@@ -790,7 +790,9 @@ const STORES = {
   eodReconciliations: 'eod_reconciliations',
   referralLedger: 'referral_ledger',
   trainingCompletions: 'training_completions',
-  incentiveRules: 'incentive_rules'
+  incentiveRules: 'incentive_rules',
+  pettyCash: 'petty_cash',
+  paymentVouchers: 'payment_vouchers'
 };
 
 // ---------- camelCase <-> snake_case helpers ----------
@@ -13167,6 +13169,512 @@ window.VW_VENDOR = {
 };
 
 
+/* === accounts.js === */
+// ============================================================
+// ACCOUNTS MODULE
+// Petty Cash · Payment Vouchers · Party Ledgers · GST Export
+// The existing payment verification queue stays in dispatch.js
+// ============================================================
+
+// ===== MAIN ACCOUNTS PAGE =====
+async function renderAccountsPage() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const isAdmin = VW_AUTH.isAdmin();
+  const isAccounts = profile?.role === 'accounts' || isAdmin;
+
+  return `
+  <div class="module-header"><h2>Accounts</h2></div>
+  <div class="entry-type-grid" style="margin-bottom:14px">
+    <button class="entry-type-btn active" id="acc-tab-verify" onclick="VW_ACCOUNTS.switchAccountsTab('verify',this)">
+      <span class="et-icon">💳</span>Verification
+    </button>
+    <button class="entry-type-btn" id="acc-tab-petty" onclick="VW_ACCOUNTS.switchAccountsTab('petty',this)">
+      <span class="et-icon">💵</span>Petty Cash
+    </button>
+    <button class="entry-type-btn" id="acc-tab-vouchers" onclick="VW_ACCOUNTS.switchAccountsTab('vouchers',this)">
+      <span class="et-icon">📄</span>Vouchers
+    </button>
+    <button class="entry-type-btn" id="acc-tab-ledger" onclick="VW_ACCOUNTS.switchAccountsTab('ledger',this)">
+      <span class="et-icon">📒</span>Party Ledger
+    </button>
+    <button class="entry-type-btn" id="acc-tab-gst" onclick="VW_ACCOUNTS.switchAccountsTab('gst',this)">
+      <span class="et-icon">📊</span>GST
+    </button>
+  </div>
+  <div id="accounts-tab-content">
+    ${await VW_DISPATCH.renderAccountsQueue()}
+  </div>`;
+}
+
+async function switchAccountsTab(tab, btn) {
+  document.querySelectorAll('.entry-type-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('accounts-tab-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  switch(tab) {
+    case 'verify':  container.innerHTML = await VW_DISPATCH.renderAccountsQueue(); break;
+    case 'petty':   container.innerHTML = await renderPettyCash(); break;
+    case 'vouchers': container.innerHTML = await renderVouchers(); break;
+    case 'ledger':  container.innerHTML = await renderPartyLedger(); break;
+    case 'gst':     container.innerHTML = await renderGSTSummary(); break;
+  }
+}
+
+// ===== PETTY CASH =====
+async function renderPettyCash() {
+  const entries = await VW_DB.all(VW_DB.STORES.pettyCash);
+  const sorted = [...entries].sort((a,b) => new Date(b.date) - new Date(a.date));
+  const today = new Date().toDateString();
+  const todayEntries = sorted.filter(e => new Date(e.date).toDateString() === today);
+  const balance = entries.reduce((s,e) => s + (e.type==='in' ? (e.amount||0) : -(e.amount||0)), 0);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthOut = entries.filter(e => e.type==='out' && new Date(e.date)>=monthStart).reduce((s,e)=>s+(e.amount||0),0);
+  const isAdmin = VW_AUTH.isAdmin();
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <div style="font-size:22px;font-weight:700;color:${balance>=0?'#22c55e':'var(--red)'}">₹${Math.round(balance).toLocaleString('en-IN')}</div>
+        <div style="font-size:12px;color:var(--text3)">Cash Balance</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:600;color:var(--red)">₹${Math.round(monthOut).toLocaleString('en-IN')}</div>
+        <div style="font-size:12px;color:var(--text3)">Month Expenses</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" style="flex:1" onclick="VW_ACCOUNTS.showAddPettyCash('in')">+ Cash In</button>
+      <button class="btn-secondary" style="flex:1;color:var(--red)" onclick="VW_ACCOUNTS.showAddPettyCash('out')">− Cash Out</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Recent Entries</h3>
+    ${!sorted.length ? '<p class="empty-msg">No petty cash entries yet</p>' :
+    sorted.slice(0,30).map(e => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${e.description||e.category||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${e.category||'Misc'} · ${new Date(e.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${e.addedByName||'—'}</div>
+        </div>
+        <div style="font-weight:700;color:${e.type==='in'?'#22c55e':'var(--red)'}">
+          ${e.type==='in'?'+':'−'}₹${(e.amount||0).toLocaleString('en-IN')}
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function showAddPettyCash(type) {
+  const categories = type === 'in'
+    ? ['Opening Balance','Cash Sale','Owner Deposit','Other Income']
+    : ['Tea/Refreshments','Auto/Travel','Stationery','Cleaning','Maintenance','Phone Bill','Advance to Staff','Miscellaneous'];
+  const profile = VW_AUTH.getCurrentProfile();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>${type==='in'?'💵 Cash In':'💸 Cash Out'}</h3>
+    <div class="form-group"><label>Amount (₹) *</label><input type="number" id="pc-amount" min="1" placeholder="e.g. 500"></div>
+    <div class="form-group"><label>Category *</label>
+      <select id="pc-category">
+        ${categories.map(c=>`<option>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Description</label><input type="text" id="pc-desc" placeholder="e.g. Chai for staff, 10 persons"></div>
+    <div class="form-group"><label>Date</label><input type="date" id="pc-date" value="${new Date().toISOString().split('T')[0]}"></div>
+    <button class="btn-primary full-width" onclick="VW_ACCOUNTS.savePettyCash('${type}')">Save Entry</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function savePettyCash(type) {
+  const amount = parseFloat(document.getElementById('pc-amount')?.value)||0;
+  if (!amount || amount <= 0) { showToast('Enter a valid amount', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  await VW_DB.put(VW_DB.STORES.pettyCash, {
+    type, amount,
+    category: document.getElementById('pc-category')?.value||'Misc',
+    description: document.getElementById('pc-desc')?.value.trim()||'',
+    date: document.getElementById('pc-date')?.value || new Date().toISOString().split('T')[0],
+    addedByName: profile?.name||'',
+    createdAt: new Date().toISOString()
+  });
+  showToast(`₹${amount.toLocaleString('en-IN')} ${type==='in'?'cash in':'expense'} recorded`, 'success');
+  closeSheet();
+  const container = document.getElementById('accounts-tab-content');
+  if (container) container.innerHTML = await renderPettyCash();
+}
+
+// ===== PAYMENT VOUCHERS =====
+async function renderVouchers() {
+  const vouchers = await VW_DB.all(VW_DB.STORES.paymentVouchers);
+  const sorted = [...vouchers].sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
+  const pending = sorted.filter(v => v.status === 'pending');
+  const approved = sorted.filter(v => v.status === 'approved').slice(0,10);
+  const isAdmin = VW_AUTH.isAdmin();
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h3 style="margin:0">Payment Vouchers</h3>
+    <button class="btn-sm" onclick="VW_ACCOUNTS.showAddVoucher()">+ New</button>
+  </div>
+
+  ${pending.length ? `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Pending Approval <span class="badge">${pending.length}</span></h3>
+    ${pending.map(v => `
+      <div class="task-card">
+        <div class="task-card-header">
+          <span class="task-dept">${v.voucherNo}</span>
+          <span style="font-weight:700;color:var(--gold)">₹${(v.amount||0).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3)">${v.payTo} · ${v.purpose||'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">${new Date(v.createdAt).toLocaleDateString('en-IN')} · By ${v.createdByName||'—'}</div>
+        ${isAdmin ? `
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn-sm" style="background:#22c55e;color:#fff" onclick="VW_ACCOUNTS.approveVoucher(${v.id})">✓ Approve</button>
+          <button class="btn-sm" style="color:var(--red)" onclick="VW_ACCOUNTS.rejectVoucher(${v.id})">✕ Reject</button>
+        </div>` : ''}
+      </div>`).join('')}
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">Recent Vouchers</h3>
+    ${!approved.length && !sorted.length ? '<p class="empty-msg">No vouchers yet</p>' :
+    (approved.length ? approved : []).map(v => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${v.voucherNo} · ${v.payTo}</div>
+          <div style="font-size:11px;color:var(--text3)">${v.purpose||'—'} · ${new Date(v.createdAt).toLocaleDateString('en-IN')}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;color:var(--red)">₹${(v.amount||0).toLocaleString('en-IN')}</div>
+          <div style="font-size:11px;color:#22c55e">✓ Approved</div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+async function showAddVoucher() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const vendors = await VW_DB.all(VW_DB.STORES.vendors);
+  const voucherCount = (await VW_DB.all(VW_DB.STORES.paymentVouchers)).length + 1;
+  const fy = getFinancialYearLabel();
+  const voucherNo = `PV/${fy}/${String(voucherCount).padStart(4,'0')}`;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>New Payment Voucher</h3>
+    <p class="sheet-meta">${voucherNo} · Requires Admin approval</p>
+    <div class="form-group"><label>Pay To *</label>
+      <input type="text" id="pv-payto" list="pv-payto-list" placeholder="e.g. Ramesh Tiles, or pick vendor">
+      <datalist id="pv-payto-list">${vendors.map(v=>`<option value="${v.name}">`).join('')}</datalist>
+    </div>
+    <div class="form-group"><label>Amount (₹) *</label><input type="number" id="pv-amount" min="1"></div>
+    <div class="form-group"><label>Payment Mode</label>
+      <select id="pv-mode">
+        <option>Cash</option><option>Bank Transfer (NEFT/IMPS)</option><option>Cheque</option><option>UPI</option>
+      </select>
+    </div>
+    <div class="form-group"><label>Purpose / Description *</label><input type="text" id="pv-purpose" placeholder="e.g. Stock purchase advance, Rent May 2026"></div>
+    <div class="form-group"><label>Reference / Bill No.</label><input type="text" id="pv-ref" placeholder="e.g. Vendor invoice no."></div>
+    <button class="btn-primary full-width" onclick="VW_ACCOUNTS.saveVoucher('${voucherNo}')">Submit for Approval</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function saveVoucher(voucherNo) {
+  const payTo = document.getElementById('pv-payto')?.value.trim();
+  const amount = parseFloat(document.getElementById('pv-amount')?.value)||0;
+  const purpose = document.getElementById('pv-purpose')?.value.trim();
+  if (!payTo) { showToast('Enter who to pay', 'warn'); return; }
+  if (!amount) { showToast('Enter amount', 'warn'); return; }
+  if (!purpose) { showToast('Enter purpose', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  await VW_DB.put(VW_DB.STORES.paymentVouchers, {
+    voucherNo, payTo, amount,
+    paymentMode: document.getElementById('pv-mode')?.value||'Cash',
+    purpose,
+    reference: document.getElementById('pv-ref')?.value.trim()||'',
+    status: VW_AUTH.isAdmin() ? 'approved' : 'pending',
+    createdByName: profile?.name||'',
+    createdAt: new Date().toISOString()
+  });
+  showToast(`Voucher ${voucherNo} ${VW_AUTH.isAdmin()?'created & approved':'submitted for approval'}`, 'success');
+  closeSheet();
+  const container = document.getElementById('accounts-tab-content');
+  if (container) container.innerHTML = await renderVouchers();
+}
+
+async function approveVoucher(id) {
+  const v = await VW_DB.getById(VW_DB.STORES.paymentVouchers, id);
+  if (!v) return;
+  v.status = 'approved';
+  v.approvedByName = VW_AUTH.getCurrentProfile()?.name||'';
+  v.approvedAt = new Date().toISOString();
+  await VW_DB.put(VW_DB.STORES.paymentVouchers, v);
+  showToast('Voucher approved', 'success');
+  const container = document.getElementById('accounts-tab-content');
+  if (container) container.innerHTML = await renderVouchers();
+}
+
+async function rejectVoucher(id) {
+  const v = await VW_DB.getById(VW_DB.STORES.paymentVouchers, id);
+  if (!v) return;
+  v.status = 'rejected';
+  v.approvedByName = VW_AUTH.getCurrentProfile()?.name||'';
+  await VW_DB.put(VW_DB.STORES.paymentVouchers, v);
+  showToast('Voucher rejected', 'info');
+  const container = document.getElementById('accounts-tab-content');
+  if (container) container.innerHTML = await renderVouchers();
+}
+
+// ===== PARTY LEDGER =====
+async function renderPartyLedger() {
+  const [customers, invoices, vendors, pos] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.customers),
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.vendors),
+    VW_DB.all(VW_DB.STORES.purchaseOrders)
+  ]);
+
+  // Customer ledger — who owes us money (unpaid credit sales)
+  const creditByCustomer = {};
+  invoices.filter(i => i.creditSale && !i.paymentVerified && i.approvalStatus === 'approved').forEach(i => {
+    if (!creditByCustomer[i.customerId]) creditByCustomer[i.customerId] = { name: '', total: 0, count: 0 };
+    const cust = customers.find(c => c.id === i.customerId);
+    creditByCustomer[i.customerId].name = cust?.name || 'Unknown';
+    creditByCustomer[i.customerId].phone = cust?.phone || '';
+    creditByCustomer[i.customerId].total += i.total||0;
+    creditByCustomer[i.customerId].count++;
+    creditByCustomer[i.customerId].customerId = i.customerId;
+  });
+  const creditEntries = Object.values(creditByCustomer).sort((a,b) => b.total - a.total);
+  const totalReceivable = creditEntries.reduce((s,e) => s+e.total, 0);
+
+  // Vendor ledger — open POs (what we might owe vendors)
+  const openPOs = pos.filter(p => p.status === 'sent').sort((a,b) => b.totalValue - a.totalValue);
+  const totalPayable = openPOs.reduce((s,p) => s+(p.totalValue||0), 0);
+
+  return `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="padding:12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;text-align:center">
+      <div style="font-size:18px;font-weight:700;color:#22c55e">₹${Math.round(totalReceivable/1000)}K</div>
+      <div style="font-size:12px;color:var(--text3)">To Receive (Customers)</div>
+    </div>
+    <div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;text-align:center">
+      <div style="font-size:18px;font-weight:700;color:var(--red)">₹${Math.round(totalPayable/1000)}K</div>
+      <div style="font-size:12px;color:var(--text3)">To Pay (Vendors)</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Receivables — Credit Sales Outstanding <span class="badge">${creditEntries.length}</span></h3>
+    ${!creditEntries.length ? '<p class="empty-msg">No outstanding credit sales ✓</p>' :
+    creditEntries.map(e => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${e.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${e.count} invoice${e.count>1?'s':''} unpaid · ${e.phone||'—'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;color:var(--red)">₹${Math.round(e.total).toLocaleString('en-IN')}</div>
+          ${e.phone ? `<a href="https://wa.me/91${e.phone.replace(/\D/g,'')}?text=${encodeURIComponent('Hi, a friendly reminder about your outstanding amount of ₹'+Math.round(e.total).toLocaleString('en-IN')+' with V Wholesale. Please arrange payment at your earliest convenience. Thank you!')}" target="_blank" style="font-size:11px;color:#22c55e">💬 Remind</a>` : ''}
+        </div>
+      </div>`).join('')}
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Payables — Open Vendor POs <span class="badge">${openPOs.length}</span></h3>
+    ${!openPOs.length ? '<p class="empty-msg">No open purchase orders ✓</p>' :
+    openPOs.map(po => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${po.vendorName}</div>
+          <div style="font-size:12px;color:var(--text3)">${po.poNo} · ${po.items?.length||0} items</div>
+        </div>
+        <div style="font-weight:700;color:var(--gold)">₹${(po.totalValue||0).toLocaleString('en-IN')}</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ===== GST SUMMARY & EXPORT =====
+async function renderGSTSummary() {
+  const invoices = await VW_DB.all(VW_DB.STORES.invoices);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthInvoices = invoices.filter(i =>
+    new Date(i.date) >= monthStart && i.approvalStatus === 'approved'
+  );
+
+  // Group by GST rate
+  const gstSlabs = {};
+  monthInvoices.forEach(inv => {
+    (inv.items||[]).forEach(item => {
+      if (item.isFreeGift) return;
+      const rate = item.gst || 18;
+      if (!gstSlabs[rate]) gstSlabs[rate] = { taxable: 0, cgst: 0, sgst: 0, total: 0 };
+      const inclPrice = item.price * item.qty;
+      const taxable = inclPrice / (1 + rate/100);
+      const gstAmt = inclPrice - taxable;
+      gstSlabs[rate].taxable += taxable;
+      gstSlabs[rate].cgst += gstAmt / 2;
+      gstSlabs[rate].sgst += gstAmt / 2;
+      gstSlabs[rate].total += inclPrice;
+    });
+  });
+
+  const totalTaxable = Object.values(gstSlabs).reduce((s,g) => s+g.taxable, 0);
+  const totalGST = Object.values(gstSlabs).reduce((s,g) => s+g.cgst+g.sgst, 0);
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">GST Summary — ${new Date().toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="padding:10px;background:var(--bg2);border-radius:8px;text-align:center">
+        <div style="font-size:16px;font-weight:700">₹${Math.round(totalTaxable).toLocaleString('en-IN')}</div>
+        <div style="font-size:12px;color:var(--text3)">Total Taxable Value</div>
+      </div>
+      <div style="padding:10px;background:var(--bg2);border-radius:8px;text-align:center">
+        <div style="font-size:16px;font-weight:700;color:var(--gold)">₹${Math.round(totalGST).toLocaleString('en-IN')}</div>
+        <div style="font-size:12px;color:var(--text3)">Total GST Collected</div>
+      </div>
+    </div>
+    ${Object.entries(gstSlabs).sort((a,b)=>b[0]-a[0]).map(([rate, vals]) => `
+    <div style="padding:8px;background:var(--bg2);border-radius:6px;margin-bottom:6px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">${rate}% GST Slab</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3)">
+        <span>Taxable: ₹${Math.round(vals.taxable).toLocaleString('en-IN')}</span>
+        <span>CGST: ₹${Math.round(vals.cgst).toLocaleString('en-IN')}</span>
+        <span>SGST: ₹${Math.round(vals.sgst).toLocaleString('en-IN')}</span>
+      </div>
+    </div>`).join('')}
+    <p style="font-size:11px;color:var(--text3);margin-top:8px">GST calculated on GST-inclusive prices using back-calculation. Verify with your CA before filing.</p>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">Export for CA / Filing</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:12px">Download invoice-wise data for GSTR-1 preparation. Share with your Chartered Accountant.</p>
+    <button class="btn-primary full-width" onclick="VW_ACCOUNTS.exportGSTData()">📥 Download GSTR-1 Data (Excel)</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_ACCOUNTS.exportFullLedger()">📥 Download Full Invoice Ledger</button>
+  </div>`;
+}
+
+async function exportGSTData() {
+  showToast('Preparing GST export...', 'info');
+  const [invoices, customers] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.customers)
+  ]);
+  const custMap = {}; customers.forEach(c => custMap[c.id] = c);
+  const approved = invoices.filter(i => i.approvalStatus === 'approved');
+
+  const rows = [];
+  approved.forEach(inv => {
+    const cust = custMap[inv.customerId];
+    (inv.items||[]).forEach(item => {
+      if (item.isFreeGift) return;
+      const rate = item.gst || 18;
+      const inclPrice = item.price * item.qty;
+      const taxable = inclPrice / (1 + rate/100);
+      const gstAmt = inclPrice - taxable;
+      rows.push({
+        InvoiceNo: inv.invoiceNo,
+        Date: (inv.date||'').split('T')[0],
+        CustomerName: cust?.name || 'Walk-in',
+        CustomerPhone: cust?.phone || '',
+        CustomerGST: cust?.gstNo || '',
+        ItemName: item.name,
+        Qty: item.qty,
+        Unit: item.unit||'pc',
+        RateInclGST: item.price,
+        GSTRate: rate,
+        TaxableValue: Math.round(taxable),
+        CGST: Math.round(gstAmt/2),
+        SGST: Math.round(gstAmt/2),
+        TotalInclGST: Math.round(inclPrice),
+        PaymentMethod: inv.paymentMethod||'',
+        CreditSale: inv.creditSale ? 'Yes' : 'No'
+      });
+    });
+  });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'GSTR-1 Data');
+  XLSX.writeFile(wb, `VWholesale-GSTR1-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('GST data exported', 'success');
+}
+
+async function exportFullLedger() {
+  showToast('Preparing full ledger...', 'info');
+  const [invoices, customers, returns, pettyCash, vouchers] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.customers),
+    VW_DB.all(VW_DB.STORES.salesReturns),
+    VW_DB.all(VW_DB.STORES.pettyCash),
+    VW_DB.all(VW_DB.STORES.paymentVouchers)
+  ]);
+  const custMap = {}; customers.forEach(c => custMap[c.id] = c);
+
+  const wb = XLSX.utils.book_new();
+
+  // Invoices sheet
+  const invRows = invoices.filter(i=>i.approvalStatus==='approved').map(i => ({
+    InvoiceNo: i.invoiceNo,
+    Date: (i.date||'').split('T')[0],
+    Customer: custMap[i.customerId]?.name||'Walk-in',
+    Phone: custMap[i.customerId]?.phone||'',
+    Subtotal: i.subtotal||0,
+    GST: i.gstAmt||0,
+    Total: i.total||0,
+    CashDiscount: i.cashDiscountAmt||0,
+    PaymentMethod: i.paymentMethod||'',
+    CreditSale: i.creditSale?'Yes':'No',
+    PaymentVerified: i.paymentVerified?'Yes':'No',
+    SalesExecutive: i.salesExecutiveName||''
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows), 'Invoices');
+
+  // Returns sheet
+  const retRows = returns.map(r => ({
+    CreditNoteNo: r.creditNoteNo||'', Date: (r.createdAt||'').split('T')[0],
+    Customer: custMap[r.customerId]?.name||'', RefundAmt: r.totalRefund||0,
+    RefundMethod: r.refundMethod||'', InvoiceRef: r.invoiceNo||''
+  }));
+  if (retRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(retRows), 'Returns');
+
+  // Petty Cash sheet
+  const pcRows = pettyCash.map(e => ({
+    Date: e.date||'', Type: e.type==='in'?'Cash In':'Cash Out',
+    Category: e.category||'', Description: e.description||'',
+    Amount: e.type==='in'?e.amount:-(e.amount||0), By: e.addedByName||''
+  }));
+  if (pcRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows), 'Petty Cash');
+
+  // Vouchers sheet
+  const pvRows = vouchers.map(v => ({
+    VoucherNo: v.voucherNo||'', Date: (v.createdAt||'').split('T')[0],
+    PayTo: v.payTo||'', Amount: v.amount||0, Mode: v.paymentMode||'',
+    Purpose: v.purpose||'', Status: v.status||'', By: v.createdByName||''
+  }));
+  if (pvRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pvRows), 'Vouchers');
+
+  XLSX.writeFile(wb, `VWholesale-FullLedger-${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Full ledger exported', 'success');
+}
+
+window.VW_ACCOUNTS = {
+  renderAccountsPage, switchAccountsTab,
+  showAddPettyCash, savePettyCash,
+  showAddVoucher, saveVoucher, approveVoucher, rejectVoucher,
+  exportGSTData, exportFullLedger
+};
+
+
 /* === ledger.js === */
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
@@ -13522,7 +14030,7 @@ async function navigateTo(page, params) {
     else if (page === 'club') html = await renderContractorClub();
     else if (page === 'training') html = await VW_TRAINING.renderTraining();
     else if (page === 'feedback') html = await renderFeedbackPage();
-    else if (page === 'accounts') html = await VW_DISPATCH.renderAccountsQueue();
+    else if (page === 'accounts') html = await VW_ACCOUNTS.renderAccountsPage();
     else if (page === 'dispatch') html = await VW_DISPATCH.renderDispatchQueue();
     else if (page === 'promotions') html = await VW_FEATURES.renderPromotionsPage();
     else if (page === 'catalogs') html = await VW_FEATURES.renderCatalogsPage();
