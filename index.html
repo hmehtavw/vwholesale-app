@@ -793,7 +793,11 @@ const STORES = {
   incentiveRules: 'incentive_rules',
   pettyCash: 'petty_cash',
   paymentVouchers: 'payment_vouchers',
-  marketingCampaigns: 'marketing_campaigns'
+  marketingCampaigns: 'marketing_campaigns',
+  workOrders: 'work_orders',
+  serviceVendors: 'service_vendors',
+  announcements: 'announcements',
+  chatMessages: 'chat_messages'
 };
 
 // ---------- camelCase <-> snake_case helpers ----------
@@ -1208,10 +1212,10 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing'],
-  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
-  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger'],
+  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp'],
   accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger'],
   dispatch:  ['dashboard','tasks','feedback','training','dispatch'],
   pending:   [] // no app access until approved
@@ -3623,6 +3627,19 @@ async function getNextInvoiceNumber() {
 window.getFinancialYearLabel = getFinancialYearLabel;
 window.getNextInvoiceNumber = getNextInvoiceNumber;
 
+// Financial year auto-reset: on April 1 the FY label changes automatically
+// since getFinancialYearLabel() is date-based — no manual reset needed.
+// New sequences auto-start at 1 for new FY labels in Supabase.
+function checkFYRollover() {
+  const now = new Date();
+  if (now.getMonth() === 3 && now.getDate() === 1) {
+    // April 1 — clear any cached FY so fresh sequences are used
+    localStorage.removeItem('vw_fy_cache');
+    console.log('Financial year rolled over to', getFinancialYearLabel());
+  }
+}
+checkFYRollover();
+
 let invoiceGenerationInFlight = false; // guards against a double-tap firing two concurrent invoices
 
 async function generateInvoice() {
@@ -3685,6 +3702,8 @@ async function generateInvoiceInner() {
     cashDiscountAmt = 0;
   } else {
     cashDiscountAmt = parseFloat(document.getElementById('cash-discount-amt')?.value || 0);
+  const loyaltyPtsRedeemed = parseFloat(document.getElementById('loyalty-redeem-pts')?.value || 0);
+  const loyaltyDiscAmt = Math.round(loyaltyPtsRedeemed * ((window._loyaltyConfig?.pointValue)||1));
   }
 
   // The actual invoice total = pre-discount total minus any cash discount.
@@ -3704,7 +3723,7 @@ async function generateInvoiceInner() {
     creditDueDate = document.getElementById('credit-due-date')?.value || null;
     balanceDue = Math.round(total);
   } else {
-    const payable = Math.max(0, total - advanceAlready);
+    const payable = Math.max(0, total - advanceAlready - cashDiscountAmt - loyaltyDiscAmt);
     paymentMethod = document.getElementById('cash-payment-method')?.value || 'Cash';
 
     if (paymentMethod === 'Split') {
@@ -3830,6 +3849,18 @@ async function generateInvoiceInner() {
 
   await VW_NOTIFY.notify('invoice', null, [invoiceNo, Math.round(total)], 'en', 'invoice');
   if (activeCart.customerId) await VW_FEATURES.earnLoyaltyPoints(activeCart.customerId, invId, total);
+  // Record loyalty redemption if points were used
+  if (loyaltyPtsRedeemed > 0 && activeCart.customerId) {
+    await VW_DB.put(VW_DB.STORES.loyaltyTransactions, {
+      customerId: activeCart.customerId,
+      type: 'redeem',
+      points: loyaltyPtsRedeemed,
+      discountAmt: loyaltyDiscAmt,
+      invoiceId: invId,
+      invoiceNo,
+      createdAt: new Date().toISOString()
+    });
+  }
   printInvoice(invoice, activeCart.customerId);
   setTimeout(() => VW_FEATURES.showSpinWheel(invId, total), 1500);
 }
@@ -4063,6 +4094,7 @@ function setSaleType(type) {
   document.getElementById('sale-type-cash-btn').classList.toggle('active', type==='cash');
   document.getElementById('sale-type-credit-btn').classList.toggle('active', type==='credit');
   document.getElementById('payment-section').innerHTML = renderPaymentSection();
+  if (activeCart.customerId) setTimeout(() => loadLoyaltyBalance(activeCart.customerId), 50);
 }
 window.setSaleType = setSaleType;
 
@@ -4083,6 +4115,36 @@ function updateSalesExecFromSelect(sel) {
 }
 window.updateSalesExecFromSelect = updateSalesExecFromSelect;
 
+// ===== LOYALTY POINTS REDEMPTION =====
+async function loadLoyaltyBalance(customerId) {
+  const el = document.getElementById('loyalty-redemption-section');
+  if (!el || !customerId) return;
+  const txns = await VW_DB.all(VW_DB.STORES.loyaltyTransactions);
+  const custTxns = txns.filter(t => t.customerId === customerId);
+  const balance = custTxns.reduce((s, t) => s + (t.type === 'earn' ? (t.points||0) : -(t.points||0)), 0);
+  const settings = await VW_DB.getSetting('loyalty_config', { pointValue: 1 });
+  const pointValue = settings.pointValue || 1; // ₹1 per point default
+  const maxRedeemable = Math.min(balance, Math.floor(computeCartGrandTotal() * 0.1)); // max 10% of bill
+  if (balance <= 0) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:6px 0">⭐ Loyalty: 0 points (₹0)</div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div style="background:rgba(200,151,43,0.08);border:1px solid rgba(200,151,43,0.25);border-radius:10px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--gold)">⭐ ${balance.toLocaleString('en-IN')} points = ₹${(balance*pointValue).toLocaleString('en-IN')}</span>
+        <span style="font-size:11px;color:var(--text3)">Max redeem: ₹${(maxRedeemable*pointValue).toLocaleString('en-IN')}</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="loyalty-redeem-pts" value="0" min="0" max="${maxRedeemable}"
+          style="flex:1" oninput="updatePaymentTotals()" placeholder="Points to redeem">
+        <button class="btn-sm" style="background:var(--gold);color:#000" onclick="document.getElementById('loyalty-redeem-pts').value=${maxRedeemable};updatePaymentTotals()">Use Max</button>
+      </div>
+      <div id="loyalty-redeem-value" style="font-size:12px;color:#22c55e;margin-top:4px"></div>
+    </div>`;
+}
+window.loadLoyaltyBalance = loadLoyaltyBalance;
+
 function renderPaymentSection() {
   const saleType = activeCart.saleType || 'cash';
   const total = computeCartGrandTotal();
@@ -4100,6 +4162,8 @@ function renderPaymentSection() {
 
   return `
   ${advanceAlready ? `<p style="font-size:12px;color:var(--text2);margin-bottom:8px">Advance collected: ₹${advanceAlready.toLocaleString('en-IN')}</p>` : ''}
+
+  ${activeCart.customerId ? `<div id="loyalty-redemption-section" style="margin-bottom:10px"></div>` : ''}
 
   <div class="form-group">
     <label>Cash Discount (₹) <span style="font-size:11px;color:var(--text3)">e.g. round off ₹30 on a ₹19,130 bill</span></label>
@@ -4162,11 +4226,19 @@ function updatePaymentTotals() {
   const total = computeCartGrandTotal();
   const advance = activeCart.quotationAdvance || 0;
   const cashDisc = parseFloat(document.getElementById('cash-discount-amt')?.value || 0);
-  const payable = Math.max(0, total - advance - cashDisc);
+  const loyaltyPts = parseFloat(document.getElementById('loyalty-redeem-pts')?.value || 0);
+  const settings_lc = window._loyaltyConfig || { pointValue: 1 };
+  const loyaltyDisc = Math.round(loyaltyPts * (settings_lc.pointValue || 1));
+  const payable = Math.max(0, total - advance - cashDisc - loyaltyDisc);
+
+  // Show loyalty redemption value
+  const loyaltyEl = document.getElementById('loyalty-redeem-value');
+  if (loyaltyEl && loyaltyPts > 0) loyaltyEl.textContent = `✓ Redeeming ${loyaltyPts} points = ₹${loyaltyDisc} off`;
+  else if (loyaltyEl) loyaltyEl.textContent = '';
 
   // Update payable display
   const payDisp = document.getElementById('final-payable-display');
-  if (payDisp) payDisp.innerHTML = `Payable: <span style="color:var(--gold)">₹${payable.toLocaleString('en-IN')}</span>${cashDisc > 0 ? ` <span style="font-size:12px;color:var(--text3)">(₹${cashDisc} discount applied)</span>` : ''}`;
+  if (payDisp) payDisp.innerHTML = `Payable: <span style="color:var(--gold)">₹${payable.toLocaleString('en-IN')}</span>${cashDisc > 0 ? ` <span style="font-size:12px;color:var(--text3)">(₹${cashDisc} discount)</span>` : ''}${loyaltyDisc > 0 ? ` <span style="font-size:12px;color:var(--gold)">(-₹${loyaltyDisc} loyalty)</span>` : ''}`;
 
   const method = document.getElementById('cash-payment-method')?.value;
   const splitContainer = document.getElementById('split-payment-container');
@@ -4532,9 +4604,55 @@ window.confirmDispatch = confirmDispatch;
 async function sendInvoiceToCustomer(invId) {
   const inv = await VW_DB.getById(VW_DB.STORES.invoices, invId);
   const customer = inv.customerId ? await VW_DB.getById(VW_DB.STORES.customers, inv.customerId) : null;
-  if (!customer || !customer.phone) return showToast('No customer phone number on this invoice', 'warn');
-  const msg = `🧾 Invoice ${inv.invoiceNo}\nTotal: ₹${inv.total.toLocaleString('en-IN')}\nDate: ${new Date(inv.date).toLocaleDateString('en-IN')}\n\nThank you for shopping with V Wholesale!`;
-  window.open(`https://wa.me/91${customer.phone.replace(/\D/g,'')}?text=${VW_NOTIFY.waEncode(msg)}`, '_blank');
+  if (!customer?.phone) { showToast('No customer phone number on this invoice', 'warn'); return; }
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+
+  // Build full formatted invoice message
+  const lines = (inv.items||[]).filter(i => !i.isFreeGift).map((item, idx) =>
+    `${idx+1}. ${[item.brand, item.model, item.name].filter(Boolean).join(' ')} — ${item.qty} ${item.unit||'pc'} × ₹${(item.price||0).toLocaleString('en-IN')} = *₹${Math.round((item.price||0)*(item.qty||1)).toLocaleString('en-IN')}*`
+  );
+  const freeItems = (inv.items||[]).filter(i => i.isFreeGift);
+
+  let msg = `🧾 *Invoice — ${inv.invoiceNo}*\n`;
+  msg += `📅 ${new Date(inv.date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}\n`;
+  msg += `🏠 *${storeName}, Vijayawada*\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `*Bill To:* ${customer.name}\n`;
+  if (customer.phone) msg += `📞 ${customer.phone}\n`;
+  if (inv.vehicleNumber) msg += `🚗 Vehicle: ${inv.vehicleNumber}\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `*Items:*\n${lines.join('\n')}\n`;
+  if (freeItems.length) msg += `🎁 Free Gift: ${freeItems.map(i=>i.name).join(', ')}\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  if (inv.subtotal && inv.gstAmt) {
+    msg += `Subtotal: ₹${Math.round(inv.subtotal).toLocaleString('en-IN')}\n`;
+    msg += `GST: ₹${Math.round(inv.gstAmt).toLocaleString('en-IN')}\n`;
+  }
+  if (inv.cashDiscountAmt) msg += `Discount: −₹${inv.cashDiscountAmt.toLocaleString('en-IN')}\n`;
+  msg += `*TOTAL: ₹${Math.round(inv.total).toLocaleString('en-IN')}*\n`;
+  msg += `Payment: ${inv.creditSale ? '💳 Credit Sale' : inv.paymentMethod||'Cash'}\n`;
+  msg += `━━━━━━━━━━━━━━━━━\n`;
+  msg += `Thank you for shopping with us! 🙏\nFor queries: wa.me/918712697930`;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>💬 Send Invoice to Customer</h3>
+    <p class="sheet-meta">${customer.name} · ${customer.phone}</p>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;font-size:12px;white-space:pre-wrap;max-height:260px;overflow-y:auto;margin-bottom:12px;line-height:1.6;color:var(--text2)">${msg.replace(/\*/g,'')}</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-wa" style="flex:1" onclick="window.open('https://wa.me/91${customer.phone.replace(/\D/g,'')}?text='+encodeURIComponent(${JSON.stringify(msg)}),'_blank');closeSheet()">
+        💬 Send via WhatsApp
+      </button>
+      <button class="btn-secondary" onclick="printInvoice(${JSON.stringify(inv).replace(/"/g,'&quot;')},${inv.customerId||'null'});closeSheet()">
+        🖨 Print PDF
+      </button>
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
 }
 window.sendInvoiceToCustomer = sendInvoiceToCustomer;
 
@@ -4789,30 +4907,45 @@ function renderQuotationsList(quotes) {
   const statusLabels = { draft:'Draft', sent:'Sent', converted:'Converted to Bill' };
   const approvalColors = { pending_approval: 'var(--gold)', approved: '#22c55e', rejected: 'var(--red)' };
   const approvalLabels = { pending_approval: 'Awaiting Approval', approved: 'Approved', rejected: 'Rejected — Edit Needed' };
-  return quotes.map(q => {
-    const badgeColor = q.status === 'converted' ? statusColors.converted : q.approvalStatus ? approvalColors[q.approvalStatus] : statusColors[q.status];
-    const badgeLabel = q.status === 'converted' ? statusLabels.converted : q.approvalStatus ? (approvalLabels[q.approvalStatus] || q.approvalStatus) : (statusLabels[q.status]||q.status);
-    const isConverted = q.status === 'converted';
-    const isApproved = q.approvalStatus === 'approved';
-    return `
-    <div class="task-card" onclick="openQuotationDetail(${q.id})">
-      <div class="task-card-header">
-        <span class="task-dept">${q.quoteNo || 'Q-'+q.id} &middot; ${quoteDisplayLabel(q)}</span>
-        <span class="task-stage" style="color:${badgeColor||'#888'}">${badgeLabel}</span>
+
+  // Group by customer
+  const grouped = {};
+  quotes.forEach(q => {
+    const key = q.customerName || 'Walk-in / Unknown';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(q);
+  });
+
+  return Object.entries(grouped).map(([custName, custQuotes]) => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;padding:0 2px">
+        👤 ${custName} <span style="font-weight:400">(${custQuotes.length})</span>
       </div>
-      <div class="task-desc">${(q.items||[]).length} item${(q.items||[]).length!==1?'s':''} &middot; ${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')}</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-        <div class="task-meta">₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
-        <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-          ${!isConverted ? `<button class="btn-sm" onclick="editQuotation(${q.id})">✏️ Edit</button>` : ''}
-          <button class="btn-sm" onclick="printQuotation(${q.id})">🖨 Print</button>
-          ${isApproved && !isConverted ? `<button class="btn-sm" style="background:var(--gold);color:#000" onclick="closeSheet();pullQuotationIntoCart(${q.id})">🧾 Bill</button>` : ''}
-          ${!isConverted && !isApproved ? `<button class="btn-sm" onclick="saveQuotation('sent')" style="background:#25D366;color:#fff">📤 Send</button>` : ''}
-          ${isConverted ? `<button class="btn-sm" onclick="VW_DISPATCH.openDispatchDetail(${q.invoiceId})" style="background:#378ADD;color:#fff">📦 Track</button>` : ''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
+      ${custQuotes.map(q => {
+        const badgeColor = q.status === 'converted' ? statusColors.converted : q.approvalStatus ? approvalColors[q.approvalStatus] : statusColors[q.status];
+        const badgeLabel = q.status === 'converted' ? statusLabels.converted : q.approvalStatus ? (approvalLabels[q.approvalStatus] || q.approvalStatus) : (statusLabels[q.status]||q.status);
+        const isConverted = q.status === 'converted';
+        const isApproved = q.approvalStatus === 'approved';
+        return `
+        <div class="task-card" onclick="openQuotationDetail(${q.id})">
+          <div class="task-card-header">
+            <span class="task-dept">${q.quoteNo || 'Q-'+q.id} &middot; ${quoteDisplayLabel(q)}</span>
+            <span class="task-stage" style="color:${badgeColor||'#888'}">${badgeLabel}</span>
+          </div>
+          <div class="task-desc">${(q.items||[]).length} item${(q.items||[]).length!==1?'s':''} &middot; ${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+            <div class="task-meta">₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
+            <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+              ${!isConverted ? `<button class="btn-sm" onclick="editQuotation(${q.id})">✏️ Edit</button>` : ''}
+              <button class="btn-sm" onclick="printQuotation(${q.id})">🖨 Print</button>
+              ${isApproved && !isConverted ? `<button class="btn-sm" style="background:var(--gold);color:#000" onclick="closeSheet();pullQuotationIntoCart(${q.id})">🧾 Bill</button>` : ''}
+              ${!isConverted && !isApproved ? `<button class="btn-sm" onclick="saveQuotation('sent')" style="background:#25D366;color:#fff">📤 Send</button>` : ''}
+              ${isConverted ? `<button class="btn-sm" onclick="VW_DISPATCH.openDispatchDetail(${q.invoiceId})" style="background:#378ADD;color:#fff">📦 Track</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
 }
 
 async function filterQuotationsList() {
@@ -6094,21 +6227,21 @@ async function openQuotationDetail(id) {
 
 async function sendQuotationWhatsApp(id, preloaded = null) {
   const q = preloaded || await VW_DB.getById(VW_DB.STORES.quotations, id);
-  let msg = `*V Wholesale, Vijayawada*\nQuotation: ${q.quoteNo || 'Q-'+q.id}\nDate: ${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')}\n\n`;
-  if (q.siteName) msg += `Site: ${q.siteName}\n`;
-  if (q.customerName) msg += `Customer: ${q.customerName}\n`;
-  if (q.address) msg += `Address: ${q.address}\n`;
-  if (q.area) msg += `Area: ${q.area}\n`;
-  if (q.deliveryAddress) msg += `Delivery Address: ${q.deliveryAddress}\n`;
-  if (q.contact) msg += `Phone: ${q.contact}\n`;
-  if (q.otherContactName || q.otherContactNumber) msg += `Other Contact: ${[q.otherContactName, q.otherContactNumber].filter(Boolean).join(' · ')}\n`;
-  (q.customFields||[]).forEach(f => { if (f.label && f.value) msg += `${f.label}: ${f.value}\n`; });
-  msg += `\n`;
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+  let msg = `Dear ${q.customerName||'Customer'},\n\nThank you for visiting *${storeName}, Vijayawada*! 🙏\n\nPlease find your quotation details below:\n\n`;
+  msg += `📋 *Quotation: ${q.quoteNo || 'Q-'+q.id}*\n`;
+  msg += `📅 Date: ${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')}\n`;
+  if (q.siteName) msg += `🏠 Site: ${q.siteName}\n`;
+  if (q.address) msg += `📍 Address: ${q.address}\n`;
+  msg += `\n*Items:*\n`;
   (q.items||[]).forEach((it,i) => {
     const { netPrice, total } = it.netPrice !== undefined ? it : computeLine(it);
-    msg += `${i+1}. ${[it.brand,it.model,it.description].filter(Boolean).join(' ')} — Qty ${it.qty} x ₹${netPrice.toFixed(2)} = ₹${total.toFixed(2)}\n`;
+    msg += `${i+1}. ${[it.brand,it.model,it.description].filter(Boolean).join(' ')} — ${it.qty} ${it.unit||'pc'} × ₹${netPrice.toFixed(0)} = *₹${total.toFixed(0)}*\n`;
   });
-  msg += `\n*Grand Total: ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}*\n\n${q.terms || DEFAULT_QUOTE_TERMS}`;
+  msg += `\n💰 *Grand Total: ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}*\n`;
+  msg += `\n⏳ This quotation is valid for 7 days.\n`;
+  msg += `\nFor any queries, please call or WhatsApp us directly.\n\n— Team ${storeName} 🏠`;
   const phone = (q.contact||'').replace(/\D/g,'');
   const encoded = VW_NOTIFY.waEncode(msg);
   const url = phone ? `https://wa.me/91${phone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
@@ -6332,14 +6465,19 @@ async function renderCustomerList(customers, search = '') {
   return list.map(c => {
     const daysSince = c.lastVisit ? Math.floor((new Date() - new Date(c.lastVisit)) / 86400000) : null;
     const typeLabel = { retail:'Retail', b2b_pro:'B2B Pro', b2b_shop:'B2B Shop', contractor_club:'Contractor' }[c.type] || c.type;
+    const lastSeenColor = daysSince === null ? '#888' : daysSince === 0 ? '#22c55e' : daysSince <= 30 ? '#22c55e' : daysSince <= 90 ? 'var(--gold)' : 'var(--red)';
+    const lastSeenLabel = daysSince === null ? 'New' : daysSince === 0 ? 'Today' : daysSince === 1 ? 'Yesterday' : daysSince + 'd ago';
     return `
     <div class="cust-row" onclick="openCustomer(${c.id})">
       <div class="cust-avatar">${(c.name||'?')[0].toUpperCase()}</div>
       <div class="cust-info">
         <div class="cust-name">${c.name}</div>
-        <div class="cust-meta">${c.phone} · ${typeLabel} · ${c.visitCount || 1} visit${c.visitCount > 1 ? 's' : ''}</div>
+        <div class="cust-meta">${c.phone||'—'} · ${typeLabel} · ${c.visitCount || 1} visit${(c.visitCount||1) > 1 ? 's' : ''}</div>
       </div>
-      <div class="cust-badge ${daysSince > 30 ? 'badge-warn' : 'badge-ok'}">${daysSince !== null ? daysSince + 'd ago' : 'New'}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:11px;font-weight:600;color:${lastSeenColor}">${lastSeenLabel}</div>
+        ${c.totalSpend ? `<div style="font-size:10px;color:var(--text3)">₹${Math.round((c.totalSpend||0)/1000)}K</div>` : ''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -6436,8 +6574,33 @@ async function openCustomer(id) {
       <button class="btn-call" onclick="callPhone('${c.phone}')">📞 Call</button>
     </div>
     <button class="btn-secondary full-width" style="margin-top:8px;background:var(--bg2)" onclick="closeSheet();navigateTo('ledger',{customerId:${c.id}})">📒 View Full Customer Ledger</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_SERVICE.showAddWorkOrder(${c.id},'${(c.name||'').replace(/'/g,"\\'")}')">🔧 New Work Order</button>
     ${lastInvoice ? `<button class="btn-secondary full-width" style="margin-top:8px" onclick="repeatLastOrder(${c.id})">🔁 Repeat Last Order (₹${Math.round(lastInvoice.total||0).toLocaleString('en-IN')})</button>` : ''}
     ${VW_AUTH.isAdmin() ? `<button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="confirmDeleteCustomer(${c.id},'${(c.name||'').replace(/'/g,"\\'")}')">🗑 Delete Customer</button>` : ''}
+
+    ${invoices.length ? `
+    <div class="sheet-section-label">Recent Purchases (${invoices.length} total)</div>
+    ${(() => {
+      const sorted = invoices.slice().sort((a,b)=>new Date(b.date)-new Date(a.date));
+      const daysSinceLast = lastInvoice ? Math.floor((Date.now()-new Date(lastInvoice.date))/(1000*60*60*24)) : null;
+      return `
+      ${daysSinceLast !== null ? `<div style="font-size:12px;color:${daysSinceLast>90?'var(--red)':daysSinceLast>30?'var(--gold)':'#22c55e'};margin-bottom:8px">
+        🕐 Last purchase: ${daysSinceLast === 0 ? 'Today' : daysSinceLast === 1 ? 'Yesterday' : daysSinceLast+' days ago'}
+      </div>` : ''}
+      ${sorted.slice(0,5).map(inv => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${inv.invoiceNo||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${new Date(inv.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})} · ${(inv.items||[]).length} item${(inv.items||[]).length!==1?'s':''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700">₹${(inv.total||0).toLocaleString('en-IN')}</div>
+          <div style="font-size:11px;color:${inv.creditSale?'var(--red)':'#22c55e'}">${inv.creditSale?'Credit':'Paid'}</div>
+        </div>
+      </div>`).join('')}
+      ${sorted.length > 5 ? `<div style="font-size:12px;color:var(--text3);padding:6px 0">+ ${sorted.length-5} more — view in Ledger</div>` : ''}`;
+    })()}
+    ` : ''}
     ${myQuotes.length ? `
     <div class="sheet-section-label">Quotations (${myQuotes.length})</div>
     ${myQuotes.map(q => `
@@ -7563,7 +7726,7 @@ async function renderAttendanceList(staff, todayAtt) {
   }).join('');
 }
 
-async function markAtt(staffId, status) {
+async function _legacy_markAtt(staffId, status) {
   const today = new Date().toDateString();
   const all = await VW_DB.all(VW_DB.STORES.attendance);
   const existing = all.find(a => a.staffId === staffId && new Date(a.date).toDateString() === today);
@@ -7577,7 +7740,7 @@ async function markAtt(staffId, status) {
   showToast(`Marked`, 'success');
 }
 
-async function markAllPresent() {
+async function _legacy_markAllPresent() {
   const staff = await VW_DB.all(VW_DB.STORES.staff);
   const today = new Date().toDateString();
   const all = await VW_DB.all(VW_DB.STORES.attendance);
@@ -7594,7 +7757,7 @@ async function markAllPresent() {
   showToast('All staff marked present', 'success');
 }
 
-function renderStaffList(staff) {
+function _legacy_renderStaffList(staff) {
   if (!staff.length) return '<p class="empty-msg">No staff added yet</p>';
   return staff.map(s => `
     <div class="cust-row" onclick="openStaff(${s.id})">
@@ -7652,7 +7815,7 @@ async function renderPendingLeaves(leaves, staff) {
     </div>`).join('');
 }
 
-async function approveLeave(id, status) {
+async function _legacy_approveLeave(id, status) {
   const leave = await VW_DB.getById(VW_DB.STORES.leaves, id);
   leave.status = status; leave.updatedAt = new Date().toISOString();
   await VW_DB.put(VW_DB.STORES.leaves, leave);
@@ -7674,7 +7837,7 @@ async function renderAllLeaves(leaves, staff) {
     </div>`).join('');
 }
 
-function showApplyLeave() {
+function _legacy_showApplyLeave() {
   VW_DB.all(VW_DB.STORES.staff).then(staff => {
     const sheet = document.getElementById('bottom-sheet');
     sheet.innerHTML = `
@@ -7694,7 +7857,7 @@ function showApplyLeave() {
   });
 }
 
-async function submitLeave() {
+async function _legacy_submitLeave() {
   const from = new Date(document.getElementById('lv-from').value);
   const to = new Date(document.getElementById('lv-to').value);
   const reason = document.getElementById('lv-reason').value.trim();
@@ -7714,7 +7877,7 @@ async function submitLeave() {
   navigateTo('hr');
 }
 
-function showAddStaff() {
+function _legacy_showAddStaff() {
   const depts = ['Tiles','Sanitary','Plywood','Electricals','Paints','Plumbing','Appliances','HR','Purchase','Inventory','Management','Accounts'];
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
@@ -7928,6 +8091,708 @@ window.markAllPresent = markAllPresent;
 window.showApplyLeave = showApplyLeave;
 window.submitLeave = submitLeave;
 window.approveLeave = approveLeave;
+
+
+/* === hr_payroll.js === */
+// ============================================================
+// HR & PAYROLL MODULE — Session 8
+// Staff Management · Attendance · Salary Calculator · Payslips
+// Based on actual V Wholesale attendance + salary data structure
+// ============================================================
+
+// Name mapping between salary sheet and attendance system
+const STAFF_NAME_MAP = {
+  'Inturi Siva Charan': 'I Siva Charan',
+  'Ramadugu Sravani': 'R. Sravani',
+  'Gonnabhakthula Lokesh Kumar': 'Lokesh Kumar',
+  'PVND sai pavan kumar': 'Sai Pavan',
+  'Ravi Prakash': 'Ravi Prakash',
+  'Imran': 'Sk. Imran',
+  'CH Naveen': 'Naveen Chundru',
+  'Durgarao': 'Bolli Durga Rao',
+  'N Rajesh': 'N Rajesh',
+  'K Adi Lakshmi': 'K Adi Lakshmi',
+  'J Naga Sai': 'J Naga Sai',
+  'Yarragunta Manasa': 'Y Manasa',
+  'P.Lakshmi': 'P.Lakshmi',
+  'Sandhya Rani': 'Sandhya Rani',
+  'Narayanamma': 'Narayanamma',
+  'B.Anand': 'Anand',
+  'Y Alok': 'Alok',
+  'D Priyanka': 'D Priyanka',
+  'G.Mahesh': 'G.Mahesh',
+  'B.Venkat Reddy': 'B.Venkat Reddy',
+};
+
+// ===== MAIN HR PAGE =====
+async function renderHRPage() {
+  const isAdmin = VW_AUTH.isAdmin();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const today = new Date().toDateString();
+  const attendance = await VW_DB.all(VW_DB.STORES.attendance);
+  const todayAtt = attendance.filter(a => new Date(a.date).toDateString() === today);
+  const presentToday = todayAtt.filter(a => a.punchIn).length;
+
+  return `
+  <div class="module-header"><h2>HR & Payroll</h2>
+    ${isAdmin ? `<button class="btn-sm" onclick="VW_HR_PAYROLL.showAddStaff()">+ Add Staff</button>` : ''}
+  </div>
+
+  <!-- Today snapshot -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="padding:10px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700;color:#22c55e">${presentToday}</div>
+      <div style="font-size:11px;color:var(--text3)">Present Today</div>
+    </div>
+    <div style="padding:10px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700;color:var(--red)">${staff.filter(s=>s.active!==false).length - presentToday}</div>
+      <div style="font-size:11px;color:var(--text3)">Absent</div>
+    </div>
+    <div style="padding:10px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700">${staff.filter(s=>s.active!==false).length}</div>
+      <div style="font-size:11px;color:var(--text3)">Total Staff</div>
+    </div>
+  </div>
+
+  <div class="entry-type-grid" style="margin-bottom:12px">
+    <button class="entry-type-btn active" id="hr-tab-staff" onclick="VW_HR_PAYROLL.switchHRTab('staff',this)"><span class="et-icon">👥</span>Staff</button>
+    <button class="entry-type-btn" id="hr-tab-attendance" onclick="VW_HR_PAYROLL.switchHRTab('attendance',this)"><span class="et-icon">📋</span>Attendance</button>
+    <button class="entry-type-btn" id="hr-tab-payroll" onclick="VW_HR_PAYROLL.switchHRTab('payroll',this)"><span class="et-icon">💰</span>Payroll</button>
+    <button class="entry-type-btn" id="hr-tab-leaves" onclick="VW_HR_PAYROLL.switchHRTab('leaves',this)"><span class="et-icon">🏖</span>Leaves</button>
+  </div>
+
+  <div id="hr-tab-content">
+    ${await renderStaffList()}
+  </div>`;
+}
+
+async function switchHRTab(tab, btn) {
+  document.querySelectorAll('[id^="hr-tab-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('hr-tab-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  switch(tab) {
+    case 'staff':      container.innerHTML = await renderStaffList(); break;
+    case 'attendance': container.innerHTML = await renderAttendanceView(); break;
+    case 'payroll':    container.innerHTML = await renderPayrollView(); break;
+    case 'leaves':     container.innerHTML = await renderLeavesView(); break;
+  }
+}
+
+// ===== STAFF LIST =====
+async function renderStaffList() {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const active = staff.filter(s => s.active !== false);
+  const inactive = staff.filter(s => s.active === false);
+  const isAdmin = VW_AUTH.isAdmin();
+
+  return `
+  <div class="card">
+    <h3 class="card-title">Active Staff <span class="badge">${active.length}</span></h3>
+    ${!active.length ? `
+      <p class="empty-msg">No staff added yet</p>
+      ${isAdmin ? `<button class="btn-primary full-width" onclick="VW_HR_PAYROLL.showAddStaff()">+ Add First Staff Member</button>` : ''}
+    ` : active.map(s => `
+      <div class="cust-row" onclick="VW_HR_PAYROLL.openStaffDetail(${s.id})">
+        <div class="staff-avatar" style="background:hsl(${(s.id||0)*47},60%,35%);color:#fff">${(s.name||'?')[0].toUpperCase()}</div>
+        <div class="cust-info">
+          <div class="cust-name">${s.name}</div>
+          <div class="cust-meta">${s.designation||'—'} · ${s.department||'—'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:12px;font-weight:600">₹${Math.round((s.grossSalary||0)/1000)}K</div>
+          <div style="font-size:11px;color:var(--text3)">${s.joiningDate||'—'}</div>
+        </div>
+      </div>`).join('')}
+  </div>
+  ${inactive.length ? `
+  <div class="card">
+    <h3 class="card-title">Exited Staff <span class="badge">${inactive.length}</span></h3>
+    ${inactive.map(s => `
+      <div class="cust-row" onclick="VW_HR_PAYROLL.openStaffDetail(${s.id})">
+        <div class="staff-avatar" style="background:#555;color:#fff">${(s.name||'?')[0].toUpperCase()}</div>
+        <div class="cust-info">
+          <div class="cust-name" style="color:var(--text3)">${s.name}</div>
+          <div class="cust-meta">Exit: ${s.exitDate||'—'}</div>
+        </div>
+      </div>`).join('')}
+  </div>` : ''}`;
+}
+
+// ===== ADD / EDIT STAFF =====
+async function showAddStaff(staffId) {
+  const s = staffId ? await VW_DB.getById(VW_DB.STORES.staff, staffId) : null;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>${s ? 'Edit Staff' : 'Add Staff Member'}</h3>
+    <div class="form-group"><label>Full Name *</label><input type="text" id="st-name" value="${s?.name||''}"></div>
+    <div class="form-group"><label>Designation</label><input type="text" id="st-designation" value="${s?.designation||''}" placeholder="e.g. Team Leader, Sales Executive"></div>
+    <div class="form-group"><label>Department</label>
+      <select id="st-dept">
+        ${['Sales','Purchase','Accounts','Marketing','HR','Billing','Dispatch','Housekeeping','Management','Other'].map(d => `<option ${s?.department===d?'selected':''}>${d}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Reporting To</label><input type="text" id="st-reports" value="${s?.reportingTo||'Himansu Mehta'}"></div>
+    <div class="form-group"><label>Phone</label><input type="tel" id="st-phone" value="${s?.phone||''}" maxlength="10"></div>
+    <div class="form-group"><label>Joining Date</label><input type="date" id="st-joining" value="${s?.joiningDate||new Date().toISOString().split('T')[0]}"></div>
+    <div class="form-group"><label>Gross Package (₹ per year) *</label><input type="number" id="st-gross" value="${s?.grossSalary||''}" placeholder="e.g. 240000 for ₹20K/month"></div>
+    <div class="form-group"><label>Bank Account Number</label><input type="text" id="st-bank-acc" value="${s?.bankAccount||''}"></div>
+    <div class="form-group"><label>IFSC Code</label><input type="text" id="st-ifsc" value="${s?.ifsc||''}"></div>
+    <div class="form-group"><label>Bank Name</label><input type="text" id="st-bank-name" value="${s?.bankName||''}"></div>
+    <div class="form-group"><label>PF Number</label><input type="text" id="st-pf" value="${s?.pfNumber||''}"></div>
+    <div class="form-group"><label>ESI Number</label><input type="text" id="st-esi" value="${s?.esiNumber||''}"></div>
+    <div class="form-group"><label>Attendance Name (as in Google Form)</label>
+      <input type="text" id="st-att-name" value="${s?.attendanceName||''}" placeholder="Name as typed in attendance form">
+    </div>
+    <div class="form-group"><label>Date of Birth 🎂</label><input type="date" id="st-dob" value="${s?.dateOfBirth||''}"></div>
+    <div class="form-group"><label>Work Anniversary Date 🎊 (if different from joining date)</label><input type="date" id="st-anniversary" value="${s?.anniversaryDate||s?.joiningDate||''}"></div>
+    ${s ? `
+    <div class="form-group"><label>Exit Date (leave blank if still active)</label><input type="date" id="st-exit" value="${s?.exitDate||''}"></div>` : ''}
+    <button class="btn-primary full-width" onclick="VW_HR_PAYROLL.saveStaff(${staffId||'null'})">Save</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function saveStaff(staffId) {
+  const name = document.getElementById('st-name')?.value.trim();
+  const gross = parseFloat(document.getElementById('st-gross')?.value)||0;
+  if (!name) { showToast('Enter staff name', 'warn'); return; }
+  if (!gross) { showToast('Enter gross package', 'warn'); return; }
+  const exitDate = document.getElementById('st-exit')?.value || '';
+  const record = {
+    name, designation: document.getElementById('st-designation')?.value.trim()||'',
+    department: document.getElementById('st-dept')?.value||'',
+    reportingTo: document.getElementById('st-reports')?.value.trim()||'Himansu Mehta',
+    phone: document.getElementById('st-phone')?.value.trim()||'',
+    joiningDate: document.getElementById('st-joining')?.value||'',
+    grossSalary: gross,
+    bankAccount: document.getElementById('st-bank-acc')?.value.trim()||'',
+    ifsc: document.getElementById('st-ifsc')?.value.trim()||'',
+    bankName: document.getElementById('st-bank-name')?.value.trim()||'',
+    pfNumber: document.getElementById('st-pf')?.value.trim()||'',
+    esiNumber: document.getElementById('st-esi')?.value.trim()||'',
+    attendanceName: document.getElementById('st-att-name')?.value.trim()||name,
+    dateOfBirth: document.getElementById('st-dob')?.value||'',
+    anniversaryDate: document.getElementById('st-anniversary')?.value||'',
+    exitDate, active: !exitDate,
+    updatedAt: new Date().toISOString()
+  };
+  if (staffId) {
+    const existing = await VW_DB.getById(VW_DB.STORES.staff, staffId);
+    await VW_DB.put(VW_DB.STORES.staff, {...existing, ...record});
+  } else {
+    record.createdAt = new Date().toISOString();
+    await VW_DB.put(VW_DB.STORES.staff, record);
+  }
+  showToast(`Staff ${staffId?'updated':'added'}`, 'success');
+  closeSheet();
+  navigateTo('hr');
+}
+
+// ===== STAFF DETAIL =====
+async function openStaffDetail(id) {
+  const [s, allAtt, allLeaves] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.staff, id),
+    VW_DB.all(VW_DB.STORES.attendance),
+    VW_DB.all(VW_DB.STORES.leaves)
+  ]);
+  if (!s) return;
+  const isAdmin = VW_AUTH.isAdmin();
+
+  // This month attendance
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const myAtt = allAtt.filter(a => a.staffId === id && new Date(a.date) >= monthStart);
+  const presentDays = myAtt.reduce((sum, a) => sum + (a.finalWorking||0), 0);
+  const monthLeaves = allLeaves.filter(l => l.staffId === id && l.status === 'approved' && new Date(l.fromDate) >= monthStart);
+
+  // Salary breakdown
+  const monthly = Math.round((s.grossSalary||0) / 12);
+  const basic = Math.round(monthly * 0.6);
+  const hra = Math.round(monthly * 0.25);
+  const allowance = monthly - basic - hra;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <h3 style="margin:0">${s.name}</h3>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${s.designation||'—'} · ${s.department||'—'}</p>
+        <p style="font-size:12px;color:var(--text3);margin:0">Reports to: ${s.reportingTo||'—'}</p>
+      </div>
+      ${isAdmin ? `<button class="btn-sm" onclick="VW_HR_PAYROLL.showAddStaff(${id})">✏️ Edit</button>` : ''}
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin:12px 0">
+      <div style="padding:8px;background:var(--bg2);border-radius:8px;text-align:center">
+        <div style="font-size:16px;font-weight:700;color:#22c55e">${presentDays}</div>
+        <div style="font-size:10px;color:var(--text3)">Days This Month</div>
+      </div>
+      <div style="padding:8px;background:var(--bg2);border-radius:8px;text-align:center">
+        <div style="font-size:16px;font-weight:700;color:var(--gold)">${monthLeaves.length}</div>
+        <div style="font-size:10px;color:var(--text3)">Leaves Taken</div>
+      </div>
+      <div style="padding:8px;background:var(--bg2);border-radius:8px;text-align:center">
+        <div style="font-size:16px;font-weight:700">₹${Math.round(monthly/1000)}K</div>
+        <div style="font-size:10px;color:var(--text3)">Monthly CTC</div>
+      </div>
+    </div>
+
+    <div class="req-item-card" style="margin-bottom:10px">
+      ${s.phone ? `<div style="font-size:13px;padding:2px 0">📞 ${s.phone}</div>` : ''}
+      <div style="font-size:12px;color:var(--text3);padding:2px 0">Joining: ${s.joiningDate||'—'}</div>
+      ${s.bankAccount ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">Bank: ${s.bankName||''} · ${s.bankAccount}</div>` : ''}
+      ${s.pfNumber ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">PF: ${s.pfNumber}</div>` : ''}
+    </div>
+
+    ${isAdmin ? `
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn-primary" style="flex:1" onclick="VW_HR_PAYROLL.generatePayslip(${id})">📄 Generate Payslip</button>
+      <button class="btn-secondary" style="flex:1" onclick="VW_HR_PAYROLL.markAttendanceForStaff(${id},'${s.name}')">✓ Mark Attendance</button>
+    </div>` : ''}
+
+    <div class="sheet-section-label">This Month Attendance</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:6px">${presentDays} days present · ${30 - presentDays} absent/LOP</div>
+    ${s.phone ? `<button class="btn-wa full-width" onclick="window.open('https://wa.me/91${s.phone.replace(/\D/g,'')}','_blank')">💬 WhatsApp</button>` : ''}
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// ===== ATTENDANCE VIEW =====
+async function renderAttendanceView() {
+  const isAdmin = VW_AUTH.isAdmin();
+  const [staff, attendance] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.staff),
+    VW_DB.all(VW_DB.STORES.attendance)
+  ]);
+  const today = new Date();
+  const todayStr = today.toDateString();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+
+  const todayAtt = attendance.filter(a => new Date(a.date).toDateString() === todayStr);
+  const activeStaff = staff.filter(s => s.active !== false);
+
+  // Build today's status
+  const todayStatus = {};
+  todayAtt.forEach(a => todayStatus[a.staffId] = a);
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h3 style="margin:0">Today — ${today.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</h3>
+    ${isAdmin ? `<button class="btn-sm" onclick="VW_HR_PAYROLL.markAllPresent()">✓ Mark All Present</button>` : ''}
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    ${!activeStaff.length ? '<p class="empty-msg">No staff added yet</p>' :
+    activeStaff.map(s => {
+      const att = todayStatus[s.id];
+      const status = att?.punchIn ? (att.punchOut ? 'done' : 'in') : 'absent';
+      const colors = { done: '#22c55e', in: '#f97316', absent: 'var(--red)' };
+      const labels = { done: `✓ ${att?.punchIn?.slice(0,5)||''} – ${att?.punchOut?.slice(0,5)||''}`, in: `🟢 In since ${att?.punchIn?.slice(0,5)||''}`, absent: '— Not marked' };
+      return `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div style="width:32px;height:32px;border-radius:50%;background:hsl(${(s.id||0)*47},60%,35%);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${(s.name||'?')[0].toUpperCase()}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${s.name}</div>
+          <div style="font-size:11px;color:${colors[status]}">${labels[status]}</div>
+        </div>
+        ${isAdmin ? `
+        <div style="display:flex;gap:4px">
+          ${status === 'absent' ? `
+            <button class="btn-sm" style="background:#22c55e;color:#fff" onclick="VW_HR_PAYROLL.markAtt(${s.id},'in')">In</button>
+            <button class="btn-sm" style="background:#888;color:#fff" onclick="VW_HR_PAYROLL.markAtt(${s.id},'half')">½</button>` : ''}
+          ${status === 'in' ? `<button class="btn-sm" onclick="VW_HR_PAYROLL.markAtt(${s.id},'out')">Out</button>` : ''}
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>
+
+  <!-- Monthly summary -->
+  <div class="card">
+    <h3 class="card-title">Month Summary — ${today.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h3>
+    ${activeStaff.map(s => {
+      const myAtt = attendance.filter(a => a.staffId === s.id && new Date(a.date) >= monthStart);
+      const present = myAtt.reduce((sum,a) => sum+(a.finalWorking||0), 0);
+      const totalDays = today.getDate();
+      const pct = Math.round(present/totalDays*100);
+      return `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;flex:1">${s.name}</div>
+        <div style="flex:2">
+          <div style="background:var(--border);border-radius:3px;height:6px">
+            <div style="background:${pct>=80?'#22c55e':pct>=60?'var(--gold)':'var(--red)'};height:6px;border-radius:3px;width:${pct}%"></div>
+          </div>
+        </div>
+        <div style="font-size:12px;font-weight:600;min-width:60px;text-align:right">${present}/${totalDays} days</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function markAtt(staffId, action) {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5);
+  const all = await VW_DB.all(VW_DB.STORES.attendance);
+  const existing = all.find(a => a.staffId === staffId && a.date === todayStr);
+  if (action === 'in' || action === 'half') {
+    if (existing) {
+      existing.punchIn = existing.punchIn || timeStr;
+      if (action === 'half') existing.finalWorking = 0.5;
+      else existing.finalWorking = 1;
+      await VW_DB.put(VW_DB.STORES.attendance, existing);
+    } else {
+      await VW_DB.put(VW_DB.STORES.attendance, {
+        staffId, date: todayStr, punchIn: timeStr,
+        finalWorking: action === 'half' ? 0.5 : 1,
+        createdAt: now.toISOString()
+      });
+    }
+  } else if (action === 'out' && existing) {
+    existing.punchOut = timeStr;
+    await VW_DB.put(VW_DB.STORES.attendance, existing);
+  }
+  showToast('Attendance marked', 'success');
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderAttendanceView();
+}
+
+async function markAllPresent() {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5);
+  const all = await VW_DB.all(VW_DB.STORES.attendance);
+  const active = staff.filter(s => s.active !== false);
+  for (const s of active) {
+    const existing = all.find(a => a.staffId === s.id && a.date === todayStr);
+    if (!existing) {
+      await VW_DB.put(VW_DB.STORES.attendance, {
+        staffId: s.id, date: todayStr, punchIn: timeStr,
+        finalWorking: 1, createdAt: now.toISOString()
+      });
+    }
+  }
+  showToast(`${active.length} staff marked present`, 'success');
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderAttendanceView();
+}
+
+// ===== PAYROLL VIEW =====
+async function renderPayrollView() {
+  const isAdmin = VW_AUTH.isAdmin();
+  const [staff, attendance] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.staff),
+    VW_DB.all(VW_DB.STORES.attendance)
+  ]);
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const active = staff.filter(s => s.active !== false);
+
+  return `
+  <div class="card">
+    <h3 class="card-title">Payroll — ${now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Calculated on ${daysInMonth}-day month. Salary = (Gross/12) × (Days Present / Working Days)</p>
+    ${active.map(s => {
+      const myAtt = attendance.filter(a => a.staffId === s.id && new Date(a.date) >= monthStart);
+      const presentDays = myAtt.reduce((sum,a) => sum+(a.finalWorking||0), 0);
+      const lop = daysInMonth - presentDays;
+      const monthly = Math.round((s.grossSalary||0)/12);
+      const perDay = monthly / daysInMonth;
+      const gross = Math.round(perDay * presentDays);
+      const basic = Math.round(gross * 0.6);
+      const hra = Math.round(gross * 0.25);
+      const allowance = gross - basic - hra;
+      // PF: 12% of basic (employee), ESI: 0.75% if salary < 21000
+      const pfEmp = gross <= 180000/12 ? Math.round(basic * 0.12) : 0;
+      const esiEmp = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+      const pt = gross <= 10000 ? 0 : gross <= 15000 ? 150 : 200;
+      const totalDed = pfEmp + esiEmp + pt;
+      const netSalary = gross - totalDed;
+
+      return `
+      <div style="margin-bottom:10px;padding:10px;background:var(--bg2);border-radius:8px" onclick="VW_HR_PAYROLL.generatePayslip(${s.id})">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-size:13px;font-weight:600">${s.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${s.designation||'—'} · ${presentDays}/${daysInMonth} days</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:14px;font-weight:700;color:${lop>5?'var(--red)':'var(--text1)'}">₹${netSalary.toLocaleString('en-IN')}</div>
+            <div style="font-size:11px;color:var(--text3)">Net · ${lop>0?`LOP: ${lop.toFixed(1)}d`:'Full month'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:6px;font-size:11px;color:var(--text3)">
+          <span>Gross: ₹${gross.toLocaleString('en-IN')}</span>
+          <span>PF: ₹${pfEmp}</span>
+          <span>PT: ₹${pt}</span>
+          ${esiEmp ? `<span>ESI: ₹${esiEmp}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+    ${isAdmin ? `
+    <button class="btn-primary full-width" style="margin-top:8px" onclick="VW_HR_PAYROLL.generateAllPayslips()">📄 Generate All Payslips</button>` : ''}
+  </div>`;
+}
+
+// ===== PAYSLIP GENERATOR =====
+async function generatePayslip(staffId) {
+  const [s, attendance] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.staff, staffId),
+    VW_DB.all(VW_DB.STORES.attendance)
+  ]);
+  if (!s) return;
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const monthName = now.toLocaleDateString('en-IN', {month:'long', year:'numeric'});
+  const myAtt = attendance.filter(a => a.staffId === staffId && new Date(a.date) >= monthStart);
+  const presentDays = myAtt.reduce((sum,a) => sum+(a.finalWorking||0), 0);
+  const lop = daysInMonth - presentDays;
+  const monthly = Math.round((s.grossSalary||0)/12);
+  const perDay = monthly / daysInMonth;
+  const gross = Math.round(perDay * presentDays);
+  const basic = Math.round(gross * 0.6);
+  const hra = Math.round(gross * 0.25);
+  const allowance = gross - basic - hra;
+  const pfEmp = gross <= 15000 ? Math.round(basic * 0.12) : 0;
+  const pfEr = pfEmp;
+  const esiEmp = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+  const esiEr = gross <= 21000 ? Math.round(gross * 0.0325) : 0;
+  const pt = gross <= 10000 ? 0 : gross <= 15000 ? 150 : 200;
+  const totalDed = pfEmp + esiEmp + pt;
+  const netSalary = gross - totalDed;
+  const ctc = gross + pfEr + esiEr;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="background:#fff;color:#000;padding:16px;border-radius:8px;font-family:Arial,sans-serif">
+      <!-- Header -->
+      <div style="text-align:center;margin-bottom:12px;border-bottom:2px solid #C8972B;padding-bottom:10px">
+        <div style="font-size:16px;font-weight:700;color:#C8972B">VASSURE WHOLESALE PVT LTD</div>
+        <div style="font-size:11px;color:#555">V Wholesale · Vijayawada, Andhra Pradesh</div>
+        <div style="font-size:13px;font-weight:600;margin-top:6px">SALARY SLIP — ${monthName}</div>
+      </div>
+      <!-- Employee details -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:12px;margin-bottom:10px">
+        <div><strong>Name:</strong> ${s.name}</div>
+        <div><strong>Code:</strong> ${s.id}</div>
+        <div><strong>Designation:</strong> ${s.designation||'—'}</div>
+        <div><strong>Department:</strong> ${s.department||'—'}</div>
+        <div><strong>Joining Date:</strong> ${s.joiningDate||'—'}</div>
+        <div><strong>Bank:</strong> ${s.bankName||'—'}</div>
+        <div><strong>Account No:</strong> ${s.bankAccount||'—'}</div>
+        <div><strong>PF No:</strong> ${s.pfNumber||'—'}</div>
+        <div><strong>Days in Month:</strong> ${daysInMonth}</div>
+        <div><strong>Days Present:</strong> ${presentDays}</div>
+        <div><strong>LOP Days:</strong> ${lop.toFixed(1)}</div>
+        <div><strong>Gross CTC/yr:</strong> ₹${(s.grossSalary||0).toLocaleString('en-IN')}</div>
+      </div>
+      <!-- Earnings & Deductions -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div style="border:1px solid #ddd;border-radius:6px;padding:8px">
+          <div style="font-weight:700;font-size:12px;color:#C8972B;margin-bottom:6px">EARNINGS</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>BASIC + DA</span><span>₹${basic.toLocaleString('en-IN')}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>HRA</span><span>₹${hra.toLocaleString('en-IN')}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>Allowance</span><span>₹${allowance.toLocaleString('en-IN')}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;border-top:1px solid #ddd;margin-top:4px;padding-top:4px"><span>GROSS</span><span>₹${gross.toLocaleString('en-IN')}</span></div>
+        </div>
+        <div style="border:1px solid #ddd;border-radius:6px;padding:8px">
+          <div style="font-weight:700;font-size:12px;color:#C8972B;margin-bottom:6px">DEDUCTIONS</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>PF (Employee)</span><span>₹${pfEmp}</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>Professional Tax</span><span>₹${pt}</span></div>
+          ${esiEmp ? `<div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0"><span>ESI (Employee)</span><span>₹${esiEmp}</span></div>` : ''}
+          <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;border-top:1px solid #ddd;margin-top:4px;padding-top:4px"><span>TOTAL DED</span><span>₹${totalDed}</span></div>
+        </div>
+      </div>
+      <!-- Net salary -->
+      <div style="background:#C8972B;color:#fff;padding:10px;border-radius:6px;text-align:center;margin-bottom:8px">
+        <div style="font-size:11px;margin-bottom:2px">NET SALARY PAYABLE</div>
+        <div style="font-size:22px;font-weight:700">₹${netSalary.toLocaleString('en-IN')}</div>
+      </div>
+      <div style="font-size:10px;color:#888;text-align:center">This is a computer-generated salary slip · Vassure Wholesale Pvt Ltd</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-wa" style="flex:1" onclick="VW_HR_PAYROLL.sendPayslipWhatsApp(${staffId},${netSalary})">💬 Send to Staff</button>
+      <button class="btn-secondary" onclick="closeSheet()">Close</button>
+    </div>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function sendPayslipWhatsApp(staffId, netSalary) {
+  const s = await VW_DB.getById(VW_DB.STORES.staff, staffId);
+  if (!s?.phone) { showToast('No phone number for this staff', 'warn'); return; }
+  const now = new Date();
+  const monthName = now.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  const msg = encodeURIComponent(`Dear ${s.name},\n\nYour salary for ${monthName} has been processed.\n\nNet Salary: ₹${netSalary.toLocaleString('en-IN')}\n\nPlease contact HR for any queries.\n\n— V Wholesale HR`);
+  window.open(`https://wa.me/91${s.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+}
+
+async function generateAllPayslips() {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const active = staff.filter(s => s.active !== false);
+  showToast(`Generating ${active.length} payslips — opening one by one`, 'info');
+  window._payslipQueue = active;
+  window._payslipIdx = 0;
+  if (active.length) await generatePayslip(active[0].id);
+}
+
+// ===== LEAVES VIEW =====
+async function renderLeavesView() {
+  const isAdmin = VW_AUTH.isAdmin();
+  const profile = VW_AUTH.getCurrentProfile();
+  const [leaves, staff] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.leaves),
+    VW_DB.all(VW_DB.STORES.staff)
+  ]);
+  const staffMap = {}; staff.forEach(s => staffMap[s.id] = s);
+  const pending = leaves.filter(l => l.status === 'pending').sort((a,b) => new Date(b.appliedAt)-new Date(a.appliedAt));
+  const approved = leaves.filter(l => l.status === 'approved').sort((a,b) => new Date(b.fromDate)-new Date(a.fromDate)).slice(0,10);
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h3 style="margin:0">Leave Management</h3>
+    <button class="btn-sm" onclick="VW_HR_PAYROLL.showApplyLeave()">+ Apply Leave</button>
+  </div>
+
+  ${pending.length ? `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Pending Approval <span class="badge" style="background:var(--gold)">${pending.length}</span></h3>
+    ${pending.map(l => {
+      const s = staffMap[l.staffId];
+      return `
+      <div class="task-card">
+        <div class="task-card-header">
+          <span class="task-dept">${s?.name||'Unknown'}</span>
+          <span style="font-size:12px;color:var(--gold)">${l.days} day${l.days>1?'s':''}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3)">${l.type} · ${new Date(l.fromDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} ${l.days>1?'→ '+new Date(l.toDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):''}</div>
+        ${l.reason ? `<div style="font-size:12px;color:var(--text2);margin-top:3px">${l.reason}</div>` : ''}
+        ${isAdmin ? `
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn-sm" style="background:#22c55e;color:#fff" onclick="VW_HR_PAYROLL.approveLeave(${l.id})">✓ Approve</button>
+          <button class="btn-sm" style="color:var(--red)" onclick="VW_HR_PAYROLL.rejectLeave(${l.id})">✕ Reject</button>
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">Recent Leaves</h3>
+    ${!approved.length ? '<p class="empty-msg">No leave records yet</p>' :
+    approved.map(l => {
+      const s = staffMap[l.staffId];
+      return `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600">${s?.name||'—'}</div>
+          <div style="font-size:12px;color:var(--text3)">${l.type} · ${new Date(l.fromDate).toLocaleDateString('en-IN')} · ${l.days} day${l.days>1?'s':''}</div>
+        </div>
+        <span class="badge" style="background:#22c55e">Approved</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function showApplyLeave(staffId) {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const profile = VW_AUTH.getCurrentProfile();
+  const isAdmin = VW_AUTH.isAdmin();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>Apply for Leave</h3>
+    ${isAdmin ? `
+    <div class="form-group"><label>Staff Member</label>
+      <select id="leave-staff">
+        ${staff.filter(s=>s.active!==false).map(s => `<option value="${s.id}" ${s.id===staffId?'selected':''}>${s.name}</option>`).join('')}
+      </select>
+    </div>` : `<p class="sheet-meta">Applying for: ${profile?.name||'—'}</p>`}
+    <div class="form-group"><label>Leave Type</label>
+      <select id="leave-type">
+        <option>Casual Leave</option><option>Sick Leave</option><option>Earned Leave</option>
+        <option>Loss of Pay</option><option>Compensatory Off</option><option>Other</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>From Date</label><input type="date" id="leave-from" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group"><label>To Date</label><input type="date" id="leave-to" value="${new Date().toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="form-group"><label>Reason</label><textarea id="leave-reason" style="height:60px" placeholder="Brief reason for leave"></textarea></div>
+    <button class="btn-primary full-width" onclick="VW_HR_PAYROLL.submitLeave()">Submit Leave Request</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function submitLeave() {
+  const fromDate = document.getElementById('leave-from')?.value;
+  const toDate = document.getElementById('leave-to')?.value;
+  if (!fromDate || !toDate) { showToast('Select dates', 'warn'); return; }
+  const from = new Date(fromDate), to = new Date(toDate);
+  const days = Math.round((to-from)/(1000*60*60*24))+1;
+  const isAdmin = VW_AUTH.isAdmin();
+  const staffSel = document.getElementById('leave-staff');
+  const staffId = isAdmin && staffSel ? parseInt(staffSel.value) : null;
+  const profile = VW_AUTH.getCurrentProfile();
+  await VW_DB.put(VW_DB.STORES.leaves, {
+    staffId, staffName: staffSel?.options[staffSel.selectedIndex]?.text||profile?.name||'',
+    type: document.getElementById('leave-type')?.value||'Casual Leave',
+    fromDate, toDate, days,
+    reason: document.getElementById('leave-reason')?.value||'',
+    status: isAdmin ? 'approved' : 'pending',
+    appliedAt: new Date().toISOString(),
+    appliedByName: profile?.name||''
+  });
+  showToast(`Leave request ${isAdmin?'approved':'submitted'}`, 'success');
+  closeSheet();
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderLeavesView();
+}
+
+async function approveLeave(leaveId) {
+  const l = await VW_DB.getById(VW_DB.STORES.leaves, leaveId);
+  if (!l) return;
+  l.status = 'approved';
+  l.approvedBy = VW_AUTH.getCurrentProfile()?.name||'';
+  l.approvedAt = new Date().toISOString();
+  await VW_DB.put(VW_DB.STORES.leaves, l);
+  showToast('Leave approved', 'success');
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderLeavesView();
+}
+
+async function rejectLeave(leaveId) {
+  const l = await VW_DB.getById(VW_DB.STORES.leaves, leaveId);
+  if (!l) return;
+  l.status = 'rejected';
+  await VW_DB.put(VW_DB.STORES.leaves, l);
+  showToast('Leave rejected', 'info');
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderLeavesView();
+}
+
+async function markAttendanceForStaff(staffId, staffName) {
+  await markAtt(staffId, 'in');
+}
+
+window.VW_HR_PAYROLL = {
+  renderHRPage, switchHRTab,
+  showAddStaff, saveStaff, openStaffDetail,
+  renderAttendanceView, markAtt, markAllPresent, markAttendanceForStaff,
+  renderPayrollView, generatePayslip, generateAllPayslips, sendPayslipWhatsApp,
+  renderLeavesView, showApplyLeave, submitLeave, approveLeave, rejectLeave
+};
 
 
 /* === onboarding.js === */
@@ -8980,6 +9845,8 @@ async function renderSettingsPage() {
   const approvedUsers = await VW_DB.all(VW_DB.STORES.profiles).then(p => p.filter(u => u.status === 'approved'));
   const pendingProducts = await VW_DB.all(VW_DB.STORES.pendingProducts).then(p => p.filter(x => x.status === 'pending'));
   const pinResets = await VW_DB.all(VW_DB.STORES.pinResetRequests).then(p => p.filter(x => x.status === 'pending'));
+  const waConfig = await VW_DB.getSetting('whatsapp_config', {});
+  const loyaltyConfig = await VW_DB.getSetting('loyalty_config', { pointValue: 1, earnRate: 1 });
 
   return `
   <div class="module-header">
@@ -8996,6 +9863,8 @@ async function renderSettingsPage() {
     <a href="#sec-categories" class="jump-chip">Categories</a>
     <a href="#sec-routing" class="jump-chip">Routing</a>
     <a href="#sec-directory" class="jump-chip">Directory</a>
+    ${profile.role === 'admin' ? `<a href="#sec-whatsapp" class="jump-chip">WhatsApp</a>` : ''}
+    ${profile.role === 'admin' ? `<a href="#sec-loyalty" class="jump-chip">Loyalty</a>` : ''}
     ${profile.role === 'admin' ? `<a href="#sec-danger" class="jump-chip" style="color:var(--red)">Danger Zone</a>` : ''}
   </div>
 
@@ -9113,6 +9982,37 @@ async function renderSettingsPage() {
       <button class="btn-secondary full-width" onclick="VW_FEATURES.checkAndSendLowStockAlerts()">📦 Send Low Stock Alert to Purchase Manager</button>
     </div>
   </div>
+  ${profile.role === 'admin' ? `
+  <div class="card" id="sec-whatsapp">
+    <h3 class="card-title">📱 WhatsApp & Store Config</h3>
+    <div class="form-group"><label>Store Name</label><input type="text" id="wa-store-name" value="${waConfig.storeName||'V Wholesale'}" placeholder="V Wholesale"></div>
+    <div class="form-group"><label>Google Review URL</label><input type="text" id="wa-review-url" value="${waConfig.googleReviewUrl||''}" placeholder="https://g.page/r/your-review-link/review"></div>
+    <div class="form-group"><label>Kiosk URL (share with store tablet)</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" value="${window.location.origin}/vwholesale-app/?kiosk=1" readonly style="flex:1;background:var(--bg2);font-size:12px">
+        <button class="btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/vwholesale-app/?kiosk=1');showToast('Kiosk URL copied!','success')">📋 Copy</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Open this URL on the store tablet and keep it open — staff tap to punch in/out</div>
+    </div>
+    <button class="btn-primary" onclick="saveWAConfig()">Save Config</button>
+  </div>
+
+  <div class="card" id="sec-loyalty">
+    <h3 class="card-title">⭐ Loyalty Points Config</h3>
+    <div class="form-group"><label>Earn Rate — Points per ₹100 spent</label><input type="number" id="loy-earn-rate" value="${loyaltyConfig.earnRate||1}" min="0.1" step="0.1" placeholder="1"></div>
+    <div class="form-group"><label>Point Value — ₹ per point redeemed</label><input type="number" id="loy-point-value" value="${loyaltyConfig.pointValue||1}" min="0.1" step="0.1" placeholder="1"></div>
+    <div class="form-group"><label>Max Redemption per Bill</label>
+      <select id="loy-max-redeem">
+        <option value="5" ${loyaltyConfig.maxRedeemPct==5?'selected':''}>5% of bill value</option>
+        <option value="10" ${loyaltyConfig.maxRedeemPct==10?'selected':''}>10% of bill value</option>
+        <option value="20" ${loyaltyConfig.maxRedeemPct==20?'selected':''}>20% of bill value</option>
+        <option value="100" ${loyaltyConfig.maxRedeemPct==100?'selected':''}>No limit</option>
+      </select>
+    </div>
+    <p style="font-size:12px;color:var(--text3)">Current: Customer earns ${loyaltyConfig.earnRate||1} point per ₹100. 1 point = ₹${loyaltyConfig.pointValue||1} when redeemed.</p>
+    <button class="btn-primary" onclick="saveLoyaltyConfig()">Save Loyalty Config</button>
+  </div>` : ''}
+
   <div class="card" id="sec-danger" style="border-color:rgba(239,68,68,0.4)">
     <h3 class="card-title" style="color:var(--red)">⚠️ Danger Zone</h3>
     <p style="font-size:12px;color:var(--text3);margin-bottom:14px">For clearing out test data while setting up the system. These actions are permanent and cannot be undone — use carefully.</p>
@@ -9809,6 +10709,28 @@ async function initPackingRulesUI() {
     </div>`).join('');
 }
 window.initPackingRulesUI = initPackingRulesUI;
+
+async function saveWAConfig() {
+  const config = {
+    storeName: document.getElementById('wa-store-name')?.value.trim() || 'V Wholesale',
+    googleReviewUrl: document.getElementById('wa-review-url')?.value.trim() || ''
+  };
+  await VW_DB.setSetting('whatsapp_config', config);
+  showToast('WhatsApp config saved', 'success');
+}
+window.saveWAConfig = saveWAConfig;
+
+async function saveLoyaltyConfig() {
+  const config = {
+    earnRate: parseFloat(document.getElementById('loy-earn-rate')?.value)||1,
+    pointValue: parseFloat(document.getElementById('loy-point-value')?.value)||1,
+    maxRedeemPct: parseFloat(document.getElementById('loy-max-redeem')?.value)||10
+  };
+  await VW_DB.setSetting('loyalty_config', config);
+  window._loyaltyConfig = config;
+  showToast('Loyalty config saved', 'success');
+}
+window.saveLoyaltyConfig = saveLoyaltyConfig;
 
 async function addPackingRule() {
   const cats = await VW_CHECKIN.getDepartmentNames();
@@ -10685,7 +11607,11 @@ async function renderAccountsQueue() {
 
   return `
   <div class="module-header"><h2>Accounts — Payment Verification</h2></div>
+  <div class="form-group" style="margin-bottom:10px">
+    <input type="text" id="acc-invoice-search" placeholder="Search by invoice no, customer name, phone..." oninput="VW_DISPATCH.searchAccountsInvoices(this.value)">
+  </div>
   ${stillApproving ? `<div style="padding:10px 12px;background:rgba(200,151,43,0.1);border-radius:8px;margin-bottom:10px;font-size:13px;color:var(--gold)">⏳ ${stillApproving} invoice${stillApproving>1?'s are':' is'} still awaiting management approval — they'll appear here once approved</div>` : ''}
+  <div id="acc-invoice-results">
   <div class="card">
     <h3 class="card-title">Ready for Payment Verification <span class="badge">${pending.length}</span></h3>
     ${!pending.length ? '<p class="empty-msg">Nothing waiting — all caught up ✓</p>' : pending.map(inv => {
@@ -10714,8 +11640,45 @@ async function renderAccountsQueue() {
         <p style="font-size:12px;color:var(--text3)">by ${inv.paymentVerifiedBy||'—'} &middot; ${inv.paymentVerifiedAt ? new Date(inv.paymentVerifiedAt).toLocaleDateString('en-IN') : ''}</p>
       </div>`;
     }).join('')}
+  </div>
+  </div>`; // close acc-invoice-results
+}
+
+async function searchAccountsInvoices(term) {
+  if (!term || term.length < 2) {
+    const el = document.getElementById('acc-invoice-results');
+    if (el) { navigateTo('accounts'); return; }
+    return;
+  }
+  const t = term.toLowerCase();
+  const [invoices, customers] = await Promise.all([VW_DB.all(VW_DB.STORES.invoices), VW_DB.all(VW_DB.STORES.customers)]);
+  const custMap = {}; customers.forEach(c => custMap[c.id] = c);
+  const matches = invoices.filter(i =>
+    (i.invoiceNo||'').toLowerCase().includes(t) ||
+    (custMap[i.customerId]?.name||'').toLowerCase().includes(t) ||
+    (custMap[i.customerId]?.phone||'').includes(t)
+  ).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,20);
+  const el = document.getElementById('acc-invoice-results');
+  if (!el) return;
+  el.innerHTML = `<div class="card"><h3 class="card-title">Search Results (${matches.length})</h3>
+    ${!matches.length ? '<p class="empty-msg">No invoices found</p>' :
+    matches.map(inv => {
+      const cust = custMap[inv.customerId];
+      return `<div class="task-card" onclick="VW_DISPATCH.openAccountsVerify(${inv.id})">
+        <div class="task-card-header">
+          <span class="task-dept">${inv.invoiceNo}</span>
+          <span class="badge" style="background:${inv.paymentVerified?'#22c55e':inv.creditSale?'var(--gold)':'#378ADD'}">${inv.paymentVerified?'✓ Verified':inv.creditSale?'Credit':'Pending'}</span>
+        </div>
+        <p style="font-size:13px;margin:4px 0">${cust?cust.name+' · '+cust.phone:'Walk-in'} · ₹${(inv.total||0).toLocaleString('en-IN')}</p>
+        <p style="font-size:12px;color:var(--text3)">${new Date(inv.date).toLocaleDateString('en-IN')}</p>
+      </div>`;
+    }).join('')}
   </div>`;
 }
+
+window.VW_DISPATCH = {
+  renderAccountsQueue, openAccountsVerify, confirmPaymentVerified, searchAccountsInvoices
+};
 
 async function openAccountsVerify(invoiceId) {
   const inv = await VW_DB.getById(VW_DB.STORES.invoices, invoiceId);
@@ -10756,10 +11719,6 @@ async function confirmPaymentVerified(invoiceId) {
   closeSheet();
   navigateTo('accounts');
 }
-
-window.VW_DISPATCH = {
-  renderAccountsQueue, openAccountsVerify, confirmPaymentVerified
-};
 
 // ---------- DISPATCH QUEUE ----------
 async function renderDispatchQueue() {
@@ -11032,6 +11991,33 @@ async function confirmCreateGatePass(invoiceId) {
 
   showToast(`Gate Pass ${gatePassNo} created`, 'success');
   closeSheet();
+
+  // Send delivery tracking WhatsApp to customer
+  if (inv.customerId) {
+    const customers = await VW_DB.all(VW_DB.STORES.customers);
+    const cust = customers.find(c => c.id === inv.customerId);
+    const vehicleDetails = document.getElementById('gp-vehicle')?.value.trim();
+    const driverName = document.getElementById('gp-driver')?.value.trim();
+    const dispatchedItems = selectedIdxs.map(i => inv.items[i]);
+    if (cust?.phone) {
+      const itemList = dispatchedItems.map(i => `• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
+      const msg = encodeURIComponent(
+        `Dear ${cust.name},\n\nYour order from V Wholesale is on the way! 🚚\n\n` +
+        `📋 Gate Pass: ${gatePassNo}\n` +
+        `📄 Invoice: ${inv.invoiceNo}\n` +
+        (vehicleDetails ? `🚗 Vehicle: ${vehicleDetails}\n` : '') +
+        (driverName ? `👤 Driver: ${driverName}\n` : '') +
+        `\n📦 Items being delivered:\n${itemList}\n\n` +
+        `Please keep someone available to receive the delivery.\n\nThank you for shopping with us! 🙏\n— V Wholesale`
+      );
+      const waBtn = document.createElement('div');
+      waBtn.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#25D366;color:#fff;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+      waBtn.textContent = '💬 Send Delivery Alert to Customer';
+      waBtn.onclick = () => { window.open(`https://wa.me/91${cust.phone.replace(/\D/g,'')}?text=${msg}`, '_blank'); waBtn.remove(); };
+      document.body.appendChild(waBtn);
+      setTimeout(() => waBtn.remove(), 8000);
+    }
+  }
 
   // Open the printable gate pass immediately
   const gp = await VW_DB.getById(VW_DB.STORES.gatePasses, gatePassId);
@@ -14390,6 +15376,1506 @@ window.VW_MARKETING = {
 };
 
 
+/* === service.js === */
+// ============================================================
+// SERVICE VENDOR MODULE
+// Work Orders · Progress Photos · Payment Stages · Sign-off
+// ============================================================
+
+const WORK_ORDER_STAGES = [
+  { key: 'created', label: 'Order Created', color: '#888' },
+  { key: 'assigned', label: 'Vendor Assigned', color: '#378ADD' },
+  { key: 'advance_paid', label: 'Advance Paid', color: '#7F77DD' },
+  { key: 'in_progress', label: 'Work In Progress', color: '#f97316' },
+  { key: 'mid_payment', label: 'Mid Payment Done', color: '#06b6d4' },
+  { key: 'completed', label: 'Work Completed', color: '#22c55e' },
+  { key: 'signed_off', label: 'Customer Signed Off', color: '#22c55e' },
+  { key: 'final_paid', label: 'Final Payment Done', color: '#C8972B' },
+];
+
+const SERVICE_CATEGORIES = [
+  'Plumbing', 'Electrical', 'Painting', 'Carpentry', 'Tiling',
+  'Waterproofing', 'False Ceiling', 'Flooring', 'Modular Kitchen',
+  'AC Installation', 'Interior Design', 'Civil Work', 'Other'
+];
+
+// ===== MAIN PAGE =====
+async function renderServicePage() {
+  const [workOrders, vendors] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.workOrders),
+    VW_DB.all(VW_DB.STORES.serviceVendors)
+  ]);
+  const isAdmin = VW_AUTH.isAdmin();
+
+  const active = workOrders.filter(w => !['final_paid','signed_off'].includes(w.stage)).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
+  const overdue = active.filter(w => w.expectedCompletionDate && new Date(w.expectedCompletionDate) < new Date());
+  const completed = workOrders.filter(w => ['final_paid','signed_off'].includes(w.stage)).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
+
+  return `
+  <div class="module-header">
+    <h2>Service & Work Orders</h2>
+    ${isAdmin ? `<button class="btn-sm" onclick="VW_SERVICE.showAddWorkOrder()">+ New Order</button>` : ''}
+  </div>
+
+  <div class="entry-type-grid" style="margin-bottom:12px">
+    <button class="entry-type-btn active" id="svc-tab-active" onclick="VW_SERVICE.switchSvcTab('active',this)"><span class="et-icon">🔧</span>Active (${active.length})</button>
+    <button class="entry-type-btn" id="svc-tab-vendors" onclick="VW_SERVICE.switchSvcTab('vendors',this)"><span class="et-icon">👷</span>Vendors</button>
+    <button class="entry-type-btn" id="svc-tab-done" onclick="VW_SERVICE.switchSvcTab('done',this)"><span class="et-icon">✅</span>Completed</button>
+  </div>
+
+  ${overdue.length ? `
+  <div style="padding:10px 12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-bottom:10px">
+    <div style="font-weight:600;font-size:13px;color:var(--red)">⚠️ ${overdue.length} Overdue Work Order${overdue.length>1?'s':''}</div>
+    <div style="font-size:12px;color:var(--text3)">Expected completion date has passed</div>
+  </div>` : ''}
+
+  <div id="service-tab-content">
+    ${renderWorkOrderList(active, workOrders, 'active')}
+  </div>`;
+}
+
+async function switchSvcTab(tab, btn) {
+  document.querySelectorAll('[id^="svc-tab-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('service-tab-content');
+  if (!container) return;
+  const [workOrders, serviceVendors] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.workOrders),
+    VW_DB.all(VW_DB.STORES.serviceVendors)
+  ]);
+  if (tab === 'active') {
+    const active = workOrders.filter(w => !['final_paid'].includes(w.stage)).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    container.innerHTML = renderWorkOrderList(active, workOrders, 'active');
+  } else if (tab === 'vendors') {
+    container.innerHTML = renderServiceVendorList(serviceVendors);
+  } else {
+    const done = workOrders.filter(w => w.stage === 'final_paid').sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+    container.innerHTML = renderWorkOrderList(done, workOrders, 'done');
+  }
+}
+
+function renderWorkOrderList(orders, all, type) {
+  if (!orders.length) return `<div class="card"><p class="empty-msg">${type==='done'?'No completed orders yet':'No active work orders — tap + New Order to create one'}</p></div>`;
+  return orders.map(w => {
+    const stage = WORK_ORDER_STAGES.find(s=>s.key===w.stage)||WORK_ORDER_STAGES[0];
+    const isOverdue = w.expectedCompletionDate && new Date(w.expectedCompletionDate) < new Date() && w.stage !== 'final_paid';
+    const totalPaid = (w.payments||[]).reduce((s,p)=>s+(p.amount||0),0);
+    const balance = (w.totalValue||0) - totalPaid;
+    return `
+    <div class="task-card" onclick="VW_SERVICE.openWorkOrder(${w.id})">
+      <div class="task-card-header">
+        <span class="task-dept">${w.workOrderNo||'WO-'+w.id}</span>
+        <span class="badge" style="background:${isOverdue?'var(--red)':stage.color}">${isOverdue?'⚠️ Overdue':stage.label}</span>
+      </div>
+      <div style="font-size:13px;font-weight:600;margin:4px 0">${w.customerName||'—'} · ${w.category||'—'}</div>
+      <div style="font-size:12px;color:var(--text3)">${w.vendorName?'👷 '+w.vendorName+' · ':''}${w.siteName||w.siteAddress||'No site'}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px">
+        <span style="font-size:12px;color:var(--text3)">${w.expectedCompletionDate?'Due: '+new Date(w.expectedCompletionDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):''}</span>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:700">₹${(w.totalValue||0).toLocaleString('en-IN')}</div>
+          ${balance > 0 ? `<div style="font-size:11px;color:var(--red)">₹${balance.toLocaleString('en-IN')} pending</div>` : `<div style="font-size:11px;color:#22c55e">Fully paid</div>`}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderServiceVendorList(vendors) {
+  const isAdmin = VW_AUTH.isAdmin();
+  if (!vendors.length) return `
+    <div class="card">
+      <p class="empty-msg">No service vendors added yet</p>
+      ${isAdmin ? `<button class="btn-primary full-width" onclick="VW_SERVICE.showAddServiceVendor()">+ Add Service Vendor</button>` : ''}
+    </div>`;
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-size:13px;color:var(--text3)">${vendors.length} service vendors</span>
+    ${isAdmin ? `<button class="btn-sm" onclick="VW_SERVICE.showAddServiceVendor()">+ Add</button>` : ''}
+  </div>
+  ${vendors.map(v => {
+    const avgRating = v.ratings?.length ? (v.ratings.reduce((s,r)=>s+r,0)/v.ratings.length).toFixed(1) : null;
+    return `
+    <div class="task-card" onclick="VW_SERVICE.openServiceVendor(${v.id})">
+      <div class="task-card-header">
+        <span class="task-dept">${v.name}</span>
+        ${avgRating ? `<span style="color:var(--gold);font-size:12px">★ ${avgRating}</span>` : ''}
+      </div>
+      <div style="font-size:12px;color:var(--text3)">${v.categories?.join(', ')||'General'} · ${v.phone||'—'}</div>
+      ${v.notes ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-top:3px">${v.notes}</div>` : ''}
+    </div>`;
+  }).join('')}`;
+}
+
+// ===== ADD / EDIT SERVICE VENDOR =====
+async function showAddServiceVendor(vendorId) {
+  const v = vendorId ? await VW_DB.getById(VW_DB.STORES.serviceVendors, vendorId) : null;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>${v ? 'Edit' : 'Add'} Service Vendor</h3>
+    <div class="form-group"><label>Name / Business Name *</label><input type="text" id="sv-name" value="${v?.name||''}"></div>
+    <div class="form-group"><label>Phone *</label><input type="tel" id="sv-phone" value="${v?.phone||''}" maxlength="10"></div>
+    <div class="form-group"><label>Services Provided</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+        ${SERVICE_CATEGORIES.map(cat => `
+          <label style="display:flex;align-items:center;gap:4px;padding:4px 8px;background:var(--bg2);border-radius:6px;font-size:12px;cursor:pointer">
+            <input type="checkbox" name="sv-cat" value="${cat}" ${(v?.categories||[]).includes(cat)?'checked':''}> ${cat}
+          </label>`).join('')}
+      </div>
+    </div>
+    <div class="form-group"><label>GST Number</label><input type="text" id="sv-gst" value="${v?.gstNo||''}"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="sv-notes" value="${v?.notes||''}" placeholder="e.g. Reliable for bathroom tiling, available weekdays"></div>
+    <button class="btn-primary full-width" onclick="VW_SERVICE.saveServiceVendor(${vendorId||'null'})">Save</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function saveServiceVendor(vendorId) {
+  const name = document.getElementById('sv-name')?.value.trim();
+  const phone = document.getElementById('sv-phone')?.value.trim();
+  if (!name) { showToast('Enter vendor name', 'warn'); return; }
+  const categories = [...document.querySelectorAll('input[name="sv-cat"]:checked')].map(cb => cb.value);
+  const profile = VW_AUTH.getCurrentProfile();
+  const record = {
+    name, phone, categories,
+    gstNo: document.getElementById('sv-gst')?.value.trim()||'',
+    notes: document.getElementById('sv-notes')?.value.trim()||'',
+    updatedAt: new Date().toISOString()
+  };
+  if (vendorId) {
+    const existing = await VW_DB.getById(VW_DB.STORES.serviceVendors, vendorId);
+    await VW_DB.put(VW_DB.STORES.serviceVendors, {...existing, ...record});
+  } else {
+    record.ratings = [];
+    record.createdAt = new Date().toISOString();
+    record.addedByName = profile?.name||'';
+    await VW_DB.put(VW_DB.STORES.serviceVendors, record);
+  }
+  showToast(`Service vendor ${vendorId?'updated':'added'}`, 'success');
+  closeSheet();
+  navigateTo('service');
+}
+
+async function openServiceVendor(id) {
+  const [v, allOrders] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.serviceVendors, id),
+    VW_DB.all(VW_DB.STORES.workOrders)
+  ]);
+  if (!v) return;
+  const vendorOrders = allOrders.filter(w => w.serviceVendorId === id);
+  const isAdmin = VW_AUTH.isAdmin();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <h3 style="margin:0">${v.name}</h3>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${v.categories?.join(', ')||'General'}</p>
+      </div>
+      ${isAdmin ? `<button class="btn-sm" onclick="VW_SERVICE.showAddServiceVendor(${id})">✏️ Edit</button>` : ''}
+    </div>
+    <div class="req-item-card" style="margin-bottom:10px">
+      ${v.phone ? `<div style="font-size:13px">📞 <a href="tel:${v.phone}" style="color:var(--text1)">${v.phone}</a></div>` : ''}
+      ${v.gstNo ? `<div style="font-size:12px;color:var(--text3)">GST: ${v.gstNo}</div>` : ''}
+      ${v.notes ? `<div style="font-size:12px;color:var(--text3);font-style:italic">${v.notes}</div>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      ${v.phone ? `<button class="btn-wa" style="flex:1" onclick="window.open('https://wa.me/91${v.phone.replace(/\D/g,'')}','_blank')">💬 WhatsApp</button>` : ''}
+      ${v.phone ? `<button class="btn-call" onclick="window.location='tel:${v.phone}'">📞 Call</button>` : ''}
+    </div>
+    <div class="sheet-section-label">Work Orders (${vendorOrders.length})</div>
+    ${vendorOrders.slice(0,5).map(w => {
+      const stage = WORK_ORDER_STAGES.find(s=>s.key===w.stage)||WORK_ORDER_STAGES[0];
+      return `<div class="task-card" onclick="VW_SERVICE.openWorkOrder(${w.id})">
+        <div class="task-card-header"><span>${w.workOrderNo||'WO-'+w.id}</span><span class="badge" style="background:${stage.color}">${stage.label}</span></div>
+        <div style="font-size:12px;color:var(--text3)">${w.customerName||'—'} · ₹${(w.totalValue||0).toLocaleString('en-IN')}</div>
+      </div>`;
+    }).join('') || '<p style="font-size:12px;color:var(--text3)">No work orders yet</p>'}
+    ${isAdmin && v.ratings?.length ? `
+    <div class="sheet-section-label">Ratings</div>
+    <div style="font-size:13px">Average: ${'★'.repeat(Math.round(v.ratings.reduce((s,r)=>s+r,0)/v.ratings.length))} (${v.ratings.length} orders)</div>` : ''}
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// ===== ADD WORK ORDER =====
+async function showAddWorkOrder(customerId, customerName) {
+  const [customers, serviceVendors] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.customers),
+    VW_DB.all(VW_DB.STORES.serviceVendors)
+  ]);
+  const profile = VW_AUTH.getCurrentProfile();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>New Work Order</h3>
+
+    <div class="form-group"><label>Customer *</label>
+      <select id="wo-customer">
+        <option value="">— Select customer —</option>
+        ${customers.map(c => `<option value="${c.id}" data-name="${c.name}" ${c.id===customerId?'selected':''}>${c.name} · ${c.phone||'—'}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Service Category *</label>
+      <select id="wo-category">
+        <option value="">— Select category —</option>
+        ${SERVICE_CATEGORIES.map(c => `<option>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Site / Address</label><input type="text" id="wo-site" placeholder="e.g. House at Bhavanipuram, Flat 2B"></div>
+    <div class="form-group"><label>Description of Work</label><textarea id="wo-desc" style="height:80px" placeholder="e.g. Complete bathroom tiling — 2 bathrooms, floor + walls"></textarea></div>
+    <div class="form-group"><label>Assign Service Vendor</label>
+      <select id="wo-vendor">
+        <option value="">— Assign later —</option>
+        ${serviceVendors.map(v => `<option value="${v.id}" data-name="${v.name}">${v.name} (${v.categories?.join(', ')||'General'})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Total Work Value (₹) *</label><input type="number" id="wo-value" min="0" placeholder="e.g. 50000"></div>
+    <div class="form-group"><label>Payment Structure</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">
+        <div><label style="font-size:11px;color:var(--text3)">Advance %</label><input type="number" id="wo-adv-pct" value="30" min="0" max="100"></div>
+        <div><label style="font-size:11px;color:var(--text3)">Mid %</label><input type="number" id="wo-mid-pct" value="60" min="0" max="100"></div>
+        <div><label style="font-size:11px;color:var(--text3)">Final %</label><input type="number" id="wo-fin-pct" value="10" min="0" max="100"></div>
+      </div>
+    </div>
+    <div class="form-group"><label>Expected Completion Date</label><input type="date" id="wo-due" value="${new Date(Date.now()+14*86400000).toISOString().split('T')[0]}"></div>
+    <button class="btn-primary full-width" onclick="VW_SERVICE.saveWorkOrder()">Create Work Order</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function saveWorkOrder() {
+  const custSel = document.getElementById('wo-customer');
+  const customerId = parseInt(custSel?.value);
+  const customerName = custSel?.options[custSel.selectedIndex]?.dataset.name || '';
+  const category = document.getElementById('wo-category')?.value;
+  const totalValue = parseFloat(document.getElementById('wo-value')?.value)||0;
+  if (!customerId) { showToast('Select a customer', 'warn'); return; }
+  if (!category) { showToast('Select a category', 'warn'); return; }
+  if (!totalValue) { showToast('Enter work value', 'warn'); return; }
+
+  const vendorSel = document.getElementById('wo-vendor');
+  const serviceVendorId = parseInt(vendorSel?.value)||null;
+  const vendorName = serviceVendorId ? vendorSel?.options[vendorSel.selectedIndex]?.dataset.name||'' : '';
+
+  const fy = getFinancialYearLabel();
+  const all = await VW_DB.all(VW_DB.STORES.workOrders);
+  const seq = (all.length + 1).toString().padStart(4,'0');
+  const workOrderNo = `WO/${fy}/${seq}`;
+  const advPct = parseFloat(document.getElementById('wo-adv-pct')?.value)||30;
+  const midPct = parseFloat(document.getElementById('wo-mid-pct')?.value)||60;
+  const finPct = parseFloat(document.getElementById('wo-fin-pct')?.value)||10;
+  const profile = VW_AUTH.getCurrentProfile();
+
+  await VW_DB.put(VW_DB.STORES.workOrders, {
+    workOrderNo, customerId, customerName, category,
+    siteName: document.getElementById('wo-site')?.value.trim()||'',
+    description: document.getElementById('wo-desc')?.value.trim()||'',
+    serviceVendorId, vendorName,
+    totalValue,
+    paymentStructure: { advancePct: advPct, midPct, finalPct: finPct },
+    expectedCompletionDate: document.getElementById('wo-due')?.value||'',
+    stage: serviceVendorId ? 'assigned' : 'created',
+    payments: [],
+    photos: [],
+    notes: [],
+    createdByName: profile?.name||'',
+    createdAt: new Date().toISOString()
+  });
+
+  // WhatsApp notification to vendor if assigned
+  if (serviceVendorId) {
+    const vendor = await VW_DB.getById(VW_DB.STORES.serviceVendors, serviceVendorId);
+    if (vendor?.phone) {
+      const msg = encodeURIComponent(`Dear ${vendor.name},\n\nNew work order assigned: ${workOrderNo}\n\nCustomer: ${customerName}\nWork: ${category}\nSite: ${document.getElementById('wo-site')?.value||'—'}\nValue: ₹${totalValue.toLocaleString('en-IN')}\nDue: ${document.getElementById('wo-due')?.value||'—'}\n\nPlease confirm availability.\n\n— V Wholesale`);
+      window.open(`https://wa.me/91${vendor.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+    }
+  }
+  showToast(`Work order ${workOrderNo} created`, 'success');
+  closeSheet();
+  navigateTo('service');
+}
+
+// ===== WORK ORDER DETAIL =====
+async function openWorkOrder(id) {
+  const wo = await VW_DB.getById(VW_DB.STORES.workOrders, id);
+  if (!wo) return;
+  const isAdmin = VW_AUTH.isAdmin();
+  const stageIdx = WORK_ORDER_STAGES.findIndex(s => s.key === wo.stage);
+  const totalPaid = (wo.payments||[]).reduce((s,p) => s+(p.amount||0), 0);
+  const balance = (wo.totalValue||0) - totalPaid;
+  const advAmt = Math.round((wo.totalValue||0) * (wo.paymentStructure?.advancePct||30) / 100);
+  const midAmt = Math.round((wo.totalValue||0) * (wo.paymentStructure?.midPct||60) / 100);
+  const finAmt = Math.round((wo.totalValue||0) * (wo.paymentStructure?.finalPct||10) / 100);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <h3 style="margin:0">${wo.workOrderNo}</h3>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${wo.customerName} · ${wo.category}</p>
+        ${wo.siteName ? `<p style="font-size:12px;color:var(--text3);margin:0">📍 ${wo.siteName}</p>` : ''}
+      </div>
+      <span class="badge" style="background:${WORK_ORDER_STAGES[stageIdx]?.color||'#888'}">${WORK_ORDER_STAGES[stageIdx]?.label||wo.stage}</span>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        ${WORK_ORDER_STAGES.slice(0,6).map((s,i) => `
+          <div style="text-align:center;flex:1">
+            <div style="width:20px;height:20px;border-radius:50%;margin:0 auto;background:${i<=stageIdx?s.color:'var(--border)'}"></div>
+            <div style="font-size:9px;color:${i<=stageIdx?'var(--text1)':'var(--text3)'};margin-top:2px;line-height:1.2">${s.label.split(' ')[0]}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Financial summary -->
+    <div class="req-item-card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Total Value</span><strong>₹${(wo.totalValue||0).toLocaleString('en-IN')}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Paid so far</span><strong style="color:#22c55e">₹${totalPaid.toLocaleString('en-IN')}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Balance</span><strong style="color:${balance>0?'var(--red)':'#22c55e'}">₹${balance.toLocaleString('en-IN')}</strong></div>
+    </div>
+
+    <!-- Payment milestones -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Payment Milestones</div>
+      ${[
+        {label:'Advance', amt: advAmt, stageKey:'advance_paid'},
+        {label:'Mid-payment', amt: midAmt, stageKey:'mid_payment'},
+        {label:'Final', amt: finAmt, stageKey:'final_paid'}
+      ].map(m => {
+        const paid = (wo.payments||[]).find(p=>p.milestone===m.stageKey);
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2)">
+          <div>
+            <div style="font-size:13px">${m.label}: ₹${m.amt.toLocaleString('en-IN')}</div>
+            ${paid ? `<div style="font-size:11px;color:#22c55e">✓ Paid ${new Date(paid.paidAt).toLocaleDateString('en-IN')} by ${paid.paidByName}</div>` : ''}
+          </div>
+          ${isAdmin && !paid && stageIdx >= WORK_ORDER_STAGES.findIndex(s=>s.key===m.stageKey)-1 ?
+            `<button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_SERVICE.recordPayment(${id},'${m.stageKey}',${m.amt})">Pay</button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- Progress photos -->
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600">Progress Photos (${(wo.photos||[]).length})</div>
+        <button class="btn-sm" onclick="VW_SERVICE.addProgressPhoto(${id})">📷 Add</button>
+      </div>
+      ${(wo.photos||[]).length ? `
+        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+          ${wo.photos.map(p => `<img src="${p.url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0">`).join('')}
+        </div>` : '<p style="font-size:12px;color:var(--text3)">No photos yet</p>'}
+    </div>
+
+    <!-- Stage actions -->
+    ${isAdmin ? `
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+      ${wo.stage === 'in_progress' ? `<button class="btn-primary full-width" onclick="VW_SERVICE.updateStage(${id},'completed')">✅ Mark Work Completed</button>` : ''}
+      ${wo.stage === 'completed' ? `<button class="btn-primary full-width" onclick="VW_SERVICE.requestCustomerSignoff(${id})">📋 Request Customer Sign-off</button>` : ''}
+      ${wo.stage === 'signed_off' ? `<button class="btn-primary full-width" style="background:#22c55e" onclick="VW_SERVICE.updateStage(${id},'final_paid')">💰 Release Final Payment</button>` : ''}
+      ${wo.stage === 'assigned' ? `<button class="btn-secondary full-width" onclick="VW_SERVICE.updateStage(${id},'in_progress')">🔧 Mark Work Started</button>` : ''}
+    </div>` : ''}
+
+    <!-- Vendor actions -->
+    ${wo.vendorName ? `
+    <div style="display:flex;gap:8px">
+      <button class="btn-wa" style="flex:1" onclick="window.open('https://wa.me/91${wo.vendorPhone||''}','_blank')">💬 WhatsApp Vendor</button>
+      <button class="btn-secondary" onclick="VW_SERVICE.rateServiceVendor(${wo.serviceVendorId})">⭐ Rate</button>
+    </div>` : `
+    <button class="btn-secondary full-width" onclick="VW_SERVICE.assignVendor(${id})">👷 Assign Vendor</button>`}
+    <button class="btn-secondary full-width" style="margin-top:8px;color:var(--text3)" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function updateStage(workOrderId, newStage) {
+  const wo = await VW_DB.getById(VW_DB.STORES.workOrders, workOrderId);
+  if (!wo) return;
+  wo.stage = newStage;
+  wo.stageUpdatedAt = new Date().toISOString();
+  wo.stageUpdatedBy = VW_AUTH.getCurrentProfile()?.name||'';
+  await VW_DB.put(VW_DB.STORES.workOrders, wo);
+  showToast(`Stage updated: ${WORK_ORDER_STAGES.find(s=>s.key===newStage)?.label}`, 'success');
+  await openWorkOrder(workOrderId);
+}
+
+async function recordPayment(workOrderId, milestone, suggestedAmount) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>Record Payment</h3>
+    <p class="sheet-meta">${milestone.replace(/_/g,' ')} · Suggested: ₹${suggestedAmount.toLocaleString('en-IN')}</p>
+    <div class="form-group"><label>Amount Paid (₹)</label><input type="number" id="pay-amount" value="${suggestedAmount}"></div>
+    <div class="form-group"><label>Payment Mode</label>
+      <select id="pay-mode"><option>Cash</option><option>UPI</option><option>Bank Transfer</option><option>Cheque</option></select>
+    </div>
+    <div class="form-group"><label>Reference / UTR</label><input type="text" id="pay-ref" placeholder="UTR or cheque number"></div>
+    <button class="btn-primary full-width" onclick="VW_SERVICE.confirmPayment(${workOrderId},'${milestone}')">✓ Confirm Payment</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_SERVICE.openWorkOrder(${workOrderId})">Cancel</button>
+  `;
+}
+
+async function confirmPayment(workOrderId, milestone) {
+  const amount = parseFloat(document.getElementById('pay-amount')?.value)||0;
+  if (!amount) { showToast('Enter amount', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  const wo = await VW_DB.getById(VW_DB.STORES.workOrders, workOrderId);
+  if (!wo) return;
+  wo.payments = [...(wo.payments||[]), {
+    milestone, amount,
+    mode: document.getElementById('pay-mode')?.value||'Cash',
+    reference: document.getElementById('pay-ref')?.value||'',
+    paidByName: profile?.name||'',
+    paidAt: new Date().toISOString()
+  }];
+  // Auto advance stage
+  const stageMap = { advance_paid: 'in_progress', mid_payment: 'in_progress', final_paid: 'final_paid' };
+  if (stageMap[milestone]) wo.stage = stageMap[milestone];
+  await VW_DB.put(VW_DB.STORES.workOrders, wo);
+  showToast(`₹${amount.toLocaleString('en-IN')} payment recorded`, 'success');
+  await openWorkOrder(workOrderId);
+}
+
+async function addProgressPhoto(workOrderId) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📷 Add Progress Photo</h3>
+    <div class="form-group"><label>Stage / Caption</label>
+      <select id="photo-stage">
+        <option>Before Work</option><option>Work Started</option><option>50% Complete</option>
+        <option>90% Complete</option><option>After Completion</option><option>Issue Found</option>
+      </select>
+    </div>
+    <div id="photo-preview" style="display:none;margin-bottom:12px">
+      <img id="photo-img" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px">
+    </div>
+    <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="VW_SERVICE.previewPhoto(this)">
+    <button class="btn-primary full-width" onclick="document.getElementById('photo-input').click()">📷 Take / Upload Photo</button>
+    <button class="btn-secondary full-width" id="photo-save-btn" style="display:none;margin-top:8px" onclick="VW_SERVICE.saveProgressPhoto(${workOrderId})">✓ Save Photo</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_SERVICE.openWorkOrder(${workOrderId})">Cancel</button>
+  `;
+}
+
+function previewPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = document.getElementById('photo-img');
+    const preview = document.getElementById('photo-preview');
+    const saveBtn = document.getElementById('photo-save-btn');
+    if (img) img.src = e.target.result;
+    if (preview) preview.style.display = '';
+    if (saveBtn) saveBtn.style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveProgressPhoto(workOrderId) {
+  const input = document.getElementById('photo-input');
+  const file = input?.files[0];
+  if (!file) { showToast('Take a photo first', 'warn'); return; }
+  const stage = document.getElementById('photo-stage')?.value||'';
+  const profile = VW_AUTH.getCurrentProfile();
+
+  const saveBtn = document.getElementById('photo-save-btn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Uploading...'; }
+
+  try {
+    const dataUrl = await new Promise((res,rej) => {
+      const r = new FileReader(); r.onload = ()=>res(r.result); r.onerror = rej; r.readAsDataURL(file);
+    });
+    const path = `workorders/${workOrderId}-${Date.now()}.jpg`;
+    const binary = atob(dataUrl.split(',')[1]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    await VW_DB.client.storage.from('visit-photos').upload(path, bytes, {contentType:'image/jpeg'});
+    const { data: pubUrl } = VW_DB.client.storage.from('visit-photos').getPublicUrl(path);
+
+    const wo = await VW_DB.getById(VW_DB.STORES.workOrders, workOrderId);
+    if (wo) {
+      wo.photos = [...(wo.photos||[]), {
+        url: pubUrl?.publicUrl||'', stage,
+        addedByName: profile?.name||'',
+        addedAt: new Date().toISOString()
+      }];
+      await VW_DB.put(VW_DB.STORES.workOrders, wo);
+    }
+    showToast('Photo saved', 'success');
+    await openWorkOrder(workOrderId);
+  } catch(e) {
+    console.error('Photo upload error:', e);
+    showToast('Upload failed — try again', 'warn');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✓ Save Photo'; }
+  }
+}
+
+async function requestCustomerSignoff(workOrderId) {
+  const wo = await VW_DB.getById(VW_DB.STORES.workOrders, workOrderId);
+  if (!wo) return;
+  const cust = await VW_DB.getById(VW_DB.STORES.customers, wo.customerId);
+  if (!cust?.phone) { showToast('No customer phone number', 'warn'); return; }
+  const msg = encodeURIComponent(
+    `Dear ${cust.name},\n\nThe work at your site (${wo.siteName||wo.category}) has been completed by our team.\n\nWork Order: ${wo.workOrderNo}\nCategory: ${wo.category}\n\nKindly confirm you are satisfied with the work so we can close the order.\n\nReply CONFIRM to approve or call us if you have any concerns.\n\nThank you!\n— V Wholesale`
+  );
+  window.open(`https://wa.me/91${cust.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+  wo.stage = 'signed_off';
+  wo.signoffRequestedAt = new Date().toISOString();
+  await VW_DB.put(VW_DB.STORES.workOrders, wo);
+  showToast('Sign-off request sent', 'success');
+  closeSheet();
+}
+
+async function assignVendor(workOrderId) {
+  const vendors = await VW_DB.all(VW_DB.STORES.serviceVendors);
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>Assign Service Vendor</h3>
+    <div class="form-group"><label>Select Vendor</label>
+      <select id="assign-vendor">
+        <option value="">— Select —</option>
+        ${vendors.map(v => `<option value="${v.id}" data-name="${v.name}" data-phone="${v.phone||''}">${v.name} · ${v.categories?.join(', ')||'General'}</option>`).join('')}
+      </select>
+    </div>
+    <button class="btn-primary full-width" onclick="VW_SERVICE.confirmAssignVendor(${workOrderId})">Assign & Notify</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_SERVICE.openWorkOrder(${workOrderId})">Cancel</button>
+  `;
+}
+
+async function confirmAssignVendor(workOrderId) {
+  const sel = document.getElementById('assign-vendor');
+  const vendorId = parseInt(sel?.value);
+  if (!vendorId) { showToast('Select a vendor', 'warn'); return; }
+  const opt = sel?.options[sel.selectedIndex];
+  const wo = await VW_DB.getById(VW_DB.STORES.workOrders, workOrderId);
+  if (!wo) return;
+  wo.serviceVendorId = vendorId;
+  wo.vendorName = opt?.dataset.name||'';
+  wo.vendorPhone = opt?.dataset.phone||'';
+  wo.stage = 'assigned';
+  await VW_DB.put(VW_DB.STORES.workOrders, wo);
+  // Notify vendor
+  if (opt?.dataset.phone) {
+    const msg = encodeURIComponent(`Dear ${wo.vendorName},\n\nNew work order assigned: ${wo.workOrderNo}\nCustomer: ${wo.customerName}\nWork: ${wo.category}\nSite: ${wo.siteName||'—'}\nValue: ₹${(wo.totalValue||0).toLocaleString('en-IN')}\n\nPlease confirm availability.\n\n— V Wholesale`);
+    window.open(`https://wa.me/91${opt.dataset.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+  }
+  showToast(`Assigned to ${wo.vendorName}`, 'success');
+  await openWorkOrder(workOrderId);
+}
+
+async function rateServiceVendor(vendorId) {
+  if (!vendorId) return;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>Rate Service Vendor</h3>
+    <p class="sheet-meta">How was the quality of work?</p>
+    <div style="display:flex;gap:10px;justify-content:center;padding:16px 0">
+      ${[1,2,3,4,5].map(n => `
+        <button onclick="VW_SERVICE.submitVendorRating(${vendorId},${n})" style="background:none;border:2px solid var(--border);border-radius:50%;width:48px;height:48px;font-size:20px;cursor:pointer">
+          ${'★'}
+        </button>`).join('')}
+    </div>
+    <button class="btn-secondary full-width" onclick="closeSheet()">Cancel</button>
+  `;
+}
+
+async function submitVendorRating(vendorId, rating) {
+  const v = await VW_DB.getById(VW_DB.STORES.serviceVendors, vendorId);
+  if (!v) return;
+  v.ratings = [...(v.ratings||[]), rating];
+  await VW_DB.put(VW_DB.STORES.serviceVendors, v);
+  showToast(`Rated ${rating}★`, 'success');
+  closeSheet();
+}
+
+window.VW_SERVICE = {
+  renderServicePage, switchSvcTab,
+  showAddServiceVendor, saveServiceVendor, openServiceVendor,
+  showAddWorkOrder, saveWorkOrder, openWorkOrder,
+  updateStage, recordPayment, confirmPayment,
+  addProgressPhoto, previewPhoto, saveProgressPhoto,
+  requestCustomerSignoff, assignVendor, confirmAssignVendor,
+  rateServiceVendor, submitVendorRating
+};
+
+
+/* === employee_app.js === */
+// ============================================================
+// EMPLOYEE SELF-SERVICE APP + KIOSK — Session 9
+// Kiosk Punch In/Out · Employee Dashboard · Breaks · Chat
+// Birthday/Anniversary · Leave Tracker · Announcements
+// ============================================================
+
+// Store GPS coordinates — update exact location from Google Maps
+const STORE_LAT = 16.5206153;
+const STORE_LNG = 80.5999189;
+const BREAK_GEOFENCE_METERS = 50;
+const PUNCH_GEOFENCE_METERS = 50;
+
+// =====================================================
+// KIOSK MODE — opened via ?kiosk=1
+// Full screen, no login needed
+// =====================================================
+async function renderKioskMode() {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const active = staff.filter(s => s.active !== false);
+  const today = new Date().toISOString().split('T')[0];
+  const attendance = await VW_DB.all(VW_DB.STORES.attendance);
+  const todayAtt = {};
+  attendance.filter(a => a.date === today).forEach(a => todayAtt[a.staffId] = a);
+
+  const presentCount = Object.values(todayAtt).filter(a => a.punchIn && !a.punchOut).length;
+  const now = new Date();
+
+  return `
+  <style>
+    body { overflow: hidden; }
+    .kiosk-wrap { min-height: 100vh; background: linear-gradient(135deg, #0a0a0a 0%, #1a1208 100%); padding: 0; }
+    .kiosk-header { background: linear-gradient(90deg, #C8972B, #f5c842); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+    .kiosk-time { font-size: 28px; font-weight: 700; color: #000; }
+    .kiosk-date { font-size: 13px; color: #333; }
+    .kiosk-present { background: rgba(0,0,0,0.2); padding: 6px 12px; border-radius: 20px; font-size: 13px; color: #000; font-weight: 600; }
+    .kiosk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 16px; }
+    .kiosk-card { background: rgba(255,255,255,0.06); border: 1px solid rgba(200,151,43,0.2); border-radius: 16px; padding: 16px 12px; text-align: center; cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
+    .kiosk-card:active { transform: scale(0.96); background: rgba(200,151,43,0.15); }
+    .kiosk-avatar { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 8px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: #fff; }
+    .kiosk-name { font-size: 12px; font-weight: 600; color: #fff; margin-bottom: 4px; line-height: 1.3; }
+    .kiosk-status { font-size: 10px; padding: 2px 8px; border-radius: 10px; display: inline-block; }
+    .status-in { background: rgba(34,197,94,0.2); color: #22c55e; }
+    .status-out { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .status-break { background: rgba(249,115,22,0.2); color: #f97316; }
+    .kiosk-punch-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+    .kiosk-punch-card { background: #111; border: 2px solid #C8972B; border-radius: 24px; padding: 28px 20px; width: 100%; max-width: 360px; text-align: center; }
+  </style>
+  <div class="kiosk-wrap" id="kiosk-root">
+    <div class="kiosk-header">
+      <div>
+        <div class="kiosk-time" id="kiosk-clock">${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="kiosk-date">${now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+      </div>
+      <div>
+        <div class="kiosk-present">🟢 ${presentCount} In Store</div>
+        <div style="font-size:11px;color:#333;margin-top:4px;text-align:center">V Wholesale</div>
+      </div>
+    </div>
+    <p style="text-align:center;color:rgba(255,255,255,0.4);font-size:13px;padding:12px 0 0">Tap your name to Punch In or Out</p>
+    <div class="kiosk-grid">
+      ${active.map(s => {
+        const att = todayAtt[s.id];
+        const isIn = att?.punchIn && !att?.punchOut;
+        const isOnBreak = att?.currentlyOnBreak;
+        const status = isOnBreak ? 'break' : isIn ? 'in' : 'out';
+        const statusLabel = isOnBreak ? '☕ On Break' : isIn ? `✓ In ${att.punchIn?.slice(0,5)||''}` : '— Not Punched';
+        const color = `hsl(${(s.id||1)*47},65%,40%)`;
+        return `
+        <div class="kiosk-card" onclick="VW_EMPLOYEE.openKioskPunch(${s.id},'${s.name.replace(/'/g,"\\'")}','${status}')">
+          <div class="kiosk-avatar" style="background:${color}">${s.name[0].toUpperCase()}</div>
+          <div class="kiosk-name">${s.name.split(' ')[0]}</div>
+          <div class="kiosk-status status-${status}">${statusLabel}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+
+  // Start kiosk clock
+  setTimeout(() => {
+    setInterval(() => {
+      const el = document.getElementById('kiosk-clock');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    }, 1000);
+  }, 100);
+}
+
+async function openKioskPunch(staffId, staffName, currentStatus) {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const isIn = currentStatus === 'in' || currentStatus === 'break';
+  const action = isIn ? 'Punch Out' : 'Punch In';
+  const actionColor = isIn ? '#ef4444' : '#22c55e';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'kiosk-punch-overlay';
+  overlay.id = 'kiosk-overlay';
+  overlay.innerHTML = `
+    <div class="kiosk-punch-card">
+      <div style="font-size:40px;margin-bottom:12px">${isIn ? '👋' : '👋'}</div>
+      <h2 style="color:#fff;margin:0 0 4px;font-size:22px">${staffName.split(' ')[0]}</h2>
+      <p style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:20px">${timeStr} · ${now.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</p>
+      <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="font-size:13px;color:rgba(255,255,255,0.6)">Current Status</div>
+        <div style="font-size:16px;color:${currentStatus==='in'?'#22c55e':currentStatus==='break'?'#f97316':'#ef4444'};font-weight:600;margin-top:4px">
+          ${currentStatus==='in'?'✓ In Store':currentStatus==='break'?'☕ On Break':'— Not Punched In'}
+        </div>
+      </div>
+      <button style="background:${actionColor};color:#fff;border:none;border-radius:14px;padding:16px;width:100%;font-size:18px;font-weight:700;cursor:pointer;margin-bottom:10px" onclick="VW_EMPLOYEE.confirmKioskPunch(${staffId},'${action}')">
+        ${action}
+      </button>
+      <button style="background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);border:none;border-radius:14px;padding:12px;width:100%;font-size:14px;cursor:pointer" onclick="document.getElementById('kiosk-overlay').remove()">
+        Cancel
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function confirmKioskPunch(staffId, action) {
+  await recordKioskPunch(staffId, action);
+}
+
+async function recordKioskPunch(staffId, action, locationFailed) {
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5);
+  const all = await VW_DB.all(VW_DB.STORES.attendance);
+  const existing = all.find(a => a.staffId === staffId && a.date === today);
+
+  if (action === 'Punch In') {
+    if (existing) {
+      existing.punchIn = existing.punchIn || timeStr;
+      existing.finalWorking = 1;
+      await VW_DB.put(VW_DB.STORES.attendance, existing);
+    } else {
+      await VW_DB.put(VW_DB.STORES.attendance, {
+        staffId, date: today, punchIn: timeStr,
+        finalWorking: 1, currentlyOnBreak: false,
+        createdAt: now.toISOString()
+      });
+    }
+  } else {
+    if (existing) {
+      existing.punchOut = timeStr;
+      existing.currentlyOnBreak = false;
+      // Calculate hours worked
+      if (existing.punchIn) {
+        const inParts = existing.punchIn.split(':').map(Number);
+        const outParts = timeStr.split(':').map(Number);
+        const hoursWorked = (outParts[0]*60+outParts[1] - inParts[0]*60-inParts[1]) / 60;
+        existing.hoursWorked = Math.max(0, hoursWorked).toFixed(2);
+      }
+      await VW_DB.put(VW_DB.STORES.attendance, existing);
+    }
+  }
+
+  // Show success and auto-close
+  const overlay = document.getElementById('kiosk-overlay');
+  if (overlay) {
+    overlay.innerHTML = `
+      <div class="kiosk-punch-card" style="text-align:center">
+        <div style="font-size:60px;margin-bottom:12px">${action==='Punch In'?'✅':'👋'}</div>
+        <h2 style="color:#fff;font-size:24px;margin:0 0 8px">${action} Successful!</h2>
+        <p style="color:rgba(255,255,255,0.6);font-size:15px">${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</p>
+        <div style="margin-top:16px;color:var(--gold);font-size:14px">Have a great ${action==='Punch In'?'day':'evening'}! 🙏</div>
+      </div>`;
+    setTimeout(() => {
+      overlay.remove();
+      // Refresh kiosk
+      navigateTo('kiosk');
+    }, 2500);
+  }
+  showToast(`${action} recorded`, 'success');
+}
+
+// =====================================================
+// EMPLOYEE HOME DASHBOARD
+// =====================================================
+async function renderEmployeeDashboard() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const [staff, allAtt, announcements, tasks, leaves] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.staff),
+    VW_DB.all(VW_DB.STORES.attendance),
+    VW_DB.all(VW_DB.STORES.announcements),
+    VW_DB.all(VW_DB.STORES.tasks),
+    VW_DB.all(VW_DB.STORES.leaves)
+  ]);
+
+  // Find this employee's staff record by matching name
+  const myStaff = staff.find(s =>
+    s.name === profile?.name ||
+    s.attendanceName === profile?.name ||
+    s.name?.toLowerCase().includes((profile?.name||'').toLowerCase().split(' ')[0])
+  );
+
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const myTodayAtt = myStaff ? allAtt.find(a => a.staffId === myStaff.id && a.date === today) : null;
+  const isIn = myTodayAtt?.punchIn && !myTodayAtt?.punchOut;
+  const onBreak = myTodayAtt?.currentlyOnBreak;
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const myMonthAtt = myStaff ? allAtt.filter(a => a.staffId === myStaff.id && new Date(a.date) >= monthStart) : [];
+  const presentDays = myMonthAtt.reduce((s,a) => s+(a.finalWorking||0), 0);
+  const myPendingLeave = leaves.filter(l => l.staffId === myStaff?.id && l.status === 'pending');
+  const myTasks = tasks.filter(t => t.assignedToName === profile?.name && t.status !== 'resolved');
+  const pinned = announcements.filter(a => a.pinned).sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt)).slice(0,3);
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  // Check birthdays/anniversaries today
+  const todayMD = `${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const birthdayPeople = staff.filter(s => s.dateOfBirth && s.dateOfBirth.slice(5) === todayMD);
+  const anniversaryPeople = staff.filter(s => s.joiningDate && s.joiningDate.slice(5) === todayMD && s.id !== myStaff?.id);
+
+  return `
+  <style>
+    .emp-punch-card { background: linear-gradient(135deg, #1a1208, #0d0d0d); border: 1px solid rgba(200,151,43,0.3); border-radius: 20px; padding: 20px; margin-bottom: 14px; }
+    .punch-status-ring { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 28px; margin: 0 auto 10px; border: 3px solid; }
+    .emp-quick-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 14px; padding: 14px 10px; text-align: center; cursor: pointer; transition: all 0.2s; -webkit-tap-highlight-color: transparent; }
+    .emp-quick-btn:active { transform: scale(0.95); background: rgba(200,151,43,0.15); }
+    .emp-quick-icon { font-size: 24px; display: block; margin-bottom: 6px; }
+    .emp-quick-label { font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 600; }
+    .announce-card { background: rgba(200,151,43,0.08); border: 1px solid rgba(200,151,43,0.2); border-radius: 12px; padding: 12px; margin-bottom: 8px; }
+    .emp-stat { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 12px; text-align: center; }
+  </style>
+
+  <!-- Greeting -->
+  <div style="padding: 4px 0 14px">
+    <div style="font-size: 22px; font-weight: 700; color: #fff;">${greeting}, ${(profile?.name||'').split(' ')[0]}! ${hour < 12 ? '☀️' : hour < 17 ? '🌤' : '🌙'}</div>
+    <div style="font-size: 13px; color: rgba(255,255,255,0.4);">${now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
+  </div>
+
+  ${(birthdayPeople.length || anniversaryPeople.length) ? `
+  <div style="background:linear-gradient(135deg,rgba(200,151,43,0.2),rgba(200,151,43,0.05));border:1px solid rgba(200,151,43,0.4);border-radius:16px;padding:14px;margin-bottom:14px">
+    ${birthdayPeople.map(p => `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:28px">🎂</div>
+      <div>
+        <div style="font-weight:700;color:#fff">Happy Birthday, ${p.name.split(' ')[0]}!</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5)">Wishing you a wonderful day 🎉</div>
+      </div>
+      ${p.phone ? `<button style="margin-left:auto;background:var(--gold);color:#000;border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer" onclick="window.open('https://wa.me/91${p.phone.replace(/\D/g,'')}?text=${encodeURIComponent('Happy Birthday '+p.name.split(' ')[0]+'! 🎂🎉 Wishing you a wonderful year ahead! — V Wholesale Family')}','_blank')">💬 Wish</button>` : ''}
+    </div>`).join('')}
+    ${anniversaryPeople.map(p => `
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:28px">🎊</div>
+      <div>
+        <div style="font-weight:700;color:#fff">Work Anniversary — ${p.name.split(' ')[0]}!</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5)">Thank you for being with us 🙏</div>
+      </div>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <!-- Punch Status Card -->
+  <div class="emp-punch-card">
+    <div class="punch-status-ring" style="border-color:${onBreak?'#f97316':isIn?'#22c55e':'rgba(255,255,255,0.2)'};background:${onBreak?'rgba(249,115,22,0.1)':isIn?'rgba(34,197,94,0.1)':'rgba(255,255,255,0.05)'}">
+      ${onBreak ? '☕' : isIn ? '✅' : myTodayAtt?.punchOut ? '🏠' : '⏰'}
+    </div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:18px;font-weight:700;color:${onBreak?'#f97316':isIn?'#22c55e':'rgba(255,255,255,0.6)'}">
+        ${onBreak ? 'On Break' : isIn ? 'In Store' : myTodayAtt?.punchOut ? 'Punched Out' : 'Not Checked In'}
+      </div>
+      ${myTodayAtt?.punchIn ? `<div style="font-size:12px;color:rgba(255,255,255,0.4)">In: ${myTodayAtt.punchIn?.slice(0,5)||'—'}${myTodayAtt?.punchOut?' · Out: '+myTodayAtt.punchOut?.slice(0,5):''}</div>` : ''}
+    </div>
+    <!-- Quick actions grid -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.requestBreakOut()">
+        <span class="emp-quick-icon">🚶</span><span class="emp-quick-label">Break Out</span>
+      </div>
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.requestBreakIn()">
+        <span class="emp-quick-icon">🔙</span><span class="emp-quick-label">Break In</span>
+      </div>
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.showApplyLeaveEmp()">
+        <span class="emp-quick-icon">📅</span><span class="emp-quick-label">Apply Leave</span>
+      </div>
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.showMyPayslip()">
+        <span class="emp-quick-icon">💰</span><span class="emp-quick-label">My Payslip</span>
+      </div>
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.showMyAttendance()">
+        <span class="emp-quick-icon">📋</span><span class="emp-quick-label">Attendance</span>
+      </div>
+      <div class="emp-quick-btn" onclick="VW_EMPLOYEE.openEmpChat()">
+        <span class="emp-quick-icon">💬</span><span class="emp-quick-label">Team Chat</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+    <div class="emp-stat">
+      <div style="font-size:20px;font-weight:700;color:#22c55e">${presentDays}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.4)">Days This Month</div>
+    </div>
+    <div class="emp-stat">
+      <div style="font-size:20px;font-weight:700;color:var(--gold)">${myTasks.length}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.4)">Open Tasks</div>
+    </div>
+    <div class="emp-stat">
+      <div style="font-size:20px;font-weight:700;color:${myPendingLeave.length?'#f97316':'rgba(255,255,255,0.6)'}">${myPendingLeave.length}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.4)">Pending Leave</div>
+    </div>
+  </div>
+
+  <!-- My Tasks today -->
+  ${myTasks.length ? `
+  <div style="margin-bottom:14px">
+    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px">📋 My Tasks</div>
+    ${myTasks.slice(0,3).map(t => `
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px;margin-bottom:6px" onclick="VW_TASKS.openTaskDetail(${t.id})">
+      <div style="font-size:13px;font-weight:600;color:#fff">${t.description||'Task'}</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px">${t.department||'—'} · ${t.customerName||'—'}</div>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <!-- Announcements -->
+  ${pinned.length ? `
+  <div>
+    <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px">📢 Announcements</div>
+    ${pinned.map(a => `
+    <div class="announce-card">
+      <div style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:4px">${a.title}</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.7)">${a.body}</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:6px">${new Date(a.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${a.postedByName||'Management'}</div>
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
+// =====================================================
+// BREAK OUT / BREAK IN with Geofence
+// =====================================================
+async function requestBreakOut() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>☕ Break Out</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:14px">Checking your location... must be within ${BREAK_GEOFENCE_METERS}m of store to punch break.</p>
+    <div id="break-location-status" style="text-align:center;padding:16px">
+      <div class="spinner"></div>
+      <p style="color:var(--text3);font-size:13px;margin-top:8px">Getting location...</p>
+    </div>
+    <div id="break-form" style="display:none">
+      <div class="form-group"><label>Reason *</label>
+        <select id="break-reason">
+          <option>Lunch</option>
+          <option>Office Work</option>
+          <option>Delivery</option>
+          <option>Purchase</option>
+          <option>Personal</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Vehicle</label>
+        <select id="break-vehicle">
+          <option value="">None / On Foot</option>
+          <option>Bike (Personal)</option>
+          <option>Bike Blue</option>
+          <option>Auto</option>
+          <option>Car</option>
+          <option>Public Transport</option>
+        </select>
+      </div>
+      <button class="btn-primary full-width" onclick="VW_EMPLOYEE.confirmBreakOut()">🚶 Punch Break Out</button>
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+  // Get location
+  await checkGeofence(BREAK_GEOFENCE_METERS, 'break-location-status', 'break-form');
+}
+
+async function requestBreakIn() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>🔙 Break In</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:14px">Checking you are back at the store...</p>
+    <div id="breakin-location-status" style="text-align:center;padding:16px">
+      <div class="spinner"></div>
+      <p style="color:var(--text3);font-size:13px;margin-top:8px">Getting location...</p>
+    </div>
+    <div id="breakin-form" style="display:none">
+      <div class="form-group"><label>Vehicle Returned</label>
+        <select id="breakin-vehicle">
+          <option value="">None</option>
+          <option>Bike (Personal)</option>
+          <option>Bike Blue</option>
+          <option>Auto</option>
+          <option>Car</option>
+        </select>
+      </div>
+      <button class="btn-primary full-width" onclick="VW_EMPLOYEE.confirmBreakIn()">✅ Punch Break In</button>
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+  await checkGeofence(BREAK_GEOFENCE_METERS, 'breakin-location-status', 'breakin-form');
+}
+
+async function checkGeofence(radiusMeters, statusElId, formElId) {
+  if (!navigator.geolocation) {
+    document.getElementById(statusElId).innerHTML = `<p style="color:var(--red)">❌ Location not supported on this device</p>`;
+    document.getElementById(formElId).style.display = '';
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const dist = getDistance(pos.coords.latitude, pos.coords.longitude, STORE_LAT, STORE_LNG);
+      const statusEl = document.getElementById(statusElId);
+      const formEl = document.getElementById(formElId);
+      if (dist <= radiusMeters) {
+        if (statusEl) statusEl.innerHTML = `<div style="color:#22c55e;font-size:13px">✅ Location verified — ${Math.round(dist)}m from store</div>`;
+        if (formEl) formEl.style.display = '';
+      } else {
+        if (statusEl) statusEl.innerHTML = `
+          <div style="color:var(--red);font-size:13px;padding:10px">
+            ❌ You are ${Math.round(dist)}m away from the store.<br>
+            Must be within ${radiusMeters}m to punch break.<br>
+            <span style="color:rgba(255,255,255,0.4);font-size:11px">Walk closer to the store and try again.</span>
+          </div>
+          <button class="btn-secondary" style="margin-top:8px" onclick="VW_EMPLOYEE.checkGeofenceRetry('${statusElId}','${formElId}',${radiusMeters})">🔄 Retry</button>`;
+      }
+    },
+    (err) => {
+      const el = document.getElementById(statusElId);
+      if (el) el.innerHTML = `<p style="color:var(--gold);font-size:12px">⚠️ Could not get location. ${err.message}</p>`;
+      // Allow punch anyway if location fails (admin can review)
+      const formEl = document.getElementById(formElId);
+      if (formEl) formEl.style.display = '';
+    },
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+  );
+}
+
+function checkGeofenceRetry(statusElId, formElId, radius) {
+  const el = document.getElementById(statusElId);
+  if (el) el.innerHTML = '<div class="spinner"></div>';
+  checkGeofence(radius, statusElId, formElId);
+}
+window.checkGeofenceRetry = checkGeofenceRetry;
+
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLon = (lon2-lon1) * Math.PI/180;
+  const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+async function confirmBreakOut() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  if (!myStaff) { showToast('Staff record not found', 'warn'); return; }
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5);
+  const all = await VW_DB.all(VW_DB.STORES.attendance);
+  let att = all.find(a => a.staffId === myStaff.id && a.date === today);
+  if (!att) { showToast('Please punch in first', 'warn'); return; }
+  const breaks = att.breaks || [];
+  breaks.push({
+    reason: document.getElementById('break-reason')?.value||'Lunch',
+    vehicle: document.getElementById('break-vehicle')?.value||'',
+    outTime: timeStr, inTime: null,
+    deductible: ['Lunch','Personal'].includes(document.getElementById('break-reason')?.value)
+  });
+  att.breaks = breaks;
+  att.currentlyOnBreak = true;
+  await VW_DB.put(VW_DB.STORES.attendance, att);
+  showToast('Break out recorded 🚶', 'success');
+  closeSheet();
+  navigateTo('employeeapp');
+}
+
+async function confirmBreakIn() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  if (!myStaff) { showToast('Staff record not found', 'warn'); return; }
+  const now = new Date();
+  const today = now.toISOString().split('T')[0];
+  const timeStr = now.toTimeString().slice(0,5);
+  const all = await VW_DB.all(VW_DB.STORES.attendance);
+  let att = all.find(a => a.staffId === myStaff.id && a.date === today);
+  if (!att) return;
+  const breaks = att.breaks || [];
+  const openBreak = [...breaks].reverse().find(b => !b.inTime);
+  if (openBreak) { openBreak.inTime = timeStr; openBreak.vehicleReturned = document.getElementById('breakin-vehicle')?.value||''; }
+  att.breaks = breaks;
+  att.currentlyOnBreak = false;
+  await VW_DB.put(VW_DB.STORES.attendance, att);
+  showToast('Break in recorded ✅', 'success');
+  closeSheet();
+  navigateTo('employeeapp');
+}
+
+// =====================================================
+// TEAM CHAT
+// =====================================================
+async function openEmpChat() {
+  const [messages, staff] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.chatMessages),
+    VW_DB.all(VW_DB.STORES.staff)
+  ]);
+  const profile = VW_AUTH.getCurrentProfile();
+  const groups = [
+    { id: 'general', name: '🏠 V Wholesale Team', type: 'group' },
+    { id: 'management', name: '👔 Management', type: 'group' },
+    { id: 'sales', name: '💼 Sales Team', type: 'group' },
+  ];
+  // 1-on-1 chats
+  const myDirects = [...new Set(
+    messages.filter(m => m.toId === profile?.id || m.fromId === profile?.id)
+      .map(m => m.fromId === profile?.id ? m.toId : m.fromId)
+  )].filter(id => id && id !== profile?.id);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>💬 Team Chat</h3>
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px;font-weight:600">CHANNELS</div>
+      ${groups.map(g => {
+        const count = messages.filter(m => m.channelId === g.id).length;
+        const last = messages.filter(m => m.channelId === g.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt))[0];
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:var(--bg2)" onclick="VW_EMPLOYEE.openChannel('${g.id}','${g.name}')">
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600">${g.name}</div>
+            ${last ? `<div style="font-size:11px;color:var(--text3)">${last.senderName}: ${(last.text||'').slice(0,40)}</div>` : `<div style="font-size:11px;color:var(--text3)">No messages yet</div>`}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px;font-weight:600">DIRECT MESSAGES</div>
+      ${staff.filter(s=>s.active!==false && s.name !== profile?.name).slice(0,8).map(s => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:var(--bg2)" onclick="VW_EMPLOYEE.openDM(${s.id},'${s.name.replace(/'/g,"\\'")}')">
+          <div style="width:36px;height:36px;border-radius:50%;background:hsl(${(s.id)*47},60%,35%);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px">${s.name[0]}</div>
+          <div style="font-size:13px;font-weight:600">${s.name}</div>
+          <div style="margin-left:auto;font-size:11px;color:var(--text3)">${s.designation||''}</div>
+        </div>`).join('')}
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function openChannel(channelId, channelName) {
+  const profile = VW_AUTH.getCurrentProfile();
+  const allMessages = await VW_DB.all(VW_DB.STORES.chatMessages);
+  const msgs = allMessages.filter(m => m.channelId === channelId).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  renderChatWindow(channelName, msgs, async (text) => {
+    await VW_DB.put(VW_DB.STORES.chatMessages, {
+      channelId, text,
+      fromId: profile?.id, senderName: profile?.name||'',
+      createdAt: new Date().toISOString()
+    });
+  });
+}
+
+async function openDM(toStaffId, toName) {
+  const profile = VW_AUTH.getCurrentProfile();
+  const allMessages = await VW_DB.all(VW_DB.STORES.chatMessages);
+  const msgs = allMessages.filter(m =>
+    (m.fromId === profile?.id && m.toId === String(toStaffId)) ||
+    (m.toId === profile?.id && m.fromId === String(toStaffId))
+  ).sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+  renderChatWindow(toName, msgs, async (text) => {
+    await VW_DB.put(VW_DB.STORES.chatMessages, {
+      toId: String(toStaffId), text,
+      fromId: profile?.id, senderName: profile?.name||'',
+      isDM: true, createdAt: new Date().toISOString()
+    });
+  });
+}
+
+function renderChatWindow(title, msgs, sendFn) {
+  const profile = VW_AUTH.getCurrentProfile();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 0 10px">
+      <button onclick="VW_EMPLOYEE.openEmpChat()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">←</button>
+      <h3 style="margin:0;flex:1">${title}</h3>
+    </div>
+    <div id="chat-messages" style="height:300px;overflow-y:auto;padding:4px 0;display:flex;flex-direction:column;gap:6px">
+      ${!msgs.length ? '<p style="text-align:center;color:var(--text3);font-size:13px;padding:20px">No messages yet — say hi! 👋</p>' :
+      msgs.map(m => {
+        const isMe = m.senderName === profile?.name || m.fromId === profile?.id;
+        return `
+        <div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'}">
+          ${!isMe ? `<div style="font-size:10px;color:var(--text3);margin-bottom:2px;padding:0 4px">${m.senderName||'?'}</div>` : ''}
+          <div style="max-width:75%;padding:8px 12px;border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isMe?'var(--gold)':'rgba(255,255,255,0.08)'};color:${isMe?'#000':'#fff'};font-size:13px">
+            ${m.text}
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px;padding:0 4px">${new Date(m.createdAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--border)">
+      <input type="text" id="chat-input" placeholder="Type a message..." style="flex:1" onkeydown="if(event.key==='Enter')VW_EMPLOYEE.sendChatMsg()">
+      <button class="btn-primary" onclick="VW_EMPLOYEE.sendChatMsg()" style="flex-shrink:0">Send</button>
+    </div>
+  `;
+  window._chatSendFn = sendFn;
+  // Scroll to bottom
+  setTimeout(() => {
+    const el = document.getElementById('chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 100);
+}
+
+async function sendChatMsg() {
+  const input = document.getElementById('chat-input');
+  const text = input?.value.trim();
+  if (!text || !window._chatSendFn) return;
+  input.value = '';
+  await window._chatSendFn(text);
+  // Reload chat
+  const msgs = await VW_DB.all(VW_DB.STORES.chatMessages);
+  const profile = VW_AUTH.getCurrentProfile();
+  // Re-render messages area
+  const container = document.getElementById('chat-messages');
+  if (container) {
+    const relevantMsgs = msgs.filter(m => m.channelId || (m.fromId === profile?.id || m.toId === profile?.id))
+      .sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt)).slice(-50);
+    // Simple re-render
+    container.innerHTML = relevantMsgs.map(m => {
+      const isMe = m.senderName === profile?.name || m.fromId === profile?.id;
+      return `<div style="display:flex;flex-direction:column;align-items:${isMe?'flex-end':'flex-start'}">
+        ${!isMe ? `<div style="font-size:10px;color:var(--text3);margin-bottom:2px;padding:0 4px">${m.senderName||'?'}</div>` : ''}
+        <div style="max-width:75%;padding:8px 12px;border-radius:${isMe?'16px 16px 4px 16px':'16px 16px 16px 4px'};background:${isMe?'var(--gold)':'rgba(255,255,255,0.08)'};color:${isMe?'#000':'#fff'};font-size:13px">${m.text}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px;padding:0 4px">${new Date(m.createdAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`;
+    }).join('');
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+// =====================================================
+// ANNOUNCEMENTS (Admin Posts, Staff Reads)
+// =====================================================
+async function showPostAnnouncement() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📢 Post Announcement</h3>
+    <div class="form-group"><label>Title *</label><input type="text" id="ann-title" placeholder="e.g. Store Timing Change"></div>
+    <div class="form-group"><label>Message *</label><textarea id="ann-body" style="height:100px" placeholder="Write your announcement..."></textarea></div>
+    <div class="form-group"><label>Priority</label>
+      <select id="ann-priority">
+        <option value="normal">Normal</option>
+        <option value="important">⚠️ Important</option>
+        <option value="urgent">🚨 Urgent</option>
+      </select>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+      <input type="checkbox" id="ann-pinned" checked> Pin to top (stays on everyone's home screen)
+    </label>
+    <button class="btn-primary full-width" onclick="VW_EMPLOYEE.saveAnnouncement()">Post Announcement</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function saveAnnouncement() {
+  const title = document.getElementById('ann-title')?.value.trim();
+  const body = document.getElementById('ann-body')?.value.trim();
+  if (!title || !body) { showToast('Title and message required', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  await VW_DB.put(VW_DB.STORES.announcements, {
+    title, body,
+    priority: document.getElementById('ann-priority')?.value||'normal',
+    pinned: document.getElementById('ann-pinned')?.checked||false,
+    postedByName: profile?.name||'',
+    createdAt: new Date().toISOString()
+  });
+  showToast('Announcement posted', 'success');
+  closeSheet();
+}
+
+// =====================================================
+// LEAVE APPLICATION (Employee facing)
+// =====================================================
+async function showMyPayslip() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  if (!myStaff) { showToast('Staff record not linked to your account. Contact HR.', 'warn'); return; }
+  await VW_HR_PAYROLL.generatePayslip(myStaff.id);
+}
+
+async function showMyAttendance() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const [staff, allAtt] = await Promise.all([VW_DB.all(VW_DB.STORES.staff), VW_DB.all(VW_DB.STORES.attendance)]);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  if (!myStaff) { showToast('Staff record not found', 'warn'); return; }
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const myAtt = allAtt.filter(a => a.staffId === myStaff.id && new Date(a.date) >= monthStart)
+    .sort((a,b) => new Date(a.date)-new Date(b.date));
+  const presentDays = myAtt.reduce((s,a)=>s+(a.finalWorking||0),0);
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📋 My Attendance — ${now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#22c55e">${presentDays}</div>
+        <div style="font-size:11px;color:var(--text3)">Days Present</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:var(--red)">${Math.max(0,now.getDate()-presentDays)}</div>
+        <div style="font-size:11px;color:var(--text3)">Absent/LOP</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:700">${daysInMonth}</div>
+        <div style="font-size:11px;color:var(--text3)">Working Days</div>
+      </div>
+    </div>
+    <div style="max-height:300px;overflow-y:auto">
+      ${myAtt.map(a => {
+        const d = new Date(a.date);
+        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);font-size:13px">
+          <span>${d.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}</span>
+          <div style="display:flex;gap:8px;color:var(--text3);font-size:12px">
+            ${a.punchIn?`<span>In: ${a.punchIn?.slice(0,5)}</span>`:''}
+            ${a.punchOut?`<span>Out: ${a.punchOut?.slice(0,5)}</span>`:''}
+            ${(a.breaks||[]).length?`<span>☕ ${a.breaks.length} break${a.breaks.length>1?'s':''}</span>`:''}
+          </div>
+          <span style="color:${a.finalWorking>=1?'#22c55e':a.finalWorking===0.5?'var(--gold)':'var(--red)'}">
+            ${a.finalWorking>=1?'✓ Full':a.finalWorking===0.5?'½ Day':'—'}
+          </span>
+        </div>`;
+      }).join('') || '<p style="color:var(--text3);font-size:13px;text-align:center;padding:20px">No attendance this month yet</p>'}
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:10px" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function showApplyLeaveEmp() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  const leaves = await VW_DB.all(VW_DB.STORES.leaves);
+  const myLeaves = leaves.filter(l => l.staffId === myStaff?.id).sort((a,b)=>new Date(b.appliedAt)-new Date(a.appliedAt));
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📅 Leave Application</h3>
+    <div class="form-group"><label>Leave Type</label>
+      <select id="emp-leave-type">
+        <option>Casual Leave</option><option>Sick Leave</option>
+        <option>Earned Leave</option><option>Loss of Pay</option><option>Compensatory Off</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group"><label>From Date</label><input type="date" id="emp-leave-from" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="form-group"><label>To Date</label><input type="date" id="emp-leave-to" value="${new Date().toISOString().split('T')[0]}"></div>
+    </div>
+    <div class="form-group"><label>Reason</label><textarea id="emp-leave-reason" style="height:60px" placeholder="Brief reason..."></textarea></div>
+    <button class="btn-primary full-width" onclick="VW_EMPLOYEE.submitLeaveEmp()">Submit Request</button>
+
+    ${myLeaves.length ? `
+    <div style="margin-top:16px">
+      <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:8px">MY LEAVE HISTORY</div>
+      ${myLeaves.slice(0,5).map(l => `
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
+        <div><div style="font-weight:600">${l.type}</div><div style="color:var(--text3)">${new Date(l.fromDate).toLocaleDateString('en-IN')} · ${l.days} day${l.days>1?'s':''}</div></div>
+        <span class="badge" style="background:${l.status==='approved'?'#22c55e':l.status==='rejected'?'var(--red)':'var(--gold)'}">${l.status}</span>
+      </div>`).join('')}
+    </div>` : ''}
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function submitLeaveEmp() {
+  const fromDate = document.getElementById('emp-leave-from')?.value;
+  const toDate = document.getElementById('emp-leave-to')?.value;
+  if (!fromDate) { showToast('Select dates', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const myStaff = staff.find(s => s.name === profile?.name || s.attendanceName === profile?.name);
+  const days = Math.round((new Date(toDate)-new Date(fromDate))/(1000*60*60*24))+1;
+  await VW_DB.put(VW_DB.STORES.leaves, {
+    staffId: myStaff?.id||null,
+    staffName: profile?.name||'',
+    type: document.getElementById('emp-leave-type')?.value||'Casual Leave',
+    fromDate, toDate, days,
+    reason: document.getElementById('emp-leave-reason')?.value||'',
+    status: 'pending',
+    appliedAt: new Date().toISOString(),
+    appliedByName: profile?.name||''
+  });
+  showToast('Leave request submitted! 🙏', 'success');
+  closeSheet();
+}
+
+// =====================================================
+// BIRTHDAY & ANNIVERSARY ADMIN WIDGET + AUTO WHATSAPP
+// =====================================================
+async function checkBirthdaysAndAnniversaries() {
+  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  const today = new Date();
+  const todayMD = `${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const birthdays = staff.filter(s => s.dateOfBirth && s.dateOfBirth.slice(5) === todayMD && s.active !== false);
+  const anniversaries = staff.filter(s => {
+    if (!s.joiningDate || s.active === false) return false;
+    const jd = s.joiningDate.replace(/\./g,'-');
+    return jd.slice(5) === todayMD;
+  });
+  return { birthdays, anniversaries };
+}
+
+async function sendBirthdayWishes() {
+  const { birthdays, anniversaries } = await checkBirthdaysAndAnniversaries();
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+
+  for (const person of birthdays) {
+    if (!person.phone) continue;
+    const msg = encodeURIComponent(
+      `🎂 Happy Birthday ${person.name.split(' ')[0]}! 🎉\n\nWishing you a wonderful birthday and a year filled with joy and success!\n\nWith love and warm wishes,\nTeam ${storeName} 🏠🙏`
+    );
+    window.open(`https://wa.me/91${person.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  for (const person of anniversaries) {
+    if (!person.phone) continue;
+    const years = new Date().getFullYear() - new Date(person.joiningDate).getFullYear();
+    const msg = encodeURIComponent(
+      `🎊 Happy Work Anniversary ${person.name.split(' ')[0]}!\n\nThank you for ${years} year${years>1?'s':''} of dedication and hard work at ${storeName}! You are truly valued. 🙏\n\n— Team ${storeName}`
+    );
+    window.open(`https://wa.me/91${person.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+    await new Promise(r => setTimeout(r, 1500));
+  }
+  showToast(`Wishes sent to ${birthdays.length + anniversaries.length} people`, 'success');
+}
+
+window.VW_EMPLOYEE = {
+  renderKioskMode, openKioskPunch, confirmKioskPunch, recordKioskPunch,
+  renderEmployeeDashboard,
+  requestBreakOut, requestBreakIn, checkGeofence, checkGeofenceRetry,
+  confirmBreakOut, confirmBreakIn,
+  openEmpChat, openChannel, openDM, sendChatMsg,
+  showPostAnnouncement, saveAnnouncement,
+  showApplyLeaveEmp, submitLeaveEmp,
+  showMyPayslip, showMyAttendance,
+  checkBirthdaysAndAnniversaries, sendBirthdayWishes
+};
+
+
 /* === ledger.js === */
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
@@ -14708,7 +17194,59 @@ function applyRolePermissions() {
   if (!allowed.includes(currentPage)) {
     navigateTo('dashboard');
   }
+  // Update dynamic badges on quick action buttons
+  updateQuickActionBadges();
 }
+
+async function updateQuickActionBadges() {
+  try {
+    const [products, workOrders, invoices, leaves] = await Promise.all([
+      VW_DB.all(VW_DB.STORES.products),
+      VW_DB.all(VW_DB.STORES.workOrders),
+      VW_DB.all(VW_DB.STORES.invoices),
+      VW_DB.all(VW_DB.STORES.leaves)
+    ]);
+    // Low stock count
+    const lowStock = products.filter(p => (p.stock||0) <= (p.lowStockThreshold||5) && p.active !== false).length;
+    const invBtn = document.querySelector('.qa-btn[data-page="inventory"] span:first-child');
+    if (invBtn && lowStock > 0) invBtn.textContent = `📦${lowStock > 9 ? '🔴' : ''}`;
+
+    // Active work orders
+    const activeWO = workOrders.filter(w => !['final_paid'].includes(w.stage)).length;
+    const svcBtn = document.querySelector('.qa-btn[data-page="service"] span:first-child');
+    if (svcBtn && activeWO > 0) svcBtn.textContent = `🔧`;
+
+    // Pending payment verifications
+    const pendingPay = invoices.filter(i => i.creditSale && !i.paymentVerified && i.approvalStatus === 'approved').length;
+    const accBtn = document.querySelector('.qa-btn[data-page="accounts"] span:first-child');
+    if (accBtn && pendingPay > 0) accBtn.textContent = `💳`;
+
+    // Pending leaves
+    const pendingLeaves = leaves.filter(l => l.status === 'pending').length;
+    const hrBtn = document.querySelector('.qa-btn[data-page="hr"] span:first-child');
+    if (hrBtn && pendingLeaves > 0) hrBtn.textContent = `🧑‍💼`;
+
+    // Add count badges
+    if (lowStock > 0) addQABadge('inventory', lowStock);
+    if (activeWO > 0) addQABadge('service', activeWO);
+    if (pendingPay > 0) addQABadge('accounts', pendingPay);
+    if (pendingLeaves > 0) addQABadge('hr', pendingLeaves);
+  } catch(e) { /* silent fail */ }
+}
+
+function addQABadge(page, count) {
+  const btn = document.querySelector(`.qa-btn[data-page="${page}"]`);
+  if (!btn) return;
+  const existing = btn.querySelector('.qa-badge');
+  if (existing) existing.remove();
+  const badge = document.createElement('span');
+  badge.className = 'qa-badge';
+  badge.style.cssText = 'position:absolute;top:4px;right:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:8px;min-width:14px;text-align:center';
+  badge.textContent = count > 9 ? '9+' : count;
+  btn.style.position = 'relative';
+  btn.appendChild(badge);
+}
+window.updateQuickActionBadges = updateQuickActionBadges;
 
 var _navParams = null;
 async function navigateTo(page, params) {
@@ -14738,7 +17276,7 @@ async function navigateTo(page, params) {
     else if (page === 'cart') html = await renderBillingPage();
     else if (page === 'crm') html = await VW_CRM.renderCRM();
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
-    else if (page === 'hr') html = await VW_HR.renderHR();
+    else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
     else if (page === 'settings') { html = await renderSettingsPage(); setTimeout(() => initPackingRulesUI(), 100); }
@@ -14755,6 +17293,9 @@ async function navigateTo(page, params) {
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
     else if (page === 'marketing') html = await VW_MARKETING.renderMarketingPage();
+    else if (page === 'service') html = await VW_SERVICE.renderServicePage();
+    else if (page === 'kiosk') html = await VW_EMPLOYEE.renderKioskMode();
+    else if (page === 'employeeapp') html = await VW_EMPLOYEE.renderEmployeeDashboard();
     else if (page === 'ledger') {
       const cid = _navParams?.customerId;
       if (cid) {
@@ -15335,8 +17876,11 @@ async function renderDashboard() {
     <button class="qa-btn" data-page="inventory" onclick="navigateTo('inventory')"><span class="qa-icon">📦</span><span>Inventory</span></button>
     <button class="qa-btn" data-page="vendors" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
     <button class="qa-btn" data-page="marketing" onclick="navigateTo('marketing')"><span class="qa-icon">📣</span><span>Marketing</span></button>
+    <button class="qa-btn" data-page="service" onclick="navigateTo('service')"><span class="qa-icon">🔧</span><span>Service</span></button>
+    <button class="qa-btn" data-page="employeeapp" onclick="navigateTo('employeeapp')"><span class="qa-icon">👤</span><span>My App</span></button>
     <button class="qa-btn" data-page="ledger" onclick="navigateTo('ledger')"><span class="qa-icon">📒</span><span>Ledger</span></button>
     <button class="qa-btn" data-page="hr" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
+    <button class="qa-btn" data-page="dispatch" onclick="navigateTo('dispatch')"><span class="qa-icon">📦</span><span>Dispatch</span></button>
     <button class="qa-btn" data-page="analytics" onclick="navigateTo('analytics')"><span class="qa-icon">📊</span><span>Analytics</span></button>
     <button class="qa-btn" data-page="settings" onclick="navigateTo('settings')"><span class="qa-icon">⚙️</span><span>Settings</span></button>
   </div>
@@ -15767,6 +18311,9 @@ function showToast(msg, type = 'info') {
 async function init() {
   try {
     await VW_DB.initDB();
+    // Load loyalty config into global so billing can use it immediately
+    VW_DB.getSetting('loyalty_config', { pointValue: 1, earnRate: 1, maxRedeemPct: 10 })
+      .then(cfg => { window._loyaltyConfig = cfg; });
   } catch(e) {
     console.error('DB init error:', e);
     document.getElementById('app-content').innerHTML = `<div style="padding:2rem;text-align:center">
@@ -15781,6 +18328,14 @@ async function init() {
   // no-login flow — short-circuit before any auth check, since the
   // candidate filling this out has no app account at all.
   const urlParams = new URLSearchParams(window.location.search);
+
+  // KIOSK MODE — ?kiosk=1 bypasses login entirely
+  if (urlParams.get('kiosk') === '1') {
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_EMPLOYEE.renderKioskMode();
+    return;
+  }
   const onboardOfferId = urlParams.get('onboard');
   if (onboardOfferId) {
     await VW_ONBOARDING.renderCandidateEntry(onboardOfferId);
