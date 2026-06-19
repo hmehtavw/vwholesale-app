@@ -792,7 +792,8 @@ const STORES = {
   trainingCompletions: 'training_completions',
   incentiveRules: 'incentive_rules',
   pettyCash: 'petty_cash',
-  paymentVouchers: 'payment_vouchers'
+  paymentVouchers: 'payment_vouchers',
+  marketingCampaigns: 'marketing_campaigns'
 };
 
 // ---------- camelCase <-> snake_case helpers ----------
@@ -1207,8 +1208,8 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors'],
-  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
   reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger'],
   accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger'],
@@ -13675,6 +13676,720 @@ window.VW_ACCOUNTS = {
 };
 
 
+/* === marketing.js === */
+// ============================================================
+// MARKETING OS — V Wholesale
+// Calendar · Broadcast · Collaterals · SEO · Analytics
+// ============================================================
+
+// ===== FESTIVAL DATA =====
+const FESTIVALS_2026 = [
+  // June
+  { date: '2026-06-21', name: 'Father\'s Day', telugu: 'తండ్రుల దినం', type: 'national', category: 'family' },
+  // July
+  { date: '2026-07-07', name: 'Bonalu', telugu: 'బోనాలు', type: 'telugu', category: 'festival' },
+  { date: '2026-07-10', name: 'Muharram', telugu: 'మొహర్రం', type: 'national', category: 'festival' },
+  { date: '2026-07-17', name: 'Eid ul-Adha', telugu: 'బక్రీద్', type: 'national', category: 'festival' },
+  // August
+  { date: '2026-08-08', name: 'Friendship Day', telugu: 'స్నేహితుల దినం', type: 'national', category: 'social' },
+  { date: '2026-08-09', name: 'Nagula Chavithi', telugu: 'నాగుల చవితి', type: 'telugu', category: 'festival' },
+  { date: '2026-08-15', name: 'Independence Day', telugu: 'స్వాతంత్ర్య దినోత్సవం', type: 'national', category: 'national' },
+  { date: '2026-08-22', name: 'Raksha Bandhan', telugu: 'రాఖీ పౌర్ణమి', type: 'national', category: 'festival' },
+  { date: '2026-08-23', name: 'Onam', telugu: 'ఓణం', type: 'national', category: 'festival' },
+  { date: '2026-08-27', name: 'Janmashtami', telugu: 'కృష్ణాష్టమి', type: 'national', category: 'festival' },
+  // September
+  { date: '2026-09-07', name: 'Ganesh Chaturthi', telugu: 'వినాయక చవితి', type: 'telugu', category: 'festival' },
+  { date: '2026-09-16', name: 'Milad-un-Nabi', telugu: 'మిలాద్-ఉన్-నబీ', type: 'national', category: 'festival' },
+  { date: '2026-09-25', name: 'Navratri Begins', telugu: 'నవరాత్రులు', type: 'national', category: 'festival' },
+  // October
+  { date: '2026-10-02', name: 'Gandhi Jayanti', telugu: 'గాంధీ జయంతి', type: 'national', category: 'national' },
+  { date: '2026-10-03', name: 'Dussehra / Vijayadashami', telugu: 'దసరా', type: 'telugu', category: 'festival' },
+  { date: '2026-10-20', name: 'Diwali', telugu: 'దీపావళి', type: 'national', category: 'festival' },
+  { date: '2026-10-21', name: 'Govardhan Puja', telugu: 'అన్నకూట్', type: 'national', category: 'festival' },
+  { date: '2026-10-23', name: 'Bhai Dooj', telugu: 'భాయి దూజ్', type: 'national', category: 'festival' },
+  // November
+  { date: '2026-11-01', name: 'Andhra Pradesh Formation Day', telugu: 'ఆంధ్రప్రదేశ్ అవతరణ దినం', type: 'telugu', category: 'regional' },
+  { date: '2026-11-14', name: 'Children\'s Day', telugu: 'బాలల దినం', type: 'national', category: 'social' },
+  { date: '2026-11-30', name: 'Karthika Pournami', telugu: 'కార్తీక పౌర్ణమి', type: 'telugu', category: 'festival' },
+  // December
+  { date: '2026-12-06', name: 'Sampada / Bonalu End', telugu: 'సంపద', type: 'telugu', category: 'festival' },
+  { date: '2026-12-25', name: 'Christmas', telugu: 'క్రిస్మస్', type: 'national', category: 'festival' },
+  { date: '2026-12-31', name: 'New Year\'s Eve', telugu: 'నూతన సంవత్సర వేళ', type: 'national', category: 'social' },
+  // January 2027
+  { date: '2027-01-01', name: 'New Year', telugu: 'నూతన సంవత్సరం', type: 'national', category: 'social' },
+  { date: '2027-01-14', name: 'Sankranti / Pongal', telugu: 'మకర సంక్రాంతి', type: 'telugu', category: 'festival' },
+  { date: '2027-01-15', name: 'Bhogi', telugu: 'భోగి', type: 'telugu', category: 'festival' },
+  { date: '2027-01-26', name: 'Republic Day', telugu: 'గణతంత్ర దినోత్సవం', type: 'national', category: 'national' },
+  // February 2027
+  { date: '2027-02-14', name: 'Valentine\'s Day', telugu: 'ప్రేమికుల దినం', type: 'national', category: 'social' },
+  { date: '2027-02-26', name: 'Maha Shivaratri', telugu: 'మహాశివరాత్రి', type: 'telugu', category: 'festival' },
+  // March 2027
+  { date: '2027-03-08', name: 'Women\'s Day', telugu: 'మహిళా దినోత్సవం', type: 'national', category: 'social' },
+  { date: '2027-03-21', name: 'Holi', telugu: 'హోలీ', type: 'national', category: 'festival' },
+  { date: '2027-03-30', name: 'Telugu New Year (Ugadi)', telugu: 'ఉగాది', type: 'telugu', category: 'festival' },
+];
+
+// Greeting templates per festival category
+const GREETING_TEMPLATES = {
+  festival: {
+    en: (name, store) => `🎉 Warm wishes on the occasion of ${name}!\n\nMay this festive season bring joy, prosperity, and happiness to your family and home.\n\n🏠 Planning to renovate or decorate your home this ${name}? Visit ${store} for the best deals on tiles, sanitary, electricals, and more!\n\nHappy ${name}! 🙏`,
+    te: (name, teluguName, store) => `🎉 ${teluguName} శుభాకాంక్షలు!\n\nఈ పండుగ మీ కుటుంబానికి ఆనందం, సంతోషం తీసుకొచ్చాలని కోరుకుంటున్నాం. 🙏\n\n🏠 మీ ఇంటిని అందంగా మార్చాలని అనుకుంటున్నారా? ${store} లో అద్భుతమైన ఆఫర్లు చూడండి!\n\n${teluguName} శుభాకాంక్షలు! ✨`
+  },
+  national: {
+    en: (name, store) => `🇮🇳 Happy ${name}!\n\nOn this special occasion, we at ${store} salute the spirit of our great nation. 🙏\n\nVisit us for the best home building materials in Vijayawada!\n\n— Team V Wholesale`,
+    te: (name, teluguName, store) => `🇮🇳 ${teluguName} శుభాకాంక్షలు!\n\nఈ విశేష సందర్భంగా ${store} తరఫున మీ అందరికీ నమస్కారాలు. 🙏\n\n— V Wholesale బృందం`
+  },
+  social: {
+    en: (name, store) => `💐 Happy ${name} from ${store}!\n\nThank you for being a valued part of our V Wholesale family. We appreciate your trust and support!\n\n🏠 Best home building & renovation materials in Vijayawada\n📍 Visit us or call for the best deals!`,
+    te: (name, teluguName, store) => `💐 ${teluguName} సందర్భంగా ${store} తరఫున శుభాకాంక్షలు!\n\nమీ నమ్మకానికి, మద్దతుకు ధన్యవాదాలు! 🙏\n\n🏠 విజయవాడలో అత్యుత్తమ నిర్మాణ సామగ్రి`
+  },
+  family: {
+    en: (name, store) => `💐 Happy ${name} from all of us at ${store}!\n\nWishing you and your family a wonderful day filled with love and joy. 🏠❤️`,
+    te: (name, teluguName, store) => `💐 ${teluguName} సందర్భంగా ${store} తరఫున శుభాకాంక్షలు!\n\nమీ కుటుంబానికి ఆనందమయమైన రోజు కోరుకుంటున్నాం. 🏠❤️`
+  }
+};
+
+// SEO Keywords for V Wholesale / Vijayawada
+const SEO_KEYWORDS = {
+  primary: [
+    'tiles shop Vijayawada', 'sanitary ware Vijayawada', 'building materials Vijayawada',
+    'home renovation Vijayawada', 'electrical shop Vijayawada', 'plumbing materials Vijayawada',
+    'paint shop Vijayawada', 'hardware shop Vijayawada', 'V Wholesale Vijayawada',
+    'wholesale building materials Andhra Pradesh'
+  ],
+  secondary: [
+    'ceramic tiles price Vijayawada', 'bathroom fittings Vijayawada', 'LED lights wholesale Vijayawada',
+    'modular kitchen Vijayawada', 'waterproofing materials Vijayawada', 'plywood dealers Vijayawada',
+    'steel doors Vijayawada', 'granite tiles Vijayawada', 'construction materials Vijayawada',
+    'interior design materials Vijayawada', 'home improvement store AP', 'TISAN products Vijayawada'
+  ],
+  local: [
+    'tiles near Bhavanipuram', 'hardware shop Auto Nagar Vijayawada', 'building materials Krishnalanka',
+    'sanitary ware MG Road Vijayawada', 'construction shop Vijayawada one town',
+    'tiles Gannavaram road', 'home store Vijayawada'
+  ],
+  google_posts: [
+    'New stock arrived — Premium tiles from ₹X/sqft',
+    'Festival offer — 10% off on all sanitary fittings',
+    'Contractor special — Bulk pricing on electrical items',
+    'Home renovation package deals now available',
+    'Free delivery above ₹10,000 in Vijayawada'
+  ]
+};
+
+// ===== MAIN MARKETING PAGE =====
+async function renderMarketingPage() {
+  return `
+  <div class="module-header"><h2>📣 Marketing OS</h2></div>
+  <div style="overflow-x:auto;white-space:nowrap;margin-bottom:14px;padding-bottom:4px">
+    <button class="entry-type-btn active" id="mktab-calendar" onclick="VW_MARKETING.switchMkTab('calendar',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">📅</span>Calendar</button>
+    <button class="entry-type-btn" id="mktab-broadcast" onclick="VW_MARKETING.switchMkTab('broadcast',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">📢</span>Broadcast</button>
+    <button class="entry-type-btn" id="mktab-collateral" onclick="VW_MARKETING.switchMkTab('collateral',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🎨</span>Collaterals</button>
+    <button class="entry-type-btn" id="mktab-seo" onclick="VW_MARKETING.switchMkTab('seo',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔍</span>SEO</button>
+    <button class="entry-type-btn" id="mktab-analytics" onclick="VW_MARKETING.switchMkTab('analytics',this)" style="display:inline-flex"><span class="et-icon">📊</span>Analytics</button>
+  </div>
+  <div id="marketing-tab-content">
+    ${await renderFestivalCalendar()}
+  </div>`;
+}
+
+async function switchMkTab(tab, btn) {
+  document.querySelectorAll('[id^="mktab-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('marketing-tab-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  switch(tab) {
+    case 'calendar':   container.innerHTML = await renderFestivalCalendar(); break;
+    case 'broadcast':  container.innerHTML = await renderBroadcast(); break;
+    case 'collateral': container.innerHTML = renderCollaterals(); break;
+    case 'seo':        container.innerHTML = renderSEO(); break;
+    case 'analytics':  container.innerHTML = await renderMarketingAnalytics(); break;
+  }
+}
+
+// ===== TAB 1: FESTIVAL CALENDAR =====
+async function renderFestivalCalendar() {
+  const today = new Date();
+  const upcoming = FESTIVALS_2026
+    .filter(f => new Date(f.date) >= today)
+    .sort((a,b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 20);
+
+  const typeColors = { telugu: '#C8972B', national: '#378ADD', regional: '#22c55e' };
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Upcoming Festivals & Events</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Tap any festival to create a WhatsApp greeting or social media post instantly</p>
+    ${upcoming.map(f => {
+      const date = new Date(f.date);
+      const daysAway = Math.ceil((date - today) / (1000*60*60*24));
+      const isThisWeek = daysAway <= 7;
+      return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)">
+        <div style="min-width:48px;text-align:center;padding:6px;background:${isThisWeek?'rgba(200,151,43,0.15)':'var(--bg2)'};border-radius:8px">
+          <div style="font-size:16px;font-weight:700;color:${isThisWeek?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
+          <div style="font-size:10px;color:var(--text3)">${date.toLocaleDateString('en-IN',{month:'short'})}</div>
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${f.name} ${isThisWeek?'🔔':''}</div>
+          <div style="font-size:12px;color:var(--text3)">${f.telugu} · <span style="color:${typeColors[f.type]||'#888'}">${f.type}</span> · ${daysAway===0?'Today':daysAway===1?'Tomorrow':daysAway+' days away'}</div>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="btn-sm" onclick="VW_MARKETING.showFestivalContent('${f.name}','${f.telugu}','${f.category}')">✍️ Create</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function showFestivalContent(name, telugu, category) {
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale, Vijayawada';
+  const tmpl = GREETING_TEMPLATES[category] || GREETING_TEMPLATES.festival;
+  const enMsg = tmpl.en(name, storeName);
+  const teMsg = tmpl.te(name, telugu, storeName);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>${name} — ${telugu}</h3>
+    <p class="sheet-meta">Choose content type and send or copy</p>
+
+    <div class="entry-type-grid" style="margin-bottom:12px">
+      <button class="entry-type-btn active" id="fcnt-en" onclick="document.getElementById('fcnt-en').classList.add('active');document.getElementById('fcnt-te').classList.remove('active');document.getElementById('festival-msg').value=window._festivalEnMsg">English</button>
+      <button class="entry-type-btn" id="fcnt-te" onclick="document.getElementById('fcnt-te').classList.add('active');document.getElementById('fcnt-en').classList.remove('active');document.getElementById('festival-msg').value=window._festivalTeMsg">Telugu</button>
+    </div>
+
+    <textarea id="festival-msg" style="width:100%;height:160px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box">${enMsg}</textarea>
+
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" style="flex:1" onclick="VW_MARKETING.broadcastFestival()">📢 Send to Customers</button>
+      <button class="btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('festival-msg').value);showToast('Copied!','success')">📋 Copy</button>
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_MARKETING.generateAIContent('${name}','${telugu}','${category}')">✨ Generate AI Content</button>
+    <button class="btn-secondary full-width" style="margin-top:8px;color:var(--text3)" onclick="closeSheet()">Close</button>
+  `;
+  window._festivalEnMsg = enMsg;
+  window._festivalTeMsg = teMsg;
+  window._currentFestivalName = name;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function generateAIContent(festivalName, teluguName, category) {
+  showToast('Generating AI content...', 'info');
+  const saveBtn = document.querySelector('#bottom-sheet .btn-secondary[onclick*="generateAI"]');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Generating...'; }
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `Create a WhatsApp marketing message for V Wholesale, a home building materials store in Vijayawada, Andhra Pradesh, for the ${festivalName} (${teluguName}) festival.
+
+Requirements:
+- Write TWO versions: one in English, one in Telugu
+- Warm festive greeting + subtle product promotion
+- Mention home renovation, tiles, sanitary, electrical, paints
+- Include a call to action (visit store / call for deals)
+- Keep it genuine, not salesy
+- English: 80-100 words
+- Telugu: 60-80 words (use Telugu script)
+
+Format response as:
+ENGLISH:
+[message]
+
+TELUGU:
+[message]`
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    const enMatch = text.match(/ENGLISH:\s*([\s\S]+?)(?=TELUGU:|$)/i);
+    const teMatch = text.match(/TELUGU:\s*([\s\S]+?)$/i);
+    if (enMatch) window._festivalEnMsg = enMatch[1].trim();
+    if (teMatch) window._festivalTeMsg = teMatch[1].trim();
+    const msgBox = document.getElementById('festival-msg');
+    if (msgBox) msgBox.value = window._festivalEnMsg;
+    showToast('AI content generated!', 'success');
+  } catch(e) {
+    showToast('AI generation failed — using template', 'warn');
+  }
+  if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '✨ Regenerate AI Content'; }
+}
+
+async function broadcastFestival() {
+  const msg = document.getElementById('festival-msg')?.value || '';
+  closeSheet();
+  // Open broadcast with this message pre-filled
+  window._broadcastPreFill = msg;
+  document.getElementById('mktab-broadcast')?.click();
+}
+
+// ===== TAB 2: BROADCAST =====
+async function renderBroadcast() {
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const segments = {
+    all: customers.filter(c => c.phone),
+    retail: customers.filter(c => c.phone && (c.type === 'retail' || !c.type)),
+    contractor: customers.filter(c => c.phone && c.type === 'contractor'),
+    professional: customers.filter(c => c.phone && c.type === 'professional'),
+    b2b: customers.filter(c => c.phone && c.type === 'b2b'),
+  };
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">WhatsApp Broadcast</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Messages open WhatsApp one by one — works without WhatsApp Business API. Best for up to 500 customers per session.</p>
+
+    <div class="form-group">
+      <label>Customer Segment</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
+        ${Object.entries(segments).map(([key, list]) => `
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border-radius:8px;cursor:pointer;border:2px solid ${key==='all'?'var(--gold)':'transparent'}" onclick="VW_MARKETING.selectSegment('${key}')">
+            <input type="radio" name="segment" value="${key}" ${key==='all'?'checked':''} style="accent-color:var(--gold)">
+            <div>
+              <div style="font-size:12px;font-weight:600;text-transform:capitalize">${key==='all'?'All Customers':key}</div>
+              <div style="font-size:11px;color:var(--text3)">${list.length} contacts</div>
+            </div>
+          </label>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px">
+      <label>Message</label>
+      <textarea id="broadcast-msg" style="width:100%;height:140px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box" placeholder="Type your message here...">${window._broadcastPreFill||''}</textarea>
+      <div style="display:flex;justify-content:space-between;margin-top:4px">
+        <span id="broadcast-char-count" style="font-size:11px;color:var(--text3)">0 characters</span>
+        <button style="background:none;border:none;color:var(--gold);font-size:11px;cursor:pointer" onclick="VW_MARKETING.generateBroadcastAI()">✨ AI Generate</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Quick Templates</label>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
+        ${[
+          {label:'🎉 Festival Offer', msg:'🎉 Festival Special Offer!\n\nDear Customer, this festive season get FLAT 10% off on all tiles and sanitary fittings at V Wholesale, Vijayawada.\n\n📍 Visit us today!\n📞 Call for home delivery above ₹10,000\n\n— Team V Wholesale'},
+          {label:'📦 New Stock', msg:'📦 Fresh Stock Alert!\n\nDear Customer, exciting new products have arrived at V Wholesale!\n\n✅ Premium Tiles\n✅ Designer Sanitary Ware\n✅ LED Lighting Solutions\n\nVisit us to see the full collection. Best prices guaranteed!\n\n— V Wholesale, Vijayawada'},
+          {label:'⭐ Review Request', msg:'Dear Customer,\n\nThank you for shopping at V Wholesale! 🙏\n\nWe hope you are happy with your purchase. It would mean a lot to us if you could share your experience on Google.\n\n👉 [Google Review Link]\n\nYour feedback helps us serve you better!\n\n— Team V Wholesale'},
+          {label:'💰 Contractor Deal', msg:'Dear Contractor / Professional,\n\nExclusive B2B Pricing now available at V Wholesale, Vijayawada!\n\n✅ Bulk discounts on all categories\n✅ Credit facility available\n✅ Free delivery for bulk orders\n✅ Dedicated relationship manager\n\nCall us to know more about our Contractor Club benefits!\n\n— V Wholesale'}
+        ].map(t => `
+          <button class="btn-secondary" style="text-align:left;font-size:12px;padding:8px 12px" onclick="document.getElementById('broadcast-msg').value=${JSON.stringify(t.msg)};updateBroadcastCount()">${t.label}</button>`).join('')}
+      </div>
+    </div>
+
+    <div id="broadcast-summary" style="padding:10px;background:rgba(200,151,43,0.1);border-radius:8px;margin-top:10px;font-size:13px">
+      Select segment and write message, then tap Send
+    </div>
+
+    <button class="btn-primary full-width" style="margin-top:10px;font-size:15px" onclick="VW_MARKETING.startBroadcast()">📢 Start Broadcast</button>
+    <p style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px">Opens WhatsApp for each customer. Keep phone unlocked. ~3 seconds per customer.</p>
+  </div>`;
+}
+
+function selectSegment(key) {
+  document.querySelectorAll('[name="segment"]').forEach(r => {
+    const label = r.closest('label');
+    label.style.border = r.value === key ? '2px solid var(--gold)' : '2px solid transparent';
+  });
+  const radio = document.querySelector(`[name="segment"][value="${key}"]`);
+  if (radio) radio.checked = true;
+}
+
+function updateBroadcastCount() {
+  const msg = document.getElementById('broadcast-msg')?.value || '';
+  const el = document.getElementById('broadcast-char-count');
+  if (el) el.textContent = `${msg.length} characters`;
+}
+
+async function generateBroadcastAI() {
+  showToast('Generating message...', 'info');
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: 'Write a short WhatsApp marketing message for V Wholesale, a home building materials store in Vijayawada (tiles, sanitary, electrical, paints, hardware). Warm, not salesy, 60-80 words, include a call to action. English only.'
+        }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    const box = document.getElementById('broadcast-msg');
+    if (box) { box.value = text; updateBroadcastCount(); }
+    showToast('Message generated!', 'success');
+  } catch(e) { showToast('AI failed — write manually', 'warn'); }
+}
+
+async function startBroadcast() {
+  const msg = document.getElementById('broadcast-msg')?.value.trim();
+  if (!msg) { showToast('Write a message first', 'warn'); return; }
+  const segmentVal = document.querySelector('[name="segment"]:checked')?.value || 'all';
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  let filtered = customers.filter(c => c.phone);
+  if (segmentVal !== 'all') filtered = filtered.filter(c => c.type === segmentVal || (!c.type && segmentVal === 'retail'));
+
+  if (!filtered.length) { showToast('No customers with phone in this segment', 'warn'); return; }
+
+  // Save broadcast record
+  await VW_DB.put(VW_DB.STORES.marketingCampaigns, {
+    type: 'whatsapp_broadcast',
+    segment: segmentVal,
+    message: msg,
+    recipientCount: filtered.length,
+    sentAt: new Date().toISOString(),
+    sentByName: VW_AUTH.getCurrentProfile()?.name || ''
+  });
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📢 Broadcast Started</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:12px">${filtered.length} customers · Keep WhatsApp open</p>
+    <div id="broadcast-progress" style="background:var(--bg2);border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;margin-bottom:8px">Ready to send to <strong>${filtered.length}</strong> customers</div>
+      <div style="background:var(--border);border-radius:4px;height:8px">
+        <div id="broadcast-bar" style="background:var(--gold);height:8px;border-radius:4px;width:0%;transition:width 0.3s"></div>
+      </div>
+      <div id="broadcast-status" style="font-size:12px;color:var(--text3);margin-top:6px">Tap button below for each customer</div>
+    </div>
+    <div id="broadcast-current"></div>
+    <button id="broadcast-next-btn" class="btn-primary full-width" onclick="VW_MARKETING.openNextWhatsApp()">💬 Open WhatsApp for Customer 1</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Done / Stop</button>
+  `;
+  window._broadcastQueue = filtered;
+  window._broadcastMsg = msg;
+  window._broadcastIdx = 0;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function openNextWhatsApp() {
+  const queue = window._broadcastQueue || [];
+  const idx = window._broadcastIdx || 0;
+  if (idx >= queue.length) {
+    showToast('Broadcast complete! 🎉', 'success');
+    closeSheet();
+    return;
+  }
+  const customer = queue[idx];
+  const msg = encodeURIComponent(window._broadcastMsg || '');
+  const phone = customer.phone.replace(/\D/g,'');
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  window._broadcastIdx = idx + 1;
+  const pct = Math.round((idx + 1) / queue.length * 100);
+  const bar = document.getElementById('broadcast-bar');
+  const status = document.getElementById('broadcast-status');
+  const btn = document.getElementById('broadcast-next-btn');
+  const current = document.getElementById('broadcast-current');
+  if (bar) bar.style.width = pct + '%';
+  if (status) status.textContent = `${idx + 1} of ${queue.length} sent`;
+  if (current) current.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">✓ Opened for: ${customer.name}</div>`;
+  if (btn) btn.textContent = idx + 1 >= queue.length ? '✅ Done!' : `💬 Next → ${queue[idx+1]?.name||'Customer '+(idx+2)}`;
+}
+
+// ===== TAB 3: COLLATERALS =====
+function renderCollaterals() {
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Marketing Collaterals</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate posters, price lists, and offer cards instantly using AI</p>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('offer_poster')">
+        🎨 <strong>Festival Offer Poster</strong><br><span style="font-size:12px;color:var(--text3)">AI-generated poster text for WhatsApp status / print</span>
+      </button>
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('price_list')">
+        💰 <strong>Product Price List</strong><br><span style="font-size:12px;color:var(--text3)">Format your top products into a shareable price list</span>
+      </button>
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('new_arrival')">
+        📦 <strong>New Arrival Announcement</strong><br><span style="font-size:12px;color:var(--text3)">Announce new stock with product details</span>
+      </button>
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('google_post')">
+        📍 <strong>Google Business Post</strong><br><span style="font-size:12px;color:var(--text3)">AI-generated post for your Google Business Profile</span>
+      </button>
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('instagram')">
+        📸 <strong>Instagram Caption</strong><br><span style="font-size:12px;color:var(--text3)">Caption + hashtags in English and Telugu</span>
+      </button>
+      <button class="btn-secondary" style="text-align:left;padding:12px" onclick="VW_MARKETING.generateCollateral('review_request')">
+        ⭐ <strong>Google Review Request</strong><br><span style="font-size:12px;color:var(--text3)">Personalised message asking customer for a review</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+async function generateCollateral(type) {
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+  const googleReviewLink = settings.googleReviewUrl || 'https://g.page/r/your-review-link';
+  const prompts = {
+    offer_poster: `Create a WhatsApp marketing poster text for V Wholesale, a home building materials store in Vijayawada. Include: headline, 3 key offers (tiles, sanitary, electricals), call to action. Bilingual - English and Telugu. Format as poster text, punchy and visual.`,
+    price_list: `Create a formatted WhatsApp price list message for V Wholesale Vijayawada. Include sample price ranges for: Tiles (per sqft), Sanitary fittings, LED lights, Paints (per litre), Plumbing materials. Note these are sample ranges - format professionally. End with contact CTA.`,
+    new_arrival: `Write a new stock arrival announcement for V Wholesale, home building materials store in Vijayawada. Exciting, energetic tone. Mention categories: premium tiles, designer sanitary, smart electrical solutions. Include visit/call CTA. 80 words English + 60 words Telugu.`,
+    google_post: `Write a Google Business Profile post for V Wholesale, Vijayawada - home building and renovation materials store. Professional, local SEO optimised, 100-150 words. Include: what we sell, why choose us, location (Vijayawada), call to action. Use relevant keywords for local search.`,
+    instagram: `Write an Instagram caption for V Wholesale Vijayawada, a home building materials store. Engaging, visual, aspirational home renovation theme. Include 15-20 relevant hashtags mix of English and Telugu. 50 words caption + hashtags.`,
+    review_request: `Write a personalised WhatsApp message asking a customer to leave a Google review for V Wholesale Vijayawada. Warm, grateful tone, not pushy. Include placeholder [Customer Name] and [Google Review Link]. 50-60 words.`
+  };
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>✨ Generating Content...</h3>
+    <div style="text-align:center;padding:30px"><div class="spinner"></div></div>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 800,
+        messages: [{ role: 'user', content: prompts[type] }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || 'Could not generate content';
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <h3>✨ Generated Content</h3>
+      <textarea style="width:100%;height:220px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box">${text}</textarea>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-primary" style="flex:1" onclick="navigator.clipboard.writeText(this.closest('#bottom-sheet').querySelector('textarea').value);showToast('Copied!','success')">📋 Copy</button>
+        <button class="btn-secondary" onclick="VW_MARKETING.generateCollateral('${type}')">🔄 Regenerate</button>
+      </div>
+      <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Done</button>
+    `;
+  } catch(e) {
+    sheet.innerHTML = `<div class="sheet-handle"></div><h3>Error</h3><p>AI generation failed. Check connection.</p><button class="btn-primary full-width" onclick="closeSheet()">Close</button>`;
+  }
+}
+
+// ===== TAB 4: SEO =====
+function renderSEO() {
+  const settings_google = 'https://business.google.com/create';
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🔍 SEO & Local Discovery</h3>
+
+    <div style="padding:10px;background:rgba(200,151,43,0.1);border:1px solid rgba(200,151,43,0.3);border-radius:8px;margin-bottom:12px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px">📍 Google Business Profile</div>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Your #1 local SEO tool. Customers searching "tiles shop Vijayawada" see you first.</p>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" style="background:var(--gold);color:#000" onclick="window.open('https://business.google.com','_blank')">Manage Profile</button>
+        <button class="btn-sm" onclick="VW_MARKETING.generateGooglePost()">✨ AI Post Generator</button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">🎯 Primary Keywords — Use in Google posts, descriptions</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${SEO_KEYWORDS.primary.map(k => `<span style="padding:4px 10px;background:rgba(55,138,221,0.15);color:#378ADD;border-radius:12px;font-size:12px;cursor:pointer" onclick="navigator.clipboard.writeText('${k}');showToast('Copied!','success')">${k}</span>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">📍 Local Area Keywords</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${SEO_KEYWORDS.local.map(k => `<span style="padding:4px 10px;background:rgba(34,197,94,0.1);color:#22c55e;border-radius:12px;font-size:12px;cursor:pointer" onclick="navigator.clipboard.writeText('${k}');showToast('Copied!','success')">${k}</span>`).join('')}
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">⭐ Google Review Strategy</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Send review requests after every invoice above ₹10,000. Target: 50+ reviews in 3 months.</div>
+      <button class="btn-secondary full-width" onclick="VW_MARKETING.sendReviewRequests()">Send Review Request to Recent Customers</button>
+    </div>
+
+    <div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px">📝 Google Post Ideas — Post weekly</div>
+      ${SEO_KEYWORDS.google_posts.map((p,i) => `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+          <span style="font-size:13px">${p}</span>
+          <button class="btn-sm" onclick="VW_MARKETING.generateGooglePost('${p.replace(/'/g,'')}')">✍️ Draft</button>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+async function generateGooglePost(topic) {
+  const prompt = topic
+    ? `Write a Google Business Profile post for V Wholesale Vijayawada about: "${topic}". Professional, local SEO optimised, 100-120 words, include call to action.`
+    : `Write a Google Business Profile post for V Wholesale Vijayawada, home building materials store. Topic: why choose V Wholesale for your home renovation. 100-120 words, include local keywords like Vijayawada, tiles, sanitary, electricals.`;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `<div class="sheet-handle"></div><h3>📍 Google Business Post</h3><div style="text-align:center;padding:30px"><div class="spinner"></div></div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6', max_tokens: 500,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <h3>📍 Google Business Post</h3>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Copy and paste this into your Google Business Profile → Posts</p>
+      <textarea style="width:100%;height:200px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text1);font-size:13px;line-height:1.5;resize:vertical;box-sizing:border-box">${text}</textarea>
+      <button class="btn-primary full-width" style="margin-top:10px" onclick="navigator.clipboard.writeText(this.previousElementSibling.value);showToast('Copied — paste into Google Business!','success')">📋 Copy</button>
+      <button class="btn-wa full-width" style="margin-top:8px" onclick="window.open('https://business.google.com','_blank')">📍 Open Google Business</button>
+      <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Done</button>
+    `;
+  } catch(e) { closeSheet(); showToast('AI failed','warn'); }
+}
+
+async function sendReviewRequests() {
+  const [invoices, customers] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.customers)
+  ]);
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const reviewLink = settings.googleReviewUrl || 'https://g.page/r/your-review-link/review';
+  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000);
+  const eligible = invoices
+    .filter(i => i.total >= 10000 && new Date(i.date) >= thirtyDaysAgo && i.approvalStatus === 'approved')
+    .slice(0, 20);
+  const custMap = {}; customers.forEach(c => custMap[c.id] = c);
+
+  window._reviewQueue = eligible.map(i => custMap[i.customerId]).filter(c => c?.phone);
+  window._reviewLink = reviewLink;
+  window._broadcastMsg = `Dear [Customer],\n\nThank you for shopping at V Wholesale! 🙏\n\nWe hope you are happy with your purchase. A quick Google review from you would mean the world to us — it takes just 30 seconds!\n\n👉 ${reviewLink}\n\nThank you for your continued trust!\n\n— Team V Wholesale, Vijayawada`;
+  window._broadcastQueue = window._reviewQueue;
+  window._broadcastIdx = 0;
+
+  showToast(`${window._reviewQueue.length} customers eligible for review request`, 'info');
+  setTimeout(() => VW_MARKETING.startBroadcast(), 500);
+}
+
+// ===== TAB 5: ANALYTICS =====
+async function renderMarketingAnalytics() {
+  const [invoices, customers, leads, campaigns] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.customers),
+    VW_DB.all(VW_DB.STORES.leads),
+    VW_DB.all(VW_DB.STORES.marketingCampaigns)
+  ]);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthInvoices = invoices.filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved');
+
+  // Channel attribution
+  const byChannel = {};
+  monthInvoices.forEach(i => {
+    const ch = i.orderSource || 'walk_in';
+    if (!byChannel[ch]) byChannel[ch] = { count: 0, revenue: 0 };
+    byChannel[ch].count++;
+    byChannel[ch].revenue += i.total||0;
+  });
+  const channelLabels = {
+    walk_in: '🏪 Walk-in', field_team: '🚗 Field Team', whatsapp: '💬 WhatsApp',
+    referral: '🤝 Referral', instagram: '📸 Instagram', google: '🔍 Google',
+    phone: '📞 Phone', other: '📌 Other'
+  };
+
+  // Lead sources
+  const leadSources = {};
+  leads.forEach(l => {
+    const s = l.source || 'store';
+    leadSources[s] = (leadSources[s]||0) + 1;
+  });
+
+  // Customer growth
+  const monthCustomers = customers.filter(c => c.createdAt && new Date(c.createdAt) >= monthStart);
+
+  // Campaign history
+  const recentCampaigns = [...campaigns].sort((a,b) => new Date(b.sentAt)-new Date(a.sentAt)).slice(0,5);
+
+  const totalRevenue = monthInvoices.reduce((s,i)=>s+(i.total||0),0);
+
+  return `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="padding:12px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700;color:var(--gold)">₹${Math.round(totalRevenue/1000)}K</div>
+      <div style="font-size:11px;color:var(--text3)">Month Revenue</div>
+    </div>
+    <div style="padding:12px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700">${monthCustomers.length}</div>
+      <div style="font-size:11px;color:var(--text3)">New Customers</div>
+    </div>
+    <div style="padding:12px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700">${leads.filter(l=>l.stage!=='Won'&&l.stage!=='Lost').length}</div>
+      <div style="font-size:11px;color:var(--text3)">Active Leads</div>
+    </div>
+    <div style="padding:12px;background:var(--bg2);border-radius:10px;text-align:center">
+      <div style="font-size:20px;font-weight:700">${recentCampaigns.length}</div>
+      <div style="font-size:11px;color:var(--text3)">Campaigns Sent</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Revenue by Channel — This Month</h3>
+    ${!Object.keys(byChannel).length ? '<p class="empty-msg">No channel data yet — add order source when billing</p>' :
+    Object.entries(byChannel).sort((a,b)=>b[1].revenue-a[1].revenue).map(([ch, data]) => {
+      const pct = Math.round(data.revenue/totalRevenue*100);
+      return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+          <span>${channelLabels[ch]||ch}</span>
+          <span style="font-weight:600">₹${Math.round(data.revenue/1000)}K (${pct}%)</span>
+        </div>
+        <div style="background:var(--border);border-radius:4px;height:8px">
+          <div style="background:var(--gold);height:8px;border-radius:4px;width:${pct}%"></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${data.count} invoice${data.count>1?'s':''}</div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Lead Sources</h3>
+    ${Object.entries(leadSources).map(([src, count]) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2);font-size:13px">
+        <span>${channelLabels[src]||src}</span>
+        <span style="font-weight:600;color:var(--gold)">${count} leads</span>
+      </div>`).join('') || '<p class="empty-msg">No leads yet</p>'}
+  </div>
+
+  ${recentCampaigns.length ? `
+  <div class="card">
+    <h3 class="card-title">Recent Campaigns</h3>
+    ${recentCampaigns.map(c => `
+      <div style="padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:13px;font-weight:600">WhatsApp Broadcast — ${c.segment||'all'}</div>
+        <div style="font-size:12px;color:var(--text3)">${c.recipientCount||0} recipients · ${new Date(c.sentAt).toLocaleDateString('en-IN')} · by ${c.sentByName||'—'}</div>
+      </div>`).join('')}
+  </div>` : ''}`;
+}
+
+window.VW_MARKETING = {
+  renderMarketingPage, switchMkTab,
+  showFestivalContent, generateAIContent, broadcastFestival,
+  renderBroadcast, selectSegment, generateBroadcastAI, startBroadcast, openNextWhatsApp,
+  renderCollaterals, generateCollateral,
+  renderSEO, generateGooglePost, sendReviewRequests,
+  renderMarketingAnalytics
+};
+
+
 /* === ledger.js === */
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
@@ -14039,6 +14754,7 @@ async function navigateTo(page, params) {
     else if (page === 'incentives') html = await VW_FEATURES.renderIncentivesPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
+    else if (page === 'marketing') html = await VW_MARKETING.renderMarketingPage();
     else if (page === 'ledger') {
       const cid = _navParams?.customerId;
       if (cid) {
@@ -14618,6 +15334,7 @@ async function renderDashboard() {
     <button class="qa-btn" data-page="crm" onclick="navigateTo('crm')"><span class="qa-icon">👥</span><span>CRM</span></button>
     <button class="qa-btn" data-page="inventory" onclick="navigateTo('inventory')"><span class="qa-icon">📦</span><span>Inventory</span></button>
     <button class="qa-btn" data-page="vendors" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
+    <button class="qa-btn" data-page="marketing" onclick="navigateTo('marketing')"><span class="qa-icon">📣</span><span>Marketing</span></button>
     <button class="qa-btn" data-page="ledger" onclick="navigateTo('ledger')"><span class="qa-icon">📒</span><span>Ledger</span></button>
     <button class="qa-btn" data-page="hr" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
     <button class="qa-btn" data-page="analytics" onclick="navigateTo('analytics')"><span class="qa-icon">📊</span><span>Analytics</span></button>
