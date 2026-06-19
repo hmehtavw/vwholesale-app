@@ -5534,7 +5534,10 @@ function pickInventoryItem(productId) {
   };
   quoteItems.push(newItem);
   quoteExpandedId = newItem.id;
-  showQuoteForm();
+  // Close picker immediately so user sees the quote form right away
+  closeSheet();
+  // Small delay so close animation runs, then re-open with quote form
+  setTimeout(() => showQuoteForm(), 80);
 }
 
 function expandQuoteItem(id) {
@@ -5666,7 +5669,7 @@ function renderQuoteItems() {
           </select>
         </div>
       </div>
-      <div class="form-group"><label>Description</label><input type="text" value="${item.description}" oninput="updateQuoteItem(${item.id},'description',this.value)"></div>
+      <div class="form-group"><label>Description</label><input type="text" id="qdesc-${item.id}" value="${(item.description||'').replace(/"/g,'&quot;')}" placeholder="Paste or type description..." onchange="updateQuoteItem(${item.id},'description',this.value)" onblur="updateQuoteItem(${item.id},'description',this.value)" onpaste="setTimeout(()=>updateQuoteItem(${item.id},'description',document.getElementById('qdesc-${item.id}').value),10)"></div>
 
       <div class="input-row">
         <div class="form-group" style="flex:1"><label>Qty</label><input type="number" value="${item.qty}" min="0" oninput="updateQuoteItem(${item.id},'qty',this.value)"></div>
@@ -10323,39 +10326,96 @@ async function renderSettingsTeam() {
   const active = profiles.filter(p=>p.role!=='pending'&&p.status!=='pending');
 
   return `
+  <!-- HOW TO CHANGE PERMISSIONS GUIDE -->
+  <div class="announce-card" style="margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:4px">🔐 How to edit user rights</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.6">
+      <b>Change role</b> — Use the dropdown next to each person below. Role sets their default page access.<br>
+      <b>Edit individual permissions</b> — Tap "Edit Rights" next to any person, or go to the Permissions tab above.
+    </div>
+  </div>
+
   ${pending.length ? `
-  <div class="card" style="border-color:rgba(200,151,43,0.4)">
-    <h3 class="card-title">⏳ Pending Approval <span class="badge" style="background:var(--gold)">${pending.length}</span></h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">These accounts were created through HR onboarding and are awaiting role assignment</p>
+  <div class="card" style="border-color:rgba(245,200,66,0.35);margin-bottom:12px">
+    <h3 class="card-title">⏳ Pending Approval <span class="badge badge-gold">${pending.length}</span></h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">New accounts awaiting role assignment</p>
     ${pending.map(p => `
     <div class="task-card">
-      <div style="font-size:13px;font-weight:600">${p.name||'Unknown'} · ${p.phone||'—'}</div>
-      <div class="form-group" style="margin-top:8px">
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">${p.name||'Unknown'} · <span style="color:var(--text2);font-weight:400">${p.phone||'—'}</span></div>
+      <div class="form-group" style="margin:0 0 8px">
         <select id="role-select-${p.id}">
           ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}">${r}</option>`).join('')}
         </select>
       </div>
-      <button class="btn-primary full-width" onclick="VW_SETTINGS.approveProfile('${p.id}')">✓ Approve with selected role</button>
+      <button class="btn-primary full-width" onclick="VW_SETTINGS.approveProfile('${p.id}')">✓ Approve</button>
     </div>`).join('')}
   </div>` : ''}
 
   <div class="card">
     <h3 class="card-title">Team Members <span class="badge">${active.length}</span></h3>
     ${active.map(p => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)">
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:600">${p.name||'—'}</div>
-        <div style="font-size:11px;color:var(--text3)">${p.phone||'—'}</div>
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="width:36px;height:36px;border-radius:50%;background:var(--gold-muted);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${(p.name||'?')[0].toUpperCase()}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${p.name||'—'}</div>
+        <div style="font-size:12px;color:var(--text2)">${p.phone||'—'}</div>
       </div>
-      <select onchange="VW_SETTINGS.updateProfileRole('${p.id}',this.value)" style="font-size:12px;padding:4px 8px">
+      <select onchange="VW_SETTINGS.updateProfileRole('${p.id}',this.value)" style="font-size:12px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);max-width:90px">
         ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
       </select>
+      <button class="btn-sm" onclick="VW_SETTINGS.openUserPermissions('${p.id}')" style="flex-shrink:0">🔐 Rights</button>
     </div>`).join('')}
   </div>`;
 }
 
+async function openUserPermissions(profileId) {
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  const sheet = document.getElementById('bottom-sheet');
+  const userPerms = prof.featurePermissions || {};
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>🔐 ${prof.name||prof.phone}</h3>
+    <p class="sheet-meta">Role: <strong>${prof.role}</strong> — Toggle individual rights below. Changes apply immediately.</p>
+
+    <div style="margin-bottom:12px;display:flex;gap:8px">
+      <button class="btn-sm" onclick="VW_SETTINGS.clearUserPermissions('${profileId}');closeSheet();setTimeout(()=>VW_SETTINGS.openUserPermissions('${profileId}'),100)">Reset to role defaults</button>
+    </div>
+
+    ${Object.entries(FEATURE_PERMISSIONS).map(([featKey, feat]) => `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px;padding:6px 0;border-bottom:1px solid var(--border)">${feat.icon} ${feat.label}</div>
+      ${Object.entries(feat.actions).map(([actKey, act]) => {
+        const key = `${featKey}.${actKey}`;
+        const hasOverride = key in userPerms;
+        const roleDefault = act[prof.role] === true;
+        const currentVal = hasOverride ? userPerms[key] : roleDefault;
+        return `
+        <label style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <div>
+            <div style="font-size:14px;color:var(--text)">${act.label}</div>
+            <div style="font-size:11px;color:var(--text3)">${hasOverride?'⚙️ Custom override':'Role default'}</div>
+          </div>
+          <div style="position:relative;width:44px;height:24px;flex-shrink:0">
+            <input type="checkbox" ${currentVal?'checked':''} style="opacity:0;position:absolute;width:100%;height:100%;cursor:pointer;z-index:1;margin:0"
+              onchange="VW_SETTINGS.setUserPermission('${profileId}','${key}',this.checked);this.closest('label').querySelector('.toggle-track').style.background=this.checked?'var(--gold)':'var(--bg3)'">
+            <div class="toggle-track" style="position:absolute;inset:0;border-radius:12px;background:${currentVal?'var(--gold)':'var(--bg3)'};border:1px solid var(--border2);transition:background 0.2s"></div>
+            <div style="position:absolute;top:3px;left:${currentVal?'22px':'3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left 0.2s;pointer-events:none"></div>
+          </div>
+        </label>`;
+      }).join('')}
+    </div>`).join('')}
+
+    <button class="btn-secondary full-width" style="margin-top:10px" onclick="closeSheet()">Done</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+window.VW_SETTINGS.openUserPermissions = openUserPermissions;
+
 async function approveProfile(profileId) {
-  const sel = document.getElementById(`role-select-${profileId}`);
   const role = sel?.value || 'staff';
   const rec = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
   if (!rec) return;
@@ -19588,9 +19648,11 @@ async function renderDashboard() {
   }
 
   // Low-stock products (Admin only)
+  const lowStock = (profile && profile.role === 'admin')
+    ? products.filter(p => p.stock <= (p.lowStockThreshold || 20))
+    : [];
   let lowStockBanner = '';
   if (profile && profile.role === 'admin') {
-    const lowStock = products.filter(p => p.stock <= (p.lowStockThreshold || 20));
     if (lowStock.length) {
       lowStockBanner = `
       <div class="alert-card">
