@@ -19000,20 +19000,21 @@ async function generateAITest(prompt) {
     </div>`;
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call via Supabase Edge Function proxy (avoids CORS on direct Anthropic API calls)
+    const SUPABASE_URL = VW_DB.client.supabaseUrl || 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+    const SUPABASE_KEY = VW_DB.client.supabaseKey || '';
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/claude-test-generator`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1000,
-        system: AI_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: `Generate a test for: ${prompt}` }]
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'apikey': SUPABASE_KEY,
+      },
+      body: JSON.stringify({ prompt })
     });
     const data = await response.json();
-    const raw = data.content?.[0]?.text || '';
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const testPlan = JSON.parse(clean);
+    if (data.error) throw new Error(data.error);
+    const testPlan = data.testPlan;
     _currentAITest = testPlan;
     // Add to history
     _aiTestHistory.unshift({ prompt, testPlan, timestamp: new Date().toLocaleTimeString() });
