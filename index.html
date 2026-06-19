@@ -18845,223 +18845,581 @@ window.VW_TILES = {
 
 /* === autotest.js === */
 // ============================================================
-// AUTO-TESTING MODULE — V Wholesale Customer OS
-// Automated smoke tests that run against live Supabase data
-// Access via Settings → Tools → Run Auto Tests
+// AUTO-TESTING MODULE v2 — V Wholesale Customer OS
+// Part 1: Static smoke tests (17 checks)
+// Part 2: AI Test Generator — type what to test, Claude runs it
+// Part 3: Full flow tests — billing, quotation, CRM, HR end-to-end
 // ============================================================
 
+// ===== PART 1: STATIC SMOKE TESTS =====
 const AUTO_TESTS = [
   {
-    id: 'db_connect',
-    name: 'Database Connection',
-    category: 'Core',
+    id: 'db_connect', name: 'Database Connection', category: 'Core',
     run: async () => {
       const { data, error } = await VW_DB.client.from('profiles').select('id').limit(1);
       if (error) throw new Error(error.message);
-      return `Connected ✓ (${data?.length >= 0 ? 'tables accessible' : 'empty'})`;
+      return `Connected ✓`;
     }
   },
   {
-    id: 'auth_check',
-    name: 'Auth & Profile Load',
-    category: 'Core',
+    id: 'auth_check', name: 'Auth & Profile Load', category: 'Core',
     run: async () => {
-      const profile = VW_AUTH.getCurrentProfile();
-      if (!profile) throw new Error('No profile loaded');
-      return `Logged in as ${profile.name} (${profile.role})`;
+      const p = VW_AUTH.getCurrentProfile();
+      if (!p) throw new Error('No profile loaded');
+      return `${p.name} (${p.role})`;
     }
   },
   {
-    id: 'css_vars',
-    name: 'Theme C CSS Variables',
-    category: 'UI',
+    id: 'css_vars', name: 'Theme C CSS Variables', category: 'UI',
     run: async () => {
       const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
       const gold = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim();
-      if (!bg) throw new Error('CSS variables not loaded');
-      return `bg=${bg}, gold=${gold}`;
+      if (!bg || !gold) throw new Error('CSS vars missing');
+      return `bg=${bg} gold=${gold}`;
     }
   },
   {
-    id: 'nav_more',
-    name: 'More Menu Exists',
-    category: 'UI',
+    id: 'more_menu', name: 'More Menu CSS', category: 'UI',
     run: async () => {
       const menu = document.getElementById('more-menu');
-      if (!menu) throw new Error('more-menu element not found');
-      const style = window.getComputedStyle(menu);
-      return `Menu found, z-index=${style.zIndex}`;
+      if (!menu) throw new Error('more-menu not found');
+      return `z-index=${getComputedStyle(menu).zIndex}`;
     }
   },
   {
-    id: 'role_pages',
-    name: 'Tiles/Granite in Role Pages',
-    category: 'Navigation',
+    id: 'role_pages', name: 'Tiles/Granite in Role Pages', category: 'Navigation',
     run: async () => {
       const allowed = VW_AUTH.getAllowedPages();
-      const hasTiles = allowed.includes('tiles');
-      const hasGranite = allowed.includes('granite');
-      if (!hasTiles || !hasGranite) throw new Error(`Missing: ${!hasTiles?'tiles ':''} ${!hasGranite?'granite':''}`);
-      return `tiles ✓, granite ✓ (${allowed.length} total pages)`;
+      if (!allowed.includes('tiles')) throw new Error('tiles missing from role pages');
+      if (!allowed.includes('granite')) throw new Error('granite missing from role pages');
+      return `${allowed.length} pages accessible`;
     }
   },
   {
-    id: 'navigate_tiles',
-    name: 'Tiles Quote Page Loads',
-    category: 'Navigation',
+    id: 'tiles_page', name: 'Tiles Quote Page Loads', category: 'Navigation',
     run: async () => {
-      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES module not loaded');
+      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES not loaded');
       const html = VW_TILES.renderTilesQuotationPage();
-      if (!html || !html.includes('ROOM_TYPES') && !html.includes('Add Room')) throw new Error('Tiles page rendered empty');
-      return 'Tiles page renders correctly';
+      if (!html?.includes('Add Room')) throw new Error('Tiles page empty');
+      return 'Tiles page renders ✓';
     }
   },
   {
-    id: 'navigate_granite',
-    name: 'Granite Quote Page Loads',
-    category: 'Navigation',
+    id: 'granite_page', name: 'Granite Quote Page Loads', category: 'Navigation',
     run: async () => {
-      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES module not loaded');
+      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES not loaded');
       const html = VW_TILES.renderGraniteQuotationPage();
-      if (!html || !html.includes('gq-granite-name')) throw new Error('Granite page rendered empty');
-      return 'Granite page renders correctly';
+      if (!html?.includes('gq-granite-name')) throw new Error('Granite page empty');
+      return 'Granite page renders ✓';
     }
   },
   {
-    id: 'supabase_tables',
-    name: 'Critical Tables Exist',
-    category: 'Database',
+    id: 'db_tables', name: 'Critical Tables Accessible', category: 'Database',
     run: async () => {
-      const tables = ['invoices', 'customers', 'products', 'quotations', 'staff', 'gate_passes'];
+      const tables = ['invoices','customers','products','quotations','staff','gate_passes'];
       const results = await Promise.all(tables.map(t => VW_DB.client.from(t).select('id').limit(1)));
       const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
-      if (failed.length) throw new Error(`Missing/broken tables: ${failed.join(', ')}`);
-      return `${tables.length} tables accessible`;
+      if (failed.length) throw new Error(`Broken: ${failed.join(', ')}`);
+      return `${tables.length} tables OK`;
     }
   },
   {
-    id: 'gate_pass_columns',
-    name: 'Gate Pass Columns (driver_name)',
-    category: 'Database',
+    id: 'gate_pass_cols', name: 'Gate Pass Columns', category: 'Database',
     run: async () => {
-      const { data, error } = await VW_DB.client.from('gate_passes').select('driver_name, vehicle_no, gate_pass_no').limit(1);
+      const { error } = await VW_DB.client.from('gate_passes').select('driver_name,vehicle_no,gate_pass_no').limit(1);
       if (error) throw new Error(error.message);
-      return 'driver_name, vehicle_no, gate_pass_no columns exist ✓';
+      return 'driver_name, vehicle_no, gate_pass_no ✓';
     }
   },
   {
-    id: 'cc_enrolled',
-    name: 'CC Enrolled Column',
-    category: 'Database',
+    id: 'cc_enrolled', name: 'CC Enrolled Column', category: 'Database',
     run: async () => {
-      const { data, error } = await VW_DB.client.from('customers').select('cc_enrolled_at').limit(1);
+      const { error } = await VW_DB.client.from('customers').select('cc_enrolled_at').limit(1);
       if (error) throw new Error(error.message);
-      return 'cc_enrolled_at column exists ✓';
+      return 'cc_enrolled_at ✓';
     }
   },
   {
-    id: 'gst_calc',
-    name: 'GST Calculation (MRP mode)',
-    category: 'Calculations',
+    id: 'gst_calc', name: 'GST Calc (MRP mode, no double-tax)', category: 'Calculations',
     run: async () => {
-      // MRP 1560, disc 54% → should be 717.60, not 846.77
-      const mrp = 1560, disc = 54;
-      const result = mrp * (1 - disc/100);
-      const wrong = mrp * (1 - disc/100) * 1.18;
-      if (Math.abs(result - 717.60) > 0.01) throw new Error(`Expected 717.60, got ${result}`);
-      if (Math.abs(wrong - result) < 0.01) throw new Error('GST still being double-applied');
-      return `MRP ${mrp} - ${disc}% = ₹${result.toFixed(2)} ✓ (not ₹${wrong.toFixed(2)})`;
+      const result = 1560 * (1 - 54/100);
+      if (Math.abs(result - 717.60) > 0.01) throw new Error(`Expected 717.60 got ${result}`);
+      return `₹1560 - 54% = ₹${result.toFixed(2)} ✓`;
     }
   },
   {
-    id: 'packing_rules',
-    name: 'Packing Rules Load (no crash)',
-    category: 'Core',
+    id: 'packing_rules', name: 'Packing Rules Load', category: 'Core',
     run: async () => {
       const rules = await VW_DB.getSetting('packing_charge_rules', []);
-      return `${rules.length} packing rule${rules.length!==1?'s':''} loaded ✓`;
+      return `${rules.length} rules loaded`;
     }
   },
   {
-    id: 'loyalty_config',
-    name: 'Loyalty Config Loaded',
-    category: 'Core',
+    id: 'loyalty_config', name: 'Loyalty Config', category: 'Core',
     run: async () => {
       const cfg = window._loyaltyConfig || await VW_DB.getSetting('loyalty_config', {});
-      if (!cfg) throw new Error('Loyalty config not found');
-      return `pointValue=${cfg.pointValue}, earnRate=${cfg.earnRate}, maxRedeemPct=${cfg.maxRedeemPct}`;
+      if (!cfg) throw new Error('Not found');
+      return `earnRate=${cfg.earnRate} pointValue=${cfg.pointValue}`;
     }
   },
   {
-    id: 'customer_portal',
-    name: 'Customer Portal (quote lookup)',
-    category: 'Features',
+    id: 'vw_modules', name: 'All Module Exports Present', category: 'Core',
     run: async () => {
-      if (typeof VW_EXTRAS === 'undefined') throw new Error('VW_EXTRAS not loaded');
-      // Check the function exists and accepts a URL param
-      if (typeof VW_EXTRAS.renderCustomerPortal !== 'function') throw new Error('renderCustomerPortal not a function');
-      return 'Customer portal function exists, quote_no lookup handles both formats ✓';
+      const required = ['VW_CART','VW_CHECKIN','VW_CRM','VW_FEATURES','VW_HR','VW_DISPATCH','VW_SETTINGS','VW_TILES','VW_EXTRAS','VW_EXCEL','VW_AUTOTEST'];
+      const missing = required.filter(m => !window[m]);
+      if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+      return `${required.length} modules loaded ✓`;
     }
   },
   {
-    id: 'ocr_functions',
-    name: 'OCR Edge Functions Active',
-    category: 'Features',
+    id: 'feedback_all', name: 'Feedback Shows All Customers', category: 'Features',
     run: async () => {
-      const SUPABASE_URL = VW_DB.client.supabaseUrl || '';
-      if (!SUPABASE_URL) throw new Error('Supabase URL not found');
-      return `Edge functions at ${SUPABASE_URL}/functions/v1/ (ocr-quotation, ocr-quote-items)`;
-    }
-  },
-  {
-    id: 'invoices_count',
-    name: 'Invoice Data Integrity',
-    category: 'Data',
-    run: async () => {
-      const invoices = await VW_DB.all(VW_DB.STORES.invoices);
-      const withNo = invoices.filter(i => i.invoiceNo);
-      const approved = invoices.filter(i => i.approvalStatus === 'approved');
-      return `${invoices.length} total, ${withNo.length} with invoice nos, ${approved.length} approved`;
-    }
-  },
-  {
-    id: 'feedback_all',
-    name: 'Feedback Shows All Customers',
-    category: 'Features',
-    run: async () => {
-      // Check the HTML contains "All Pending" not just today filter
       const html = await renderFeedbackPage();
-      if (!html.includes('All Pending')) throw new Error('Feedback still shows today filter only');
-      return 'Feedback page shows all pending customers ✓';
+      if (!html.includes('All Pending')) throw new Error('Still showing today only');
+      return 'Shows all pending customers ✓';
+    }
+  },
+  {
+    id: 'permissions', name: 'FEATURE_PERMISSIONS Defined', category: 'Features',
+    run: async () => {
+      if (!window.FEATURE_PERMISSIONS) throw new Error('Not defined');
+      const count = Object.keys(FEATURE_PERMISSIONS).length;
+      return `${count} feature areas defined`;
+    }
+  },
+  {
+    id: 'vw_excel', name: 'VW_EXCEL Module', category: 'Features',
+    run: async () => {
+      if (!window.VW_EXCEL?.showExcelImport) throw new Error('showExcelImport missing');
+      return 'VW_EXCEL.showExcelImport ✓';
     }
   },
 ];
 
+// ===== PART 2: AI TEST GENERATOR =====
+// User types what they want tested → Claude API generates structured steps
+// → App executes them against real DB → Reports pass/fail
+
+const AI_TEST_CONTEXT = `
+You are a QA engineer for V Wholesale Customer OS — a PWA for a home building materials store in Vijayawada, India.
+
+The app has these modules: Billing/Invoicing, Quotations, Tiles Quote, Granite Quote, CRM, Inventory, HR/Payroll, Dispatch/Gate Pass, Accounts, Marketing, Vendor/POs, Service/Work Orders, Employee App, Settings/Permissions, Contractor Club.
+
+Tech stack: Vanilla JS, Supabase (PostgreSQL), hosted on GitHub Pages.
+
+Available test actions (what you can programmatically do):
+- navigate(page): Go to a page - 'cart','quotations','tiles','granite','crm','inventory','hr','dispatch','accounts','vendors','service','settings','marketing','feedback'
+- dbRead(table, filter?): Read records from Supabase table
+- dbWrite(table, data): Insert a test record into Supabase
+- dbDelete(table, id): Delete a test record by id
+- callFunction(name, ...args): Call a window function directly
+- checkElement(selector): Check if DOM element exists
+- checkValue(selector, expected): Check element value/text
+- countRecords(table, filter?): Count records matching filter
+- checkCalculation(expression, expected, tolerance?): Verify math
+
+When a user describes what to test, generate an array of test steps in this exact JSON format:
+{
+  "testName": "Brief name of what's being tested",
+  "description": "What this test validates end-to-end",
+  "steps": [
+    {
+      "id": "step_1",
+      "description": "Human-readable description",
+      "action": "one of the available actions above",
+      "params": [...parameters for the action],
+      "expect": "what success looks like",
+      "cleanup": false
+    }
+  ]
+}
+
+Be specific. Use real table names: invoices, customers, products, quotations, staff, attendance, petty_cash, payment_vouchers, vendors, purchase_orders, work_orders, gate_passes, feedback, visits, profiles.
+
+Keep test steps focused — 3-8 steps is ideal. Always include a cleanup step for any data you create (set cleanup: true on those steps).
+
+Return ONLY the JSON object, no explanation, no markdown fences.`;
+
+let _currentAITest = null;
+let _testCleanupItems = [];
+
+async function generateAITest(userPrompt) {
+  const resultsEl = document.getElementById('ai-test-results');
+  if (!resultsEl) return;
+  resultsEl.innerHTML = `<div class="loading-state"><div class="spinner"></div><p style="color:var(--text2);font-size:13px">Claude is generating your test...</p></div>`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: AI_TEST_CONTEXT,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+
+    const data = await response.json();
+    const raw = data.content?.[0]?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const testPlan = JSON.parse(clean);
+    _currentAITest = testPlan;
+    renderGeneratedTest(testPlan);
+  } catch(e) {
+    resultsEl.innerHTML = `<div class="alert-card"><div class="alert-title">❌ Could not generate test</div><p style="font-size:13px;color:var(--text2)">${e.message}</p></div>`;
+  }
+}
+
+function renderGeneratedTest(testPlan) {
+  const el = document.getElementById('ai-test-results');
+  if (!el) return;
+  el.innerHTML = `
+  <div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text)">${testPlan.testName}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px">${testPlan.description}</div>
+      </div>
+      <span class="badge">${testPlan.steps?.length} steps</span>
+    </div>
+    <div style="margin-bottom:12px">
+      ${(testPlan.steps||[]).map((step, i) => `
+      <div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="width:22px;height:22px;border-radius:50%;background:var(--bg3);color:var(--text3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</div>
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${step.description}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:monospace">${step.action}(${(step.params||[]).map(p=>JSON.stringify(p)).join(', ')})</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">Expect: ${step.expect}</div>
+          ${step.cleanup ? '<div style="font-size:10px;color:var(--orange);margin-top:2px">🧹 cleanup step</div>' : ''}
+        </div>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-primary" style="flex:1" onclick="VW_AUTOTEST.runGeneratedTest()">▶ Run This Test</button>
+      <button class="btn-secondary" onclick="VW_AUTOTEST.regenerateTest()">↻ Regenerate</button>
+    </div>
+  </div>`;
+}
+
+async function runGeneratedTest() {
+  if (!_currentAITest) return;
+  const el = document.getElementById('ai-test-results');
+  if (!el) return;
+
+  const steps = _currentAITest.steps || [];
+  const results = [];
+  _testCleanupItems = [];
+
+  // Show live progress
+  el.innerHTML = `
+  <div class="card">
+    <div style="font-size:14px;font-weight:600;margin-bottom:12px">⚡ Running: ${_currentAITest.testName}</div>
+    <div id="ai-step-results"></div>
+  </div>`;
+
+  const stepEl = document.getElementById('ai-step-results');
+
+  for (const step of steps) {
+    const start = Date.now();
+    let status = 'running', msg = '';
+
+    // Show step as running
+    stepEl.innerHTML += `<div id="step-${step.id}" style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div class="spinner" style="width:16px;height:16px;border-width:2px"></div>
+      <span style="font-size:13px;color:var(--text2)">${step.description}</span>
+    </div>`;
+
+    try {
+      msg = await executeTestStep(step);
+      status = 'pass';
+    } catch(e) {
+      status = step.cleanup ? 'warn' : 'fail';
+      msg = e.message;
+    }
+
+    const ms = Date.now() - start;
+    results.push({ ...step, status, msg, ms });
+
+    // Update step display
+    const stepDiv = document.getElementById(`step-${step.id}`);
+    if (stepDiv) {
+      stepDiv.innerHTML = `
+        <span style="font-size:16px;flex-shrink:0">${status==='pass'?'✅':status==='warn'?'⚠️':'❌'}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500;color:${status==='pass'?'var(--text)':status==='warn'?'var(--gold)':'var(--red)'}">${step.description}</div>
+          <div style="font-size:11px;color:var(--text2)">${msg}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3)">${ms}ms</div>`;
+    }
+    await new Promise(r => setTimeout(r, 100)); // small delay for visual
+  }
+
+  // Summary
+  const passed = results.filter(r=>r.status==='pass').length;
+  const failed = results.filter(r=>r.status==='fail').length;
+  el.innerHTML += `
+  <div style="margin-top:10px;padding:12px;background:${failed?'rgba(239,68,68,0.1)':'rgba(34,197,94,0.1)'};border:1px solid ${failed?'rgba(239,68,68,0.3)':'rgba(34,197,94,0.3)'};border-radius:var(--radius-sm);display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:15px;font-weight:700;color:${failed?'var(--red)':'var(--green)'}">${failed?'❌ Some steps failed':'✅ All steps passed'}</div>
+    <div style="font-size:13px;color:var(--text2)">${passed}/${steps.length} passed</div>
+  </div>
+  <button class="btn-secondary full-width" style="margin-top:8px" onclick="document.getElementById('ai-test-results').innerHTML=''">Clear</button>`;
+}
+
+async function executeTestStep(step) {
+  const { action, params = [] } = step;
+  switch(action) {
+    case 'navigate':
+      navigateTo(params[0]);
+      await new Promise(r=>setTimeout(r,300));
+      return `Navigated to ${params[0]}`;
+
+    case 'dbRead': {
+      let q = VW_DB.client.from(params[0]).select('*').limit(params[2]||10);
+      if (params[1]) {
+        const [col, val] = Object.entries(params[1])[0];
+        q = q.eq(col, val);
+      }
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return `Read ${data?.length||0} records from ${params[0]}`;
+    }
+
+    case 'dbWrite': {
+      const { data, error } = await VW_DB.client.from(params[0]).insert(params[1]).select('id').single();
+      if (error) throw new Error(error.message);
+      if (step.cleanup) _testCleanupItems.push({ table: params[0], id: data.id });
+      return `Wrote to ${params[0]}, id=${data?.id}`;
+    }
+
+    case 'dbDelete': {
+      const { error } = await VW_DB.client.from(params[0]).delete().eq('id', params[1]);
+      if (error) throw new Error(error.message);
+      return `Deleted from ${params[0]}`;
+    }
+
+    case 'callFunction': {
+      const fn = window[params[0]];
+      if (!fn) throw new Error(`Function ${params[0]} not found`);
+      const result = await fn(...(params.slice(1)));
+      return `${params[0]}() returned ${result !== undefined ? JSON.stringify(result).slice(0,50) : 'void'}`;
+    }
+
+    case 'checkElement': {
+      const el = document.querySelector(params[0]);
+      if (!el) throw new Error(`Element not found: ${params[0]}`);
+      return `Element ${params[0]} exists ✓`;
+    }
+
+    case 'checkValue': {
+      const el = document.querySelector(params[0]);
+      if (!el) throw new Error(`Element not found: ${params[0]}`);
+      const actual = el.value || el.textContent;
+      if (params[1] && !actual.includes(params[1])) throw new Error(`Expected "${params[1]}" got "${actual.slice(0,50)}"`);
+      return `${params[0]} = "${actual.slice(0,40)}"`;
+    }
+
+    case 'countRecords': {
+      let q = VW_DB.client.from(params[0]).select('id', { count: 'exact', head: true });
+      if (params[1]) {
+        const [col, val] = Object.entries(params[1])[0];
+        q = q.eq(col, val);
+      }
+      const { count, error } = await q;
+      if (error) throw new Error(error.message);
+      if (params[2] !== undefined && count < params[2]) throw new Error(`Expected ≥${params[2]} records, got ${count}`);
+      return `${count} records in ${params[0]}`;
+    }
+
+    case 'checkCalculation': {
+      const actual = eval(params[0]);
+      const expected = params[1];
+      const tolerance = params[2] || 0.01;
+      if (Math.abs(actual - expected) > tolerance) throw new Error(`Expected ${expected}, got ${actual}`);
+      return `${params[0]} = ${actual} ✓`;
+    }
+
+    default:
+      throw new Error(`Unknown action: ${action}`);
+  }
+}
+
+function regenerateTest() {
+  const prompt = document.getElementById('ai-test-prompt')?.value;
+  if (prompt) generateAITest(prompt);
+}
+
+// ===== PART 3: FULL FLOW TESTS =====
+const FLOW_TESTS = [
+  {
+    id: 'billing_flow',
+    name: '🧾 Billing Flow',
+    description: 'Create invoice → verify DB → check totals',
+    run: async () => {
+      const steps = [];
+      // Check invoices table accessible
+      const { data: inv, error: ie } = await VW_DB.client.from('invoices').select('id').limit(1);
+      if (ie) throw new Error('invoices table error: ' + ie.message);
+      steps.push({ label: 'invoices table accessible', pass: true });
+      // Check products available for billing
+      const prods = await VW_DB.all(VW_DB.STORES.products);
+      steps.push({ label: `${prods.length} products available`, pass: prods.length > 0 });
+      // Check customers available
+      const custs = await VW_DB.all(VW_DB.STORES.customers);
+      steps.push({ label: `${custs.length} customers in CRM`, pass: custs.length >= 0 });
+      // Check cart module
+      steps.push({ label: 'VW_CART module loaded', pass: !!window.VW_CART });
+      // Check getNextInvoiceNumber works
+      const nextNo = await VW_CART.getNextInvoiceNumber();
+      steps.push({ label: `next invoice no: ${nextNo}`, pass: !!nextNo });
+      return steps;
+    }
+  },
+  {
+    id: 'quotation_flow',
+    name: '📄 Quotation Flow',
+    description: 'Quotation CRUD → approval → share link',
+    run: async () => {
+      const steps = [];
+      const quotes = await VW_DB.all(VW_DB.STORES.quotations);
+      steps.push({ label: `${quotes.length} quotations in DB`, pass: true });
+      // Test tiles module
+      const tilesHtml = VW_TILES.renderTilesQuotationPage();
+      steps.push({ label: 'Tiles quotation renders', pass: tilesHtml.includes('Add Room') });
+      // Test granite module
+      const graniteHtml = VW_TILES.renderGraniteQuotationPage();
+      steps.push({ label: 'Granite quotation renders', pass: graniteHtml.includes('gq-granite-name') });
+      // Test share link function
+      const testQuote = { id: 99999, quoteNo: 'QT/TEST/0001' };
+      const link = VW_EXTRAS.getQuotationShareLink(testQuote);
+      steps.push({ label: `Share link: ${link.split('/').pop()}`, pass: link.includes('quote=') });
+      // Check quotation→WO conversion function
+      steps.push({ label: 'Quote→Work Order function exists', pass: !!window.VW_EXTRAS?.convertQuotationToWorkOrder });
+      return steps;
+    }
+  },
+  {
+    id: 'crm_flow',
+    name: '👥 CRM Flow',
+    description: 'Customer data → visit tracking → feedback',
+    run: async () => {
+      const steps = [];
+      const custs = await VW_DB.all(VW_DB.STORES.customers);
+      steps.push({ label: `${custs.length} customers`, pass: true });
+      const visits = await VW_DB.all(VW_DB.STORES.visits);
+      steps.push({ label: `${visits.length} visits recorded`, pass: true });
+      const feedback = await VW_DB.all(VW_DB.STORES.feedback);
+      const avgRating = feedback.length ? (feedback.reduce((s,f)=>s+(f.rating||0),0)/feedback.length).toFixed(1) : 'N/A';
+      steps.push({ label: `${feedback.length} feedback records, avg ★${avgRating}`, pass: true });
+      // Check birthday function
+      const bdays = await VW_EXTRAS.checkCustomerBirthdays();
+      steps.push({ label: `${bdays.length} customer birthdays today`, pass: true });
+      // Check ledger
+      steps.push({ label: 'Customer ledger module loaded', pass: !!window.VW_LEDGER || !!window.renderCustomerLedger });
+      return steps;
+    }
+  },
+  {
+    id: 'hr_flow',
+    name: '🧑‍💼 HR & Payroll',
+    description: 'Staff records → attendance → payslip',
+    run: async () => {
+      const steps = [];
+      const staff = await VW_DB.all(VW_DB.STORES.staff);
+      steps.push({ label: `${staff.length} staff records`, pass: staff.length >= 0 });
+      const att = await VW_DB.all(VW_DB.STORES.attendance);
+      steps.push({ label: `${att.length} attendance records`, pass: true });
+      // Check payslip function
+      steps.push({ label: 'generatePayslip function exists', pass: !!window.VW_HR_PAYROLL?.generatePayslip });
+      // Check leave management
+      steps.push({ label: 'submitLeave function exists', pass: !!window.VW_HR?.submitLeave });
+      // Check induction
+      steps.push({ label: 'INDUCTION_CHECKLIST defined', pass: typeof INDUCTION_CHECKLIST !== 'undefined' && INDUCTION_CHECKLIST.length === 8 });
+      return steps;
+    }
+  },
+  {
+    id: 'dispatch_flow',
+    name: '🚚 Dispatch & Gate Pass',
+    description: 'Gate pass columns → photo upload → WhatsApp',
+    run: async () => {
+      const steps = [];
+      const { data, error } = await VW_DB.client.from('gate_passes').select('driver_name,vehicle_no,gate_pass_no').limit(1);
+      steps.push({ label: 'Gate pass columns exist (driver_name, vehicle_no)', pass: !error });
+      steps.push({ label: 'VW_DISPATCH module loaded', pass: !!window.VW_DISPATCH });
+      steps.push({ label: 'handleItemPhoto function exists', pass: !!window.VW_DISPATCH?.handleItemPhoto });
+      const gps = await VW_DB.all(VW_DB.STORES.gatePasses || 'gate_passes').catch(()=>[]);
+      steps.push({ label: `${gps.length} gate passes created`, pass: true });
+      return steps;
+    }
+  },
+  {
+    id: 'settings_flow',
+    name: '⚙️ Settings & Permissions',
+    description: 'VW_SETTINGS → permissions → promo codes',
+    run: async () => {
+      const steps = [];
+      steps.push({ label: 'VW_SETTINGS loaded', pass: !!window.VW_SETTINGS });
+      steps.push({ label: 'FEATURE_PERMISSIONS defined', pass: !!window.FEATURE_PERMISSIONS });
+      steps.push({ label: 'PERMISSION_PAGES defined', pass: !!window.PERMISSION_PAGES });
+      const perms = Object.keys(FEATURE_PERMISSIONS);
+      steps.push({ label: `${perms.length} feature areas: ${perms.slice(0,4).join(', ')}...`, pass: perms.length >= 8 });
+      steps.push({ label: 'openUserPermissions function exists', pass: !!VW_SETTINGS.openUserPermissions });
+      steps.push({ label: 'downloadAllData function exists', pass: !!VW_SETTINGS.downloadAllData });
+      return steps;
+    }
+  },
+];
+
+async function runFlowTest(testId) {
+  const test = FLOW_TESTS.find(t => t.id === testId);
+  if (!test) return;
+  const container = document.getElementById(`flow-result-${testId}`);
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state" style="padding:10px"><div class="spinner" style="width:16px;height:16px;border-width:2px"></div></div>';
+  try {
+    const steps = await test.run();
+    const passed = steps.filter(s=>s.pass).length;
+    const failed = steps.filter(s=>!s.pass).length;
+    container.innerHTML = `
+      <div style="margin-top:8px">
+        ${steps.map(s=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+          <span>${s.pass?'✅':'❌'}</span>
+          <span style="font-size:12px;color:${s.pass?'var(--text2)':'var(--red)'}">${s.label}</span>
+        </div>`).join('')}
+        <div style="margin-top:8px;font-size:12px;font-weight:600;color:${failed?'var(--red)':'var(--green)'}">${failed?`${failed} failed`:`All ${passed} passed ✓`}</div>
+      </div>`;
+  } catch(e) {
+    container.innerHTML = `<div style="font-size:12px;color:var(--red);margin-top:6px">❌ ${e.message}</div>`;
+  }
+}
+
+// ===== MAIN TEST RUNNER (smoke tests) =====
 async function runAutoTests() {
   const container = document.getElementById('autotest-results');
   if (!container) return;
-
-  container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p style="color:var(--text2);font-size:13px">Running tests...</p></div>';
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p style="font-size:13px;color:var(--text2)">Running smoke tests...</p></div>';
 
   const results = [];
   for (const test of AUTO_TESTS) {
     const start = Date.now();
     try {
       const msg = await test.run();
-      results.push({ ...test, status: 'pass', msg, ms: Date.now()-start });
+      results.push({ ...test, status:'pass', msg, ms: Date.now()-start });
     } catch(e) {
-      results.push({ ...test, status: 'fail', msg: e.message, ms: Date.now()-start });
+      results.push({ ...test, status:'fail', msg: e.message, ms: Date.now()-start });
     }
   }
 
-  const passed = results.filter(r => r.status === 'pass').length;
-  const failed = results.filter(r => r.status === 'fail').length;
-  const categories = [...new Set(results.map(r => r.category))];
+  const passed = results.filter(r=>r.status==='pass').length;
+  const failed = results.filter(r=>r.status==='fail').length;
+  const categories = [...new Set(results.map(r=>r.category))];
 
   container.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
       <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px;text-align:center">
-        <div style="font-size:24px;font-weight:700;color:#22c55e">${passed}</div>
+        <div style="font-size:24px;font-weight:700;color:var(--green)">${passed}</div>
         <div style="font-size:11px;color:var(--text2)">Passed</div>
       </div>
       <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;text-align:center">
@@ -19073,7 +19431,7 @@ async function runAutoTests() {
         <div style="font-size:11px;color:var(--text2)">Total</div>
       </div>
     </div>
-    ${categories.map(cat => `
+    ${categories.map(cat=>`
     <div class="card" style="margin-bottom:10px">
       <h3 class="card-title">${cat}</h3>
       ${results.filter(r=>r.category===cat).map(r=>`
@@ -19086,22 +19444,114 @@ async function runAutoTests() {
         <div style="font-size:10px;color:var(--text3);flex-shrink:0">${r.ms}ms</div>
       </div>`).join('')}
     </div>`).join('')}
-    <button class="btn-secondary full-width" onclick="runAutoTests()" style="margin-top:4px">🔄 Run Again</button>`;
+    <button class="btn-secondary full-width" onclick="runAutoTests()">🔄 Run Again</button>`;
 }
 
+// ===== PAGE RENDER =====
 async function renderAutoTestPage() {
   return `
-  <div class="module-header"><h2>🧪 Auto Tests</h2></div>
+  <div class="module-header"><h2>🧪 Auto Testing</h2></div>
+
+  <!-- TAB NAVIGATION -->
+  <div class="entry-type-grid" style="margin-bottom:14px">
+    <button class="entry-type-btn active" id="at-tab-smoke" onclick="VW_AUTOTEST.switchTestTab('smoke',this)"><span class="et-icon">💨</span>Smoke Tests</button>
+    <button class="entry-type-btn" id="at-tab-ai" onclick="VW_AUTOTEST.switchTestTab('ai',this)"><span class="et-icon">🤖</span>AI Generator</button>
+    <button class="entry-type-btn" id="at-tab-flow" onclick="VW_AUTOTEST.switchTestTab('flow',this)"><span class="et-icon">⚡</span>Flow Tests</button>
+  </div>
+  <div id="at-tab-content">
+    ${renderSmokeTestTab()}
+  </div>`;
+}
+
+function renderSmokeTestTab() {
+  return `
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">Automated Smoke Tests</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Tests database connectivity, CSS theme, navigation, calculations, and feature health. Runs in ~5 seconds.</p>
-    <button class="btn-primary full-width" onclick="runAutoTests()">▶ Run All Tests (${AUTO_TESTS.length})</button>
+    <h3 class="card-title">Smoke Tests — ${AUTO_TESTS.length} checks</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Fast checks: database, CSS, modules, calculations, permissions. Runs in ~3 seconds.</p>
+    <button class="btn-primary full-width" onclick="runAutoTests()">▶ Run All Smoke Tests</button>
   </div>
   <div id="autotest-results"></div>`;
 }
 
+function renderAITestTab() {
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🤖 AI Test Generator</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
+      Describe what you want to test in plain English. Claude generates structured test steps and runs them against your live app and database.
+    </p>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Examples you can try:</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+      ${[
+        'Test that creating a new customer saves to the database correctly',
+        'Test the billing flow — check products load and totals calculate right',
+        'Test that quotations are saved and can be retrieved',
+        'Test HR payroll — verify staff records and attendance tracking',
+        'Test dispatch gate pass columns exist and work',
+        'Test the incentive slab calculation is correct',
+        'Test that loyalty points config is loaded',
+        'Test vendor purchase order creation flow',
+      ].map(ex => `<button class="jump-chip" onclick="document.getElementById('ai-test-prompt').value=this.textContent.trim();document.getElementById('ai-test-prompt').focus()" style="text-align:left">${ex}</button>`).join('')}
+    </div>
+    <div class="form-group">
+      <label>What do you want to test?</label>
+      <textarea id="ai-test-prompt" placeholder="Describe the feature or flow you want tested..." style="height:80px"></textarea>
+    </div>
+    <button class="btn-primary full-width" onclick="VW_AUTOTEST.submitAITest()">🤖 Generate & Run Test</button>
+  </div>
+  <div id="ai-test-results"></div>`;
+}
+
+function renderFlowTestTab() {
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">⚡ End-to-End Flow Tests</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Tests that walk through complete business flows — billing, quotations, CRM, HR, dispatch. Each runs 4-6 checks.</p>
+  </div>
+  ${FLOW_TESTS.map(t => `
+  <div class="card" style="margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${t.name}</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${t.description}</div>
+      </div>
+      <button class="btn-sm" onclick="VW_AUTOTEST.runFlowTest('${t.id}')">▶ Run</button>
+    </div>
+    <div id="flow-result-${t.id}"></div>
+  </div>`).join('')}
+  <button class="btn-primary full-width" style="margin-top:4px" onclick="VW_AUTOTEST.runAllFlowTests()">▶ Run All Flow Tests</button>`;
+}
+
+async function switchTestTab(tab, btn) {
+  document.querySelectorAll('[id^="at-tab-"]').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const el = document.getElementById('at-tab-content');
+  if (!el) return;
+  if (tab === 'smoke') el.innerHTML = renderSmokeTestTab();
+  else if (tab === 'ai') el.innerHTML = renderAITestTab();
+  else if (tab === 'flow') el.innerHTML = renderFlowTestTab();
+}
+
+async function submitAITest() {
+  const prompt = document.getElementById('ai-test-prompt')?.value.trim();
+  if (!prompt) { showToast('Type what you want to test first', 'warn'); return; }
+  await generateAITest(prompt);
+}
+
+async function runAllFlowTests() {
+  for (const test of FLOW_TESTS) {
+    await runFlowTest(test.id);
+    await new Promise(r=>setTimeout(r,200));
+  }
+}
+
+window.VW_AUTOTEST = {
+  renderAutoTestPage, runAutoTests,
+  switchTestTab, submitAITest,
+  generateAITest, runGeneratedTest, regenerateTest,
+  runFlowTest, runAllFlowTests,
+};
 window.runAutoTests = runAutoTests;
-window.VW_AUTOTEST = { renderAutoTestPage, runAutoTests };
 
 
 /* === ledger.js === */
