@@ -1366,7 +1366,7 @@ async function showAuthScreen() {
       </div>
       <div id="auth-error" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
       <button class="btn-primary full-width" id="auth-submit-btn" onclick="handleAuthSubmit()">Log In</button>
-      <button class="btn-secondary full-width" style="margin-top:8px" onclick="toggleAuthMode()" id="auth-toggle-btn">New here? Request Access</button>
+      <button class="btn-secondary full-width" style="margin-top:8px" onclick="toggleAuthMode()" id="auth-toggle-btn">New employee? Register</button>
       <button class="btn-secondary full-width" style="margin-top:8px;background:none;border:none;color:var(--text3);font-size:13px" id="forgot-pin-btn" onclick="showForgotPin()">Forgot PIN?</button>
     </div>
   `;
@@ -1427,18 +1427,19 @@ window.submitPinResetRequest = submitPinResetRequest;
 
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
-  document.getElementById('auth-title').textContent = authMode === 'login' ? 'Log In' : 'Request Access';
+  document.getElementById('auth-title').textContent = authMode === 'login' ? 'Log In' : 'Register';
   document.getElementById('auth-sub').textContent = authMode === 'login'
     ? 'Enter your phone number and PIN.'
-    : 'Enter your details. Management will review and approve your access.';
+    : 'HR must have initiated your onboarding before you can register.';
   document.getElementById('auth-name-group').style.display = authMode === 'signup' ? 'block' : 'none';
-  document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'Log In' : 'Request Access';
-  document.getElementById('auth-toggle-btn').textContent = authMode === 'login' ? 'New here? Request Access' : 'Already have an account? Log In';
-  document.getElementById('auth-error').style.display = 'none';
+  document.getElementById('auth-submit-btn').textContent = authMode === 'login' ? 'Log In' : 'Register';
+  document.getElementById('auth-toggle-btn').textContent = authMode === 'login' ? 'New employee? Register' : 'Already registered? Log In';
+  const errEl = document.getElementById('auth-error');
+  if (errEl) errEl.style.display = 'none';
 }
 
 async function handleAuthSubmit() {
-  const phone = document.getElementById('auth-phone').value.trim();
+  const phone = document.getElementById('auth-phone').value.trim().replace(/\D/g,'').slice(-10);
   const pin = document.getElementById('auth-pin').value.trim();
   const errEl = document.getElementById('auth-error');
   errEl.style.display = 'none';
@@ -1449,8 +1450,39 @@ async function handleAuthSubmit() {
   try {
     if (authMode === 'signup') {
       const name = document.getElementById('auth-name').value.trim();
-      if (!name) throw new Error('Please enter your name');
+      if (!name) throw new Error('Please enter your full name');
+      if (phone.length !== 10) throw new Error('Enter a valid 10-digit phone number');
+      if (pin.length !== 6) throw new Error('PIN must be exactly 6 digits');
+
+      // Check if this phone number has been pre-approved by HR
+      const offers = await VW_DB.all(VW_DB.STORES.staffOffers);
+      const matchingOffer = offers.find(o =>
+        (o.candidatePhone||'').replace(/\D/g,'').slice(-10) === phone
+      );
+
+      if (!matchingOffer) {
+        throw new Error('Your phone number is not registered for hiring. Please contact HR to initiate your onboarding.');
+      }
+
+      if (matchingOffer.status === 'pending' || matchingOffer.status === 'draft') {
+        throw new Error('HR has sent you an onboarding link. Please complete your documents and induction first, then come back to register.');
+      }
+
+      if (matchingOffer.status === 'accepted') {
+        throw new Error('You have accepted the offer but not completed the induction checklist yet. Please complete your onboarding form first.');
+      }
+
+      if (!matchingOffer.inductionCompleted) {
+        throw new Error('Your onboarding documents are submitted but induction is not complete. Please finish the induction checklist in your onboarding link.');
+      }
+
+      if (matchingOffer.status === 'rejected') {
+        throw new Error('Your application was not approved. Please contact HR for more information.');
+      }
+
+      // Offer is submitted/approved and induction is complete — allow registration
       await signUp(phone, pin, name);
+
     } else {
       await signIn(phone, pin);
     }
@@ -1462,7 +1494,7 @@ async function handleAuthSubmit() {
     errEl.textContent = e.message || 'Something went wrong';
     errEl.style.display = 'block';
     btn.disabled = false;
-    btn.textContent = authMode === 'login' ? 'Log In' : 'Request Access';
+    btn.textContent = authMode === 'login' ? 'Log In' : 'Register';
   }
 }
 
@@ -1604,6 +1636,144 @@ window.toggleAuthMode = toggleAuthMode;
 window.checkApprovalStatus = checkApprovalStatus;
 window.toggleStatusMenu = toggleStatusMenu;
 window.setExecStatus = setExecStatus;
+
+// ============================================================
+// GRANULAR FEATURE PERMISSIONS
+// Per-role rights: view, edit, delete, print, export, approve
+// Overridable per-user via profile.featurePermissions
+// ============================================================
+
+const FEATURE_PERMISSIONS = {
+  billing: {
+    label: 'Billing & Invoicing',
+    icon: '🧾',
+    actions: {
+      create:       { label: 'Create Invoice',       admin:true, executive:true,  staff:false, reception:true,  accounts:false, dispatch:false },
+      edit:         { label: 'Edit Invoice',          admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      delete:       { label: 'Delete Invoice',        admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      print:        { label: 'Print Invoice',         admin:true, executive:true,  staff:false, reception:true,  accounts:true,  dispatch:false },
+      discount:     { label: 'Apply Cash Discount',   admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      credit_sale:  { label: 'Create Credit Sale',    admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      approve:      { label: 'Approve Invoices',      admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+    }
+  },
+  quotations: {
+    label: 'Quotations',
+    icon: '📄',
+    actions: {
+      create:  { label: 'Create Quotation',  admin:true, executive:true,  staff:false, reception:true,  accounts:false, dispatch:false },
+      edit:    { label: 'Edit Quotation',    admin:true, executive:true,  staff:false, reception:false, accounts:false, dispatch:false },
+      delete:  { label: 'Delete Quotation',  admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      approve: { label: 'Approve Quotation', admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      print:   { label: 'Print Quotation',   admin:true, executive:true,  staff:false, reception:true,  accounts:true,  dispatch:false },
+    }
+  },
+  inventory: {
+    label: 'Inventory',
+    icon: '📦',
+    actions: {
+      view:    { label: 'View Inventory',    admin:true, executive:true,  staff:true,  reception:true,  accounts:false, dispatch:true  },
+      edit:    { label: 'Edit Products',     admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      delete:  { label: 'Delete Products',   admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      restock: { label: 'Restock Products',  admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true  },
+    }
+  },
+  crm: {
+    label: 'CRM & Customers',
+    icon: '👥',
+    actions: {
+      view:   { label: 'View Customers',     admin:true, executive:true,  staff:false, reception:true,  accounts:false, dispatch:false },
+      edit:   { label: 'Edit Customers',     admin:true, executive:true,  staff:false, reception:true,  accounts:false, dispatch:false },
+      delete: { label: 'Delete Customers',   admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      leads:  { label: 'Manage Leads',       admin:true, executive:true,  staff:false, reception:false, accounts:false, dispatch:false },
+    }
+  },
+  reports: {
+    label: 'Reports & Analytics',
+    icon: '📊',
+    actions: {
+      view:   { label: 'View Reports',       admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      export: { label: 'Export Reports',     admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+    }
+  },
+  hr: {
+    label: 'HR & Payroll',
+    icon: '🧑‍💼',
+    actions: {
+      view:       { label: 'View Staff',       admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      edit:       { label: 'Edit Staff',       admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      payroll:    { label: 'View Payroll',     admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      attendance: { label: 'Mark Attendance',  admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+    }
+  },
+  accounts: {
+    label: 'Accounts & Finance',
+    icon: '💳',
+    actions: {
+      view:    { label: 'View Accounts',      admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      petty:   { label: 'Petty Cash Entry',   admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      voucher: { label: 'Create Vouchers',    admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      export:  { label: 'Export GST / Ledger',admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+    }
+  },
+  dispatch: {
+    label: 'Dispatch & Gate Pass',
+    icon: '📦',
+    actions: {
+      view:      { label: 'View Dispatch Queue', admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true  },
+      gatepass:  { label: 'Create Gate Pass',    admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true  },
+      photo:     { label: 'Upload Item Photos',  admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true  },
+    }
+  },
+  vendors: {
+    label: 'Vendors & POs',
+    icon: '🏭',
+    actions: {
+      view:    { label: 'View Vendors',      admin:true, executive:false, staff:false, reception:false, accounts:true,  dispatch:false },
+      edit:    { label: 'Edit Vendors',      admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      po:      { label: 'Create POs',        admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      receive: { label: 'Receive Stock',     admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true  },
+    }
+  },
+  marketing: {
+    label: 'Marketing',
+    icon: '📣',
+    actions: {
+      view:      { label: 'View Marketing',    admin:true, executive:true,  staff:false, reception:false, accounts:false, dispatch:false },
+      broadcast: { label: 'Send Broadcasts',   admin:true, executive:true,  staff:false, reception:false, accounts:false, dispatch:false },
+      collateral:{ label: 'Generate Content',  admin:true, executive:true,  staff:false, reception:false, accounts:false, dispatch:false },
+    }
+  },
+  settings: {
+    label: 'Settings',
+    icon: '⚙️',
+    actions: {
+      view:   { label: 'View Settings',   admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      edit:   { label: 'Edit Settings',   admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+      danger: { label: 'Danger Zone',     admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false },
+    }
+  },
+};
+
+// Check if current user has a specific feature permission
+function hasPermission(feature, action) {
+  const profile = currentProfile;
+  if (!profile) return false;
+  if (profile.role === 'admin') return true;
+  // Check user-level override first
+  const userPerms = profile.featurePermissions || {};
+  const key = `${feature}.${action}`;
+  if (key in userPerms) return userPerms[key];
+  // Fall back to role defaults
+  const feat = FEATURE_PERMISSIONS[feature];
+  if (!feat) return false;
+  const act = feat.actions[action];
+  if (!act) return false;
+  return act[profile.role] === true;
+}
+
+window.FEATURE_PERMISSIONS = FEATURE_PERMISSIONS;
+window.hasPermission = hasPermission;
 
 
 /* === notify.js === */
@@ -4820,25 +4990,23 @@ function computeLine(item) {
   let netPrice = 0;
   const gstPct = parseFloat(item.gstPct) || 0;
   if (item.mode === 'cost_margin') {
+    // Cost + margin gives GST-exclusive selling price, then GST added on top
     const sp = (parseFloat(item.costPrice)||0) * (1 + (parseFloat(item.marginPct)||0)/100);
-    // Margin is calculated on the GST-exclusive cost+margin price, then
-    // GST is added on top to arrive at the inclusive figure — this
-    // matches how margin planning actually works (you plan margin on
-    // the base cost, not on a number that already has tax baked in).
-    netPrice = sp * (1 + gstPct/100);
+    netPrice = item.addGst ? sp * (1 + gstPct/100) : sp;
   } else if (item.mode === 'direct') {
-    // A directly-typed price is assumed to already be the final,
-    // GST-inclusive figure the customer will actually pay — there's no
-    // other reasonable assumption for a number someone typed by hand.
+    // Directly typed price — taken as-is, GST-inclusive
     netPrice = parseFloat(item.directPrice) || 0;
   } else if (item.mode === 'mrp_disc_gst') {
+    // MRP is GST-EXCLUSIVE base price — apply discount then add GST
+    // Use case: manufacturer base price list, need to add GST on top
     const base = (parseFloat(item.mrp)||0) * (1 - (parseFloat(item.discPct)||0)/100);
     const slab = GST_SLABS.find(g => g.value === item.gstSlab);
     const slabPct = slab ? slab.pct : 0;
     netPrice = base * (1 + slabPct/100);
-  } else { // mrp_disc (default) — MRP minus discount is exclusive, so add GST to match every other mode
-    const base = (parseFloat(item.mrp)||0) * (1 - (parseFloat(item.discPct)||0)/100);
-    netPrice = base * (1 + gstPct/100);
+  } else {
+    // mrp_disc (default) — MRP is GST-INCLUSIVE retail price
+    // Customer price = MRP minus discount — GST is already baked in, do NOT add again
+    netPrice = (parseFloat(item.mrp)||0) * (1 - (parseFloat(item.discPct)||0)/100);
   }
   const total = netPrice * (parseFloat(item.qty)||0);
   return { netPrice, total };
@@ -5468,8 +5636,8 @@ function renderQuoteItems() {
         <div class="form-group" style="flex:1"><label>Qty</label><input type="number" value="${item.qty}" min="0" oninput="updateQuoteItem(${item.id},'qty',this.value)"></div>
         <div class="form-group" style="flex:1.5"><label>Pricing Mode</label>
           <select onchange="updateQuoteItem(${item.id},'mode',this.value)">
-            <option value="mrp_disc" ${item.mode==='mrp_disc'?'selected':''}>MRP &amp; Discount</option>
-            <option value="mrp_disc_gst" ${item.mode==='mrp_disc_gst'?'selected':''}>MRP &minus; Discount + GST</option>
+            <option value="mrp_disc" ${item.mode==='mrp_disc'?'selected':''}>MRP &minus; Discount (GST inclusive)</option>
+            <option value="mrp_disc_gst" ${item.mode==='mrp_disc_gst'?'selected':''}>Base Price &minus; Discount + GST</option>
             <option value="cost_margin" ${item.mode==='cost_margin'?'selected':''}>Cost + Margin</option>
             <option value="direct" ${item.mode==='direct'?'selected':''}>Direct Price</option>
           </select>
@@ -5478,16 +5646,17 @@ function renderQuoteItems() {
 
       ${item.mode === 'mrp_disc' ? `
       <div class="input-row">
-        <div class="form-group" style="flex:1"><label>MRP (₹)</label><input type="number" value="${item.mrp}" oninput="updateQuoteItem(${item.id},'mrp',this.value)"></div>
+        <div class="form-group" style="flex:1"><label>MRP ₹ <span style="font-size:10px;color:var(--text3)">(GST inclusive)</span></label><input type="number" value="${item.mrp}" oninput="updateQuoteItem(${item.id},'mrp',this.value)"></div>
         <div class="form-group" style="flex:1"><label>Discount %</label><input type="number" value="${item.discPct}" oninput="updateQuoteItem(${item.id},'discPct',this.value)"></div>
-      </div>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:-6px;margin-bottom:6px">Formula: MRP × (1 − Disc%) = Customer Price</div>` : ''}
 
       ${item.mode === 'mrp_disc_gst' ? `
       <div class="input-row">
-        <div class="form-group" style="flex:1"><label>MRP (₹)</label><input type="number" value="${item.mrp}" oninput="updateQuoteItem(${item.id},'mrp',this.value)"></div>
+        <div class="form-group" style="flex:1"><label>Base Price ₹ <span style="font-size:10px;color:var(--text3)">(excl. GST)</span></label><input type="number" value="${item.mrp}" oninput="updateQuoteItem(${item.id},'mrp',this.value)"></div>
         <div class="form-group" style="flex:1"><label>Discount %</label><input type="number" value="${item.discPct}" oninput="updateQuoteItem(${item.id},'discPct',this.value)"></div>
       </div>
-      <div class="form-group"><label>GST Slab</label>
+      <div class="form-group"><label>GST Slab <span style="font-size:10px;color:var(--text3)">(added on top)</span></label>
         <select onchange="updateQuoteItem(${item.id},'gstSlab',this.value)">
           ${GST_SLABS.map(g => `<option value="${g.value}" ${item.gstSlab===g.value?'selected':''}>${g.label}</option>`).join('')}
         </select>
@@ -9259,19 +9428,93 @@ async function submitCandidateForm() {
     candidateState.offer.submittedAt = new Date().toISOString();
     await VW_DB.put(VW_DB.STORES.staffOffers, candidateState.offer);
 
-    const content = document.getElementById('app-content');
-    content.innerHTML = candidateWrapper(`
-      <div style="text-align:center;padding:30px 0">
-        <div style="font-size:48px;margin-bottom:12px">✅</div>
-        <h2 style="margin:0 0 8px">All Done, ${candidateState.offer.candidateName}!</h2>
-        <p style="color:var(--text3);font-size:14px">Your details have been submitted to HR for review. They'll be in touch soon. Thank you!</p>
-      </div>`);
+    // Show induction checklist before final confirmation
+    renderInductionChecklist();
   } catch (e) {
     console.error('Onboarding submission error:', e);
     showToast('Something went wrong submitting — please try again', 'warn');
   }
 }
 window.submitCandidateForm = submitCandidateForm;
+
+const INDUCTION_CHECKLIST = [
+  { id: 'ic1', text: 'I have read and understood the V Wholesale Code of Conduct' },
+  { id: 'ic2', text: 'I have read and understood the Leave & Attendance Policy' },
+  { id: 'ic3', text: 'I have read and understood the Customer Handling Guidelines' },
+  { id: 'ic4', text: 'I have read and understood the Data Privacy & Confidentiality Policy' },
+  { id: 'ic5', text: 'I understand that company property must be used responsibly' },
+  { id: 'ic6', text: 'I have noted emergency contacts and evacuation procedures' },
+  { id: 'ic7', text: 'I agree to maintain professional conduct at all times' },
+  { id: 'ic8', text: 'I acknowledge that violation of policies may lead to disciplinary action' },
+];
+
+function renderInductionChecklist() {
+  const content = document.getElementById('app-content');
+  const name = candidateState.offer?.candidateName || 'Employee';
+  content.innerHTML = candidateWrapper(`
+    <h2 style="margin:0 0 4px">📋 Induction Checklist</h2>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Please read and acknowledge each point below. You must tick all items before completing onboarding.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">
+      ${INDUCTION_CHECKLIST.map(item => `
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:10px;cursor:pointer">
+        <input type="checkbox" id="${item.id}" style="margin-top:2px;width:18px;height:18px;accent-color:var(--gold);flex-shrink:0" onchange="updateInductionProgress()">
+        <span style="font-size:13px;line-height:1.5">${item.text}</span>
+      </label>`).join('')}
+    </div>
+    <div id="induction-progress" style="font-size:12px;color:var(--text3);margin-bottom:12px">0 of ${INDUCTION_CHECKLIST.length} items acknowledged</div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Digital Signature *</label>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Type your full name below as your digital signature to confirm you have read and agree to all the above policies.</p>
+      <input type="text" id="induction-signature" placeholder="Type your full name: ${name}" style="text-align:center;font-style:italic" oninput="updateInductionProgress()">
+    </div>
+    <button id="induction-submit-btn" class="btn-primary full-width" onclick="completeInduction()" disabled style="opacity:0.5">Complete Onboarding</button>
+  `);
+}
+window.renderInductionChecklist = renderInductionChecklist;
+
+function updateInductionProgress() {
+  const checked = INDUCTION_CHECKLIST.filter(item => document.getElementById(item.id)?.checked).length;
+  const sig = document.getElementById('induction-signature')?.value.trim();
+  const name = candidateState.offer?.candidateName || '';
+  const sigMatch = sig.toLowerCase().replace(/\s+/g,' ') === name.toLowerCase().replace(/\s+/g,' ');
+  const el = document.getElementById('induction-progress');
+  const btn = document.getElementById('induction-submit-btn');
+  if (el) el.textContent = `${checked} of ${INDUCTION_CHECKLIST.length} items acknowledged${sigMatch ? ' · Signature ✓' : ' · Signature needed'}`;
+  if (btn) {
+    const allDone = checked === INDUCTION_CHECKLIST.length && sigMatch;
+    btn.disabled = !allDone;
+    btn.style.opacity = allDone ? '1' : '0.5';
+  }
+}
+window.updateInductionProgress = updateInductionProgress;
+
+async function completeInduction() {
+  const sig = document.getElementById('induction-signature')?.value.trim();
+  if (!sig) { showToast('Please sign with your full name', 'warn'); return; }
+  const offer = candidateState.offer;
+  offer.inductionCompleted = true;
+  offer.inductionSignature = sig;
+  offer.inductionCompletedAt = new Date().toISOString();
+  await VW_DB.put(VW_DB.STORES.staffOffers, offer);
+
+  const content = document.getElementById('app-content');
+  content.innerHTML = candidateWrapper(`
+    <div style="text-align:center;padding:30px 0">
+      <div style="font-size:56px;margin-bottom:12px">🎉</div>
+      <h2 style="margin:0 0 8px">Welcome to V Wholesale, ${offer.candidateName}!</h2>
+      <p style="color:var(--text3);font-size:14px;margin-bottom:16px">Your onboarding is complete. HR will review your details and send you your app login via WhatsApp.</p>
+      <div style="background:rgba(200,151,43,0.1);border:1px solid rgba(200,151,43,0.3);border-radius:12px;padding:16px;text-align:left">
+        <div style="font-size:13px;font-weight:600;color:var(--gold);margin-bottom:8px">What happens next:</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.8">
+          1. HR reviews your submission<br>
+          2. Once approved, you'll receive your app login PIN on WhatsApp<br>
+          3. Download the app or open it in your browser<br>
+          4. Log in with your phone number and the PIN sent to you
+        </div>
+      </div>
+    </div>`);
+}
+window.completeInduction = completeInduction;
 
 // ===== STAGE 3: HR REVIEW QUEUE =====
 async function reviewOfferSubmission(offerId) {
@@ -9357,26 +9600,79 @@ async function approveOfferIntoStaff(offerId) {
   const d = offer.submittedData || {};
   const profile = VW_AUTH.getCurrentProfile();
 
+  // Step 1: Create Supabase auth account using their phone + the PIN from the offer
+  // This means they can log in immediately — no self-registration needed
+  const phone = (offer.candidatePhone||'').replace(/\D/g,'').slice(-10);
+  const email = `${phone}@vwholesale.app`;
+  const pin = offer.pin || '123456';
+
+  let authUserId = null;
+  try {
+    const { data: signUpData, error: signUpErr } = await VW_DB.client.auth.admin
+      ? await VW_DB.client.auth.admin.createUser({ email, password: pin, email_confirm: true })
+      : await VW_DB.client.auth.signUp({ email, password: pin });
+    if (signUpErr && !signUpErr.message?.includes('already registered')) {
+      console.warn('Auth account creation warning:', signUpErr.message);
+    }
+    authUserId = signUpData?.user?.id || signUpData?.id;
+  } catch(e) {
+    console.warn('Could not auto-create auth account:', e.message);
+  }
+
+  // Step 2: Create staff record
   const staffId = await VW_DB.put(VW_DB.STORES.staff, {
     name: offer.candidateName, phone: offer.candidatePhone, role: offer.role,
     department: offer.department, team: 'specialist', salary: offer.salary,
-    joinDate: offer.startDate,
+    joinDate: offer.startDate, joiningDate: offer.startDate,
+    grossSalary: offer.salary * 12,
+    attendanceName: offer.candidateName,
     dob: d.dob, gender: d.gender, address: d.address, personalEmail: d.email,
     photoPath: d.photoPath, aadhaarNumber: d.aadhaarNumber, aadhaarPath: d.aadhaarPath,
     panNumber: d.panNumber, panPath: d.panPath, extraDocs: d.extraDocs || [],
-    bankAccountName: d.bankAccountName, bankAccountNumber: d.bankAccountNumber, bankIfsc: d.bankIfsc,
-    emergencyContactName: d.emergencyContactName, emergencyContactRelation: d.emergencyContactRelation, emergencyContactPhone: d.emergencyContactPhone,
+    bankAccountName: d.bankAccountName, bankAccountNumber: d.bankAccountNumber,
+    bankIfsc: d.bankIfsc, bankName: '',
+    emergencyContactName: d.emergencyContactName, emergencyContactPhone: d.emergencyContactPhone,
     education: d.education, experience: d.experience,
-    referenceName: d.referenceName, referencePhone: d.referencePhone
+    referenceName: d.referenceName, referencePhone: d.referencePhone,
+    active: true, createdAt: new Date().toISOString()
   });
 
+  // Step 3: Create profile record so they can log in
+  if (authUserId) {
+    await VW_DB.put(VW_DB.STORES.profiles, {
+      id: authUserId,
+      phone, name: offer.candidateName,
+      role: offer.role || 'staff',
+      status: 'approved',
+      staffId,
+      approvedAt: new Date().toISOString(),
+      approvedBy: profile?.name || ''
+    });
+  }
+
+  // Step 4: Mark offer approved
   offer.status = 'approved';
-  offer.reviewedByName = profile ? profile.name : '';
+  offer.reviewedByName = profile?.name || '';
   offer.reviewedAt = new Date().toISOString();
   offer.approvedStaffId = staffId;
+  offer.authAccountCreated = !!authUserId;
   await VW_DB.put(VW_DB.STORES.staffOffers, offer);
 
-  showToast(`${offer.candidateName} added to the team`, 'success');
+  // Step 5: WhatsApp them their login details
+  if (phone) {
+    const loginMsg = encodeURIComponent(
+      `Hi ${offer.candidateName}! 🎉\n\nWelcome to V Wholesale! Your onboarding is complete.\n\n` +
+      `*Your App Login Details:*\n` +
+      `📱 Phone: ${offer.candidatePhone}\n` +
+      `🔐 PIN: ${pin}\n\n` +
+      `🔗 App: https://hmehtavw.github.io/vwholesale-app/\n\n` +
+      `Please login and change your PIN immediately from Settings.\n\n` +
+      `— HR Team, V Wholesale`
+    );
+    window.open(`https://wa.me/91${phone}?text=${loginMsg}`, '_blank');
+  }
+
+  showToast(`${offer.candidateName} approved — login credentials sent via WhatsApp`, 'success');
   closeSheet();
   navigateTo('hr');
 }
@@ -9833,965 +10129,620 @@ window.saveTaskDetail = saveTaskDetail;
 
 
 /* === settings.js === */
+// ============================================================
+// SETTINGS PAGE — Tab-based, 5 groups
+// My Account · Team & Access · Store Config · Integrations · Danger
+// ============================================================
+
 async function renderSettingsPage() {
-  categoriesDraft = null;
-  const execs = await VW_DB.all(VW_DB.STORES.executives);
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const routing = await VW_DB.getSetting('visitorRouting', {});
-  const categories = await VW_CHECKIN.getCategories();
-  const escalationContacts = await VW_DB.getSetting('escalationContacts', {});
   const profile = VW_AUTH.getCurrentProfile();
-  const pendingUsers = await VW_DB.all(VW_DB.STORES.profiles).then(p => p.filter(u => u.status === 'pending'));
-  const approvedUsers = await VW_DB.all(VW_DB.STORES.profiles).then(p => p.filter(u => u.status === 'approved'));
-  const pendingProducts = await VW_DB.all(VW_DB.STORES.pendingProducts).then(p => p.filter(x => x.status === 'pending'));
-  const pinResets = await VW_DB.all(VW_DB.STORES.pinResetRequests).then(p => p.filter(x => x.status === 'pending'));
-  const waConfig = await VW_DB.getSetting('whatsapp_config', {});
-  const loyaltyConfig = await VW_DB.getSetting('loyalty_config', { pointValue: 1, earnRate: 1 });
+  const isAdmin = VW_AUTH.isAdmin();
 
   return `
-  <div class="module-header">
-    <h2>Settings</h2>
+  <div class="module-header"><h2>⚙️ Settings</h2></div>
+
+  <div style="overflow-x:auto;white-space:nowrap;margin-bottom:14px;padding-bottom:4px">
+    <button class="entry-type-btn active" id="stab-account" onclick="VW_SETTINGS.switchSettingsTab('account',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">👤</span>My Account</button>
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-team" onclick="VW_SETTINGS.switchSettingsTab('team',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">👥</span>Team</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-permissions" onclick="VW_SETTINGS.switchSettingsTab('permissions',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔐</span>Permissions</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-store" onclick="VW_SETTINGS.switchSettingsTab('store',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🏪</span>Store</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-tools" onclick="VW_SETTINGS.switchSettingsTab('tools',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔧</span>Tools</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-danger" onclick="VW_SETTINGS.switchSettingsTab('danger',this)" style="display:inline-flex"><span class="et-icon" style="color:var(--red)">⚠️</span><span style="color:var(--red)">Danger</span></button>` : ''}
   </div>
 
-  <div class="settings-jumpnav">
-    <a href="#sec-account" class="jump-chip">Account</a>
-    ${pendingUsers.length ? `<a href="#sec-requests" class="jump-chip jump-chip-alert">Requests</a>` : ''}
-    <a href="#sec-team" class="jump-chip">Team</a>
-    <a href="#sec-executives" class="jump-chip">Executives</a>
-    ${pendingProducts.length ? `<a href="#sec-pending-products" class="jump-chip jump-chip-alert">New Items</a>` : ''}
-    <a href="#sec-escalation" class="jump-chip">Escalation</a>
-    <a href="#sec-categories" class="jump-chip">Categories</a>
-    <a href="#sec-routing" class="jump-chip">Routing</a>
-    <a href="#sec-directory" class="jump-chip">Directory</a>
-    ${profile.role === 'admin' ? `<a href="#sec-whatsapp" class="jump-chip">WhatsApp</a>` : ''}
-    ${profile.role === 'admin' ? `<a href="#sec-loyalty" class="jump-chip">Loyalty</a>` : ''}
-    ${profile.role === 'admin' ? `<a href="#sec-danger" class="jump-chip" style="color:var(--red)">Danger Zone</a>` : ''}
-  </div>
+  <div id="settings-tab-content">
+    ${await renderSettingsAccount()}
+  </div>`;
+}
 
-  <div class="card" id="sec-account">
-    <h3 class="card-title">Your Account</h3>
-    <p style="font-size:14px;margin-bottom:10px">${profile.name} &middot; ${profile.phone} &middot; <span style="color:var(--gold)">${profile.role}</span></p>
-    <button class="btn-secondary full-width" style="color:var(--red)" onclick="VW_AUTH.signOut().then(()=>location.reload())">Log Out</button>
-  </div>
+async function switchSettingsTab(tab, btn) {
+  document.querySelectorAll('[id^="stab-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('settings-tab-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  switch(tab) {
+    case 'account':     container.innerHTML = await renderSettingsAccount(); break;
+    case 'team':        container.innerHTML = await renderSettingsTeam(); break;
+    case 'permissions': container.innerHTML = await renderSettingsPermissions(); break;
+    case 'store':       container.innerHTML = await renderSettingsStore(); break;
+    case 'tools':       container.innerHTML = await renderSettingsTools(); break;
+    case 'danger':      container.innerHTML = await renderSettingsDanger(); break;
+  }
+}
 
-  ${pendingUsers.length ? `
-  <div class="alert-card" id="sec-requests">
-    <div class="alert-title">&#128276; ${pendingUsers.length} Access Request${pendingUsers.length>1?'s':''} Pending</div>
-    <div id="pending-list">${renderPendingList(pendingUsers, staff, execs)}</div>
-  </div>` : ''}
-
-  ${pinResets.length ? `
-  <div class="alert-card" id="sec-pin-resets">
-    <div class="alert-title">&#128273; ${pinResets.length} PIN Reset Request${pinResets.length>1?'s':''} Pending</div>
-    <div id="pin-reset-list">${renderPinResetList(pinResets)}</div>
-  </div>` : ''}
-
-  <div class="card" id="sec-team">
-    <h3 class="card-title">Team Accounts <span class="badge">${approvedUsers.length}</span></h3>
-    ${approvedUsers.length ? approvedUsers.map(u => `
-      <div class="cust-row" style="cursor:default" id="team-row-${u.id}">
-        <div class="staff-avatar">${(u.name||'?')[0]}</div>
-        <div class="cust-info"><div class="cust-name">${u.name}</div><div class="cust-meta">${u.phone} &middot; ${u.role}${u.team?' / '+u.team:''}${u.department?' &middot; '+u.department:''}</div></div>
-        ${u.id !== profile.id ? `
-          <button class="icon-btn" onclick="showEditUserAccess('${u.id}')" title="Edit access">✏️</button>
-          <button class="remove-btn" onclick="revokeAccess('${u.id}')" title="Revoke access">&#10005;</button>
-        ` : '<span class="badge">You</span>'}
+// ===== TAB 1: MY ACCOUNT =====
+async function renderSettingsAccount() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const pinResets = await VW_DB.all(VW_DB.STORES.pinResetRequests).then(p=>p.filter(r=>r.status==='pending'));
+  return `
+  <div class="card">
+    <h3 class="card-title">👤 My Account</h3>
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2);margin-bottom:12px">
+      <div style="width:48px;height:48px;border-radius:50%;background:var(--gold);color:#000;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">${(profile?.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div style="font-size:15px;font-weight:700">${profile?.name||'—'}</div>
+        <div style="font-size:12px;color:var(--text3)">${profile?.role||'—'} · ${profile?.phone||'—'}</div>
       </div>
-      <div id="edit-access-${u.id}"></div>`).join('') : '<p class="empty-msg">No approved accounts yet</p>'}
-  </div>
-
-  <div class="card" id="sec-executives">
-    <div class="card-header-row">
-      <h3 class="card-title">Store Executives <span class="badge">${execs.length}</span></h3>
-      <button class="btn-sm" onclick="addExecutive()">+ Add Executive</button>
     </div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Round-robin rotates through all executives in order below, skipping anyone Busy or On Break. Add as many as you need.</p>
-    <div id="exec-list">${renderExecList(execs)}</div>
+    <div class="form-group">
+      <label>Display Name</label>
+      <input type="text" id="set-name" value="${profile?.name||''}">
+    </div>
+    <button class="btn-primary" onclick="VW_SETTINGS.saveAccountName()">Save Name</button>
   </div>
 
-  ${pendingProducts.length ? `
-  <div class="card" id="sec-pending-products">
-    <h3 class="card-title">New Items from Quotations <span class="badge">${pendingProducts.length}</span></h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">These brand/model combos were typed into a Quotation and don't exist in Inventory yet. They're usable in Quotations already — approve to add them to Inventory properly (with stock and a confirmed price), or reject to remove them from the suggestion list.</p>
-    <div id="pending-products-list">${renderPendingProductsList(pendingProducts)}</div>
+  <div class="card">
+    <h3 class="card-title">🔐 Change PIN</h3>
+    <div class="form-group"><label>Current PIN</label><input type="password" id="set-old-pin" maxlength="6" inputmode="numeric" placeholder="6-digit PIN"></div>
+    <div class="form-group"><label>New PIN</label><input type="password" id="set-new-pin" maxlength="6" inputmode="numeric" placeholder="6-digit PIN"></div>
+    <div class="form-group"><label>Confirm New PIN</label><input type="password" id="set-confirm-pin" maxlength="6" inputmode="numeric" placeholder="Repeat new PIN"></div>
+    <button class="btn-primary" onclick="VW_SETTINGS.changePIN()">Change PIN</button>
+  </div>
+
+  ${pinResets.length && VW_AUTH.isAdmin() ? `
+  <div class="card">
+    <h3 class="card-title">🔓 PIN Reset Requests <span class="badge" style="background:var(--red)">${pinResets.length}</span></h3>
+    ${pinResets.map(r => `
+    <div class="task-card">
+      <div style="font-size:13px;font-weight:600">${r.name||r.phone}</div>
+      <div style="font-size:12px;color:var(--text3)">${r.phone} · Requested ${new Date(r.createdAt).toLocaleDateString('en-IN')}</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input type="number" id="reset-pin-${r.id}" placeholder="New 6-digit PIN" maxlength="6" style="flex:1">
+        <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_SETTINGS.approveResetPin(${r.id})">Set PIN</button>
+      </div>
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
+async function saveAccountName() {
+  const name = document.getElementById('set-name')?.value.trim();
+  if (!name) { showToast('Enter a name', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  const rec = await VW_DB.getById(VW_DB.STORES.profiles, profile.id);
+  rec.name = name;
+  await VW_DB.put(VW_DB.STORES.profiles, rec);
+  showToast('Name updated', 'success');
+}
+
+async function changePIN() {
+  const oldPin = document.getElementById('set-old-pin')?.value;
+  const newPin = document.getElementById('set-new-pin')?.value;
+  const confirmPin = document.getElementById('set-confirm-pin')?.value;
+  if (newPin.length !== 6) { showToast('New PIN must be 6 digits', 'warn'); return; }
+  if (newPin !== confirmPin) { showToast('PINs do not match', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  const email = `${profile.phone.replace(/\D/g,'').slice(-10)}@vwholesale.app`;
+  const { error } = await VW_DB.client.auth.updateUser({ password: newPin });
+  if (error) { showToast('Could not change PIN — ' + error.message, 'warn'); return; }
+  showToast('PIN changed successfully', 'success');
+  document.getElementById('set-old-pin').value = '';
+  document.getElementById('set-new-pin').value = '';
+  document.getElementById('set-confirm-pin').value = '';
+}
+
+async function approveResetPin(requestId) {
+  const newPin = document.getElementById(`reset-pin-${requestId}`)?.value;
+  if (!newPin || newPin.length !== 6) { showToast('Enter a 6-digit PIN', 'warn'); return; }
+  const req = await VW_DB.getById(VW_DB.STORES.pinResetRequests, requestId);
+  if (!req) return;
+  req.status = 'approved';
+  req.approvedByName = VW_AUTH.getCurrentProfile()?.name||'';
+  req.approvedAt = new Date().toISOString();
+  req.newPin = newPin;
+  await VW_DB.put(VW_DB.STORES.pinResetRequests, req);
+  if (req.phone) {
+    const msg = encodeURIComponent(`Hi ${req.name||''},\n\nYour V Wholesale PIN has been reset.\n\nNew PIN: *${newPin}*\n\nLog in at: https://hmehtavw.github.io/vwholesale-app/\n\nPlease change it after logging in.\n\n— V Wholesale`);
+    window.open(`https://wa.me/91${req.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+  }
+  showToast('PIN reset — sent to staff via WhatsApp', 'success');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsAccount();
+}
+
+// ===== TAB 2: TEAM =====
+async function renderSettingsTeam() {
+  const profiles = await VW_DB.all(VW_DB.STORES.profiles);
+  const roles = ['admin','executive','staff','reception','accounts','dispatch','pending'];
+  const roleColors = { admin:'var(--gold)', executive:'#378ADD', staff:'#22c55e', reception:'#7F77DD', accounts:'#06b6d4', dispatch:'#f97316', pending:'#888' };
+  const pending = profiles.filter(p=>p.role==='pending'||p.status==='pending');
+  const active = profiles.filter(p=>p.role!=='pending'&&p.status!=='pending');
+
+  return `
+  ${pending.length ? `
+  <div class="card" style="border-color:rgba(200,151,43,0.4)">
+    <h3 class="card-title">⏳ Pending Approval <span class="badge" style="background:var(--gold)">${pending.length}</span></h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">These accounts were created through HR onboarding and are awaiting role assignment</p>
+    ${pending.map(p => `
+    <div class="task-card">
+      <div style="font-size:13px;font-weight:600">${p.name||'Unknown'} · ${p.phone||'—'}</div>
+      <div class="form-group" style="margin-top:8px">
+        <select id="role-select-${p.id}">
+          ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}">${r}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn-primary full-width" onclick="VW_SETTINGS.approveProfile('${p.id}')">✓ Approve with selected role</button>
+    </div>`).join('')}
   </div>` : ''}
 
-  <div class="card" id="sec-escalation">
-    <h3 class="card-title">Escalation Contacts</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">If no one responds within ~4 minutes, alerts reach these contacts (shown as urgent alerts on the dashboard with a one-tap WhatsApp button). Team Leads are pulled automatically from your Staff Directory.</p>
-    ${renderEscalationContacts(escalationContacts)}
-    <button class="btn-primary full-width" style="margin-top:10px" onclick="saveEscalationContacts()">Save Escalation Contacts</button>
+  <div class="card">
+    <h3 class="card-title">Team Members <span class="badge">${active.length}</span></h3>
+    ${active.map(p => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${p.name||'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.phone||'—'}</div>
+      </div>
+      <select onchange="VW_SETTINGS.updateProfileRole('${p.id}',this.value)" style="font-size:12px;padding:4px 8px">
+        ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
+      </select>
+    </div>`).join('')}
+  </div>`;
+}
+
+async function approveProfile(profileId) {
+  const sel = document.getElementById(`role-select-${profileId}`);
+  const role = sel?.value || 'staff';
+  const rec = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!rec) return;
+  rec.role = role;
+  rec.status = 'approved';
+  rec.approvedAt = new Date().toISOString();
+  rec.approvedBy = VW_AUTH.getCurrentProfile()?.name||'';
+  await VW_DB.put(VW_DB.STORES.profiles, rec);
+  showToast(`${rec.name} approved as ${role}`, 'success');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsTeam();
+}
+
+async function updateProfileRole(profileId, role) {
+  const rec = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!rec) return;
+  rec.role = role;
+  await VW_DB.put(VW_DB.STORES.profiles, rec);
+  showToast(`Role updated to ${role}`, 'success');
+}
+
+// ===== TAB 3: PERMISSIONS =====
+async function renderSettingsPermissions() {
+  const profiles = await VW_DB.all(VW_DB.STORES.profiles);
+  const roles = ['executive','staff','reception','accounts','dispatch'];
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🔐 Role Permissions</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Default permissions by role. Admin always has full access. Toggle to customise what each role can do.</p>
+    ${Object.entries(FEATURE_PERMISSIONS).map(([featKey, feat]) => `
+    <div style="margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px;padding:6px 0;border-bottom:1px solid var(--border2)">${feat.icon} ${feat.label}</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead>
+            <tr style="color:var(--text3)">
+              <th style="text-align:left;padding:4px 0;min-width:120px">Action</th>
+              ${roles.map(r=>`<th style="text-align:center;padding:4px 6px;text-transform:capitalize">${r}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.entries(feat.actions).map(([actKey, act]) => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
+              <td style="padding:6px 0;font-size:12px;color:var(--text2)">${act.label}</td>
+              ${roles.map(role => `
+              <td style="text-align:center;padding:4px 6px">
+                <input type="checkbox" ${act[role]?'checked':''}
+                  onchange="VW_SETTINGS.saveRolePermission('${featKey}','${actKey}','${role}',this.checked)"
+                  style="accent-color:var(--gold);width:14px;height:14px">
+              </td>`).join('')}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('')}
   </div>
 
-  <div class="card" id="sec-categories">
-    <div class="card-header-row">
-      <h3 class="card-title">Categories &amp; Sub-categories</h3>
-      <button class="btn-sm" onclick="addCategory()">+ Add Category</button>
+  <div class="card">
+    <h3 class="card-title">👤 Per-User Overrides</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Give or remove specific rights for individual users, overriding their role defaults.</p>
+    <select id="perm-user-select" onchange="VW_SETTINGS.loadUserPermissions(this.value)" style="margin-bottom:10px">
+      <option value="">— Select a team member —</option>
+      ${profiles.filter(p=>p.role!=='admin'&&p.role!=='pending').map(p=>`<option value="${p.id}">${p.name||p.phone} (${p.role})</option>`).join('')}
+    </select>
+    <div id="user-perms-detail"></div>
+  </div>`;
+}
+
+async function saveRolePermission(feature, action, role, value) {
+  // Save to settings as role permission overrides
+  const key = `role_perms_${role}`;
+  const current = await VW_DB.getSetting(key, {});
+  current[`${feature}.${action}`] = value;
+  await VW_DB.setSetting(key, current);
+  // Update in-memory FEATURE_PERMISSIONS
+  if (FEATURE_PERMISSIONS[feature]?.actions[action]) {
+    FEATURE_PERMISSIONS[feature].actions[action][role] = value;
+  }
+  showToast('Permission updated', 'success');
+}
+
+async function loadUserPermissions(profileId) {
+  if (!profileId) return;
+  const container = document.getElementById('user-perms-detail');
+  if (!container) return;
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  const userPerms = prof.featurePermissions || {};
+
+  container.innerHTML = `
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
+      Overrides for <strong>${prof.name||prof.phone}</strong> (role: ${prof.role}). Checked = allowed regardless of role, unchecked = denied.
     </div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">These power the requirement form during check-in. Each category can have its own sub-categories.</p>
-    <div id="categories-editor">${renderCategoriesEditor(categories)}</div>
-    <button class="btn-primary full-width" style="margin-top:10px" onclick="saveCategories()">Save Categories</button>
-  </div>
+    ${Object.entries(FEATURE_PERMISSIONS).map(([featKey, feat]) => `
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">${feat.icon} ${feat.label}</div>
+      ${Object.entries(feat.actions).map(([actKey, act]) => {
+        const key = `${featKey}.${actKey}`;
+        const hasOverride = key in userPerms;
+        const roleDefault = act[prof.role] === true;
+        const currentVal = hasOverride ? userPerms[key] : roleDefault;
+        return `
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer">
+          <input type="checkbox" ${currentVal?'checked':''} ${hasOverride?'style="accent-color:#378ADD"':'style="accent-color:var(--gold)"'}
+            onchange="VW_SETTINGS.setUserPermission('${profileId}','${key}',this.checked)">
+          <span>${act.label}</span>
+          <span style="font-size:10px;color:var(--text3)">${hasOverride?'(overridden)':'(role default)'}</span>
+        </label>`;
+      }).join('')}
+    </div>`).join('')}
+    <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_SETTINGS.clearUserPermissions('${profileId}')">Reset All Overrides to Role Defaults</button>
+  `;
+}
 
-  <div class="card" id="sec-routing">
-    <h3 class="card-title">Visitor Routing</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">For each visitor type, build an ordered list of who gets notified. If the first person doesn't respond, it moves to the next, and so on — same as the escalation timers used elsewhere. Use ▲▼ to reorder.</p>
-    ${VISITOR_TYPES.map(v => {
-      const savedList = (routing[v.key] || []).map(entry => {
-        // Backward-compat: older saved routing stored staff names as
-        // strings (unordered); newer format stores ordered numeric staff IDs.
-        if (typeof entry === 'number') return entry;
-        const match = staff.find(s => s.name === entry);
-        return match ? match.id : null;
-      }).filter(Boolean);
-      return `
-      <div class="form-group">
-        <label>${v.icon} ${v.label}</label>
-        <div class="routing-ordered-list" id="route-${v.key}" data-staff-ids="${savedList.join(',')}">
-          ${renderRoutingOrderedList(v.key, savedList, staff)}
-        </div>
-        <button class="btn-sm" style="margin-top:6px" onclick="showAddRoutingPerson('${v.key}')">+ Add Person</button>
-      </div>`;
-    }).join('')}
-    <button class="btn-primary full-width" style="margin-top:6px" onclick="saveVisitorRouting()">Save Routing</button>
-  </div>
+async function setUserPermission(profileId, key, value) {
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  const perms = prof.featurePermissions || {};
+  perms[key] = value;
+  prof.featurePermissions = perms;
+  await VW_DB.put(VW_DB.STORES.profiles, prof);
+  showToast('User permission updated', 'success');
+}
 
-  <div class="card" id="sec-directory">
-    <div class="card-header-row">
-      <h3 class="card-title">Staff Directory</h3>
-      <button class="btn-sm" onclick="navigateTo('hr')">Manage in HR →</button>
+async function clearUserPermissions(profileId) {
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  prof.featurePermissions = {};
+  await VW_DB.put(VW_DB.STORES.profiles, prof);
+  showToast('Overrides cleared — using role defaults', 'success');
+  await loadUserPermissions(profileId);
+}
+
+// ===== TAB 4: STORE CONFIG =====
+async function renderSettingsStore() {
+  const waConfig = await VW_DB.getSetting('whatsapp_config', {});
+  const loyaltyConfig = await VW_DB.getSetting('loyalty_config', { pointValue:1, earnRate:1, maxRedeemPct:10 });
+  const categories = await VW_DB.getSetting('product_categories', ['Tiles','Sanitary','Electrical','Paints','Plumbing','Hardware','Plywood','Steel','Waterproofing','Glass','Appliances']);
+  const executives = await VW_DB.all(VW_DB.STORES.executives || 'executives').catch(()=>[]);
+  const packingRules = await VW_DB.getSetting('packing_charge_rules', []);
+
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📱 WhatsApp & Store Info</h3>
+    <div class="form-group"><label>Store Display Name</label><input type="text" id="wa-store-name" value="${waConfig.storeName||'V Wholesale'}"></div>
+    <div class="form-group"><label>Google Review URL</label>
+      <input type="text" id="wa-review-url" value="${waConfig.googleReviewUrl||''}" placeholder="https://g.page/r/your-review-link/review">
+      <div style="font-size:11px;color:var(--text3);margin-top:3px">Get this from Google Business Profile → Get more reviews</div>
     </div>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Tap anyone to edit their name, phone, role, department, or team. This is the one place that info lives — Visitor Routing and approval chains all read from here.</p>
-    ${staff.map(s => `<div class="cust-row" onclick="openStaff(${s.id})"><div class="staff-avatar">${(s.name||'?')[0]}</div><div class="cust-info"><div class="cust-name">${s.name}</div><div class="cust-meta">${s.department} &middot; ${s.role} &middot; ${s.team||'—'}</div></div></div>`).join('')}
-  </div>
-
-  ${profile.role === 'admin' ? `
-  <div class="card" id="sec-packing">
-    <h3 class="card-title">📦 Packing / Loading / Transport Charges</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Auto-calculated and added to every invoice based on product category. Set rules below — they apply automatically when billing.</p>
-    <div id="packing-rules-list"></div>
-    <button class="btn-sm" onclick="addPackingRule()" style="margin-bottom:8px">+ Add Rule</button>
-    <button class="btn-primary" onclick="savePackingRules()" style="margin-top:4px">Save Charges</button>
-  </div>
-  <div class="card" id="sec-tools">
-    <h3 class="card-title">🛠 Tools</h3>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <button class="btn-secondary full-width" onclick="VW_FEATURES.exportAllData()">📥 Export All Data (Excel)</button>
-      <button class="btn-secondary full-width" onclick="navigateTo('dedup')">🔀 Find &amp; Merge Duplicate Customers</button>
-      <button class="btn-secondary full-width" onclick="VW_FEATURES.checkAndSendBirthdayMessages()">🎂 Send Birthday WhatsApp (Today)</button>
-      <button class="btn-secondary full-width" onclick="VW_FEATURES.checkAndSendLowStockAlerts()">📦 Send Low Stock Alert to Purchase Manager</button>
-    </div>
-  </div>
-  ${profile.role === 'admin' ? `
-  <div class="card" id="sec-whatsapp">
-    <h3 class="card-title">📱 WhatsApp & Store Config</h3>
-    <div class="form-group"><label>Store Name</label><input type="text" id="wa-store-name" value="${waConfig.storeName||'V Wholesale'}" placeholder="V Wholesale"></div>
-    <div class="form-group"><label>Google Review URL</label><input type="text" id="wa-review-url" value="${waConfig.googleReviewUrl||''}" placeholder="https://g.page/r/your-review-link/review"></div>
-    <div class="form-group"><label>Kiosk URL (share with store tablet)</label>
+    <div class="form-group"><label>🖥️ Kiosk URL (open on store tablet)</label>
       <div style="display:flex;gap:8px">
-        <input type="text" value="${window.location.origin}/vwholesale-app/?kiosk=1" readonly style="flex:1;background:var(--bg2);font-size:12px">
-        <button class="btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/vwholesale-app/?kiosk=1');showToast('Kiosk URL copied!','success')">📋 Copy</button>
+        <input type="text" value="${window.location.origin}/vwholesale-app/?kiosk=1" readonly style="flex:1;font-size:11px;background:var(--bg2)">
+        <button class="btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/vwholesale-app/?kiosk=1');showToast('Kiosk URL copied!','success')">📋</button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:4px">Open this URL on the store tablet and keep it open — staff tap to punch in/out</div>
     </div>
-    <button class="btn-primary" onclick="saveWAConfig()">Save Config</button>
+    <button class="btn-primary" onclick="VW_SETTINGS.saveWAConfig()">Save Store Info</button>
   </div>
 
-  <div class="card" id="sec-loyalty">
-    <h3 class="card-title">⭐ Loyalty Points Config</h3>
-    <div class="form-group"><label>Earn Rate — Points per ₹100 spent</label><input type="number" id="loy-earn-rate" value="${loyaltyConfig.earnRate||1}" min="0.1" step="0.1" placeholder="1"></div>
-    <div class="form-group"><label>Point Value — ₹ per point redeemed</label><input type="number" id="loy-point-value" value="${loyaltyConfig.pointValue||1}" min="0.1" step="0.1" placeholder="1"></div>
-    <div class="form-group"><label>Max Redemption per Bill</label>
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">⭐ Loyalty Points</h3>
+    <div class="form-group"><label>Points earned per ₹100 spent</label><input type="number" id="loy-earn-rate" value="${loyaltyConfig.earnRate||1}" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>₹ value per point redeemed</label><input type="number" id="loy-point-value" value="${loyaltyConfig.pointValue||1}" min="0.1" step="0.1"></div>
+    <div class="form-group"><label>Max redemption per bill</label>
       <select id="loy-max-redeem">
-        <option value="5" ${loyaltyConfig.maxRedeemPct==5?'selected':''}>5% of bill value</option>
-        <option value="10" ${loyaltyConfig.maxRedeemPct==10?'selected':''}>10% of bill value</option>
-        <option value="20" ${loyaltyConfig.maxRedeemPct==20?'selected':''}>20% of bill value</option>
+        <option value="5" ${loyaltyConfig.maxRedeemPct==5?'selected':''}>5% of bill</option>
+        <option value="10" ${loyaltyConfig.maxRedeemPct==10?'selected':''}>10% of bill</option>
+        <option value="20" ${loyaltyConfig.maxRedeemPct==20?'selected':''}>20% of bill</option>
         <option value="100" ${loyaltyConfig.maxRedeemPct==100?'selected':''}>No limit</option>
       </select>
     </div>
-    <p style="font-size:12px;color:var(--text3)">Current: Customer earns ${loyaltyConfig.earnRate||1} point per ₹100. 1 point = ₹${loyaltyConfig.pointValue||1} when redeemed.</p>
-    <button class="btn-primary" onclick="saveLoyaltyConfig()">Save Loyalty Config</button>
-  </div>` : ''}
+    <button class="btn-primary" onclick="VW_SETTINGS.saveLoyaltyConfig()">Save Loyalty Config</button>
+  </div>
 
-  <div class="card" id="sec-danger" style="border-color:rgba(239,68,68,0.4)">
-    <h3 class="card-title" style="color:var(--red)">⚠️ Danger Zone</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:14px">For clearing out test data while setting up the system. These actions are permanent and cannot be undone — use carefully.</p>
-
-    <div class="form-group">
-      <label>Delete by date range</label>
-      <p style="font-size:11px;color:var(--text3);margin-bottom:6px">Removes customers, visits, tasks, leads, and quotations created in this range. Invoices are kept for financial records.</p>
-      <div class="input-row">
-        <input type="date" id="cleanup-from" style="flex:1">
-        <input type="date" id="cleanup-to" style="flex:1">
-      </div>
-      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="confirmBulkCleanup()">🗑 Delete Records in This Range</button>
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🏷️ Product Categories</h3>
+    <div id="categories-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      ${(categories||[]).map(c=>`<span style="padding:4px 10px;background:var(--bg2);border-radius:8px;font-size:12px;display:flex;align-items:center;gap:4px">${c}<button onclick="VW_SETTINGS.removeCategory('${c}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px">×</button></span>`).join('')}
     </div>
-
-    <div class="form-group" style="margin-top:16px">
-      <label>Reset everything except real production data</label>
-      <p style="font-size:11px;color:var(--text3);margin-bottom:6px">Wipes ALL customers, visits, tasks, leads, quotations, and invoices. Keeps your team accounts, staff, executives, inventory, and settings intact. Only use this if you're certain everything in those tables is test data.</p>
-      <button class="btn-secondary full-width" style="color:var(--red)" onclick="confirmFullReset()">🗑 Wipe All Customer/Sales Data</button>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="new-category-input" placeholder="New category..." style="flex:1">
+      <button class="btn-sm" onclick="VW_SETTINGS.addCategory()">+ Add</button>
     </div>
-  </div>` : ''}
-  `;
-}
+  </div>
 
-// ============================================================
-// ADMIN APPROVAL QUEUE
-// ============================================================
-const ROLE_LABELS = {
-  admin: 'Admin (full access)',
-  executive: 'Store Executive',
-  staff: 'Staff (Specialist/TL/HR/Purchase/Inventory)',
-  reception: 'Reception / Counter',
-  accounts: 'Accounts (payment verification)',
-  dispatch: 'Dispatch (gate pass & delivery)'
-};
-
-function renderPendingList(pendingUsers, staff, execs) {
-  return pendingUsers.map(u => `
-    <div class="req-item-card">
-      <div class="req-item-header">
-        <span class="req-item-no">${u.name} &middot; ${u.phone}</span>
-      </div>
-      <div class="form-group"><label>Assign Role</label>
-        <select id="role-${u.id}" onchange="onApprovalRoleChange('${u.id}')">
-          ${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}
-        </select>
-      </div>
-      <div id="link-${u.id}">${renderLinkPicker(u.id, 'executive', staff, execs)}</div>
-      <div class="form-group"><label>Access</label>
-        <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Dashboard, Check-in, Tasks, and Feedback are always available. Tick anything else this person should be able to open.</p>
-        <div id="perms-${u.id}">${renderPermissionCheckboxes(u.id, 'executive')}</div>
-      </div>
-      <label class="route-check-row" style="margin-top:4px">
-        <input type="checkbox" id="qdept-${u.id}">
-        <span>Quotation Department member (gets notified when a customer brings an existing quote/estimate)</span>
-      </label>
-      <button class="btn-primary full-width" style="margin-top:8px" onclick="approveUser('${u.id}')">&#10003; Approve</button>
-      <button class="btn-secondary full-width" style="margin-top:6px;color:var(--red)" onclick="rejectUser('${u.id}')">&#10005; Reject</button>
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📋 Packing Charge Rules</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Auto-added packing charges based on bill value</p>
+    <div id="packing-rules-ui">
+      ${(packingRules||[]).map((r,i)=>`
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <input type="number" value="${r.minAmount}" style="flex:1" placeholder="Min ₹" oninput="VW_SETTINGS.updatePackingRule(${i},'minAmount',this.value)">
+        <input type="number" value="${r.maxAmount||''}" style="flex:1" placeholder="Max ₹" oninput="VW_SETTINGS.updatePackingRule(${i},'maxAmount',this.value)">
+        <input type="number" value="${r.charge}" style="flex:1" placeholder="₹ charge" oninput="VW_SETTINGS.updatePackingRule(${i},'charge',this.value)">
+        <button onclick="VW_SETTINGS.removePackingRule(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px">✕</button>
+      </div>`).join('')}
     </div>
-  `).join('');
-}
+    <button class="btn-sm" onclick="VW_SETTINGS.addPackingRule()" style="margin-top:6px">+ Add Rule</button>
+    <button class="btn-primary" style="margin-top:10px;width:100%" onclick="VW_SETTINGS.savePackingRules()">Save Packing Rules</button>
+  </div>
 
-function renderPermissionCheckboxes(userId, role, checkedPerms = null) {
-  const defaults = checkedPerms || Object.keys(VW_AUTH.PERMISSION_PAGES).filter(perm =>
-    VW_AUTH.PERMISSION_PAGES[perm].every(page => (ROLE_PAGES_FOR_DEFAULTS[role] || []).includes(page))
-  );
-  return `<div class="perm-checklist" id="permlist-${userId}">
-    ${Object.entries(VW_AUTH.PERMISSION_LABELS).map(([key, label]) => `
-      <label class="route-check-row">
-        <input type="checkbox" value="${key}" ${defaults.includes(key) ? 'checked' : ''}>
-        <span>${label}</span>
-      </label>`).join('')}
+  <div class="card">
+    <h3 class="card-title">🚨 Escalation Contacts</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">WhatsApp numbers that receive alerts for high-value invoices, overrides, and issues</p>
+    ${await renderEscalationSettings()}
   </div>`;
 }
-// Mirrors auth.js's ROLE_PAGES, used only to compute sensible default
-// checkboxes when approving someone — the actual gating logic lives in auth.js.
-const ROLE_PAGES_FOR_DEFAULTS = {
-  admin: ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings'],
-  executive: ['dashboard','checkin','cart','tasks','feedback'],
-  staff: ['dashboard','checkin','tasks','feedback'],
-  reception: ['dashboard','checkin','cart','tasks','feedback']
-};
 
-function renderLinkPicker(userId, role, staff, execs) {
-  if (role === 'executive') {
-    return `<div class="form-group"><label>Link to Executive Slot</label>
-      <select id="link-select-${userId}">
-        <option value="">— Not linked (notifications won't route) —</option>
-        ${execs.map(e=>`<option value="executives:${e.id}">${e.name} (${e.phone||'no phone set'})</option>`).join('')}
-      </select></div>`;
-  } else if (role === 'staff') {
-    return `<div class="form-group"><label>Link to Team Member</label>
-      <select id="link-select-${userId}">
-        <option value="">— Not linked (notifications won't route) —</option>
-        ${staff.map(s=>`<option value="staff:${s.id}">${s.name} (${s.department} &middot; ${s.team||'—'})</option>`).join('')}
-      </select></div>`;
-  }
-  return '';
+async function renderEscalationSettings() {
+  const contacts = await VW_DB.getSetting('escalation_contacts', []);
+  return `
+  <div id="escalation-contacts-list">
+    ${(contacts||[]).map((c,i)=>`
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <input type="text" value="${c.name||''}" placeholder="Name" style="flex:1" oninput="VW_SETTINGS.updateEscalation(${i},'name',this.value)">
+      <input type="tel" value="${c.phone||''}" placeholder="Phone" style="flex:1" oninput="VW_SETTINGS.updateEscalation(${i},'phone',this.value)">
+      <button onclick="VW_SETTINGS.removeEscalation(${i})" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
+    </div>`).join('')}
+  </div>
+  <button class="btn-sm" onclick="VW_SETTINGS.addEscalation()">+ Add Contact</button>
+  <button class="btn-primary" style="margin-top:10px;width:100%" onclick="VW_SETTINGS.saveEscalation()">Save Escalation Contacts</button>`;
 }
 
-function onApprovalRoleChange(userId) {
-  VW_DB.all(VW_DB.STORES.staff).then(staff => {
-    VW_DB.all(VW_DB.STORES.executives).then(execs => {
-      const role = document.getElementById(`role-${userId}`).value;
-      document.getElementById(`link-${userId}`).innerHTML = renderLinkPicker(userId, role, staff, execs);
-      const permsEl = document.getElementById(`perms-${userId}`);
-      if (permsEl) permsEl.innerHTML = renderPermissionCheckboxes(userId, role);
-    });
-  });
-}
-
-async function approveUser(userId) {
-  const role = document.getElementById(`role-${userId}`).value;
-  const linkSelect = document.getElementById(`link-select-${userId}`);
-  const linkVal = linkSelect ? linkSelect.value : '';
-  const profile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
-
-  const permsContainer = document.getElementById(`permlist-${userId}`);
-  const permissions = permsContainer
-    ? [...permsContainer.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value)
-    : [];
-  const qdeptCheckbox = document.getElementById(`qdept-${userId}`);
-  const isQuotationDept = qdeptCheckbox ? qdeptCheckbox.checked : false;
-
-  // Include existing required fields explicitly — upsert() does not merge
-  // unspecified columns with what's already in the row, it can null them out.
-  const update = {
-    id: userId, phone: profile.phone, name: profile.name,
-    role, status: 'approved', approvedAt: new Date().toISOString(), permissions, isQuotationDept
-  };
-
-  if (linkVal) {
-    const [ref, id] = linkVal.split(':');
-    update.staffRef = ref;
-    update.staffId = parseInt(id);
-    const targetStore = ref === 'executives' ? VW_DB.STORES.executives : VW_DB.STORES.staff;
-    const record = await VW_DB.getById(targetStore, parseInt(id));
-    if (record) {
-      update.team = record.team || null;
-      update.department = record.department || null;
-      // Claiming this slot means it's now this person — update the actual
-      // executive/staff record's name and phone to match, so it shows
-      // correctly everywhere else (Store Executives list, routing, etc.)
-      record.name = profile.name;
-      record.phone = profile.phone;
-      await VW_DB.put(targetStore, record);
-    }
-  }
-
-  await VW_DB.put(VW_DB.STORES.profiles, update);
-  showToast(`${profile.name} approved as ${ROLE_LABELS[role]}`, 'success');
-  navigateTo('settings');
-}
-
-async function rejectUser(userId) {
-  const profile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
-  await VW_DB.put(VW_DB.STORES.profiles, { id: userId, phone: profile.phone, name: profile.name, status: 'rejected' });
-  showToast('Access request rejected', 'info');
-  navigateTo('settings');
-}
-
-async function showEditUserAccess(userId) {
-  const container = document.getElementById(`edit-access-${userId}`);
-  if (container.innerHTML) { container.innerHTML = ''; return; } // toggle closed if already open
-
-  const profile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const execs = await VW_DB.all(VW_DB.STORES.executives);
-  const currentPerms = Array.isArray(profile.permissions) ? profile.permissions : null;
-
-  container.innerHTML = `
-    <div class="req-item-card" style="margin-top:-4px">
-      <div class="form-group"><label>Role</label>
-        <select id="edit-role-${userId}" onchange="onEditRoleChange('${userId}')">
-          ${Object.entries(ROLE_LABELS).map(([k,v])=>`<option value="${k}" ${k===profile.role?'selected':''}>${v}</option>`).join('')}
-        </select>
-      </div>
-      <div id="edit-link-${userId}">${renderLinkPicker(userId, profile.role, staff, execs)}</div>
-      <div class="form-group"><label>Access</label>
-        <div id="edit-perms-${userId}">${renderPermissionCheckboxes(userId, profile.role, currentPerms)}</div>
-      </div>
-      <label class="route-check-row" style="margin-top:4px">
-        <input type="checkbox" id="qdept-${userId}" ${profile.isQuotationDept ? 'checked' : ''}>
-        <span>Quotation Department member (gets notified when a customer brings an existing quote/estimate)</span>
-      </label>
-      <button class="btn-primary full-width" style="margin-top:8px" onclick="saveUserAccess('${userId}')">Save Changes</button>
-    </div>`;
-
-  // Pre-select the linked record if one already exists
-  if (profile.staffRef && profile.staffId) {
-    const sel = document.getElementById(`link-select-${userId}`);
-    if (sel) sel.value = `${profile.staffRef}:${profile.staffId}`;
-  }
-}
-window.showEditUserAccess = showEditUserAccess;
-
-function onEditRoleChange(userId) {
-  VW_DB.all(VW_DB.STORES.staff).then(staff => {
-    VW_DB.all(VW_DB.STORES.executives).then(execs => {
-      const role = document.getElementById(`edit-role-${userId}`).value;
-      document.getElementById(`edit-link-${userId}`).innerHTML = renderLinkPicker(userId, role, staff, execs);
-      const permsEl = document.getElementById(`edit-perms-${userId}`);
-      if (permsEl) permsEl.innerHTML = renderPermissionCheckboxes(userId, role);
-    });
-  });
-}
-window.onEditRoleChange = onEditRoleChange;
-
-async function saveUserAccess(userId) {
-  const profile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
-  const role = document.getElementById(`edit-role-${userId}`).value;
-  const linkSelect = document.getElementById(`link-select-${userId}`);
-  const linkVal = linkSelect ? linkSelect.value : '';
-  const permsContainer = document.getElementById(`permlist-${userId}`);
-  const permissions = permsContainer
-    ? [...permsContainer.querySelectorAll('input[type="checkbox"]:checked')].map(cb => cb.value)
-    : [];
-  const qdeptCheckbox = document.getElementById(`qdept-${userId}`);
-  const isQuotationDept = qdeptCheckbox ? qdeptCheckbox.checked : false;
-
-  const update = { id: userId, phone: profile.phone, name: profile.name, role, status: 'approved', permissions, isQuotationDept };
-
-  if (linkVal) {
-    const [ref, id] = linkVal.split(':');
-    update.staffRef = ref;
-    update.staffId = parseInt(id);
-    const targetStore = ref === 'executives' ? VW_DB.STORES.executives : VW_DB.STORES.staff;
-    const record = await VW_DB.getById(targetStore, parseInt(id));
-    if (record) {
-      update.team = record.team || null;
-      update.department = record.department || null;
-      record.name = profile.name;
-      record.phone = profile.phone;
-      await VW_DB.put(targetStore, record);
-    }
-  } else {
-    update.staffRef = null;
-    update.staffId = null;
-  }
-
-  await VW_DB.put(VW_DB.STORES.profiles, update);
-  showToast(`${profile.name}'s access updated`, 'success');
-  navigateTo('settings');
-}
-window.saveUserAccess = saveUserAccess;
-
-async function revokeAccess(userId) {
-  const profile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
-  if (!confirm(`Revoke ${profile.name}'s access and free up their phone number (${profile.phone}) so it can be used to sign up again?`)) return;
-
-  try {
-    const { data: sessionData } = await sb.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ userId })
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Could not revoke access');
-    showToast(`Access revoked — ${profile.phone} can sign up again`, 'success');
-  } catch (e) {
-    console.error('revokeAccess error:', e);
-    // Fall back to just marking the profile rejected if the Edge Function
-    // isn't deployed yet — phone number stays blocked, but access is cut.
-    await VW_DB.put(VW_DB.STORES.profiles, { id: userId, phone: profile.phone, name: profile.name, status: 'rejected', role: 'pending' });
-    showToast('Access revoked (phone reuse needs the delete-user function deployed)', 'warn');
-  }
-  navigateTo('settings');
-}
-
-// ============================================================
-// EXECUTIVES MANAGEMENT
-// ============================================================
-function renderPendingProductsList(items) {
-  if (!items.length) return '<p class="empty-msg">No new items waiting for review</p>';
-  return items.map(p => `
-    <div class="pending-product-row" id="pp-row-${p.id}">
-      <div class="cust-info" style="flex:1">
-        <div class="cust-name">${[p.brand, p.model].filter(Boolean).join(' · ')}</div>
-        <div class="cust-meta">${p.description ? p.description+' &middot; ' : ''}${p.category||''} &middot; from ${p.createdByName||'a quotation'}</div>
-      </div>
-      <div class="form-group" style="flex:0 0 110px;margin:0">
-        <input type="number" id="pp-price-${p.id}" value="${p.lastPrice||0}" placeholder="Price ₹" style="font-size:13px;padding:7px 8px">
-      </div>
-      <div class="form-group" style="flex:0 0 90px;margin:0">
-        <input type="number" id="pp-stock-${p.id}" value="0" placeholder="Stock" style="font-size:13px;padding:7px 8px">
-      </div>
-      <button class="btn-sm" style="flex-shrink:0" onclick="approvePendingProduct(${p.id})">✓ Approve</button>
-      <button class="remove-btn" onclick="rejectPendingProduct(${p.id})">✕</button>
-    </div>`).join('');
-}
-
-async function approvePendingProduct(id) {
-  const p = await VW_DB.getById(VW_DB.STORES.pendingProducts, id);
-  const price = parseFloat(document.getElementById(`pp-price-${id}`).value) || 0;
-  const stock = parseFloat(document.getElementById(`pp-stock-${id}`).value) || 0;
-  const profile = VW_AUTH.getCurrentProfile();
-
-  const productId = await VW_DB.put(VW_DB.STORES.products, {
-    name: p.description || [p.brand, p.model].filter(Boolean).join(' '),
-    category: p.category || '', brand: p.brand, model: p.model || '',
-    price, stock, unit: p.unit || 'pc', gst: p.gst || 18,
-    barcode: '', lowStockThreshold: 20, costPrice: 0, createdAt: new Date().toISOString()
-  });
-
-  p.status = 'approved';
-  p.reviewedByName = profile ? profile.name : '';
-  p.reviewedAt = new Date().toISOString();
-  p.approvedProductId = productId;
-  await VW_DB.put(VW_DB.STORES.pendingProducts, p);
-
-  showToast(`${p.brand} added to Inventory`, 'success');
-  navigateTo('settings');
-}
-window.approvePendingProduct = approvePendingProduct;
-
-async function rejectPendingProduct(id) {
-  const p = await VW_DB.getById(VW_DB.STORES.pendingProducts, id);
-  const profile = VW_AUTH.getCurrentProfile();
-  p.status = 'rejected';
-  p.reviewedByName = profile ? profile.name : '';
-  p.reviewedAt = new Date().toISOString();
-  await VW_DB.put(VW_DB.STORES.pendingProducts, p);
-  showToast('Item removed from suggestions', 'info');
-  navigateTo('settings');
-}
-window.rejectPendingProduct = rejectPendingProduct;
-
-function renderPinResetList(requests) {
-  return requests.map(r => `
-    <div class="pin-reset-row" id="pinreset-row-${r.id}">
-      <div class="cust-info" style="flex:1">
-        <div class="cust-name">${r.name || 'Unknown'}</div>
-        <div class="cust-meta">${r.phone}</div>
-      </div>
-      <input type="text" id="newpin-${r.id}" placeholder="New 6-digit PIN" maxlength="6" inputmode="numeric" style="flex:0 0 130px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:8px 10px;color:var(--text);font-size:14px">
-      <button class="btn-sm" onclick="resolvePinReset(${r.id})">Set PIN</button>
-    </div>`).join('');
-}
-
-async function resolvePinReset(id) {
-  const req = await VW_DB.getById(VW_DB.STORES.pinResetRequests, id);
-  const newPin = document.getElementById(`newpin-${id}`).value.trim();
-  if (newPin.length !== 6 || !/^\d{6}$/.test(newPin)) return showToast('Enter a 6-digit PIN', 'warn');
-  if (!req.profileId) return showToast('No linked account found for this request', 'warn');
-
-  try {
-    const { data: sessionData } = await sb.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/reset-pin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ userId: req.profileId, newPin })
-    });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.error || 'Could not reset PIN');
-
-    const profile = VW_AUTH.getCurrentProfile();
-    req.status = 'resolved';
-    req.resolvedByName = profile ? profile.name : '';
-    req.resolvedAt = new Date().toISOString();
-    await VW_DB.put(VW_DB.STORES.pinResetRequests, req);
-
-    showToast(`New PIN set for ${req.name} — share it with them directly`, 'success');
-    navigateTo('settings');
-  } catch (e) {
-    showToast(e.message || 'Could not reset PIN (is the reset-pin function deployed?)', 'warn');
-  }
-}
-window.resolvePinReset = resolvePinReset;
-
-function renderExecList(execs) {
-  if (!execs.length) return '<p class="empty-msg">No executives configured</p>';
-  execs.sort((a,b)=>a.order-b.order);
-  const statusColors = { available:'var(--green)', busy:'var(--gold)', break:'#888' };
-  return execs.map(e => `
-    <div class="cust-row" style="cursor:default">
-      <div class="staff-avatar" style="background:${statusColors[e.status]}22;color:${statusColors[e.status]}">${e.order}</div>
-      <div class="cust-info">
-        <input type="text" value="${e.name}" onchange="renameExecutive(${e.id},this.value)" style="background:transparent;border:none;color:var(--text);font-size:14px;font-weight:500;padding:0;width:100%">
-        <div class="cust-meta" style="display:flex;align-items:center;gap:6px">
-          <input type="tel" value="${e.phone||''}" maxlength="10" onchange="updateExecPhone(${e.id},this.value)" style="background:transparent;border:none;color:var(--text3);font-size:12px;padding:0;width:90px">
-          &middot; <span style="color:${statusColors[e.status]}">${e.status}</span>
-        </div>
-      </div>
-      <button class="remove-btn" onclick="removeExecutive(${e.id})" title="Remove">&#10005;</button>
-    </div>`).join('');
-}
-
-async function addExecutive() {
-  const execs = await VW_DB.all(VW_DB.STORES.executives);
-  const maxOrder = execs.reduce((m,e)=>Math.max(m,e.order||0), 0);
-  await VW_DB.put(VW_DB.STORES.executives, {
-    name: `Executive ${maxOrder+1}`, phone: '', order: maxOrder+1,
-    status: 'available', statusUpdatedAt: new Date().toISOString(), currentVisitId: null
-  });
-  showToast('Executive added', 'success');
-  navigateTo('settings');
-}
-
-async function removeExecutive(id) {
-  const exec = await VW_DB.getById(VW_DB.STORES.executives, id);
-  if (exec && exec.currentVisitId) return showToast('Cannot remove — currently handling an active visit', 'warn');
-  await VW_DB.del(VW_DB.STORES.executives, id);
-  showToast('Executive removed', 'info');
-  navigateTo('settings');
-}
-
-async function updateExecPhone(id, phone) {
-  const exec = await VW_DB.getById(VW_DB.STORES.executives, id);
-  exec.phone = phone.trim();
-  await VW_DB.put(VW_DB.STORES.executives, exec);
-  showToast('Phone updated', 'success');
-}
-
-async function renameExecutive(id, name) {
-  const exec = await VW_DB.getById(VW_DB.STORES.executives, id);
-  exec.name = name.trim() || exec.name;
-  await VW_DB.put(VW_DB.STORES.executives, exec);
-  showToast('Executive updated', 'success');
-}
-
-// ============================================================
-// ESCALATION CONTACTS (Floor Manager / Store Manager / Management)
-// ============================================================
-const ESCALATION_CONTACT_FIELDS = [
-  { key: 'floorManager', label: 'Floor Manager' },
-  { key: 'storeManager', label: 'Store Manager' },
-  { key: 'management', label: 'Management' }
-];
-
-function renderEscalationContacts(contacts) {
-  return ESCALATION_CONTACT_FIELDS.map(f => {
-    const c = contacts[f.key] || {};
-    return `
-    <div class="input-row" style="margin-bottom:8px">
-      <div class="form-group" style="flex:1.2"><label>${f.label} Name</label>
-        <input type="text" id="esc-${f.key}-name" value="${(c.name||'').replace(/"/g,'&quot;')}" placeholder="e.g. ${f.label} name"></div>
-      <div class="form-group" style="flex:1"><label>Phone</label>
-        <input type="tel" id="esc-${f.key}-phone" maxlength="10" value="${c.phone||''}" placeholder="10-digit number"></div>
-    </div>`;
-  }).join('');
-}
-
-async function saveEscalationContacts() {
-  const contacts = {};
-  for (const f of ESCALATION_CONTACT_FIELDS) {
-    const name = document.getElementById(`esc-${f.key}-name`).value.trim();
-    const phone = document.getElementById(`esc-${f.key}-phone`).value.trim();
-    if (name || phone) contacts[f.key] = { name, phone };
-  }
-  await VW_DB.setSetting('escalationContacts', contacts);
-  showToast('Escalation contacts saved', 'success');
-}
-
-// ============================================================
-// CATEGORIES & SUB-CATEGORIES MANAGEMENT
-// ============================================================
-let categoriesDraft = null;
-
-function renderCategoriesEditor(categories) {
-  if (!categoriesDraft) categoriesDraft = JSON.parse(JSON.stringify(categories || {}));
-  const entries = Object.entries(categoriesDraft);
-  if (!entries.length) return '<p class="empty-msg">No categories yet — tap "+ Add Category"</p>';
-  return entries.map(([dept, subs], i) => `
-    <div class="req-item-card">
-      <div class="req-item-header">
-        <input type="text" value="${dept.replace(/"/g,'&quot;')}" onchange="renameCategory(${i},this.value)" style="background:transparent;border:none;color:var(--text);font-size:14px;font-weight:600;padding:0;width:65%">
-        <button class="remove-btn" onclick="removeCategory(${i})" title="Remove category">&#10005;</button>
-      </div>
-      <div class="cat-subchips">
-        ${subs.map((s,j)=>`<span class="subcat-chip">${s}<button onclick="removeSubcategory(${i},${j})">&times;</button></span>`).join('') || '<span style="font-size:12px;color:var(--text3)">No sub-categories yet</span>'}
-      </div>
-      <div class="input-row" style="margin-top:8px">
-        <input type="text" id="newsub-${i}" placeholder="Add sub-category" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addSubcategory(${i})}">
-        <button class="btn-sm" onclick="addSubcategory(${i})">+ Add</button>
-      </div>
-    </div>`).join('');
-}
-
-function refreshCategoriesEditor() {
-  document.getElementById('categories-editor').innerHTML = renderCategoriesEditor();
-}
-
-function addCategory() {
-  if (!categoriesDraft) categoriesDraft = {};
-  let name = 'New Category', n = 1;
-  while (categoriesDraft[name] !== undefined) { n++; name = `New Category ${n}`; }
-  categoriesDraft[name] = [];
-  refreshCategoriesEditor();
-}
-
-function renameCategory(i, newName) {
-  newName = newName.trim();
-  if (!newName) return refreshCategoriesEditor();
-  const entries = Object.entries(categoriesDraft);
-  if (entries.some(([d],idx) => d === newName && idx !== i)) {
-    showToast('A category with that name already exists', 'warn');
-    return refreshCategoriesEditor();
-  }
-  entries[i][0] = newName;
-  categoriesDraft = Object.fromEntries(entries);
-  refreshCategoriesEditor();
-}
-
-function removeCategory(i) {
-  const entries = Object.entries(categoriesDraft);
-  entries.splice(i, 1);
-  categoriesDraft = Object.fromEntries(entries);
-  refreshCategoriesEditor();
-}
-
-function addSubcategory(i) {
-  const entries = Object.entries(categoriesDraft);
-  const input = document.getElementById(`newsub-${i}`);
-  const val = (input.value || '').trim();
-  if (!val) return;
-  if (entries[i][1].includes(val)) { showToast('Already in the list', 'warn'); return; }
-  entries[i][1].push(val);
-  categoriesDraft = Object.fromEntries(entries);
-  refreshCategoriesEditor();
-}
-
-function removeSubcategory(i, j) {
-  const entries = Object.entries(categoriesDraft);
-  entries[i][1].splice(j, 1);
-  categoriesDraft = Object.fromEntries(entries);
-  refreshCategoriesEditor();
-}
-
-async function saveCategories() {
-  if (!categoriesDraft || !Object.keys(categoriesDraft).length) {
-    return showToast('Add at least one category first', 'warn');
-  }
-  await VW_DB.setSetting('categories', categoriesDraft);
-  VW_CHECKIN.setCategoriesCache(JSON.parse(JSON.stringify(categoriesDraft)));
-  showToast('Categories saved', 'success');
-}
-
-// ============================================================
-// VISITOR ROUTING
-// ============================================================
-function renderRoutingOrderedList(visitorTypeKey, staffIds, allStaff) {
-  if (!staffIds.length) return '<p class="empty-msg" style="margin:4px 0">Nobody added yet</p>';
-  return staffIds.map((id, idx) => {
-    const s = allStaff.find(st => st.id === id);
-    if (!s) return '';
-    return `
-    <div class="routing-rank-row">
-      <span class="routing-rank-num">${idx+1}</span>
-      <div class="cust-info" style="flex:1"><div class="cust-name">${s.name}</div><div class="cust-meta">${s.department}</div></div>
-      <button class="icon-btn" onclick="moveRoutingPerson('${visitorTypeKey}',${idx},-1)" ${idx===0?'disabled':''}>▲</button>
-      <button class="icon-btn" onclick="moveRoutingPerson('${visitorTypeKey}',${idx},1)" ${idx===staffIds.length-1?'disabled':''}>▼</button>
-      <button class="remove-btn" onclick="removeRoutingPerson('${visitorTypeKey}',${idx})">✕</button>
-    </div>`;
-  }).join('');
-}
-
-function getRoutingIds(visitorTypeKey) {
-  const container = document.getElementById(`route-${visitorTypeKey}`);
-  const raw = container.dataset.staffIds;
-  return raw ? raw.split(',').filter(Boolean).map(n => parseInt(n)) : [];
-}
-
-async function refreshRoutingList(visitorTypeKey, ids) {
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const container = document.getElementById(`route-${visitorTypeKey}`);
-  container.dataset.staffIds = ids.join(',');
-  container.innerHTML = renderRoutingOrderedList(visitorTypeKey, ids, staff);
-}
-
-function moveRoutingPerson(visitorTypeKey, idx, direction) {
-  const ids = getRoutingIds(visitorTypeKey);
-  const newIdx = idx + direction;
-  if (newIdx < 0 || newIdx >= ids.length) return;
-  [ids[idx], ids[newIdx]] = [ids[newIdx], ids[idx]];
-  refreshRoutingList(visitorTypeKey, ids);
-}
-window.moveRoutingPerson = moveRoutingPerson;
-
-function removeRoutingPerson(visitorTypeKey, idx) {
-  const ids = getRoutingIds(visitorTypeKey);
-  ids.splice(idx, 1);
-  refreshRoutingList(visitorTypeKey, ids);
-}
-window.removeRoutingPerson = removeRoutingPerson;
-
-async function showAddRoutingPerson(visitorTypeKey) {
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const currentIds = getRoutingIds(visitorTypeKey);
-  const available = staff.filter(s => !currentIds.includes(s.id));
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <h3>Add to Routing List</h3>
-    <p class="sheet-meta">They'll be added to the end of the list (lowest priority) — reorder afterward if needed.</p>
-    <div class="visit-list">
-      ${available.length ? available.map(s => `
-        <div class="cust-row" onclick="addRoutingPerson('${visitorTypeKey}',${s.id})">
-          <div class="cust-info"><div class="cust-name">${s.name}</div><div class="cust-meta">${s.department} &middot; ${s.role}</div></div>
-        </div>`).join('') : '<p class="empty-msg">Everyone in the directory is already on this list</p>'}
-    </div>
-  `;
-  sheet.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
-}
-window.showAddRoutingPerson = showAddRoutingPerson;
-
-function addRoutingPerson(visitorTypeKey, staffId) {
-  const ids = getRoutingIds(visitorTypeKey);
-  ids.push(staffId);
-  refreshRoutingList(visitorTypeKey, ids);
-  closeSheet();
-}
-window.addRoutingPerson = addRoutingPerson;
-
-async function saveVisitorRouting() {
-  const routing = {};
-  for (const v of VISITOR_TYPES) {
-    routing[v.key] = getRoutingIds(v.key);
-  }
-  await VW_DB.setSetting('visitorRouting', routing);
-  showToast('Visitor routing saved', 'success');
-}
-
-async function confirmBulkCleanup() {
-  const from = document.getElementById('cleanup-from').value;
-  const to = document.getElementById('cleanup-to').value;
-  if (!from || !to) return showToast('Pick both a from and to date', 'warn');
-  if (!confirm(`Permanently delete all customers, visits, tasks, leads, and quotations created between ${from} and ${to}? Inventory products and the brand/model catalog are never touched by this. This cannot be undone.`)) return;
-
-  const fromTime = new Date(from).getTime();
-  const toTime = new Date(to).getTime() + 86400000; // include the whole "to" day
-
-  const [customers, visits, tasks, leads, quotes] = await Promise.all([
-    VW_DB.all(VW_DB.STORES.customers), VW_DB.all(VW_DB.STORES.visits),
-    VW_DB.all(VW_DB.STORES.tasks), VW_DB.all(VW_DB.STORES.leads), VW_DB.all(VW_DB.STORES.quotations)
-  ]);
-  const inRange = (dateStr) => { const t = new Date(dateStr).getTime(); return t >= fromTime && t < toTime; };
-
-  let count = 0;
-  for (const v of visits) if (inRange(v.date)) { await VW_DB.del(VW_DB.STORES.visits, v.id); count++; }
-  for (const t of tasks) if (inRange(t.createdAt)) { await VW_DB.del(VW_DB.STORES.tasks, t.id); count++; }
-  for (const l of leads) if (inRange(l.createdAt)) { await VW_DB.del(VW_DB.STORES.leads, l.id); count++; }
-  for (const q of quotes) if (inRange(q.createdAt)) { await VW_DB.del(VW_DB.STORES.quotations, q.id); count++; }
-  for (const c of customers) if (inRange(c.createdAt)) { await VW_DB.del(VW_DB.STORES.customers, c.id); count++; }
-
-  showToast(`Deleted ${count} record(s) in that date range`, 'success');
-  navigateTo('settings');
-}
-window.confirmBulkCleanup = confirmBulkCleanup;
-
-async function confirmFullReset() {
-  if (!confirm('This wipes ALL customers, visits, tasks, leads, quotations, and invoices. Team accounts, staff, Inventory products, and the brand/model catalog are NEVER touched by this. Type-to-confirm is not available here — please be certain. Continue?')) return;
-  if (!confirm('Final check: this cannot be undone. Proceed with wiping all customer/sales data?')) return;
-
-  const stores = [VW_DB.STORES.visits, VW_DB.STORES.tasks, VW_DB.STORES.leads, VW_DB.STORES.quotations, VW_DB.STORES.invoices, VW_DB.STORES.customers];
-  for (const store of stores) {
-    const rows = await VW_DB.all(store);
-    for (const r of rows) await VW_DB.del(store, r.id);
-  }
-  showToast('All customer and sales data wiped', 'success');
-  navigateTo('settings');
-}
-window.confirmFullReset = confirmFullReset;
-
-// ===== PACKING / LOADING / TRANSPORT CHARGE RULES =====
-async function loadPackingRules() {
-  const rules = await VW_DB.getSetting('packing_charge_rules', []);
-  window._packingChargeRules = Array.isArray(rules) ? rules : [];
-  return window._packingChargeRules;
-}
-
-async function initPackingRulesUI() {
-  const rules = await loadPackingRules();
-  const cats = await VW_CHECKIN.getDepartmentNames();
-  const container = document.getElementById('packing-rules-list');
-  if (!container) return;
-  if (!rules.length) { container.innerHTML = '<p style="font-size:12px;color:var(--text3);margin-bottom:8px">No rules yet — add one below</p>'; return; }
-  container.innerHTML = rules.map((r, i) => `
-    <div class="input-row" style="gap:6px;margin-bottom:6px" id="pack-rule-${i}">
-      <select id="pack-cat-${i}" style="flex:2">
-        <option value="All" ${r.category==='All'?'selected':''}>All Categories</option>
-        ${cats.map(c=>`<option value="${c}" ${r.category===c?'selected':''}>${c}</option>`).join('')}
-      </select>
-      <select id="pack-type-${i}" style="flex:1.5">
-        <option value="flat" ${r.type==='flat'?'selected':''}>Flat (₹ per invoice)</option>
-        <option value="per_unit" ${r.type==='per_unit'?'selected':''}>Per Unit (₹ each)</option>
-        <option value="pct" ${r.type==='pct'?'selected':''}>% of item value</option>
-      </select>
-      <input type="number" id="pack-amt-${i}" value="${r.amount||0}" style="flex:1" placeholder="Amount">
-      <input type="text" id="pack-label-${i}" value="${r.label||'Packing'}" style="flex:2" placeholder="Label e.g. Loading">
-      <button onclick="document.getElementById('pack-rule-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>
-    </div>`).join('');
-}
-window.initPackingRulesUI = initPackingRulesUI;
+let _packingRules = [];
+let _categories = [];
+let _escalationContacts = [];
 
 async function saveWAConfig() {
-  const config = {
-    storeName: document.getElementById('wa-store-name')?.value.trim() || 'V Wholesale',
-    googleReviewUrl: document.getElementById('wa-review-url')?.value.trim() || ''
-  };
-  await VW_DB.setSetting('whatsapp_config', config);
-  showToast('WhatsApp config saved', 'success');
+  await VW_DB.setSetting('whatsapp_config', {
+    storeName: document.getElementById('wa-store-name')?.value.trim()||'V Wholesale',
+    googleReviewUrl: document.getElementById('wa-review-url')?.value.trim()||''
+  });
+  showToast('Store info saved', 'success');
 }
-window.saveWAConfig = saveWAConfig;
 
 async function saveLoyaltyConfig() {
-  const config = {
+  const cfg = {
     earnRate: parseFloat(document.getElementById('loy-earn-rate')?.value)||1,
     pointValue: parseFloat(document.getElementById('loy-point-value')?.value)||1,
     maxRedeemPct: parseFloat(document.getElementById('loy-max-redeem')?.value)||10
   };
-  await VW_DB.setSetting('loyalty_config', config);
-  window._loyaltyConfig = config;
+  await VW_DB.setSetting('loyalty_config', cfg);
+  window._loyaltyConfig = cfg;
   showToast('Loyalty config saved', 'success');
 }
-window.saveLoyaltyConfig = saveLoyaltyConfig;
+
+async function addCategory() {
+  const val = document.getElementById('new-category-input')?.value.trim();
+  if (!val) return;
+  const cats = await VW_DB.getSetting('product_categories', []);
+  if (!cats.includes(val)) { cats.push(val); await VW_DB.setSetting('product_categories', cats); }
+  document.getElementById('new-category-input').value = '';
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
+}
+
+async function removeCategory(cat) {
+  const cats = await VW_DB.getSetting('product_categories', []);
+  await VW_DB.setSetting('product_categories', cats.filter(c=>c!==cat));
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
+}
 
 async function addPackingRule() {
-  const cats = await VW_CHECKIN.getDepartmentNames();
-  const container = document.getElementById('packing-rules-list');
-  if (!container) return;
-  const i = Date.now();
-  const div = document.createElement('div');
-  div.className = 'input-row';
-  div.style.cssText = 'gap:6px;margin-bottom:6px';
-  div.id = `pack-rule-${i}`;
-  div.innerHTML = `
-    <select id="pack-cat-${i}" style="flex:2">
-      <option value="All">All Categories</option>
-      ${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}
-    </select>
-    <select id="pack-type-${i}" style="flex:1.5">
-      <option value="flat">Flat (₹ per invoice)</option>
-      <option value="per_unit">Per Unit (₹ each)</option>
-      <option value="pct">% of item value</option>
-    </select>
-    <input type="number" id="pack-amt-${i}" value="0" style="flex:1" placeholder="Amount">
-    <input type="text" id="pack-label-${i}" value="Packing" style="flex:2" placeholder="Label e.g. Loading">
-    <button onclick="document.getElementById('pack-rule-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>`;
-  container.appendChild(div);
+  const rules = await VW_DB.getSetting('packing_charge_rules', []);
+  rules.push({ minAmount: 0, maxAmount: null, charge: 0 });
+  await VW_DB.setSetting('packing_charge_rules', rules);
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
 }
-window.addPackingRule = addPackingRule;
+
+async function removePackingRule(idx) {
+  const rules = await VW_DB.getSetting('packing_charge_rules', []);
+  rules.splice(idx, 1);
+  await VW_DB.setSetting('packing_charge_rules', rules);
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
+}
+
+async function updatePackingRule(idx, field, val) {
+  const rules = await VW_DB.getSetting('packing_charge_rules', []);
+  if (rules[idx]) rules[idx][field] = parseFloat(val)||0;
+  await VW_DB.setSetting('packing_charge_rules', rules);
+}
 
 async function savePackingRules() {
-  const rows = document.querySelectorAll('[id^="pack-rule-"]');
-  const rules = [];
-  rows.forEach(row => {
-    const i = row.id.replace('pack-rule-', '');
-    const cat = document.getElementById(`pack-cat-${i}`)?.value;
-    const type = document.getElementById(`pack-type-${i}`)?.value;
-    const amount = parseFloat(document.getElementById(`pack-amt-${i}`)?.value || 0);
-    const label = document.getElementById(`pack-label-${i}`)?.value || 'Packing';
-    if (cat && type && amount > 0) rules.push({ category: cat, type, amount, label });
-  });
-  await VW_DB.setSetting('packing_charge_rules', rules);
-  window._packingChargeRules = rules;
-  showToast(`${rules.length} packing charge rule(s) saved`, 'success');
+  showToast('Packing rules saved', 'success');
 }
-window.savePackingRules = savePackingRules;
 
-window.renderSettingsPage = renderSettingsPage;
-window.renameExecutive = renameExecutive;
-window.saveVisitorRouting = saveVisitorRouting;
-window.addExecutive = addExecutive;
-window.removeExecutive = removeExecutive;
-window.updateExecPhone = updateExecPhone;
-window.onApprovalRoleChange = onApprovalRoleChange;
-window.approveUser = approveUser;
-window.rejectUser = rejectUser;
-window.revokeAccess = revokeAccess;
-window.addCategory = addCategory;
-window.renameCategory = renameCategory;
-window.removeCategory = removeCategory;
-window.addSubcategory = addSubcategory;
-window.removeSubcategory = removeSubcategory;
-window.saveCategories = saveCategories;
-window.saveEscalationContacts = saveEscalationContacts;
+async function addEscalation() {
+  const contacts = await VW_DB.getSetting('escalation_contacts', []);
+  contacts.push({ name: '', phone: '' });
+  await VW_DB.setSetting('escalation_contacts', contacts);
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
+}
+
+async function removeEscalation(idx) {
+  const contacts = await VW_DB.getSetting('escalation_contacts', []);
+  contacts.splice(idx, 1);
+  await VW_DB.setSetting('escalation_contacts', contacts);
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsStore();
+}
+
+async function updateEscalation(idx, field, val) {
+  const contacts = await VW_DB.getSetting('escalation_contacts', []);
+  if (contacts[idx]) contacts[idx][field] = val;
+  await VW_DB.setSetting('escalation_contacts', contacts);
+}
+
+async function saveEscalation() {
+  showToast('Escalation contacts saved', 'success');
+}
+
+// ===== TAB 5: TOOLS =====
+async function renderSettingsTools() {
+  const pendingProducts = await VW_DB.all(VW_DB.STORES.pendingProducts).then(p=>p.filter(x=>x.status==='pending'));
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📦 Pending Product Approvals <span class="badge">${pendingProducts.length}</span></h3>
+    ${!pendingProducts.length ? '<p class="empty-msg">No pending products</p>' :
+    pendingProducts.map(p=>`
+    <div class="task-card">
+      <div class="task-card-header"><span class="task-dept">${p.name}</span><span class="badge">${p.category||'—'}</span></div>
+      <div style="font-size:12px;color:var(--text3)">₹${p.price||0} · ${p.submittedByName||'—'}</div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn-sm" style="background:#22c55e;color:#fff" onclick="VW_SETTINGS.approvePendingProduct(${p.id})">✓ Approve</button>
+        <button class="btn-sm" style="color:var(--red)" onclick="VW_SETTINGS.rejectPendingProduct(${p.id})">✕ Reject</button>
+      </div>
+    </div>`).join('')}
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📥 Excel Import</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Import customers or products from Excel/CSV</p>
+    <button class="btn-secondary full-width" onclick="VW_EXCEL.showExcelImport()">📊 Open Excel Import Tool</button>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🔍 Customer Deduplication</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Find and merge duplicate customer records</p>
+    <button class="btn-secondary full-width" onclick="navigateTo('dedup')">Open Dedup Tool</button>
+  </div>
+
+  <div class="card">
+    <h3 class="card-title">📋 Sales Executive Config</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Manage sales executives who appear in billing for commission tracking</p>
+    <button class="btn-secondary full-width" onclick="navigateTo('settings');VW_SETTINGS.switchSettingsTab('team',document.getElementById('stab-team'))">Manage Team →</button>
+  </div>`;
+}
+
+async function approvePendingProduct(id) {
+  const p = await VW_DB.getById(VW_DB.STORES.pendingProducts, id);
+  if (!p) return;
+  await VW_DB.put(VW_DB.STORES.products, {
+    name: p.name, category: p.category, price: p.price, unit: p.unit,
+    gst: p.gst||18, stock: 0, lowStockThreshold: 5, active: true, createdAt: new Date().toISOString()
+  });
+  p.status = 'approved';
+  await VW_DB.put(VW_DB.STORES.pendingProducts, p);
+  showToast(`${p.name} added to inventory`, 'success');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsTools();
+}
+
+async function rejectPendingProduct(id) {
+  const p = await VW_DB.getById(VW_DB.STORES.pendingProducts, id);
+  if (!p) return;
+  p.status = 'rejected';
+  await VW_DB.put(VW_DB.STORES.pendingProducts, p);
+  showToast('Product rejected', 'info');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsTools();
+}
+
+// ===== TAB 6: DANGER ZONE =====
+async function renderSettingsDanger() {
+  return `
+  <div class="card" style="border-color:rgba(239,68,68,0.4)">
+    <h3 class="card-title" style="color:var(--red)">⚠️ Danger Zone</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px">These actions are irreversible. Be absolutely sure before proceeding.</p>
+
+    <div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:4px">Clear All Visits</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Delete all check-in records. Invoice history is not affected.</div>
+      <button class="btn-secondary" style="color:var(--red)" onclick="VW_SETTINGS.confirmDangerAction('visits','Clear All Visits')">Clear Visits</button>
+    </div>
+
+    <div style="padding:12px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:var(--red);margin-bottom:4px">Reset All Sequences</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Reset invoice/quotation counters to start from 1. Use on April 1 if needed manually.</div>
+      <button class="btn-secondary" style="color:var(--red)" onclick="VW_SETTINGS.confirmDangerAction('sequences','Reset Sequences')">Reset Sequences</button>
+    </div>
+
+    <div style="padding:12px;background:rgba(239,68,68,0.15);border:2px solid rgba(239,68,68,0.5);border-radius:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:4px">⚠️ Factory Reset</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Delete ALL data — invoices, customers, staff, products. This cannot be undone.</div>
+      <button class="btn-secondary" style="color:var(--red);border-color:var(--red)" onclick="VW_SETTINGS.confirmDangerAction('factory','FACTORY RESET — Delete Everything')">Factory Reset</button>
+    </div>
+  </div>`;
+}
+
+async function confirmDangerAction(action, label) {
+  const confirm1 = window.confirm(`Are you sure you want to: ${label}?\n\nThis cannot be undone.`);
+  if (!confirm1) return;
+  const confirm2 = window.prompt(`Type "CONFIRM" to proceed with: ${label}`);
+  if (confirm2 !== 'CONFIRM') { showToast('Cancelled', 'info'); return; }
+  if (action === 'visits') {
+    const all = await VW_DB.all(VW_DB.STORES.visits);
+    for (const v of all) { await VW_DB.client.from('visits').delete().eq('id', v.id); }
+    showToast('All visits cleared', 'success');
+  } else if (action === 'sequences') {
+    await VW_DB.client.from('invoice_sequences').delete().neq('id', 0);
+    await VW_DB.client.from('quotation_sequences').delete().neq('id', 0);
+    await VW_DB.client.from('po_sequences').delete().neq('fy_label', '');
+    showToast('Sequences reset', 'success');
+  } else if (action === 'factory') {
+    showToast('Factory reset initiated — refreshing...', 'warn');
+    setTimeout(() => { localStorage.clear(); window.location.reload(); }, 2000);
+  }
+}
+
+window.VW_SETTINGS = {
+  renderSettingsPage, switchSettingsTab,
+  saveAccountName, changePIN, approveResetPin,
+  approveProfile, updateProfileRole,
+  saveRolePermission, loadUserPermissions, setUserPermission, clearUserPermissions,
+  saveWAConfig, saveLoyaltyConfig,
+  addCategory, removeCategory,
+  addPackingRule, removePackingRule, updatePackingRule, savePackingRules,
+  addEscalation, removeEscalation, updateEscalation, saveEscalation,
+  approvePendingProduct, rejectPendingProduct,
+  confirmDangerAction
+};
+
+// Legacy exports for backward compatibility
+window.saveWAConfig = saveWAConfig;
+window.saveLoyaltyConfig = saveLoyaltyConfig;
+window.savePackingRules = savePackingRules;
+window.initPackingRulesUI = () => {}; // no-op, handled by tab now
 
 
 /* === reports.js === */
@@ -17279,7 +17230,7 @@ async function navigateTo(page, params) {
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
-    else if (page === 'settings') { html = await renderSettingsPage(); setTimeout(() => initPackingRulesUI(), 100); }
+    else if (page === 'settings') { html = await VW_SETTINGS.renderSettingsPage(); }
     else if (page === 'club') html = await renderContractorClub();
     else if (page === 'training') html = await VW_TRAINING.renderTraining();
     else if (page === 'feedback') html = await renderFeedbackPage();
