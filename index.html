@@ -537,6 +537,263 @@ td strong { color: var(--text); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
+/* ============================================================
+   MISSING CLASS DEFINITIONS — added after audit
+   All classes used in JS templates, sorted by frequency
+   ============================================================ */
+
+/* Generic layout helpers used everywhere */
+.row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: none; }
+.meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.header { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+.sub { font-size: 13px; color: var(--text2); margin-bottom: 10px; }
+.grand { font-size: 18px; font-weight: 700; color: var(--gold); }
+.totals { padding: 10px 0; }
+.unit { font-size: 12px; color: var(--text3); }
+.amount { font-size: 16px; font-weight: 700; color: var(--gold); }
+.discount { font-size: 13px; color: var(--green); }
+.balance { font-size: 14px; font-weight: 600; color: var(--gold); }
+.out { font-size: 13px; color: var(--red); font-weight: 600; }
+
+/* Sheet components */
+.sheet-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.sheet-stat { text-align: center; flex: 1; }
+.sheet-stat span { display: block; font-size: 22px; font-weight: 700; color: var(--gold); }
+.sheet-stat small { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; }
+.sheet-stats { display: flex; gap: 0; margin-bottom: 14px; }
+.sheet-stats .sheet-stat { padding: 12px; background: var(--bg3); border-radius: var(--radius-sm); margin-right: 8px; }
+.sheet-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--gold-muted); color: var(--gold); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 20px; flex-shrink: 0; }
+.sheet-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.sheet-notes { font-size: 13px; color: var(--text2); padding: 10px; background: var(--bg3); border-radius: var(--radius-sm); margin-top: 10px; line-height: 1.6; }
+
+/* Invoice / print templates */
+.letterhead { text-align: center; padding: 16px 0 10px; border-bottom: 2px solid var(--gold); margin-bottom: 12px; }
+.brand { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--text); }
+.brand-block { margin-bottom: 4px; }
+.brand-sub { font-size: 12px; color: var(--text2); }
+.doc-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); margin: 8px 0; }
+.addr-block { margin-bottom: 10px; }
+.addr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.addr-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; margin-bottom: 4px; }
+.date-line { font-size: 12px; color: var(--text2); }
+.tax-right { text-align: right; }
+.tax-right-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; color: var(--text2); border-bottom: 1px solid var(--border); }
+.tax-left { font-size: 13px; color: var(--text2); }
+.tax-footer { display: flex; justify-content: space-between; padding: 10px 0; font-size: 15px; font-weight: 700; color: var(--text); border-top: 2px solid var(--gold); margin-top: 4px; }
+.tot-grand { font-size: 18px; font-weight: 800; color: var(--gold); }
+.terms { font-size: 11px; color: var(--text3); margin-top: 12px; line-height: 1.6; }
+.terms-list { padding-left: 0; list-style: none; }
+.footer { text-align: center; font-size: 12px; color: var(--text3); margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.copy-marker { text-align: center; font-size: 11px; font-weight: 700; background: var(--bg3); color: var(--text3); padding: 4px; border-radius: 4px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Invoice print specific */
+.inv-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.inv-info { flex: 1; min-width: 0; }
+.inv-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inv-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.inv-no { font-size: 12px; font-weight: 700; color: var(--gold); }
+.inv-total { font-size: 14px; font-weight: 700; color: var(--gold); }
+.inv-date { font-size: 11px; color: var(--text3); }
+.inv-stock { font-size: 11px; color: var(--text3); }
+.inv-unit { font-size: 11px; color: var(--text3); }
+.invoice-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+
+/* Signature blocks (print) */
+.sign { margin-top: 30px; }
+.sign-row { display: flex; justify-content: space-between; margin-top: 30px; }
+.sign-box { text-align: center; width: 140px; }
+.sign-line { border-top: 1px solid var(--border2); margin-bottom: 4px; height: 36px; }
+.sign-block { text-align: center; flex: 1; }
+.sign-section { display: flex; justify-content: space-between; gap: 12px; margin-top: 24px; }
+
+/* Request item sheet (checkin quotation OCR) */
+.req-item-no { font-size: 12px; color: var(--text3); font-weight: 600; flex-shrink: 0; width: 20px; }
+.req-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.req-item-collapsed { opacity: 0.7; }
+.req-item-summary { font-size: 13px; color: var(--text2); }
+.remove-btn { background: none; border: none; color: var(--text3); cursor: pointer; font-size: 18px; padding: 0 4px; flex-shrink: 0; transition: color 0.15s; }
+.remove-btn:hover { color: var(--red); }
+.add-item-row { display: flex; gap: 8px; margin-top: 10px; }
+
+/* Cart / billing */
+.cart-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cart-totals { margin: 10px 0; }
+.cart-item-info { flex: 1; min-width: 0; }
+.cart-item-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.cart-item-price { font-size: 13px; color: var(--text2); margin-top: 2px; }
+.cart-item-total { font-size: 14px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+.cart-item-controls { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.bill-actions { display: flex; gap: 8px; margin-top: 12px; }
+.price-override-input { width: 90px; }
+.qtotal-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; color: var(--text2); }
+.qline-totals { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* Approval card */
+.approval-card { background: rgba(245,200,66,0.08); border: 1px solid var(--gold-border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+.approval-cards-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+
+/* Visit list */
+.visit-list { display: flex; flex-direction: column; gap: 0; }
+
+/* Staff / HR */
+.staff-info { flex: 1; min-width: 0; }
+.staff-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.staff-meta { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.att-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.att-summary-row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; }
+.att-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.leave-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+
+/* Attendance status active states */
+.att-active-green { color: var(--green) !important; border-color: var(--green) !important; }
+.att-active-red { color: var(--red) !important; border-color: var(--red) !important; }
+.att-active-gold { color: var(--gold) !important; border-color: var(--gold) !important; }
+.att-active-blue { color: var(--blue) !important; border-color: var(--blue) !important; }
+
+/* Kiosk */
+.kiosk-header { background: var(--header-bg); padding: 20px 16px; text-align: center; }
+.kiosk-name { font-size: 22px; font-weight: 700; color: var(--text); font-family: 'Syne', sans-serif; }
+.kiosk-date { font-size: 13px; color: var(--text3); margin-top: 4px; }
+.kiosk-time { font-size: 32px; font-weight: 700; color: var(--gold); font-family: 'Syne', sans-serif; }
+.kiosk-avatar { width: 60px; height: 60px; border-radius: 50%; background: var(--gold-muted); color: var(--gold); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700; margin: 0 auto 10px; }
+.kiosk-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 16px; }
+.kiosk-present { text-align: center; padding: 16px; background: rgba(34,197,94,0.1); border-radius: var(--radius); }
+.kiosk-punch-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin: 16px; text-align: center; }
+.punch-status-ring { width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--gold); display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 28px; }
+
+/* Employee app stats */
+.emp-stat { background: var(--bg3); border-radius: var(--radius-sm); padding: 12px; text-align: center; }
+
+/* Feedback */
+.fb-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.fb-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+.fb-who { font-size: 14px; font-weight: 600; color: var(--text); }
+.fb-date { font-size: 11px; color: var(--text3); }
+.fb-stars { color: var(--gold); font-size: 13px; margin-bottom: 4px; }
+.fb-text { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.fb-suggest { font-size: 12px; color: var(--text3); margin-top: 4px; font-style: italic; }
+
+/* Gate pass */
+.gp-no { font-size: 18px; font-weight: 800; color: var(--gold); font-family: 'Syne', sans-serif; }
+.gp-badge { background: var(--gold-muted); color: var(--gold); border: 1px solid var(--gold-border); border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 600; display: inline-block; }
+
+/* Escalation timeline */
+.escalation-timeline { display: flex; flex-direction: column; gap: 0; margin: 10px 0; }
+.esc-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.esc-name { font-size: 14px; font-weight: 600; color: var(--text); flex: 1; }
+.esc-time { font-size: 12px; color: var(--text3); }
+
+/* Routing */
+.route-check-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.routing-preview { background: var(--bg3); border-radius: var(--radius-sm); padding: 12px; margin-top: 10px; }
+.status-menu { position: absolute; top: 100%; right: 0; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 4px; z-index: 50; min-width: 120px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.status-box { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; position: relative; }
+
+/* Products */
+.product-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.product-cat { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.product-price { font-size: 15px; font-weight: 700; color: var(--gold); }
+.product-photo-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; text-align: center; }
+.product-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.photo-preview-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.stock-bar-bg { height: 4px; background: var(--bg3); border-radius: 2px; margin-top: 4px; overflow: hidden; }
+.stock-bar { height: 4px; background: var(--green); border-radius: 2px; }
+
+/* Auth screen */
+.id-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 20px; }
+.id-badge { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 8px 14px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.id-badge-name { font-weight: 600; color: var(--text); }
+.id-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+
+/* Loyalty tiers */
+.tier-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.tier-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px; display: flex; align-items: center; gap: 12px; }
+.tier-card.platinum { border-color: var(--gold-border); background: var(--gold-muted); }
+.tier-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.tier-count { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.tier-badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+.tier-benefit { font-size: 12px; color: var(--text2); }
+.silver { color: #C0C0C0; }
+.platinum { color: var(--gold); }
+
+/* Referral bonuses */
+.ref-bonus { font-size: 14px; font-weight: 700; color: var(--green); }
+.ref-pct { font-size: 12px; color: var(--text3); }
+.ref-result { font-size: 15px; font-weight: 700; color: var(--gold); }
+
+/* CRM */
+.customer-list { display: flex; flex-direction: column; gap: 0; }
+.cc-member-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+
+/* Insight rows (analytics) */
+.insight-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.insight-icon { font-size: 20px; flex-shrink: 0; }
+.insight-text { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+/* Pipeline (CRM kanban) */
+.pipeline-scroll { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+.pipeline-col { flex-shrink: 0; width: 200px; }
+.pipeline-header { font-size: 12px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; padding: 6px 10px; background: var(--bg3); border-radius: var(--radius-sm); }
+.pipeline-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px; margin-bottom: 6px; cursor: pointer; }
+
+/* Voucher (accounts print) */
+.voucher { background: #fff; color: #000; padding: 20px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 16px; }
+
+/* Bank details */
+.bank-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+
+/* Punch status ring */
+.topbar { background: var(--header-bg); padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; }
+
+/* Spin wheel */
+.spin-seg { transform-origin: center; }
+
+/* Activity filters */
+.activity-filters { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 10px; }
+.activity-status { font-size: 11px; color: var(--text3); font-weight: 500; }
+
+/* Inventory modal */
+.meta-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* People cards */
+.pc-date { font-size: 11px; color: var(--text3); }
+.pc-dept { font-size: 12px; color: var(--text2); }
+.pc-val { font-size: 14px; font-weight: 700; color: var(--gold); }
+
+/* Language selector */
+.lang-btn { background: var(--bg3); border: 1px solid var(--border2); border-radius: 20px; padding: 6px 14px; font-size: 13px; font-weight: 500; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+.lang-btn.active { background: var(--gold-muted); border-color: var(--gold); color: var(--gold); }
+
+/* Voice/mic button */
+.mic-btn { background: none; border: 1px solid var(--border2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); font-size: 18px; }
+
+/* Notifications */
+.notif-list { display: flex; flex-direction: column; gap: 0; }
+
+/* Icon button */
+.icon-btn { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text2); font-size: 18px; transition: all 0.15s; }
+.icon-btn:active { background: var(--bg4); }
+
+/* Engine analytics rows */
+.engine-row-an { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.engine-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.engine-name-an { flex: 1; font-size: 14px; font-weight: 500; color: var(--text); }
+.engine-pct-an { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.engine-val-an { font-size: 14px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+.engine-bar-bg-an { flex: 1; height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.engine-bar-an { height: 5px; background: var(--gold); border-radius: 3px; }
+
+/* Toggle (used in permissions sheet) */
+.toggle-track { position: absolute; inset: 0; border-radius: 12px; transition: background 0.2s; }
+
+/* Discount input */
+.price-override-input { width: 80px; font-size: 13px; padding: 6px 8px !important; }
+
+.print-btn { background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 10px 18px; font-size: 14px; color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif; display: inline-flex; align-items: center; gap: 6px; }
+
   </style>
 </head>
 <body>
@@ -10020,6 +10277,29 @@ function downloadImportTemplate(entityType) {
   XLSX.writeFile(wb, `${entityType === 'staff' ? 'staff' : 'products'}_import_template.xlsx`);
 }
 window.downloadImportTemplate = downloadImportTemplate;
+
+// VW_EXCEL namespace — referenced from Settings Tools tab
+window.VW_EXCEL = {
+  showExcelImport: function() {
+    // Show import type selection sheet
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <h3>📊 Excel Import</h3>
+      <p class="sheet-meta">Import staff or product data from an Excel or CSV file</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="btn-primary full-width" onclick="triggerExcelImport('staff')">👥 Import Staff / HR Data</button>
+        <button class="btn-secondary full-width" onclick="triggerExcelImport('inventory')">📦 Import Products / Inventory</button>
+        <button class="btn-secondary full-width" onclick="triggerExcelImport('customers')">🤝 Import Customers</button>
+        <button class="btn-sm full-width" style="text-align:center" onclick="downloadImportTemplate('staff')">📥 Download Staff Template</button>
+        <button class="btn-sm full-width" style="text-align:center" onclick="downloadImportTemplate('inventory')">📥 Download Inventory Template</button>
+      </div>
+      <button class="btn-secondary full-width" style="margin-top:12px" onclick="closeSheet()">Cancel</button>
+    `;
+    sheet.classList.add('open');
+    document.getElementById('sheet-overlay').classList.add('open');
+  }
+};
 
 
 /* === tasks.js === */
