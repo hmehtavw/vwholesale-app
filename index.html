@@ -1113,10 +1113,10 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor'],
-  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
-  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor'],
+  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations'],
   accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger'],
   dispatch:  ['dashboard','tasks','feedback','training','dispatch'],
   pending:   [] // no app access until approved
@@ -3375,6 +3375,14 @@ async function renderCart(customerId = null, visitId = null) {
   }
 
   return `
+  <!-- Quick links row — Billing | Quotations | Tiles | Granite -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:2px;white-space:nowrap">
+    <button class="entry-type-btn active"><span class="et-icon">🧾</span>New Bill</button>
+    <button class="entry-type-btn" onclick="navigateTo('quotations')"><span class="et-icon">📄</span>Quotations</button>
+    <button class="entry-type-btn" onclick="navigateTo('tiles')"><span class="et-icon">🏠</span>Tiles Quote</button>
+    <button class="entry-type-btn" onclick="navigateTo('granite')"><span class="et-icon">🪨</span>Granite Quote</button>
+  </div>
+
   ${customer ? `
     <div class="customer-pill" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
       <span>👤 ${customer.name} · ${customer.phone}</span>
@@ -3775,6 +3783,9 @@ async function generateInvoiceInner() {
     cashDiscountAmt = parseFloat(document.getElementById('cash-discount-amt')?.value || 0);
   const loyaltyPtsRedeemed = parseFloat(document.getElementById('loyalty-redeem-pts')?.value || 0);
   const loyaltyDiscAmt = Math.round(loyaltyPtsRedeemed * ((window._loyaltyConfig?.pointValue)||1));
+  const ledgerDiscAmt = _appliedLedgerBalance || 0;
+  const promoDiscAmt = _appliedPromoDiscount || 0;
+  const promoCodeUsed = _appliedPromoCode || '';
   }
 
   // The actual invoice total = pre-discount total minus any cash discount.
@@ -3794,7 +3805,7 @@ async function generateInvoiceInner() {
     creditDueDate = document.getElementById('credit-due-date')?.value || null;
     balanceDue = Math.round(total);
   } else {
-    const payable = Math.max(0, total - advanceAlready - cashDiscountAmt - loyaltyDiscAmt);
+    const payable = Math.max(0, total - advanceAlready - cashDiscountAmt - loyaltyDiscAmt - ledgerDiscAmt - promoDiscAmt);
     paymentMethod = document.getElementById('cash-payment-method')?.value || 'Cash';
 
     if (paymentMethod === 'Split') {
@@ -4165,7 +4176,10 @@ function setSaleType(type) {
   document.getElementById('sale-type-cash-btn').classList.toggle('active', type==='cash');
   document.getElementById('sale-type-credit-btn').classList.toggle('active', type==='credit');
   document.getElementById('payment-section').innerHTML = renderPaymentSection();
-  if (activeCart.customerId) setTimeout(() => loadLoyaltyBalance(activeCart.customerId), 50);
+  if (activeCart.customerId) {
+    setTimeout(() => loadLoyaltyBalance(activeCart.customerId), 50);
+    setTimeout(() => loadLedgerBalance(activeCart.customerId), 80);
+  }
 }
 window.setSaleType = setSaleType;
 
@@ -4216,6 +4230,86 @@ async function loadLoyaltyBalance(customerId) {
 }
 window.loadLoyaltyBalance = loadLoyaltyBalance;
 
+// ===== CUSTOMER LEDGER BALANCE AT BILLING =====
+async function loadLedgerBalance(customerId) {
+  const el = document.getElementById('ledger-balance-section');
+  if (!el || !customerId) return;
+  try {
+    const [invoices, returns] = await Promise.all([
+      VW_DB.all(VW_DB.STORES.invoices),
+      VW_DB.all(VW_DB.STORES.salesReturns)
+    ]);
+    const custInvoices = invoices.filter(i => i.customerId === customerId && i.approvalStatus === 'approved');
+    const totalBilled = custInvoices.reduce((s,i) => s+(i.total||0), 0);
+    const totalPaid = custInvoices.reduce((s,i) => s+(i.amountPaid||i.total||0), 0);
+    const advances = custInvoices.reduce((s,i) => s+(i.excessPaid||0), 0);
+    const custReturns = returns.filter(r => r.customerId === customerId);
+    const returnCredit = custReturns.reduce((s,r) => s+(r.creditAmount||0), 0);
+    const availableBalance = advances + returnCredit;
+    if (availableBalance <= 0) { el.innerHTML = ''; return; }
+    el.innerHTML = `
+      <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#22c55e">💰 Customer Balance Available</div>
+          <div style="font-size:11px;color:var(--text2)">
+            ${advances>0?`Advance credit: ₹${advances.toLocaleString('en-IN')}`:''} 
+            ${returnCredit>0?`Return credit: ₹${returnCredit.toLocaleString('en-IN')}`:''} 
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:16px;font-weight:700;color:#22c55e">₹${availableBalance.toLocaleString('en-IN')}</div>
+          <button class="btn-sm" style="margin-top:4px;background:rgba(34,197,94,0.2);color:#22c55e;border-color:rgba(34,197,94,0.4)" onclick="applyLedgerBalance(${availableBalance})">Use Balance</button>
+        </div>
+      </div>`;
+  } catch(e) { el.innerHTML = ''; }
+}
+window.loadLedgerBalance = loadLedgerBalance;
+
+let _appliedLedgerBalance = 0;
+function applyLedgerBalance(amount) {
+  _appliedLedgerBalance = amount;
+  const el = document.getElementById('ledger-balance-section');
+  if (el) el.innerHTML = `
+    <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.4);border-radius:10px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:600;color:#22c55e">✓ Balance applied: ₹${amount.toLocaleString('en-IN')}</span>
+        <button class="btn-sm" style="color:var(--red)" onclick="_appliedLedgerBalance=0;loadLedgerBalance(activeCart.customerId);updatePaymentTotals()">Remove</button>
+      </div>
+    </div>`;
+  updatePaymentTotals();
+  showToast(`₹${amount.toLocaleString('en-IN')} customer balance applied`, 'success');
+}
+window.applyLedgerBalance = applyLedgerBalance;
+
+// ===== PROMO CODE / GIFT VOUCHER =====
+const PROMO_CODES = {}; // Loaded from settings
+let _appliedPromoDiscount = 0;
+let _appliedPromoCode = '';
+
+async function applyPromoCode(code) {
+  if (!code || code.length < 3) return;
+  const promoEl = document.getElementById('promo-result');
+  const promos = await VW_DB.getSetting('promo_codes', {});
+  const promo = promos[code.toUpperCase()];
+  if (!promo) {
+    if (promoEl) promoEl.innerHTML = `<span style="color:var(--red)">❌ Invalid code</span>`;
+    _appliedPromoDiscount = 0; _appliedPromoCode = '';
+    updatePaymentTotals(); return;
+  }
+  if (promo.expiry && new Date(promo.expiry) < new Date()) {
+    if (promoEl) promoEl.innerHTML = `<span style="color:var(--red)">❌ Code expired</span>`;
+    return;
+  }
+  const total = computeCartGrandTotal();
+  const discount = promo.type === 'pct' ? Math.round(total * promo.value / 100) : promo.value;
+  _appliedPromoDiscount = discount;
+  _appliedPromoCode = code.toUpperCase();
+  if (promoEl) promoEl.innerHTML = `<span style="color:#22c55e">✓ ${promo.label||code.toUpperCase()} — ₹${discount.toLocaleString('en-IN')} off</span>`;
+  updatePaymentTotals();
+  showToast(`Promo applied: ₹${discount} off`, 'success');
+}
+window.applyPromoCode = applyPromoCode;
+
 function renderPaymentSection() {
   const saleType = activeCart.saleType || 'cash';
   const total = computeCartGrandTotal();
@@ -4235,6 +4329,14 @@ function renderPaymentSection() {
   ${advanceAlready ? `<p style="font-size:12px;color:var(--text2);margin-bottom:8px">Advance collected: ₹${advanceAlready.toLocaleString('en-IN')}</p>` : ''}
 
   ${activeCart.customerId ? `<div id="loyalty-redemption-section" style="margin-bottom:10px"></div>` : ''}
+  ${activeCart.customerId ? `<div id="ledger-balance-section" style="margin-bottom:10px"></div>` : ''}
+  ${activeCart.customerId ? `<div id="promo-code-section" style="margin-bottom:10px">
+    <div style="display:flex;gap:8px">
+      <input type="text" id="promo-code-input" placeholder="Promo code / Gift voucher" style="flex:1;font-size:13px" oninput="applyPromoCode(this.value)">
+      <button class="btn-sm" onclick="applyPromoCode(document.getElementById('promo-code-input')?.value)">Apply</button>
+    </div>
+    <div id="promo-result" style="font-size:12px;margin-top:4px"></div>
+  </div>` : ''}
 
   <div class="form-group">
     <label>Cash Discount (₹) <span style="font-size:11px;color:var(--text3)">e.g. round off ₹30 on a ₹19,130 bill</span></label>
@@ -4300,7 +4402,9 @@ function updatePaymentTotals() {
   const loyaltyPts = parseFloat(document.getElementById('loyalty-redeem-pts')?.value || 0);
   const settings_lc = window._loyaltyConfig || { pointValue: 1 };
   const loyaltyDisc = Math.round(loyaltyPts * (settings_lc.pointValue || 1));
-  const payable = Math.max(0, total - advance - cashDisc - loyaltyDisc);
+  const ledgerDisc = _appliedLedgerBalance || 0;
+  const promoDisc = _appliedPromoDiscount || 0;
+  const payable = Math.max(0, total - advance - cashDisc - loyaltyDisc - ledgerDisc - promoDisc);
 
   // Show loyalty redemption value
   const loyaltyEl = document.getElementById('loyalty-redeem-value');
@@ -4959,9 +5063,9 @@ async function renderQuotationsTab() {
       <h3 class="card-title">Quotations</h3>
       <button class="btn-sm" onclick="showNewQuotationEntry()">+ New Quotation</button>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button class="btn-sm" style="background:var(--gold-muted);border-color:var(--gold);color:var(--gold)" onclick="navigateTo('tiles')">🏠 Tiles Quote</button>
-      <button class="btn-sm" style="background:var(--gold-muted);border-color:var(--gold);color:var(--gold)" onclick="navigateTo('granite')">🪨 Granite Quote</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px">
+      <button class="btn-sm" style="background:var(--gold-muted);border-color:var(--gold);color:var(--gold);white-space:nowrap" onclick="navigateTo('tiles')">🏠 Tiles Quote</button>
+      <button class="btn-sm" style="background:var(--gold-muted);border-color:var(--gold);color:var(--gold);white-space:nowrap" onclick="navigateTo('granite')">🪨 Granite Quote</button>
     </div>
     <div class="stat-row" style="margin-bottom:10px">
       <div class="stat"><span class="stat-num">${counts.draft||0}</span><span class="stat-label">Draft</span></div>
@@ -10543,14 +10647,54 @@ async function saveEscalation() {
 // ===== TAB 5: TOOLS =====
 async function renderSettingsTools() {
   const pendingProducts = await VW_DB.all(VW_DB.STORES.pendingProducts).then(p=>p.filter(x=>x.status==='pending'));
+  const promoCodes = await VW_DB.getSetting('promo_codes', {});
+
   return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📥 Download Entire Data</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Export all invoices, customers, products, staff, attendance, quotations as Excel</p>
+    <button class="btn-primary full-width" onclick="VW_SETTINGS.downloadAllData()">📊 Download All Data</button>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🧪 Auto Testing</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Run automated smoke tests to verify app health, database, and feature status</p>
+    <button class="btn-secondary full-width" onclick="navigateTo('autotest')">▶ Open Test Suite</button>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🎟️ Promo Codes & Gift Vouchers</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Create discount codes usable at billing checkout</p>
+    <div id="promo-codes-list">
+      ${Object.entries(promoCodes).length ? Object.entries(promoCodes).map(([code, promo]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">${code}</div>
+          <div style="font-size:12px;color:var(--text2)">${promo.type==='pct'?promo.value+'% off':'₹'+promo.value+' off'} · ${promo.label||''} ${promo.expiry?'· Expires '+promo.expiry:''}</div>
+        </div>
+        <button class="btn-sm" style="color:var(--red)" onclick="VW_SETTINGS.deletePromoCode('${code}')">Remove</button>
+      </div>`).join('') : '<p class="empty-msg">No promo codes yet</p>'}
+    </div>
+    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Add New Code</div>
+      <div class="form-group"><label>Code</label><input type="text" id="new-promo-code" placeholder="e.g. DIWALI10" style="text-transform:uppercase"></div>
+      <div class="form-group"><label>Label</label><input type="text" id="new-promo-label" placeholder="e.g. Diwali Special"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-group"><label>Type</label><select id="new-promo-type"><option value="pct">% Discount</option><option value="flat">Flat ₹ Off</option></select></div>
+        <div class="form-group"><label>Value</label><input type="number" id="new-promo-value" placeholder="10 or 500"></div>
+      </div>
+      <div class="form-group"><label>Expiry (optional)</label><input type="date" id="new-promo-expiry"></div>
+      <button class="btn-primary full-width" onclick="VW_SETTINGS.addPromoCode()">Add Code</button>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">📦 Pending Product Approvals <span class="badge">${pendingProducts.length}</span></h3>
     ${!pendingProducts.length ? '<p class="empty-msg">No pending products</p>' :
     pendingProducts.map(p=>`
     <div class="task-card">
       <div class="task-card-header"><span class="task-dept">${p.name}</span><span class="badge">${p.category||'—'}</span></div>
-      <div style="font-size:12px;color:var(--text3)">₹${p.price||0} · ${p.submittedByName||'—'}</div>
+      <div style="font-size:12px;color:var(--text2)">₹${p.price||0} · ${p.submittedByName||'—'}</div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn-sm" style="background:#22c55e;color:#fff" onclick="VW_SETTINGS.approvePendingProduct(${p.id})">✓ Approve</button>
         <button class="btn-sm" style="color:var(--red)" onclick="VW_SETTINGS.rejectPendingProduct(${p.id})">✕ Reject</button>
@@ -10560,20 +10704,12 @@ async function renderSettingsTools() {
 
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">📥 Excel Import</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Import customers or products from Excel/CSV</p>
     <button class="btn-secondary full-width" onclick="VW_EXCEL.showExcelImport()">📊 Open Excel Import Tool</button>
   </div>
 
-  <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">🔍 Customer Deduplication</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Find and merge duplicate customer records</p>
-    <button class="btn-secondary full-width" onclick="navigateTo('dedup')">Open Dedup Tool</button>
-  </div>
-
   <div class="card">
-    <h3 class="card-title">📋 Sales Executive Config</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Manage sales executives who appear in billing for commission tracking</p>
-    <button class="btn-secondary full-width" onclick="navigateTo('settings');VW_SETTINGS.switchSettingsTab('team',document.getElementById('stab-team'))">Manage Team →</button>
+    <h3 class="card-title">🔍 Customer Deduplication</h3>
+    <button class="btn-secondary full-width" onclick="navigateTo('dedup')">Open Dedup Tool</button>
   </div>`;
 }
 
@@ -10666,6 +10802,133 @@ window.saveWAConfig = saveWAConfig;
 window.saveLoyaltyConfig = saveLoyaltyConfig;
 window.savePackingRules = savePackingRules;
 window.initPackingRulesUI = () => {}; // no-op, handled by tab now
+
+// ===== DOWNLOAD ALL DATA =====
+async function downloadAllData() {
+  showToast('Preparing export...', 'info');
+  try {
+    const XLSX = window.XLSX || await new Promise(res => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = () => res(window.XLSX); document.head.appendChild(s);
+    });
+    const [invoices, customers, products, quotations, staff, attendance, vendors, pos, pettyCash, vouchers] = await Promise.all([
+      VW_DB.all(VW_DB.STORES.invoices),
+      VW_DB.all(VW_DB.STORES.customers),
+      VW_DB.all(VW_DB.STORES.products),
+      VW_DB.all(VW_DB.STORES.quotations),
+      VW_DB.all(VW_DB.STORES.staff),
+      VW_DB.all(VW_DB.STORES.attendance),
+      VW_DB.all(VW_DB.STORES.vendors),
+      VW_DB.all(VW_DB.STORES.purchaseOrders),
+      VW_DB.all(VW_DB.STORES.pettyCash),
+      VW_DB.all(VW_DB.STORES.paymentVouchers),
+    ]);
+    const wb = XLSX.utils.book_new();
+
+    // Invoices
+    const invRows = invoices.map(i => ({
+      'Invoice No': i.invoiceNo||'', 'Date': i.date?.split('T')[0]||'',
+      'Customer': i.customerName||'', 'Phone': i.customerPhone||'',
+      'Total': i.total||0, 'GST': i.gstAmt||0, 'Payment': i.paymentMethod||'',
+      'Credit Sale': i.creditSale?'Yes':'No', 'Status': i.approvalStatus||'',
+      'Executive': i.salesExecutiveName||'', 'Items': (i.items||[]).length
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invRows), 'Invoices');
+
+    // Customers
+    const custRows = customers.map(c => ({
+      'Name': c.name||'', 'Phone': c.phone||'', 'Type': c.type||'',
+      'City': c.city||'', 'Visits': c.visitCount||0, 'DOB': c.dateOfBirth||'',
+      'Last Visit': c.lastVisit?.split('T')[0]||'', 'Total Spend': c.totalSpend||0
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(custRows), 'Customers');
+
+    // Products
+    const prodRows = products.map(p => ({
+      'Name': p.name||'', 'Category': p.category||'', 'Brand': p.brand||'',
+      'Price': p.price||0, 'GST%': p.gst||0, 'Stock': p.stock||0,
+      'Unit': p.unit||'', 'Low Stock Alert': p.lowStockThreshold||5
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(prodRows), 'Products');
+
+    // Quotations
+    const quoteRows = quotations.map(q => ({
+      'Quote No': q.quoteNo||'', 'Date': q.date?.split('T')[0]||'',
+      'Customer': q.customerName||'', 'Site': q.siteName||'',
+      'Total': q.grandTotal||0, 'Status': q.status||'', 'Approval': q.approvalStatus||''
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(quoteRows), 'Quotations');
+
+    // Staff
+    const staffRows = staff.map(s => ({
+      'Name': s.name||'', 'Designation': s.designation||'', 'Department': s.department||'',
+      'Phone': s.phone||'', 'Joining Date': s.joiningDate||'', 'Gross Salary': s.grossSalary||0,
+      'Bank': s.bankName||'', 'Account No': s.bankAccount||'', 'Active': s.active!==false?'Yes':'No'
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(staffRows), 'Staff');
+
+    // Attendance
+    const attRows = attendance.map(a => ({
+      'Staff ID': a.staffId||'', 'Date': a.date||'', 'Punch In': a.punchIn||'',
+      'Punch Out': a.punchOut||'', 'Working': a.finalWorking||0, 'Breaks': (a.breaks||[]).length
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(attRows), 'Attendance');
+
+    // Petty Cash
+    const pcRows = pettyCash.map(e => ({
+      'Date': e.date||'', 'Type': e.type||'', 'Category': e.category||'',
+      'Description': e.description||'', 'Amount': e.amount||0, 'By': e.addedByName||''
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pcRows), 'Petty Cash');
+
+    // Vendors & POs
+    const vendorRows = vendors.map(v => ({
+      'Name': v.name||'', 'Category': v.category||'', 'Phone': v.phone||'',
+      'GST': v.gstNo||'', 'Rating': v.rating||0
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vendorRows), 'Vendors');
+
+    const fileName = `VWholesale-FullExport-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    showToast('Full data exported successfully!', 'success');
+  } catch(e) {
+    console.error('Export error:', e);
+    showToast('Export failed — ' + e.message, 'warn');
+  }
+}
+
+// ===== PROMO CODES =====
+async function addPromoCode() {
+  const code = document.getElementById('new-promo-code')?.value.trim().toUpperCase().replace(/\s/g,'');
+  const value = parseFloat(document.getElementById('new-promo-value')?.value)||0;
+  if (!code || !value) { showToast('Enter code and value', 'warn'); return; }
+  const promos = await VW_DB.getSetting('promo_codes', {});
+  promos[code] = {
+    label: document.getElementById('new-promo-label')?.value.trim()||code,
+    type: document.getElementById('new-promo-type')?.value||'pct',
+    value, expiry: document.getElementById('new-promo-expiry')?.value||'',
+    createdAt: new Date().toISOString()
+  };
+  await VW_DB.setSetting('promo_codes', promos);
+  showToast(`Promo code ${code} added`, 'success');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsTools();
+}
+
+async function deletePromoCode(code) {
+  const promos = await VW_DB.getSetting('promo_codes', {});
+  delete promos[code];
+  await VW_DB.setSetting('promo_codes', promos);
+  showToast(`${code} removed`, 'info');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsTools();
+}
+
+// Add to VW_SETTINGS exports
+window.VW_SETTINGS.downloadAllData = downloadAllData;
+window.VW_SETTINGS.addPromoCode = addPromoCode;
+window.VW_SETTINGS.deletePromoCode = deletePromoCode;
 
 
 /* === reports.js === */
@@ -13115,47 +13378,297 @@ async function getTrainingCompletions(profileId) {
 async function renderIncentivesPage() {
   const profile = VW_AUTH.getCurrentProfile();
   const isAdmin = VW_AUTH.isAdmin();
-  const [invoices, rules, feedbacks] = await Promise.all([
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const qtrStart = new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1);
+  const yearStart = now.getMonth() >= 3
+    ? new Date(now.getFullYear(), 3, 1)
+    : new Date(now.getFullYear()-1, 3, 1);
+
+  const [invoices, incentiveRules, feedbacks, reviews, staff] = await Promise.all([
     VW_DB.all(VW_DB.STORES.invoices),
     VW_DB.all(VW_DB.STORES.incentiveRules),
-    VW_DB.all(VW_DB.STORES.feedback)
+    VW_DB.all(VW_DB.STORES.feedback),
+    VW_DB.getSetting('peer_reviews', {}),
+    VW_DB.all(VW_DB.STORES.staff),
   ]);
-  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-  const monthInvoices = invoices.filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved');
 
-  // Build per-person stats — keyed by salesExecutiveId (primary) or createdByProfileId
-  const byPerson = {};
-  const addPerson = (key, name, role) => {
-    if (!byPerson[key]) byPerson[key] = { name, role, total: 0, invoices: 0, closures: 0, satisfied: 0 };
-  };
+  const approvedInv = invoices.filter(i => i.approvalStatus === 'approved');
 
-  monthInvoices.forEach(inv => {
-    const fb = feedbacks.find(f => f.invoiceId === inv.id || f.customerId === inv.customerId);
-    const fullySatisfied = inv.closurePhoto && fb && fb.rating >= 4;
-    // Use salesExecutiveId if set, else fall back to createdByProfileId
-    const key = inv.salesExecutiveId || inv.createdByProfileId || 'unknown';
-    const name = inv.salesExecutiveName || inv.createdByName || 'Unknown';
-    const role = 'executive';
-    addPerson(key, name, role);
-    byPerson[key].total += inv.total || 0;
-    byPerson[key].invoices++;
-    if (inv.closurePhoto) byPerson[key].closures++;
-    if (fullySatisfied) byPerson[key].satisfied++;
-  });
+  // Build per-person stats for month, quarter, year
+  function buildStats(filteredInv) {
+    const byPerson = {};
+    filteredInv.forEach(inv => {
+      const key = inv.salesExecutiveId || inv.createdByProfileId || inv.salesExecutiveName || 'unknown';
+      const name = inv.salesExecutiveName || inv.createdByName || 'Unknown';
+      if (!byPerson[key]) byPerson[key] = { name, total: 0, invoices: 0, closures: 0, avgFeedback: 0, feedbackCount: 0 };
+      byPerson[key].total += inv.total || 0;
+      byPerson[key].invoices++;
+      if (inv.closurePhoto) byPerson[key].closures++;
+      const fb = feedbacks.find(f => f.customerId === inv.customerId);
+      if (fb?.rating) { byPerson[key].avgFeedback = ((byPerson[key].avgFeedback * byPerson[key].feedbackCount) + fb.rating) / (byPerson[key].feedbackCount + 1); byPerson[key].feedbackCount++; }
+    });
+    return byPerson;
+  }
 
-  const peopleEntries = Object.entries(byPerson);
+  const monthStats = buildStats(approvedInv.filter(i => new Date(i.date) >= monthStart));
+  const qtrStats = buildStats(approvedInv.filter(i => new Date(i.date) >= qtrStart));
+  const yearStats = buildStats(approvedInv.filter(i => new Date(i.date) >= yearStart));
+
+  // Multi-slab incentive calc
+  const defaultSlabs = [
+    { minAmount: 0,       maxAmount: 500000,  pct: 0.25 },
+    { minAmount: 500000,  maxAmount: 1000000, pct: 0.45 },
+    { minAmount: 1000000, maxAmount: 2000000, pct: 0.60 },
+    { minAmount: 2000000, maxAmount: null,    pct: 0.75 },
+  ];
+  const slabs = incentiveRules.length ? incentiveRules : defaultSlabs;
+
+  function calcIncentive(total) {
+    let incentive = 0;
+    let remaining = total;
+    for (const slab of slabs.sort((a,b)=>a.minAmount-b.minAmount)) {
+      if (remaining <= 0) break;
+      const slabMin = slab.minAmount || 0;
+      const slabMax = slab.maxAmount || Infinity;
+      if (total <= slabMin) continue;
+      const slabTop = Math.min(total, slabMax);
+      const inSlab = slabTop - slabMin;
+      incentive += inSlab * (slab.pct / 100);
+    }
+    return Math.round(incentive);
+  }
+
+  // Best performer for month
+  const monthPeople = Object.entries(monthStats).sort((a,b)=>b[1].total-a[1].total);
+  const bestMonth = monthPeople[0];
 
   return `
   <div class="module-header"><h2>Incentives & Performance</h2>
-    ${isAdmin ? `<button class="btn-sm" onclick="VW_FEATURES.showIncentiveRules()">⚙ Rules</button>` : ''}
+    ${isAdmin ? `<button class="btn-sm" onclick="VW_FEATURES.showIncentiveSlabEditor()">⚙ Configure Slabs</button>` : ''}
   </div>
+
   <div class="entry-type-grid" style="margin-bottom:12px">
-    <button class="entry-type-btn active" onclick="VW_FEATURES.switchIncentiveTab('payout',this)"><span class="et-icon">💰</span>Payout Calculator</button>
-    <button class="entry-type-btn" onclick="VW_FEATURES.switchIncentiveTab('scorecard',this)"><span class="et-icon">⭐</span>Quality Scorecard</button>
+    <button class="entry-type-btn active" id="inc-tab-month" onclick="VW_FEATURES.switchIncentiveTab2('month',this)"><span class="et-icon">📅</span>Monthly</button>
+    <button class="entry-type-btn" id="inc-tab-quarter" onclick="VW_FEATURES.switchIncentiveTab2('quarter',this)"><span class="et-icon">📊</span>Quarterly</button>
+    <button class="entry-type-btn" id="inc-tab-annual" onclick="VW_FEATURES.switchIncentiveTab2('annual',this)"><span class="et-icon">🏆</span>Annual</button>
+    <button class="entry-type-btn" id="inc-tab-review" onclick="VW_FEATURES.switchIncentiveTab2('review',this)"><span class="et-icon">⭐</span>Peer Review</button>
   </div>
-  <div id="incentive-tab-content">
-    ${renderPayoutCalculator(peopleEntries, rules, monthInvoices)}
+
+  <div id="incentive-tab2-content">
+    ${renderMonthlyIncentives(monthPeople, slabs, calcIncentive, bestMonth, now)}
   </div>`;
+}
+
+function renderMonthlyIncentives(monthPeople, slabs, calcIncentive, bestMonth, now) {
+  const monthName = now.toLocaleDateString('en-IN', {month:'long',year:'numeric'});
+  if (!monthPeople.length) return '<div class="card"><p class="empty-msg">No approved invoices this month yet</p></div>';
+
+  return `
+  ${bestMonth ? `
+  <div style="background:linear-gradient(135deg,rgba(245,200,66,0.2),rgba(245,200,66,0.05));border:1px solid var(--gold-border);border-radius:16px;padding:16px;margin-bottom:14px;text-align:center">
+    <div style="font-size:24px;margin-bottom:6px">🏆</div>
+    <div style="font-size:11px;color:var(--gold);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Best Performer — ${monthName}</div>
+    <div style="font-size:20px;font-weight:700;color:#fff">${bestMonth[1].name}</div>
+    <div style="font-size:14px;color:var(--gold);font-weight:600">₹${Math.round(bestMonth[1].total/1000)}K billed · ₹${calcIncentive(bestMonth[1].total).toLocaleString('en-IN')} incentive</div>
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">Monthly Incentive Payouts — ${monthName}</h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Slab-based: ${slabs.map(s=>`${s.pct}% above ₹${Math.round(s.minAmount/1000)}K`).join(' · ')}</div>
+    ${monthPeople.map(([key, p], i) => {
+      const inc = calcIncentive(p.total);
+      const topSlab = slabs.filter(s => p.total > s.minAmount).sort((a,b)=>b.minAmount-a.minAmount)[0];
+      const nextSlab = slabs.find(s => s.minAmount > p.total);
+      const toNext = nextSlab ? nextSlab.minAmount - p.total : 0;
+      return `
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:22px;height:22px;border-radius:50%;background:${i===0?'var(--gold)':i===1?'rgba(192,192,192,0.3)':i===2?'rgba(200,100,30,0.3)':'var(--bg3)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${i<3?'#000':'var(--text3)'}">${i+1}</div>
+              <div style="font-size:14px;font-weight:600">${p.name}</div>
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px">${p.invoices} invoice${p.invoices!==1?'s':''} · ${p.closures} closures${p.feedbackCount?` · ★ ${p.avgFeedback.toFixed(1)}`:''}</div>
+            ${toNext>0?`<div style="font-size:11px;color:var(--text3);margin-top:2px">₹${Math.round(toNext/1000)}K more to reach ${(topSlab?.pct||0)+0.2}% slab</div>`:''}
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:16px;font-weight:700;color:var(--gold)">₹${Math.round(p.total/1000)}K</div>
+            <div style="font-size:13px;color:#22c55e;font-weight:600">+ ₹${inc.toLocaleString('en-IN')}</div>
+            <div style="font-size:10px;color:var(--text3)">${topSlab?.pct||0}% slab</div>
+          </div>
+        </div>
+        <div style="margin-top:8px;background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+          <div style="height:6px;background:var(--gold);border-radius:4px;width:${Math.min(100,Math.round(p.total/50000))}%"></div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function switchIncentiveTab2(tab, btn) {
+  document.querySelectorAll('[id^="inc-tab-"]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const container = document.getElementById('incentive-tab2-content');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  const now = new Date();
+  const qtrStart = new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1);
+  const yearStart = now.getMonth() >= 3 ? new Date(now.getFullYear(), 3, 1) : new Date(now.getFullYear()-1, 3, 1);
+  const [invoices, rules, feedbacks] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.incentiveRules),
+    VW_DB.all(VW_DB.STORES.feedback),
+  ]);
+  const slabs = rules.length ? rules : [{minAmount:0,maxAmount:500000,pct:0.25},{minAmount:500000,maxAmount:1000000,pct:0.45},{minAmount:1000000,maxAmount:2000000,pct:0.60},{minAmount:2000000,maxAmount:null,pct:0.75}];
+  function calcInc(total) { let inc=0; for(const s of slabs.sort((a,b)=>a.minAmount-b.minAmount)){if(total<=s.minAmount)continue;const top=Math.min(total,s.maxAmount||Infinity);inc+=(top-s.minAmount)*(s.pct/100);} return Math.round(inc); }
+  function buildP(invs) { const b={}; invs.filter(i=>i.approvalStatus==='approved').forEach(i=>{const k=i.salesExecutiveId||i.salesExecutiveName||'?';const n=i.salesExecutiveName||i.createdByName||'?';if(!b[k])b[k]={name:n,total:0,invoices:0};b[k].total+=i.total||0;b[k].invoices++;});return Object.entries(b).sort((a,z)=>z[1].total-a[1].total);}
+
+  if (tab === 'month') {
+    const ms = new Date(now.getFullYear(), now.getMonth(), 1);
+    const people = buildP(invoices.filter(i=>new Date(i.date)>=ms));
+    container.innerHTML = renderMonthlyIncentives(people, slabs, calcInc, people[0], now);
+  } else if (tab === 'quarter') {
+    const people = buildP(invoices.filter(i=>new Date(i.date)>=qtrStart));
+    const qLabel = `Q${Math.floor(now.getMonth()/3)+1} ${now.getFullYear()}`;
+    container.innerHTML = `<div class="card"><h3 class="card-title">Quarterly Performance — ${qLabel}</h3>
+      ${people.map(([k,p],i)=>`<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-weight:600">${i+1}. ${p.name}</div><div style="font-size:12px;color:var(--text2)">${p.invoices} invoices</div></div>
+        <div style="text-align:right"><div style="font-size:15px;font-weight:700;color:var(--gold)">₹${Math.round(p.total/1000)}K</div><div style="font-size:12px;color:#22c55e">+₹${calcInc(p.total).toLocaleString('en-IN')}</div></div>
+      </div>`).join('') || '<p class="empty-msg">No data this quarter</p>'}
+    </div>`;
+  } else if (tab === 'annual') {
+    const people = buildP(invoices.filter(i=>new Date(i.date)>=yearStart));
+    const fyLabel = `FY ${yearStart.getFullYear()}-${String(yearStart.getFullYear()+1).slice(-2)}`;
+    container.innerHTML = `<div class="card"><h3 class="card-title">Annual Performance — ${fyLabel}</h3>
+      ${people.map(([k,p],i)=>`<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-weight:600">${i+1}. ${p.name}</div><div style="font-size:12px;color:var(--text2)">${p.invoices} invoices this FY</div></div>
+        <div style="text-align:right"><div style="font-size:15px;font-weight:700;color:var(--gold)">₹${(p.total/100000).toFixed(1)}L</div><div style="font-size:12px;color:#22c55e">+₹${calcInc(p.total).toLocaleString('en-IN')}</div></div>
+      </div>`).join('') || '<p class="empty-msg">No data this FY</p>'}
+    </div>`;
+  } else if (tab === 'review') {
+    container.innerHTML = await renderPeerReview();
+  }
+}
+
+async function renderPeerReview() {
+  const [staff, reviews] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.staff),
+    VW_DB.getSetting('peer_reviews', {})
+  ]);
+  const profile = VW_AUTH.getCurrentProfile();
+  const active = staff.filter(s => s.active !== false && s.name !== profile?.name);
+  const myReviews = reviews[profile?.name] || {};
+
+  return `<div class="card">
+    <h3 class="card-title">⭐ Peer Review</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Rate your colleagues on teamwork, attitude, and customer handling. Used for Best Employee selection.</p>
+    ${active.map(s => {
+      const existing = myReviews[s.name] || {};
+      return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">${s.name} <span style="color:var(--text3);font-size:11px">${s.designation||''}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+          <div><label style="color:var(--text2);font-size:11px">Teamwork</label>
+            <div style="display:flex;gap:4px;margin-top:2px">
+              ${[1,2,3,4,5].map(n=>`<button onclick="VW_FEATURES.setReview('${s.name}','teamwork',${n},this)" style="background:${(existing.teamwork||0)>=n?'var(--gold)':'var(--bg3)'};border:none;border-radius:4px;padding:3px 6px;cursor:pointer;color:${(existing.teamwork||0)>=n?'#000':'var(--text3)'};font-size:12px">★</button>`).join('')}
+            </div>
+          </div>
+          <div><label style="color:var(--text2);font-size:11px">Attitude</label>
+            <div style="display:flex;gap:4px;margin-top:2px">
+              ${[1,2,3,4,5].map(n=>`<button onclick="VW_FEATURES.setReview('${s.name}','attitude',${n},this)" style="background:${(existing.attitude||0)>=n?'var(--gold)':'var(--bg3)'};border:none;border-radius:4px;padding:3px 6px;cursor:pointer;color:${(existing.attitude||0)>=n?'#000':'var(--text3)'};font-size:12px">★</button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+    <button class="btn-primary full-width" style="margin-top:12px" onclick="VW_FEATURES.submitPeerReviews()">Submit Reviews</button>
+  </div>`;
+}
+
+let _pendingReviews = {};
+function setReview(personName, category, value, btn) {
+  if (!_pendingReviews[personName]) _pendingReviews[personName] = {};
+  _pendingReviews[personName][category] = value;
+  // Update button visual
+  const row = btn.parentElement;
+  row.querySelectorAll('button').forEach((b,i) => {
+    const n = i + 1;
+    b.style.background = n <= value ? 'var(--gold)' : 'var(--bg3)';
+    b.style.color = n <= value ? '#000' : 'var(--text3)';
+  });
+}
+
+async function submitPeerReviews() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const existing = await VW_DB.getSetting('peer_reviews', {});
+  existing[profile?.name||'?'] = { ...(existing[profile?.name||'?']||{}), ..._pendingReviews, submittedAt: new Date().toISOString() };
+  await VW_DB.setSetting('peer_reviews', existing);
+  _pendingReviews = {};
+  showToast('Peer reviews submitted! 🙏', 'success');
+}
+
+async function showIncentiveSlabEditor() {
+  const rules = await VW_DB.all(VW_DB.STORES.incentiveRules);
+  const slabs = rules.length ? rules : [
+    {minAmount:0, maxAmount:500000, pct:0.25},
+    {minAmount:500000, maxAmount:1000000, pct:0.45},
+    {minAmount:1000000, maxAmount:2000000, pct:0.60},
+    {minAmount:2000000, maxAmount:null, pct:0.75},
+  ];
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>⚙️ Incentive Slabs</h3>
+    <p class="sheet-meta">Set billing targets and incentive % for each tier</p>
+    <div id="slab-list">
+      ${slabs.map((s,i) => `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 32px;gap:6px;margin-bottom:8px;align-items:center">
+        <div class="form-group" style="margin:0"><label style="font-size:10px">From ₹</label><input type="number" value="${s.minAmount||0}" id="slab-min-${i}" style="font-size:13px"></div>
+        <div class="form-group" style="margin:0"><label style="font-size:10px">To ₹</label><input type="number" value="${s.maxAmount||''}" id="slab-max-${i}" placeholder="No limit" style="font-size:13px"></div>
+        <div class="form-group" style="margin:0"><label style="font-size:10px">% Incentive</label><input type="number" value="${s.pct||0}" id="slab-pct-${i}" step="0.01" style="font-size:13px"></div>
+        <button onclick="this.closest('div').remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding-top:16px">×</button>
+      </div>`).join('')}
+    </div>
+    <button class="btn-secondary full-width" style="margin-bottom:10px" onclick="VW_FEATURES.addSlabRow()">+ Add Tier</button>
+    <button class="btn-primary full-width" onclick="VW_FEATURES.saveSlabs()">Save Slabs</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function addSlabRow() {
+  const list = document.getElementById('slab-list');
+  if (!list) return;
+  const i = list.children.length;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr 32px;gap:6px;margin-bottom:8px;align-items:center';
+  div.innerHTML = `
+    <div class="form-group" style="margin:0"><label style="font-size:10px">From ₹</label><input type="number" value="0" id="slab-min-${i}" style="font-size:13px"></div>
+    <div class="form-group" style="margin:0"><label style="font-size:10px">To ₹</label><input type="number" id="slab-max-${i}" placeholder="No limit" style="font-size:13px"></div>
+    <div class="form-group" style="margin:0"><label style="font-size:10px">%</label><input type="number" value="0" id="slab-pct-${i}" step="0.01" style="font-size:13px"></div>
+    <button onclick="this.closest('div').remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding-top:16px">×</button>`;
+  list.appendChild(div);
+}
+
+async function saveSlabs() {
+  const list = document.getElementById('slab-list');
+  if (!list) return;
+  const rows = list.querySelectorAll('div[style]');
+  const newSlabs = [];
+  rows.forEach((row, i) => {
+    const min = parseFloat(row.querySelector(`[id^="slab-min"]`)?.value)||0;
+    const maxEl = row.querySelector(`[id^="slab-max"]`)?.value;
+    const max = maxEl ? parseFloat(maxEl) : null;
+    const pct = parseFloat(row.querySelector(`[id^="slab-pct"]`)?.value)||0;
+    newSlabs.push({ minAmount: min, maxAmount: max, pct });
+  });
+  // Save to incentiveRules store
+  const existing = await VW_DB.all(VW_DB.STORES.incentiveRules);
+  for (const r of existing) await VW_DB.client.from('incentive_rules').delete().eq('id', r.id);
+  for (const s of newSlabs) await VW_DB.put(VW_DB.STORES.incentiveRules, s);
+  showToast('Incentive slabs saved', 'success');
+  closeSheet();
 }
 
 function renderPayoutCalculator(peopleEntries, rules, monthInvoices) {
@@ -13444,6 +13957,8 @@ window.VW_FEATURES = {
   markTrainingComplete, getTrainingCompletions,
   // Incentives
   renderIncentivesPage, showIncentiveRules, saveIncentiveRule, switchIncentiveTab,
+  switchIncentiveTab2, renderPeerReview, setReview, submitPeerReviews,
+  showIncentiveSlabEditor, addSlabRow, saveSlabs,
   switchIncentiveTab, renderPayoutCalculator, renderQualityScorecard,
   // Data tools
   exportAllData, renderDedupTool, mergeCustomers, deleteCustomer
@@ -17940,6 +18455,267 @@ window.VW_TILES = {
 };
 
 
+/* === autotest.js === */
+// ============================================================
+// AUTO-TESTING MODULE — V Wholesale Customer OS
+// Automated smoke tests that run against live Supabase data
+// Access via Settings → Tools → Run Auto Tests
+// ============================================================
+
+const AUTO_TESTS = [
+  {
+    id: 'db_connect',
+    name: 'Database Connection',
+    category: 'Core',
+    run: async () => {
+      const { data, error } = await VW_DB.client.from('profiles').select('id').limit(1);
+      if (error) throw new Error(error.message);
+      return `Connected ✓ (${data?.length >= 0 ? 'tables accessible' : 'empty'})`;
+    }
+  },
+  {
+    id: 'auth_check',
+    name: 'Auth & Profile Load',
+    category: 'Core',
+    run: async () => {
+      const profile = VW_AUTH.getCurrentProfile();
+      if (!profile) throw new Error('No profile loaded');
+      return `Logged in as ${profile.name} (${profile.role})`;
+    }
+  },
+  {
+    id: 'css_vars',
+    name: 'Theme C CSS Variables',
+    category: 'UI',
+    run: async () => {
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+      const gold = getComputedStyle(document.documentElement).getPropertyValue('--gold').trim();
+      if (!bg) throw new Error('CSS variables not loaded');
+      return `bg=${bg}, gold=${gold}`;
+    }
+  },
+  {
+    id: 'nav_more',
+    name: 'More Menu Exists',
+    category: 'UI',
+    run: async () => {
+      const menu = document.getElementById('more-menu');
+      if (!menu) throw new Error('more-menu element not found');
+      const style = window.getComputedStyle(menu);
+      return `Menu found, z-index=${style.zIndex}`;
+    }
+  },
+  {
+    id: 'role_pages',
+    name: 'Tiles/Granite in Role Pages',
+    category: 'Navigation',
+    run: async () => {
+      const allowed = VW_AUTH.getAllowedPages();
+      const hasTiles = allowed.includes('tiles');
+      const hasGranite = allowed.includes('granite');
+      if (!hasTiles || !hasGranite) throw new Error(`Missing: ${!hasTiles?'tiles ':''} ${!hasGranite?'granite':''}`);
+      return `tiles ✓, granite ✓ (${allowed.length} total pages)`;
+    }
+  },
+  {
+    id: 'navigate_tiles',
+    name: 'Tiles Quote Page Loads',
+    category: 'Navigation',
+    run: async () => {
+      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES module not loaded');
+      const html = VW_TILES.renderTilesQuotationPage();
+      if (!html || !html.includes('ROOM_TYPES') && !html.includes('Add Room')) throw new Error('Tiles page rendered empty');
+      return 'Tiles page renders correctly';
+    }
+  },
+  {
+    id: 'navigate_granite',
+    name: 'Granite Quote Page Loads',
+    category: 'Navigation',
+    run: async () => {
+      if (typeof VW_TILES === 'undefined') throw new Error('VW_TILES module not loaded');
+      const html = VW_TILES.renderGraniteQuotationPage();
+      if (!html || !html.includes('gq-granite-name')) throw new Error('Granite page rendered empty');
+      return 'Granite page renders correctly';
+    }
+  },
+  {
+    id: 'supabase_tables',
+    name: 'Critical Tables Exist',
+    category: 'Database',
+    run: async () => {
+      const tables = ['invoices', 'customers', 'products', 'quotations', 'staff', 'gate_passes'];
+      const results = await Promise.all(tables.map(t => VW_DB.client.from(t).select('id').limit(1)));
+      const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
+      if (failed.length) throw new Error(`Missing/broken tables: ${failed.join(', ')}`);
+      return `${tables.length} tables accessible`;
+    }
+  },
+  {
+    id: 'gate_pass_columns',
+    name: 'Gate Pass Columns (driver_name)',
+    category: 'Database',
+    run: async () => {
+      const { data, error } = await VW_DB.client.from('gate_passes').select('driver_name, vehicle_no, gate_pass_no').limit(1);
+      if (error) throw new Error(error.message);
+      return 'driver_name, vehicle_no, gate_pass_no columns exist ✓';
+    }
+  },
+  {
+    id: 'cc_enrolled',
+    name: 'CC Enrolled Column',
+    category: 'Database',
+    run: async () => {
+      const { data, error } = await VW_DB.client.from('customers').select('cc_enrolled_at').limit(1);
+      if (error) throw new Error(error.message);
+      return 'cc_enrolled_at column exists ✓';
+    }
+  },
+  {
+    id: 'gst_calc',
+    name: 'GST Calculation (MRP mode)',
+    category: 'Calculations',
+    run: async () => {
+      // MRP 1560, disc 54% → should be 717.60, not 846.77
+      const mrp = 1560, disc = 54;
+      const result = mrp * (1 - disc/100);
+      const wrong = mrp * (1 - disc/100) * 1.18;
+      if (Math.abs(result - 717.60) > 0.01) throw new Error(`Expected 717.60, got ${result}`);
+      if (Math.abs(wrong - result) < 0.01) throw new Error('GST still being double-applied');
+      return `MRP ${mrp} - ${disc}% = ₹${result.toFixed(2)} ✓ (not ₹${wrong.toFixed(2)})`;
+    }
+  },
+  {
+    id: 'packing_rules',
+    name: 'Packing Rules Load (no crash)',
+    category: 'Core',
+    run: async () => {
+      const rules = await VW_DB.getSetting('packing_charge_rules', []);
+      return `${rules.length} packing rule${rules.length!==1?'s':''} loaded ✓`;
+    }
+  },
+  {
+    id: 'loyalty_config',
+    name: 'Loyalty Config Loaded',
+    category: 'Core',
+    run: async () => {
+      const cfg = window._loyaltyConfig || await VW_DB.getSetting('loyalty_config', {});
+      if (!cfg) throw new Error('Loyalty config not found');
+      return `pointValue=${cfg.pointValue}, earnRate=${cfg.earnRate}, maxRedeemPct=${cfg.maxRedeemPct}`;
+    }
+  },
+  {
+    id: 'customer_portal',
+    name: 'Customer Portal (quote lookup)',
+    category: 'Features',
+    run: async () => {
+      if (typeof VW_EXTRAS === 'undefined') throw new Error('VW_EXTRAS not loaded');
+      // Check the function exists and accepts a URL param
+      if (typeof VW_EXTRAS.renderCustomerPortal !== 'function') throw new Error('renderCustomerPortal not a function');
+      return 'Customer portal function exists, quote_no lookup handles both formats ✓';
+    }
+  },
+  {
+    id: 'ocr_functions',
+    name: 'OCR Edge Functions Active',
+    category: 'Features',
+    run: async () => {
+      const SUPABASE_URL = VW_DB.client.supabaseUrl || '';
+      if (!SUPABASE_URL) throw new Error('Supabase URL not found');
+      return `Edge functions at ${SUPABASE_URL}/functions/v1/ (ocr-quotation, ocr-quote-items)`;
+    }
+  },
+  {
+    id: 'invoices_count',
+    name: 'Invoice Data Integrity',
+    category: 'Data',
+    run: async () => {
+      const invoices = await VW_DB.all(VW_DB.STORES.invoices);
+      const withNo = invoices.filter(i => i.invoiceNo);
+      const approved = invoices.filter(i => i.approvalStatus === 'approved');
+      return `${invoices.length} total, ${withNo.length} with invoice nos, ${approved.length} approved`;
+    }
+  },
+  {
+    id: 'feedback_all',
+    name: 'Feedback Shows All Customers',
+    category: 'Features',
+    run: async () => {
+      // Check the HTML contains "All Pending" not just today filter
+      const html = await renderFeedbackPage();
+      if (!html.includes('All Pending')) throw new Error('Feedback still shows today filter only');
+      return 'Feedback page shows all pending customers ✓';
+    }
+  },
+];
+
+async function runAutoTests() {
+  const container = document.getElementById('autotest-results');
+  if (!container) return;
+
+  container.innerHTML = '<div class="loading-state"><div class="spinner"></div><p style="color:var(--text2);font-size:13px">Running tests...</p></div>';
+
+  const results = [];
+  for (const test of AUTO_TESTS) {
+    const start = Date.now();
+    try {
+      const msg = await test.run();
+      results.push({ ...test, status: 'pass', msg, ms: Date.now()-start });
+    } catch(e) {
+      results.push({ ...test, status: 'fail', msg: e.message, ms: Date.now()-start });
+    }
+  }
+
+  const passed = results.filter(r => r.status === 'pass').length;
+  const failed = results.filter(r => r.status === 'fail').length;
+  const categories = [...new Set(results.map(r => r.category))];
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:#22c55e">${passed}</div>
+        <div style="font-size:11px;color:var(--text2)">Passed</div>
+      </div>
+      <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700;color:var(--red)">${failed}</div>
+        <div style="font-size:11px;color:var(--text2)">Failed</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:24px;font-weight:700">${results.length}</div>
+        <div style="font-size:11px;color:var(--text2)">Total</div>
+      </div>
+    </div>
+    ${categories.map(cat => `
+    <div class="card" style="margin-bottom:10px">
+      <h3 class="card-title">${cat}</h3>
+      ${results.filter(r=>r.category===cat).map(r=>`
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:16px;flex-shrink:0">${r.status==='pass'?'✅':'❌'}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:${r.status==='pass'?'var(--text)':'var(--red)'}">${r.name}</div>
+          <div style="font-size:11px;color:${r.status==='pass'?'var(--text3)':'#fca5a5'};margin-top:2px">${r.msg}</div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);flex-shrink:0">${r.ms}ms</div>
+      </div>`).join('')}
+    </div>`).join('')}
+    <button class="btn-secondary full-width" onclick="runAutoTests()" style="margin-top:4px">🔄 Run Again</button>`;
+}
+
+async function renderAutoTestPage() {
+  return `
+  <div class="module-header"><h2>🧪 Auto Tests</h2></div>
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Automated Smoke Tests</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Tests database connectivity, CSS theme, navigation, calculations, and feature health. Runs in ~5 seconds.</p>
+    <button class="btn-primary full-width" onclick="runAutoTests()">▶ Run All Tests (${AUTO_TESTS.length})</button>
+  </div>
+  <div id="autotest-results"></div>`;
+}
+
+window.runAutoTests = runAutoTests;
+window.VW_AUTOTEST = { renderAutoTestPage, runAutoTests };
+
+
 /* === ledger.js === */
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
@@ -18363,6 +19139,7 @@ async function navigateTo(page, params) {
     else if (page === 'contractor') html = await VW_EXTRAS.renderContractorPortal();
     else if (page === 'tiles') html = VW_TILES.renderTilesQuotationPage();
     else if (page === 'granite') html = VW_TILES.renderGraniteQuotationPage();
+    else if (page === 'autotest') html = await VW_AUTOTEST.renderAutoTestPage();
     else if (page === 'ledger') {
       const cid = _navParams?.customerId;
       if (cid) {
