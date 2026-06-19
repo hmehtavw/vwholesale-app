@@ -4068,16 +4068,18 @@ async function generateInvoiceInner() {
   let paymentMethod = null, amountReceived = 0, balanceDue = 0, creditDueDate = null;
   let paymentSplits = [], changeAmount = 0, cashDiscountAmt = 0;
 
-  if (saleType === 'credit') {
-    creditDueDate = document.getElementById('credit-due-date')?.value || null;
-    cashDiscountAmt = 0;
-  } else {
-    cashDiscountAmt = parseFloat(document.getElementById('cash-discount-amt')?.value || 0);
+  // These must be declared at function scope — used in both credit and cash paths
   const loyaltyPtsRedeemed = parseFloat(document.getElementById('loyalty-redeem-pts')?.value || 0);
   const loyaltyDiscAmt = Math.round(loyaltyPtsRedeemed * ((window._loyaltyConfig?.pointValue)||1));
   const ledgerDiscAmt = _appliedLedgerBalance || 0;
   const promoDiscAmt = _appliedPromoDiscount || 0;
   const promoCodeUsed = _appliedPromoCode || '';
+
+  if (saleType === 'credit') {
+    creditDueDate = document.getElementById('credit-due-date')?.value || null;
+    cashDiscountAmt = 0;
+  } else {
+    cashDiscountAmt = parseFloat(document.getElementById('cash-discount-amt')?.value || 0);
   }
 
   // The actual invoice total = pre-discount total minus any cash discount.
