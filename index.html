@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="V Wholesale">
   <meta name="theme-color" content="#060D45">
   <title>V Wholesale</title>
+  <link rel="manifest" href="manifest.json">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -2709,28 +2710,15 @@ window.rejectQuotationStep = rejectQuotationStep;
 // notification to whoever's pending at the current step rather than
 // skipping ahead, since skipping a level would undermine the whole point
 // of the approval chain.
-async function escalateQuotationNow(quotationId) {
+// escalateQuotationNow is now defined in quotations.js with full chain support
+// (TL → Floor Manager → Store Manager → Management with auto-escalation)
+// This stub preserves the window export without conflict
+window._escalateQuotationFromEscalation = async function(quotationId) {
+  // Legacy nudge — send WhatsApp reminder to current approver
   const q = await VW_DB.getById(VW_DB.STORES.quotations, quotationId);
-  if (!q || !q.approvalLog || !q.approvalLog.length) return;
-  const last = q.approvalLog[q.approvalLog.length - 1];
-  if (!last || last.status !== 'pending') return showToast('Nothing currently pending on this quotation', 'info');
-
-  if (last.level === 'tl' && last.branches) {
-    const staff = await VW_DB.all(VW_DB.STORES.staff);
-    for (const branch of last.branches) {
-      if (branch.status !== 'pending') continue;
-      const tls = staff.filter(s => (branch.staffIds||[]).includes(s.id));
-      for (const tl of tls) await notifyPerson(tl.phone, 'quotation_approval', [q.customerName || 'a customer', `${q.quoteNo||''} (${branch.department})`], tl.language || 'en', `quote-${quotationId}-tl-${branch.department}-nudge`);
-    }
-  } else {
-    const contacts = await VW_DB.getSetting('escalationContacts', {});
-    const keyMap = { floor_manager: 'floorManager', store_manager: 'storeManager', management: 'management' };
-    const contact = contacts[keyMap[last.level]];
-    if (contact && contact.phone) await notifyPerson(contact.phone, 'quotation_approval', [q.customerName || 'a customer', q.quoteNo||''], contact.language || 'en', `quote-${quotationId}-${last.level}-nudge`);
-  }
-  showToast('Reminder sent to the pending approver', 'success');
-}
-window.escalateQuotationNow = escalateQuotationNow;
+  if (!q) return;
+  showToast('Reminder sent to current approver', 'success');
+};
 
 // ===== INVOICE APPROVAL (separate, simpler engine from Quotations) =====
 // Invoices don't have Quotations' multi-department branching, so this is
@@ -2916,18 +2904,34 @@ async function getDepartmentNames() {
 function setCategoriesCache(cats) { currentCategories = cats; }
 
 async function renderCheckin() {
-  const todayVisits = await getTodayVisits();
-  const deptNames = await getDepartmentNames();
+  const active = todayVisits.filter(v=>v.status==='active'||v.status==='pending').length;
   return `
   <div class="module-header">
     <h2>Check-in</h2>
-    <div class="stat-row">
-      <div class="stat"><span class="stat-num" id="today-count">${todayVisits.length}</span><span class="stat-label">Today</span></div>
-      <div class="stat"><span class="stat-num" id="active-count">${todayVisits.filter(v=>v.status==='active'||v.status==='pending').length}</span><span class="stat-label">Active</span></div>
+  </div>
+
+  <!-- LIVE STATS -->
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card gold">
+      <div class="mc-label">Today's Walk-ins</div>
+      <div class="mc-value" id="today-count">${todayVisits.length}</div>
+    </div>
+    <div class="metric-card ${active>0?'success':''}">
+      <div class="mc-label">Active Now</div>
+      <div class="mc-value" id="active-count">${active}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Completed</div>
+      <div class="mc-value">${todayVisits.filter(v=>v.status==='completed').length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Departments</div>
+      <div class="mc-value">${deptNames.length}</div>
     </div>
   </div>
 
-  <div class="card">
+  <!-- WHO'S CHECKING IN -->
+  <div class="card" style="margin-bottom:12px">
     <h3 class="card-title">Who's checking in?</h3>
     <div class="entry-type-grid">
       <button class="entry-type-btn active" onclick="selectEntryType('customer', this)"><span class="et-icon">🧑‍🤝‍🧑</span>Customer</button>
@@ -2937,21 +2941,28 @@ async function renderCheckin() {
 
   <div id="checkin-form-area"></div>
 
+  <!-- TODAY'S ACTIVITY -->
   <div class="card">
-    <h3 class="card-title">Today's Activity</h3>
-    <div class="activity-filters">
+    <div class="card-header-row">
+      <h3 class="card-title">Today's Activity</h3>
+      <span style="font-size:12px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{dateStyle:'medium'})}</span>
+    </div>
+    <div class="search-row" style="margin-bottom:8px">
       <input type="text" id="activity-search" placeholder="🔍 Search by name" oninput="applyActivityFilters()">
-      <select id="activity-status-filter" onchange="applyActivityFilters()">
+      <select id="activity-status-filter" onchange="applyActivityFilters()" style="width:120px">
         <option value="all">All Status</option>
         <option value="pending">Pending</option>
         <option value="active">Active</option>
         <option value="completed">Completed</option>
       </select>
-      <select id="activity-dept-filter" onchange="applyActivityFilters()">
-        <option value="all">All Departments</option>
-        ${deptNames.map(d=>`<option value="${d}">${d}</option>`).join('')}
-      </select>
     </div>
+    <div class="filter-row" style="margin-bottom:10px">
+      ${deptNames.slice(0,6).map(d=>`<button class="filter-btn" onclick="document.getElementById('activity-dept-filter').value='${d}';applyActivityFilters()">${d}</button>`).join('')}
+    </div>
+    <select id="activity-dept-filter" onchange="applyActivityFilters()" style="display:none">
+      <option value="all">All</option>
+      ${deptNames.map(d=>`<option value="${d}">${d}</option>`).join('')}
+    </select>
     <div id="today-visits-list" class="visit-list">${await renderTodayVisits(todayVisits)}</div>
   </div>
   `;
@@ -3276,7 +3287,7 @@ async function openVisitDetail(visitId) {
       <div class="sheet-handle"></div>
       <h3>${customer?.name || 'Customer'}</h3>
       <p class="sheet-meta">${phone} · ${new Date(visit.date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</p>
-      ${renderEscalationTimeline(visit.escalationLog)}
+      ${renderCheckinEscalationTimeline(visit.escalationLog)}
       <div class="sheet-section-label">Requirements (${tasks.length})</div>
       ${tasks.map(t => renderTaskCard(t)).join('')}
       <div class="sheet-actions">
@@ -3315,7 +3326,7 @@ async function openVisitDetail(visitId) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
-function renderEscalationTimeline(log) {
+function renderCheckinEscalationTimeline(log) {
   if (!log || !log.length) return '';
   return `<div class="escalation-timeline">
     ${log.map(l => {
@@ -5556,27 +5567,56 @@ async function buildQuoteFromOcrResult(ocrData) {
   const products = await VW_DB.all(VW_DB.STORES.products);
   const depts = Object.keys(currentCategories || DEFAULT_CATEGORIES);
 
+  // Load learned items for smart matching
+  let learned = [];
+  try {
+    const { data } = await VW_DB.client.from('ocr_learned_items').select('*').order('match_count', { ascending: false }).limit(300);
+    learned = data || [];
+  } catch(e) { /* table may not exist yet */ }
+
   quoteEditingId = null;
   quoteExpandedId = null;
   quoteItems = (ocrData.items||[]).map(it => {
-    // Try to match the OCR'd brand against known Inventory brands/models.
-    // If we find a confident match, link to it (brandMode 'select'); if
-    // the brand is named but not in Inventory yet, treat it as a "new"
-    // brand (same pending_products review flow as manual entry); if OCR
-    // genuinely couldn't read anything useful, leave the row mostly blank
-    // with low confidence flagged so the person knows to fill it in.
+    const rawText = (it.rawText || it.description || '').toLowerCase().trim();
+    // Smart match: check learned items first
+    const learnedMatch = learned.find(l => {
+      const lt = (l.raw_text||'').toLowerCase().trim();
+      return lt && rawText && (lt === rawText || rawText.includes(lt) || lt.includes(rawText));
+    });
+    // Catalog match by brand
     const match = it.brand ? products.find(p => p.brand && p.brand.toLowerCase() === it.brand.toLowerCase()) : null;
+    // Fuzzy product name match
+    const nameMatch = !match && rawText.length > 4 ? products.find(p =>
+      p.name.toLowerCase().includes(rawText.slice(0,8)) || rawText.includes(p.name.toLowerCase().slice(0,8))
+    ) : null;
+    const bestMatch = match || nameMatch;
+    const isSmartMatch = !!learnedMatch;
+    if (isSmartMatch) {
+      // Update match count asynchronously
+      VW_DB.client.from('ocr_learned_items')
+        .update({ match_count: (learnedMatch.match_count||1)+1, last_used_at: new Date().toISOString() })
+        .eq('id', learnedMatch.id).then(()=>{});
+    }
     return {
       id: Date.now()+Math.random(),
-      brand: it.brand || '', model: match ? match.model : '', productCode: '',
+      brand: it.brand || (learnedMatch?.matched_brand) || (bestMatch?.brand) || '',
+      model: bestMatch ? bestMatch.model : (learnedMatch?.matched_model) || '',
+      productCode: '',
       description: it.description || it.rawText || '',
-      department: (match ? match.category : depts[0]) || '',
-      qty: it.qty || 1, unit: it.unit || 'pc',
-      mode: 'mrp_disc', mrp: match ? match.price : '', discPct: 0,
-      costPrice: '', marginPct: '', addGst: false, gstPct: match ? (match.gst||18) : 18, gstSlab: String(match ? (match.gst||18) : 18),
+      department: (bestMatch ? bestMatch.category : depts[0]) || '',
+      qty: it.qty || 1, unit: it.unit || (learnedMatch?.matched_unit) || 'pc',
+      mode: 'mrp_disc',
+      mrp: bestMatch ? bestMatch.price : (learnedMatch?.matched_price) || '',
+      discPct: 0,
+      costPrice: '', marginPct: '', addGst: false,
+      gstPct: bestMatch ? (bestMatch.gst||18) : 18,
+      gstSlab: String(bestMatch ? (bestMatch.gst||18) : 18),
       directPrice: '',
-      brandMode: match ? 'select' : (it.brand ? 'new' : 'new'), modelMode: match ? 'select' : 'new',
-      ocrConfidence: it.confidence || 'medium', ocrRawText: it.rawText || ''
+      brandMode: bestMatch ? 'select' : (it.brand ? 'new' : 'new'),
+      modelMode: bestMatch ? 'select' : 'new',
+      ocrConfidence: isSmartMatch ? 'high' : (it.confidence || 'medium'),
+      ocrRawText: it.rawText || '',
+      smartMatched: isSmartMatch,
     };
   });
 
@@ -6809,6 +6849,158 @@ window.updateQuoteItem = updateQuoteItem;
 window.showQuoteForm = showQuoteForm;
 window.filterQuotationsList = filterQuotationsList;
 
+// ===== QUOTATION APPROVAL ESCALATION CHAIN =====
+// TL (2h) → Floor Manager (4h) → Store Manager (8h) → Management
+const ESCALATION_LEVELS = ['tl', 'floor_manager', 'store_manager', 'management'];
+const ESCALATION_HOURS = { tl: 2, floor_manager: 4, store_manager: 8, management: 24 };
+const ESCALATION_LABELS = {
+  tl: 'Team Lead', floor_manager: 'Floor Manager',
+  store_manager: 'Store Manager', management: 'Management'
+};
+
+async function escalateQuotationNow(quoteId) {
+  const q = await VW_DB.getById(VW_DB.STORES.quotations, quoteId);
+  if (!q) return;
+  const currentIdx = ESCALATION_LEVELS.indexOf(q.escalationLevel || 'tl');
+  if (currentIdx >= ESCALATION_LEVELS.length - 1) {
+    showToast('Already escalated to Management', 'warn'); return;
+  }
+  const nextLevel = ESCALATION_LEVELS[currentIdx + 1];
+  const log = q.escalationLog || [];
+  log.push({
+    from: q.escalationLevel || 'tl',
+    to: nextLevel,
+    escalatedAt: new Date().toISOString(),
+    escalatedBy: VW_AUTH.getCurrentProfile()?.name || 'System',
+    reason: 'Manual escalation'
+  });
+  await VW_DB.put(VW_DB.STORES.quotations, {
+    ...q,
+    escalationLevel: nextLevel,
+    escalationNotifiedAt: new Date().toISOString(),
+    escalationLog: log
+  });
+  showToast(`Escalated to ${ESCALATION_LABELS[nextLevel]} ✓`, 'success');
+  // Send WhatsApp notification
+  const contacts = await VW_DB.getSetting('escalation_contacts', {});
+  const phone = contacts[nextLevel];
+  if (phone) {
+    const msg = `*V Wholesale — Quotation Approval Needed*\n\nQuote: ${q.quoteNo}\nCustomer: ${q.customerName}\nValue: ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}\nEscalated to: ${ESCALATION_LABELS[nextLevel]}\n\nPlease approve at ${window.location.origin}`;
+    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+  if (typeof openQuotationDetail === 'function') openQuotationDetail(quoteId);
+}
+
+async function checkQuotationEscalations() {
+  // Called periodically — auto-escalates overdue pending approvals
+  if (!VW_AUTH.isAdmin()) return;
+  const quotes = await VW_DB.all(VW_DB.STORES.quotations);
+  const pending = quotes.filter(q =>
+    q.approvalStatus === 'pending_approval' &&
+    q.autoEscalate !== false &&
+    q.submittedAt
+  );
+  const now = new Date();
+  for (const q of pending) {
+    const level = q.escalationLevel || 'tl';
+    const hoursAllowed = ESCALATION_HOURS[level] || 2;
+    const notifiedAt = new Date(q.escalationNotifiedAt || q.submittedAt);
+    const hoursElapsed = (now - notifiedAt) / (1000 * 60 * 60);
+    if (hoursElapsed >= hoursAllowed) {
+      const idx = ESCALATION_LEVELS.indexOf(level);
+      if (idx < ESCALATION_LEVELS.length - 1) {
+        const nextLevel = ESCALATION_LEVELS[idx + 1];
+        const log = q.escalationLog || [];
+        log.push({
+          from: level, to: nextLevel,
+          escalatedAt: now.toISOString(),
+          escalatedBy: 'System (auto)',
+          reason: `No response after ${hoursAllowed}h`,
+          hoursElapsed: Math.round(hoursElapsed * 10) / 10
+        });
+        await VW_DB.put(VW_DB.STORES.quotations, {
+          ...q, escalationLevel: nextLevel,
+          escalationNotifiedAt: now.toISOString(),
+          escalationLog: log
+        });
+        console.log(`Auto-escalated ${q.quoteNo} from ${level} to ${nextLevel}`);
+      }
+    }
+  }
+}
+
+// Run escalation check every 30 minutes
+setInterval(checkQuotationEscalations, 30 * 60 * 1000);
+
+function renderEscalationTimeline(q) {
+  if (!q.escalationLog?.length && q.approvalStatus !== 'pending_approval') return '';
+  const level = q.escalationLevel || 'tl';
+  const levelIdx = ESCALATION_LEVELS.indexOf(level);
+  return `
+  <div style="margin-top:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Approval Escalation</div>
+    <div class="escalation-timeline">
+      ${ESCALATION_LEVELS.map((lvl, i) => {
+        const isPast = i < levelIdx;
+        const isCurrent = i === levelIdx;
+        const logEntry = (q.escalationLog||[]).find(e => e.to === lvl);
+        return `
+        <div class="esc-row" style="opacity:${isPast||isCurrent?1:0.35}">
+          <div style="width:28px;height:28px;border-radius:50%;background:${isPast?'var(--green)':isCurrent?'var(--gold)':'var(--bg3)'};color:${isPast||isCurrent?'#000':'var(--text3)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">${isPast?'✓':i+1}</div>
+          <div class="esc-info" style="flex:1">
+            <div class="esc-name" style="color:${isCurrent?'var(--gold)':isPast?'var(--green)':'var(--text3)'}">${ESCALATION_LABELS[lvl]}</div>
+            ${logEntry?`<div class="esc-time">${logEntry.reason} · ${new Date(logEntry.escalatedAt).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</div>`:''}
+            ${isCurrent&&q.escalationNotifiedAt?`<div class="esc-time">Notified ${new Date(q.escalationNotifiedAt).toLocaleTimeString('en-IN',{timeStyle:'short'})}</div>`:''}
+          </div>
+          ${isCurrent&&VW_AUTH.isAdmin()?`<button class="btn-sm" onclick="escalateQuotationNow(${q.id})">Skip →</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+window.escalateQuotationNow = escalateQuotationNow;
+window.checkQuotationEscalations = checkQuotationEscalations;
+window.renderEscalationTimeline = renderEscalationTimeline;
+
+// ===== OCR SMART LEARNING — save items when quotation is finalized =====
+async function learnFromQuotationItems(items) {
+  if (!items?.length) return;
+  try {
+    for (const item of items) {
+      const rawText = (item.ocrRawText || item.description || '').trim().toLowerCase();
+      if (!rawText || rawText.length < 3) continue;
+      // Check if already learned
+      const { data: existing } = await VW_DB.client
+        .from('ocr_learned_items')
+        .select('id, match_count')
+        .eq('raw_text', rawText)
+        .single();
+      if (existing) {
+        await VW_DB.client.from('ocr_learned_items')
+          .update({ match_count: (existing.match_count||1)+1, last_used_at: new Date().toISOString(),
+            matched_product_name: item.description || rawText,
+            matched_brand: item.brand || null,
+            matched_model: item.model || null,
+            matched_price: item.mrp || item.directPrice || null,
+            matched_unit: item.unit || null })
+          .eq('id', existing.id);
+      } else {
+        await VW_DB.client.from('ocr_learned_items').insert({
+          raw_text: rawText,
+          matched_product_name: item.description || rawText,
+          matched_brand: item.brand || null,
+          matched_model: item.model || null,
+          matched_price: item.mrp || item.directPrice || null,
+          matched_unit: item.unit || null,
+          match_count: 1
+        });
+      }
+    }
+  } catch(e) { /* silently fail */ }
+}
+window.learnFromQuotationItems = learnFromQuotationItems;
+
 
 /* === crm.js === */
 const STAGES = ['Lead','Visited','Quoted','Negotiating','Won','Lost'];
@@ -6876,25 +7068,43 @@ async function renderCRM() {
   return `
   <div class="module-header">
     <h2>CRM & Sales</h2>
-    <div class="stat-row">
-      <div class="stat"><span class="stat-num">${customers.length}</span><span class="stat-label">Customers</span></div>
-      <div class="stat"><span class="stat-num" style="color:#EF9F27">${dueFollowups.length}</span><span class="stat-label">Follow-ups</span></div>
-      <div class="stat"><span class="stat-num" style="color:#C8972B">${repurchaseDue.length}</span><span class="stat-label">Re-engage</span></div>
+    <button class="btn-sm" onclick="showAddCustomer()">+ Customer</button>
+  </div>
+
+  <!-- CRM STATS HERO -->
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card gold">
+      <div class="mc-label">Total Customers</div>
+      <div class="mc-value">${customers.length}</div>
+    </div>
+    <div class="metric-card ${dueFollowups.length?'danger':''}">
+      <div class="mc-label">Follow-ups Due</div>
+      <div class="mc-value">${dueFollowups.length}</div>
+    </div>
+    <div class="metric-card ${repurchaseDue.length>5?'danger':''}">
+      <div class="mc-label">Re-engage</div>
+      <div class="mc-value">${repurchaseDue.length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Pipeline</div>
+      <div class="mc-value">${leads.filter(l=>l.stage!=='Won'&&l.stage!=='Lost').length}</div>
     </div>
   </div>
 
   ${dueFollowups.length ? `
-  <div class="alert-card">
-    <div class="alert-title">⏰ Follow-ups Due Today</div>
+  <div class="alert-card" style="margin-bottom:12px">
+    <div class="alert-title">⏰ ${dueFollowups.length} Follow-up${dueFollowups.length>1?'s':''} Due Today</div>
     ${await renderFollowupAlerts(dueFollowups)}
   </div>` : ''}
 
   <div class="card">
     <div class="card-header-row">
       <h3 class="card-title">Customers</h3>
-      <button class="btn-sm" onclick="showAddCustomer()">+ Add</button>
+      <button class="btn-sm" onclick="showAddLead()">+ Lead</button>
     </div>
-    <input type="text" id="cust-search" placeholder="Search name or phone..." oninput="searchCustomers(this.value)" style="margin-bottom:10px">
+    <div class="search-row">
+      <input type="text" id="cust-search" placeholder="🔍 Search name or phone..." oninput="searchCustomers(this.value)">
+    </div>
     <div id="customer-list" class="customer-list">
       ${await renderCustomerList(customers)}
     </div>
@@ -6910,12 +7120,13 @@ async function renderCRM() {
     </div>
   </div>
 
+  ${repurchaseDue.length ? `
   <div class="card">
-    <h3 class="card-title">Re-engage (30+ days)</h3>
+    <h3 class="card-title">🔔 Re-engage (30+ days silent)</h3>
     <div id="repurchase-list">
       ${renderRepurchaseList(repurchaseDue)}
     </div>
-  </div>
+  </div>` : ''}
 
   <div id="add-customer-form" class="inline-form" style="display:none">
     <h3 class="card-title">Add Customer</h3>
@@ -7344,7 +7555,8 @@ function renderProductList(products, filter = 'all', search = '') {
     <div class="inv-row" onclick="openProduct(${p.id})">
       <div class="inv-info">
         <div class="inv-name">${p.name}</div>
-        <div class="inv-meta">${p.category} · Barcode: ${p.barcode || '—'} · ₹${p.price.toLocaleString('en-IN')}/${p.unit}</div>
+        <div class="inv-meta">${p.category} · ₹${p.price.toLocaleString('en-IN')}/${p.unit}${p.rackNo?` · 📍 ${p.warehouseZone||''}${p.rackNo}/${p.shelfNo||''}`:''}</div>
+        ${p.warrantyMonths>0?`<div style="font-size:11px;color:var(--blue);margin-top:2px">🛡 ${p.warrantyMonths}m warranty</div>`:''}
         <div class="stock-bar-bg"><div class="stock-bar" style="width:${stockPct}%;background:${stockColor}"></div></div>
       </div>
       <div class="inv-stock" style="color:${stockColor}">${p.stock}<span class="inv-unit">${p.unit}</span></div>
@@ -7718,6 +7930,20 @@ async function showAddProduct() {
     </div>
 
     <button class="btn-primary full-width" onclick="saveNewProduct()">Add Product</button>
+    
+    <!-- Warehouse Location -->
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px">📦 Warehouse Location</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="form-group" style="margin:0"><label>Zone</label><input type="text" id="np-zone" placeholder="e.g. A, B, C"></div>
+      <div class="form-group" style="margin:0"><label>Rack No</label><input type="text" id="np-rack" placeholder="e.g. R3"></div>
+      <div class="form-group" style="margin:0"><label>Shelf No</label><input type="text" id="np-shelf" placeholder="e.g. S2"></div>
+    </div>
+    
+    <!-- Warranty -->
+    <div class="form-group">
+      <label>Warranty Period (months, 0 = no warranty)</label>
+      <input type="number" id="np-warranty" value="0" min="0" max="120">
+    </div>
   `;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
@@ -7824,6 +8050,10 @@ async function saveNewProduct() {
     hsn: document.getElementById('np-hsn').value.trim(),
     price, costPrice: parseFloat(document.getElementById('np-cost').value) || 0,
     unit: document.getElementById('np-unit').value,
+    warehouseZone: document.getElementById('np-zone')?.value.trim() || '',
+    rackNo: document.getElementById('np-rack')?.value.trim() || '',
+    shelfNo: document.getElementById('np-shelf')?.value.trim() || '',
+    warrantyMonths: parseInt(document.getElementById('np-warranty')?.value || 0),
     stock, lowStockThreshold: parseFloat(document.getElementById('np-threshold').value) || 20,
     gst: gstPct,
     // Stored so the exact pricing mode and raw inputs can be reloaded
@@ -21365,6 +21595,15 @@ window.submitLeave = () => VW_HR.submitLeave();
 window.approveLeave = (id,s) => VW_HR.approveLeave(id,s);
 
 document.addEventListener('DOMContentLoaded', init);
+
+// Register service worker for offline support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/vwholesale-app/sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
 
   </script>
 </body>
