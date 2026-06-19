@@ -1212,10 +1212,10 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp'],
-  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
-  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp'],
+  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor'],
   accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger'],
   dispatch:  ['dashboard','tasks','feedback','training','dispatch'],
   pending:   [] // no app access until approved
@@ -6381,7 +6381,10 @@ async function openQuotationDetail(id) {
     <div style="display:flex;gap:8px;margin-top:10px">
       ${q.status !== 'converted' ? `<button class="btn-secondary" onclick="editQuotation(${q.id})">${(canActOnApproval || myTlBranches.length) ? '✏️ Edit & Approve' : '✏️ Edit'}</button>` : ''}
       <button class="btn-secondary" onclick="printQuotation(${q.id})">🖨 Print</button>
-      ${q.approvalStatus === 'approved' && q.status !== 'converted' ? `<button class="btn-wa" onclick="sendQuotationWhatsApp(${q.id})">💬 Send</button>` : ''}    </div>
+      ${q.approvalStatus === 'approved' && q.status !== 'converted' ? `<button class="btn-wa" onclick="sendQuotationWhatsApp(${q.id})">💬 Send</button>` : ''}
+      <button class="btn-sm" onclick="shareQuotationLink(${JSON.stringify(q).replace(/"/g,'&quot;')})">🔗 Share</button>
+    </div>
+      ${q.approvalStatus === 'approved' && q.status !== 'converted' ? `<button class="btn-secondary full-width" style="margin-top:6px" onclick="VW_EXTRAS.convertQuotationToWorkOrder(${q.id})">🔧 Convert to Work Order</button>` : ''}
     ${renderAdvanceSection(q)}
     ${q.status === 'converted' ? `<div onclick="${q.invoiceId ? `closeSheet();openInvoiceFromTab(${q.invoiceId})` : ''}" style="${q.invoiceId ? 'cursor:pointer' : ''};font-size:12px;color:var(--green);margin-top:8px;text-align:center;padding:6px;border-radius:8px;${q.invoiceId ? 'background:rgba(34,197,94,0.08)' : ''}">✓ Converted to Bill${q.invoiceNo ? ` — Invoice ${q.invoiceNo}${q.invoiceId ? ' (tap to view)' : ''}` : ''}<br><span style="color:var(--text3)">This quotation is locked and can no longer be edited or deleted.</span></div>`
       : q.approvalStatus === 'approved' ? `<button class="btn-primary full-width" style="margin-top:8px" onclick="closeSheet();pullQuotationIntoCart(${q.id})">🛒 Bill This Quotation</button>`
@@ -6613,6 +6616,8 @@ async function renderCRM() {
     <input type="text" id="new-cust-name" placeholder="Name *">
     <input type="tel" id="new-cust-phone" placeholder="Phone *" maxlength="10">
     <input type="text" id="new-cust-city" placeholder="City">
+    <label style="font-size:12px;color:var(--text3);margin-top:4px;display:block">Date of Birth (for birthday wishes)</label>
+    <input type="date" id="new-cust-dob">
     <select id="new-cust-type">
       <option value="retail">Retail</option>
       <option value="b2b_pro">B2B Professional</option>
@@ -6839,7 +6844,13 @@ async function saveNewCustomer() {
   const name = document.getElementById('new-cust-name').value.trim();
   const phone = document.getElementById('new-cust-phone').value.trim();
   if (!name || !phone) return showToast('Name and phone required', 'warn');
-  await VW_DB.put(VW_DB.STORES.customers, { name, phone, type: document.getElementById('new-cust-type').value, city: document.getElementById('new-cust-city').value, visitCount: 0, createdAt: new Date().toISOString() });
+  await VW_DB.put(VW_DB.STORES.customers, {
+    name, phone,
+    type: document.getElementById('new-cust-type').value,
+    city: document.getElementById('new-cust-city').value,
+    dateOfBirth: document.getElementById('new-cust-dob')?.value || '',
+    visitCount: 0, createdAt: new Date().toISOString()
+  });
   showToast('Customer saved', 'success');
   hideAddCustomer();
   navigateTo('crm');
@@ -7120,6 +7131,7 @@ async function openProduct(id) {
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-primary" onclick="updateProduct(${id})">Save Changes</button>
       <button class="btn-secondary" onclick="showRestock(${id})">📦 Restock</button>
+      <button class="btn-secondary" onclick="VW_EXTRAS.renderStockHistory(${id})">📊 History</button>
     </div>
     ${p.customFields && Object.keys(p.customFields).length ? `
     <div class="req-item-card" style="margin-top:10px">
@@ -16827,6 +16839,551 @@ window.VW_EMPLOYEE = {
 };
 
 
+/* === extras.js === */
+// ============================================================
+// EXTRAS MODULE — Session 11
+// Customer Portal · Contractor Club Portal · Customer Birthdays
+// Stock Movement History · Quotation→Work Order · Executive Dashboard Card
+// + migrate openStaff from hr.js
+// ============================================================
+
+// =====================================================
+// 1. CUSTOMER PORTAL — shareable quotation link
+// ?quote=QT2627XXXXX — no login needed, public read
+// =====================================================
+async function renderCustomerPortal() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const quoteRef = urlParams.get('quote');
+  if (!quoteRef) return;
+
+  const quotations = await VW_DB.all(VW_DB.STORES.quotations);
+  const q = quotations.find(q => q.quoteNo === quoteRef || String(q.id) === quoteRef);
+
+  if (!q) {
+    document.getElementById('app-content').innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:#0a0a0a">
+        <div style="text-align:center;max-width:320px">
+          <div style="font-size:48px;margin-bottom:12px">🔍</div>
+          <h2 style="color:#fff;margin:0 0 8px">Quotation Not Found</h2>
+          <p style="color:rgba(255,255,255,0.5);font-size:14px">The quotation link may have expired or is incorrect. Please contact V Wholesale.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+  const products = await VW_DB.all(VW_DB.STORES.products);
+  const validUntil = q.expiryDate ? new Date(q.expiryDate) : new Date(new Date(q.createdAt).getTime() + 30*24*60*60*1000);
+  const isExpired = validUntil < new Date();
+
+  document.getElementById('app-nav').style.display = 'none';
+  document.getElementById('app-header').style.display = 'none';
+  document.getElementById('app-content').innerHTML = `
+  <div style="min-height:100vh;background:#0a0a0a;padding:0 0 40px">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#C8972B,#f5c842);padding:20px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#000;letter-spacing:-0.5px">${storeName}</div>
+      <div style="font-size:12px;color:rgba(0,0,0,0.6);margin-top:2px">Vijayawada · Home Building Materials</div>
+    </div>
+
+    <div style="max-width:480px;margin:0 auto;padding:16px">
+      <!-- Quote header -->
+      <div style="background:#111;border:1px solid rgba(200,151,43,0.3);border-radius:16px;padding:16px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+          <div>
+            <div style="font-size:11px;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1px">Quotation</div>
+            <div style="font-size:18px;font-weight:700;color:#fff">${q.quoteNo || 'Q-'+q.id}</div>
+          </div>
+          <span style="padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${isExpired?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.15)'};color:${isExpired?'#ef4444':'#22c55e'}">
+            ${isExpired ? '⚠️ Expired' : `Valid until ${validUntil.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}`}
+          </span>
+        </div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.6)">
+          ${new Date(q.date||q.createdAt).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}
+          ${q.customerName ? ` · Prepared for ${q.customerName}` : ''}
+        </div>
+        ${q.siteName ? `<div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:4px">📍 ${q.siteName}</div>` : ''}
+      </div>
+
+      <!-- Items -->
+      <div style="background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Items</div>
+        ${(q.items||[]).filter(i=>!i.isFreeGift).map((item,idx) => {
+          const { netPrice, total } = item.netPrice !== undefined ? item : { netPrice: item.price||0, total: (item.price||0)*(item.qty||1) };
+          return `
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div style="flex:1;padding-right:12px">
+              <div style="font-size:13px;font-weight:600;color:#fff">${[item.brand,item.model,item.description].filter(Boolean).join(' ')}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-top:2px">${item.department||item.category||''} · ${item.qty} ${item.unit||'pc'} × ₹${Math.round(netPrice).toLocaleString('en-IN')}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-size:14px;font-weight:700;color:var(--gold)">₹${Math.round(total).toLocaleString('en-IN')}</div>
+            </div>
+          </div>`;
+        }).join('')}
+        ${(q.items||[]).filter(i=>i.isFreeGift).map(i=>`
+          <div style="padding:8px 0;font-size:12px;color:#22c55e">🎁 Free Gift: ${i.name}</div>`).join('')}
+        <!-- Total -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 0 0;margin-top:4px">
+          <div style="font-size:14px;color:rgba(255,255,255,0.6)">Grand Total</div>
+          <div style="font-size:22px;font-weight:800;color:var(--gold)">₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
+        </div>
+        ${q.terms ? `<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:10px;line-height:1.6">${q.terms}</div>` : ''}
+      </div>
+
+      ${!isExpired ? `
+      <!-- Accept / Contact -->
+      <div style="background:#111;border:1px solid rgba(200,151,43,0.3);border-radius:16px;padding:16px;text-align:center">
+        <div style="font-size:14px;font-weight:600;color:#fff;margin-bottom:4px">Ready to proceed?</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:14px">Contact us to confirm your order</div>
+        <a href="https://wa.me/918712697930?text=${encodeURIComponent('Hi, I am confirming my quotation '+q.quoteNo+' for ₹'+Math.round(q.grandTotal||0).toLocaleString('en-IN')+'. Please proceed.')}"
+          style="display:block;background:#25D366;color:#fff;padding:14px;border-radius:12px;text-decoration:none;font-weight:700;font-size:15px;margin-bottom:8px">
+          💬 Confirm via WhatsApp
+        </a>
+        <a href="tel:+918712697930" style="display:block;background:rgba(255,255,255,0.08);color:#fff;padding:12px;border-radius:12px;text-decoration:none;font-size:14px">
+          📞 Call Us
+        </a>
+      </div>` : ''}
+
+      <div style="text-align:center;margin-top:20px;font-size:11px;color:rgba(255,255,255,0.2)">${storeName} · All prices are inclusive of GST</div>
+    </div>
+  </div>`;
+}
+
+// Generate shareable quotation link
+function getQuotationShareLink(q) {
+  return `${window.location.origin}/vwholesale-app/?quote=${q.quoteNo||q.id}`;
+}
+window.getQuotationShareLink = getQuotationShareLink;
+
+// Add share button to quotation detail (called from quotations.js)
+function shareQuotationLink(q) {
+  const link = getQuotationShareLink(q);
+  const msg = `Hi ${q.customerName||''},\n\nYour quotation from V Wholesale is ready to view:\n\n🔗 ${link}\n\nThis link shows all items and pricing. Tap "Confirm via WhatsApp" on the page to proceed.\n\n— V Wholesale, Vijayawada`;
+  const phone = (q.contact||'').replace(/\D/g,'');
+  const url = phone ? `https://wa.me/91${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+}
+window.shareQuotationLink = shareQuotationLink;
+
+// =====================================================
+// 2. CONTRACTOR CLUB PORTAL
+// Special view for contractors — their stats, referrals, club status
+// =====================================================
+async function renderContractorPortal() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  // Find contractor customer linked to this profile
+  const myCustomer = customers.find(c =>
+    c.phone === profile?.phone ||
+    c.profileId === profile?.id
+  );
+
+  if (!myCustomer) {
+    return `
+    <div style="text-align:center;padding:40px 20px">
+      <div style="font-size:48px;margin-bottom:12px">🏗️</div>
+      <h2>Contractor Club</h2>
+      <p style="color:var(--text3);font-size:14px">Your contractor profile is not linked yet. Please contact V Wholesale to activate your Contractor Club membership.</p>
+      <a href="https://wa.me/918712697930?text=Hi, I would like to join the V Wholesale Contractor Club" target="_blank" class="btn-wa full-width" style="margin-top:16px;display:block;text-decoration:none;text-align:center">💬 Request Membership</a>
+    </div>`;
+  }
+
+  const [invoices, referrals, quotations] = await Promise.all([
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.referralLedger),
+    VW_DB.all(VW_DB.STORES.quotations)
+  ]);
+
+  const myInvoices = invoices.filter(i => i.customerId === myCustomer.id && i.approvalStatus === 'approved');
+  const myReferrals = referrals.filter(r => r.referringCustomerId === myCustomer.id);
+  const totalSpend = myInvoices.reduce((s,i)=>s+(i.total||0),0);
+  const totalReferralEarned = myReferrals.reduce((s,r)=>s+(r.bonusAmount||0),0);
+  const pendingReferral = myReferrals.filter(r=>r.status==='pending').reduce((s,r)=>s+(r.bonusAmount||0),0);
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const monthSpend = myInvoices.filter(i=>new Date(i.date)>=monthStart).reduce((s,i)=>s+(i.total||0),0);
+  const myQuotes = quotations.filter(q => q.customerId === myCustomer.id).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
+
+  return `
+  <div class="module-header"><h2>🏗️ Contractor Club</h2></div>
+
+  <!-- Club card -->
+  <div style="background:linear-gradient(135deg,#1a1208,#0d0d0d);border:1px solid rgba(200,151,43,0.4);border-radius:20px;padding:20px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+      <div>
+        <div style="font-size:11px;color:rgba(200,151,43,0.6);text-transform:uppercase;letter-spacing:1px">Member</div>
+        <div style="font-size:18px;font-weight:700;color:#fff">${myCustomer.name}</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.4)">${myCustomer.phone}</div>
+      </div>
+      <div style="background:rgba(200,151,43,0.15);border:1px solid rgba(200,151,43,0.3);border-radius:10px;padding:8px 12px;text-align:center">
+        <div style="font-size:11px;color:var(--gold)">Tier</div>
+        <div style="font-size:14px;font-weight:700;color:var(--gold)">${totalSpend >= 500000 ? '⭐ Gold' : totalSpend >= 100000 ? 'Silver' : 'Standard'}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div style="text-align:center">
+        <div style="font-size:16px;font-weight:700;color:var(--gold)">₹${Math.round(totalSpend/1000)}K</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Total Spend</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:16px;font-weight:700;color:#22c55e">₹${Math.round(totalReferralEarned/1000)}K</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Referral Earned</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:16px;font-weight:700;color:#f97316">₹${Math.round(pendingReferral/1000)}K</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.4)">Pending Payout</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Referral section -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🤝 Refer & Earn</h3>
+    <p style="font-size:13px;color:var(--text3);margin-bottom:10px">Earn 2% bonus on every customer you refer to V Wholesale on their first purchase + 0.5% lifetime on all their future purchases.</p>
+    <button class="btn-wa full-width" onclick="VW_EXTRAS.shareReferralLink('${myCustomer.id}','${myCustomer.name.replace(/'/g,"\\'")}')">💬 Share My Referral Link</button>
+    ${myReferrals.length ? `
+    <div style="margin-top:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:8px">MY REFERRALS</div>
+      ${myReferrals.slice(0,5).map(r=>`
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
+        <span style="color:var(--text2)">${r.referredCustomerName||'Customer'}</span>
+        <div style="text-align:right">
+          <div style="font-weight:600;color:${r.status==='paid'?'#22c55e':'var(--gold)'}">₹${(r.bonusAmount||0).toLocaleString('en-IN')}</div>
+          <div style="font-size:10px;color:var(--text3)">${r.status}</div>
+        </div>
+      </div>`).join('')}
+    </div>` : ''}
+  </div>
+
+  <!-- My orders -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📋 My Orders</h3>
+    ${!myInvoices.length ? '<p class="empty-msg">No orders yet</p>' :
+    myInvoices.slice(0,5).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(inv=>`
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <div style="font-size:13px;font-weight:600">${inv.invoiceNo}</div>
+        <div style="font-size:11px;color:var(--text3)">${new Date(inv.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700">₹${(inv.total||0).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:${inv.creditSale?'var(--gold)':'#22c55e'}">${inv.creditSale?'Credit':'Paid'}</div>
+      </div>
+    </div>`).join('')}
+  </div>
+
+  <!-- My quotations -->
+  ${myQuotes.length ? `
+  <div class="card">
+    <h3 class="card-title">📄 My Quotations</h3>
+    ${myQuotes.slice(0,5).map(q=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <div style="font-size:13px;font-weight:600">${q.quoteNo||'Q-'+q.id}</div>
+        <div style="font-size:11px;color:var(--text3)">${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')} · ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
+      </div>
+      <button class="btn-sm" onclick="window.open('${window.location.origin}/vwholesale-app/?quote=${q.quoteNo||q.id}','_blank')">View</button>
+    </div>`).join('')}
+  </div>` : ''}`;
+}
+
+async function shareReferralLink(customerId, customerName) {
+  const link = `${window.location.origin}/vwholesale-app/?ref=${customerId}`;
+  const msg = `Hi! I am a V Wholesale Contractor Club member.\n\nV Wholesale is the best home building materials store in Vijayawada — tiles, sanitary, electrical, paints and more.\n\nVisit them and mention my name *${customerName}* to get priority service!\n\n📍 NH-65, Beside Padmaja Suzuki, Bhavanipuram, Vijayawada\n💬 +91 87126 97930`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// =====================================================
+// 3. CUSTOMER BIRTHDAY WISHES from CRM
+// =====================================================
+async function checkCustomerBirthdays() {
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const today = new Date();
+  const todayMD = `${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  return customers.filter(c => c.dateOfBirth && c.phone && c.dateOfBirth.slice(5) === todayMD);
+}
+
+async function sendCustomerBirthdayWishes() {
+  const birthdays = await checkCustomerBirthdays();
+  const settings = await VW_DB.getSetting('whatsapp_config', {});
+  const storeName = settings.storeName || 'V Wholesale';
+  if (!birthdays.length) { showToast('No customer birthdays today', 'info'); return; }
+  for (const c of birthdays) {
+    const msg = encodeURIComponent(`🎂 Happy Birthday ${c.name}!\n\nWishing you a wonderful birthday and a beautiful home! 🏠✨\n\nAs a special birthday treat, visit V Wholesale today and ask for your birthday surprise!\n\n— Team ${storeName}, Vijayawada 🙏`);
+    window.open(`https://wa.me/91${c.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
+    await new Promise(r=>setTimeout(r,1500));
+  }
+  showToast(`Birthday wishes sent to ${birthdays.length} customers`, 'success');
+}
+window.sendCustomerBirthdayWishes = sendCustomerBirthdayWishes;
+
+// =====================================================
+// 4. STOCK MOVEMENT HISTORY
+// =====================================================
+async function renderStockHistory(productId) {
+  const [product, invoices, pos, returns] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.products, productId),
+    VW_DB.all(VW_DB.STORES.invoices),
+    VW_DB.all(VW_DB.STORES.purchaseOrders),
+    VW_DB.all(VW_DB.STORES.salesReturns)
+  ]);
+  if (!product) return;
+
+  // Build movement log
+  const movements = [];
+
+  // Sales (stock out)
+  invoices.filter(i=>i.approvalStatus==='approved').forEach(inv => {
+    (inv.items||[]).forEach(item => {
+      if (item.productId === productId || item.name === product.name) {
+        movements.push({
+          date: inv.date, type: 'out', qty: -(item.qty||0),
+          reason: `Sale — ${inv.invoiceNo}`, ref: inv.invoiceNo,
+          color: 'var(--red)'
+        });
+      }
+    });
+  });
+
+  // Restocks from POs
+  pos.filter(p=>p.status==='received').forEach(po => {
+    (po.items||[]).forEach(item => {
+      if (item.productId === productId) {
+        movements.push({
+          date: po.receivedAt||po.createdAt, type: 'in', qty: item.qtyReceived||item.qty||0,
+          reason: `PO Receipt — ${po.poNo}`, ref: po.poNo,
+          color: '#22c55e'
+        });
+      }
+    });
+  });
+
+  // Returns (stock back in)
+  returns.forEach(ret => {
+    (ret.items||[]).forEach(item => {
+      if (item.productId === productId || item.name === product.name) {
+        movements.push({
+          date: ret.createdAt, type: 'in', qty: item.qty||0,
+          reason: `Return — ${ret.creditNoteNo||'CN'}`, ref: ret.creditNoteNo,
+          color: '#06b6d4'
+        });
+      }
+    });
+  });
+
+  movements.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📦 ${product.name}</h3>
+    <p class="sheet-meta">Current stock: ${product.stock||0} ${product.unit||'pc'}</p>
+    <div style="max-height:400px;overflow-y:auto">
+      ${!movements.length ? '<p class="empty-msg">No movement history yet</p>' :
+      movements.map(m=>`
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:${m.color}">${m.qty > 0 ? '+' : ''}${m.qty} ${product.unit||'pc'}</div>
+          <div style="font-size:12px;color:var(--text3)">${m.reason}</div>
+          <div style="font-size:11px;color:var(--text3)">${new Date(m.date).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})}</div>
+        </div>
+        <span class="badge" style="background:${m.type==='in'?'rgba(34,197,94,0.15)':'rgba(239,68,68,0.15)'};color:${m.color};align-self:center">${m.type==='in'?'IN':'OUT'}</span>
+      </div>`).join('')}
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:10px" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// =====================================================
+// 5. QUOTATION → WORK ORDER CONVERSION
+// =====================================================
+async function convertQuotationToWorkOrder(quotationId) {
+  const [q, customers, serviceVendors] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.quotations, quotationId),
+    VW_DB.all(VW_DB.STORES.customers),
+    VW_DB.all(VW_DB.STORES.serviceVendors)
+  ]);
+  if (!q) return;
+  const cust = customers.find(c => c.id === q.customerId);
+
+  // Check if quotation has service/labour items
+  const labourItems = (q.items||[]).filter(i =>
+    ['Plumbing','Electrical','Painting','Carpentry','Tiling','Waterproofing','Installation','Labour','Service'].some(s =>
+      (i.department||i.category||i.description||'').toLowerCase().includes(s.toLowerCase())
+    )
+  );
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>🔧 Convert to Work Order</h3>
+    <p class="sheet-meta">${q.quoteNo} · ${cust?.name||q.customerName||'Customer'}</p>
+    ${labourItems.length ? `
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--text2)">
+      ✓ Found ${labourItems.length} service item${labourItems.length>1?'s':''} in this quotation that can become work order tasks
+    </div>` : ''}
+    <div class="form-group"><label>Service Category *</label>
+      <select id="wo-conv-cat">
+        ${['Plumbing','Electrical','Painting','Carpentry','Tiling','Waterproofing','False Ceiling','Flooring','Modular Kitchen','Civil Work','Other'].map(c=>`<option>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Site / Address</label>
+      <input type="text" id="wo-conv-site" value="${q.address||q.siteName||cust?.address||''}" placeholder="Customer site address">
+    </div>
+    <div class="form-group"><label>Work Description</label>
+      <textarea id="wo-conv-desc" style="height:80px">${labourItems.map(i=>i.description||i.name).join('\n')}</textarea>
+    </div>
+    <div class="form-group"><label>Assign Service Vendor</label>
+      <select id="wo-conv-vendor">
+        <option value="">— Assign later —</option>
+        ${serviceVendors.map(v=>`<option value="${v.id}" data-name="${v.name}">${v.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group"><label>Work Value (₹)</label>
+      <input type="number" id="wo-conv-value" value="${Math.round(labourItems.reduce((s,i)=>{const {total}=i.netPrice!==undefined?i:{total:(i.price||0)*(i.qty||1)};return s+total;},0)||q.grandTotal||0)}">
+    </div>
+    <div class="form-group"><label>Expected Completion Date</label>
+      <input type="date" id="wo-conv-due" value="${new Date(Date.now()+14*86400000).toISOString().split('T')[0]}">
+    </div>
+    <button class="btn-primary full-width" onclick="VW_EXTRAS.confirmConvertToWO(${quotationId})">Create Work Order</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function confirmConvertToWO(quotationId) {
+  const q = await VW_DB.getById(VW_DB.STORES.quotations, quotationId);
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const cust = customers.find(c => c.id === q.customerId);
+  const vendorSel = document.getElementById('wo-conv-vendor');
+  const serviceVendorId = parseInt(vendorSel?.value)||null;
+  const vendorName = serviceVendorId ? vendorSel?.options[vendorSel.selectedIndex]?.dataset.name||'' : '';
+  const totalValue = parseFloat(document.getElementById('wo-conv-value')?.value)||0;
+  const all = await VW_DB.all(VW_DB.STORES.workOrders);
+  const fy = getFinancialYearLabel();
+  const seq = String(all.length+1).padStart(4,'0');
+  const workOrderNo = `WO/${fy}/${seq}`;
+  const profile = VW_AUTH.getCurrentProfile();
+
+  await VW_DB.put(VW_DB.STORES.workOrders, {
+    workOrderNo, customerId: q.customerId, customerName: cust?.name||q.customerName||'',
+    category: document.getElementById('wo-conv-cat')?.value||'Other',
+    siteName: document.getElementById('wo-conv-site')?.value||'',
+    description: document.getElementById('wo-conv-desc')?.value||'',
+    serviceVendorId, vendorName,
+    totalValue, paymentStructure: { advancePct:30, midPct:60, finalPct:10 },
+    expectedCompletionDate: document.getElementById('wo-conv-due')?.value||'',
+    stage: serviceVendorId ? 'assigned' : 'created',
+    quotationId, quotationNo: q.quoteNo,
+    payments:[], photos:[], notes:[],
+    createdByName: profile?.name||'',
+    createdAt: new Date().toISOString()
+  });
+
+  // Mark quotation as having a work order
+  q.workOrderCreated = true;
+  q.workOrderNo = workOrderNo;
+  await VW_DB.put(VW_DB.STORES.quotations, q);
+
+  showToast(`Work Order ${workOrderNo} created from ${q.quoteNo}`, 'success');
+  closeSheet();
+  navigateTo('service');
+}
+
+// =====================================================
+// 6. EXECUTIVE DAILY SALES CARD on Admin Dashboard
+// =====================================================
+async function renderExecutiveSalesCard(invoices, staff, today) {
+  const todayInv = invoices.filter(i =>
+    new Date(i.date).toDateString() === today &&
+    i.approvalStatus === 'approved'
+  );
+  if (!todayInv.length) return '';
+
+  // Group by sales executive
+  const byExec = {};
+  todayInv.forEach(inv => {
+    const name = inv.salesExecutiveName || inv.createdByName || 'Walk-in/Direct';
+    if (!byExec[name]) byExec[name] = { count: 0, total: 0 };
+    byExec[name].count++;
+    byExec[name].total += inv.total||0;
+  });
+
+  const entries = Object.entries(byExec).sort((a,b)=>b[1].total-a[1].total);
+  if (!entries.length) return '';
+
+  return `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">📊 Today's Sales by Executive</h3>
+    ${entries.map(([name, data], i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)">
+      <div style="width:24px;height:24px;border-radius:50%;background:hsl(${i*80},60%,35%);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${name}</div>
+        <div style="font-size:11px;color:var(--text3)">${data.count} invoice${data.count>1?'s':''}</div>
+      </div>
+      <div style="font-weight:700;color:var(--gold)">₹${data.total>=100000?Math.round(data.total/100000)+'L':data.total>=1000?Math.round(data.total/1000)+'K':Math.round(data.total).toLocaleString('en-IN')}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+// =====================================================
+// MIGRATE openStaff from hr.js — so hr.js can be gutted
+// =====================================================
+async function openStaffFull(id) {
+  // Full staff detail with onboarding docs — was in hr.js
+  const s = await VW_DB.getById(VW_DB.STORES.staff, id);
+  if (!s) return;
+  const isAdmin = VW_AUTH.isAdmin();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <h3 style="margin:0">${s.name}</h3>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${s.designation||s.role||'—'} · ${s.department||'—'}</p>
+      </div>
+      ${isAdmin ? `<button class="btn-sm" onclick="VW_HR_PAYROLL.showAddStaff(${id})">✏️ Edit</button>` : ''}
+    </div>
+    <div class="req-item-card" style="margin-bottom:10px">
+      ${s.phone ? `<div style="font-size:13px;padding:2px 0">📞 ${s.phone}</div>` : ''}
+      ${s.joiningDate ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">Joined: ${s.joiningDate}</div>` : ''}
+      ${s.bankAccount ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">Bank: ${s.bankName||''} · ${s.bankAccount}</div>` : ''}
+      ${s.aadhaarNumber ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">Aadhaar: ${s.aadhaarNumber}</div>` : ''}
+      ${s.panNumber ? `<div style="font-size:12px;color:var(--text3);padding:2px 0">PAN: ${s.panNumber}</div>` : ''}
+    </div>
+    ${s.photoPath ? `<img src="${s.photoPath}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px">` : ''}
+    <div style="display:flex;gap:8px">
+      ${s.phone ? `<button class="btn-wa" style="flex:1" onclick="window.open('https://wa.me/91${(s.phone||'').replace(/\D/g,'')}','_blank')">💬 WhatsApp</button>` : ''}
+      <button class="btn-primary" style="flex:1" onclick="VW_HR_PAYROLL.generatePayslip(${id})">📄 Payslip</button>
+    </div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Close</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+// Override the old openStaff proxy
+window.openStaff = openStaffFull;
+
+window.VW_EXTRAS = {
+  renderCustomerPortal,
+  getQuotationShareLink,
+  shareQuotationLink,
+  renderContractorPortal,
+  shareReferralLink,
+  checkCustomerBirthdays,
+  sendCustomerBirthdayWishes,
+  renderStockHistory,
+  convertQuotationToWorkOrder,
+  confirmConvertToWO,
+  renderExecutiveSalesCard
+};
+
+
 /* === ledger.js === */
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
@@ -17247,6 +17804,7 @@ async function navigateTo(page, params) {
     else if (page === 'service') html = await VW_SERVICE.renderServicePage();
     else if (page === 'kiosk') html = await VW_EMPLOYEE.renderKioskMode();
     else if (page === 'employeeapp') html = await VW_EMPLOYEE.renderEmployeeDashboard();
+    else if (page === 'contractor') html = await VW_EXTRAS.renderContractorPortal();
     else if (page === 'ledger') {
       const cid = _navParams?.customerId;
       if (cid) {
@@ -17794,6 +18352,16 @@ async function renderDashboard() {
   ${canSeeDailyReport ? dailyReportCard : ''}
   ${lowStockBanner}
   ${quotesCard}
+  ${await VW_EXTRAS.renderExecutiveSalesCard(invoices, [], today)}
+  ${await (async () => {
+    const bdays = await VW_EXTRAS.checkCustomerBirthdays();
+    if (!bdays.length) return '';
+    return `<div style="background:linear-gradient(135deg,rgba(200,151,43,0.15),rgba(200,151,43,0.05));border:1px solid rgba(200,151,43,0.3);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">🎂 ${bdays.length} Customer Birthday${bdays.length>1?'s':''} Today!</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${bdays.map(c=>c.name).join(', ')}</div>
+      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="sendCustomerBirthdayWishes()">💬 Send Birthday Wishes</button>
+    </div>`;
+  })()}
 
   <div class="metric-grid-4">
     <div class="metric-card gold">
@@ -18285,6 +18853,12 @@ async function init() {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').innerHTML = await VW_EMPLOYEE.renderKioskMode();
+    return;
+  }
+
+  // CUSTOMER PORTAL — ?quote=XXXXX public quotation view
+  if (urlParams.get('quote')) {
+    await VW_EXTRAS.renderCustomerPortal();
     return;
   }
   const onboardOfferId = urlParams.get('onboard');
