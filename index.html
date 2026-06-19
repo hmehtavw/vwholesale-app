@@ -1154,19 +1154,32 @@ const ROLE_PAGES = {
 // "feedback" stay always-on for every approved role — they're core to
 // doing the job, not optional add-ons.
 const PERMISSION_PAGES = {
-  billing: ['cart'],
+  billing:   ['cart', 'quotations', 'tiles', 'granite', 'ledger'],
   inventory: ['inventory'],
-  crm: ['crm'],
-  hr: ['hr'],
+  crm:       ['crm'],
+  hr:        ['hr'],
   analytics: ['analytics'],
-  club: ['club'],
-  settings: ['settings']
+  club:      ['club'],
+  settings:  ['settings'],
+  vendors:   ['vendors'],
+  marketing: ['marketing'],
+  dispatch:  ['dispatch'],
+  service:   ['service'],
 };
 const PERMISSION_LABELS = {
-  billing: 'Billing & Quotations', inventory: 'Inventory', crm: 'CRM & Sales',
-  hr: 'HR & Team', analytics: 'Analytics', club: 'Contractor Club', settings: 'Settings'
+  billing: 'Billing, Quotations & Tiles/Granite',
+  inventory: 'Inventory',
+  crm: 'CRM & Sales',
+  hr: 'HR & Team',
+  analytics: 'Analytics & Reports',
+  club: 'Contractor Club',
+  settings: 'Settings',
+  vendors: 'Vendors & Purchase Orders',
+  marketing: 'Marketing',
+  dispatch: 'Dispatch & Gate Pass',
+  service: 'Service & Work Orders',
 };
-const ALWAYS_ON_PAGES = ['dashboard', 'checkin', 'tasks', 'feedback', 'training'];
+const ALWAYS_ON_PAGES = ['dashboard', 'checkin', 'tasks', 'feedback', 'training', 'employeeapp', 'contractor'];
 
 function getRole() {
   return (currentProfile && currentProfile.status === 'approved') ? currentProfile.role : 'pending';
@@ -1174,31 +1187,26 @@ function getRole() {
 
 function getAllowedPages() {
   const role = getRole();
-  if (role === 'admin') return ROLE_PAGES.admin; // Admin always has full access, no overrides apply
+  if (role === 'admin') return ROLE_PAGES.admin;
   if (role === 'pending') return [];
 
-  // If this person has an explicit permissions array saved, that's
-  // authoritative for the optional pages — combined with the pages every
-  // approved person always gets.
+  // Start with role defaults — this ensures tiles/granite/quotations
+  // are always available when the role has them, regardless of explicit perms
+  const roleDefaults = new Set(ROLE_PAGES[role] || []);
+
+  // If this person has an explicit permissions array saved, merge it on top
   const explicit = currentProfile && Array.isArray(currentProfile.permissions) ? currentProfile.permissions : null;
   if (explicit) {
-    const pages = new Set(ALWAYS_ON_PAGES);
+    const pages = new Set([...ALWAYS_ON_PAGES, ...roleDefaults]);
     explicit.forEach(perm => (PERMISSION_PAGES[perm] || []).forEach(p => pages.add(p)));
-    // Accounts/Dispatch's own work page is the entire point of being
-    // that role, not an optional add-on toggled like Billing or CRM —
-    // same reasoning as Admin always getting full access regardless of
-    // any permissions array. Without this, approving someone as Accounts
-    // or Dispatch would leave them with no way to actually reach their
-    // own work queue unless that specific box happened to be ticked.
-    if (role === 'accounts') pages.add('accounts');
+    // Role-specific always-on work pages
+    if (role === 'accounts') { pages.add('accounts'); pages.add('eod'); }
     if (role === 'dispatch') pages.add('dispatch');
-    if (['admin','executive','reception','staff','accounts'].includes(role)) pages.add('catalogs');
     if (['admin','executive'].includes(role)) pages.add('incentives');
-    if (role === 'accounts') pages.add('eod');
     return [...pages];
   }
-  // No explicit permissions saved yet (e.g. existing accounts from before
-  // this feature) — fall back to the role's original default page set.
+
+  // No explicit permissions — use role defaults
   return ROLE_PAGES[role] || [];
 }
 
@@ -10413,8 +10421,6 @@ async function openUserPermissions(profileId) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
-window.VW_SETTINGS.openUserPermissions = openUserPermissions;
-
 async function approveProfile(profileId) {
   const role = sel?.value || 'staff';
   const rec = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
@@ -10440,122 +10446,90 @@ async function updateProfileRole(profileId, role) {
 // ===== TAB 3: PERMISSIONS =====
 async function renderSettingsPermissions() {
   const profiles = await VW_DB.all(VW_DB.STORES.profiles);
-  const roles = ['executive','staff','reception','accounts','dispatch'];
+  const nonAdmin = profiles.filter(p=>p.role!=='admin'&&p.role!=='pending'&&p.status==='approved');
 
   return `
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">🔐 Role Permissions</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Default permissions by role. Admin always has full access. Toggle to customise what each role can do.</p>
-    ${Object.entries(FEATURE_PERMISSIONS).map(([featKey, feat]) => `
-    <div style="margin-bottom:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px;padding:6px 0;border-bottom:1px solid var(--border2)">${feat.icon} ${feat.label}</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px">
-          <thead>
-            <tr style="color:var(--text3)">
-              <th style="text-align:left;padding:4px 0;min-width:120px">Action</th>
-              ${roles.map(r=>`<th style="text-align:center;padding:4px 6px;text-transform:capitalize">${r}</th>`).join('')}
-            </tr>
-          </thead>
-          <tbody>
-            ${Object.entries(feat.actions).map(([actKey, act]) => `
-            <tr style="border-bottom:1px solid rgba(255,255,255,0.04)">
-              <td style="padding:6px 0;font-size:12px;color:var(--text2)">${act.label}</td>
-              ${roles.map(role => `
-              <td style="text-align:center;padding:4px 6px">
-                <input type="checkbox" ${act[role]?'checked':''}
-                  onchange="VW_SETTINGS.saveRolePermission('${featKey}','${actKey}','${role}',this.checked)"
-                  style="accent-color:var(--gold);width:14px;height:14px">
-              </td>`).join('')}
-            </tr>`).join('')}
-          </tbody>
-        </table>
+    <h3 class="card-title">🔐 Page Access — By Person</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Control which sections each person can access. These are the actual navigation permissions —
+      toggling a section on/off controls whether that person sees it in their app.
+    </p>
+    <div id="perm-people-list">
+      ${nonAdmin.map(p => {
+        const perms = Array.isArray(p.permissions) ? p.permissions : null;
+        const activePerms = perms || [];
+        return `
+        <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <div style="width:36px;height:36px;border-radius:50%;background:var(--gold-muted);color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">${(p.name||'?')[0].toUpperCase()}</div>
+            <div style="flex:1">
+              <div style="font-size:14px;font-weight:600;color:var(--text)">${p.name||p.phone}</div>
+              <div style="font-size:12px;color:var(--text2)">Role: ${p.role} ${perms?'· Custom permissions':'· Using role defaults'}</div>
+            </div>
+            ${perms ? `<button class="btn-sm" style="color:var(--text3)" onclick="VW_SETTINGS.resetToRoleDefaults('${p.id}')">Reset</button>` : ''}
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            ${Object.entries(PERMISSION_LABELS).map(([key, label]) => {
+              const isOn = perms ? activePerms.includes(key) : (ROLE_PAGES[p.role]||[]).some(pg => (PERMISSION_PAGES[key]||[]).includes(pg));
+              return `<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:${isOn?'var(--gold-muted)':'var(--bg3)'};border:1px solid ${isOn?'var(--gold)':'var(--border2)'};border-radius:20px;cursor:pointer;font-size:12px;font-weight:${isOn?'600':'400'};color:${isOn?'var(--gold)':'var(--text2)'};transition:all 0.15s">
+                <input type="checkbox" ${isOn?'checked':''} style="display:none"
+                  onchange="VW_SETTINGS.togglePersonPerm('${p.id}','${key}',this.checked,'${p.role}')">
+                <span>${isOn?'✓':''} ${label.split(' ')[0]}</span>
+              </label>`;
+            }).join('')}
+          </div>
+        </div>`;
+      }).join('') || '<p class="empty-msg">No active team members</p>'}
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📋 Role Defaults (for reference)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">What each role can access by default. Individual overrides above take priority.</p>
+    ${['executive','reception','accounts','dispatch','staff'].map(role => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;text-transform:capitalize">${role}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${(ROLE_PAGES[role]||[]).map(pg => `<span class="badge" style="font-size:10px">${pg}</span>`).join('')}
       </div>
     </div>`).join('')}
   </div>
 
   <div class="card">
-    <h3 class="card-title">👤 Per-User Overrides</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Give or remove specific rights for individual users, overriding their role defaults.</p>
-    <select id="perm-user-select" onchange="VW_SETTINGS.loadUserPermissions(this.value)" style="margin-bottom:10px">
-      <option value="">— Select a team member —</option>
-      ${profiles.filter(p=>p.role!=='admin'&&p.role!=='pending').map(p=>`<option value="${p.id}">${p.name||p.phone} (${p.role})</option>`).join('')}
-    </select>
-    <div id="user-perms-detail"></div>
+    <h3 class="card-title">⚡ Feature Actions (advanced)</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px">Fine-grained control within pages — e.g. can view but not delete. Tap "🔐 Rights" next to any person in the Team tab.</p>
+    <button class="btn-secondary full-width" onclick="VW_SETTINGS.switchSettingsTab('team', document.getElementById('stab-team'))">Go to Team → Rights buttons ↗</button>
   </div>`;
 }
 
-async function saveRolePermission(feature, action, role, value) {
-  // Save to settings as role permission overrides
-  const key = `role_perms_${role}`;
-  const current = await VW_DB.getSetting(key, {});
-  current[`${feature}.${action}`] = value;
-  await VW_DB.setSetting(key, current);
-  // Update in-memory FEATURE_PERMISSIONS
-  if (FEATURE_PERMISSIONS[feature]?.actions[action]) {
-    FEATURE_PERMISSIONS[feature].actions[action][role] = value;
-  }
-  showToast('Permission updated', 'success');
-}
-
-async function loadUserPermissions(profileId) {
-  if (!profileId) return;
-  const container = document.getElementById('user-perms-detail');
-  if (!container) return;
+async function togglePersonPerm(profileId, permKey, isOn, role) {
   const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
   if (!prof) return;
-  const userPerms = prof.featurePermissions || {};
-
-  container.innerHTML = `
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">
-      Overrides for <strong>${prof.name||prof.phone}</strong> (role: ${prof.role}). Checked = allowed regardless of role, unchecked = denied.
-    </div>
-    ${Object.entries(FEATURE_PERMISSIONS).map(([featKey, feat]) => `
-    <div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">${feat.icon} ${feat.label}</div>
-      ${Object.entries(feat.actions).map(([actKey, act]) => {
-        const key = `${featKey}.${actKey}`;
-        const hasOverride = key in userPerms;
-        const roleDefault = act[prof.role] === true;
-        const currentVal = hasOverride ? userPerms[key] : roleDefault;
-        return `
-        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;cursor:pointer">
-          <input type="checkbox" ${currentVal?'checked':''} ${hasOverride?'style="accent-color:#378ADD"':'style="accent-color:var(--gold)"'}
-            onchange="VW_SETTINGS.setUserPermission('${profileId}','${key}',this.checked)">
-          <span>${act.label}</span>
-          <span style="font-size:10px;color:var(--text3)">${hasOverride?'(overridden)':'(role default)'}</span>
-        </label>`;
-      }).join('')}
-    </div>`).join('')}
-    <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_SETTINGS.clearUserPermissions('${profileId}')">Reset All Overrides to Role Defaults</button>
-  `;
-}
-
-async function setUserPermission(profileId, key, value) {
-  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
-  if (!prof) return;
-  const perms = prof.featurePermissions || {};
-  perms[key] = value;
-  prof.featurePermissions = perms;
+  // Get current perms — if none set yet, start from role defaults
+  let perms = Array.isArray(prof.permissions) ? [...prof.permissions] : 
+    Object.keys(PERMISSION_PAGES).filter(k => (ROLE_PAGES[role]||[]).some(pg => (PERMISSION_PAGES[k]||[]).includes(pg)));
+  if (isOn) { if (!perms.includes(permKey)) perms.push(permKey); }
+  else { perms = perms.filter(p => p !== permKey); }
+  prof.permissions = perms;
   await VW_DB.put(VW_DB.STORES.profiles, prof);
-  showToast('User permission updated', 'success');
+  showToast(`${prof.name}: ${PERMISSION_LABELS[permKey]?.split(' ')[0]} ${isOn?'enabled':'disabled'}`, 'success');
 }
 
-async function clearUserPermissions(profileId) {
+async function resetToRoleDefaults(profileId) {
   const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
   if (!prof) return;
-  prof.featurePermissions = {};
+  delete prof.permissions;
   await VW_DB.put(VW_DB.STORES.profiles, prof);
-  showToast('Overrides cleared — using role defaults', 'success');
-  await loadUserPermissions(profileId);
+  showToast(`${prof.name} reset to role defaults`, 'success');
+  const container = document.getElementById('settings-tab-content');
+  if (container) container.innerHTML = await renderSettingsPermissions();
 }
 
-// ===== TAB 4: STORE CONFIG =====
 async function renderSettingsStore() {
   const waConfig = await VW_DB.getSetting('whatsapp_config', {});
   const loyaltyConfig = await VW_DB.getSetting('loyalty_config', { pointValue:1, earnRate:1, maxRedeemPct:10 });
   const categories = await VW_DB.getSetting('product_categories', ['Tiles','Sanitary','Electrical','Paints','Plumbing','Hardware','Plywood','Steel','Waterproofing','Glass','Appliances']);
-  const executives = await VW_DB.all(VW_DB.STORES.executives || 'executives').catch(()=>[]);
   const packingRules = await VW_DB.getSetting('packing_charge_rules', []);
 
   return `
@@ -10875,13 +10849,16 @@ window.VW_SETTINGS = {
   renderSettingsPage, switchSettingsTab,
   saveAccountName, changePIN, approveResetPin,
   approveProfile, updateProfileRole,
+  togglePersonPerm, resetToRoleDefaults,
   saveRolePermission, loadUserPermissions, setUserPermission, clearUserPermissions,
+  openUserPermissions,
   saveWAConfig, saveLoyaltyConfig,
   addCategory, removeCategory,
   addPackingRule, removePackingRule, updatePackingRule, savePackingRules,
   addEscalation, removeEscalation, updateEscalation, saveEscalation,
   approvePendingProduct, rejectPendingProduct,
-  confirmDangerAction
+  confirmDangerAction,
+  downloadAllData, addPromoCode, deletePromoCode
 };
 
 // Legacy exports for backward compatibility
@@ -11013,9 +10990,47 @@ async function deletePromoCode(code) {
 }
 
 // Add to VW_SETTINGS exports
-window.VW_SETTINGS.downloadAllData = downloadAllData;
-window.VW_SETTINGS.addPromoCode = addPromoCode;
-window.VW_SETTINGS.deletePromoCode = deletePromoCode;
+
+// ===== FEATURE PERMISSION HELPERS (used by openUserPermissions sheet) =====
+async function saveRolePermission(feature, action, role, value) {
+  const key = `role_perms_${role}`;
+  const current = await VW_DB.getSetting(key, {});
+  current[`${feature}.${action}`] = value;
+  await VW_DB.setSetting(key, current);
+  if (FEATURE_PERMISSIONS[feature]?.actions[action]) {
+    FEATURE_PERMISSIONS[feature].actions[action][role] = value;
+  }
+  showToast('Permission updated', 'success');
+}
+
+async function loadUserPermissions(profileId) {
+  if (!profileId) return;
+  const container = document.getElementById('user-perms-detail');
+  if (!container) return;
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  const userPerms = prof.featurePermissions || {};
+  container.innerHTML = `<p style="font-size:13px;color:var(--text2)">Use the 🔐 Rights button in the Team tab for a better interface.</p>`;
+}
+
+async function setUserPermission(profileId, key, value) {
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  const perms = prof.featurePermissions || {};
+  perms[key] = value;
+  prof.featurePermissions = perms;
+  await VW_DB.put(VW_DB.STORES.profiles, prof);
+  showToast('Permission updated', 'success');
+}
+
+async function clearUserPermissions(profileId) {
+  const prof = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
+  if (!prof) return;
+  prof.featurePermissions = {};
+  await VW_DB.put(VW_DB.STORES.profiles, prof);
+  showToast('Feature overrides cleared', 'success');
+}
+
 
 
 /* === reports.js === */
