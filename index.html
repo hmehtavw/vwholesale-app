@@ -27521,6 +27521,7 @@ async function renderDashboard() {
   const lowStock = (profile && profile.role === 'admin')
     ? products.filter(p => p.stock <= (p.lowStockThreshold || 20))
     : [];
+  let lowStockBanner = '';
   // Stock hold alerts for SM/Management
   let holdAlertBanner = '';
   if (profile && ['admin','store_manager','management'].includes(profile.role)) {
