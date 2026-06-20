@@ -892,6 +892,20 @@ td strong { color: var(--text); }
   .metric-grid-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
 }
 
+/* ===== SKELETON LOADING (instant perceived performance) ===== */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton-line {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+  height: 16px;
+  margin-bottom: 8px;
+}
+
   </style>
 </head>
 <body>
@@ -907,7 +921,11 @@ td strong { color: var(--text); }
       <div class="header-right">
         <div id="identity-badge"></div>
         <button id="lang-toggle" onclick="VW_SETTINGS.showLanguagePicker()"
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:3px 7px;font-size:11px;color:var(--text2);cursor:pointer;font-weight:600;margin-right:2px">EN</button>
+          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Language">🌐</button>
+        <button onclick="navigateTo('eod')" 
+          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Daily Summary">📅</button>
+        <button onclick="navigateTo('settings')"
+          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Settings">⚙️</button>
         <button class="notif-btn" onclick="hardRefreshApp()" aria-label="Refresh" title="Refresh data">
           &#8635;
         </button>
@@ -935,54 +953,54 @@ td strong { color: var(--text); }
       <!-- SALES & CUSTOMERS -->
       <div class="more-section-label">Sales & Customers</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="crm" onclick="navigateTo('crm');toggleMoreMenu()"><span>👥</span><span>CRM</span></button>
-        <button class="more-tile" data-page="quotations" onclick="navigateTo('quotations');toggleMoreMenu()"><span>📋</span><span>Quotes</span></button>
-        <button class="more-tile" data-page="club" onclick="navigateTo('club');toggleMoreMenu()"><span>🏅</span><span>CC Club</span></button>
-        <button class="more-tile" data-page="wishlist" onclick="navigateTo('wishlist');toggleMoreMenu()"><span>❤️</span><span>Wishlist</span></button>
-        <button class="more-tile" data-page="returns" onclick="navigateTo('returns');toggleMoreMenu()"><span>↩️</span><span>Returns</span></button>
-        <button class="more-tile" data-page="feedback" onclick="navigateTo('feedback');toggleMoreMenu()"><span>⭐</span><span>Feedback</span></button>
+        <button class="more-tile" data-page="crm" onclick="closeMoreMenu();navigateTo('crm')"><span>👥</span><span>CRM</span></button>
+        <button class="more-tile" data-page="quotations" onclick="closeMoreMenu();navigateTo('quotations')"><span>📋</span><span>Quotes</span></button>
+        <button class="more-tile" data-page="club" onclick="closeMoreMenu();navigateTo('club')"><span>🏅</span><span>CC Club</span></button>
+        <button class="more-tile" data-page="wishlist" onclick="closeMoreMenu();navigateTo('wishlist')"><span>❤️</span><span>Wishlist</span></button>
+        <button class="more-tile" data-page="returns" onclick="closeMoreMenu();navigateTo('returns')"><span>↩️</span><span>Returns</span></button>
+        <button class="more-tile" data-page="feedback" onclick="closeMoreMenu();navigateTo('feedback')"><span>⭐</span><span>Feedback</span></button>
       </div>
 
       <!-- OPERATIONS -->
       <div class="more-section-label">Operations</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="inventory" onclick="navigateTo('inventory');toggleMoreMenu()"><span>📦</span><span>Inventory</span></button>
-        <button class="more-tile" data-page="vendors" onclick="navigateTo('vendors');toggleMoreMenu()"><span>🏭</span><span>Vendors</span></button>
-        <button class="more-tile" data-page="dispatch" onclick="navigateTo('dispatch');toggleMoreMenu()"><span>🚚</span><span>Dispatch</span></button>
-        <button class="more-tile" data-page="grn" onclick="navigateTo('grn');toggleMoreMenu()"><span>🧾</span><span>GRN</span></button>
-        <button class="more-tile" data-page="tiles" onclick="navigateTo('tiles');toggleMoreMenu()"><span>🔲</span><span>Tiles</span></button>
-        <button class="more-tile" data-page="granite" onclick="navigateTo('granite');toggleMoreMenu()"><span>🪨</span><span>Granite</span></button>
+        <button class="more-tile" data-page="inventory" onclick="closeMoreMenu();navigateTo('inventory')"><span>📦</span><span>Inventory</span></button>
+        <button class="more-tile" data-page="vendors" onclick="closeMoreMenu();navigateTo('vendors')"><span>🏭</span><span>Vendors</span></button>
+        <button class="more-tile" data-page="dispatch" onclick="closeMoreMenu();navigateTo('dispatch')"><span>🚚</span><span>Dispatch</span></button>
+        <button class="more-tile" data-page="grn" onclick="closeMoreMenu();navigateTo('grn')"><span>🧾</span><span>GRN</span></button>
+        <button class="more-tile" data-page="tiles" onclick="closeMoreMenu();navigateTo('tiles')"><span>🔲</span><span>Tiles</span></button>
+        <button class="more-tile" data-page="granite" onclick="closeMoreMenu();navigateTo('granite')"><span>🪨</span><span>Granite</span></button>
       </div>
 
       <!-- FINANCE -->
       <div class="more-section-label">Finance</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="accounts" onclick="navigateTo('accounts');toggleMoreMenu()"><span>💰</span><span>Accounts</span></button>
-        <button class="more-tile" data-page="ledger" onclick="navigateTo('ledger');toggleMoreMenu()"><span>📒</span><span>Ledger</span></button>
-        <button class="more-tile" data-page="eod" onclick="navigateTo('eod');toggleMoreMenu()"><span>📅</span><span>End of Day</span></button>
-        <button class="more-tile" data-page="gst" onclick="navigateTo('gst');toggleMoreMenu()"><span>📊</span><span>GST</span></button>
+        <button class="more-tile" data-page="accounts" onclick="closeMoreMenu();navigateTo('accounts')"><span>💰</span><span>Accounts</span></button>
+        <button class="more-tile" data-page="ledger" onclick="closeMoreMenu();navigateTo('ledger')"><span>📒</span><span>Ledger</span></button>
+        <button class="more-tile" data-page="eod" onclick="closeMoreMenu();navigateTo('eod')"><span>📅</span><span>End of Day</span></button>
+        <button class="more-tile" data-page="gst" onclick="closeMoreMenu();navigateTo('gst')"><span>📊</span><span>GST</span></button>
       </div>
 
       <!-- TEAM -->
       <div class="more-section-label">Team</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="hr" onclick="navigateTo('hr');toggleMoreMenu()"><span>👤</span><span>HR</span></button>
-        <button class="more-tile" data-page="field" onclick="navigateTo('field');toggleMoreMenu()"><span>🚗</span><span>Field Team</span></button>
-        <button class="more-tile" data-page="analytics" onclick="navigateTo('analytics');toggleMoreMenu()"><span>📈</span><span>Analytics</span></button>
-        <button class="more-tile" data-page="training" onclick="navigateTo('training');toggleMoreMenu()"><span>🎓</span><span>Training</span></button>
-        <button class="more-tile" data-page="incentives" onclick="navigateTo('incentives');toggleMoreMenu()"><span>🏆</span><span>Incentives</span></button>
-        <button class="more-tile" data-page="referrals" onclick="navigateTo('referrals');toggleMoreMenu()"><span>🤝</span><span>Referrals</span></button>
+        <button class="more-tile" data-page="hr" onclick="closeMoreMenu();navigateTo('hr')"><span>👤</span><span>HR</span></button>
+        <button class="more-tile" data-page="field" onclick="closeMoreMenu();navigateTo('field')"><span>🚗</span><span>Field Team</span></button>
+        <button class="more-tile" data-page="analytics" onclick="closeMoreMenu();navigateTo('analytics')"><span>📈</span><span>Analytics</span></button>
+        <button class="more-tile" data-page="training" onclick="closeMoreMenu();navigateTo('training')"><span>🎓</span><span>Training</span></button>
+        <button class="more-tile" data-page="incentives" onclick="closeMoreMenu();navigateTo('incentives')"><span>🏆</span><span>Incentives</span></button>
+        <button class="more-tile" data-page="referrals" onclick="closeMoreMenu();navigateTo('referrals')"><span>🤝</span><span>Referrals</span></button>
       </div>
 
       <!-- TOOLS -->
       <div class="more-section-label">Tools & More</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="visualizer" onclick="navigateTo('visualizer');toggleMoreMenu()"><span>🎨</span><span>Visualizer</span></button>
-        <button class="more-tile" data-page="marketing" onclick="navigateTo('marketing');toggleMoreMenu()"><span>📣</span><span>Marketing</span></button>
-        <button class="more-tile" data-page="promotions" onclick="navigateTo('promotions');toggleMoreMenu()"><span>🎁</span><span>Promos</span></button>
-        <button class="more-tile" data-page="catalogs" onclick="navigateTo('catalogs');toggleMoreMenu()"><span>📚</span><span>Catalogs</span></button>
-        <button class="more-tile" data-page="settings" onclick="navigateTo('settings');toggleMoreMenu()"><span>⚙️</span><span>Settings</span></button>
-        <button class="more-tile" onclick="window.open(location.origin+location.pathname+'?kiosk=security','_blank');toggleMoreMenu()"><span>🛡️</span><span>Security</span></button>
+        <button class="more-tile" data-page="visualizer" onclick="closeMoreMenu();navigateTo('visualizer')"><span>🎨</span><span>Visualizer</span></button>
+        <button class="more-tile" data-page="marketing" onclick="closeMoreMenu();navigateTo('marketing')"><span>📣</span><span>Marketing</span></button>
+        <button class="more-tile" data-page="promotions" onclick="closeMoreMenu();navigateTo('promotions')"><span>🎁</span><span>Promos</span></button>
+        <button class="more-tile" data-page="catalogs" onclick="closeMoreMenu();navigateTo('catalogs')"><span>📚</span><span>Catalogs</span></button>
+        <button class="more-tile" data-page="settings" onclick="closeMoreMenu();navigateTo('settings')"><span>⚙️</span><span>Settings</span></button>
+        <button class="more-tile" onclick="closeMoreMenu();window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>🛡️</span><span>Security</span></button>
       </div>
     </div>
   </div>
@@ -3998,10 +4016,9 @@ async function resetKioskPage() {
 // Add to VW_CHECKIN exports
 // Exit kiosk mode and go to staff check-in (restores nav)
 function exitKioskToStaffCheckin() {
-  document.getElementById('app-nav')?.style.removeProperty('display');
-  document.getElementById('app-header')?.style.removeProperty('display');
-  // Redirect to login — kiosk was unauthenticated
-  window.location.href = window.location.pathname;
+  // Strip ?kiosk=security from URL so app starts normally
+  const cleanUrl = window.location.pathname;
+  window.location.href = cleanUrl; // Full reload with clean URL
 }
 
 window.VW_CHECKIN.renderSecurityKioskPage = renderSecurityKioskPage;
@@ -24355,6 +24372,44 @@ window.VW_GRN = {
 
 /* === app.js === */
 let currentPage = 'dashboard';
+const _pageCache = {}; // Simple in-memory cache keyed by page name
+const _pageCacheTTL = {}; // TTL timestamps
+const CACHE_TTL_MS = 30000; // 30 seconds cache per page
+
+async function navigateTo(page, params) {
+  // Close more menu IMMEDIATELY — synchronous, no delay
+  const menu = document.getElementById('more-menu');
+  if (menu) menu.style.display = 'none';
+
+  currentPage = page;
+
+  // Show instant skeleton/spinner while loading
+  const content = document.getElementById('app-content');
+  if (content) {
+    // If we have a recent cache, show it instantly, then refresh in background
+    const cacheKey = page + (params ? JSON.stringify(params) : '');
+    const cached = _pageCache[cacheKey];
+    const cacheAge = Date.now() - (_pageCacheTTL[cacheKey] || 0);
+
+    if (cached && cacheAge < CACHE_TTL_MS) {
+      content.innerHTML = cached; // Instant — show cache immediately
+      applyRolePermissions();
+      // Refresh in background silently after 500ms
+      setTimeout(() => navigateToFresh(page, params, cacheKey), 500);
+      return;
+    }
+
+    // No cache — show skeleton
+    content.innerHTML = `<div style="padding:20px">
+      <div class="skeleton-line" style="width:40%;height:22px;margin-bottom:20px"></div>
+      <div class="skeleton-line" style="width:100%;height:80px;margin-bottom:10px;border-radius:14px"></div>
+      <div class="skeleton-line" style="width:100%;height:60px;margin-bottom:10px;border-radius:14px"></div>
+      <div class="skeleton-line" style="width:100%;height:60px;margin-bottom:10px;border-radius:14px"></div>
+    </div>`;
+  }
+
+  await navigateToFresh(page, params, page + (params ? JSON.stringify(params) : ''));
+}
 
 function applyRolePermissions() {
   const allowed = VW_AUTH.getAllowedPages();
@@ -24444,18 +24499,21 @@ function addQABadge(page, count) {
 window.updateQuickActionBadges = updateQuickActionBadges;
 
 var _navParams = null;
-async function navigateTo(page, params) {
+async function navigateToFresh(page, params, cacheKey) {
+  // Track page view
+  try { trackEvent('page_view', page, 'navigate'); } catch(e) {}
+
   _navParams = params || null;
-  stopActiveScanner(); // switching pages destroys the #qr-video element the scanner depends on — always release the camera first
+  stopActiveScanner();
   const allowed = VW_AUTH.getAllowedPages();
   if (!allowed.includes(page)) {
-    showToast("You don't have access to this section. Contact Management if you need it.", 'warn');
+    showToast("You don't have access to this section.", 'warn');
     if (currentPage !== page) return;
     page = 'dashboard';
   }
   currentPage = page;
   const content = document.getElementById('app-content');
-  content.innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  if (!content) return;
 
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const activeBtn = document.querySelector(`.nav-btn[data-page="${page}"]`);
@@ -24466,6 +24524,9 @@ async function navigateTo(page, params) {
 
   try {
     let html = '';
+    // Pages that should NOT be cached (real-time data)
+    const noCachePages = ['dashboard','cart','dispatch','accounts','checkin','tasks'];
+
     if (page === 'dashboard') html = await renderDashboard();
     else if (page === 'checkin') html = await VW_CHECKIN.renderCheckin();
     else if (page === 'cart') html = await renderBillingPage();
@@ -24474,7 +24535,7 @@ async function navigateTo(page, params) {
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
-    else if (page === 'settings') { html = await VW_SETTINGS.renderSettingsPage(); }
+    else if (page === 'settings') html = await VW_SETTINGS.renderSettingsPage();
     else if (page === 'club') html = await renderContractorClub();
     else if (page === 'training') html = await VW_TRAINING.renderTraining();
     else if (page === 'feedback') html = await renderFeedbackPage();
@@ -24506,15 +24567,15 @@ async function navigateTo(page, params) {
       if (cid) {
         html = await VW_LEDGER.renderCustomerLedger(cid);
       } else {
-        // No customer selected — show search to pick one
-        const customers = await VW_DB.all(VW_DB.STORES.customers);
+        const customers = await VW_DB.client.from('customers').select('id,name,phone,type').order('name').limit(200);
+        const custs = customers.data || [];
         html = `
           <div class="module-header"><h2>📒 Customer Ledger</h2></div>
           <div class="card">
             <p style="font-size:13px;color:var(--text3);margin-bottom:10px">Search for a customer to view their full ledger</p>
             <input type="text" id="ledger-search" placeholder="Search by name or phone..." oninput="filterLedgerSearch(this.value)" style="margin-bottom:10px">
             <div id="ledger-customer-list">
-              ${customers.slice(0,20).map(c => `
+              ${custs.slice(0,20).map(c => `
                 <div class="cust-row" onclick="navigateTo('ledger',{customerId:${c.id}})">
                   <div class="staff-avatar">${(c.name||'?')[0].toUpperCase()}</div>
                   <div class="cust-info">
@@ -24524,21 +24585,35 @@ async function navigateTo(page, params) {
                 </div>`).join('')}
             </div>
           </div>`;
-        setTimeout(() => {
-          window._ledgerAllCustomers = customers;
-        }, 0);
+        setTimeout(() => { window._ledgerAllCustomers = custs; }, 0);
       }
     }
-    content.innerHTML = html || '<p style="padding:2rem;color:#888">Nothing here yet.</p>';
+
+    const finalHtml = html || '<p style="padding:2rem;color:#888">Nothing here yet.</p>';
+
+    // Cache the result (skip for real-time pages)
+    if (!noCachePages.includes(page) && cacheKey) {
+      _pageCache[cacheKey] = finalHtml;
+      _pageCacheTTL[cacheKey] = Date.now();
+    }
+
+    content.innerHTML = finalHtml;
+    content.scrollTop = 0;
+    applyRolePermissions();
+
   } catch(err) {
     console.error('Navigation error:', err);
+    try { trackEvent('error', page, 'render_error', null, err.message); } catch(e) {}
     content.innerHTML = `<div style="padding:2rem;text-align:center">
       <div style="font-size:2rem;margin-bottom:1rem">⚠️</div>
-      <div style="color:#C8972B;font-weight:600;margin-bottom:8px">Something went wrong</div>
+      <div style="color:var(--gold);font-weight:600;margin-bottom:8px">Something went wrong loading this page</div>
       <div style="color:var(--text3);font-size:13px;margin-bottom:1.5rem">${err.message || 'Unknown error'}</div>
-      <button onclick="navigateTo('${page}')" style="background:#C8972B;color:#000;border:none;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer">Try Again</button>
+      <button onclick="navigateTo('${page}')" style="background:var(--gold);color:#000;border:none;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer">Try Again</button>
     </div>`;
   }
+
+  // Scroll to top
+  document.getElementById('app-content')?.scrollTo(0, 0);
   content.scrollTo(0, 0);
   applyRolePermissions();
 }
@@ -24653,23 +24728,32 @@ function shareDailyReportWhatsApp() {
 window.shareDailyReportWhatsApp = shareDailyReportWhatsApp;
 
 async function renderDashboard() {
-  const [customers, visits, invoices, leads, feedback, tasks, products, quotations] = await Promise.all([
-    VW_DB.all(VW_DB.STORES.customers),
-    VW_DB.all(VW_DB.STORES.visits),
-    VW_DB.all(VW_DB.STORES.invoices),
-    VW_DB.all(VW_DB.STORES.leads),
-    VW_DB.all(VW_DB.STORES.feedback),
-    VW_DB.all(VW_DB.STORES.tasks),
-    VW_DB.all(VW_DB.STORES.products),
-    VW_DB.all(VW_DB.STORES.quotations)
+  const profile = VW_AUTH.getCurrentProfile();
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const todayStr = new Date().toDateString();
+
+  // ⚡ PERFORMANCE: Load only what's needed, with limits
+  // Use Supabase direct for date-filtered queries instead of loading ALL records
+  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes] = await Promise.all([
+    VW_DB.client.from('customers').select('id,name,phone,visit_count,total_spend,last_visit').order('created_at', { ascending: false }).limit(500),
+    VW_DB.client.from('visits').select('*').gte('date', today + 'T00:00:00').limit(100),
+    VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received').gte('date', today + 'T00:00:00').limit(100),
+    VW_DB.client.from('tasks').select('*').in('status', ['pending','in_progress']).limit(50),
+    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at').eq('approval_status', 'pending_approval').limit(20),
   ]);
 
-  const profile = VW_AUTH.getCurrentProfile();
-  const today = new Date().toDateString();
-  const todayInvoices = invoices.filter(i => new Date(i.date).toDateString() === today);
-  const todayVisits = visits.filter(v => new Date(v.date).toDateString() === today);
-  const todayCustomers = todayVisits.filter(v => v.visitorType === 'customer');
-  const todayVisitors = todayVisits.filter(v => v.visitorType !== 'customer');
+  const customers = customersRes.data || [];
+  const visits = visitsRes.data || [];
+  const invoices = invoicesRes.data || [];
+  const tasks = tasksRes.data || [];
+  const pendingQuotes = quotationsRes.data || [];
+
+  // Normalize snake_case from Supabase to camelCase for compatibility
+  const normalizeInv = i => ({ ...i, invoiceNo: i.invoice_no || i.invoiceNo, paymentMethod: i.payment_method || i.paymentMethod, creditSale: i.credit_sale || i.creditSale, approvalStatus: i.approval_status || i.approvalStatus, paymentVerified: i.payment_verified || i.paymentVerified, customerName: i.customer_name || i.customerName, amountReceived: i.amount_received || i.amountReceived });
+  const todayInvoices = invoices.map(normalizeInv);
+  const todayVisits = visits;
+  const todayCustomers = todayVisits.filter(v => v.visitor_type === 'customer' || v.visitorType === 'customer');
+  const todayVisitors = todayVisits.filter(v => v.visitor_type !== 'customer' && v.visitorType !== 'customer');
 
   // Cashier / Accounts role gets a focused daily till summary instead of
   // the full admin dashboard — shows exactly what they need for handover.
@@ -25113,11 +25197,12 @@ async function renderDashboard() {
 
   <!-- PENDING QUOTATIONS -->
   ${quotesCard}
-    <button class="qa-btn" data-page="settings" onclick="navigateTo('settings')"><span class="qa-icon">⚙️</span><span>Settings</span></button>
-  </div>
 
   ${profile && profile.role === 'admin' ? `
-  <button class="btn-wa full-width" style="margin-bottom:14px" onclick="sendDailySummary()">📤 Send Daily Summary (WhatsApp)</button>` : ''}
+  <div style="margin-bottom:14px;display:flex;gap:8px">
+    <button class="btn-secondary" style="flex:1" onclick="sendDailySummary()">📤 Daily Summary WA</button>
+    <button class="btn-secondary" style="flex:1" onclick="navigateTo('analytics')">📈 Analytics</button>
+  </div>` : ''}
 
   <div class="card">
     <h3 class="card-title">Business Snapshot</h3>
@@ -25421,27 +25506,36 @@ function renderFeedbackList(feedbacks, custMap) {
     </div>`).join('');
 }
 
+function closeMoreMenu() {
+  const menu = document.getElementById('more-menu');
+  if (menu) menu.style.display = 'none';
+}
+window.closeMoreMenu = closeMoreMenu;
+
 function toggleMoreMenu() {
   const menu = document.getElementById('more-menu');
   if (!menu) return;
-  const isOpen = menu.style.display !== 'none' && menu.style.display !== '';
-  menu.style.display = isOpen ? 'none' : 'block';
-  // Highlight active page tile
-  if (!isOpen) {
+  const isOpen = menu.style.display === 'block';
+  if (isOpen) {
+    menu.style.display = 'none';
+  } else {
+    menu.style.display = 'block';
+    // Highlight current active page tile
     menu.querySelectorAll('.more-tile[data-page]').forEach(btn => {
       btn.dataset.active = btn.dataset.page === currentPage ? 'true' : 'false';
     });
   }
 }
 
-// Close the More menu when tapping anywhere outside it (or its toggle button)
+// Close more menu when tapping outside it
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('more-menu');
-  if (!menu || menu.style.display === 'none') return;
+  if (!menu || menu.style.display !== 'block') return;
   const moreBtn = document.querySelector('.nav-btn[data-page="more"]');
-  if (menu.contains(e.target) || (moreBtn && moreBtn.contains(e.target))) return;
-  menu.style.display = 'none';
-});
+  if (!menu.contains(e.target) && !(moreBtn && moreBtn.contains(e.target))) {
+    menu.style.display = 'none';
+  }
+}, true); // capture phase so it fires before tile onclick
 
 async function refreshNotifBadge() {
   const count = await VW_NOTIFY.getUnreadNotificationCount();
@@ -25661,7 +25755,15 @@ async function init() {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').innerHTML = await VW_CHECKIN.renderSecurityKioskPage();
+    // Override navigateTo on kiosk page — strip URL params and reload normally
+    window._kioskMode = 'security';
     return;
+  }
+
+  // If we arrived here with kiosk in URL but somehow got past — strip it
+  if (urlParams.has('kiosk') || urlParams.has('delivery') || urlParams.has('track')) {
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
   }
 
   // DRIVER DELIVERY CONFIRMATION — ?delivery=GP/26-27/00001
