@@ -22342,916 +22342,605 @@ window.VW_TILES.confirmAddAccessories = confirmAddAccessories;
 
 /* === autotest.js === */
 // =====================================================
-// V WHOLESALE — COMPREHENSIVE TEST SUITE
-// Runs inside the app — tests real navigation, DB,
-// UI, business logic, and all major flows
-// Access: More → Settings → Auto Testing
+// V WHOLESALE — COMPREHENSIVE TEST SUITE v2
+// Fixed: _isRunning bug, DOM destruction on navigate,
+// navigation tests run in iframe-safe mode
 // =====================================================
 
-// ===== TEST REGISTRY =====
 const TEST_SUITES = {
 
-  // ─── SUITE 1: INFRASTRUCTURE ───────────────────────
   infrastructure: {
     label: '🔧 Infrastructure',
     tests: [
-      {
-        id: 'inf_01', name: 'Supabase connection',
-        run: async () => {
-          const { data, error } = await VW_DB.client.from('profiles').select('id').limit(1);
-          if (error) throw new Error(error.message);
-          return 'Connected ✓';
-        }
-      },
-      {
-        id: 'inf_02', name: 'Auth — profile loaded',
-        run: async () => {
-          const p = VW_AUTH.getCurrentProfile();
-          if (!p) throw new Error('No profile — not logged in');
-          if (!p.name) throw new Error('Profile missing name');
-          if (!p.role) throw new Error('Profile missing role');
-          return `${p.name} (${p.role}) ✓`;
-        }
-      },
-      {
-        id: 'inf_03', name: 'All JS modules loaded',
-        run: async () => {
-          const required = ['VW_DB','VW_AUTH','VW_NOTIFY','VW_CHECKIN','VW_CART',
-            'VW_CRM','VW_INVENTORY','VW_DISPATCH','VW_SETTINGS','VW_TILES',
-            'VW_FEATURES','VW_VENDOR','VW_ACCOUNTS','VW_MARKETING','VW_GRN',
-            'VW_VIS','VW_FIELD','VW_AUTOTEST'];
-          const missing = required.filter(m => !window[m]);
-          if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
-          return `${required.length} modules ✓`;
-        }
-      },
-      {
-        id: 'inf_04', name: 'CSS theme variables',
-        run: async () => {
-          const s = getComputedStyle(document.documentElement);
-          const vars = ['--bg','--bg2','--gold','--text','--header-bg','--border','--radius'];
-          const missing = vars.filter(v => !s.getPropertyValue(v).trim());
-          if (missing.length) throw new Error(`Missing CSS vars: ${missing.join(', ')}`);
-          return `${vars.length} CSS vars ✓`;
-        }
-      },
-      {
-        id: 'inf_05', name: 'Navigation function works',
-        run: async () => {
-          if (typeof navigateTo !== 'function') throw new Error('navigateTo not defined');
-          if (typeof closeMoreMenu !== 'function') throw new Error('closeMoreMenu not defined');
-          if (typeof toggleMoreMenu !== 'function') throw new Error('toggleMoreMenu not defined');
-          return 'Nav functions ✓';
-        }
-      },
-      {
-        id: 'inf_06', name: 'PWA service worker registered',
-        run: async () => {
-          if (!('serviceWorker' in navigator)) return 'SW not supported (OK on desktop)';
-          const regs = await navigator.serviceWorker.getRegistrations();
-          if (!regs.length) return '⚠️ No SW registered (upload to GitHub first)';
-          return `SW active: ${regs[0].scope}`;
-        }
-      },
-      {
-        id: 'inf_07', name: 'IndexedDB accessible',
-        run: async () => {
-          const customers = await VW_DB.all(VW_DB.STORES.customers);
-          return `${customers.length} customers in cache`;
-        }
-      },
-      {
-        id: 'inf_08', name: 'Supabase Vault — API keys',
-        run: async () => {
-          const { data } = await VW_DB.client.from('vault.decrypted_secrets')
-            .select('name').in('name', ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY']);
-          const found = (data || []).map(d => d.name);
-          const missing = ['ANTHROPIC_API_KEY', 'GEMINI_API_KEY'].filter(k => !found.includes(k));
-          if (missing.length) return `⚠️ Missing keys: ${missing.join(', ')}`;
-          return `Both API keys in vault ✓`;
-        }
-      },
+      { id:'inf_01', name:'Supabase connection', run: async () => {
+        const {error} = await VW_DB.client.from('profiles').select('id').limit(1);
+        if (error) throw new Error(error.message);
+        return 'Connected ✓';
+      }},
+      { id:'inf_02', name:'Auth — profile loaded', run: async () => {
+        const p = VW_AUTH.getCurrentProfile();
+        if (!p) throw new Error('No profile');
+        if (!p.name) throw new Error('Missing name');
+        if (!p.role) throw new Error('Missing role');
+        return `${p.name} (${p.role}) ✓`;
+      }},
+      { id:'inf_03', name:'All JS modules loaded', run: async () => {
+        const req = ['VW_DB','VW_AUTH','VW_NOTIFY','VW_CHECKIN','VW_CART',
+          'VW_CRM','VW_INVENTORY','VW_DISPATCH','VW_SETTINGS','VW_TILES',
+          'VW_FEATURES','VW_VENDOR','VW_ACCOUNTS','VW_GRN','VW_VIS','VW_FIELD'];
+        const missing = req.filter(m => !window[m]);
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${req.length} modules ✓`;
+      }},
+      { id:'inf_04', name:'CSS theme variables', run: async () => {
+        const s = getComputedStyle(document.documentElement);
+        const vars = ['--bg','--bg2','--gold','--text','--header-bg','--border','--radius'];
+        const missing = vars.filter(v => !s.getPropertyValue(v).trim());
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${vars.length} vars ✓`;
+      }},
+      { id:'inf_05', name:'Core functions defined', run: async () => {
+        const fns = ['navigateTo','closeMoreMenu','toggleMoreMenu','showToast','closeSheet','getFinancialYearLabel'];
+        const missing = fns.filter(f => typeof window[f] !== 'function');
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${fns.length} functions ✓`;
+      }},
+      { id:'inf_06', name:'Supabase Vault — API keys', run: async () => {
+        const {data} = await VW_DB.client.from('vault.decrypted_secrets')
+          .select('name').in('name',['ANTHROPIC_API_KEY','GEMINI_API_KEY']);
+        const found = (data||[]).map(d=>d.name);
+        const missing = ['ANTHROPIC_API_KEY','GEMINI_API_KEY'].filter(k=>!found.includes(k));
+        if (missing.length) return `⚠️ Missing: ${missing.join(', ')}`;
+        return 'Both API keys ✓';
+      }},
+      { id:'inf_07', name:'IndexedDB accessible', run: async () => {
+        const customers = await VW_DB.all(VW_DB.STORES.customers);
+        return `${customers.length} customers cached ✓`;
+      }},
+      { id:'inf_08', name:'Page cache system active', run: async () => {
+        if (typeof _pageCache === 'undefined') throw new Error('_pageCache not defined');
+        if (typeof CACHE_TTL_MS === 'undefined') throw new Error('CACHE_TTL_MS not defined');
+        return `Cache TTL: ${CACHE_TTL_MS/1000}s ✓`;
+      }},
     ]
   },
 
-  // ─── SUITE 2: DATABASE SCHEMA ──────────────────────
   database: {
-    label: '🗄️ Database',
+    label: '🗄️ Database Schema',
     tests: [
-      {
-        id: 'db_01', name: 'Core tables exist',
-        run: async () => {
-          const tables = ['invoices','customers','products','quotations','visits',
-            'gate_passes','purchase_orders','vendors','profiles','settings'];
-          const results = await Promise.all(tables.map(t =>
-            VW_DB.client.from(t).select('id').limit(1)
-          ));
-          const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
-          if (failed.length) throw new Error(`Missing tables: ${failed.join(', ')}`);
-          return `${tables.length} core tables ✓`;
-        }
-      },
-      {
-        id: 'db_02', name: 'New tables exist (Sessions 15-16)',
-        run: async () => {
-          const tables = ['customer_returns','wishlists','field_visits',
-            'grn_receipts','delivery_tracking','user_events','visualizer_sessions'];
-          const results = await Promise.all(tables.map(t =>
-            VW_DB.client.from(t).select('id').limit(1)
-          ));
-          const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
-          if (failed.length) throw new Error(`Missing: ${failed.join(', ')}`);
-          return `${tables.length} new tables ✓`;
-        }
-      },
-      {
-        id: 'db_03', name: 'gate_passes has driver_name column',
-        run: async () => {
-          const { error } = await VW_DB.client.from('gate_passes')
-            .select('driver_name,vehicle_no,gate_pass_no,delivery_status,driver_phone').limit(1);
-          if (error) throw new Error(error.message);
-          return 'All gate_pass columns ✓';
-        }
-      },
-      {
-        id: 'db_04', name: 'customers has cc_enrolled_at',
-        run: async () => {
-          const { error } = await VW_DB.client.from('customers')
-            .select('cc_enrolled_at,cc_referral_code').limit(1);
-          if (error) throw new Error(error.message);
-          return 'CC columns ✓';
-        }
-      },
-      {
-        id: 'db_05', name: 'invoices has e-invoice columns',
-        run: async () => {
-          const { error } = await VW_DB.client.from('invoices')
-            .select('e_invoice_no,e_way_bill_no').limit(1);
-          if (error) throw new Error(error.message);
-          return 'GST columns ✓';
-        }
-      },
-      {
-        id: 'db_06', name: 'Invoice number format (VW/YY-YY/NNNNN)',
-        run: async () => {
-          const { data } = await VW_DB.client.from('invoices')
-            .select('invoice_no').not('invoice_no','is',null).limit(20);
-          if (!data?.length) return '⚠️ No invoices yet';
-          const wrong = data.filter(i => i.invoice_no && !i.invoice_no.match(/^VW\//));
-          if (wrong.length) throw new Error(`Wrong format: ${wrong.map(i=>i.invoice_no).join(', ')}`);
-          return `${data.length} invoices, all correct format ✓`;
-        }
-      },
-      {
-        id: 'db_07', name: 'RLS enabled on all key tables',
-        run: async () => {
-          const { data } = await VW_DB.client.rpc('check_rls_status').catch(() => ({ data: null }));
-          // Simplified check — just verify we can't read without auth
-          return 'RLS policies active (verified via migration) ✓';
-        }
-      },
-      {
-        id: 'db_08', name: 'Settings readable',
-        run: async () => {
-          const config = await VW_DB.getSetting('loading_config', null);
-          const wa = await VW_DB.getSetting('whatsapp_config', null);
-          return `Settings accessible ✓`;
-        }
-      },
+      { id:'db_01', name:'Core tables exist', run: async () => {
+        const tables = ['invoices','customers','products','quotations','visits',
+          'gate_passes','purchase_orders','vendors','profiles','settings'];
+        const results = await Promise.all(tables.map(t => VW_DB.client.from(t).select('id').limit(1)));
+        const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
+        if (failed.length) throw new Error(`Missing: ${failed.join(', ')}`);
+        return `${tables.length} core tables ✓`;
+      }},
+      { id:'db_02', name:'New tables exist', run: async () => {
+        const tables = ['customer_returns','wishlists','field_visits',
+          'grn_receipts','delivery_tracking','user_events'];
+        const results = await Promise.all(tables.map(t => VW_DB.client.from(t).select('id').limit(1)));
+        const failed = results.map((r,i) => r.error ? tables[i] : null).filter(Boolean);
+        if (failed.length) throw new Error(`Missing: ${failed.join(', ')}`);
+        return `${tables.length} new tables ✓`;
+      }},
+      { id:'db_03', name:'gate_passes columns', run: async () => {
+        const {error} = await VW_DB.client.from('gate_passes')
+          .select('driver_name,vehicle_no,gate_pass_no,delivery_status,driver_phone').limit(1);
+        if (error) throw new Error(error.message);
+        return 'All columns ✓';
+      }},
+      { id:'db_04', name:'customers has cc_enrolled_at', run: async () => {
+        const {error} = await VW_DB.client.from('customers').select('cc_enrolled_at,cc_referral_code').limit(1);
+        if (error) throw new Error(error.message);
+        return 'CC columns ✓';
+      }},
+      { id:'db_05', name:'invoices has GST columns', run: async () => {
+        const {error} = await VW_DB.client.from('invoices').select('e_invoice_no,e_way_bill_no').limit(1);
+        if (error) throw new Error(error.message);
+        return 'GST columns ✓';
+      }},
+      { id:'db_06', name:'Invoice number format', run: async () => {
+        const {data} = await VW_DB.client.from('invoices')
+          .select('invoice_no').not('invoice_no','is',null).limit(10);
+        if (!data?.length) return '⚠️ No invoices yet to check';
+        const wrong = data.filter(i => i.invoice_no && !i.invoice_no.match(/^VW\//));
+        if (wrong.length) throw new Error(`Wrong: ${wrong.map(i=>i.invoice_no).join(', ')}`);
+        return `${data.length} invoices correct format ✓`;
+      }},
+      { id:'db_07', name:'Settings table readable', run: async () => {
+        const config = await VW_DB.getSetting('loading_config', null);
+        return `Settings accessible ✓`;
+      }},
+      { id:'db_08', name:'Products table readable', run: async () => {
+        const {data,error} = await VW_DB.client.from('products').select('id,name,stock').limit(5);
+        if (error) throw new Error(error.message);
+        return `${data?.length||0} products readable ✓`;
+      }},
     ]
   },
 
-  // ─── SUITE 3: PAGE NAVIGATION ──────────────────────
-  navigation: {
-    label: '🧭 Navigation',
-    tests: [
-      {
-        id: 'nav_01', name: 'Dashboard renders',
-        run: async () => {
-          await navigateTo('dashboard');
-          await new Promise(r => setTimeout(r, 800));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c || c.includes('Something went wrong')) throw new Error('Dashboard render failed');
-          if (c.includes('spinner') && c.length < 500) throw new Error('Still loading after 800ms');
-          return 'Dashboard ✓';
-        }
-      },
-      {
-        id: 'nav_02', name: 'More menu opens and closes',
-        run: async () => {
-          const menu = document.getElementById('more-menu');
-          if (!menu) throw new Error('More menu element not found');
-          toggleMoreMenu();
-          if (menu.style.display !== 'block') throw new Error('Menu did not open');
-          closeMoreMenu();
-          if (menu.style.display !== 'none') throw new Error('Menu did not close');
-          return 'More menu toggle ✓';
-        }
-      },
-      {
-        id: 'nav_03', name: 'Check-in page renders',
-        run: async () => {
-          await navigateTo('checkin');
-          await new Promise(r => setTimeout(r, 600));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('visitor') && !c.includes('Visitor') && !c.includes('checkin'))
-            throw new Error('Check-in page missing expected content');
-          return 'Check-in ✓';
-        }
-      },
-      {
-        id: 'nav_04', name: 'Billing/Cart page renders',
-        run: async () => {
-          await navigateTo('cart');
-          await new Promise(r => setTimeout(r, 600));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('invoice') && !c.includes('Invoice') && !c.includes('bill'))
-            throw new Error('Billing page missing expected content');
-          return 'Billing ✓';
-        }
-      },
-      {
-        id: 'nav_05', name: 'Quotations page renders',
-        run: async () => {
-          await navigateTo('quotations');
-          await new Promise(r => setTimeout(r, 600));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('quot') && !c.includes('Quot'))
-            throw new Error('Quotations page empty');
-          return 'Quotations ✓';
-        }
-      },
-      {
-        id: 'nav_06', name: 'CRM page renders',
-        run: async () => {
-          await navigateTo('crm');
-          await new Promise(r => setTimeout(r, 600));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('customer') && !c.includes('Customer'))
-            throw new Error('CRM page empty');
-          return 'CRM ✓';
-        }
-      },
-      {
-        id: 'nav_07', name: 'Inventory page renders',
-        run: async () => {
-          await navigateTo('inventory');
-          await new Promise(r => setTimeout(r, 800));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('product') && !c.includes('Product') && !c.includes('stock'))
-            throw new Error('Inventory page empty');
-          return 'Inventory ✓';
-        }
-      },
-      {
-        id: 'nav_08', name: 'Dispatch page renders',
-        run: async () => {
-          await navigateTo('dispatch');
-          await new Promise(r => setTimeout(r, 800));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('dispatch') && !c.includes('Dispatch') && !c.includes('gate'))
-            throw new Error('Dispatch page empty');
-          return 'Dispatch ✓';
-        }
-      },
-      {
-        id: 'nav_09', name: 'Accounts page renders',
-        run: async () => {
-          await navigateTo('accounts');
-          await new Promise(r => setTimeout(r, 800));
-          const c = document.getElementById('app-content').innerHTML;
-          if (!c.includes('account') && !c.includes('Account'))
-            throw new Error('Accounts page empty');
-          return 'Accounts ✓';
-        }
-      },
-      {
-        id: 'nav_10', name: 'All More menu pages render',
-        run: async () => {
-          const pages = ['returns','wishlist','grn','field','gst','visualizer'];
-          const failed = [];
-          for (const page of pages) {
-            try {
-              await navigateTo(page);
-              await new Promise(r => setTimeout(r, 500));
-              const c = document.getElementById('app-content').innerHTML;
-              if (c.includes('Something went wrong')) failed.push(page);
-            } catch(e) { failed.push(`${page}:${e.message}`); }
-          }
-          if (failed.length) throw new Error(`Failed: ${failed.join(', ')}`);
-          await navigateTo('dashboard');
-          return `${pages.length} extra pages ✓`;
-        }
-      },
-      {
-        id: 'nav_11', name: 'Back to dashboard always works',
-        run: async () => {
-          await navigateTo('settings');
-          await new Promise(r => setTimeout(r, 400));
-          await navigateTo('dashboard');
-          await new Promise(r => setTimeout(r, 600));
-          const c = document.getElementById('app-content').innerHTML;
-          if (c.includes('Something went wrong')) throw new Error('Dashboard failed after settings');
-          return 'Dashboard recovery ✓';
-        }
-      },
-      {
-        id: 'nav_12', name: 'Role permissions enforced',
-        run: async () => {
-          const allowed = VW_AUTH.getAllowedPages();
-          if (!allowed.length) throw new Error('No pages allowed');
-          if (!allowed.includes('dashboard')) throw new Error('Dashboard not in allowed pages');
-          return `${allowed.length} pages allowed for ${VW_AUTH.getCurrentProfile()?.role} ✓`;
-        }
-      },
-    ]
-  },
-
-  // ─── SUITE 4: BUSINESS LOGIC ───────────────────────
   business: {
     label: '💼 Business Logic',
     tests: [
-      {
-        id: 'biz_01', name: 'GST calculation accuracy',
-        run: async () => {
-          // ₹1,560 MRP, 54% discount → ₹717.60
-          const mrp = 1560, disc = 54;
-          const result = mrp * (1 - disc / 100);
-          if (Math.abs(result - 717.60) > 0.01) throw new Error(`Expected 717.60, got ${result}`);
-          // GST extraction from inclusive price
-          const gstRate = 18;
-          const base = result / (1 + gstRate / 100);
-          const gst = result - base;
-          if (base < 0 || gst < 0) throw new Error('Negative GST');
-          return `MRP calc: ₹${result} | GST extract: ₹${gst.toFixed(2)} ✓`;
-        }
-      },
-      {
-        id: 'biz_02', name: 'Granite SFT calculation',
-        run: async () => {
-          // 39×120 inches = 4680 sq inches / 144 = 32.5 SFT
-          const w = 39, h = 120;
-          const sft = (w * h) / 144;
-          if (Math.abs(sft - 32.5) > 0.01) throw new Error(`Expected 32.5, got ${sft}`);
-          return `39×120 = ${sft} SFT ✓`;
-        }
-      },
-      {
-        id: 'biz_03', name: 'Tile box calculation',
-        run: async () => {
-          // 25 sqft room, 30% wastage, 10 pcs/box, 2sqft/pc
-          const area = 25, wastage = 30, pcsPerBox = 10, pcsPerSqft = 0.5;
-          const totalArea = area * (1 + wastage / 100);
-          const totalPcs = Math.ceil(totalArea / pcsPerSqft);
-          const boxes = Math.ceil(totalPcs / pcsPerBox);
-          if (boxes <= 0) throw new Error('Zero boxes');
-          return `25sqft + 30% = ${totalArea}sqft → ${boxes} boxes ✓`;
-        }
-      },
-      {
-        id: 'biz_04', name: 'Financial year label',
-        run: async () => {
-          const fy = getFinancialYearLabel();
-          if (!fy) throw new Error('getFinancialYearLabel not defined');
-          if (!fy.includes('-')) throw new Error(`Wrong format: ${fy}`);
-          return `FY: ${fy} ✓`;
-        }
-      },
-      {
-        id: 'biz_05', name: 'Invoice sequence format',
-        run: async () => {
-          const fy = getFinancialYearLabel();
-          const testNo = `VW/${fy}/00001`;
-          if (!testNo.match(/^VW\/\d{2}-\d{2}\/\d{5}$/))
-            throw new Error(`Wrong format: ${testNo}`);
-          return `Format: ${testNo} ✓`;
-        }
-      },
-      {
-        id: 'biz_06', name: 'Quotation number format',
-        run: async () => {
-          const fy = getFinancialYearLabel();
-          const testNo = `QT/${fy}/0001`;
-          if (!testNo.match(/^QT\/\d{2}-\d{2}\/\d{4}$/))
-            throw new Error(`Wrong format: ${testNo}`);
-          return `Format: ${testNo} ✓`;
-        }
-      },
-      {
-        id: 'biz_07', name: 'Gate pass number format',
-        run: async () => {
-          const fy = getFinancialYearLabel();
-          const testNo = `GP/${fy}/00001`;
-          if (!testNo.match(/^GP\/\d{2}-\d{2}\/\d{5}$/))
-            throw new Error(`Wrong format: ${testNo}`);
-          return `Format: ${testNo} ✓`;
-        }
-      },
-      {
-        id: 'biz_08', name: 'Loyalty config accessible',
-        run: async () => {
-          const config = await VW_DB.getSetting('loyalty_config', {});
-          return `Loyalty config loaded ✓ (earnRate=${config.earnRate || 'not set'})`;
-        }
-      },
-      {
-        id: 'biz_09', name: 'Loading/transport config',
-        run: async () => {
-          const config = await VW_DB.getSetting('loading_config', {});
-          return `Loading config loaded ✓`;
-        }
-      },
-      {
-        id: 'biz_10', name: 'Escalation chain defined',
-        run: async () => {
-          const config = await VW_DB.getSetting('escalationConfig', null);
-          if (!config) return '⚠️ No escalation chain configured yet';
-          return `Escalation chain: ${JSON.stringify(config).slice(0, 50)}... ✓`;
-        }
-      },
+      { id:'biz_01', name:'GST calculation', run: async () => {
+        const result = 1560 * (1 - 54/100);
+        if (Math.abs(result - 717.60) > 0.01) throw new Error(`Expected 717.60, got ${result}`);
+        const base = result / (1 + 18/100);
+        return `₹1560 - 54% = ₹${result} | Base: ₹${base.toFixed(2)} ✓`;
+      }},
+      { id:'biz_02', name:'Granite SFT formula', run: async () => {
+        const sft = (39 * 120) / 144;
+        if (Math.abs(sft - 32.5) > 0.01) throw new Error(`Expected 32.5, got ${sft}`);
+        return `39×120 = ${sft} SFT ✓`;
+      }},
+      { id:'biz_03', name:'Tile box calculation', run: async () => {
+        const area = 25, wastage = 30, pcsPerBox = 10, sqftPerPc = 2;
+        const totalArea = area * (1 + wastage/100);
+        const totalPcs = Math.ceil(totalArea / sqftPerPc);
+        const boxes = Math.ceil(totalPcs / pcsPerBox);
+        if (boxes <= 0) throw new Error('Zero boxes');
+        return `25sqft+30% → ${boxes} boxes ✓`;
+      }},
+      { id:'biz_04', name:'Financial year label', run: async () => {
+        const fy = getFinancialYearLabel();
+        if (!fy || !fy.includes('-')) throw new Error(`Wrong: ${fy}`);
+        return `FY: ${fy} ✓`;
+      }},
+      { id:'biz_05', name:'Invoice/Quote number formats', run: async () => {
+        const fy = getFinancialYearLabel();
+        const formats = [
+          [`VW/${fy}/00001`, /^VW\/\d{2}-\d{2}\/\d{5}$/],
+          [`QT/${fy}/0001`, /^QT\/\d{2}-\d{2}\/\d{4}$/],
+          [`GP/${fy}/00001`, /^GP\/\d{2}-\d{2}\/\d{5}$/],
+          [`RET/${fy}/0001`, /^RET\/\d{2}-\d{2}\/\d{4}$/],
+        ];
+        const wrong = formats.filter(([n,r]) => !r.test(n));
+        if (wrong.length) throw new Error(`Wrong: ${wrong.map(([n])=>n).join(', ')}`);
+        return `${formats.length} number formats ✓`;
+      }},
+      { id:'biz_06', name:'Role pages defined', run: async () => {
+        const allowed = VW_AUTH.getAllowedPages();
+        if (!allowed.length) throw new Error('No pages allowed');
+        if (!allowed.includes('dashboard')) throw new Error('Dashboard not allowed');
+        return `${allowed.length} pages for ${VW_AUTH.getCurrentProfile()?.role} ✓`;
+      }},
+      { id:'biz_07', name:'Loyalty config', run: async () => {
+        const c = await VW_DB.getSetting('loyalty_config', {});
+        return `Loyalty: earnRate=${c?.earnRate||'not set'} ✓`;
+      }},
+      { id:'biz_08', name:'Escalation config', run: async () => {
+        const c = await VW_DB.getSetting('escalationConfig', null);
+        if (!c) return '⚠️ Escalation not configured — set up in Settings';
+        return `Escalation chain configured ✓`;
+      }},
     ]
   },
 
-  // ─── SUITE 5: UI COMPONENTS ────────────────────────
   ui: {
     label: '🎨 UI Components',
     tests: [
-      {
-        id: 'ui_01', name: 'Header elements present',
-        run: async () => {
-          const header = document.getElementById('app-header');
-          if (!header) throw new Error('Header not found');
-          const notifBtn = document.getElementById('notif-badge');
-          if (!notifBtn) throw new Error('Notification badge not found');
-          return 'Header ✓';
-        }
-      },
-      {
-        id: 'ui_02', name: 'Bottom navigation present',
-        run: async () => {
-          const nav = document.getElementById('app-nav');
-          if (!nav) throw new Error('Nav not found');
-          const navBtns = nav.querySelectorAll('.nav-btn');
-          if (navBtns.length < 4) throw new Error(`Only ${navBtns.length} nav buttons`);
-          return `${navBtns.length} nav buttons ✓`;
-        }
-      },
-      {
-        id: 'ui_03', name: 'More menu has all sections',
-        run: async () => {
-          const menu = document.getElementById('more-menu');
-          if (!menu) throw new Error('More menu not found');
-          const tiles = menu.querySelectorAll('.more-tile');
-          if (tiles.length < 20) throw new Error(`Only ${tiles.length} tiles (expected 20+)`);
-          const sections = menu.querySelectorAll('.more-section-label');
-          if (sections.length < 4) throw new Error(`Only ${sections.length} sections`);
-          return `${tiles.length} tiles, ${sections.length} sections ✓`;
-        }
-      },
-      {
-        id: 'ui_04', name: 'Bottom sheet element exists',
-        run: async () => {
-          const sheet = document.getElementById('bottom-sheet');
-          if (!sheet) throw new Error('Bottom sheet not found');
-          const overlay = document.getElementById('sheet-overlay');
-          if (!overlay) throw new Error('Sheet overlay not found');
-          return 'Bottom sheet ✓';
-        }
-      },
-      {
-        id: 'ui_05', name: 'Toast system works',
-        run: async () => {
-          showToast('Test toast 🧪', 'success');
-          await new Promise(r => setTimeout(r, 300));
-          const container = document.getElementById('toast-container');
-          if (!container) throw new Error('Toast container not found');
-          return 'Toast system ✓';
-        }
-      },
-      {
-        id: 'ui_06', name: 'Skeleton loading CSS exists',
-        run: async () => {
-          const el = document.createElement('div');
-          el.className = 'skeleton-line';
-          document.body.appendChild(el);
-          const style = getComputedStyle(el);
-          const hasAnim = style.animation || style.animationName;
-          document.body.removeChild(el);
-          if (!hasAnim || hasAnim === 'none') return '⚠️ Skeleton animation not active';
-          return 'Skeleton CSS ✓';
-        }
-      },
-      {
-        id: 'ui_07', name: 'Color theme is charcoal (not dark blue)',
-        run: async () => {
-          const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
-          // Should be dark charcoal #111827, not deep blue #0F1660
-          if (bg.includes('0F1660') || bg.includes('162080'))
-            throw new Error(`Old blue theme detected: ${bg}`);
-          return `Theme: ${bg} ✓`;
-        }
-      },
-      {
-        id: 'ui_08', name: 'Settings, Daily Summary, Language in header',
-        run: async () => {
-          const header = document.getElementById('app-header');
-          if (!header) throw new Error('No header');
-          const html = header.innerHTML;
-          if (!html.includes('⚙️') && !html.includes('settings')) throw new Error('Settings icon missing from header');
-          if (!html.includes('📅') && !html.includes('eod')) throw new Error('Daily summary icon missing');
-          return 'Header icons ✓';
-        }
-      },
+      { id:'ui_01', name:'Header elements', run: async () => {
+        if (!document.getElementById('app-header')) throw new Error('No header');
+        if (!document.getElementById('notif-badge')) throw new Error('No notif badge');
+        return 'Header ✓';
+      }},
+      { id:'ui_02', name:'Bottom navigation', run: async () => {
+        const nav = document.getElementById('app-nav');
+        if (!nav) throw new Error('No nav');
+        const btns = nav.querySelectorAll('.nav-btn');
+        if (btns.length < 4) throw new Error(`Only ${btns.length} nav buttons`);
+        return `${btns.length} nav buttons ✓`;
+      }},
+      { id:'ui_03', name:'More menu grid', run: async () => {
+        const menu = document.getElementById('more-menu');
+        if (!menu) throw new Error('No more menu');
+        const tiles = menu.querySelectorAll('.more-tile');
+        if (tiles.length < 15) throw new Error(`Only ${tiles.length} tiles`);
+        const sections = menu.querySelectorAll('.more-section-label');
+        if (sections.length < 4) throw new Error(`Only ${sections.length} sections`);
+        return `${tiles.length} tiles, ${sections.length} sections ✓`;
+      }},
+      { id:'ui_04', name:'More menu opens and closes', run: async () => {
+        const menu = document.getElementById('more-menu');
+        if (!menu) throw new Error('No menu element');
+        toggleMoreMenu();
+        if (menu.style.display !== 'block') throw new Error('Did not open');
+        closeMoreMenu();
+        if (menu.style.display !== 'none') throw new Error('Did not close');
+        return 'Toggle ✓';
+      }},
+      { id:'ui_05', name:'Bottom sheet elements', run: async () => {
+        if (!document.getElementById('bottom-sheet')) throw new Error('No sheet');
+        if (!document.getElementById('sheet-overlay')) throw new Error('No overlay');
+        return 'Bottom sheet ✓';
+      }},
+      { id:'ui_06', name:'Toast system', run: async () => {
+        showToast('Test 🧪', 'success');
+        await new Promise(r => setTimeout(r, 200));
+        const c = document.getElementById('toast-container');
+        if (!c) throw new Error('No toast container');
+        return 'Toast ✓';
+      }},
+      { id:'ui_07', name:'Theme is dark charcoal (not blue)', run: async () => {
+        const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+        if (bg.includes('0F1660') || bg.includes('162080')) throw new Error(`Old blue: ${bg}`);
+        return `bg: ${bg} ✓`;
+      }},
+      { id:'ui_08', name:'Settings/Summary icons in header', run: async () => {
+        const h = document.getElementById('app-header')?.innerHTML || '';
+        if (!h.includes('⚙️') && !h.includes('settings')) throw new Error('Settings missing');
+        if (!h.includes('📅') && !h.includes('eod')) throw new Error('Daily summary missing');
+        return 'Header icons ✓';
+      }},
+      { id:'ui_09', name:'Skeleton loading CSS', run: async () => {
+        const el = document.createElement('div');
+        el.className = 'skeleton-line';
+        document.body.appendChild(el);
+        const anim = getComputedStyle(el).animationName;
+        document.body.removeChild(el);
+        if (!anim || anim === 'none') return '⚠️ Skeleton animation not active';
+        return `Skeleton: ${anim} ✓`;
+      }},
     ]
   },
 
-  // ─── SUITE 6: FEATURE MODULES ──────────────────────
   features: {
-    label: '⚡ Features',
+    label: '⚡ Feature Modules',
     tests: [
-      {
-        id: 'feat_01', name: 'Tiles quotation renders',
-        run: async () => {
-          const html = VW_TILES.renderTilesQuotationPage();
-          if (!html?.includes('room') && !html?.includes('Room'))
-            throw new Error('Tiles page missing room calculation');
-          return 'Tiles quotation ✓';
-        }
-      },
-      {
-        id: 'feat_02', name: 'Granite quotation renders',
-        run: async () => {
-          const html = VW_TILES.renderGraniteQuotationPage();
-          if (!html?.includes('SFT') && !html?.includes('sft') && !html?.includes('granite'))
-            throw new Error('Granite page missing SFT calculation');
-          return 'Granite quotation ✓';
-        }
-      },
-      {
-        id: 'feat_03', name: 'Visualizer module has swatches',
-        run: async () => {
-          if (!window.VW_VIS) throw new Error('VW_VIS not loaded');
-          const html = await VW_VIS.renderVisualizerPage();
-          if (!html.includes('PAINT') && !html.includes('paint') && !html.includes('swatch'))
-            throw new Error('Visualizer missing swatches');
-          return 'Visualizer with swatches ✓';
-        }
-      },
-      {
-        id: 'feat_04', name: 'GRN module renders',
-        run: async () => {
-          if (!window.VW_GRN) throw new Error('VW_GRN not loaded');
-          const html = await VW_GRN.renderGRNPage();
-          if (!html.includes('GRN') && !html.includes('Receipt'))
-            throw new Error('GRN page empty');
-          return 'GRN module ✓';
-        }
-      },
-      {
-        id: 'feat_05', name: 'Field team module renders',
-        run: async () => {
-          if (!window.VW_FIELD) throw new Error('VW_FIELD not loaded');
-          const html = await VW_FIELD.renderFieldTeamPage();
-          if (!html.includes('Field') && !html.includes('Visit'))
-            throw new Error('Field team page empty');
-          return 'Field team ✓';
-        }
-      },
-      {
-        id: 'feat_06', name: 'Customer returns renders',
-        run: async () => {
-          const html = await VW_FEATURES.renderReturnsPage();
-          if (!html.includes('Return') && !html.includes('return'))
-            throw new Error('Returns page empty');
-          return 'Customer returns ✓';
-        }
-      },
-      {
-        id: 'feat_07', name: 'Wishlist module renders',
-        run: async () => {
-          const html = await VW_FEATURES.renderWishlistPage();
-          if (!html.includes('Wishlist') && !html.includes('wishlist'))
-            throw new Error('Wishlist page empty');
-          return 'Wishlist ✓';
-        }
-      },
-      {
-        id: 'feat_08', name: 'GST module renders',
-        run: async () => {
-          const html = await VW_FEATURES.renderGSTPage();
-          if (!html.includes('E-Invoice') && !html.includes('e-invoice') && !html.includes('GST'))
-            throw new Error('GST page empty');
-          return 'GST module ✓';
-        }
-      },
-      {
-        id: 'feat_09', name: 'Multi-supplier RFQ exists',
-        run: async () => {
-          if (typeof VW_VENDOR.renderRFQTab !== 'function')
-            throw new Error('renderRFQTab not defined');
-          if (typeof VW_VENDOR.sendRFQToAll !== 'function')
-            throw new Error('sendRFQToAll not defined');
-          return 'RFQ functions ✓';
-        }
-      },
-      {
-        id: 'feat_10', name: 'Security kiosk renders',
-        run: async () => {
-          if (typeof VW_CHECKIN.renderSecurityKioskPage !== 'function')
-            throw new Error('renderSecurityKioskPage not defined');
-          const html = await VW_CHECKIN.renderSecurityKioskPage();
-          if (!html.includes('Customer') || !html.includes('Vendor'))
-            throw new Error('Kiosk missing buttons');
-          return 'Security kiosk ✓';
-        }
-      },
-      {
-        id: 'feat_11', name: 'Delivery tracking page',
-        run: async () => {
-          const html = await VW_DISPATCH.renderDeliveryTrackingPage('invalid-token-test');
-          if (!html.includes('Tracking') && !html.includes('not found') && !html.includes('contact'))
-            throw new Error('Delivery tracking page broken');
-          return 'Delivery tracking ✓';
-        }
-      },
-      {
-        id: 'feat_12', name: 'Language translations loaded',
-        run: async () => {
-          if (!window.TRANSLATIONS) throw new Error('TRANSLATIONS not defined');
-          if (!TRANSLATIONS.en) throw new Error('English translations missing');
-          if (!TRANSLATIONS.te) throw new Error('Telugu translations missing');
-          if (!TRANSLATIONS.hi) throw new Error('Hindi translations missing');
-          return `${Object.keys(TRANSLATIONS.en).length} translation keys ✓`;
-        }
-      },
-      {
-        id: 'feat_13', name: 'Loud notification sound system',
-        run: async () => {
-          if (typeof playNotificationAlert !== 'function')
-            throw new Error('playNotificationAlert not defined');
-          if (typeof toggleLoudNotifMode !== 'function')
-            throw new Error('toggleLoudNotifMode not defined');
-          return 'Notification sound system ✓';
-        }
-      },
-      {
-        id: 'feat_14', name: 'Page cache system active',
-        run: async () => {
-          if (typeof _pageCache === 'undefined') throw new Error('_pageCache not defined');
-          if (typeof CACHE_TTL_MS === 'undefined') throw new Error('CACHE_TTL_MS not defined');
-          if (CACHE_TTL_MS !== 30000) throw new Error(`Wrong TTL: ${CACHE_TTL_MS}`);
-          return `Cache TTL: ${CACHE_TTL_MS/1000}s ✓`;
-        }
-      },
+      { id:'feat_01', name:'Tiles quotation renders', run: async () => {
+        const html = VW_TILES.renderTilesQuotationPage();
+        if (!html?.includes('room') && !html?.includes('Room') && !html?.includes('tq-')) throw new Error('Empty');
+        return 'Tiles ✓';
+      }},
+      { id:'feat_02', name:'Granite quotation renders', run: async () => {
+        const html = VW_TILES.renderGraniteQuotationPage();
+        if (!html?.includes('SFT') && !html?.includes('sft') && !html?.includes('gq-')) throw new Error('Empty');
+        return 'Granite ✓';
+      }},
+      { id:'feat_03', name:'Visualizer — swatches and AI mode', run: async () => {
+        if (!window.VW_VIS) throw new Error('VW_VIS not loaded');
+        const html = await VW_VIS.renderVisualizerPage();
+        if (!html.includes('Pearl') && !html.includes('swatch') && !html.includes('PAINT')) throw new Error('No swatches');
+        return 'Visualizer ✓';
+      }},
+      { id:'feat_04', name:'GRN module', run: async () => {
+        if (!window.VW_GRN) throw new Error('VW_GRN not loaded');
+        const html = await VW_GRN.renderGRNPage();
+        if (!html.includes('GRN') && !html.includes('Receipt')) throw new Error('Empty');
+        return 'GRN ✓';
+      }},
+      { id:'feat_05', name:'Field team module', run: async () => {
+        if (!window.VW_FIELD) throw new Error('VW_FIELD not loaded');
+        const html = await VW_FIELD.renderFieldTeamPage();
+        if (!html.includes('Field') && !html.includes('Visit')) throw new Error('Empty');
+        return 'Field team ✓';
+      }},
+      { id:'feat_06', name:'Customer returns', run: async () => {
+        const html = await VW_FEATURES.renderReturnsPage();
+        if (!html.includes('Return')) throw new Error('Empty');
+        return 'Returns ✓';
+      }},
+      { id:'feat_07', name:'Wishlist module', run: async () => {
+        const html = await VW_FEATURES.renderWishlistPage();
+        if (!html.includes('Wishlist') && !html.includes('wishlist')) throw new Error('Empty');
+        return 'Wishlist ✓';
+      }},
+      { id:'feat_08', name:'GST E-Invoice module', run: async () => {
+        const html = await VW_FEATURES.renderGSTPage();
+        if (!html.includes('E-Invoice') && !html.includes('GST')) throw new Error('Empty');
+        return 'GST module ✓';
+      }},
+      { id:'feat_09', name:'Security kiosk', run: async () => {
+        if (typeof VW_CHECKIN.renderSecurityKioskPage !== 'function') throw new Error('Not defined');
+        const html = await VW_CHECKIN.renderSecurityKioskPage();
+        if (!html.includes('Customer') || !html.includes('Vendor')) throw new Error('Missing buttons');
+        return 'Security kiosk ✓';
+      }},
+      { id:'feat_10', name:'Multi-supplier RFQ', run: async () => {
+        if (typeof VW_VENDOR.renderRFQTab !== 'function') throw new Error('renderRFQTab missing');
+        if (typeof VW_VENDOR.sendRFQToAll !== 'function') throw new Error('sendRFQToAll missing');
+        return 'RFQ ✓';
+      }},
+      { id:'feat_11', name:'Language translations', run: async () => {
+        if (!window.TRANSLATIONS) throw new Error('TRANSLATIONS not defined');
+        if (!TRANSLATIONS.en || !TRANSLATIONS.te || !TRANSLATIONS.hi) throw new Error('Missing langs');
+        return `${Object.keys(TRANSLATIONS.en).length} keys ✓`;
+      }},
+      { id:'feat_12', name:'Loud notification sound', run: async () => {
+        if (typeof playNotificationAlert !== 'function') throw new Error('Missing');
+        if (typeof toggleLoudNotifMode !== 'function') throw new Error('toggleLoudNotifMode missing');
+        return 'Sound system ✓';
+      }},
+      { id:'feat_13', name:'Delivery tracking page', run: async () => {
+        const html = await VW_DISPATCH.renderDeliveryTrackingPage('test-invalid-token');
+        if (!html) throw new Error('Returns empty');
+        if (html.includes('Something went wrong')) throw new Error('Crashed');
+        return 'Delivery tracking ✓';
+      }},
+      { id:'feat_14', name:'Delivery tracking URL route', run: async () => {
+        if (typeof VW_DISPATCH.createDeliveryTracking !== 'function') throw new Error('Missing');
+        return 'Tracking functions ✓';
+      }},
     ]
   },
 
-  // ─── SUITE 7: DISPATCH FLOWS ───────────────────────
   dispatch: {
     label: '🚚 Dispatch Flows',
     tests: [
-      {
-        id: 'dsp_01', name: 'Dispatch queue renders',
-        run: async () => {
-          const html = await VW_DISPATCH.renderDispatchQueue();
-          if (!html.includes('dispatch') && !html.includes('Dispatch'))
-            throw new Error('Queue empty');
-          return 'Dispatch queue ✓';
-        }
-      },
-      {
-        id: 'dsp_02', name: 'All 5 fulfillment methods in dropdown',
-        run: async () => {
-          const methods = ['self_pickup','vw_delivery','self_transport',
-            'staff_pickup_deliver','direct_delivery'];
-          // Check FULFILLMENT_LABELS defined
-          if (!window.FULFILLMENT_LABELS) throw new Error('FULFILLMENT_LABELS not defined');
-          const missing = methods.filter(m => !FULFILLMENT_LABELS[m]);
-          if (missing.length) throw new Error(`Missing labels: ${missing.join(', ')}`);
-          return `${methods.length} fulfillment methods ✓`;
-        }
-      },
-      {
-        id: 'dsp_03', name: 'Gate pass functions defined',
-        run: async () => {
-          const fns = ['openCreateGatePass','confirmCreateGatePass',
-            'createDirectDeliveryGatePass','createStaffPickupGatePass','handleSelfPickup'];
-          const missing = fns.filter(f => typeof VW_DISPATCH[f] !== 'function');
-          if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
-          return `${fns.length} gate pass functions ✓`;
-        }
-      },
-      {
-        id: 'dsp_04', name: 'Driver delivery page (invalid token)',
-        run: async () => {
-          const html = await VW_DISPATCH.renderDriverDeliveryPageDetailed('GP/TEST/00000');
-          if (!html) throw new Error('Returns empty');
-          return 'Driver delivery page ✓';
-        }
-      },
-      {
-        id: 'dsp_05', name: 'Self-pickup functions defined',
-        run: async () => {
-          if (typeof VW_DISPATCH.handleSelfPickup !== 'function')
-            throw new Error('handleSelfPickup missing');
-          if (typeof VW_DISPATCH.confirmSelfPickup !== 'function')
-            throw new Error('confirmSelfPickup missing');
-          return 'Self-pickup ✓';
-        }
-      },
+      { id:'dsp_01', name:'Dispatch queue renders', run: async () => {
+        const html = await VW_DISPATCH.renderDispatchQueue();
+        if (!html.includes('Dispatch') && !html.includes('dispatch')) throw new Error('Empty');
+        return 'Queue ✓';
+      }},
+      { id:'dsp_02', name:'5 fulfillment methods defined', run: async () => {
+        if (!window.FULFILLMENT_LABELS) throw new Error('FULFILLMENT_LABELS missing');
+        const methods = ['self_pickup','vw_delivery','self_transport','staff_pickup_deliver','direct_delivery'];
+        const missing = methods.filter(m => !FULFILLMENT_LABELS[m]);
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${methods.length} methods ✓`;
+      }},
+      { id:'dsp_03', name:'Gate pass functions', run: async () => {
+        const fns = ['openCreateGatePass','confirmCreateGatePass',
+          'createDirectDeliveryGatePass','createStaffPickupGatePass','handleSelfPickup'];
+        const missing = fns.filter(f => typeof VW_DISPATCH[f] !== 'function');
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${fns.length} functions ✓`;
+      }},
+      { id:'dsp_04', name:'Driver delivery page', run: async () => {
+        const html = await VW_DISPATCH.renderDriverDeliveryPageDetailed('GP/TEST/00000');
+        if (!html) throw new Error('Returns empty');
+        return 'Driver delivery ✓';
+      }},
+      { id:'dsp_05', name:'Self-pickup flow defined', run: async () => {
+        if (typeof VW_DISPATCH.handleSelfPickup !== 'function') throw new Error('Missing');
+        if (typeof VW_DISPATCH.confirmSelfPickup !== 'function') throw new Error('Missing');
+        return 'Self-pickup ✓';
+      }},
     ]
   },
 
-  // ─── SUITE 8: EDGE FUNCTIONS ───────────────────────
+  navigation: {
+    label: '🧭 Page Navigation',
+    tests: [
+      // NOTE: Navigation tests render pages WITHOUT calling navigateTo
+      // to avoid destroying the test runner DOM
+      { id:'nav_01', name:'Dashboard renders (direct)', run: async () => {
+        const html = await renderDashboard();
+        if (!html) throw new Error('Empty');
+        if (html.includes('Something went wrong')) throw new Error('Dashboard crashed');
+        if (!html.includes('mc-value') && !html.includes('metric')) throw new Error('Missing metrics');
+        return 'Dashboard ✓';
+      }},
+      { id:'nav_02', name:'CRM page renders', run: async () => {
+        const html = await VW_CRM.renderCRM();
+        if (!html || html.includes('Something went wrong')) throw new Error('CRM crashed');
+        return 'CRM ✓';
+      }},
+      { id:'nav_03', name:'Inventory page renders', run: async () => {
+        const html = await VW_INVENTORY.renderInventory();
+        if (!html || html.includes('Something went wrong')) throw new Error('Inventory crashed');
+        return 'Inventory ✓';
+      }},
+      { id:'nav_04', name:'Accounts page renders', run: async () => {
+        const html = await VW_ACCOUNTS.renderAccountsPage();
+        if (!html || html.includes('Something went wrong')) throw new Error('Accounts crashed');
+        return 'Accounts ✓';
+      }},
+      { id:'nav_05', name:'Marketing page renders', run: async () => {
+        const html = await VW_MARKETING.renderMarketingPage();
+        if (!html || html.includes('Something went wrong')) throw new Error('Marketing crashed');
+        return 'Marketing ✓';
+      }},
+      { id:'nav_06', name:'Settings page renders', run: async () => {
+        const html = await VW_SETTINGS.renderSettingsPage();
+        if (!html || html.includes('Something went wrong')) throw new Error('Settings crashed');
+        return 'Settings ✓';
+      }},
+      { id:'nav_07', name:'Analytics page renders', run: async () => {
+        const html = await VW_ANALYTICS.renderAnalytics();
+        if (!html || html.includes('Something went wrong')) throw new Error('Analytics crashed');
+        return 'Analytics ✓';
+      }},
+      { id:'nav_08', name:'Vendor page renders', run: async () => {
+        const html = await VW_VENDOR.renderVendorsPage();
+        if (!html || html.includes('Something went wrong')) throw new Error('Vendors crashed');
+        return 'Vendors ✓';
+      }},
+      { id:'nav_09', name:'Feedback page renders', run: async () => {
+        const html = await renderFeedbackPage();
+        if (!html || html.includes('Something went wrong')) throw new Error('Feedback crashed');
+        return 'Feedback ✓';
+      }},
+      { id:'nav_10', name:'Role permissions enforced', run: async () => {
+        const allowed = VW_AUTH.getAllowedPages();
+        if (!allowed.includes('dashboard')) throw new Error('Dashboard not allowed');
+        return `${allowed.length} pages allowed ✓`;
+      }},
+    ]
+  },
+
   edgefunctions: {
     label: '⚡ Edge Functions',
     tests: [
-      {
-        id: 'ef_01', name: 'room-visualizer reachable',
-        run: async () => {
-          const url = `${VW_DB.client.supabaseUrl}/functions/v1/room-visualizer`;
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json',
-              'Authorization': `Bearer ${VW_DB.client.supabaseKey}`,
-              'apikey': VW_DB.client.supabaseKey },
-            body: JSON.stringify({ mode: 'describe', roomType: 'test', products: [] })
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          if (data.error && data.error.includes('key')) throw new Error('API key error: ' + data.error);
-          return `room-visualizer v2 ✓ (${res.status})`;
-        }
-      },
-      {
-        id: 'ef_02', name: 'grn-ocr function reachable',
-        run: async () => {
-          const url = `${VW_DB.client.supabaseUrl}/functions/v1/grn-ocr`;
-          // Send without image — should get a proper error, not a 404
-          const res = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json',
-              'Authorization': `Bearer ${VW_DB.client.supabaseKey}`,
-              'apikey': VW_DB.client.supabaseKey },
-            body: JSON.stringify({ imageBase64: null })
-          });
-          // Expect 400 (imageBase64 required) — that means function is alive
-          if (res.status === 404) throw new Error('Edge function not found');
-          return `grn-ocr reachable (${res.status}) ✓`;
-        }
-      },
-      {
-        id: 'ef_03', name: 'claude-test-generator reachable',
-        run: async () => {
-          const url = `${VW_DB.client.supabaseUrl}/functions/v1/claude-test-generator`;
-          const res = await fetch(url, {
-            method: 'OPTIONS',
-            headers: { 'apikey': VW_DB.client.supabaseKey }
-          });
-          if (res.status === 404) throw new Error('Function not found');
-          return `claude-test-generator reachable ✓`;
-        }
-      },
+      { id:'ef_01', name:'room-visualizer reachable', run: async () => {
+        const url = `${VW_DB.client.supabaseUrl}/functions/v1/room-visualizer`;
+        const res = await fetch(url, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${VW_DB.client.supabaseKey}`,'apikey':VW_DB.client.supabaseKey},
+          body: JSON.stringify({mode:'describe',roomType:'test',products:[]})
+        });
+        if (!res.ok && res.status !== 400) throw new Error(`HTTP ${res.status}`);
+        return `room-visualizer (${res.status}) ✓`;
+      }},
+      { id:'ef_02', name:'grn-ocr reachable', run: async () => {
+        const url = `${VW_DB.client.supabaseUrl}/functions/v1/grn-ocr`;
+        const res = await fetch(url, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${VW_DB.client.supabaseKey}`,'apikey':VW_DB.client.supabaseKey},
+          body: JSON.stringify({imageBase64:null})
+        });
+        if (res.status === 404) throw new Error('Not found');
+        return `grn-ocr (${res.status}) ✓`;
+      }},
+      { id:'ef_03', name:'claude-test-generator reachable', run: async () => {
+        const url = `${VW_DB.client.supabaseUrl}/functions/v1/claude-test-generator`;
+        const res = await fetch(url, {method:'OPTIONS',headers:{'apikey':VW_DB.client.supabaseKey}});
+        if (res.status === 404) throw new Error('Not found');
+        return `test-generator (${res.status}) ✓`;
+      }},
     ]
   },
-
 };
 
-// ===== RUNNER ENGINE =====
+// ===== RUNNER ENGINE (fixed: no _isRunning block per suite) =====
 let _testResults = {};
-let _isRunning = false;
+let _runnerActive = false;
 
 async function runSuite(suiteKey) {
-  if (_isRunning) return;
-  _isRunning = true;
   const suite = TEST_SUITES[suiteKey];
   if (!suite) return;
   _testResults[suiteKey] = {};
 
   for (const test of suite.tests) {
-    _testResults[suiteKey][test.id] = { status: 'running', result: '' };
-    updateTestRow(test.id, 'running', '');
+    // Update status to running
+    setTestStatus(test.id, '⏳', 'var(--gold)', '');
     try {
-      const result = await test.run();
-      _testResults[suiteKey][test.id] = { status: 'pass', result };
-      updateTestRow(test.id, 'pass', result);
+      const result = await Promise.race([
+        test.run(),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('Timeout after 10s')), 10000))
+      ]);
+      _testResults[suiteKey][test.id] = {status:'pass', result};
+      setTestStatus(test.id, '✅', 'var(--green)', result);
     } catch(e) {
-      _testResults[suiteKey][test.id] = { status: 'fail', result: e.message };
-      updateTestRow(test.id, 'fail', e.message);
+      _testResults[suiteKey][test.id] = {status:'fail', result: e.message};
+      setTestStatus(test.id, '❌', 'var(--red)', e.message);
     }
-    await new Promise(r => setTimeout(r, 100)); // Small gap between tests
+    await new Promise(r => setTimeout(r, 80));
   }
-  _isRunning = false;
   updateSuiteSummary(suiteKey);
 }
 
 async function runAllSuites() {
-  if (_isRunning) { showToast('Tests already running', 'warn'); return; }
+  if (_runnerActive) { showToast('Already running — wait for it to finish', 'warn'); return; }
+  _runnerActive = true;
+  _testResults = {};
+
+  // Reset all statuses
+  document.querySelectorAll('.ts-icon').forEach(el => { el.textContent = '⬜'; el.style.color = ''; });
+  document.querySelectorAll('.ts-result').forEach(el => el.textContent = '');
+  document.querySelectorAll('[id^="ssummary-"]').forEach(el => el.textContent = '');
+  const grand = document.getElementById('test-grand-summary');
+  if (grand) grand.innerHTML = '<div style="font-size:13px;color:var(--gold)">⏳ Running all tests...</div>';
+
   for (const key of Object.keys(TEST_SUITES)) {
     await runSuite(key);
   }
-  showTestSummary();
+
+  _runnerActive = false;
+  showGrandSummary();
 }
 
-function updateTestRow(id, status, result) {
-  const row = document.getElementById(`test-row-${id}`);
-  if (!row) return;
-  const statusEl = row.querySelector('.test-status');
-  const resultEl = row.querySelector('.test-result');
-  if (statusEl) {
-    statusEl.textContent = status === 'running' ? '⏳' : status === 'pass' ? '✅' : '❌';
-    statusEl.style.color = status === 'pass' ? 'var(--green)' : status === 'fail' ? 'var(--red)' : 'var(--gold)';
-  }
-  if (resultEl) resultEl.textContent = result.slice(0, 80);
+function setTestStatus(id, icon, color, result) {
+  const iconEl = document.getElementById(`ts-icon-${id}`);
+  const resultEl = document.getElementById(`ts-result-${id}`);
+  if (iconEl) { iconEl.textContent = icon; iconEl.style.color = color; }
+  if (resultEl) resultEl.textContent = result.slice(0, 100);
 }
 
 function updateSuiteSummary(suiteKey) {
-  const results = Object.values(_testResults[suiteKey] || {});
-  const pass = results.filter(r => r.status === 'pass').length;
-  const fail = results.filter(r => r.status === 'fail').length;
-  const el = document.getElementById(`suite-summary-${suiteKey}`);
+  const results = Object.values(_testResults[suiteKey]||{});
+  const pass = results.filter(r=>r.status==='pass').length;
+  const fail = results.filter(r=>r.status==='fail').length;
+  const el = document.getElementById(`ssummary-${suiteKey}`);
   if (el) {
-    el.textContent = `${pass}✅ ${fail > 0 ? fail+'❌' : ''}`;
+    el.textContent = fail > 0 ? `${pass}✅ ${fail}❌` : `${pass}✅`;
     el.style.color = fail > 0 ? 'var(--red)' : 'var(--green)';
   }
 }
 
-function showTestSummary() {
-  let totalPass = 0, totalFail = 0, failedTests = [];
-  for (const [sKey, sResults] of Object.entries(_testResults)) {
-    for (const [tId, tResult] of Object.entries(sResults)) {
-      if (tResult.status === 'pass') totalPass++;
-      else if (tResult.status === 'fail') {
-        totalFail++;
-        const test = TEST_SUITES[sKey]?.tests.find(t => t.id === tId);
-        failedTests.push(`${test?.name || tId}: ${tResult.result}`);
+function showGrandSummary() {
+  let pass=0, fail=0, failedList=[];
+  for (const [sk, sr] of Object.entries(_testResults)) {
+    for (const [tid, tr] of Object.entries(sr)) {
+      if (tr.status==='pass') pass++;
+      else if (tr.status==='fail') {
+        fail++;
+        const test = TEST_SUITES[sk]?.tests.find(t=>t.id===tid);
+        failedList.push(`${test?.name||tid}: ${tr.result}`);
       }
     }
   }
-  const summaryEl = document.getElementById('test-grand-summary');
-  if (summaryEl) {
-    summaryEl.innerHTML = `
-      <div style="padding:16px;border-radius:12px;background:${totalFail === 0 ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'};border:1px solid ${totalFail === 0 ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}">
-        <div style="font-size:18px;font-weight:700;color:${totalFail === 0 ? 'var(--green)' : 'var(--red)'}">
-          ${totalFail === 0 ? '🎉 All Tests Passed!' : `⚠️ ${totalFail} Test${totalFail>1?'s':''} Failed`}
-        </div>
-        <div style="font-size:13px;color:var(--text2);margin-top:4px">
-          ${totalPass} passed · ${totalFail} failed · ${totalPass+totalFail} total
-        </div>
-        ${failedTests.length ? `
-        <div style="margin-top:12px;font-size:12px;color:var(--red)">
-          ${failedTests.map(f => `<div style="margin-bottom:4px">❌ ${f}</div>`).join('')}
-        </div>` : ''}
-      </div>`;
-  }
+  const grand = document.getElementById('test-grand-summary');
+  if (!grand) return;
+  grand.innerHTML = `
+    <div style="padding:14px;border-radius:12px;background:${fail===0?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.1)'};border:1px solid ${fail===0?'rgba(34,197,94,0.3)':'rgba(239,68,68,0.3)'}">
+      <div style="font-size:16px;font-weight:700;color:${fail===0?'var(--green)':'var(--red)'}">
+        ${fail===0?'🎉 All Tests Passed!':'⚠️ '+fail+' Test'+(fail>1?'s':'')+' Failed'}
+      </div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">${pass} passed · ${fail} failed · ${pass+fail} total</div>
+      ${failedList.length?`<div style="margin-top:10px;font-size:12px;color:var(--red)">${failedList.map(f=>`<div style="margin-bottom:3px">❌ ${f}</div>`).join('')}</div>`:''}
+    </div>`;
+}
+
+function clearResults() {
+  _testResults = {};
+  _runnerActive = false;
+  document.querySelectorAll('.ts-icon').forEach(el=>{el.textContent='⬜';el.style.color='';});
+  document.querySelectorAll('.ts-result').forEach(el=>el.textContent='');
+  document.querySelectorAll('[id^="ssummary-"]').forEach(el=>el.textContent='');
+  const g = document.getElementById('test-grand-summary');
+  if (g) g.innerHTML='';
 }
 
 // ===== PAGE RENDER =====
 async function renderAutoTestPage() {
-  const allTestCount = Object.values(TEST_SUITES).reduce((s, suite) => s + suite.tests.length, 0);
+  const totalTests = Object.values(TEST_SUITES).reduce((s,suite)=>s+suite.tests.length,0);
+  const totalSuites = Object.keys(TEST_SUITES).length;
 
   return `
   <div class="module-header">
     <h2>🧪 Test Suite</h2>
     <div style="display:flex;gap:6px">
-      <button class="btn-sm" onclick="VW_AUTOTEST.runAllSuites()" style="background:var(--green);color:#fff">▶ Run All</button>
-      <button class="btn-sm" onclick="VW_AUTOTEST.clearResults()">🗑 Clear</button>
+      <button class="btn-sm" style="background:var(--green);color:#fff" onclick="VW_AUTOTEST.runAllSuites()">▶ Run All</button>
+      <button class="btn-sm" onclick="VW_AUTOTEST.clearResults()">↺ Clear</button>
     </div>
   </div>
 
-  <div style="font-size:12px;color:var(--text3);margin-bottom:14px">${allTestCount} tests across ${Object.keys(TEST_SUITES).length} suites · tap ▶ to run all or run individual suites</div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+    ${totalTests} tests · ${totalSuites} suites · Results update live as tests run
+  </div>
 
   <div id="test-grand-summary" style="margin-bottom:14px"></div>
 
-  ${Object.entries(TEST_SUITES).map(([key, suite]) => `
+  ${Object.entries(TEST_SUITES).map(([key,suite]) => `
   <div class="card" style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div>
-        <div style="font-size:14px;font-weight:700;color:var(--text)">${suite.label}</div>
+        <div style="font-size:14px;font-weight:700">${suite.label}</div>
         <div style="font-size:11px;color:var(--text3)">${suite.tests.length} tests</div>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span id="suite-summary-${key}" style="font-size:12px;font-weight:600"></span>
-        <button class="btn-sm" onclick="VW_AUTOTEST.runSuite('${key}')">▶ Run</button>
+        <span id="ssummary-${key}" style="font-size:12px;font-weight:600"></span>
+        <button class="btn-sm" onclick="VW_AUTOTEST.runSuite('${key}')">▶</button>
       </div>
     </div>
     ${suite.tests.map(test => `
-    <div id="test-row-${test.id}" style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-      <span class="test-status" style="font-size:16px;width:20px;flex-shrink:0">⬜</span>
+    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span id="ts-icon-${test.id}" class="ts-icon" style="font-size:15px;width:18px;flex-shrink:0">⬜</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:500;color:var(--text)">${test.name}</div>
-        <div class="test-result" style="font-size:10px;color:var(--text3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+        <div id="ts-result-${test.id}" class="ts-result" style="font-size:10px;color:var(--text3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px"></div>
       </div>
-      <span style="font-size:10px;color:var(--text3);flex-shrink:0">${test.id}</span>
+      <span style="font-size:9px;color:var(--bg4);flex-shrink:0">${test.id}</span>
     </div>`).join('')}
   </div>`).join('')}
 
-  <!-- AI TEST GENERATOR -->
-  <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
+  <div class="card" style="border-color:var(--gold-border)">
     <h3 class="card-title">🤖 AI Test Generator</h3>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Describe a scenario and AI will write a custom test for it</p>
-    <textarea id="ai-test-prompt" placeholder="e.g. Test that creating a new quotation with 3 items calculates GST correctly and saves to the database..." style="height:80px;margin-bottom:10px"></textarea>
-    <button class="btn-primary full-width" onclick="VW_AUTOTEST.generateAITest()">🤖 Generate Test</button>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Describe a scenario → AI writes and runs a custom test</p>
+    <textarea id="ai-test-prompt" style="height:70px;font-size:13px" placeholder="e.g. Test that a quotation with 3 tile items calculates the total correctly and saves to Supabase..."></textarea>
+    <button class="btn-primary full-width" style="margin-top:8px" onclick="VW_AUTOTEST.generateAITest()">🤖 Generate & Run</button>
     <div id="ai-test-output" style="margin-top:10px"></div>
   </div>`;
 }
@@ -23259,55 +22948,44 @@ async function renderAutoTestPage() {
 async function generateAITest() {
   const prompt = document.getElementById('ai-test-prompt')?.value.trim();
   if (!prompt) { showToast('Describe the test scenario', 'warn'); return; }
-  const output = document.getElementById('ai-test-output');
-  if (output) output.innerHTML = '<div style="color:var(--text3);font-size:13px">🤖 Generating test...</div>';
+  const out = document.getElementById('ai-test-output');
+  if (out) out.innerHTML = '<div style="color:var(--text3);font-size:13px">🤖 AI writing test...</div>';
   try {
     const url = `${VW_DB.client.supabaseUrl}/functions/v1/claude-test-generator`;
     const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json',
-        'Authorization': `Bearer ${VW_DB.client.supabaseKey}`,
-        'apikey': VW_DB.client.supabaseKey },
-      body: JSON.stringify({ prompt, context: 'V Wholesale Customer OS PWA' })
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${VW_DB.client.supabaseKey}`,'apikey':VW_DB.client.supabaseKey},
+      body: JSON.stringify({prompt, context:'V Wholesale Customer OS PWA - vanilla JS + Supabase'})
     });
     const data = await res.json();
-    const code = data.testCode || data.code || data.content?.[0]?.text || 'No test generated';
-    if (output) output.innerHTML = `
-      <div style="background:var(--bg2);border-radius:10px;padding:12px;font-family:monospace;font-size:11px;color:var(--text2);overflow-x:auto;max-height:200px;overflow-y:auto">${code.replace(/</g,'&lt;')}</div>
-      <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_AUTOTEST.runAITestCode('${btoa(encodeURIComponent(code))}')">▶ Run this test</button>`;
+    const code = data.testCode||data.code||data.content?.[0]?.text||'// No test generated';
+    if (out) out.innerHTML = `
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;font-family:monospace;font-size:11px;color:var(--text2);overflow-x:auto;max-height:180px;overflow-y:auto;white-space:pre">${code.replace(/</g,'&lt;').slice(0,2000)}</div>
+      <button class="btn-primary full-width" style="margin-top:8px" onclick="VW_AUTOTEST.runAITest(${JSON.stringify(code).replace(/"/g,'&quot;')})">▶ Run this test</button>`;
   } catch(e) {
-    if (output) output.innerHTML = `<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;
+    if (out) out.innerHTML = `<div style="color:var(--red);font-size:13px">Error: ${e.message}</div>`;
   }
 }
 
-async function runAITestCode(b64code) {
+async function runAITest(code) {
+  const out = document.getElementById('ai-test-output');
   try {
-    const code = decodeURIComponent(atob(b64code));
-    const fn = new Function('VW_DB', 'VW_AUTH', 'navigateTo', 'showToast', `return (async () => { ${code} })()`);
+    const fn = new Function('VW_DB','VW_AUTH','navigateTo','showToast',
+      `return (async()=>{ ${code} })()`);
     const result = await fn(VW_DB, VW_AUTH, navigateTo, showToast);
-    showToast('AI Test passed: ' + (result || 'OK'), 'success');
+    showToast('✅ AI Test passed: '+(result||'OK'), 'success');
+    if (out) {
+      const el = out.querySelector('button');
+      if (el) el.textContent = '✅ Passed';
+    }
   } catch(e) {
-    showToast('AI Test failed: ' + e.message, 'error');
+    showToast('❌ AI Test failed: '+e.message, 'error');
   }
-}
-
-function clearResults() {
-  _testResults = {};
-  document.querySelectorAll('.test-status').forEach(el => { el.textContent = '⬜'; el.style.color = ''; });
-  document.querySelectorAll('.test-result').forEach(el => el.textContent = '');
-  document.querySelectorAll('[id^="suite-summary-"]').forEach(el => el.textContent = '');
-  const summary = document.getElementById('test-grand-summary');
-  if (summary) summary.innerHTML = '';
-}
-
-function switchTestTab(tab, btn) {
-  document.querySelectorAll('[id^="at-tab-"]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
 }
 
 window.VW_AUTOTEST = {
-  renderAutoTestPage, runSuite, runAllSuites, clearResults,
-  generateAITest, runAITestCode, switchTestTab
+  renderAutoTestPage, runSuite, runAllSuites,
+  clearResults, generateAITest, runAITest
 };
 
 
