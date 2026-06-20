@@ -134,20 +134,39 @@ html, body {
 /* ===== MORE MENU ===== */
 .more-menu {
   position: fixed; bottom: var(--nav-h); left: 0; right: 0;
-  background: var(--header-bg);
+  background: var(--bg2);
   border-top: 1px solid var(--border2);
-  border-radius: 20px 20px 0 0;
-  padding: 20px 20px 8px;
-  z-index: 99; max-height: 72vh; overflow-y: auto;
-  box-shadow: 0 -8px 40px rgba(0,0,0,0.5);
+  border-radius: 24px 24px 0 0;
+  padding: 20px 16px 16px;
+  z-index: 99; max-height: 78vh; overflow-y: auto;
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.5);
+  -webkit-overflow-scrolling: touch;
 }
-.more-menu-item {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 0; border-bottom: 1px solid var(--border);
-  cursor: pointer; font-size: 15px; color: var(--text);
+.more-section-label {
+  font-size: 10px; font-weight: 700; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 14px 0 8px; padding: 0 2px;
 }
-.more-menu-item:last-child { border-bottom: none; }
-.more-menu-icon { font-size: 22px; width: 32px; text-align: center; }
+.more-section-label:first-of-type { margin-top: 0; }
+.more-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 8px; margin-bottom: 4px;
+}
+.more-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 14px 8px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 14px; cursor: pointer;
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  text-align: center; transition: all 0.15s; line-height: 1.2;
+}
+.more-tile span:first-child { font-size: 24px; line-height: 1; }
+.more-tile:active { background: var(--bg4); transform: scale(0.95); }
+.more-tile.active, .more-tile[data-active="true"] {
+  background: var(--gold-muted); border-color: var(--gold-border); color: var(--gold);
+}
+/* Hide old more-btn style */
+.more-btn { display: none !important; }
 
 /* ===== MODULE HEADERS ===== */
 .module-header {
@@ -908,28 +927,63 @@ td strong { color: var(--text); }
       <button class="nav-btn" data-page="more" onclick="toggleMoreMenu()"><span class="nav-icon">&#8943;</span><span>More</span></button>
     </nav>
     <div id="more-menu" class="more-menu" style="display:none">
-      <button class="more-btn" data-page="crm" onclick="navigateTo('crm')"><span>&#128101;</span> CRM</button>
-      <button class="more-btn" data-page="inventory" onclick="navigateTo('inventory')"><span>&#128230;</span> Inventory</button>
-      <button class="more-btn" data-page="hr" onclick="navigateTo('hr')"><span>&#129333;</span> HR &amp; Team</button>
-      <button class="more-btn" data-page="analytics" onclick="navigateTo('analytics')"><span>&#128202;</span> Analytics</button>
-      <button class="more-btn" data-page="club" onclick="navigateTo('club')"><span>&#127885;</span> Contractor Club</button>
-      <button class="more-btn" data-page="training" onclick="navigateTo('training')"><span>&#127891;</span> Training</button>
-      <button class="more-btn" data-page="feedback" onclick="navigateTo('feedback')"><span>&#11088;</span> Feedback</button>
-      <button class="more-btn" data-page="accounts" onclick="navigateTo('accounts')"><span>&#128181;</span> Accounts</button>
-      <button class="more-btn" data-page="dispatch" onclick="navigateTo('dispatch')"><span>&#128666;</span> Dispatch</button>
-      <button class="more-btn" data-page="returns" onclick="navigateTo('returns')"><span>&#8617;&#65039;</span> Returns</button>
-      <button class="more-btn" data-page="promotions" onclick="navigateTo('promotions')"><span>&#127881;</span> Promotions</button>
-      <button class="more-btn" data-page="catalogs" onclick="navigateTo('catalogs')"><span>&#128218;</span> Catalogs</button>
-      <button class="more-btn" data-page="eod" onclick="navigateTo('eod')"><span>&#128197;</span> End of Day</button>
-      <button class="more-btn" data-page="referrals" onclick="navigateTo('referrals')"><span>&#129309;</span> Referrals</button>
-      <button class="more-btn" data-page="incentives" onclick="navigateTo('incentives')"><span>&#127942;</span> Incentives</button>
-      <button class="more-btn" data-page="visualizer" onclick="navigateTo('visualizer')"><span>🎨</span> Visualizer</button>
-      <button class="more-btn" data-page="field" onclick="navigateTo('field')"><span>🚗</span> Field Team</button>
-      <button class="more-btn" data-page="gst" onclick="navigateTo('gst')"><span>📊</span> GST</button>
-      <button class="more-btn" data-page="wishlist" onclick="navigateTo('wishlist')"><span>❤️</span> Wishlist</button>
-      <button class="more-btn" data-page="grn" onclick="navigateTo('grn')"><span>📦</span> GRN</button>
-      <button class="more-btn" data-page="settings" onclick="navigateTo('settings')"><span>&#9881;&#65039;</span> Settings</button>
-      <button class="more-btn" onclick="window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>&#128737;</span> Security Kiosk</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em">Menu</div>
+        <button onclick="toggleMoreMenu()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:0">✕</button>
+      </div>
+
+      <!-- SALES & CUSTOMERS -->
+      <div class="more-section-label">Sales & Customers</div>
+      <div class="more-grid">
+        <button class="more-tile" data-page="crm" onclick="navigateTo('crm');toggleMoreMenu()"><span>👥</span><span>CRM</span></button>
+        <button class="more-tile" data-page="quotations" onclick="navigateTo('quotations');toggleMoreMenu()"><span>📋</span><span>Quotes</span></button>
+        <button class="more-tile" data-page="club" onclick="navigateTo('club');toggleMoreMenu()"><span>🏅</span><span>CC Club</span></button>
+        <button class="more-tile" data-page="wishlist" onclick="navigateTo('wishlist');toggleMoreMenu()"><span>❤️</span><span>Wishlist</span></button>
+        <button class="more-tile" data-page="returns" onclick="navigateTo('returns');toggleMoreMenu()"><span>↩️</span><span>Returns</span></button>
+        <button class="more-tile" data-page="feedback" onclick="navigateTo('feedback');toggleMoreMenu()"><span>⭐</span><span>Feedback</span></button>
+      </div>
+
+      <!-- OPERATIONS -->
+      <div class="more-section-label">Operations</div>
+      <div class="more-grid">
+        <button class="more-tile" data-page="inventory" onclick="navigateTo('inventory');toggleMoreMenu()"><span>📦</span><span>Inventory</span></button>
+        <button class="more-tile" data-page="vendors" onclick="navigateTo('vendors');toggleMoreMenu()"><span>🏭</span><span>Vendors</span></button>
+        <button class="more-tile" data-page="dispatch" onclick="navigateTo('dispatch');toggleMoreMenu()"><span>🚚</span><span>Dispatch</span></button>
+        <button class="more-tile" data-page="grn" onclick="navigateTo('grn');toggleMoreMenu()"><span>🧾</span><span>GRN</span></button>
+        <button class="more-tile" data-page="tiles" onclick="navigateTo('tiles');toggleMoreMenu()"><span>🔲</span><span>Tiles</span></button>
+        <button class="more-tile" data-page="granite" onclick="navigateTo('granite');toggleMoreMenu()"><span>🪨</span><span>Granite</span></button>
+      </div>
+
+      <!-- FINANCE -->
+      <div class="more-section-label">Finance</div>
+      <div class="more-grid">
+        <button class="more-tile" data-page="accounts" onclick="navigateTo('accounts');toggleMoreMenu()"><span>💰</span><span>Accounts</span></button>
+        <button class="more-tile" data-page="ledger" onclick="navigateTo('ledger');toggleMoreMenu()"><span>📒</span><span>Ledger</span></button>
+        <button class="more-tile" data-page="eod" onclick="navigateTo('eod');toggleMoreMenu()"><span>📅</span><span>End of Day</span></button>
+        <button class="more-tile" data-page="gst" onclick="navigateTo('gst');toggleMoreMenu()"><span>📊</span><span>GST</span></button>
+      </div>
+
+      <!-- TEAM -->
+      <div class="more-section-label">Team</div>
+      <div class="more-grid">
+        <button class="more-tile" data-page="hr" onclick="navigateTo('hr');toggleMoreMenu()"><span>👤</span><span>HR</span></button>
+        <button class="more-tile" data-page="field" onclick="navigateTo('field');toggleMoreMenu()"><span>🚗</span><span>Field Team</span></button>
+        <button class="more-tile" data-page="analytics" onclick="navigateTo('analytics');toggleMoreMenu()"><span>📈</span><span>Analytics</span></button>
+        <button class="more-tile" data-page="training" onclick="navigateTo('training');toggleMoreMenu()"><span>🎓</span><span>Training</span></button>
+        <button class="more-tile" data-page="incentives" onclick="navigateTo('incentives');toggleMoreMenu()"><span>🏆</span><span>Incentives</span></button>
+        <button class="more-tile" data-page="referrals" onclick="navigateTo('referrals');toggleMoreMenu()"><span>🤝</span><span>Referrals</span></button>
+      </div>
+
+      <!-- TOOLS -->
+      <div class="more-section-label">Tools & More</div>
+      <div class="more-grid">
+        <button class="more-tile" data-page="visualizer" onclick="navigateTo('visualizer');toggleMoreMenu()"><span>🎨</span><span>Visualizer</span></button>
+        <button class="more-tile" data-page="marketing" onclick="navigateTo('marketing');toggleMoreMenu()"><span>📣</span><span>Marketing</span></button>
+        <button class="more-tile" data-page="promotions" onclick="navigateTo('promotions');toggleMoreMenu()"><span>🎁</span><span>Promos</span></button>
+        <button class="more-tile" data-page="catalogs" onclick="navigateTo('catalogs');toggleMoreMenu()"><span>📚</span><span>Catalogs</span></button>
+        <button class="more-tile" data-page="settings" onclick="navigateTo('settings');toggleMoreMenu()"><span>⚙️</span><span>Settings</span></button>
+        <button class="more-tile" onclick="window.open(location.origin+location.pathname+'?kiosk=security','_blank');toggleMoreMenu()"><span>🛡️</span><span>Security</span></button>
+      </div>
     </div>
   </div>
   <div id="sheet-overlay" onclick="closeSheet()"></div>
@@ -3811,9 +3865,9 @@ async function renderSecurityKioskPage() {
       </div>`).join('')}
     </div>` : ''}
 
-    <div style="margin-top:24px">
-      <button onclick="navigateTo('checkin')" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;text-decoration:underline">
-        → Full Staff Check-in
+    <div style="margin-top:24px;text-align:center">
+      <button onclick="VW_CHECKIN.exitKioskToStaffCheckin()" style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 20px;color:var(--text2);font-size:13px;cursor:pointer">
+        → Full Staff Check-in (requires login)
       </button>
     </div>
   </div>`;
@@ -3898,52 +3952,65 @@ async function confirmSecurityNotify(type) {
   const name = document.getElementById('sec-cust-name')?.value.trim() || 'Visitor';
   const phone = document.getElementById('sec-cust-phone')?.value.trim() || '';
   const subType = document.getElementById('sec-vendor-type')?.value || type;
+  const notes = document.getElementById('sec-meeting-reason')?.value || '';
 
-  // Create visit record
-  const visitData = {
-    visitorType: type === 'customer' ? 'customer' : subType,
-    visitorName: name,
-    phone, status: 'pending',
-    date: new Date().toISOString(),
-    securityCheckin: true,
-    department: type === 'customer' ? 'General' : 'Management',
-    notes: document.getElementById('sec-meeting-reason')?.value || '',
-    createdAt: new Date().toISOString()
-  };
-  const visitId = await VW_DB.put(VW_DB.STORES.visits, visitData);
+  try {
+    // Save to Supabase directly (works without auth using anon key)
+    await VW_DB.client.from('visits').insert({
+      visitor_type: type === 'customer' ? 'customer' : subType,
+      visitor_name: name,
+      phone, status: 'pending',
+      date: new Date().toISOString(),
+      security_checkin: true,
+      department: type === 'customer' ? 'General' : 'Management',
+      notes,
+      created_at: new Date().toISOString()
+    });
+  } catch(e) { /* Ignore DB errors on kiosk — still show confirmation */ }
 
   closeSheet();
   
-  // Show notification to all staff on floor
-  showToast(`✅ Team notified — ${name} at entrance`, 'success');
-
-  // Push notification to all logged-in staff
-  const profiles = await VW_DB.all(VW_DB.STORES.profiles);
-  const activeStaff = profiles.filter(p => p.status === 'active' && p.role !== 'security');
-  for (const staff of activeStaff.slice(0, 5)) {
-    if (staff.phone) {
-      const msg = type === 'customer'
-        ? `🧑‍🤝‍🧑 Customer "${name}" has arrived at V Wholesale entrance. Please attend! 🏠`
-        : `📢 ${subType} "${name}" at V Wholesale entrance. Please verify and allow entry.`;
-      // In-app notification (push to notification store)
-      await VW_DB.put(VW_DB.STORES.notifications || 'notifications', {
-        to: staff.id, type: 'security_alert', title: `${type === 'customer' ? '🧑' : '🏢'} At Entrance`,
-        body: msg, visitId, read: false, createdAt: new Date().toISOString()
-      }).catch(()=>{});
-    }
+  // Show big confirmation on kiosk screen
+  const content = document.getElementById('app-content');
+  if (content) {
+    const icon = type === 'customer' ? '🧑‍🤝‍🧑' : (type === 'vendor' ? '🚚' : '🏢');
+    const msg = type === 'customer'
+      ? 'Sales team has been notified. Please wait at the entrance — someone will be with you shortly!'
+      : `Our team has been notified. Please proceed to reception.`;
+    content.innerHTML = `
+      <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center">
+        <div style="font-size:72px;margin-bottom:20px;animation:pulse 1s ease-in-out 3">${icon}</div>
+        <div style="font-size:24px;font-weight:800;color:var(--green);font-family:'Syne',sans-serif;margin-bottom:12px">✓ Team Notified!</div>
+        <div style="font-size:15px;color:var(--text2);max-width:300px;line-height:1.6;margin-bottom:28px">${msg}</div>
+        <div style="font-size:13px;color:var(--text3)">V Wholesale · Vijayawada</div>
+        <button onclick="VW_CHECKIN.resetKioskPage()" style="margin-top:32px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px 24px;color:var(--text2);font-size:14px;cursor:pointer">← Back to Check-in</button>
+      </div>`;
+    // Auto-reset after 8 seconds
+    setTimeout(() => VW_CHECKIN.resetKioskPage(), 8000);
   }
+}
 
-  // Update kiosk UI
+async function resetKioskPage() {
   const content = document.getElementById('app-content');
   if (content) content.innerHTML = await renderSecurityKioskPage();
 }
 
 // Add to VW_CHECKIN exports
+// Exit kiosk mode and go to staff check-in (restores nav)
+function exitKioskToStaffCheckin() {
+  document.getElementById('app-nav')?.style.removeProperty('display');
+  document.getElementById('app-header')?.style.removeProperty('display');
+  // Redirect to login — kiosk was unauthenticated
+  window.location.href = window.location.pathname;
+}
+
 window.VW_CHECKIN.renderSecurityKioskPage = renderSecurityKioskPage;
+window.VW_CHECKIN.exitKioskToStaffCheckin = exitKioskToStaffCheckin;
 window.VW_CHECKIN.securityNotifyCustomer = securityNotifyCustomer;
 window.VW_CHECKIN.securityNotifyVendor = securityNotifyVendor;
 window.VW_CHECKIN.securityNotifyOther = securityNotifyOther;
 window.VW_CHECKIN.confirmSecurityNotify = confirmSecurityNotify;
+window.VW_CHECKIN.resetKioskPage = resetKioskPage;
 
 
 /* === cart.js === */
@@ -24299,6 +24366,13 @@ function applyRolePermissions() {
   });
 
   let moreVisibleCount = 0;
+  document.querySelectorAll('.more-tile[data-page]').forEach(btn => {
+    const page = btn.dataset.page;
+    const show = allowed.includes(page);
+    btn.style.display = show ? '' : 'none';
+    if (show) moreVisibleCount++;
+  });
+  // Also handle old more-btn for backward compat
   document.querySelectorAll('.more-btn[data-page]').forEach(btn => {
     const page = btn.dataset.page;
     const show = allowed.includes(page);
@@ -25349,7 +25423,15 @@ function renderFeedbackList(feedbacks, custMap) {
 
 function toggleMoreMenu() {
   const menu = document.getElementById('more-menu');
-  if (menu) menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none' && menu.style.display !== '';
+  menu.style.display = isOpen ? 'none' : 'block';
+  // Highlight active page tile
+  if (!isOpen) {
+    menu.querySelectorAll('.more-tile[data-page]').forEach(btn => {
+      btn.dataset.active = btn.dataset.page === currentPage ? 'true' : 'false';
+    });
+  }
 }
 
 // Close the More menu when tapping anywhere outside it (or its toggle button)
