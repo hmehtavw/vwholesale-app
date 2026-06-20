@@ -25021,26 +25021,58 @@ async function renderDashboard() {
 
   // ⚡ PERFORMANCE: Load only what's needed, with limits
   // Use Supabase direct for date-filtered queries instead of loading ALL records
-  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes] = await Promise.all([
+  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes, leadsRes, feedbackRes, productsRes] = await Promise.all([
     VW_DB.client.from('customers').select('id,name,phone,visit_count,total_spend,last_visit').order('created_at', { ascending: false }).limit(500),
     VW_DB.client.from('visits').select('*').gte('date', today + 'T00:00:00').limit(100),
-    VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received').gte('date', today + 'T00:00:00').limit(100),
+    VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason,escalation_log,closure_photo').gte('date', today + 'T00:00:00').limit(100),
     VW_DB.client.from('tasks').select('*').in('status', ['pending','in_progress']).limit(50),
-    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at').eq('approval_status', 'pending_approval').limit(20),
+    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at,status,items').in('approval_status', ['pending_approval','approved','sent','draft']).limit(100),
+    VW_DB.client.from('leads').select('id,name,stage,assigned_to,assigned_to_name,created_at').limit(100),
+    VW_DB.client.from('feedback').select('id,rating,visit_id,customer_id,created_at').order('created_at', { ascending: false }).limit(50),
+    VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit,active').eq('active', true).limit(200),
   ]);
 
   const customers = customersRes.data || [];
   const visits = visitsRes.data || [];
-  const invoices = invoicesRes.data || [];
+  const invoices = (invoicesRes.data || []).map(i => ({
+    ...i,
+    invoiceNo: i.invoice_no || i.invoiceNo,
+    paymentMethod: i.payment_method || i.paymentMethod,
+    creditSale: i.credit_sale ?? i.creditSale,
+    approvalStatus: i.approval_status || i.approvalStatus,
+    paymentVerified: i.payment_verified ?? i.paymentVerified,
+    customerName: i.customer_name || i.customerName,
+    amountReceived: i.amount_received || i.amountReceived,
+    approvalReason: i.approval_reason || i.approvalReason,
+    escalationLog: i.escalation_log || i.escalationLog || [],
+    closurePhoto: i.closure_photo || i.closurePhoto,
+  }));
   const tasks = tasksRes.data || [];
-  const pendingQuotes = quotationsRes.data || [];
+  const quotations = (quotationsRes.data || []).map(q => ({
+    ...q,
+    quoteNo: q.quote_no || q.quoteNo,
+    approvalStatus: q.approval_status || q.approvalStatus,
+    customerName: q.customer_name || q.customerName,
+    grandTotal: q.grand_total || q.grandTotal,
+  }));
+  const pendingQuotes = quotations.filter(q => q.approvalStatus === 'pending_approval');
+  const leads = (leadsRes.data || []).map(l => ({
+    ...l,
+    assignedTo: l.assigned_to || l.assignedTo,
+    assignedToName: l.assigned_to_name || l.assignedToName,
+  }));
+  const feedback = feedbackRes.data || [];
+  const products = (productsRes.data || []).map(p => ({
+    ...p,
+    lowStockThreshold: p.low_stock_threshold || p.lowStockThreshold || 20,
+  }));
 
-  // Normalize snake_case from Supabase to camelCase for compatibility
-  const normalizeInv = i => ({ ...i, invoiceNo: i.invoice_no || i.invoiceNo, paymentMethod: i.payment_method || i.paymentMethod, creditSale: i.credit_sale || i.creditSale, approvalStatus: i.approval_status || i.approvalStatus, paymentVerified: i.payment_verified || i.paymentVerified, customerName: i.customer_name || i.customerName, amountReceived: i.amount_received || i.amountReceived });
-  const todayInvoices = invoices.map(normalizeInv);
+  const todayInvoices = invoices; // already filtered to today
   const todayVisits = visits;
   const todayCustomers = todayVisits.filter(v => v.visitor_type === 'customer' || v.visitorType === 'customer');
   const todayVisitors = todayVisits.filter(v => v.visitor_type !== 'customer' && v.visitorType !== 'customer');
+  const todayBilling = invoices.filter(i => i.approvalStatus === 'approved').reduce((s,i)=>s+(i.total||0),0);
+  const todayPendingApproval = invoices.filter(i => i.approvalStatus === 'pending_approval').length;
 
   // Cashier / Accounts role gets a focused daily till summary instead of
   // the full admin dashboard — shows exactly what they need for handover.
@@ -25221,10 +25253,13 @@ async function renderDashboard() {
       }).join('')}
     </div>`;
   }
-  const todayBilling = invoices.filter(i => new Date(i.date).toDateString() === today && i.approvalStatus === 'approved').reduce((s,i)=>s+(i.total||0),0);
-  const todayPendingApproval = invoices.filter(i => new Date(i.date).toDateString() === today && i.approvalStatus === 'pending_approval').length;
+  // todayBilling already set above
+  // todayPendingApproval already set above
   const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
-  const monthBilling = invoices.filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved').reduce((s,i)=>s+(i.total||0),0);
+  const { data: monthData } = await VW_DB.client.from('invoices')
+    .select('total').eq('approval_status','approved')
+    .gte('date', monthStart.toISOString()).limit(500);
+  const monthBilling = (monthData||[]).reduce((s,i)=>s+(i.total||0),0);
   const wonLeads = leads.filter(l=>l.stage==='Won').length;
   const convRate = leads.length ? Math.round(wonLeads/leads.length*100) : 0;
   const avgRating = feedback.length ? (feedback.reduce((s,f)=>s+(f.rating||0),0)/feedback.length).toFixed(1) : '—';
@@ -26246,12 +26281,12 @@ async function sendDailySummary() {
     VW_DB.all(VW_DB.STORES.tasks),
     VW_DB.all(VW_DB.STORES.feedback)
   ]);
-  const today = new Date().toDateString();
+  // today already set above
   const todayInvoices = invoices.filter(i => new Date(i.date).toDateString() === today);
   const todayVisits = visits.filter(v => new Date(v.date).toDateString() === today);
   const todayCustomers = todayVisits.filter(v=>v.visitorType==='customer');
   const todayVisitors = todayVisits.filter(v=>v.visitorType!=='customer');
-  const todayBilling = todayInvoices.reduce((s,i)=>s+(i.total||0),0);
+  // todayBilling already set above
   const todayTasks = tasks.filter(t => new Date(t.createdAt).toDateString() === today);
   const deptCount = {};
   todayTasks.forEach(t => { if(t.department) deptCount[t.department]=(deptCount[t.department]||0)+1; });
