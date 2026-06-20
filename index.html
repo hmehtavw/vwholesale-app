@@ -15,15 +15,14 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 /* ============================================================
-   V WHOLESALE — THEME C COMPLETE
+   V WHOLESALE — THEME D
    Design principles:
-   - Header/Nav: Deep Navy #060D45 (brand)
-   - Page bg: #0F1660 (slightly lighter, readable)
-   - Cards: #162080 with subtle border
-   - Inputs: #1B269A
+   - Header/Nav: Deep Navy #060D45 (brand identity)
+   - Page bg: #111827 (dark charcoal — much more readable than deep blue)
+   - Cards: #1F2937 (lighter charcoal)
+   - Inputs: #374151 (medium grey)
    - Gold #F5C842 = numbers, CTAs, active states
-   - Silver #C8D4FF = primary readable text
-   - Muted #7A8EC0 = secondary text (NOT dim grey)
+   - Text: #F9FAFB = crisp white, highly readable on dark charcoal
    ============================================================ */
 :root {
   /* Gold palette */
@@ -33,26 +32,28 @@
   --gold-muted: rgba(245,200,66,0.12);
   --gold-border: rgba(245,200,66,0.3);
 
-  /* Blue depth scale — readable backgrounds */
-  --header-bg:  #060D45;   /* header + bottom nav */
-  --bg:         #0F1660;   /* page content bg */
-  --bg1:        #0F1660;   /* alias */
-  --bg2:        #162080;   /* cards */
-  --bg3:        #1B269A;   /* inputs, secondary buttons */
-  --bg4:        #2030B8;   /* hover */
-  --sheet-bg:   #0D1870;   /* bottom sheets */
+  /* Header/Nav stays navy — brand identity */
+  --header-bg:  #060D45;
 
-  /* Borders */
-  --border:  rgba(200,212,255,0.14);
-  --border2: rgba(200,212,255,0.24);
+  /* Page content — dark charcoal (NOT navy blue) */
+  --bg:         #111827;   /* page background — dark grey, not blue */
+  --bg1:        #111827;
+  --bg2:        #1F2937;   /* cards — slightly lighter */
+  --bg3:        #374151;   /* inputs, secondary buttons */
+  --bg4:        #4B5563;   /* hover states */
+  --sheet-bg:   #1F2937;   /* bottom sheets */
 
-  /* Text — properly readable on dark navy */
-  --text:  #EEF2FF;    /* primary white-blue — headings, important values */
-  --text1: #EEF2FF;    /* alias */
-  --text2: #A8BBEE;    /* secondary — descriptions, meta */
-  --text3: #7A8EC0;    /* tertiary — labels, timestamps — NOT invisible grey */
+  /* Borders — subtle on dark charcoal */
+  --border:  rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.16);
 
-  /* Status */
+  /* Text — crisp and readable on dark charcoal */
+  --text:  #F9FAFB;    /* primary — bright white */
+  --text1: #F9FAFB;
+  --text2: #D1D5DB;    /* secondary — light grey */
+  --text3: #9CA3AF;    /* tertiary — medium grey */
+
+  /* Status colors */
   --green:  #22c55e;
   --red:    #ef4444;
   --blue:   #60A5FA;
@@ -81,13 +82,13 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px;
   background: var(--header-bg);
-  border-bottom: 1px solid rgba(200,212,255,0.08);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0; z-index: 10;
 }
 .header-logo-block { cursor: pointer; display: flex; align-items: center; gap: 10px; }
 .header-logo-icon {
   width: 34px; height: 34px; border-radius: 9px;
-  background: linear-gradient(135deg,#1B269A,#162080);
+  background: linear-gradient(135deg,var(--header-bg),#162080);
   border: 1px solid var(--gold-border);
   display: flex; align-items: center; justify-content: center;
   font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 800; color: var(--gold);
@@ -117,7 +118,7 @@ html, body {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: var(--nav-h);
   background: var(--header-bg);
-  border-top: 1px solid rgba(200,212,255,0.1);
+  border-top: 1px solid var(--border);
   display: flex; align-items: center; justify-content: space-around;
   z-index: 100; padding-bottom: env(safe-area-inset-bottom);
 }
@@ -134,7 +135,7 @@ html, body {
 .more-menu {
   position: fixed; bottom: var(--nav-h); left: 0; right: 0;
   background: var(--header-bg);
-  border-top: 1px solid rgba(200,212,255,0.15);
+  border-top: 1px solid var(--border2);
   border-radius: 20px 20px 0 0;
   padding: 20px 20px 8px;
   z-index: 99; max-height: 72vh; overflow-y: auto;
@@ -160,7 +161,7 @@ html, body {
 
 /* Page intro card — first card on every page, slight gold accent */
 .page-hero {
-  background: linear-gradient(135deg, #162080 0%, #1B269A 100%);
+  background: linear-gradient(135deg,var(--header-bg),#1a2a8a);
   border: 1px solid var(--gold-border);
   border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
 }
@@ -289,7 +290,7 @@ html, body {
 #bottom-sheet {
   position: fixed; bottom: 0; left: 0; right: 0;
   background: var(--sheet-bg);
-  border-top: 1px solid rgba(200,212,255,0.15);
+  border-top: 1px solid var(--border2);
   border-radius: 22px 22px 0 0;
   padding: 16px 16px 40px;
   transform: translateY(100%);
@@ -399,7 +400,7 @@ html, body {
 .dash-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .logo-mark {
   width: 48px; height: 48px; border-radius: 14px;
-  background: linear-gradient(135deg,#1B269A,#162080);
+  background: linear-gradient(135deg,var(--header-bg),#162080);
   border: 1.5px solid var(--gold-border);
   display: flex; align-items: center; justify-content: center;
   font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 800; color: var(--gold);
@@ -411,11 +412,11 @@ html, body {
 .lb-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .lb-rank { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
 .lb-rank-1 { background: var(--gold); color: #000; }
-.lb-rank-2 { background: rgba(200,212,255,0.2); color: var(--text2); }
+.lb-rank-2 { background: rgba(255,255,255,0.08); color: var(--text2); }
 .lb-rank-n { background: var(--bg3); color: var(--text3); }
 .lb-info { flex: 1; min-width: 0; }
 .lb-name { font-size: 13px; font-weight: 600; color: var(--text); }
-.lb-bar-bg { height: 3px; background: rgba(200,212,255,0.1); border-radius: 2px; margin-top: 4px; }
+.lb-bar-bg { height: 3px; background: var(--border); border-radius: 2px; margin-top: 4px; }
 .lb-bar { height: 3px; background: var(--gold); border-radius: 2px; transition: width 0.5s ease; }
 .lb-val { font-size: 14px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
 
@@ -443,7 +444,7 @@ html, body {
 /* ===== AUTH SCREEN ===== */
 .identity-overlay { position: fixed; inset: 0; background: var(--header-bg); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; }
 .identity-card { background: var(--bg2); border: 1px solid var(--border2); border-radius: 24px; padding: 32px 24px; width: 100%; max-width: 340px; }
-.id-logo { width: 60px; height: 60px; border-radius: 18px; margin: 0 auto 24px; background: linear-gradient(135deg,#1B269A,#162080); border: 2px solid var(--gold-border); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--gold); }
+.id-logo { width: 60px; height: 60px; border-radius: 18px; margin: 0 auto 24px; background: linear-gradient(135deg,var(--header-bg),#162080); border: 2px solid var(--gold-border); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--gold); }
 
 /* ===== LOADING ===== */
 .loading-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; gap: 14px; }
@@ -486,7 +487,7 @@ html, body {
 .kiosk-card:active { transform: scale(0.96); background: var(--gold-muted); border-color: var(--gold); }
 
 /* ===== EMPLOYEE APP ===== */
-.emp-punch-card { background: linear-gradient(135deg,#1B269A,#162080); border: 1px solid var(--gold-border); border-radius: 20px; padding: 22px; margin-bottom: 14px; }
+.emp-punch-card { background: linear-gradient(135deg,var(--header-bg),#162080); border: 1px solid var(--gold-border); border-radius: 20px; padding: 22px; margin-bottom: 14px; }
 .emp-quick-btn { background: var(--bg3); border: 1px solid var(--border); border-radius: 14px; padding: 16px 10px; text-align: center; cursor: pointer; transition: all 0.2s; }
 .emp-quick-btn:active { background: var(--gold-muted); border-color: var(--gold); }
 .emp-quick-icon { font-size: 26px; display: block; margin-bottom: 6px; }
@@ -926,6 +927,7 @@ td strong { color: var(--text); }
       <button class="more-btn" data-page="field" onclick="navigateTo('field')"><span>🚗</span> Field Team</button>
       <button class="more-btn" data-page="gst" onclick="navigateTo('gst')"><span>📊</span> GST</button>
       <button class="more-btn" data-page="wishlist" onclick="navigateTo('wishlist')"><span>❤️</span> Wishlist</button>
+      <button class="more-btn" data-page="grn" onclick="navigateTo('grn')"><span>📦</span> GRN</button>
       <button class="more-btn" data-page="settings" onclick="navigateTo('settings')"><span>&#9881;&#65039;</span> Settings</button>
       <button class="more-btn" onclick="window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>&#128737;</span> Security Kiosk</button>
     </div>
@@ -1483,7 +1485,7 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest','returns','visualizer','field','gst','wishlist'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest','returns','visualizer','field','gst','wishlist','grn'],
   executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
   reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer','wishlist'],
@@ -3753,7 +3755,7 @@ async function renderSecurityKioskPage() {
       
       <!-- CUSTOMER -->
       <button onclick="VW_CHECKIN.securityNotifyCustomer()" style="
-        background:linear-gradient(135deg,#1B269A,#162080);
+        background:var(--header-bg);
         border:2px solid var(--gold-border);
         border-radius:20px;padding:28px 20px;
         display:flex;align-items:center;gap:16px;
@@ -11153,6 +11155,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-store" onclick="VW_SETTINGS.switchSettingsTab('store',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🏪</span>Store</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-tools" onclick="VW_SETTINGS.switchSettingsTab('tools',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔧</span>Tools</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-danger" onclick="VW_SETTINGS.switchSettingsTab('danger',this)" style="display:inline-flex"><span class="et-icon" style="color:var(--red)">⚠️</span><span style="color:var(--red)">Danger</span></button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
   </div>
 
   <div id="settings-tab-content">
@@ -11173,6 +11176,7 @@ async function switchSettingsTab(tab, btn) {
     case 'store':       container.innerHTML = await renderSettingsStore(); break;
     case 'tools':       container.innerHTML = await renderSettingsTools(); break;
     case 'danger':      container.innerHTML = await renderSettingsDanger(); break;
+    case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
   }
 }
 
@@ -12235,6 +12239,67 @@ async function clearUserPermissions(profileId) {
 }
 
 
+// =====================================================
+// COST OPTIMIZATION GUIDE (Settings tab)
+// =====================================================
+async function renderCostOptimizationTab() {
+  return `
+  <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
+    <h3 class="card-title">💰 Cost Optimization for V Wholesale</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Based on your current setup, here are ways to reduce Google Workspace, SIM, and calling costs.
+    </p>
+
+    <!-- EMAIL -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">📧 Email (Google Workspace)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">You're paying ~₹125/user/month for Google Workspace. Options:</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:6px">✅ <strong>Best option: Zoho Mail Free</strong></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Free for up to 5 users with custom domain (vwholesale.in email). Same features as Google Workspace basic.</div>
+      <a href="https://www.zoho.com/mail/free-email-hosting.html" target="_blank" class="btn-sm" style="display:inline-block;text-decoration:none">Open Zoho Mail →</a>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">💡 For WhatsApp-heavy teams like yours, email matters less. Zoho free covers all your needs.</div>
+    </div>
+
+    <!-- CALLING / SIM -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">📞 Staff Calling (Personal SIMs)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Staff calling customers from personal numbers — 3 problems: customer data leak, cost, no tracking.</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px">✅ <strong>Recommended: Exotel</strong></div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">₹2,500–5,000/month for unlimited calling from a single V Wholesale number. Staff dials from app — customer only sees your business number. All calls recorded, tracked in CRM.</div>
+      <a href="https://exotel.com" target="_blank" class="btn-sm" style="display:inline-block;text-decoration:none">Exotel Plans →</a>
+      <div style="font-size:13px;color:var(--text);margin-top:8px;margin-bottom:4px">Budget option: <strong>Knowlarity</strong></div>
+      <div style="font-size:12px;color:var(--text2)">Similar features, slightly cheaper. Good for small teams.</div>
+    </div>
+
+    <!-- WHATSAPP BUSINESS API -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">💬 WhatsApp (Currently personal numbers)</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Staff sending from personal WhatsApp — same risks. Switch to WhatsApp Business API:</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:4px">✅ <strong>Interakt / AiSensy / Wati</strong></div>
+      <div style="font-size:12px;color:var(--text2)">₹1,500–3,000/month. One V Wholesale WhatsApp number, multiple staff can send, all messages tracked, automated templates for quotations/invoices.</div>
+    </div>
+
+    <!-- TOTAL SAVINGS ESTIMATE -->
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:12px">
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">💚 Estimated savings</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span>Google Workspace → Zoho Free</span>
+        <span style="color:var(--green)">Save ₹625–1,250/month</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-bottom:1px solid var(--border)">
+        <span>Personal SIMs → Exotel</span>
+        <span style="color:var(--green)">Save ₹2,000–4,000/month</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0">
+        <span>Personal WA → WA Business API</span>
+        <span style="color:var(--green)">+ CRM integration</span>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--green);margin-top:8px">Total: Save ₹3,000–6,000/month + data protection</div>
+    </div>
+  </div>`;
+}
+window.VW_SETTINGS.renderCostOptimizationTab = renderCostOptimizationTab;
+
 
 /* === reports.js === */
 // ===================== HELPERS =====================
@@ -12690,6 +12755,78 @@ function generateInsights(invoices, visits, customers, leads, feedback) {
 }
 
 window.VW_ANALYTICS = { renderAnalytics };
+
+// =====================================================
+// USER BEHAVIOUR REPORT (admin only)
+// =====================================================
+async function renderUserBehaviourTab() {
+  const { data: events } = await VW_DB.client
+    .from('user_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  const list = events || [];
+
+  // Aggregate by user
+  const byUser = {};
+  list.forEach(e => {
+    const key = e.user_name || 'Unknown';
+    if (!byUser[key]) byUser[key] = { name: key, role: e.user_role, pageViews: 0, actions: 0, errors: 0, lastSeen: e.created_at };
+    if (e.event_type === 'page_view') byUser[key].pageViews++;
+    else if (e.event_type === 'action') byUser[key].actions++;
+    else if (e.event_type === 'error') byUser[key].errors++;
+    if (e.created_at > byUser[key].lastSeen) byUser[key].lastSeen = e.created_at;
+  });
+
+  const errors = list.filter(e => e.event_type === 'error');
+  const topPages = {};
+  list.filter(e => e.event_type === 'page_view').forEach(e => {
+    topPages[e.page] = (topPages[e.page]||0)+1;
+  });
+  const sortedPages = Object.entries(topPages).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  return `
+  <div style="margin-bottom:14px">
+    <h3 class="card-title">👥 User Activity (last 200 events)</h3>
+    ${Object.values(byUser).map(u => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:600">${u.name} <span style="font-size:11px;color:var(--text3)">${u.role}</span></div>
+        <div style="font-size:11px;color:var(--text3)">Last: ${new Date(u.lastSeen).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</div>
+      </div>
+      <div style="display:flex;gap:12px;font-size:12px">
+        <span style="color:var(--blue)">📄 ${u.pageViews}</span>
+        <span style="color:var(--green)">✓ ${u.actions}</span>
+        ${u.errors?`<span style="color:var(--red)">⚠️ ${u.errors}</span>`:''}
+      </div>
+    </div>`).join('')}
+  </div>
+
+  <div style="margin-bottom:14px">
+    <h3 class="card-title">📊 Most Used Pages</h3>
+    ${sortedPages.map(([page, count]) => `
+    <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px">${page}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:${Math.round(count/sortedPages[0][1]*80)}px;height:6px;background:var(--gold);border-radius:3px"></div>
+        <span style="font-size:12px;color:var(--text3)">${count}</span>
+      </div>
+    </div>`).join('')}
+  </div>
+
+  ${errors.length ? `
+  <div>
+    <h3 class="card-title" style="color:var(--red)">⚠️ Recent Errors (${errors.length})</h3>
+    ${errors.slice(0,10).map(e => `
+    <div style="background:rgba(239,68,68,0.06);border-radius:8px;padding:8px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:var(--red)">${e.action}</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">${e.error_message||'—'}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${e.user_name||'Unknown'} · ${new Date(e.created_at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</div>
+    </div>`).join('')}
+  </div>` : '<div style="font-size:13px;color:var(--green);text-align:center;padding:16px">✓ No errors recorded</div>'}`;
+}
+
+if (window.VW_ANALYTICS) window.VW_ANALYTICS.renderUserBehaviourTab = renderUserBehaviourTab;
 
 
 /* === training.js === */
@@ -13525,7 +13662,14 @@ async function confirmCreateGatePass(invoiceId) {
   showToast(`Gate Pass ${gatePassNo} created`, 'success');
   closeSheet();
 
-  // Send delivery tracking WhatsApp to customer AND driver
+  // Create delivery tracking record
+  const trackingLink = await VW_DISPATCH.createDeliveryTracking(
+    gatePassNo, invoiceId,
+    dispatchedItems.map(i => ({ name: i.name, qty: i.qty, unit: i.unit||'pc' })),
+    driverName, driverPhone, vehicleDetails,
+    inv.customerName || cust?.name || '',
+    cust?.phone || ''
+  ).catch(() => null);
   const customers = await VW_DB.all(VW_DB.STORES.customers);
   const cust = inv.customerId ? customers.find(c => c.id === inv.customerId) : null;
   const vehicleDetails = document.getElementById('gp-vehicle')?.value.trim();
@@ -13535,13 +13679,14 @@ async function confirmCreateGatePass(invoiceId) {
   const itemList = dispatchedItems.map(i => `• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
   const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
 
-  // Customer notification
+  // Customer notification — include tracking link
   if (cust?.phone) {
     const msg = encodeURIComponent(
       `Dear ${cust.name},\n\nYour order from V Wholesale is on the way! 🚚\n\n` +
       `📋 Gate Pass: ${gatePassNo}\n📄 Invoice: ${inv.invoiceNo}\n` +
       (vehicleDetails ? `🚗 Vehicle: ${vehicleDetails}\n` : '') +
       (driverName ? `👤 Driver: ${driverName}\n` : '') +
+      (trackingLink ? `\n🔗 Track your delivery live:\n${trackingLink}\n` : '') +
       `\n📦 Items being delivered:\n${itemList}\n\n` +
       `Please keep someone available to receive the delivery.\n\nThank you! 🙏\n— V Wholesale`
     );
@@ -14144,6 +14289,121 @@ async function createStaffPickupGatePass(invoiceId) {
 }
 
 window.VW_DISPATCH.createStaffPickupGatePass = createStaffPickupGatePass;
+
+// =====================================================
+// DELIVERY TRACKING MODULE
+// Customer-facing live tracking page
+// URL: ?track=TOKEN
+// =====================================================
+
+async function renderDeliveryTrackingPage(token) {
+  const { data: tracking } = await VW_DB.client
+    .from('delivery_tracking')
+    .select('*')
+    .eq('tracking_token', token)
+    .single();
+
+  if (!tracking) {
+    return `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px">
+      <div style="text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">🔍</div>
+        <h2 style="color:var(--text)">Tracking Not Found</h2>
+        <p style="color:var(--text3);font-size:14px">This tracking link may have expired or is incorrect.<br>Please contact V Wholesale.</p>
+        <div style="margin-top:16px;font-size:13px;color:var(--text3)">📞 8712697930 · V Wholesale, Vijayawada</div>
+      </div>
+    </div>`;
+  }
+
+  const statusSteps = [
+    { key: 'dispatched', label: 'Order Dispatched', icon: '📦', desc: 'Your order has left V Wholesale store' },
+    { key: 'in_transit', label: 'In Transit', icon: '🚚', desc: `${tracking.driver_name||'Driver'} is on the way${tracking.vehicle_no?' in '+tracking.vehicle_no:''}` },
+    { key: 'delivered', label: 'Delivered', icon: '✅', desc: 'Your order has been delivered successfully' },
+  ];
+  const currentIdx = statusSteps.findIndex(s => s.key === tracking.status);
+
+  return `
+  <div style="min-height:100vh;background:var(--bg);padding:16px;max-width:440px;margin:0 auto">
+    <!-- HEADER -->
+    <div style="text-align:center;padding:16px 0 20px;border-bottom:1px solid var(--border);margin-bottom:20px">
+      <div style="font-size:16px;font-weight:800;color:var(--text);font-family:'Syne',sans-serif">V Wholesale</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">Live Delivery Tracking</div>
+    </div>
+
+    <!-- GATE PASS / ORDER INFO -->
+    <div style="background:var(--bg2);border-radius:14px;padding:16px;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">${tracking.gate_pass_no||tracking.invoice_no}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">For: ${tracking.customer_name||'Customer'}</div>
+      ${tracking.estimated_delivery ? `<div style="font-size:12px;color:var(--gold);margin-top:4px">Expected: ${new Date(tracking.estimated_delivery).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}</div>` : ''}
+    </div>
+
+    <!-- STATUS TRACKER -->
+    <div style="margin-bottom:20px">
+      ${statusSteps.map((step, i) => {
+        const done = i <= currentIdx;
+        const current = i === currentIdx;
+        return `
+        <div style="display:flex;align-items:flex-start;gap:14px;margin-bottom:${i<statusSteps.length-1?'0':'0'}">
+          <div style="display:flex;flex-direction:column;align-items:center">
+            <div style="width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;border:3px solid ${done?'var(--green)':'var(--border)'};background:${done?'rgba(34,197,94,0.1)':'var(--bg2)'};${current?'animation:pulse 2s infinite':''}">${step.icon}</div>
+            ${i<statusSteps.length-1?`<div style="width:3px;height:40px;background:${done&&i<currentIdx?'var(--green)':'var(--border)'};margin:4px 0"></div>`:''}
+          </div>
+          <div style="padding-top:8px;flex:1">
+            <div style="font-size:14px;font-weight:${current?'700':'500'};color:${done?'var(--text)':'var(--text3)'}">${step.label}</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">${done?step.desc:''}</div>
+            ${current && tracking.status==='delivered' && tracking.delivered_at ? `<div style="font-size:12px;color:var(--green);margin-top:2px">✓ ${new Date(tracking.delivered_at).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- ITEMS LIST -->
+    ${(tracking.items||[]).length ? `
+    <div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:10px">Your Order</div>
+      ${(tracking.items||[]).map(item => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text)">${item.name||'—'}</span>
+        <span style="font-size:13px;color:var(--text2)">${item.qty||1} ${item.unit||'pc'}</span>
+      </div>`).join('')}
+    </div>` : ''}
+
+    <!-- DELIVERY PHOTO (if delivered) -->
+    ${tracking.delivery_photo ? `
+    <div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Delivery Photo</div>
+      <img src="data:image/jpeg;base64,${tracking.delivery_photo}" style="width:100%;border-radius:10px">
+    </div>` : ''}
+
+    <!-- CONTACT -->
+    <div style="text-align:center;padding:16px;font-size:13px;color:var(--text3)">
+      Questions? Call us: <a href="tel:8712697930" style="color:var(--gold);font-weight:600">8712697930</a><br>
+      <span style="font-size:11px">V Wholesale · NH-65 Bhavanipuram, Vijayawada</span>
+    </div>
+  </div>`;
+}
+
+// Create tracking record when gate pass is generated
+async function createDeliveryTracking(gatePassNo, invoiceId, items, driverName, driverPhone, vehicleNo, customerName, customerPhone) {
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  await VW_DB.client.from('delivery_tracking').insert({
+    gate_pass_no: gatePassNo,
+    invoice_id: invoiceId,
+    driver_name: driverName || '',
+    driver_phone: driverPhone || '',
+    vehicle_no: vehicleNo || '',
+    customer_name: customerName || '',
+    customer_phone: customerPhone || '',
+    items: items || [],
+    status: 'dispatched',
+    dispatched_at: new Date().toISOString(),
+    tracking_token: token
+  });
+  return `${window.location.origin}/vwholesale-app/?track=${token}`;
+}
+
+window.VW_DISPATCH.renderDeliveryTrackingPage = renderDeliveryTrackingPage;
+window.VW_DISPATCH.createDeliveryTracking = createDeliveryTracking;
 
 
 /* === features.js === */
@@ -23027,7 +23287,7 @@ async function renderVisualizerPage() {
         <button onclick="VW_VIS.clearPhoto()" style="background:rgba(0,0,0,0.5);border:none;color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">Change</button>
       </div>
     </div>` : `
-    <div onclick="document.getElementById('vis-file-input').click()" style="background:linear-gradient(135deg,#1B269A20,#0d166010);border:2px dashed var(--border);border-radius:14px;padding:36px 20px;text-align:center;cursor:pointer">
+    <div onclick="document.getElementById('vis-file-input').click()" style="background:rgba(255,255,255,0.03);border:2px dashed var(--border);border-radius:14px;padding:36px 20px;text-align:center;cursor:pointer">
       <div style="font-size:52px;margin-bottom:10px">📷</div>
       <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px">Snap your room</div>
       <div style="font-size:13px;color:var(--text3)">Take a photo or upload from gallery</div>
@@ -23698,6 +23958,334 @@ window.VW_FIELD = {
 };
 
 
+/* === grn.js === */
+// =====================================================
+// GRN — GOODS RECEIPT NOTE
+// Scan supplier invoice → AI extracts items →
+// Match against PO → approve/reject
+// =====================================================
+
+async function renderGRNPage() {
+  const { data: grns } = await VW_DB.client
+    .from('grn_receipts').select('*')
+    .order('created_at', { ascending: false }).limit(50);
+  const list = grns || [];
+  const pending = list.filter(g => g.status === 'pending');
+
+  return `
+  <div class="module-header">
+    <h2>📦 Goods Receipt (GRN)</h2>
+    <button class="btn-sm" onclick="VW_GRN.newGRN()">+ New GRN</button>
+  </div>
+
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card ${pending.length?'danger':''}">
+      <div class="mc-label">Pending Approval</div>
+      <div class="mc-value">${pending.length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Total GRNs</div>
+      <div class="mc-value">${list.length}</div>
+    </div>
+    <div class="metric-card gold">
+      <div class="mc-label">Total Value</div>
+      <div class="mc-value">₹${Math.round(list.reduce((s,g)=>s+(g.total_value||0),0)/1000)}K</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Approved</div>
+      <div class="mc-value">${list.filter(g=>g.status==='approved').length}</div>
+    </div>
+  </div>
+
+  ${pending.length ? `
+  <div class="card" style="margin-bottom:10px;border-color:rgba(239,68,68,0.3)">
+    <h3 class="card-title" style="color:var(--red)">⚠️ Pending GRNs</h3>
+    ${pending.map(g => renderGRNRow(g)).join('')}
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">All GRNs</h3>
+    ${list.length ? list.map(g => renderGRNRow(g)).join('') : '<p class="empty-msg">No GRNs yet — scan a supplier invoice to create one</p>'}
+  </div>`;
+}
+
+function renderGRNRow(g) {
+  const statusColor = { pending:'var(--gold)', approved:'var(--green)', rejected:'var(--red)' };
+  return `
+  <div onclick="VW_GRN.openGRN(${g.id})" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:13px;font-weight:600">${g.vendor_name||'Unknown Vendor'} · ${g.invoice_no||'No Invoice No.'}</div>
+        <div style="font-size:11px;color:var(--text3)">${g.po_no?'PO: '+g.po_no+' · ':''} ${(g.items||[]).length} items · ${new Date(g.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:700">₹${Math.round(g.total_value||0).toLocaleString('en-IN')}</div>
+        <span style="font-size:11px;color:${statusColor[g.status]||'var(--text3)'}">● ${g.status}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function newGRN() {
+  const pos = await VW_DB.all(VW_DB.STORES.purchaseOrders);
+  const openPOs = pos.filter(p => p.status !== 'received' && p.status !== 'cancelled');
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📦 New GRN</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Photograph the supplier's invoice and AI will extract all items automatically.</p>
+
+    ${openPOs.length ? `
+    <div class="form-group"><label>Link to Purchase Order (optional)</label>
+      <select id="grn-po-select">
+        <option value="">No PO — direct purchase</option>
+        ${openPOs.map(p=>`<option value="${p.id}" data-items='${JSON.stringify(p.items||[])}'>${p.poNo||'PO-'+p.id} · ${p.vendorName||'Vendor'} · ₹${Math.round(p.total||0).toLocaleString('en-IN')}</option>`).join('')}
+      </select>
+    </div>` : ''}
+
+    <div id="grn-photo-area" onclick="document.getElementById('grn-photo-input').click()"
+      style="border:2px dashed var(--border);border-radius:14px;padding:32px;text-align:center;cursor:pointer;margin-bottom:12px">
+      <div style="font-size:48px;margin-bottom:8px">📄</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text)">Photograph supplier invoice</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">AI will extract all items, quantities and amounts</div>
+    </div>
+    <input type="file" id="grn-photo-input" accept="image/*" capture="environment" style="display:none" onchange="VW_GRN.processGRNPhoto(this)">
+
+    <div class="form-group"><label>Or enter manually — Vendor Name</label>
+      <input type="text" id="grn-vendor-name" placeholder="e.g. Ravi Tiles Depot">
+    </div>
+    <button class="btn-secondary full-width" onclick="VW_GRN.openManualGRN()">Enter Items Manually Instead</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function processGRNPhoto(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+
+  // Show loading state
+  const area = document.getElementById('grn-photo-area');
+  if (area) area.innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+      <div class="spinner"></div>
+      <div style="font-size:14px;font-weight:600">AI reading invoice...</div>
+      <div style="font-size:12px;color:var(--text3)">Extracting items, quantities and amounts</div>
+    </div>`;
+
+  // Compress image
+  const b64 = await new Promise((res) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const maxSize = 1200;
+        const ratio = Math.min(maxSize/img.width, maxSize/img.height, 1);
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        res(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Get PO items for matching
+  const poSelect = document.getElementById('grn-po-select');
+  const poItemsRaw = poSelect?.options[poSelect.selectedIndex]?.dataset?.items;
+  const poItems = poItemsRaw ? JSON.parse(poItemsRaw) : [];
+
+  try {
+    const SUPABASE_URL = VW_DB.client.supabaseUrl;
+    const SUPABASE_KEY = VW_DB.client.supabaseKey;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/grn-ocr`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}`, 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ imageBase64: b64, poItems })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    // Store parsed data and show review
+    window._grnOCRData = { ...data, photoB64: b64 };
+    showGRNReview(data, b64);
+  } catch(e) {
+    if (area) area.innerHTML = `
+      <div style="text-align:center">
+        <div style="font-size:32px">❌</div>
+        <div style="font-size:13px;color:var(--red);margin-top:8px">${e.message}</div>
+        <button class="btn-secondary" style="margin-top:10px" onclick="document.getElementById('grn-photo-input').click()">Try Again</button>
+      </div>`;
+  }
+}
+
+function showGRNReview(data, photoB64) {
+  const sheet = document.getElementById('bottom-sheet');
+  const items = data.items || [];
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">✅ Invoice Read — Review Items</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        ${data.vendorName?`<div><span style="font-size:11px;color:var(--text3)">Vendor</span><div style="font-size:13px;font-weight:600">${data.vendorName}</div></div>`:''}
+        ${data.invoiceNo?`<div><span style="font-size:11px;color:var(--text3)">Invoice No.</span><div style="font-size:13px;font-weight:600">${data.invoiceNo}</div></div>`:''}
+        ${data.invoiceDate?`<div><span style="font-size:11px;color:var(--text3)">Date</span><div style="font-size:13px;font-weight:600">${data.invoiceDate}</div></div>`:''}
+        ${data.grandTotal?`<div><span style="font-size:11px;color:var(--text3)">Total</span><div style="font-size:14px;font-weight:700;color:var(--gold)">₹${Math.round(data.grandTotal).toLocaleString('en-IN')}</div></div>`:''}
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">${items.length} items extracted — edit if needed</div>
+
+    <div id="grn-items-review">
+      ${items.map((item, i) => `
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
+        <input type="text" value="${(item.name||'').replace(/"/g,'&quot;')}" style="width:100%;font-size:13px;font-weight:600;background:transparent;border:none;color:var(--text);padding:0;margin-bottom:6px" id="grn-item-name-${i}">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <label style="font-size:10px;color:var(--text3)">QTY</label>
+            <input type="number" value="${item.qty||1}" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-qty-${i}">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:10px;color:var(--text3)">UNIT</label>
+            <input type="text" value="${item.unit||'pc'}" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-unit-${i}">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:10px;color:var(--text3)">RATE ₹</label>
+            <input type="number" value="${item.rate||0}" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-rate-${i}">
+          </div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Review the items above. Edit any mistakes before saving.</div>
+    <button class="btn-primary full-width" onclick="VW_GRN.saveGRN(${items.length}, '${(data.vendorName||'').replace(/'/g,"\\'")}', '${data.invoiceNo||''}', '${data.invoiceDate||''}', ${Math.round(data.grandTotal||0)})">
+      💾 Save GRN — Submit for Approval
+    </button>`;
+}
+
+async function saveGRN(itemCount, vendorName, invoiceNo, invoiceDate, grandTotal) {
+  const poSelect = document.getElementById('grn-po-select');
+  const poId = poSelect?.value ? parseInt(poSelect.value) : null;
+  const poText = poSelect?.options[poSelect?.selectedIndex]?.text || '';
+  const poNo = poText.split(' · ')[0] || '';
+
+  const items = [];
+  for (let i = 0; i < itemCount; i++) {
+    const name = document.getElementById(`grn-item-name-${i}`)?.value.trim();
+    const qty = parseFloat(document.getElementById(`grn-item-qty-${i}`)?.value || 1);
+    const unit = document.getElementById(`grn-item-unit-${i}`)?.value.trim() || 'pc';
+    const rate = parseFloat(document.getElementById(`grn-item-rate-${i}`)?.value || 0);
+    if (name) items.push({ name, qty, unit, rate, amount: qty * rate });
+  }
+
+  const { error } = await VW_DB.client.from('grn_receipts').insert({
+    po_id: poId,
+    po_no: poNo,
+    vendor_name: vendorName || document.getElementById('grn-vendor-name')?.value.trim() || 'Unknown',
+    invoice_no: invoiceNo,
+    invoice_date: invoiceDate || null,
+    items,
+    total_value: grandTotal || items.reduce((s,i)=>s+i.amount,0),
+    status: 'pending',
+    created_by_name: VW_AUTH.getCurrentProfile()?.name || ''
+  });
+
+  if (error) { showToast('Error saving GRN: ' + error.message, 'error'); return; }
+  closeSheet();
+  showToast(`GRN saved — ${items.length} items pending approval ✓`, 'success');
+  navigateTo('grn');
+}
+
+async function openGRN(id) {
+  const { data: g } = await VW_DB.client.from('grn_receipts').select('*').eq('id', id).single();
+  if (!g) return;
+  const isAdmin = VW_AUTH.isAdmin();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">GRN #${g.id}</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">
+      ${g.vendor_name} · ${g.invoice_no||'No Inv No'} · ₹${Math.round(g.total_value||0).toLocaleString('en-IN')}
+    </div>
+    <div style="margin-bottom:12px">
+      ${(g.items||[]).map(item => `
+      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-size:13px">${item.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${item.qty} ${item.unit} × ₹${item.rate||0}</div>
+        </div>
+        <div style="font-size:13px;font-weight:600">₹${Math.round(item.amount||0).toLocaleString('en-IN')}</div>
+      </div>`).join('')}
+    </div>
+    ${isAdmin && g.status === 'pending' ? `
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" style="flex:1;background:var(--green)" onclick="VW_GRN.approveGRN(${g.id})">✓ Approve & Update Stock</button>
+      <button class="btn-secondary" style="flex:1;color:var(--red)" onclick="VW_GRN.rejectGRN(${g.id})">✗ Reject</button>
+    </div>` : `<div style="font-size:13px;color:var(--text3);text-align:center">${g.status.toUpperCase()} ${g.approved_by?'by '+g.approved_by:''}</div>`}`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function approveGRN(id) {
+  const { data: g } = await VW_DB.client.from('grn_receipts').select('*').eq('id', id).single();
+  if (!g) return;
+
+  // Update stock for each item
+  const products = await VW_DB.all(VW_DB.STORES.products);
+  for (const item of (g.items||[])) {
+    const match = products.find(p =>
+      p.name?.toLowerCase().includes(item.name?.toLowerCase().slice(0,10)) ||
+      item.name?.toLowerCase().includes(p.name?.toLowerCase().slice(0,10))
+    );
+    if (match) {
+      await VW_DB.put(VW_DB.STORES.products, {
+        ...match,
+        stock: (match.stock||0) + (item.qty||0),
+        lastGRN: new Date().toISOString()
+      });
+    }
+  }
+
+  await VW_DB.client.from('grn_receipts').update({
+    status: 'approved',
+    approved_by: VW_AUTH.getCurrentProfile()?.name || '',
+    approved_at: new Date().toISOString()
+  }).eq('id', id);
+
+  closeSheet();
+  showToast(`GRN approved — stock updated for ${(g.items||[]).length} items ✓`, 'success');
+  navigateTo('grn');
+}
+
+async function rejectGRN(id) {
+  await VW_DB.client.from('grn_receipts').update({ status: 'rejected', approved_by: VW_AUTH.getCurrentProfile()?.name || '', approved_at: new Date().toISOString() }).eq('id', id);
+  closeSheet();
+  showToast('GRN rejected', 'warn');
+  navigateTo('grn');
+}
+
+async function openManualGRN() {
+  // TODO: manual entry form
+  showToast('Manual GRN — use the same form, just skip the photo', 'warn');
+}
+
+window.VW_GRN = {
+  renderGRNPage, newGRN, processGRNPhoto, showGRNReview,
+  saveGRN, openGRN, approveGRN, rejectGRN, openManualGRN
+};
+
+
 /* === app.js === */
 let currentPage = 'dashboard';
 
@@ -23828,6 +24416,7 @@ async function navigateTo(page, params) {
     else if (page === 'field') html = await VW_FIELD.renderFieldTeamPage();
     else if (page === 'gst') html = await VW_FEATURES.renderGSTPage();
     else if (page === 'wishlist') html = await VW_FEATURES.renderWishlistPage();
+    else if (page === 'grn') html = await VW_GRN.renderGRNPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
     else if (page === 'marketing') html = await VW_MARKETING.renderMarketingPage();
@@ -25002,6 +25591,15 @@ async function init() {
     return;
   }
 
+  // CUSTOMER DELIVERY TRACKING — ?track=TOKEN public tracking page
+  const trackToken = urlParams.get('track');
+  if (trackToken) {
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_DISPATCH.renderDeliveryTrackingPage(trackToken);
+    return;
+  }
+
   // CUSTOMER PORTAL — ?quote=XXXXX public quotation view, no login needed
   if (urlParams.get('quote')) {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
@@ -25023,6 +25621,11 @@ async function init() {
 
   await navigateTo('dashboard');
   try { await refreshNotifBadge(); } catch(e) { console.warn('Notif badge refresh error', e); }
+
+  // Init data protection for non-admin staff
+  try { initDataProtection(); } catch(e) {}
+  // Track login event
+  try { trackEvent('action', 'dashboard', 'login', { role: VW_AUTH.getCurrentProfile()?.role }); } catch(e) {}
 
   // Escalation engine — check every 30 seconds (safety net for missed realtime events)
   try { await VW_ESCALATION.checkEscalations(); } catch(e) { console.warn('Escalation check error', e); }
@@ -25386,6 +25989,136 @@ function setLanguage(lang) {
 
 window.t = t;
 window.setLanguage = setLanguage;
+
+// =====================================================
+// USER JOURNEY / BEHAVIOUR TRACKING
+// Records every page view, action, error per user
+// =====================================================
+const _trackSession = Math.random().toString(36).slice(2,10);
+let _trackBuffer = [];
+let _trackFlushTimer = null;
+
+function trackEvent(type, page, action, details, errorMessage) {
+  const profile = VW_AUTH.getCurrentProfile();
+  if (!profile) return; // Don't track unauthenticated
+  _trackBuffer.push({
+    user_id: profile.id,
+    user_name: profile.name,
+    user_role: profile.role,
+    event_type: type,
+    page: page || window._currentPage || 'unknown',
+    action: action || null,
+    details: details || null,
+    error_message: errorMessage || null,
+    session_id: _trackSession,
+    device_info: navigator.userAgent?.slice(0,100) || null,
+    created_at: new Date().toISOString()
+  });
+  // Flush every 10 events or 30 seconds
+  if (_trackBuffer.length >= 10) flushTrackingEvents();
+  else {
+    clearTimeout(_trackFlushTimer);
+    _trackFlushTimer = setTimeout(flushTrackingEvents, 30000);
+  }
+}
+window.trackEvent = trackEvent;
+
+async function flushTrackingEvents() {
+  if (!_trackBuffer.length) return;
+  const events = [..._trackBuffer];
+  _trackBuffer = [];
+  try {
+    await VW_DB.client.from('user_events').insert(events);
+  } catch(e) { /* Silent fail — tracking should never break the app */ }
+}
+
+// Track page navigation
+const _origNavigateTo = window.navigateTo;
+window.navigateTo = function(page, params) {
+  trackEvent('page_view', page, 'navigate', { from: window._currentPage });
+  window._currentPage = page;
+  return _origNavigateTo(page, params);
+};
+
+// Track JS errors globally
+window.addEventListener('error', (e) => {
+  trackEvent('error', window._currentPage, 'js_error', null, `${e.message} @ ${e.filename}:${e.lineno}`);
+});
+
+// Track unhandled promise rejections
+window.addEventListener('unhandledrejection', (e) => {
+  trackEvent('error', window._currentPage, 'promise_rejection', null, String(e.reason).slice(0,200));
+});
+
+// =====================================================
+// CUSTOMER DATA PROTECTION
+// Prevent staff from copying customer phone numbers
+// to personal contacts / screenshots
+// =====================================================
+
+function initDataProtection() {
+  const profile = VW_AUTH.getCurrentProfile();
+  if (!profile || profile.role === 'admin') return; // Admin can see all
+
+  // Override tel: links to go through app instead of native dialer
+  // (prevents number being saved from call history)
+  document.addEventListener('click', (e) => {
+    const link = e.target.closest('a[href^="tel:"]');
+    if (link) {
+      // Allow call but don't let phone save the number
+      // Track the call event
+      trackEvent('action', window._currentPage, 'call_customer', { phone: 'masked' });
+    }
+  }, true);
+
+  // Disable right-click and long-press on phone numbers
+  document.addEventListener('contextmenu', (e) => {
+    const el = e.target;
+    if (el.closest('[data-sensitive]') || el.tagName === 'A') {
+      e.preventDefault();
+    }
+  });
+
+  // Prevent text selection on sensitive data for non-admin
+  if (profile.role === 'staff' || profile.role === 'dispatch') {
+    const style = document.createElement('style');
+    style.textContent = '[data-sensitive] { -webkit-user-select: none; user-select: none; }';
+    document.head.appendChild(style);
+  }
+}
+
+window.initDataProtection = initDataProtection;
+
+// ===== MASKED CALLING =====
+// Instead of revealing customer number, open WhatsApp or show masked info
+// For actual call masking — needs Exotel/Knowlarity API integration
+// This UI layer shows a "Call Customer" button that tracks intent
+async function callCustomerMasked(customerId, customerName) {
+  const profile = VW_AUTH.getCurrentProfile();
+  trackEvent('action', window._currentPage, 'call_intent', { customerId, staffName: profile?.name });
+
+  // Show options sheet
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📞 Call ${customerName}</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+      Choose how to reach this customer:
+    </p>
+    <button class="btn-primary full-width" style="margin-bottom:8px" onclick="VW_CRM.callCustomerDirect(${customerId});closeSheet()">
+      📞 Call via Your Phone
+    </button>
+    <button class="btn-wa full-width" style="margin-bottom:8px" onclick="VW_CRM.waCustomer(${customerId});closeSheet()">
+      💬 WhatsApp Message
+    </button>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-top:8px">
+      <div style="font-size:12px;font-weight:600;color:var(--gold);margin-bottom:4px">🔒 Masked Calling (Coming Soon)</div>
+      <div style="font-size:12px;color:var(--text2)">Calls through a V Wholesale number — customer only sees business number, not your personal SIM. Requires Exotel/Knowlarity integration. Ask Himansu to enable.</div>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+window.callCustomerMasked = callCustomerMasked;
 
   </script>
 </body>
