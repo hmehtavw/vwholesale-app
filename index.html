@@ -925,6 +925,7 @@ td strong { color: var(--text); }
       <button class="more-btn" data-page="visualizer" onclick="navigateTo('visualizer')"><span>🎨</span> Visualizer</button>
       <button class="more-btn" data-page="field" onclick="navigateTo('field')"><span>🚗</span> Field Team</button>
       <button class="more-btn" data-page="gst" onclick="navigateTo('gst')"><span>📊</span> GST</button>
+      <button class="more-btn" data-page="wishlist" onclick="navigateTo('wishlist')"><span>❤️</span> Wishlist</button>
       <button class="more-btn" data-page="settings" onclick="navigateTo('settings')"><span>&#9881;&#65039;</span> Settings</button>
       <button class="more-btn" onclick="window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>&#128737;</span> Security Kiosk</button>
     </div>
@@ -1482,11 +1483,11 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest','returns','visualizer','field'],
-  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field'],
+  admin:     ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest','returns','visualizer','field','gst','wishlist'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist'],
   staff:     ['dashboard','checkin','tasks','feedback','training','catalogs'],
-  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer'],
-  accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns'],
+  reception: ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer','wishlist'],
+  accounts:  ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns','gst'],
   dispatch:  ['dashboard','tasks','feedback','training','dispatch'],
   pending:   []
 };
@@ -13019,9 +13020,11 @@ window.VW_TRAINING = {
 // partial batches along the way.
 
 const FULFILLMENT_LABELS = {
-  self_pickup: 'Self Pickup',
-  vw_delivery: 'V Wholesale Delivery',
-  self_transport: 'Self Transport'
+  self_pickup: 'Self Pickup by Customer',
+  vw_delivery: 'V Wholesale Delivery (own truck)',
+  self_transport: 'Customer\'s Own Transport',
+  staff_pickup_deliver: 'Staff Picks from Vendor → Delivers to Site',
+  direct_delivery: 'Direct from Vendor to Customer Site'
 };
 
 // ---------- ACCOUNTS QUEUE ----------
@@ -13247,11 +13250,69 @@ async function openDispatchDetail(invoiceId) {
 
     <div class="form-group">
       <label>Fulfillment Method</label>
-      <select id="dp-fulfillment-method" style="width:100%">
-        <option value="self_pickup" ${inv.fulfillmentMethod==='self_pickup'?'selected':''}>Self Pickup</option>
-        <option value="vw_delivery" ${inv.fulfillmentMethod==='vw_delivery'?'selected':''}>V Wholesale Delivery</option>
-        <option value="self_transport" ${inv.fulfillmentMethod==='self_transport'?'selected':''}>Self Transport</option>
+      <select id="dp-fulfillment-method" style="width:100%" onchange="VW_DISPATCH.onFulfillmentChange(this.value,${invoiceId})">
+        <option value="self_pickup" ${inv.fulfillmentMethod==='self_pickup'?'selected':''}>Self Pickup by Customer</option>
+        <option value="vw_delivery" ${inv.fulfillmentMethod==='vw_delivery'?'selected':''}>V Wholesale Delivery (own truck)</option>
+        <option value="self_transport" ${inv.fulfillmentMethod==='self_transport'?'selected':''}>Customer's Own Transport</option>
+        <option value="staff_pickup_deliver" ${inv.fulfillmentMethod==='staff_pickup_deliver'?'selected':''}>Staff Picks from Vendor → Delivers to Site</option>
+        <option value="direct_delivery" ${inv.fulfillmentMethod==='direct_delivery'?'selected':''}>Direct from Vendor to Customer Site</option>
       </select>
+    </div>
+
+    <!-- Staff picks from vendor, delivers to site -->
+    <div id="staff-pickup-fields" style="display:${inv.fulfillmentMethod==='staff_pickup_deliver'?'block':'none'}">
+      <div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:#60A5FA;margin-bottom:4px">🚶 Staff Pickup & Delivery</div>
+        <div style="font-size:12px;color:var(--text2)">Your staff member goes to the vendor, picks up the material, and delivers directly to customer site. Gate pass records which staff member is handling this.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin:0">
+          <label>Staff Member Name</label>
+          <input type="text" id="spd-staff-name" value="${inv.staffPickupName||''}" placeholder="Who is going to pick up">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Staff WhatsApp</label>
+          <input type="tel" id="spd-staff-phone" value="${inv.staffPickupPhone||''}" placeholder="Send pickup instructions">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Vendor / Supplier to pick from</label>
+        <input type="text" id="spd-vendor-name" value="${inv.staffPickupVendor||''}" placeholder="e.g. Ravi Tiles Depot, Bhavanipuram">
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="margin:0">
+          <label>Vendor Phone</label>
+          <input type="tel" id="spd-vendor-phone" value="${inv.staffPickupVendorPhone||''}" placeholder="Vendor contact">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label>Vehicle to Use</label>
+          <input type="text" id="spd-vehicle" value="${inv.staffPickupVehicle||''}" placeholder="e.g. AP39AB1234">
+        </div>
+      </div>
+    </div>
+
+    <!-- Direct delivery extra fields -->
+    <div id="direct-delivery-fields" style="display:${inv.fulfillmentMethod==='direct_delivery'?'block':'none'}">
+      <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">📦 Direct from Vendor/Supplier</div>
+        <div style="font-size:12px;color:var(--text2)">Vendor or their driver delivers directly to customer site. They get a WhatsApp link to confirm delivery item by item.</div>
+      </div>
+      <div class="form-group">
+        <label>Vendor / Supplier Name</label>
+        <input type="text" id="dd-vendor-name" value="${inv.directDeliveryVendor||''}" placeholder="e.g. Ravi Tiles Depot">
+      </div>
+      <div class="form-group">
+        <label>Vendor / Driver WhatsApp</label>
+        <input type="tel" id="dd-vendor-phone" value="${inv.directDeliveryPhone||''}" placeholder="WhatsApp number to send delivery link">
+      </div>
+      <div class="form-group">
+        <label>Vehicle No. (if known)</label>
+        <input type="text" id="dd-vehicle" value="${inv.directDeliveryVehicle||''}" placeholder="e.g. AP16 AB 1234">
+      </div>
+      <div class="form-group">
+        <label>Expected Delivery Date</label>
+        <input type="date" id="dd-expected-date" value="${inv.directDeliveryDate||new Date().toISOString().split('T')[0]}">
+      </div>
     </div>
 
     <h4 style="margin:12px 0 8px;font-size:14px">Items Checklist</h4>
@@ -13274,7 +13335,13 @@ async function openDispatchDetail(invoiceId) {
 
     <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn-secondary" style="flex:1" onclick="VW_DISPATCH.saveFulfillmentMethod(${invoiceId})">💾 Save Changes</button>
-      <button class="btn-primary" style="flex:1" onclick="VW_DISPATCH.openCreateGatePass(${invoiceId})">🛂 New Gate Pass</button>
+      ${inv.fulfillmentMethod === 'self_pickup' ? 
+        `<button class="btn-primary" style="flex:1" onclick="VW_DISPATCH.handleSelfPickup(${invoiceId})">📷 Self Pickup</button>` :
+        inv.fulfillmentMethod === 'direct_delivery' ? 
+        `<button class="btn-primary" style="flex:1;background:#25D366" onclick="VW_DISPATCH.createDirectDeliveryGatePass(${invoiceId})">📦 Send to Vendor</button>` :
+        inv.fulfillmentMethod === 'staff_pickup_deliver' ? 
+        `<button class="btn-primary" style="flex:1;background:#60A5FA" onclick="VW_DISPATCH.createStaffPickupGatePass(${invoiceId})">🚶 Send Task to Staff</button>` :
+        `<button class="btn-primary" style="flex:1" onclick="VW_DISPATCH.openCreateGatePass(${invoiceId})">🛂 New Gate Pass</button>`}
     </div>
   `;
   sheet.classList.add('open');
@@ -13344,10 +13411,29 @@ async function markItemPending(invoiceId, itemIdx) {
 async function saveFulfillmentMethod(invoiceId) {
   const inv = await VW_DB.getById(VW_DB.STORES.invoices, invoiceId);
   if (!inv) return;
-  inv.fulfillmentMethod = document.getElementById('dp-fulfillment-method')?.value || inv.fulfillmentMethod;
+  const method = document.getElementById('dp-fulfillment-method')?.value || inv.fulfillmentMethod;
+  inv.fulfillmentMethod = method;
+
+  // Save direct delivery details
+  if (method === 'direct_delivery') {
+    inv.directDeliveryVendor = document.getElementById('dd-vendor-name')?.value.trim() || '';
+    inv.directDeliveryPhone = document.getElementById('dd-vendor-phone')?.value.trim() || '';
+    inv.directDeliveryVehicle = document.getElementById('dd-vehicle')?.value.trim() || '';
+    inv.directDeliveryDate = document.getElementById('dd-expected-date')?.value || '';
+  }
+
+  // Save staff pickup+deliver details
+  if (method === 'staff_pickup_deliver') {
+    inv.staffPickupName = document.getElementById('spd-staff-name')?.value.trim() || '';
+    inv.staffPickupPhone = document.getElementById('spd-staff-phone')?.value.trim() || '';
+    inv.staffPickupVendor = document.getElementById('spd-vendor-name')?.value.trim() || '';
+    inv.staffPickupVendorPhone = document.getElementById('spd-vendor-phone')?.value.trim() || '';
+    inv.staffPickupVehicle = document.getElementById('spd-vehicle')?.value.trim() || '';
+  }
+
   await VW_DB.put(VW_DB.STORES.invoices, inv);
-  showToast('Fulfillment method updated', 'success');
-  await openDispatchDetail(invoiceId);
+  showToast('Fulfillment method saved ✓', 'success');
+  closeSheet();
 }
 
 // ---------- GATE PASS CREATION ----------
@@ -13381,9 +13467,15 @@ async function openCreateGatePass(invoiceId) {
       <label>Vehicle / Transport Details (if applicable)</label>
       <input type="text" id="gp-vehicle" placeholder="e.g. AP16 AB 1234 or Customer Own Transport" value="${inv.vehicleNumber||''}">
     </div>
-    <div class="form-group">
-      <label>Driver / Contact Name</label>
-      <input type="text" id="gp-driver" placeholder="e.g. Ravi Kumar">
+    <div class="form-row">
+      <div class="form-group" style="margin:0">
+        <label>Driver / Contact Name</label>
+        <input type="text" id="gp-driver" placeholder="e.g. Ravi Kumar">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Driver WhatsApp</label>
+        <input type="tel" id="gp-driver-phone" placeholder="Send delivery link" maxlength="10">
+      </div>
     </div>
     <label class="route-check-row" style="margin-top:8px">
       <input type="checkbox" id="gp-confirm">
@@ -13433,31 +13525,47 @@ async function confirmCreateGatePass(invoiceId) {
   showToast(`Gate Pass ${gatePassNo} created`, 'success');
   closeSheet();
 
-  // Send delivery tracking WhatsApp to customer
-  if (inv.customerId) {
-    const customers = await VW_DB.all(VW_DB.STORES.customers);
-    const cust = customers.find(c => c.id === inv.customerId);
-    const vehicleDetails = document.getElementById('gp-vehicle')?.value.trim();
-    const driverName = document.getElementById('gp-driver')?.value.trim();
-    const dispatchedItems = selectedIdxs.map(i => inv.items[i]);
-    if (cust?.phone) {
-      const itemList = dispatchedItems.map(i => `• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
-      const msg = encodeURIComponent(
-        `Dear ${cust.name},\n\nYour order from V Wholesale is on the way! 🚚\n\n` +
-        `📋 Gate Pass: ${gatePassNo}\n` +
-        `📄 Invoice: ${inv.invoiceNo}\n` +
-        (vehicleDetails ? `🚗 Vehicle: ${vehicleDetails}\n` : '') +
-        (driverName ? `👤 Driver: ${driverName}\n` : '') +
-        `\n📦 Items being delivered:\n${itemList}\n\n` +
-        `Please keep someone available to receive the delivery.\n\nThank you for shopping with us! 🙏\n— V Wholesale`
-      );
-      const waBtn = document.createElement('div');
-      waBtn.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#25D366;color:#fff;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
-      waBtn.textContent = '💬 Send Delivery Alert to Customer';
-      waBtn.onclick = () => { window.open(`https://wa.me/91${cust.phone.replace(/\D/g,'')}?text=${msg}`, '_blank'); waBtn.remove(); };
-      document.body.appendChild(waBtn);
-      setTimeout(() => waBtn.remove(), 8000);
-    }
+  // Send delivery tracking WhatsApp to customer AND driver
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const cust = inv.customerId ? customers.find(c => c.id === inv.customerId) : null;
+  const vehicleDetails = document.getElementById('gp-vehicle')?.value.trim();
+  const driverName = document.getElementById('gp-driver')?.value.trim();
+  const driverPhone = document.getElementById('gp-driver-phone')?.value.trim();
+  const dispatchedItems = selectedIdxs.map(i => inv.items[i]);
+  const itemList = dispatchedItems.map(i => `• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
+  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+
+  // Customer notification
+  if (cust?.phone) {
+    const msg = encodeURIComponent(
+      `Dear ${cust.name},\n\nYour order from V Wholesale is on the way! 🚚\n\n` +
+      `📋 Gate Pass: ${gatePassNo}\n📄 Invoice: ${inv.invoiceNo}\n` +
+      (vehicleDetails ? `🚗 Vehicle: ${vehicleDetails}\n` : '') +
+      (driverName ? `👤 Driver: ${driverName}\n` : '') +
+      `\n📦 Items being delivered:\n${itemList}\n\n` +
+      `Please keep someone available to receive the delivery.\n\nThank you! 🙏\n— V Wholesale`
+    );
+    const waBtn = document.createElement('div');
+    waBtn.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:9999;background:#25D366;color:#fff;padding:12px 20px;border-radius:12px;cursor:pointer;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.3)';
+    waBtn.textContent = '💬 Send Delivery Alert to Customer';
+    waBtn.onclick = () => { window.open(`https://wa.me/91${cust.phone.replace(/\D/g,'')}?text=${msg}`, '_blank'); waBtn.remove(); };
+    document.body.appendChild(waBtn);
+    setTimeout(() => waBtn.remove(), 8000);
+  }
+
+  // Driver notification with delivery confirmation link
+  if (driverPhone) {
+    const driverMsg = encodeURIComponent(
+      `*V Wholesale — Delivery Assignment*\n\n` +
+      `Gate Pass: ${gatePassNo}\n` +
+      `Customer: ${cust?.name||inv.customerName||'Customer'}\n` +
+      `Items: ${dispatchedItems.length}\n\n` +
+      `📦 Tap this link at the delivery site to confirm:\n${deliveryLink}\n\n` +
+      `Take a photo of delivered items and confirm delivery.`
+    );
+    setTimeout(() => {
+      window.open(`https://wa.me/91${driverPhone.replace(/\D/g,'')}?text=${driverMsg}`, '_blank');
+    }, 1000);
   }
 
   // Open the printable gate pass immediately
@@ -13545,6 +13653,497 @@ window.VW_DISPATCH.saveFulfillmentMethod = saveFulfillmentMethod;
 window.VW_DISPATCH.openCreateGatePass = openCreateGatePass;
 window.VW_DISPATCH.confirmCreateGatePass = confirmCreateGatePass;
 window.VW_DISPATCH.printGatePass = printGatePass;
+
+// =====================================================
+// ENHANCED DISPATCH FLOWS
+// =====================================================
+
+// FLOW 1: Driver completes delivery at customer site
+// Share a link with driver — they open on their phone, confirm items, take photo
+async function renderDriverDeliveryPage(gatePassNo) {
+  const gps = await VW_DB.all(VW_DB.STORES.gatePasses);
+  const gp = gps.find(g => g.gatePassNo === gatePassNo);
+  if (!gp) return `<div class="module-header"><h2>Gate Pass not found</h2></div>`;
+
+  const inv = await VW_DB.getById(VW_DB.STORES.invoices, gp.invoiceId);
+  const items = (gp.itemIndexes||[]).map(i => inv?.items?.[i]).filter(Boolean);
+  const isDelivered = gp.deliveryStatus === 'delivered';
+
+  return `
+  <div style="padding:16px;max-width:420px;margin:0 auto">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:14px;font-weight:800;color:var(--text);font-family:'Syne',sans-serif">V Wholesale</div>
+      <div style="font-size:11px;color:var(--text3)">Driver Delivery Confirmation</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:16px;font-weight:700;color:var(--text)">${gp.gatePassNo}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">${inv?.customerName||'Customer'} · ${inv?.invoiceNo||''}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">Driver: ${gp.driverName||'—'} · Vehicle: ${gp.vehicleDetails||'—'}</div>
+    </div>
+
+    ${isDelivered ? `
+    <div class="card" style="border-color:rgba(34,197,94,0.4);background:rgba(34,197,94,0.05)">
+      <div style="font-size:16px;font-weight:700;color:var(--green);text-align:center">✅ Delivery Complete</div>
+      <div style="font-size:12px;color:var(--text2);text-align:center;margin-top:4px">Delivered at ${gp.deliveredAt ? new Date(gp.deliveredAt).toLocaleString('en-IN') : '—'}</div>
+    </div>` : `
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">Items to Deliver (${items.length})</h3>
+      ${items.map((item, i) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <input type="checkbox" id="del-item-${i}" style="width:20px;height:20px" onchange="updateDeliveryCount()">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:500">${item.name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">Qty: ${item.qty||1} ${item.unit||'pc'}</div>
+        </div>
+      </div>`).join('')}
+      <div style="font-size:13px;color:var(--text3);padding:8px 0" id="delivery-count-msg">Tick all items delivered</div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">📷 Delivery Photo</h3>
+      <div id="del-photo-area" onclick="document.getElementById('del-photo-input').click()" 
+        style="border:2px dashed var(--border);border-radius:10px;padding:20px;text-align:center;cursor:pointer">
+        <div style="font-size:32px">📷</div>
+        <div style="font-size:13px;color:var(--text3)">Take photo of delivered items at site</div>
+      </div>
+      <input type="file" id="del-photo-input" accept="image/*" capture="environment" style="display:none" 
+        onchange="handleDeliveryPhoto(this)">
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">Customer Notes (optional)</h3>
+      <textarea id="del-notes" placeholder="Any issues, customer comments..." style="height:60px"></textarea>
+    </div>
+
+    <button class="btn-primary full-width" style="padding:16px;font-size:15px" 
+      onclick="confirmDelivery('${gatePassNo}', ${items.length})">
+      ✅ Confirm Delivery Complete
+    </button>`}
+  </div>`;
+}
+
+function updateDeliveryCount() {
+  const checked = document.querySelectorAll('[id^="del-item-"]:checked').length;
+  const total = document.querySelectorAll('[id^="del-item-"]').length;
+  const el = document.getElementById('delivery-count-msg');
+  if (el) el.textContent = checked === total ? `✓ All ${total} items confirmed` : `${checked}/${total} items ticked`;
+  if (el) el.style.color = checked === total ? 'var(--green)' : 'var(--text3)';
+}
+
+let _deliveryPhotoB64 = null;
+function handleDeliveryPhoto(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _deliveryPhotoB64 = e.target.result.split(',')[1];
+    const area = document.getElementById('del-photo-area');
+    if (area) area.innerHTML = `<img src="${e.target.result}" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover"><div style="font-size:12px;color:var(--green);margin-top:6px">✓ Photo added</div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function confirmDelivery(gatePassNo, totalItems) {
+  const checked = document.querySelectorAll('[id^="del-item-"]:checked').length;
+  if (checked < totalItems) {
+    showToast(`Please tick all ${totalItems} items before confirming`, 'warn'); return;
+  }
+  if (!_deliveryPhotoB64) {
+    showToast('Please take a photo of the delivered items', 'warn'); return;
+  }
+  const notes = document.getElementById('del-notes')?.value.trim() || '';
+  const gps = await VW_DB.all(VW_DB.STORES.gatePasses);
+  const gp = gps.find(g => g.gatePassNo === gatePassNo);
+  if (!gp) return;
+  await VW_DB.put(VW_DB.STORES.gatePasses, {
+    ...gp,
+    deliveryStatus: 'delivered',
+    deliveredAt: new Date().toISOString(),
+    deliveryPhoto: _deliveryPhotoB64,
+    deliveryNotes: notes
+  });
+  // Notify store
+  showToast('✅ Delivery confirmed! Notifying store...', 'success');
+  // Reload page
+  const content = document.getElementById('app-content');
+  if (content) content.innerHTML = await renderDriverDeliveryPage(gatePassNo);
+}
+
+// SELF-PICKUP — single consolidated photo
+async function handleSelfPickup(invoiceId) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">Self Pickup</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Customer is picking up. Take ONE photo of all items together.</p>
+    <div id="pickup-photo-area" onclick="document.getElementById('pickup-photo-input').click()"
+      style="border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;margin-bottom:12px">
+      <div style="font-size:40px">📷</div>
+      <div style="font-size:14px;color:var(--text)">Take photo of all items</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">One photo covers all items for self-pickup</div>
+    </div>
+    <input type="file" id="pickup-photo-input" accept="image/*" capture="environment" style="display:none" onchange="VW_DISPATCH.handlePickupPhoto(this,${invoiceId})">
+    <div class="form-group"><label>Vehicle No. (optional)</label>
+      <input type="text" id="pickup-vehicle" placeholder="e.g. AP39AB1234">
+    </div>
+    <div class="form-group"><label>Pickup by (Name)</label>
+      <input type="text" id="pickup-person" placeholder="Person collecting the order">
+    </div>
+    <button class="btn-primary full-width" onclick="VW_DISPATCH.confirmSelfPickup(${invoiceId})">✅ Generate Gate Pass & Complete</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+let _pickupPhotoB64 = null;
+async function handlePickupPhoto(input, invoiceId) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _pickupPhotoB64 = e.target.result.split(',')[1];
+    const area = document.getElementById('pickup-photo-area');
+    if (area) area.innerHTML = `<img src="${e.target.result}" style="width:100%;border-radius:8px;max-height:180px;object-fit:cover"><div style="font-size:12px;color:var(--green);margin-top:6px">✓ Photo taken</div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function confirmSelfPickup(invoiceId) {
+  if (!_pickupPhotoB64) { showToast('Take a photo first', 'warn'); return; }
+  const inv = await VW_DB.getById(VW_DB.STORES.invoices, invoiceId);
+  if (!inv) return;
+  const profile = VW_AUTH.getCurrentProfile();
+  const fy = getFinancialYearLabel();
+  const nextSeq = await VW_DB.incrementGatePassSequence(fy);
+  const gatePassNo = `GP/${fy}/${String(nextSeq).padStart(5,'0')}`;
+  const allIdxs = (inv.items||[]).map((_,i)=>i);
+  await VW_DB.put(VW_DB.STORES.gatePasses, {
+    invoiceId, invoiceNo: inv.invoiceNo,
+    gatePassNo, itemIndexes: allIdxs,
+    pickupType: 'self_pickup',
+    driverName: document.getElementById('pickup-person')?.value.trim() || 'Self Pickup',
+    vehicleDetails: document.getElementById('pickup-vehicle')?.value.trim() || '',
+    deliveryPhoto: _pickupPhotoB64,
+    deliveryStatus: 'delivered',
+    deliveredAt: new Date().toISOString(),
+    confirmed: true,
+    confirmedByName: profile?.name || '',
+    confirmedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  });
+  _pickupPhotoB64 = null;
+  closeSheet();
+  showToast(`Gate Pass ${gatePassNo} created — Self Pickup complete ✓`, 'success');
+  navigateTo('dispatch');
+}
+
+// VENDOR OUTSTANDING — shown on accounts dashboard
+async function getVendorOutstanding() {
+  const pos = await VW_DB.all(VW_DB.STORES.purchaseOrders);
+  const pending = pos.filter(p => p.status !== 'received' && p.status !== 'cancelled' && (p.total||0) > 0);
+  const totalOutstanding = pending.reduce((s,p) => s + (p.total||0), 0);
+  return { pending, totalOutstanding, count: pending.length };
+}
+
+window.VW_DISPATCH.renderDriverDeliveryPage = renderDriverDeliveryPage;
+window.VW_DISPATCH.confirmDelivery = confirmDelivery;
+window.VW_DISPATCH.updateDeliveryCount = updateDeliveryCount;
+window.VW_DISPATCH.handlePickupPhoto = handlePickupPhoto;
+window.VW_DISPATCH.confirmSelfPickup = confirmSelfPickup;
+window.VW_DISPATCH.handleSelfPickup = handleSelfPickup;
+window.VW_DISPATCH.getVendorOutstanding = getVendorOutstanding;
+window.handleDeliveryPhoto = handleDeliveryPhoto;
+
+// ===== DIRECT DELIVERY FROM OUTSIDE VENDOR =====
+
+function onFulfillmentChange(value, invoiceId) {
+  const ddFields = document.getElementById('direct-delivery-fields');
+  const spdFields = document.getElementById('staff-pickup-fields');
+  if (ddFields) ddFields.style.display = value === 'direct_delivery' ? 'block' : 'none';
+  if (spdFields) spdFields.style.display = value === 'staff_pickup_deliver' ? 'block' : 'none';
+}
+
+// Direct delivery gate pass — vendor confirms per item at customer site
+async function createDirectDeliveryGatePass(invoiceId) {
+  const inv = await VW_DB.getById(VW_DB.STORES.invoices, invoiceId);
+  if (!inv) return;
+  const vendorPhone = inv.directDeliveryPhone;
+  const vendorName = inv.directDeliveryVendor || 'Vendor';
+  if (!vendorPhone) { showToast('Add vendor WhatsApp number first — tap Save Changes', 'warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const fy = getFinancialYearLabel();
+  const nextSeq = await VW_DB.incrementGatePassSequence(fy);
+  const gatePassNo = `GP/${fy}/${String(nextSeq).padStart(5,'0')}`;
+  const allIdxs = (inv.items||[]).map((_,i)=>i);
+
+  const gatePassId = await VW_DB.put(VW_DB.STORES.gatePasses, {
+    invoiceId, invoiceNo: inv.invoiceNo,
+    gatePassNo, itemIndexes: allIdxs,
+    pickupType: 'direct_delivery',
+    driverName: vendorName,
+    vehicleDetails: inv.directDeliveryVehicle || '',
+    deliveryStatus: 'pending',
+    confirmed: true,
+    confirmedByName: profile?.name || '',
+    confirmedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  });
+
+  // Build delivery link
+  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+  const itemList = (inv.items||[]).map(i=>`• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
+
+  // WhatsApp to vendor/supplier
+  const vendorMsg = encodeURIComponent(
+    `*V Wholesale — Direct Delivery Request*\n\n` +
+    `Gate Pass: ${gatePassNo}\n` +
+    `Invoice: ${inv.invoiceNo}\n` +
+    `Customer: ${inv.customerName||'Customer'}\n\n` +
+    `📦 Items to deliver:\n${itemList}\n\n` +
+    `📍 Deliver to customer site and tap the link below to confirm each item:\n${deliveryLink}\n\n` +
+    `Please take a photo of all items at delivery and confirm.\n— V Wholesale, Vijayawada`
+  );
+  window.open(`https://wa.me/91${vendorPhone.replace(/\D/g,'')}?text=${vendorMsg}`, '_blank');
+
+  // Also notify customer
+  if (inv.customerId || inv.customerPhone) {
+    const customers = await VW_DB.all(VW_DB.STORES.customers);
+    const cust = inv.customerId ? customers.find(c => c.id === inv.customerId) : null;
+    const custPhone = cust?.phone || inv.customerPhone;
+    if (custPhone) {
+      setTimeout(() => {
+        const custMsg = encodeURIComponent(
+          `Dear ${inv.customerName||'Customer'}, 🙏\n\n` +
+          `Your order (${inv.invoiceNo}) will be delivered directly from our supplier *${vendorName}*.\n\n` +
+          `📦 ${(inv.items||[]).length} item${(inv.items||[]).length>1?'s':''} on the way\n` +
+          (inv.directDeliveryDate ? `📅 Expected: ${new Date(inv.directDeliveryDate).toLocaleDateString('en-IN')}\n` : '') +
+          `\nPlease keep someone available at the delivery site.\n— V Wholesale, Vijayawada 📞 8712697930`
+        );
+        window.open(`https://wa.me/91${custPhone.replace(/\D/g,'')}?text=${custMsg}`, '_blank');
+      }, 1500);
+    }
+  }
+
+  showToast(`Gate Pass ${gatePassNo} sent to ${vendorName} via WhatsApp ✓`, 'success');
+  closeSheet();
+}
+
+// Enhanced driver delivery page — item by item confirmation
+async function renderDriverDeliveryPageDetailed(gatePassNo) {
+  const gps = await VW_DB.all(VW_DB.STORES.gatePasses);
+  const gp = gps.find(g => g.gatePassNo === gatePassNo);
+  if (!gp) return '<div style="padding:20px;text-align:center">Gate Pass not found</div>';
+
+  const inv = await VW_DB.getById(VW_DB.STORES.invoices, gp.invoiceId);
+  const items = (gp.itemIndexes||[]).map(i => inv?.items?.[i]).filter(Boolean);
+  const isDelivered = gp.deliveryStatus === 'delivered';
+  const isDirectDelivery = gp.pickupType === 'direct_delivery';
+
+  return `
+  <div style="padding:16px;max-width:440px;margin:0 auto;min-height:100vh">
+    <div style="text-align:center;padding:16px 0 12px;border-bottom:1px solid var(--border);margin-bottom:16px">
+      <div style="font-size:16px;font-weight:800;color:var(--text);font-family:'Syne',sans-serif">V Wholesale</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">${isDirectDelivery ? 'Supplier Delivery Confirmation' : 'Driver Delivery Confirmation'}</div>
+    </div>
+
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">${gp.gatePassNo}</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:4px">${inv?.customerName||'Customer'} · ${inv?.invoiceNo||''}</div>
+      ${gp.vehicleDetails?`<div style="font-size:12px;color:var(--text3);margin-top:2px">🚗 ${gp.vehicleDetails}</div>`:''}
+    </div>
+
+    ${isDelivered ? `
+    <div style="background:rgba(34,197,94,0.1);border:2px solid rgba(34,197,94,0.4);border-radius:16px;padding:24px;text-align:center;margin-bottom:16px">
+      <div style="font-size:48px;margin-bottom:8px">✅</div>
+      <div style="font-size:18px;font-weight:800;color:var(--green)">Delivery Complete</div>
+      <div style="font-size:13px;color:var(--text2);margin-top:6px">Confirmed at ${gp.deliveredAt ? new Date(gp.deliveredAt).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}) : '—'}</div>
+    </div>` : `
+
+    <!-- PER-ITEM CHECKLIST -->
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Tick each item as you deliver it (${items.length} items)</div>
+    ${items.map((item, i) => `
+    <div id="del-item-card-${i}" onclick="VW_DISPATCH.toggleDeliveryItem(${i},${items.length})"
+      style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;background:var(--bg2);border:2px solid var(--border)" id="del-item-card-${i}">
+      <div id="del-item-check-${i}" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;transition:all 0.2s"></div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${item.name||'—'}</div>
+        <div style="font-size:12px;color:var(--text3)">Qty: ${item.qty||1} ${item.unit||'pc'}</div>
+      </div>
+    </div>`).join('')}
+
+    <div id="del-count-msg" style="text-align:center;font-size:13px;color:var(--text3);padding:12px 0">Tap each item above after delivering it</div>
+
+    <!-- PHOTO -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px;margin:14px 0">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📷 Take photo of delivered items</div>
+      <div id="del-photo-preview" onclick="document.getElementById('del-photo-inp').click()"
+        style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer">
+        <div style="font-size:36px">📷</div>
+        <div style="font-size:13px;color:var(--text3);margin-top:4px">Tap to take photo</div>
+      </div>
+      <input type="file" id="del-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="handleDeliveryPhoto(this)">
+    </div>
+
+    <textarea id="del-notes-inp" placeholder="Any notes (issues, partial delivery, customer comments)..." style="width:100%;height:70px;border-radius:10px;padding:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:14px"></textarea>
+
+    <button id="del-confirm-btn" onclick="confirmDelivery('${gatePassNo}', ${items.length})"
+      style="width:100%;padding:18px;border-radius:14px;background:var(--bg3);border:none;font-size:16px;font-weight:700;color:var(--text3);cursor:not-allowed" disabled>
+      Tick all items + take photo to confirm
+    </button>`}
+  </div>
+
+  <scr` + `ipt>
+  var _delChecked = new Set();
+  var _delPhoto = null;
+  window.toggleDeliveryItem = function(i, total) {
+    const card = document.getElementById('del-item-card-' + i);
+    const check = document.getElementById('del-item-check-' + i);
+    if (!card || !check) return;
+    if (_delChecked.has(i)) {
+      _delChecked.delete(i);
+      card.style.background = 'var(--bg2)';
+      card.style.borderColor = 'var(--border)';
+      check.style.background = 'transparent';
+      check.style.borderColor = 'var(--border)';
+      check.textContent = '';
+    } else {
+      _delChecked.add(i);
+      card.style.background = 'rgba(34,197,94,0.08)';
+      card.style.borderColor = 'rgba(34,197,94,0.4)';
+      check.style.background = 'var(--green)';
+      check.style.borderColor = 'var(--green)';
+      check.textContent = '✓';
+      check.style.color = '#fff';
+    }
+    var msg = document.getElementById('del-count-msg');
+    var btn = document.getElementById('del-confirm-btn');
+    if (msg) msg.textContent = _delChecked.size + '/' + total + ' items confirmed';
+    if (btn) {
+      var ready = _delChecked.size === total && _delPhoto;
+      btn.disabled = !ready;
+      btn.style.background = ready ? 'var(--green)' : 'var(--bg3)';
+      btn.style.color = ready ? '#fff' : 'var(--text3)';
+      btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+      btn.textContent = ready ? '✅ Confirm All Delivered' : (_delChecked.size + '/' + total + ' ticked' + (_delPhoto ? ' · Photo ✓' : ' · Photo needed'));
+    }
+  };
+  window.handleDeliveryPhoto = function(input) {
+    var file = input.files && input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      _delPhoto = e.target.result.split(',')[1];
+      var preview = document.getElementById('del-photo-preview');
+      if (preview) preview.innerHTML = '<img src="' + e.target.result + '" style="width:100%;border-radius:8px;max-height:180px;object-fit:cover"><div style="font-size:12px;color:var(--green);margin-top:6px;text-align:center">✓ Photo taken</div>';
+      // Re-check button state
+      var total = ${items.length};
+      var btn = document.getElementById('del-confirm-btn');
+      if (btn) {
+        var ready = _delChecked.size === total;
+        btn.disabled = !ready;
+        btn.style.background = ready ? 'var(--green)' : 'var(--bg3)';
+        btn.style.color = ready ? '#fff' : 'var(--text3)';
+        btn.style.cursor = ready ? 'pointer' : 'not-allowed';
+        btn.textContent = ready ? '✅ Confirm All Delivered' : (_delChecked.size + '/' + total + ' ticked · Photo ✓');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  <\/script>`;
+}
+
+window.VW_DISPATCH.onFulfillmentChange = onFulfillmentChange;
+window.VW_DISPATCH.createDirectDeliveryGatePass = createDirectDeliveryGatePass;
+window.VW_DISPATCH.renderDriverDeliveryPageDetailed = renderDriverDeliveryPageDetailed;
+
+// ===== STAFF PICKS FROM VENDOR, DELIVERS TO CUSTOMER SITE =====
+async function createStaffPickupGatePass(invoiceId) {
+  const inv = await VW_DB.getById(VW_DB.STORES.invoices, invoiceId);
+  if (!inv) return;
+
+  const staffName = inv.staffPickupName;
+  const staffPhone = inv.staffPickupPhone;
+  const vendorName = inv.staffPickupVendor;
+  const vendorPhone = inv.staffPickupVendorPhone;
+
+  if (!staffName) { showToast('Enter staff member name first — tap Save Changes', 'warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const fy = getFinancialYearLabel();
+  const nextSeq = await VW_DB.incrementGatePassSequence(fy);
+  const gatePassNo = `GP/${fy}/${String(nextSeq).padStart(5,'0')}`;
+  const allIdxs = (inv.items||[]).map((_,i)=>i);
+  const itemList = (inv.items||[]).map(i=>`• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
+  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+
+  // Save gate pass
+  await VW_DB.put(VW_DB.STORES.gatePasses, {
+    invoiceId, invoiceNo: inv.invoiceNo,
+    gatePassNo, itemIndexes: allIdxs,
+    pickupType: 'staff_pickup_deliver',
+    driverName: staffName,
+    vehicleDetails: inv.staffPickupVehicle || '',
+    deliveryStatus: 'pending',
+    confirmed: true,
+    confirmedByName: profile?.name || '',
+    confirmedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString()
+  });
+
+  // Step 1: WhatsApp to vendor to keep material ready
+  if (vendorPhone) {
+    const vendorMsg = encodeURIComponent(
+      `*V Wholesale — Material Pickup Request*\n\n` +
+      `Our staff *${staffName}* will be coming to pick up the following material:\n\n` +
+      `${itemList}\n\n` +
+      `For Invoice: ${inv.invoiceNo}\n` +
+      `Customer: ${inv.customerName||'Customer'}\n\n` +
+      `Please keep the material ready.\n— V Wholesale, Vijayawada 📞 8712697930`
+    );
+    window.open(`https://wa.me/91${vendorPhone.replace(/\D/g,'')}?text=${vendorMsg}`, '_blank');
+  }
+
+  // Step 2: WhatsApp to staff with pickup + delivery instructions
+  if (staffPhone) {
+    setTimeout(() => {
+      const staffMsg = encodeURIComponent(
+        `*V Wholesale — Pickup & Delivery Task*\n\n` +
+        `Gate Pass: ${gatePassNo}\n\n` +
+        `📍 *STEP 1 — Pick up from:*\n${vendorName||'Vendor'}\n${vendorPhone?'📞 '+vendorPhone:''}\n\n` +
+        `📦 *Items to collect:*\n${itemList}\n\n` +
+        `🏠 *STEP 2 — Deliver to:*\n${inv.customerName||'Customer'}\n\n` +
+        `✅ *After delivery, tap this link to confirm:*\n${deliveryLink}\n\n` +
+        `Take a photo of all items at the delivery site before confirming.`
+      );
+      window.open(`https://wa.me/91${staffPhone.replace(/\D/g,'')}?text=${staffMsg}`, '_blank');
+    }, 1500);
+  }
+
+  // Step 3: Notify customer their order is coming
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const cust = inv.customerId ? customers.find(c => c.id === inv.customerId) : null;
+  const custPhone = cust?.phone || inv.customerPhone;
+  if (custPhone) {
+    setTimeout(() => {
+      const custMsg = encodeURIComponent(
+        `Dear ${inv.customerName||'Customer'}, 🙏\n\n` +
+        `Your order (${inv.invoiceNo}) is being arranged.\n\n` +
+        `Our team member *${staffName}* will collect and deliver your material today.\n\n` +
+        `We'll notify you once it's on the way.\n— V Wholesale, Vijayawada 📞 8712697930`
+      );
+      window.open(`https://wa.me/91${custPhone.replace(/\D/g,'')}?text=${custMsg}`, '_blank');
+    }, 3000);
+  }
+
+  showToast(`Gate Pass ${gatePassNo} created — ${staffName} notified via WhatsApp ✓`, 'success');
+  closeSheet();
+}
+
+window.VW_DISPATCH.createStaffPickupGatePass = createStaffPickupGatePass;
 
 
 /* === features.js === */
@@ -15492,10 +16091,35 @@ async function rejectReturn(id) {
 }
 
 async function completeReturn(id) {
+  const { data: r } = await VW_DB.client.from('customer_returns').select('*').eq('id', id).single();
   await VW_DB.client.from('customer_returns').update({
     status: 'completed', completed_by: VW_AUTH.getCurrentProfile()?.name || '', completed_at: new Date().toISOString()
   }).eq('id', id);
-  closeSheet(); showToast('Return completed ✓', 'success'); navigateTo('returns');
+
+  // Auto-record in accounts based on refund method
+  if (r?.total_return_value > 0) {
+    if (r.refund_method === 'credit_note' && r.customer_id) {
+      await VW_DB.client.from('payment_vouchers').insert({
+        type: 'credit_note', customer_id: r.customer_id,
+        customer_name: r.customer_name, amount: r.total_return_value,
+        description: `Return ${r.return_no}: ${r.return_reason}`,
+        status: 'approved', created_by_name: VW_AUTH.getCurrentProfile()?.name || '',
+        created_at: new Date().toISOString()
+      }).catch(()=>{});
+      showToast(`Return complete — ₹${Math.round(r.total_return_value).toLocaleString('en-IN')} credit note in ledger ✓`, 'success');
+    } else {
+      await VW_DB.put(VW_DB.STORES.pettyCash, {
+        type: 'out', amount: r.total_return_value,
+        category: 'Customer Return Refund',
+        description: `Return ${r.return_no}: ${r.customer_name} — ${r.return_reason}`,
+        date: new Date().toISOString(), addedByName: VW_AUTH.getCurrentProfile()?.name || ''
+      });
+      showToast(`Return complete — ₹${Math.round(r.total_return_value).toLocaleString('en-IN')} refund in petty cash ✓`, 'success');
+    }
+  } else {
+    showToast('Return completed ✓', 'success');
+  }
+  closeSheet(); navigateTo('returns');
 }
 
 window.VW_FEATURES.renderReturnsPage = renderReturnsPage;
@@ -15738,6 +16362,226 @@ window.VW_FEATURES.saveEInvoice = saveEInvoice;
 window.VW_FEATURES.generateEWayBill = generateEWayBill;
 window.VW_FEATURES.saveEWayBill = saveEWayBill;
 window.VW_FEATURES.generateAllEInvoices = generateAllEInvoices;
+
+// =====================================================
+// WISHLIST MODULE
+// Executive adds products to customer's wishlist in-store
+// Customer can view/buy later
+// =====================================================
+async function renderWishlistPage() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const { data: items } = await VW_DB.client
+    .from('wishlists')
+    .select('*')
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+  const wishlists = items || [];
+
+  // Group by customer
+  const byCustomer = {};
+  wishlists.forEach(w => {
+    const key = w.customer_id || w.customer_phone;
+    if (!byCustomer[key]) byCustomer[key] = { name: w.customer_name, phone: w.customer_phone, items: [] };
+    byCustomer[key].items.push(w);
+  });
+  const customers = Object.values(byCustomer);
+
+  return `
+  <div class="module-header">
+    <h2>❤️ Wishlist</h2>
+    <button class="btn-sm" onclick="VW_FEATURES.addToWishlist()">+ Add</button>
+  </div>
+
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card gold">
+      <div class="mc-label">Active Wishlists</div>
+      <div class="mc-value">${wishlists.length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Customers</div>
+      <div class="mc-value">${customers.length}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Potential Value</div>
+      <div class="mc-value">₹${Math.round(wishlists.reduce((s,w)=>s+(w.product_price||0),0)/1000)}K</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Converted</div>
+      <div class="mc-value">${(await VW_DB.client.from('wishlists').select('id',{count:'exact',head:true}).eq('status','purchased')).count||0}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="search-row" style="margin-bottom:12px">
+      <input type="text" id="wishlist-search" placeholder="🔍 Search customer or product..." oninput="VW_FEATURES.searchWishlists(this.value)">
+    </div>
+    <div id="wishlist-list">
+      ${customers.length ? customers.map(c => `
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${c.name||'Unknown'}</div>
+            <div style="font-size:11px;color:var(--text3)">${c.phone||''} · ${c.items.length} item${c.items.length>1?'s':''}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-sm" onclick="VW_FEATURES.createQuoteFromWishlist('${c.phone}')">📄 Quote</button>
+            ${c.phone?`<button class="btn-sm" style="background:#25D366;color:#fff" onclick="VW_FEATURES.shareWishlistWA('${c.phone}','${(c.name||'').replace(/'/g,"\\'")}')">💬 WA</button>`:''}
+          </div>
+        </div>
+        ${c.items.map(w => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px">
+          <span style="font-size:20px">❤️</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text)">${w.product_name||'—'}</div>
+            <div style="font-size:11px;color:var(--text3)">${w.product_category||''} ${w.product_price?'· ₹'+w.product_price.toLocaleString('en-IN'):''}</div>
+            ${w.notes?`<div style="font-size:11px;color:var(--text2);margin-top:2px">${w.notes}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <button class="btn-sm" onclick="VW_FEATURES.markWishlistPurchased(${w.id})">✓ Bought</button>
+            <button class="btn-sm" style="color:var(--red)" onclick="VW_FEATURES.removeWishlistItem(${w.id})">✕</button>
+          </div>
+        </div>`).join('')}
+      </div>`).join('') : '<p class="empty-msg">No active wishlist items — add products while customers browse the store</p>'}
+    </div>
+  </div>`;
+}
+
+async function addToWishlist(prefilledCustomerId) {
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const products = await VW_DB.all(VW_DB.STORES.products);
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">Add to Wishlist ❤️</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div class="form-group"><label>Customer Phone *</label>
+      <input type="tel" id="wl-phone" placeholder="10-digit mobile" maxlength="10" oninput="VW_FEATURES.lookupWishlistCustomer(this.value)">
+      <div id="wl-cust-status" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+    </div>
+    <div class="form-group"><label>Customer Name *</label>
+      <input type="text" id="wl-name" placeholder="Customer name" list="wl-cust-list">
+      <datalist id="wl-cust-list">${customers.slice(0,50).map(c=>`<option value="${c.name}">`).join('')}</datalist>
+    </div>
+    <div class="form-group"><label>Product</label>
+      <input type="text" id="wl-product" placeholder="Search product..." list="wl-product-list" oninput="VW_FEATURES.lookupWishlistProduct(this.value)">
+      <datalist id="wl-product-list">${products.slice(0,100).map(p=>`<option value="${p.name}" data-price="${p.price}" data-cat="${p.category||''}">`).join('')}</datalist>
+      <div id="wl-product-status" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+    </div>
+    <div class="form-group"><label>Notes (what they're looking for)</label>
+      <input type="text" id="wl-notes" placeholder="e.g. Needs 200 boxes, budget ₹50K, light colour preference">
+    </div>
+    <button class="btn-primary full-width" onclick="VW_FEATURES.saveWishlistItem()">❤️ Add to Wishlist</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function lookupWishlistCustomer(phone) {
+  if (phone.length < 10) return;
+  const customers = await VW_DB.all(VW_DB.STORES.customers);
+  const match = customers.find(c => c.phone === phone);
+  const el = document.getElementById('wl-cust-status');
+  const nameEl = document.getElementById('wl-name');
+  if (match) {
+    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${match.name} · ${match.visitCount||0} visits</span>`;
+    if (nameEl && !nameEl.value) nameEl.value = match.name;
+    window._wlCustomer = match;
+  } else {
+    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer</span>`;
+    window._wlCustomer = null;
+  }
+}
+
+async function lookupWishlistProduct(name) {
+  const products = await VW_DB.all(VW_DB.STORES.products);
+  const match = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+  if (match) {
+    window._wlProduct = match;
+    const el = document.getElementById('wl-product-status');
+    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ₹${match.price||0}/${match.unit||'unit'} · ${match.category||''}</span>`;
+  }
+}
+
+async function saveWishlistItem() {
+  const name = document.getElementById('wl-name')?.value.trim();
+  const phone = document.getElementById('wl-phone')?.value.trim();
+  const productName = document.getElementById('wl-product')?.value.trim();
+  const notes = document.getElementById('wl-notes')?.value.trim();
+  if (!name) { showToast('Enter customer name', 'warn'); return; }
+  if (!productName) { showToast('Enter product name', 'warn'); return; }
+  const p = window._wlProduct;
+  const { error } = await VW_DB.client.from('wishlists').insert({
+    customer_id: window._wlCustomer?.id || null,
+    customer_name: name,
+    customer_phone: phone || '',
+    product_id: p?.id || null,
+    product_name: productName,
+    product_brand: p?.brand || '',
+    product_price: p?.price || null,
+    product_category: p?.category || '',
+    added_by_name: VW_AUTH.getCurrentProfile()?.name || '',
+    notes, status: 'active'
+  });
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  window._wlCustomer = null; window._wlProduct = null;
+  closeSheet();
+  showToast(`Added to ${name}'s wishlist ❤️`, 'success');
+  navigateTo('wishlist');
+}
+
+async function markWishlistPurchased(id) {
+  await VW_DB.client.from('wishlists').update({ status: 'purchased' }).eq('id', id);
+  showToast('Marked as purchased ✓', 'success');
+  navigateTo('wishlist');
+}
+
+async function removeWishlistItem(id) {
+  await VW_DB.client.from('wishlists').delete().eq('id', id);
+  showToast('Removed from wishlist', 'warn');
+  navigateTo('wishlist');
+}
+
+async function createQuoteFromWishlist(phone) {
+  const { data } = await VW_DB.client.from('wishlists').select('*').eq('customer_phone', phone).eq('status','active');
+  if (!data?.length) return;
+  quoteItems = data.map(w => ({
+    id: Date.now()+Math.random(), brand: w.product_brand||'', model: '',
+    description: w.product_name, department: w.product_category||'',
+    qty: 1, mode: 'mrp_disc', mrp: w.product_price||0, discPct: 0,
+    costPrice:'', marginPct:'', addGst:false, gstPct:18, gstSlab:'18',
+    directPrice:'', brandMode:'new', modelMode:'new'
+  }));
+  navigateTo('quotations');
+  setTimeout(() => showQuoteForm(), 400);
+  showToast(`${data.length} wishlist items loaded into quote`, 'success');
+}
+
+async function shareWishlistWA(phone, name) {
+  const { data } = await VW_DB.client.from('wishlists').select('product_name').eq('customer_phone', phone).eq('status','active');
+  const items = (data||[]).map(w => w.product_name).filter(Boolean);
+  const msg = `Dear ${name}, 🙏\n\nHere are the products from your V Wholesale wishlist:\n\n${items.map((p,i)=>`${i+1}. ${p}`).join('\n')}\n\nWould you like us to send a quotation?\n📞 8712697930 · V Wholesale, Vijayawada`;
+  window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+async function searchWishlists(q) {
+  // Simple client-side filter
+  const items = document.querySelectorAll('#wishlist-list > div');
+  items.forEach(el => {
+    el.style.display = el.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+window.VW_FEATURES.renderWishlistPage = renderWishlistPage;
+window.VW_FEATURES.addToWishlist = addToWishlist;
+window.VW_FEATURES.lookupWishlistCustomer = lookupWishlistCustomer;
+window.VW_FEATURES.lookupWishlistProduct = lookupWishlistProduct;
+window.VW_FEATURES.saveWishlistItem = saveWishlistItem;
+window.VW_FEATURES.markWishlistPurchased = markWishlistPurchased;
+window.VW_FEATURES.removeWishlistItem = removeWishlistItem;
+window.VW_FEATURES.createQuoteFromWishlist = createQuoteFromWishlist;
+window.VW_FEATURES.shareWishlistWA = shareWishlistWA;
+window.VW_FEATURES.searchWishlists = searchWishlists;
 
 
 /* === vendor.js === */
@@ -16436,8 +17280,24 @@ async function renderAccountsPage() {
   const isAdmin = VW_AUTH.isAdmin();
   const isAccounts = profile?.role === 'accounts' || isAdmin;
 
+  // Load vendor outstanding
+  const vendorOutstanding = await VW_DISPATCH.getVendorOutstanding().catch(()=>({ pending:[], totalOutstanding:0, count:0 }));
+
   return `
   <div class="module-header"><h2>Accounts</h2></div>
+
+  <!-- OUTSTANDING ALERTS -->
+  ${vendorOutstanding.count > 0 ? `
+  <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:var(--radius);padding:12px;margin-bottom:12px;cursor:pointer" onclick="navigateTo('vendors')">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--red)">⚠️ ${vendorOutstanding.count} Vendor PO${vendorOutstanding.count>1?'s':''} Outstanding</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Total: ₹${Math.round(vendorOutstanding.totalOutstanding).toLocaleString('en-IN')} pending payment</div>
+      </div>
+      <span style="color:var(--red);font-size:18px">→</span>
+    </div>
+  </div>` : ''}
+
   <div class="entry-type-grid" style="margin-bottom:14px">
     <button class="entry-type-btn active" id="acc-tab-verify" onclick="VW_ACCOUNTS.switchAccountsTab('verify',this)">
       <span class="et-icon">💳</span>Verification
@@ -22967,6 +23827,7 @@ async function navigateTo(page, params) {
     else if (page === 'visualizer') html = await VW_VIS.renderVisualizerPage();
     else if (page === 'field') html = await VW_FIELD.renderFieldTeamPage();
     else if (page === 'gst') html = await VW_FEATURES.renderGSTPage();
+    else if (page === 'wishlist') html = await VW_FEATURES.renderWishlistPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
     else if (page === 'marketing') html = await VW_MARKETING.renderMarketingPage();
@@ -24129,6 +24990,15 @@ async function init() {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').innerHTML = await VW_CHECKIN.renderSecurityKioskPage();
+    return;
+  }
+
+  // DRIVER DELIVERY CONFIRMATION — ?delivery=GP/26-27/00001
+  const deliveryPass = urlParams.get('delivery');
+  if (deliveryPass) {
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_DISPATCH.renderDriverDeliveryPageDetailed(decodeURIComponent(deliveryPass));
     return;
   }
 
