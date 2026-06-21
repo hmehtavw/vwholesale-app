@@ -11671,6 +11671,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-team" onclick="VW_SETTINGS.switchSettingsTab('team',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">👥</span>Team</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-permissions" onclick="VW_SETTINGS.switchSettingsTab('permissions',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔐</span>Permissions</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-store" onclick="VW_SETTINGS.switchSettingsTab('store',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🏪</span>Store</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-tile" onclick="VW_SETTINGS.switchSettingsTab('tile',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔲</span>Tile Settings</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-tools" onclick="VW_SETTINGS.switchSettingsTab('tools',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔧</span>Tools</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-danger" onclick="VW_SETTINGS.switchSettingsTab('danger',this)" style="display:inline-flex"><span class="et-icon" style="color:var(--red)">⚠️</span><span style="color:var(--red)">Danger</span></button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
@@ -11692,6 +11693,7 @@ async function switchSettingsTab(tab, btn) {
     case 'team':        container.innerHTML = await renderSettingsTeam(); break;
     case 'permissions': container.innerHTML = await renderSettingsPermissions(); break;
     case 'store':       container.innerHTML = await renderSettingsStore(); break;
+    case 'tile':        container.innerHTML = await renderTileSettings(); break;
     case 'tools':       container.innerHTML = await renderSettingsTools(); break;
     case 'danger':      container.innerHTML = await renderSettingsDanger(); break;
     case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
@@ -12171,79 +12173,292 @@ async function renderSettingsStore() {
     <button class="btn-primary full-width" onclick="VW_SETTINGS.saveTransportConfig()">Save Transport Config</button>
   </div>
 
-  <!-- TILE WEIGHT CONFIG (admin only) -->
-  <div class="card" style="border-color:rgba(245,200,66,0.3)">
-    <h3 class="card-title">⚖️ Tile Weight per Box (Admin Only)</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Used in Tile Quotation to calculate total load and recommend the right vehicle. Executives cannot edit.
-    </p>
-    <div id="tile-weight-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
-      ${(weightCfg?.sizes||[]).map((s,i)=>`
-      <div style="display:flex;align-items:center;gap:6px;background:var(--bg2);border-radius:8px;padding:6px 10px">
-        <span style="font-size:11px;color:var(--text2);flex:1">${s.label||s.mm}</span>
-        <input type="number" id="twt-${i}" value="${s.weight_per_box||0}" min="1" step="0.5"
-          style="width:50px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px;font-size:11px;color:var(--text);text-align:center">
-        <span style="font-size:10px;color:var(--text3)">kg</span>
-      </div>`).join('')}
-    </div>
-    <button class="btn-primary full-width" onclick="VW_SETTINGS.saveTileWeights()">Save Tile Weights</button>
-  </div>
-
-  <!-- FLOOR DELIVERY CONFIG (admin only) -->
-  <div class="card" style="border-color:rgba(245,200,66,0.3)">
-    <h3 class="card-title">🏢 Floor Delivery Rates (Admin Only)</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Rates per box. Ground = included in base. Beyond 10ft from vehicle = extra charge.
-    </p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="form-group" style="margin:0"><label>Loading within 10ft (₹/box)</label>
-        <input type="number" id="fl-base" value="${floorCfg?.loading_within_10ft||5}" min="0" step="0.5"></div>
-      <div class="form-group" style="margin:0"><label>Loading beyond 10ft (₹/box)</label>
-        <input type="number" id="fl-beyond" value="${floorCfg?.loading_beyond_10ft||8}" min="0" step="0.5"></div>
-    </div>
-    <div style="font-size:12px;font-weight:600;margin-bottom:8px">Floor surcharge (₹/box above ground)</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
-      ${['G','1','2','3','4','5'].map(fl=>`
-      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${fl==='G'?'Ground':fl+' Floor'}</div>
-        <input type="number" id="fl-floor-${fl}" value="${(floorCfg?.floor_rates_per_box||{})[fl]||0}" min="0" step="1"
-          style="width:50px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px;font-size:12px;color:var(--text);text-align:center">
-        <div style="font-size:10px;color:var(--text3)">₹/box</div>
-      </div>`).join('')}
-    </div>
-    <button class="btn-primary full-width" onclick="VW_SETTINGS.saveFloorConfig()">Save Floor Rates</button>
-  </div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:12px">
-      Escalation levels are pulled automatically from HR staff designations (TL → Floor Manager → Store Manager).<br>
-      Business hours: <strong>9:00 AM – 9:00 PM</strong>. Staff on break or off duty are skipped immediately.
-    </p>
-
-    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Escalation Timing</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="form-group" style="margin:0"><label>TL response window (minutes)</label>
-        <input type="number" id="esc-tl-mins" value="${escalationConfig.tlMinutes||60}" min="15" step="15"></div>
-      <div class="form-group" style="margin:0"><label>Floor Manager window (minutes)</label>
-        <input type="number" id="esc-fm-mins" value="${escalationConfig.fmMinutes||180}" min="30" step="15"></div>
-      <div class="form-group" style="margin:0"><label>Store Manager window (minutes)</label>
-        <input type="number" id="esc-sm-mins" value="${escalationConfig.smMinutes||360}" min="60" step="30"></div>
-      <div class="form-group" style="margin:0"><label>Management contact phone</label>
-        <input type="tel" id="esc-mgmt-phone" value="${escalationConfig.managementPhone||''}" placeholder="WhatsApp number"></div>
-    </div>
-
-    <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px;margin-bottom:14px">
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:8px">Current Escalation Staff (from HR)</div>
-      ${escalationStaff.map(s => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-size:13px;font-weight:500;color:var(--text)">${s.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${s.designation} · ${s.phone||'No phone set'}</div>
-        </div>
-        <span class="badge ${s.isAvailable?'badge-green':'badge-red'}">${s.isAvailable?'Available':s.onBreak?'On Break':'Off Duty'}</span>
-      </div>`).join('') || '<p class="empty-msg">No TL/FM/SM staff found in HR — add staff with these designations</p>'}
-    </div>
-
-    <button class="btn-primary full-width" onclick="VW_SETTINGS.saveEscalationConfig()">Save Escalation Config</button>
+  <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:10px;font-size:12px;color:var(--text2)">
+    💡 Tile weight, floor delivery rates, and tile-specific configuration → go to <strong>Tile Settings</strong> tab
+    <button class="btn-sm" style="margin-left:8px" onclick="VW_SETTINGS.switchSettingsTab('tile',document.getElementById('stab-tile'))">→ Open Tile Settings</button>
   </div>`;
+}
+
+async function renderTileSettings() {
+  // Load all tile config
+  const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
+  const floorCfg = await VW_DB.getSetting('floor_delivery_config', {
+    loading_within_10ft:5, loading_beyond_10ft:8,
+    floor_rates_per_box:{'G':0,'1':6,'2':10,'3':14,'4':18,'5':22}
+  });
+  const groutCfg = await VW_DB.getSetting('tile_grout_config', {
+    joint_width_default_mm: 3,
+    density_factor: 1.6,
+    wastage_pct: 5,
+  });
+  const spacerCfg = await VW_DB.getSetting('tile_spacer_config', {
+    pcs_per_packet: 100,
+    spacers_per_tile: 4,
+    min_size_mm: 300,
+  });
+
+  // All tile sizes from TILE_SIZES constant in tiles_granite.js
+  const SIZES = window.TILE_SIZES_SETTINGS || [
+    {mm:'100×100',label:'100×100mm (4×4")'},{mm:'150×150',label:'150×150mm (6×6")'},
+    {mm:'200×200',label:'200×200mm (8×8")'},{mm:'200×300',label:'200×300mm (8×12")'},
+    {mm:'300×300',label:'300×300mm (12×12")'},{mm:'300×450',label:'300×450mm (12×18")'},
+    {mm:'300×600',label:'300×600mm (12×24")'},{mm:'400×400',label:'400×400mm (16×16")'},
+    {mm:'400×800',label:'400×800mm (16×32")'},{mm:'450×900',label:'450×900mm (18×36")'},
+    {mm:'600×600',label:'600×600mm (2×2 ft)'},{mm:'600×900',label:'600×900mm (2×3 ft)'},
+    {mm:'600×1200',label:'600×1200mm (2×4 ft)'},{mm:'800×800',label:'800×800mm (32×32")'},
+    {mm:'800×1600',label:'800×1600mm (32×64")'},{mm:'1000×1000',label:'1000×1000mm (40×40")'},
+  ];
+
+  // Merge stored weights into size list
+  const weightMap = {};
+  (weightCfg?.sizes||[]).forEach(s => { weightMap[s.mm] = s; });
+  const sizeRows = SIZES.map(s => ({
+    ...s,
+    weight: weightMap[s.mm]?.weight_per_box || '',
+    sqft: (() => {
+      const [l,w] = s.mm.split('×').map(Number);
+      return l && w ? Math.round((l/1000)*(w/1000)*10.764*100)/100 : '';
+    })(),
+    tiles_per_box: weightMap[s.mm]?.tiles_per_box || '',
+    thickness_mm: weightMap[s.mm]?.thickness_mm || '',
+    spacer_required: weightMap[s.mm]?.spacer_required !== false,
+    active: weightMap[s.mm]?.active !== false,
+  }));
+
+  return `
+  <div class="module-header" style="margin-bottom:14px">
+    <h2 style="font-size:16px">🔲 Tile Settings</h2>
+    <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_SETTINGS.saveTileSettings()">💾 Save All</button>
+  </div>
+
+  <!-- TILE SIZE MASTER TABLE -->
+  <div class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 class="card-title" style="margin:0">📐 Tile Size Configuration</h3>
+      <div style="font-size:11px;color:var(--text3)">Sqft/tile auto-calculated from dimensions</div>
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="text-align:left;padding:8px 6px;color:var(--text3);font-weight:600;white-space:nowrap">Size (mm)</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Sqft/Tile</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Tiles/Box</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Thickness (mm)</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Wt/Box (kg)</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Spacer</th>
+            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sizeRows.map((s, i) => `
+          <tr style="border-bottom:1px solid var(--border2);${!s.active?'opacity:0.45':''}">
+            <td style="padding:7px 6px;font-weight:600;white-space:nowrap">${s.mm}<div style="font-size:10px;color:var(--text3);font-weight:400">${s.label.split('(')[1]?.replace(')','')?.trim()||''}</div></td>
+            <td style="text-align:center;padding:7px 6px;color:var(--gold);font-weight:700">${s.sqft||'—'}</td>
+            <td style="text-align:center;padding:7px 4px">
+              <input type="number" id="ts-tpb-${i}" value="${s.tiles_per_box||''}" placeholder="—"
+                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="1" step="1">
+            </td>
+            <td style="text-align:center;padding:7px 4px">
+              <input type="number" id="ts-thick-${i}" value="${s.thickness_mm||''}" placeholder="—"
+                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="5" max="25" step="1">
+            </td>
+            <td style="text-align:center;padding:7px 4px">
+              <input type="number" id="ts-wt-${i}" value="${s.weight||''}" placeholder="—"
+                style="width:55px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="1" max="100" step="0.5">
+            </td>
+            <td style="text-align:center;padding:7px 4px">
+              <input type="checkbox" id="ts-spc-${i}" ${s.spacer_required?'checked':''} style="width:18px;height:18px">
+            </td>
+            <td style="text-align:center;padding:7px 4px">
+              <input type="checkbox" id="ts-act-${i}" ${s.active?'checked':''} style="width:18px;height:18px">
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-primary" style="flex:1" onclick="VW_SETTINGS.saveTileWeightTable()">💾 Save Size Config</button>
+      <button class="btn-secondary" onclick="VW_SETTINGS.autoFillDefaultWeights()">Auto-fill Default Weights</button>
+    </div>
+  </div>
+
+  <!-- LOADING CHARGES TABLE — per size -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">🏋️ Floor Delivery & Loading Rates</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Packing is always free. Loading charge is per box of tiles.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div class="form-group" style="margin:0">
+        <label>Loading within 10ft ground (₹/box)</label>
+        <input type="number" id="ts-fl-base" value="${floorCfg?.loading_within_10ft||5}" min="0" step="0.5">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Loading beyond 10ft / manual lift (₹/box)</label>
+        <input type="number" id="ts-fl-beyond" value="${floorCfg?.loading_beyond_10ft||8}" min="0" step="0.5">
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Floor Rate (₹/box above Ground floor)</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:2px solid var(--border)">
+          ${['Ground','1st Floor','2nd Floor','3rd Floor','4th Floor','5th Floor'].map((f,i)=>
+            `<th style="text-align:center;padding:6px;color:var(--text3);font-weight:600">${f}</th>`).join('')}
+        </tr></thead>
+        <tbody><tr>
+          ${['G','1','2','3','4','5'].map(fl => `
+          <td style="text-align:center;padding:6px 4px">
+            <div style="background:var(--bg2);border-radius:8px;padding:8px 4px">
+              <input type="number" id="ts-floor-${fl}" value="${(floorCfg?.floor_rates_per_box||{})[fl]||0}" min="0" step="1"
+                style="width:50px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:13px;font-weight:700;color:var(--text)">
+              <div style="font-size:10px;color:var(--text3);margin-top:2px">₹/box</div>
+            </div>
+          </td>`).join('')}
+        </tr></tbody>
+      </table>
+    </div>
+    <button class="btn-primary full-width" style="margin-top:12px" onclick="VW_SETTINGS.saveFloorConfig()">💾 Save Floor Rates</button>
+  </div>
+
+  <!-- GROUT FORMULA CONFIG -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">🧪 Grout Formula (Saint-Gobain)</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Formula: ((L+W)/(L×W)) × Thickness × JointWidth × Area_m² × DensityFactor × (1 + Wastage%)</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Default Joint Width (mm)</label>
+        <input type="number" id="ts-grout-joint" value="${groutCfg.joint_width_default_mm||3}" min="1" max="10" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Density Factor</label>
+        <input type="number" id="ts-grout-density" value="${groutCfg.density_factor||1.6}" min="1" max="2.5" step="0.1">
+        <div style="font-size:10px;color:var(--text3)">Saint-Gobain = 1.6</div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Wastage % buffer</label>
+        <input type="number" id="ts-grout-waste" value="${groutCfg.wastage_pct||5}" min="0" max="20" step="1">
+      </div>
+    </div>
+    <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveGroutConfig()">💾 Save Grout Config</button>
+  </div>
+
+  <!-- SPACER CONFIG -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">📦 Spacer Configuration</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Pcs per Packet</label>
+        <input type="number" id="ts-spacer-pkt" value="${spacerCfg.pcs_per_packet||100}" min="10" step="10">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Spacers per Tile</label>
+        <input type="number" id="ts-spacer-tile" value="${spacerCfg.spacers_per_tile||4}" min="2" max="8" step="1">
+        <div style="font-size:10px;color:var(--text3)">4 = one per corner</div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Min size for spacer (mm)</label>
+        <input type="number" id="ts-spacer-min" value="${spacerCfg.min_size_mm||300}" min="100" step="50">
+        <div style="font-size:10px;color:var(--text3)">Below this = no spacer needed</div>
+      </div>
+    </div>
+    <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveSpacerConfig()">💾 Save Spacer Config</button>
+  </div>`;
+}
+
+async function saveTileWeightTable() {
+  // Collect all size data from the table
+  const SIZES = window.TILE_SIZES_SETTINGS || [
+    {mm:'100×100'},{mm:'150×150'},{mm:'200×200'},{mm:'200×300'},
+    {mm:'300×300'},{mm:'300×450'},{mm:'300×600'},{mm:'400×400'},
+    {mm:'400×800'},{mm:'450×900'},{mm:'600×600'},{mm:'600×900'},
+    {mm:'600×1200'},{mm:'800×800'},{mm:'800×1600'},{mm:'1000×1000'},
+  ];
+  const sizes = SIZES.map((s, i) => ({
+    mm: s.mm, label: s.label || s.mm,
+    tiles_per_box: parseFloat(document.getElementById(`ts-tpb-${i}`)?.value||0)||null,
+    thickness_mm: parseFloat(document.getElementById(`ts-thick-${i}`)?.value||0)||null,
+    weight_per_box: parseFloat(document.getElementById(`ts-wt-${i}`)?.value||0)||null,
+    spacer_required: document.getElementById(`ts-spc-${i}`)?.checked !== false,
+    active: document.getElementById(`ts-act-${i}`)?.checked !== false,
+  }));
+  await VW_DB.setSetting('tile_weight_config', { sizes });
+  showToast('Tile size configuration saved ✓', 'success');
+}
+
+async function saveFloorConfig() {
+  const within = parseFloat(document.getElementById('ts-fl-base')?.value||0)||5;
+  const beyond = parseFloat(document.getElementById('ts-fl-beyond')?.value||0)||8;
+  const floor_rates_per_box = {};
+  ['G','1','2','3','4','5'].forEach(fl => {
+    floor_rates_per_box[fl] = parseFloat(document.getElementById(`ts-floor-${fl}`)?.value||document.getElementById(`fl-floor-${fl}`)?.value||0)||0;
+  });
+  await VW_DB.setSetting('floor_delivery_config', {
+    loading_within_10ft: within,
+    loading_beyond_10ft: beyond,
+    floor_rates_per_box,
+  });
+  showToast('Floor delivery rates saved ✓', 'success');
+}
+
+async function saveGroutConfig() {
+  await VW_DB.setSetting('tile_grout_config', {
+    joint_width_default_mm: parseFloat(document.getElementById('ts-grout-joint')?.value||3)||3,
+    density_factor: parseFloat(document.getElementById('ts-grout-density')?.value||1.6)||1.6,
+    wastage_pct: parseFloat(document.getElementById('ts-grout-waste')?.value||5)||5,
+  });
+  showToast('Grout config saved ✓', 'success');
+}
+
+async function saveSpacerConfig() {
+  await VW_DB.setSetting('tile_spacer_config', {
+    pcs_per_packet: parseInt(document.getElementById('ts-spacer-pkt')?.value||100)||100,
+    spacers_per_tile: parseInt(document.getElementById('ts-spacer-tile')?.value||4)||4,
+    min_size_mm: parseInt(document.getElementById('ts-spacer-min')?.value||300)||300,
+  });
+  showToast('Spacer config saved ✓', 'success');
+}
+
+async function autoFillDefaultWeights() {
+  // Standard weight defaults per tile industry norms
+  const defaults = {
+    '100×100':3, '150×150':4, '200×200':6, '200×300':7,
+    '300×300':10,'300×450':12,'300×600':14,'400×400':16,
+    '400×800':20,'450×900':22,'600×600':24,'600×900':28,
+    '600×1200':32,'800×800':30,'800×1600':38,'1000×1000':40,
+  };
+  const defaultTiles = {
+    '100×100':25,'150×150':25,'200×200':18,'200×300':15,
+    '300×300':12,'300×450':10,'300×600':8,'400×400':8,
+    '400×800':6,'450×900':5,'600×600':4,'600×900':3,
+    '600×1200':3,'800×800':2,'800×1600':2,'1000×1000':1,
+  };
+  const defaultThick = {
+    '100×100':7,'150×150':7,'200×200':8,'200×300':8,
+    '300×300':8,'300×450':8,'300×600':8,'400×400':9,
+    '400×800':9,'450×900':9,'600×600':9,'600×900':9,
+    '600×1200':9,'800×800':9,'800×1600':10,'1000×1000':10,
+  };
+  const SIZES = window.TILE_SIZES_SETTINGS || [
+    {mm:'100×100'},{mm:'150×150'},{mm:'200×200'},{mm:'200×300'},
+    {mm:'300×300'},{mm:'300×450'},{mm:'300×600'},{mm:'400×400'},
+    {mm:'400×800'},{mm:'450×900'},{mm:'600×600'},{mm:'600×900'},
+    {mm:'600×1200'},{mm:'800×800'},{mm:'800×1600'},{mm:'1000×1000'},
+  ];
+  SIZES.forEach((s, i) => {
+    const wt = document.getElementById(`ts-wt-${i}`);
+    const tpb = document.getElementById(`ts-tpb-${i}`);
+    const thick = document.getElementById(`ts-thick-${i}`);
+    if (wt && !wt.value) wt.value = defaults[s.mm] || '';
+    if (tpb && !tpb.value) tpb.value = defaultTiles[s.mm] || '';
+    if (thick && !thick.value) thick.value = defaultThick[s.mm] || '';
+  });
+  showToast('Default weights filled — review then Save', 'info');
+}
+
+async function saveTileSettings() {
+  await saveTileWeightTable();
+  await saveFloorConfig();
+  await saveGroutConfig();
+  await saveSpacerConfig();
 }
 
 async function renderEscalationSettings() {
@@ -12386,22 +12601,7 @@ async function saveTileWeights() {
   showToast('Tile weights saved ✓', 'success');
 }
 
-async function saveFloorConfig() {
-  const cfg = {
-    loading_within_10ft: parseFloat(document.getElementById('fl-base')?.value)||5,
-    loading_beyond_10ft: parseFloat(document.getElementById('fl-beyond')?.value)||8,
-    floor_rates_per_box: {
-      G: parseFloat(document.getElementById('fl-floor-G')?.value)||0,
-      1: parseFloat(document.getElementById('fl-floor-1')?.value)||6,
-      2: parseFloat(document.getElementById('fl-floor-2')?.value)||10,
-      3: parseFloat(document.getElementById('fl-floor-3')?.value)||14,
-      4: parseFloat(document.getElementById('fl-floor-4')?.value)||18,
-      5: parseFloat(document.getElementById('fl-floor-5')?.value)||22,
-    }
-  };
-  await VW_DB.setSetting('floor_delivery_config', cfg);
-  showToast('Floor delivery rates saved ✓', 'success');
-}
+// saveFloorConfig moved to renderTileSettings section above
 
 async function saveEscalationConfig() {
   const cfg = {
@@ -12658,6 +12858,8 @@ function showLanguagePicker() {
 
 window.VW_SETTINGS = {
   renderSettingsPage, switchSettingsTab,
+  renderTileSettings, saveTileSettings, saveTileWeightTable, saveFloorConfig,
+  saveGroutConfig, saveSpacerConfig, autoFillDefaultWeights,
   saveAccountName, changePIN, approveResetPin,
   approveProfile, updateProfileRole,
   togglePersonPerm, resetToRoleDefaults,
@@ -21980,19 +22182,28 @@ function tqAddRoom(editIdx) {
   const existingRoom = isEdit ? _tqState.rooms[editIdx] : null;
   const defaultType = existingRoom?.type || 'Living Room';
 
-  sheet.innerHTML = `
+   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h3 style="margin:0">${isEdit ? '✏️ Edit Room' : '+ Add Room'}</h3>
       <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
     </div>
-    <div class="form-group">
-      <label>Room Type</label>
-      <select id="tq-room-type-sel" onchange="VW_TILES.tqSelectRoomType(this.value)" style="font-size:14px">
-        ${types.map(t => `<option value="${t}" ${t===defaultType?'selected':''}>${ROOM_DEFS[t].icon} ${t}</option>`).join('')}
-      </select>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Room Type</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+      ${types.map(t => `
+      <button onclick="VW_TILES.tqPickRoomType('${t.replace(/'/g,"\\'")}',this)"
+        style="padding:8px 4px;border-radius:10px;border:${t===defaultType?'2px solid var(--gold)':'1px solid var(--border)'};
+               background:${t===defaultType?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;
+               font-size:11px;font-weight:${t===defaultType?700:400};color:${t===defaultType?'var(--gold)':'var(--text)'};
+               text-align:center;line-height:1.3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px">
+        <span style="font-size:18px">${ROOM_DEFS[t].icon}</span>
+        <span>${t.replace(' Room','').replace(' Area','').replace('Custom','Custom')}</span>
+      </button>`).join('')}
     </div>
-    <div class="form-group"><label>Room / Area Label</label>
+    <select id="tq-room-type-sel" style="display:none">
+      ${types.map(t => `<option value="${t}" ${t===defaultType?'selected':''}>${t}</option>`).join('')}
+    </select>
+    <div class="form-group"><label>Label <span style="font-weight:400;font-size:11px;color:var(--text3)">(rename if needed)</span></label>
       <input type="text" id="tq-room-label" value="${existingRoom?.label || defaultType}" placeholder="e.g. Master Bedroom">
     </div>
     <div id="tq-measure-form-area">
@@ -22000,7 +22211,7 @@ function tqAddRoom(editIdx) {
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
-      <button class="btn-primary" style="flex:1" onclick="VW_TILES.tqSaveRoom('${defaultType.replace(/'/g,"\\'")}',${isEdit ? editIdx : 'undefined'})">${isEdit ? 'Update Room' : 'Add Room'}</button>
+      <button class="btn-primary" style="flex:1" id="tq-save-room-btn" onclick="VW_TILES.tqSaveRoom('${defaultType.replace(/'/g,"\\'")}',${isEdit ? editIdx : 'undefined'})">${isEdit ? 'Update Room' : 'Add Room'}</button>
     </div>`;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
@@ -22011,10 +22222,27 @@ function tqEditRoom(i) { tqAddRoom(i); }
 function tqSelectRoomType(type) {
   const formArea = document.getElementById('tq-measure-form-area');
   if (formArea) formArea.innerHTML = _renderMeasureForm(type, 0);
-  const saveBtn = document.querySelector('#bottom-sheet .btn-primary');
+  const sel = document.getElementById('tq-room-type-sel');
+  if (sel) sel.value = type;
+  const saveBtn = document.getElementById('tq-save-room-btn') || document.querySelector('#bottom-sheet .btn-primary');
   if (saveBtn) saveBtn.setAttribute('onclick', `VW_TILES.tqSaveRoom('${type.replace(/'/g,"\\'")}',undefined)`);
   const labelEl = document.getElementById('tq-room-label');
   if (labelEl && Object.keys(ROOM_DEFS).includes(labelEl.value)) labelEl.value = type;
+}
+
+function tqPickRoomType(type, btn) {
+  // Highlight selected button in 3-col grid
+  if (btn) {
+    const grid = btn.parentElement;
+    if (grid) grid.querySelectorAll('button').forEach(b => {
+      const sel = b === btn;
+      b.style.border = sel ? '2px solid var(--gold)' : '1px solid var(--border)';
+      b.style.background = sel ? 'var(--gold-muted)' : 'var(--bg2)';
+      b.style.color = sel ? 'var(--gold)' : 'var(--text)';
+      b.style.fontWeight = sel ? '700' : '400';
+    });
+  }
+  tqSelectRoomType(type);
 }
 
 function _renderMeasureForm(type, areaIdx, prefill) {
@@ -22257,11 +22485,17 @@ function _renderStep3() {
   const totalSqft = _tqTotalSqft();
   const sz = _tqState.selectedSize;
 
-  // Correct spacer calculation:
-  // Tiles needed = totalSqft / sqft_per_tile
-  // Spacers per tile = 4 (one per corner)
-  // Packets = ceil(tiles × 4 / 100)
-  const sqftPerTile = sz ? (sz.ft * sz.ft) : 4; // sqft per single tile (ft²)
+  // Spacer calculation — from actual mm dimensions
+  // tile area in m² → sqft. 600×600 = 0.6×0.6 = 0.36m² = 3.875 sqft per tile
+  // Spacers: 4 per tile (one per corner), 100 pcs per packet
+  let sqftPerTile = 4; // default 600×600
+  if (sz && sz.mm) {
+    const parts = sz.mm.split('×').map(Number);
+    if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+      const m2 = (parts[0]/1000) * (parts[1]/1000); // area in m²
+      sqftPerTile = m2 * 10.764; // convert to sqft
+    }
+  }
   const tilesNeeded = sqftPerTile > 0 ? Math.ceil(totalSqft / sqftPerTile) : 0;
   const spacerPcs = tilesNeeded * 4;
   const spacerQty = sp.use ? Math.ceil(spacerPcs / 100) : 0;
@@ -23039,67 +23273,23 @@ async function _renderStep8() {
     </ol>
   </div>
 
-  <!-- SUBMIT FOR APPROVAL — executive cannot take advance directly -->
-  ${(() => {
-    const profile = VW_AUTH.getCurrentProfile();
-    const isApprover = ['admin','management','store_manager','floor_manager','tl','sr_executive'].includes(profile?.role||'');
-    const isCashier = ['admin','accounts'].includes(profile?.role||'');
-
-    if (isApprover) {
-      // Approver sees price edit + approve/reject
-      return `
-      <div class="card" style="margin-bottom:10px;border-color:rgba(245,200,66,0.4)">
-        <h3 class="card-title">⚙️ Approver Actions</h3>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Edit pricing if needed, then approve (passes to next level) or reject (returns to executive). Approval chain: <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong></p>
-        <div class="form-row">
-          <div class="form-group" style="margin:0;flex:1">
-            <label>Price/Sqft (₹)</label>
-            <input type="number" id="tq-quoted-sqft" placeholder="e.g. 55" step="0.5"
-              oninput="_tqState.quotedPricePerSqft=parseFloat(this.value)||0">
-          </div>
-          <div class="form-group" style="margin:0;flex:1">
-            <label>Price/Box (₹)</label>
-            <input type="number" id="tq-quoted-box" placeholder="e.g. 880" step="1"
-              oninput="_tqState.quotedPricePerBox=parseFloat(this.value)||0">
-          </div>
-        </div>
-        <div class="form-group">
-          <label>Price Note <span style="font-size:10px;color:var(--text3)">(optional)</span></label>
-          <input type="text" id="tq-price-note" placeholder="e.g. Special rate for contractor · Seasonal offer">
-        </div>
-        <div style="display:flex;gap:8px;margin-top:4px">
-          <button onclick="VW_TILES.tqApprove()"
-            style="flex:2;padding:12px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
-            ✅ Approve & Pass to Next Level
-          </button>
-          <button onclick="VW_TILES.tqReject()"
-            style="flex:1;padding:12px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
-            ❌ Reject
-          </button>
-        </div>
-      </div>`;
-    }
-
-    // Executive — submit for approval only
-    return `
-    <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
-      <h3 class="card-title">📤 Submit for Approval</h3>
-      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
-        Once submitted, the Store Manager / Management will review and approve this quotation. Advance collection and stock hold will be enabled only after approval.
-      </p>
-      <div style="background:var(--bg2);border-radius:10px;padding:10px;font-size:12px;color:var(--text3);margin-bottom:12px">
-        <div style="font-weight:600;color:var(--text);margin-bottom:4px">Approval workflow:</div>
-        <div>1️⃣ Executive saves & submits → 2️⃣ Manager reviews & can edit price → 3️⃣ Cashier collects advance + holds stock</div>
-      </div>
-    </div>`;
-  })()}
+  <!-- SUBMIT FOR APPROVAL — wizard is for executives to create and submit only -->
+  <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
+    <h3 class="card-title">📤 Submit for Approval</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Once submitted, approval chain starts automatically: <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong> — 30 sec at each level.
+    </p>
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;font-size:12px;color:var(--text3)">
+      After final approval → you can print &amp; share with customer · Cashier collects advance &amp; holds stock
+    </div>
+  </div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqBack()">← Edit</button>
     <button class="btn-primary" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqSubmitForApproval()">📤 Submit for Approval</button>
   </div>
   <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">
-    Print & Share with customer enabled only after management approves this quotation
+    Print &amp; Share unlocked only after management approves this quotation
   </div>`;
 }
 
@@ -24064,7 +24254,14 @@ async function openTileQuote(id) {
       <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0;flex:1">
           <label style="font-size:11px">₹/sqft (edit if needed)</label>
-          <input type="number" id="tq-quoted-sqft" placeholder="${pricePerSqft||'Enter price'}" value="${pricePerSqft||''}" step="0.5" style="font-size:14px;font-weight:600">
+          <input type="number" id="tq-quoted-sqft" placeholder="${pricePerSqft||'Enter price'}" value="${pricePerSqft||''}" step="0.5" style="font-size:14px;font-weight:600"
+            oninput="(function(v){
+              const spf=parseFloat(v)||0;
+              const cov=parseFloat(${q.selected_product?.coverage_per_box||q.selected_size?.coverage||16});
+              const boxPx=spf>0&&cov>0?Math.round(spf*cov):0;
+              const boxEl=document.getElementById('tq-quoted-box');
+              if(boxEl&&boxPx>0)boxEl.value=boxPx;
+            })(this.value)">
         </div>
         <div class="form-group" style="margin:0;flex:1">
           <label style="font-size:11px">₹/box</label>
@@ -24397,7 +24594,7 @@ window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack,
   // Rooms
-  tqAddRoom, tqSelectRoomType, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
+  tqAddRoom, tqSelectRoomType, tqPickRoomType, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading,
   tqSelectProduct,
@@ -25602,6 +25799,45 @@ async function renderAutoTestPage(){
     <button class="btn-primary full-width" style="margin-top:8px" onclick="VW_AUTOTEST.genTest()">🤖 Generate & Run Test</button>
     <div id="ai-out" style="margin-top:10px"></div>
   </div>`;
+}
+
+
+async function genTest() {
+  const prompt = document.getElementById('ai-prompt')?.value.trim();
+  if (!prompt) { showToast('Describe the test first', 'warn'); return; }
+  const out = document.getElementById('ai-out');
+  if (out) out.innerHTML = '<div style="color:var(--text3);font-size:13px">🤖 Writing test…</div>';
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        system: 'You are a JS test writer for V Wholesale Customer OS (vanilla JS + Supabase PWA). Write a single async test function body that uses VW_DB.client, VW_AUTH, VW_TILES, VW_ESCALATION etc. Return only the JS function body code (no function declaration, no markdown). The code must be valid JS that can run with new Function().',
+        messages: [{ role: 'user', content: `Write a test for: ${prompt}` }]
+      })
+    });
+    const data = await res.json();
+    const code = (data.content?.[0]?.text || '// No code generated').replace(/```(?:javascript|js)?\n?|```/g, '').trim();
+    if (out) out.innerHTML = `
+      <pre style="background:var(--bg3);border-radius:8px;padding:10px;font-size:10px;overflow:auto;max-height:200px;color:var(--text2);white-space:pre-wrap;margin-bottom:8px">${code.replace(/</g,'&lt;').slice(0,3000)}</pre>
+      <button class="btn-primary full-width" onclick="VW_AUTOTEST.execTest(this.dataset.code)" data-code="${encodeURIComponent(code)}">▶ Run This Test</button>`;
+  } catch(e) {
+    if (out) out.innerHTML = `<div style="color:var(--red);font-size:12px">Error: ${e.message}</div>`;
+  }
+}
+
+async function execTest(encodedCode) {
+  const code = decodeURIComponent(encodedCode);
+  try {
+    const fn = new Function('VW_DB','VW_AUTH','VW_TILES','VW_ESCALATION','navigateTo','showToast',
+      `return (async () => { ${code} })()`);
+    const result = await fn(VW_DB, VW_AUTH, window.VW_TILES, window.VW_ESCALATION, window.navigateTo, window.showToast);
+    showToast('✅ AI Test: ' + (result || 'Passed'), 'success');
+  } catch(e) {
+    showToast('❌ ' + e.message, 'error');
+  }
 }
 
 window.VW_AUTOTEST={renderAutoTestPage,runSuite,runAllSuites,clearResults,genTest,execTest};
