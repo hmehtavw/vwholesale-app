@@ -926,6 +926,15 @@ td strong { color: var(--text); }
           style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Daily Summary">📅</button>
         <button onclick="navigateTo('settings')"
           style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Settings">⚙️</button>
+        <button onclick="if(confirm('Log out of V Wholesale?'))VW_AUTH.signOut().then(()=>location.reload())"
+          title="Log Out"
+          style="background:none;border:none;padding:4px 8px;cursor:pointer;color:var(--text3);display:flex;align-items:center" aria-label="Log out">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
         <button class="notif-btn" onclick="hardRefreshApp()" aria-label="Refresh" title="Refresh data">
           &#8635;
         </button>
@@ -971,6 +980,7 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="grn" onclick="closeMoreMenu();navigateTo('grn')"><span>🧾</span><span>GRN</span></button>
         <button class="more-tile" data-page="returns" onclick="closeMoreMenu();navigateTo('returns')"><span>↩️</span><span>Returns</span></button>
         <button class="more-tile" data-page="tiles" onclick="closeMoreMenu();navigateTo('tiles')"><span>🟫</span><span>Tile Quote</span></button>
+        <button class="more-tile" data-page="tile_quotes" onclick="closeMoreMenu();navigateTo('tile_quotes')"><span>📋</span><span>TQ List</span></button>
         <button class="more-tile" data-page="granite" onclick="closeMoreMenu();navigateTo('granite')"><span>🪨</span><span>Granite</span></button>
       </div>
 
@@ -1077,31 +1087,10 @@ File||a instanceof Blob||a instanceof URL||"string"===typeof a){let b=new Image;
 c("Image load error"):b()};a.addEventListener("load",d);a.addEventListener("error",d)})}static async _postWorkerMessage(a,b,c,d){return e._postWorkerMessageSync(await a,b,c,d)}static _postWorkerMessageSync(a,b,c,d){if(!(a instanceof Worker))return-1;let f=e._workerMessageId++;a.postMessage({id:f,type:b,data:c},d);return f}}e.DEFAULT_CANVAS_SIZE=400;e.NO_QR_CODE_FOUND="No QR code found";e._disableBarcodeDetector=!1;e._workerMessageId=0;return e})
 //# sourceMappingURL=qr-scanner.umd.min.js.map
 </script>
-  <script>
-function clearDBAndReload() {
-  indexedDB.deleteDatabase('VWholesaleDB');
-  setTimeout(function(){ location.reload(); }, 300);
-}
-function showFatalError(msg, line) {
-  var el = document.getElementById('app-content');
-  if (!el) return;
-  el.innerHTML = '<div style="padding:2rem;text-align:center">'
-    + '<div style="font-size:2rem;margin-bottom:1rem">&#9888;&#65039;</div>'
-    + '<div style="color:#C8972B;font-weight:600;margin-bottom:8px">' + msg + '</div>'
-    + (line ? '<div style="color:#888;font-size:12px;margin-bottom:1rem">Line ' + line + '</div>' : '')
-    + '<button onclick="clearDBAndReload()" style="background:#C8972B;color:#000;border:none;border-radius:8px;padding:10px 24px;font-size:14px;cursor:pointer;margin:4px">Clear Data and Reload</button>'
-    + '</div>';
-}
-window.onerror = function(msg, src, line, col, err) {
-  showFatalError('Error: ' + msg, line);
-  return false;
-};
-window.addEventListener('unhandledrejection', function(e) {
-  var msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason);
-  showFatalError(msg, null);
-});
+<script>
 
 /* === db.js === */
+
 // ============================================================
 // SUPABASE CONFIG — fill these in from Settings -> API
 // ============================================================
@@ -1464,7 +1453,10 @@ window.VW_DB = {
 };
 
 
+
+
 /* === scanner.js === */
+
 // ===== SHARED QR SCANNER MODULE =====
 // One camera-scanning sheet reused by Billing (Cart), Inventory, and
 // Quotations rather than building the camera lifecycle three times.
@@ -1553,7 +1545,10 @@ window.findProductByScannedCode = findProductByScannedCode;
 window.VW_SCANNER = { openQrScanner, stopActiveScanner, isScannerActive, findProductByScannedCode };
 
 
+
+
 /* === auth.js === */
+
 // ============================================================
 // AUTH — phone + PIN (using Supabase email/password under the hood)
 // ============================================================
@@ -1568,16 +1563,16 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
 const ROLE_PAGES = {
-  admin:        ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal'],
-  executive:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist'],
-  sr_executive: ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist','analytics'],
-  tl:           ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist','analytics','reports'],
-  floor_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal'],
-  store_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','contractor_portal'],
-  management:   ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','gst','eod','contractor_portal'],
+  admin:        ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal'],
+  executive:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist'],
+  sr_executive: ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics'],
+  tl:           ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports'],
+  floor_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal'],
+  store_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','contractor_portal'],
+  management:   ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','gst','eod','contractor_portal'],
   staff:        ['dashboard','checkin','tasks','feedback','training','catalogs'],
   reception:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer','wishlist'],
-  accounts:     ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns','gst'],
+  accounts:     ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns','gst','tile_quotes'],
   dispatch:     ['dashboard','tasks','feedback','training','dispatch'],
   pending:      []
 };
@@ -2145,7 +2140,10 @@ window.FEATURE_PERMISSIONS = FEATURE_PERMISSIONS;
 window.hasPermission = hasPermission;
 
 
+
+
 /* === notify.js === */
+
 const MESSAGES = {
   en: {
     walkin: (name, dept) => `🏪 New customer! ${name} is at reception for ${dept}. Please attend now.`,
@@ -2304,7 +2302,10 @@ function waEncode(str) {
 window.waEncode = waEncode;
 
 
+
+
 /* === escalation.js === */
+
 // Escalation hierarchy: executive/specialist -> TL -> Floor Manager -> Store Manager -> Management
 // Reaches Management by ~4 minutes total if nobody responds.
 const TRANSITION_MS = {
@@ -2315,6 +2316,12 @@ const TRANSITION_MS = {
   store_manager: 75 * 1000,  // 2:45 -> 4:00
   // 'management' has no further transition (final level)
 };
+
+// Tile Quotation approval chain — 30s at each level (per business requirement)
+// TL / Sr Executive → Floor Manager → Store Manager → Management
+const TQ_CHAIN = ['tl', 'floor_manager', 'store_manager', 'management'];
+const TQ_TRANSITION_MS = 30 * 1000; // 30 seconds at every level
+
 const NEXT_LEVEL = {
   executive: 'tl', specialist: 'tl',
   tl: 'floor_manager',
@@ -2451,6 +2458,9 @@ async function routeTask(taskId) {
 // ===== ESCALATION SWEEP — runs periodically =====
 async function checkEscalations() {
   const now = Date.now();
+
+  // Tile Quotation approval chain — runs first (fast, 30s windows)
+  await checkTileQuoteEscalations().catch(e => console.log('TQ escalation error:', e.message));
 
   // Visits awaiting acceptance
   const visits = await VW_DB.all(VW_DB.STORES.visits);
@@ -2635,7 +2645,304 @@ async function closeVisit(visitId) {
   return null;
 }
 
-window.VW_ESCALATION = { assignNextExecutive, startVisitRouting, acceptVisit, routeTask, checkEscalations, closeVisit, LEVEL_LABELS, TRANSITION_MS, startQuotationApproval, approveQuotationStep, rejectQuotationStep, startInvoiceApproval, approveInvoiceStep, rejectInvoiceStep };
+// =====================================================
+// TILE QUOTATION APPROVAL ESCALATION ENGINE
+// Chain: TL/SrExec → Floor Manager → Store Manager → Management
+// 30 seconds at each level — auto-escalates if no response
+// Same pattern as visit/task escalation above
+// =====================================================
+
+// Map each chain level to which profiles can action it
+const TQ_LEVEL_ROLES = {
+  tl:           ['tl', 'sr_executive'],          // TL or Sr Executive can approve first
+  floor_manager:['floor_manager'],
+  store_manager:['store_manager'],
+  management:   ['management', 'admin'],
+};
+
+async function startTileQuoteApproval(tileQuoteId) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
+  if (!q) return;
+
+  // Get all profiles to find approvers for first level (TL / Sr Executive)
+  const { data: profiles } = await VW_DB.client
+    .from('profiles')
+    .select('id,name,role,phone')
+    .in('role', TQ_LEVEL_ROLES.tl)
+    .eq('status', 'approved');
+
+  const approvers = profiles || [];
+  const now = new Date().toISOString();
+
+  const firstEntry = {
+    level: 'tl',
+    notifiedAt: now,
+    status: 'pending',
+    approverIds: approvers.map(p => p.id),
+    approverNames: approvers.map(p => p.name),
+    roles: TQ_LEVEL_ROLES.tl,
+  };
+
+  const log = [firstEntry];
+
+  await VW_DB.client.from('tile_quotations').update({
+    approval_status: 'pending_approval',
+    status: 'pending_approval',
+    approval_submitted_at: q.approval_submitted_at || now,
+    approval_log: log,
+  }).eq('id', tileQuoteId);
+
+  // Notify all TL / Sr Executive profiles
+  for (const p of approvers) {
+    await VW_DB.client.from('notifications').insert({
+      recipient_id: p.id,
+      category: 'tq_approval',
+      title: `📋 Tile Quote Approval — ${q.tq_no}`,
+      body: `${q.customer_name} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft · Submitted by ${q.created_by||'Executive'}`,
+      related_table: 'tile_quotations',
+      related_id: tileQuoteId,
+      read: false,
+      created_at: now,
+    }).catch(() => {}); // non-blocking
+  }
+
+  showToast && showToast(`${q.tq_no} sent for TL / Sr Executive approval`, 'success');
+}
+
+async function checkTileQuoteEscalations() {
+  const now = Date.now();
+
+  // Only check quotes that are pending approval
+  const { data: pending } = await VW_DB.client
+    .from('tile_quotations')
+    .select('id,tq_no,customer_name,approval_log,approval_status,created_by')
+    .eq('approval_status', 'pending_approval');
+
+  if (!pending?.length) return;
+
+  for (const q of pending) {
+    const log = q.approval_log || [];
+    const last = log[log.length - 1];
+    if (!last || last.status !== 'pending') continue;
+
+    const elapsed = now - new Date(last.notifiedAt).getTime();
+    if (elapsed < TQ_TRANSITION_MS) continue; // Still within 30s window
+
+    const nextLevel = NEXT_LEVEL[last.level];
+    if (!nextLevel) continue; // Already at management — no further escalation
+
+    // Mark current level as timed out
+    last.status = 'timeout';
+    last.timedOutAt = new Date().toISOString();
+
+    // Find approvers for next level
+    const nextRoles = TQ_LEVEL_ROLES[nextLevel] || [nextLevel];
+    const { data: nextApprovers } = await VW_DB.client
+      .from('profiles')
+      .select('id,name,role,phone')
+      .in('role', nextRoles)
+      .eq('status', 'approved');
+
+    const approvers = nextApprovers || [];
+    const notifiedAt = new Date().toISOString();
+
+    if (nextLevel === 'management' && !approvers.length) {
+      // Final level — still escalate even if no profiles found,
+      // management role may be set via escalationContacts in settings
+      const contacts = await VW_DB.getSetting('escalationContacts', {});
+      const mgmt = contacts.management || {};
+      log.push({
+        level: 'management',
+        notifiedAt,
+        status: 'pending',
+        approverIds: [],
+        approverNames: mgmt.name ? [mgmt.name] : [],
+        roles: ['management'],
+        note: 'Final escalation — no management profile found, check escalationContacts setting'
+      });
+    } else {
+      log.push({
+        level: nextLevel,
+        notifiedAt,
+        status: 'pending',
+        approverIds: approvers.map(p => p.id),
+        approverNames: approvers.map(p => p.name),
+        roles: nextRoles,
+        escalatedFrom: last.level,
+      });
+
+      // Notify next level approvers
+      for (const p of approvers) {
+        await VW_DB.client.from('notifications').insert({
+          recipient_id: p.id,
+          category: 'tq_approval',
+          title: `⚠️ Escalated — Tile Quote ${q.tq_no}`,
+          body: `No response from ${LEVEL_LABELS[last.level]} · ${q.customer_name} · ${q.created_by||'Executive'}`,
+          related_table: 'tile_quotations',
+          related_id: q.id,
+          read: false,
+          created_at: notifiedAt,
+        }).catch(() => {});
+      }
+    }
+
+    await VW_DB.client.from('tile_quotations')
+      .update({ approval_log: log })
+      .eq('id', q.id);
+  }
+}
+
+// Called by the existing escalation sweep — add to checkEscalations
+async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, priceNote) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
+  if (!q) return;
+  const log = q.approval_log || [];
+  const last = log[log.length - 1];
+  if (!last || last.status !== 'pending') { showToast('No pending approval step', 'warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+
+  // Verify this person can action this level
+  const allowedRoles = TQ_LEVEL_ROLES[last.level] || [last.level];
+  const isAdmin = myRole === 'admin';
+  if (!isAdmin && !allowedRoles.includes(myRole)) {
+    showToast(`Only ${allowedRoles.join(' / ')} can approve at this stage`, 'warn');
+    return;
+  }
+
+  const now = new Date().toISOString();
+  last.status = 'approved';
+  last.approvedBy = profile?.name || '';
+  last.approvedById = profile?.id || null;
+  last.approvedAt = now;
+  if (pricePerSqft > 0 || pricePerBox > 0) {
+    last.priceEdited = true;
+    last.editedPricePerSqft = pricePerSqft;
+    last.editedPricePerBox = pricePerBox;
+    last.priceNote = priceNote;
+  }
+
+  const updateData = { approval_log: log };
+
+  // Is this the final level? → Fully approved
+  if (!NEXT_LEVEL[last.level] || last.level === 'management') {
+    updateData.approval_status = 'approved';
+    updateData.status = 'approved';
+    updateData.approved_at = now;
+    updateData.approved_by = profile?.name || '';
+    updateData.approved_by_id = profile?.id || null;
+    if (pricePerSqft > 0) {
+      updateData.quoted_price_per_sqft = pricePerSqft;
+      updateData.quoted_price_per_box = pricePerBox || null;
+      updateData.price_edit_note = priceNote || null;
+      updateData.price_edited_by = profile?.name || '';
+      updateData.price_edited_at = now;
+    }
+    await VW_DB.client.from('tile_quotations').update(updateData).eq('id', tileQuoteId);
+    showToast(`${q.tq_no} fully approved ✓${pricePerSqft>0?' · Price set':''}`, 'success');
+
+    // Notify the executive who submitted
+    if (q.created_by_id) {
+      await VW_DB.client.from('notifications').insert({
+        recipient_id: q.created_by_id,
+        category: 'tq_approved',
+        title: `✅ ${q.tq_no} Approved`,
+        body: `Your tile quote for ${q.customer_name} has been approved${pricePerSqft>0?` at ₹${pricePerSqft}/sqft`:''}. Cashier can now collect advance.`,
+        related_table: 'tile_quotations', related_id: tileQuoteId,
+        read: false, created_at: now,
+      }).catch(() => {});
+    }
+    return;
+  }
+
+  // Not the last level — move to next
+  const nextLevel = NEXT_LEVEL[last.level];
+  const nextRoles = TQ_LEVEL_ROLES[nextLevel] || [nextLevel];
+  const { data: nextApprovers } = await VW_DB.client
+    .from('profiles').select('id,name,role').in('role', nextRoles).eq('status','approved');
+  const approvers = nextApprovers || [];
+
+  // If price was edited at this level, carry forward to next
+  if (pricePerSqft > 0) {
+    updateData.quoted_price_per_sqft = pricePerSqft;
+    updateData.quoted_price_per_box = pricePerBox || null;
+    updateData.price_edit_note = priceNote || null;
+    updateData.price_edited_by = profile?.name || '';
+    updateData.price_edited_at = now;
+  }
+
+  log.push({
+    level: nextLevel,
+    notifiedAt: now,
+    status: 'pending',
+    approverIds: approvers.map(p => p.id),
+    approverNames: approvers.map(p => p.name),
+    roles: nextRoles,
+    escalatedFrom: last.level,
+  });
+  updateData.approval_log = log;
+  await VW_DB.client.from('tile_quotations').update(updateData).eq('id', tileQuoteId);
+
+  // Notify next level
+  const levelLabel = LEVEL_LABELS[nextLevel] || nextLevel;
+  for (const p of approvers) {
+    await VW_DB.client.from('notifications').insert({
+      recipient_id: p.id,
+      category: 'tq_approval',
+      title: `📋 Tile Quote Approval — ${q.tq_no}`,
+      body: `Approved by ${profile?.name||''} (${LEVEL_LABELS[last.level]}) · Now needs your approval · ${q.customer_name}`,
+      related_table: 'tile_quotations', related_id: tileQuoteId,
+      read: false, created_at: now,
+    }).catch(() => {});
+  }
+  showToast(`Approved ✓ — escalated to ${levelLabel} for final sign-off`, 'success');
+}
+
+async function rejectTileQuoteStep(tileQuoteId, reason) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
+  if (!q) return;
+  const log = q.approval_log || [];
+  const last = log[log.length - 1];
+  const profile = VW_AUTH.getCurrentProfile();
+  const now = new Date().toISOString();
+  if (last) {
+    last.status = 'rejected';
+    last.rejectedBy = profile?.name || '';
+    last.rejectedAt = now;
+    last.rejectReason = reason;
+  }
+  await VW_DB.client.from('tile_quotations').update({
+    approval_status: 'rejected',
+    status: 'rejected',
+    rejected_at: now,
+    rejected_by: profile?.name || '',
+    rejection_reason: reason,
+    approval_log: log,
+  }).eq('id', tileQuoteId);
+
+  // Notify the executive who submitted
+  if (q.created_by_id) {
+    await VW_DB.client.from('notifications').insert({
+      recipient_id: q.created_by_id,
+      category: 'tq_rejected',
+      title: `❌ ${q.tq_no} Rejected`,
+      body: `Rejected by ${profile?.name||''}: ${reason}. Please revise and resubmit.`,
+      related_table: 'tile_quotations', related_id: tileQuoteId,
+      read: false, created_at: now,
+    }).catch(() => {});
+  }
+}
+
+// Export new functions
+window.startTileQuoteApproval = startTileQuoteApproval;
+window.checkTileQuoteEscalations = checkTileQuoteEscalations;
+window.approveTileQuoteStep = approveTileQuoteStep;
+window.rejectTileQuoteStep = rejectTileQuoteStep;
+window.TQ_CHAIN = TQ_CHAIN;
+window.TQ_LEVEL_ROLES = TQ_LEVEL_ROLES;
+
+window.VW_ESCALATION = { assignNextExecutive, startVisitRouting, acceptVisit, routeTask, checkEscalations, closeVisit, LEVEL_LABELS, TRANSITION_MS, startQuotationApproval, approveQuotationStep, rejectQuotationStep, startInvoiceApproval, approveInvoiceStep, rejectInvoiceStep, startTileQuoteApproval, checkTileQuoteEscalations, approveTileQuoteStep, rejectTileQuoteStep };
 
 // ===== QUOTATION APPROVAL CHAIN =====
 // Every Quotation must be approved by: Department TL -> Floor Manager ->
@@ -3040,7 +3347,10 @@ async function rejectInvoiceStep(invoiceId, reason) {
 window.rejectInvoiceStep = rejectInvoiceStep;
 
 
+
+
 /* === checkin.js === */
+
 const DEFAULT_CATEGORIES = {
   'Tiles': ['Floor Tiles','Wall Tiles','Outdoor/Parking Tiles','Bathroom Tiles','Designer/Digital Tiles'],
   'Sanitary': ['Commode','Wash Basin','Bathroom Fittings','Shower & Accessories'],
@@ -4076,7 +4386,10 @@ window.VW_CHECKIN.confirmSecurityNotify = confirmSecurityNotify;
 window.VW_CHECKIN.resetKioskPage = resetKioskPage;
 
 
+
+
 /* === cart.js === */
+
 let activeCart = { customerId: null, visitId: null, items: [], saleType: 'cash', quotationAdvance: 0 };
 
 function clearCartCustomer() {
@@ -5697,7 +6010,10 @@ async function confirmPrintSelectedCopies(invId) {
 window.confirmPrintSelectedCopies = confirmPrintSelectedCopies;
 
 
+
+
 /* === quotations.js === */
+
 const DEFAULT_QUOTE_TERMS = `TRANSPORT EXTRA
 ADVANCE 50% PAYMENT AT THE TIME OF CONFIRMATION
 BALANCE 50% PAYMENT BEFORE DELIVERY`;
@@ -7562,7 +7878,10 @@ async function learnFromQuotationItems(items) {
 window.learnFromQuotationItems = learnFromQuotationItems;
 
 
+
+
 /* === crm.js === */
+
 const STAGES = ['Lead','Visited','Quoted','Negotiating','Won','Lost'];
 const STAGE_COLORS = { Lead:'#888', Visited:'#378ADD', Quoted:'#EF9F27', Negotiating:'#7F77DD', Won:'#22c55e', Lost:'#ef4444' };
 
@@ -8033,7 +8352,10 @@ window.VW_CRM = { renderCRM, searchCustomers, openCustomer, showAddLead, saveLea
 window.sendFollowupReminder = sendFollowupReminder;
 
 
+
+
 /* === inventory.js === */
+
 const LOW_STOCK_THRESHOLD = 20;
 
 async function renderInventory() {
@@ -8051,6 +8373,31 @@ async function renderInventory() {
       <div class="stat"><span class="stat-num" style="color:var(--red)">${lowStock.length}</span><span class="stat-label">Low Stock</span></div>
       <div class="stat"><span class="stat-num" style="color:var(--gold)">₹${Math.round(totalValue/100000)}L</span><span class="stat-label">Stock Value</span></div>
     </div>
+  </div>
+
+  <!-- Quick Category Shortcuts -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px">
+    <button onclick="navigateTo('tile_inventory')"
+      style="flex-shrink:0;background:var(--header-bg);border:1px solid var(--gold-border);border-radius:12px;padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:8px;color:var(--text);font-size:13px;font-weight:700">
+      🔲 <span>Tile Stock</span>
+      <span style="font-size:10px;background:var(--gold);color:#000;border-radius:4px;padding:1px 6px;font-weight:700">Dedicated</span>
+    </button>
+    <button onclick="filterCategoryNav('Tiles')"
+      style="flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;cursor:pointer;font-size:13px;color:var(--text)">
+      🔲 All Tiles
+    </button>
+    <button onclick="filterCategoryNav('Sanitary')"
+      style="flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;cursor:pointer;font-size:13px;color:var(--text)">
+      🚿 Sanitary
+    </button>
+    <button onclick="filterCategoryNav('Paints')"
+      style="flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;cursor:pointer;font-size:13px;color:var(--text)">
+      🎨 Paints
+    </button>
+    <button onclick="filterCategoryNav('Electricals')"
+      style="flex-shrink:0;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 16px;cursor:pointer;font-size:13px;color:var(--text)">
+      ⚡ Electricals
+    </button>
   </div>
 
   ${pendingPhotoCount ? `
@@ -8895,7 +9242,30 @@ async function rejectPendingPhoto(photoId) {
 window.rejectPendingPhoto = rejectPendingPhoto;
 
 
+
+// Quick category filter from the shortcuts row
+function filterCategoryNav(category) {
+  // Navigate to inventory and filter by category
+  navigateTo('inventory');
+  setTimeout(() => {
+    const filterBtn = document.querySelector(`#inv-cat-filter`);
+    if (filterBtn) {
+      filterBtn.value = category;
+      filterBtn.dispatchEvent(new Event('change'));
+    } else {
+      // Try the filter buttons
+      const btns = document.querySelectorAll('.filter-btn');
+      btns.forEach(b => {
+        if (b.textContent.trim() === category) b.click();
+      });
+    }
+  }, 400);
+}
+window.filterCategoryNav = filterCategoryNav;
+
+
 /* === hr.js === */
+
 const TEAM_LABELS = {
   specialist: 'Specialist (gets department tasks)',
   TL: 'Team Lead / TL (escalation level 2)',
@@ -9378,7 +9748,10 @@ window.submitLeave = submitLeave;
 window.approveLeave = approveLeave;
 
 
+
+
 /* === hr_payroll.js === */
+
 // ============================================================
 // HR & PAYROLL MODULE — Session 8
 // Staff Management · Attendance · Salary Calculator · Payslips
@@ -10080,7 +10453,10 @@ window.VW_HR_PAYROLL = {
 };
 
 
+
+
 /* === onboarding.js === */
+
 // ===== EMPLOYEE ONBOARDING (self-service) =====
 // Stage 1: HR creates an offer (role/salary/terms), the app generates an
 // offer letter PDF-ready print view, HR sets a one-time PIN, and gets a
@@ -10816,7 +11192,10 @@ async function rejectOfferSubmission(offerId, reason) {
 }
 
 
+
+
 /* === excel_import.js === */
+
 // ===== EXCEL IMPORT (HR & Inventory) =====
 // Shared logic: read an uploaded .xlsx/.csv, match its columns to known
 // fields by header text (case/spacing-insensitive, with common aliases),
@@ -11096,7 +11475,10 @@ window.VW_EXCEL = {
 };
 
 
+
+
 /* === tasks.js === */
+
 // STAGES and STAGE_COLORS defined in crm.js (shared)
 
 async function renderMyTasks() {
@@ -11267,7 +11649,10 @@ window.openTaskDetail = openTaskDetail;
 window.saveTaskDetail = saveTaskDetail;
 
 
+
+
 /* === settings.js === */
+
 // ============================================================
 // SETTINGS PAGE — Tab-based, 5 groups
 // My Account · Team & Access · Store Config · Integrations · Danger
@@ -12522,7 +12907,10 @@ async function renderCostOptimizationTab() {
 window.VW_SETTINGS.renderCostOptimizationTab = renderCostOptimizationTab;
 
 
+
+
 /* === reports.js === */
+
 // ===================== HELPERS =====================
 function isSameDay(d1, d2) { return new Date(d1).toDateString() === new Date(d2).toDateString(); }
 
@@ -12742,7 +13130,10 @@ async function renderStaffPerformance() {
 window.VW_REPORTS = { renderOpsReport, renderWeeklyReport, renderStaffPerformance, drawWeeklyChart, buildOpsReport };
 
 
+
+
 /* === analytics.js === */
+
 async function renderAnalytics() {
   const invoices = await VW_DB.all(VW_DB.STORES.invoices);
   const visits = await VW_DB.all(VW_DB.STORES.visits);
@@ -13050,7 +13441,10 @@ async function renderUserBehaviourTab() {
 if (window.VW_ANALYTICS) window.VW_ANALYTICS.renderUserBehaviourTab = renderUserBehaviourTab;
 
 
+
+
 /* === training.js === */
+
 // ===== TRAINING / LMS MODULE =====
 const TRAINING_CATEGORIES = ['Tiles','Sanitary','Plywood','Electricals','Paints','Plumbing','Appliances','HR','Purchase','Inventory','Management','Accounts'];
 
@@ -13363,7 +13757,10 @@ window.VW_TRAINING = {
 };
 
 
+
+
 /* === dispatch.js === */
+
 // ============================================================
 // DISPATCH / GATE PASS / ACCOUNTS PAYMENT VERIFICATION WORKFLOW
 // ============================================================
@@ -14629,7 +15026,10 @@ window.VW_DISPATCH.renderDeliveryTrackingPage = renderDeliveryTrackingPage;
 window.VW_DISPATCH.createDeliveryTracking = createDeliveryTracking;
 
 
+
+
 /* === features.js === */
+
 // ============================================================
 // BATCH 1 FEATURES — 16 new features
 // ============================================================
@@ -15483,26 +15883,35 @@ async function renderCatalogsPage() {
 
 function renderUploadedCatalogs(catalogs) {
   if (!catalogs.length) return '<div class="card"><p class="empty-msg">No catalogs uploaded yet — tap + Upload to add brand MRP sheets, product catalogs, or pricesheets</p></div>';
-  return catalogs.map(c => `
+
+  // Group by brand
+  const byBrand = {};
+  catalogs.forEach(c => {
+    const brand = c.brand || 'Other';
+    if (!byBrand[brand]) byBrand[brand] = [];
+    byBrand[brand].push(c);
+  });
+
+  return Object.entries(byBrand).sort(([a],[b])=>a.localeCompare(b)).map(([brand, bCatalogs]) => `
     <div class="card" style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:14px">${c.name}</div>
-          ${c.brand ? `<div style="font-size:12px;color:var(--text3)">${c.brand}${c.category?' · '+c.category:''}</div>` : ''}
-          <div style="font-size:12px;color:var(--text3)">${c.uploadedByName||''} · ${c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : ''}</div>
+      <div style="font-weight:700;font-size:13px;color:var(--gold);margin-bottom:10px">${brand}</div>
+      ${bCatalogs.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)).map(c => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2)">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.category?c.category+' · ':''}${c.uploadedByName||''} · ${c.createdAt ? new Date(c.createdAt).toLocaleDateString('en-IN') : ''}</div>
         </div>
-        <div style="display:flex;gap:6px">
-          <button class="btn-sm" onclick="window.open('${c.fileUrl}','_blank')">👁 View</button>
-          <button class="btn-sm" onclick="VW_FEATURES.shareCatalog('${c.fileUrl}','${c.name}')">📤 Share</button>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          <button class="btn-sm" onclick="window.open('${c.fileUrl}','_blank')">👁</button>
+          <button class="btn-sm" onclick="VW_FEATURES.shareCatalog('${c.fileUrl}','${c.name}')">📤</button>
+          <button class="btn-sm" style="background:rgba(245,200,66,0.12);color:var(--gold)" onclick="VW_FEATURES.replaceCatalog(${c.id},'${(c.name||'').replace(/'/g,"\\'")}','${(c.brand||'').replace(/'/g,"\\'")}','${(c.category||'').replace(/'/g,"\\'")}')">🔄</button>
           ${VW_AUTH.isAdmin() ? `<button class="btn-sm" style="color:var(--red)" onclick="VW_FEATURES.deleteCatalog(${c.id})">🗑</button>` : ''}
         </div>
-      </div>
-      ${c.isCustomerVisible ? '<span class="badge" style="background:#378ADD;margin-top:6px">Customer Visible</span>' : ''}
+      </div>`).join('')}
     </div>`).join('');
 }
 
 async function switchCatalogTab(tab, btn) {
-  document.querySelectorAll('#catalog-tab-content').forEach(el => {});
   document.querySelectorAll('.entry-type-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const container = document.getElementById('catalog-tab-content');
@@ -15510,25 +15919,100 @@ async function switchCatalogTab(tab, btn) {
     const catalogs = await VW_DB.all(VW_DB.STORES.catalogs);
     container.innerHTML = renderUploadedCatalogs(catalogs.filter(c => c.type==='upload'));
   } else {
+    // Live Price List — pull from products, show brand + model + price in a clean table
     const products = await VW_DB.all(VW_DB.STORES.products);
     const byCategory = {};
-    products.forEach(p => { byCategory[p.category||'Other'] = byCategory[p.category||'Other']||[]; byCategory[p.category||'Other'].push(p); });
+    products.filter(p=>p.price>0).forEach(p => {
+      const key = p.category||'Other';
+      if (!byCategory[key]) byCategory[key] = [];
+      byCategory[key].push(p);
+    });
+
     container.innerHTML = `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <h3 class="card-title">Live Price List</h3>
-          <button class="btn-sm" onclick="VW_FEATURES.printLivePriceList()">🖨 Print</button>
-        </div>
-        ${Object.entries(byCategory).map(([cat, prods]) => `
-          <div style="margin-bottom:16px">
-            <div style="font-weight:700;font-size:13px;color:var(--gold);margin-bottom:6px;text-transform:uppercase">${cat}</div>
-            ${prods.map(p => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border2);font-size:13px">
-              <span>${p.brand?p.brand+' ':''} ${p.model?p.model+' ':''} ${p.name}</span>
-              <span style="font-weight:600">₹${(p.price||0).toLocaleString('en-IN')}/${p.unit||'pc'}</span>
-            </div>`).join('')}
-          </div>`).join('')}
-      </div>`;
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text3)">Prices from inventory · ${products.filter(p=>p.price>0).length} products</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="VW_FEATURES.printLivePriceList()">🖨 Print</button>
+        <button class="btn-sm" onclick="VW_FEATURES.uploadCatalogAsPriceList()">📤 Upload Price PDF</button>
+      </div>
+    </div>
+    ${Object.entries(byCategory).sort(([a],[b])=>a.localeCompare(b)).map(([cat, prods]) => `
+    <div class="card" style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:13px;color:var(--gold);margin-bottom:8px;text-transform:uppercase">${cat} <span style="font-size:11px;font-weight:400;color:var(--text3)">(${prods.length} items)</span></div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:4px 2px;color:var(--text3);font-weight:600">Product</th>
+          <th style="text-align:right;padding:4px 2px;color:var(--text3);font-weight:600">Price</th>
+          <th style="text-align:right;padding:4px 2px;color:var(--text3);font-weight:600">MRP</th>
+          <th style="text-align:center;padding:4px 2px;color:var(--text3);font-weight:600">Stock</th>
+        </tr></thead>
+        <tbody>
+          ${prods.sort((a,b)=>(a.brand||'').localeCompare(b.brand||'')).map(p => `
+          <tr style="border-bottom:1px solid var(--border2)">
+            <td style="padding:5px 2px">
+              <div style="font-weight:600">${p.brand?`<span style="color:var(--text3)">${p.brand}</span> `:''}${p.name}</div>
+              ${p.model?`<div style="font-size:10px;color:var(--text3)">${p.model}</div>`:''}
+            </td>
+            <td style="text-align:right;padding:5px 2px;font-weight:700;color:var(--gold)">₹${(p.price||0).toLocaleString('en-IN')}<span style="font-size:10px;color:var(--text3)">/${p.unit||'pc'}</span></td>
+            <td style="text-align:right;padding:5px 2px;color:var(--text3);font-size:11px">${p.mrp?'₹'+p.mrp.toLocaleString('en-IN'):'-'}</td>
+            <td style="text-align:center;padding:5px 2px"><span style="font-size:11px;color:${(p.stock||0)<=5?'var(--red)':(p.stock||0)<=20?'var(--gold)':'var(--green)'}">${p.stock||0} ${p.unit||''}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`).join('')}`;
   }
+}
+
+async function replaceCatalog(catalogId, currentName, currentBrand, currentCategory) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>🔄 Replace Catalog</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Upload a new version to replace the existing file. Name and brand will be preserved.</p>
+    <div class="form-group"><label>Name</label><input type="text" id="rep-cat-name" value="${currentName}"></div>
+    <div class="form-group"><label>Brand</label><input type="text" id="rep-cat-brand" value="${currentBrand}"></div>
+    <div class="form-group"><label>Category</label><input type="text" id="rep-cat-category" value="${currentCategory}"></div>
+    <div class="form-group"><label>New File (PDF or Image) *</label>
+      <input type="file" id="rep-cat-file" accept=".pdf,image/*"></div>
+    <div id="rep-cat-status" style="font-size:12px;color:var(--text3);margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button class="btn-primary" style="flex:1" onclick="VW_FEATURES.doReplaceCatalog(${catalogId})">Replace File</button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function doReplaceCatalog(catalogId) {
+  const name = document.getElementById('rep-cat-name')?.value.trim();
+  const brand = document.getElementById('rep-cat-brand')?.value.trim();
+  const category = document.getElementById('rep-cat-category')?.value.trim();
+  const file = document.getElementById('rep-cat-file')?.files[0];
+  if (!file) { showToast('Choose a new file first', 'warn'); return; }
+  const statusEl = document.getElementById('rep-cat-status');
+  if (statusEl) statusEl.textContent = 'Uploading new version...';
+  try {
+    const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
+    const { path, url } = await VW_DB.uploadCatalog(dataUrl, file.name);
+    const profile = VW_AUTH.getCurrentProfile();
+    await VW_DB.put(VW_DB.STORES.catalogs, {
+      id: catalogId, name, brand, category, type:'upload',
+      filePath: path, fileUrl: url,
+      updatedAt: new Date().toISOString(),
+      updatedByName: profile?.name||'',
+    });
+    closeSheet();
+    showToast(`${name} updated ✓`, 'success');
+    navigateTo('catalogs');
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Upload failed — try again';
+    showToast('Upload failed', 'warn');
+  }
+}
+
+function uploadCatalogAsPriceList() {
+  showToast('Upload a PDF price list under Brand Catalogs tab', 'info');
+  setTimeout(() => document.querySelector('.entry-type-btn')?.click(), 500);
 }
 
 async function showUploadCatalog() {
@@ -16330,6 +16814,7 @@ window.VW_FEATURES = {
   sendPostInvoiceFeedbackWithPhoto, isFullySatisfiedClosure,
   // Catalogs
   renderCatalogsPage, showUploadCatalog, uploadCatalogFile, shareCatalog,
+  switchCatalogTab, deleteCatalog, replaceCatalog, doReplaceCatalog, uploadCatalogAsPriceList,
   deleteCatalog, switchCatalogTab, printLivePriceList,
   // EOD
   renderEODPage, updateEODDiff, submitEOD,
@@ -17067,7 +17552,10 @@ window.VW_FEATURES.shareWishlistWA = shareWishlistWA;
 window.VW_FEATURES.searchWishlists = searchWishlists;
 
 
+
+
 /* === vendor.js === */
+
 // ============================================================
 // VENDOR / SUPPLIER MODULE
 // Vendor onboarding, Purchase Orders, PO receipt → stock update
@@ -17750,7 +18238,10 @@ window.VW_VENDOR = {
 };
 
 
+
+
 /* === accounts.js === */
+
 // ============================================================
 // ACCOUNTS MODULE
 // Petty Cash · Payment Vouchers · Party Ledgers · GST Export
@@ -18409,7 +18900,10 @@ async function printVoucher(voucherId) {
 }
 
 
+
+
 /* === marketing.js === */
+
 // ============================================================
 // MARKETING OS — V Wholesale
 // Calendar · Broadcast · Collaterals · SEO · Analytics
@@ -19123,7 +19617,10 @@ window.VW_MARKETING = {
 };
 
 
+
+
 /* === service.js === */
+
 // ============================================================
 // SERVICE VENDOR MODULE
 // Work Orders · Progress Photos · Payment Stages · Sign-off
@@ -19759,7 +20256,10 @@ window.VW_SERVICE = {
 };
 
 
+
+
 /* === employee_app.js === */
+
 // ============================================================
 // EMPLOYEE SELF-SERVICE APP + KIOSK — Session 9
 // Kiosk Punch In/Out · Employee Dashboard · Breaks · Chat
@@ -20623,7 +21123,10 @@ window.VW_EMPLOYEE = {
 };
 
 
+
+
 /* === extras.js === */
+
 // ============================================================
 // EXTRAS MODULE — Session 11
 // Customer Portal · Contractor Club Portal · Customer Birthdays
@@ -21197,7 +21700,10 @@ window.VW_EXTRAS = {
 };
 
 
+
+
 /* === tiles_granite.js === */
+
 // ============================================================
 // V WHOLESALE — TILE QUOTATION SYSTEM v2
 // Complete flow: Rooms → Tile Size → Spacer → Adhesive →
@@ -21451,12 +21957,13 @@ function _renderRoomCard(r, i) {
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <div style="font-size:14px;font-weight:700;color:var(--gold)">${totalSqft.toFixed(1)} sqft</div>
+        <button onclick="VW_TILES.tqEditRoom(${i})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--text2);cursor:pointer">✏️ Edit</button>
         <button onclick="VW_TILES.tqRemoveRoom(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px">✕</button>
       </div>
     </div>
     ${r.areas.map((a,ai) => `
     <div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">
-      ${a.label}: ${a.sqft.toFixed(2)} sqft
+      ${a.label}: ${a.sqft.toFixed(2)} sqft${a.wastage ? ` +${a.wastage}% wastage` : ''}${a.skirting ? ` · Skirting ${a.skirting}m` : ''}
       ${r.type==='Bathroom'&&a.subType?`<span style="color:var(--text3)"> · ${a.subType}</span>`:''}
     </div>`).join('')}
     <button onclick="VW_TILES.tqAddArea(${i})" style="margin-top:6px;background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;width:100%">
@@ -21465,76 +21972,80 @@ function _renderRoomCard(r, i) {
   </div>`;
 }
 
-function tqAddRoom() {
+function tqAddRoom(editIdx) {
   const types = Object.keys(ROOM_DEFS);
   const sheet = document.getElementById('bottom-sheet');
+  const isEdit = editIdx !== undefined;
+  const existingRoom = isEdit ? _tqState.rooms[editIdx] : null;
+  const defaultType = existingRoom?.type || 'Living Room';
+
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h3 style="margin:0">Select Room Type</h3>
+      <h3 style="margin:0">${isEdit ? '✏️ Edit Room' : '+ Add Room'}</h3>
       <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
-      ${types.map(t => {
-        const d = ROOM_DEFS[t];
-        return `<button onclick="VW_TILES.tqSelectRoomType('${t.replace(/'/g,"\\'")}')"
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 8px;cursor:pointer;text-align:left">
-          <div style="font-size:20px">${d.icon}</div>
-          <div style="font-size:11px;font-weight:600;color:var(--text);margin-top:4px">${t}</div>
-          <div style="font-size:10px;color:var(--text3)">${d.note}</div>
-        </button>`;
-      }).join('')}
-    </div>`;
-  sheet.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
-}
-
-function tqSelectRoomType(type) {
-  const def = ROOM_DEFS[type];
-  const roomIdx = _tqState.rooms.length;
-  const label = type + (type==='Bedroom'||type==='Bathroom'||type==='Toilet' ? ` ${_tqState.rooms.filter(r=>r.type===type).length+1}` : '');
-
-  // Show measurement form based on type
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <h3 style="margin:0">${def.icon} ${label}</h3>
-      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    <div class="form-group">
+      <label>Room Type</label>
+      <select id="tq-room-type-sel" onchange="VW_TILES.tqSelectRoomType(this.value)" style="font-size:14px">
+        ${types.map(t => `<option value="${t}" ${t===defaultType?'selected':''}>${ROOM_DEFS[t].icon} ${t}</option>`).join('')}
+      </select>
     </div>
     <div class="form-group"><label>Room / Area Label</label>
-      <input type="text" id="tq-room-label" value="${label}" placeholder="e.g. Master Bedroom"></div>
-    ${_renderMeasureForm(type, 0)}
+      <input type="text" id="tq-room-label" value="${existingRoom?.label || defaultType}" placeholder="e.g. Master Bedroom">
+    </div>
+    <div id="tq-measure-form-area">
+      ${_renderMeasureForm(defaultType, 0, existingRoom)}
+    </div>
     <div style="display:flex;gap:8px;margin-top:14px">
       <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
-      <button class="btn-primary" style="flex:1" onclick="VW_TILES.tqSaveRoom('${type.replace(/'/g,"\\'")}')">Add Room</button>
+      <button class="btn-primary" style="flex:1" onclick="VW_TILES.tqSaveRoom('${defaultType.replace(/'/g,"\\'")}',${isEdit ? editIdx : 'undefined'})">${isEdit ? 'Update Room' : 'Add Room'}</button>
     </div>`;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
-function _renderMeasureForm(type, areaIdx) {
+function tqEditRoom(i) { tqAddRoom(i); }
+
+function tqSelectRoomType(type) {
+  const formArea = document.getElementById('tq-measure-form-area');
+  if (formArea) formArea.innerHTML = _renderMeasureForm(type, 0);
+  const saveBtn = document.querySelector('#bottom-sheet .btn-primary');
+  if (saveBtn) saveBtn.setAttribute('onclick', `VW_TILES.tqSaveRoom('${type.replace(/'/g,"\\'")}',undefined)`);
+  const labelEl = document.getElementById('tq-room-label');
+  if (labelEl && Object.keys(ROOM_DEFS).includes(labelEl.value)) labelEl.value = type;
+}
+
+function _renderMeasureForm(type, areaIdx, prefill) {
   const pfx = `tq-m${areaIdx}`;
-  const def = ROOM_DEFS[type];
+  const def = ROOM_DEFS[type] || ROOM_DEFS['Custom Area'];
+  const p = prefill?.areas?.[0] || {};
 
   if (def.measureType === 'floor_lw' || def.measureType === 'floor_lw_skirting') return `
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-l" placeholder="e.g. 12" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" placeholder="e.g. 10" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Length (ft) *</label><input type="number" id="${pfx}-l" value="${p.l||''}" placeholder="e.g. 12" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Width (ft) *</label><input type="number" id="${pfx}-w" value="${p.w||''}" placeholder="e.g. 10" min="0.5" step="0.5"></div>
     </div>
     ${def.measureType==='floor_lw_skirting'?`
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Wastage % <span style="color:var(--text3)">(optional)</span></label><input type="number" id="${pfx}-waste" placeholder="5" min="0" max="30" step="1"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Skirting % <span style="color:var(--text3)">(optional)</span></label><input type="number" id="${pfx}-skirt" placeholder="10" min="0" max="20" step="1"></div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Wastage % <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+        <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Skirting (running ft) <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+        <input type="number" id="${pfx}-skirt" value="${p.skirting||''}" placeholder="Leave blank = none" min="0" step="0.5">
+      </div>
     </div>`:''}`;
 
   if (def.measureType === 'wall_hw') return `
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" placeholder="e.g. 9" min="1" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" placeholder="e.g. 8" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" value="${p.h||''}" placeholder="e.g. 9" min="1" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" value="${p.w||''}" placeholder="e.g. 8" min="0.5" step="0.5"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Wastage % <span style="color:var(--text3)">(optional)</span></label><input type="number" id="${pfx}-waste" placeholder="5" min="0" max="30" step="1"></div>
+    <div class="form-group">
+      <label>Wastage % <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+      <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
     </div>`;
 
   if (def.measureType === 'bathroom') return `
@@ -21580,12 +22091,15 @@ function _renderMeasureForm(type, areaIdx) {
     <div class="form-group"><label>Wastage %</label><input type="number" id="${pfx}-waste" placeholder="5" min="0" max="30" step="1"></div>`;
 }
 
-function tqSaveRoom(type) {
+function tqSaveRoom(type, editIdx) {
   const label = document.getElementById('tq-room-label')?.value.trim() || type;
-  const def = ROOM_DEFS[type];
+  const def = ROOM_DEFS[type] || ROOM_DEFS['Custom Area'];
   const pfx = 'tq-m0';
-  const waste = parseFloat(document.getElementById(`${pfx}-waste`)?.value||5)/100;
-  const skirt = parseFloat(document.getElementById(`${pfx}-skirt`)?.value||0)/100;
+  // Wastage is truly optional - empty = 0, not 5%
+  const wasteVal = document.getElementById(`${pfx}-waste`)?.value;
+  const waste = wasteVal !== '' && wasteVal !== null && wasteVal !== undefined ? parseFloat(wasteVal)/100 : 0;
+  const skirtVal = document.getElementById(`${pfx}-skirt`)?.value;
+  const skirtRm = skirtVal !== '' && skirtVal !== null ? parseFloat(skirtVal)||0 : 0;
   const areas = [];
 
   if (def.measureType === 'floor_lw' || def.measureType === 'floor_lw_skirting') {
@@ -21593,15 +22107,19 @@ function tqSaveRoom(type) {
     const w = parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
     if (!l||!w) { showToast('Enter length and width','warn'); return; }
     const base = l*w;
-    const sqft = base*(1+waste+skirt);
-    areas.push({ label:`${l}ft × ${w}ft${skirt>0?` + ${Math.round(skirt*100)}% skirting`:''}${waste>0?` + ${Math.round(waste*100)}% wastage`:''}`, sqft, base, l, w, waste, skirt });
+    // Skirting is in running feet (not %), convert to sqft at ~0.33ft height
+    const skirtSqft = skirtRm > 0 ? skirtRm * 0.33 : 0;
+    const sqft = base*(1+waste) + skirtSqft;
+    const wasteLabel = waste>0 ? ` +${Math.round(waste*100)}% wastage` : '';
+    const skirtLabel = skirtRm>0 ? ` +${skirtRm}ft skirting` : '';
+    areas.push({ label:`${l}ft × ${w}ft${wasteLabel}${skirtLabel}`, sqft, base, l, w, wastage:waste>0?Math.round(waste*100):0, skirting:skirtRm });
   } else if (def.measureType === 'wall_hw') {
     const h = parseFloat(document.getElementById(`${pfx}-h`)?.value)||0;
     const w = parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
     if (!h||!w) { showToast('Enter height and width','warn'); return; }
     const base = h*w;
     const sqft = base*(1+waste);
-    areas.push({ label:`${h}ft H × ${w}ft W${waste>0?` + ${Math.round(waste*100)}% wastage`:''}`, sqft, base, h, w, waste });
+    areas.push({ label:`${h}ft H × ${w}ft W${waste>0?` +${Math.round(waste*100)}% wastage`:''}`, sqft, base, h, w, wastage:waste>0?Math.round(waste*100):0 });
   } else if (def.measureType === 'bathroom') {
     const h = parseFloat(document.getElementById(`${pfx}-h`)?.value)||0;
     const w1l = parseFloat(document.getElementById(`${pfx}-w1l`)?.value)||0;
@@ -21613,30 +22131,35 @@ function tqSaveRoom(type) {
     const fl = parseFloat(document.getElementById(`${pfx}-fl`)?.value)||0;
     const fw = parseFloat(document.getElementById(`${pfx}-fw`)?.value)||0;
     if (!h) { showToast('Enter wall height','warn'); return; }
-    const wall1 = h*w1l, wall2 = h*w2w, wall3 = h*w3l, wall4 = Math.max(0, h*w4w - dw*dh);
-    const totalWall = (wall1+wall2+wall3+wall4)*(1+waste);
-    const floor = fl&&fw ? fl*fw*(1+waste) : 0;
-    if (wall1||wall2||wall3||wall4) areas.push({ label:`Walls (4 sides)`, sqft:totalWall, base:wall1+wall2+wall3+wall4, subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, waste });
-    if (floor) areas.push({ label:`Floor ${fl}×${fw}ft`, sqft:floor, base:fl*fw, subType:'floor', l:fl, w:fw, waste });
+    const wall1=h*w1l, wall2=h*w2w, wall3=h*w3l, wall4=Math.max(0,h*w4w-dw*dh);
+    const totalWall=(wall1+wall2+wall3+wall4)*(1+waste);
+    const floor=fl&&fw?fl*fw*(1+waste):0;
+    if (wall1||wall2||wall3||wall4) areas.push({ label:`Walls (4 sides)`, sqft:totalWall, base:wall1+wall2+wall3+wall4, subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, wastage:waste>0?Math.round(waste*100):0 });
+    if (floor) areas.push({ label:`Floor ${fl}×${fw}ft`, sqft:floor, base:fl*fw, subType:'floor', l:fl, w:fw, wastage:waste>0?Math.round(waste*100):0 });
   } else if (def.measureType === 'staircase') {
-    const sw = parseFloat(document.getElementById(`${pfx}-sw`)?.value)||0;
-    const sd = parseFloat(document.getElementById(`${pfx}-sd`)?.value)||0;
-    const sn = parseInt(document.getElementById(`${pfx}-sn`)?.value)||0;
-    const rh = parseFloat(document.getElementById(`${pfx}-rh`)?.value)||0;
+    const sw=parseFloat(document.getElementById(`${pfx}-sw`)?.value)||0;
+    const sd=parseFloat(document.getElementById(`${pfx}-sd`)?.value)||0;
+    const sn=parseInt(document.getElementById(`${pfx}-sn`)?.value)||0;
+    const rh=parseFloat(document.getElementById(`${pfx}-rh`)?.value)||0;
     if (!sw||!sd||!sn) { showToast('Enter step dimensions and count','warn'); return; }
-    const tread = sw*sd*sn;
-    const riser = rh>0 ? sw*rh*sn : 0;
-    const sqft = (tread+riser)*(1+waste);
-    areas.push({ label:`${sn} steps × ${sw}ft × ${sd}ft tread${rh>0?` + ${rh}ft riser`:''}`, sqft, base:tread+riser, sn, sw, sd, rh, waste });
+    const tread=sw*sd*sn, riser=rh>0?sw*rh*sn:0;
+    const sqft=(tread+riser)*(1+waste);
+    areas.push({ label:`${sn} steps × ${sw}ft × ${sd}ft${rh>0?` + ${rh}ft riser`:''}`, sqft, base:tread+riser, sn, sw, sd, rh, wastage:waste>0?Math.round(waste*100):0 });
   } else {
-    const l = parseFloat(document.getElementById(`${pfx}-l`)?.value)||0;
-    const w = parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
+    const l=parseFloat(document.getElementById(`${pfx}-l`)?.value)||0;
+    const w=parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
     if (!l||!w) { showToast('Enter dimensions','warn'); return; }
-    const sqft = l*w*(1+waste);
-    areas.push({ label:`${l}ft × ${w}ft`, sqft, base:l*w, l, w, waste });
+    areas.push({ label:`${l}ft × ${w}ft`, sqft:l*w*(1+waste), base:l*w, l, w, wastage:waste>0?Math.round(waste*100):0 });
   }
 
-  _tqState.rooms.push({ id: Date.now(), type, label, areas, def });
+  if (!areas.length || !areas[0].sqft) { showToast('Could not calculate area — check dimensions','warn'); return; }
+
+  if (editIdx !== undefined && editIdx >= 0) {
+    _tqState.rooms[editIdx] = { id: _tqState.rooms[editIdx].id, type, label, areas, def };
+    showToast('Room updated ✓', 'success');
+  } else {
+    _tqState.rooms.push({ id: Date.now(), type, label, areas, def });
+  }
   closeSheet();
   _refreshStep1();
 }
@@ -21730,29 +22253,44 @@ function tqSelectSize(id) {
 // ───── STEP 3: SPACER ──────────────────────────────────────
 function _renderStep3() {
   const sp = _tqState.spacer;
-  // Spacer qty: 1 packet ≈ 100 pcs ≈ covers about 20-25 sqft depending on tile size
   const totalSqft = _tqTotalSqft();
-  const spacerQty = sp.use ? Math.ceil(totalSqft / 22) : 0; // packets
+  const sz = _tqState.selectedSize;
+
+  // Correct spacer calculation:
+  // Tiles needed = totalSqft / sqft_per_tile
+  // Spacers per tile = 4 (one per corner)
+  // Packets = ceil(tiles × 4 / 100)
+  const sqftPerTile = sz ? (sz.ft * sz.ft) : 4; // sqft per single tile (ft²)
+  const tilesNeeded = sqftPerTile > 0 ? Math.ceil(totalSqft / sqftPerTile) : 0;
+  const spacerPcs = tilesNeeded * 4;
+  const spacerQty = sp.use ? Math.ceil(spacerPcs / 100) : 0;
+
+  // Sizes that typically don't need spacers: < 300mm
+  const sizeMm = sz ? parseInt((sz.mm||'').split('×')[0]) : 600;
+  const spacerRecommended = sizeMm >= 300;
 
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Spacer / Joint</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Spacers maintain uniform joint width for a professional finish. 100 pcs per packet.</p>
-
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Spacers maintain uniform joint width. <strong>100 pcs per packet. 4 spacers per tile.</strong></p>
+    ${!spacerRecommended ? `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2)">
+      ⚠️ Spacers are generally not required for tiles smaller than 300mm
+    </div>` : ''}
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button onclick="VW_TILES.tqSetSpacer(true)"
         style="flex:1;padding:14px;border-radius:12px;border:${sp.use?'2px solid var(--gold)':'1px solid var(--border)'};background:${sp.use?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:14px;font-weight:700;color:${sp.use?'var(--gold)':'var(--text)'}">
-        ✅ Yes, use spacer
+        ✅ Use Spacer
       </button>
       <button onclick="VW_TILES.tqSetSpacer(false)"
         style="flex:1;padding:14px;border-radius:12px;border:${!sp.use?'2px solid var(--gold)':'1px solid var(--border)'};background:${!sp.use?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:14px;font-weight:700;color:${!sp.use?'var(--gold)':'var(--text)'}">
-        ✗ No spacer
+        ✗ No Spacer
       </button>
     </div>
 
     ${sp.use ? `
     <div style="margin-bottom:14px">
-      <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Spacer Size</label>
+      <label style="font-size:12px;font-weight:600;color:var(--text);display:block;margin-bottom:8px">Joint Width</label>
       <div style="display:flex;gap:8px">
         ${[2,3,4].map(mm=>`
         <button onclick="VW_TILES.tqSetSpacerMm(${mm})"
@@ -21761,15 +22299,16 @@ function _renderStep3() {
         </button>`).join('')}
       </div>
       <div style="font-size:11px;color:var(--text3);margin-top:6px">
-        ${sp.mm===2?'2mm — very tight joint, premium look. For small tiles < 300mm':''}
-        ${sp.mm===3?'3mm — standard joint. Recommended for most tiles 300–600mm':''}
-        ${sp.mm===4?'4mm — wide joint. Recommended for large format tiles > 600mm':''}
+        ${sp.mm===2?'2mm — tight joint, premium look. For small-medium tiles':''}
+        ${sp.mm===3?'3mm — standard. Recommended for 300–600mm tiles':''}
+        ${sp.mm===4?'4mm — wide joint. For large format tiles > 600mm':''}
       </div>
     </div>
     <div style="background:var(--bg2);border-radius:10px;padding:12px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px">Estimated Spacer Requirement</div>
-      <div style="font-size:20px;font-weight:800;color:var(--gold)">${spacerQty} packets</div>
-      <div style="font-size:11px;color:var(--text3)">${totalSqft.toFixed(1)} sqft total · 1 packet per 22 sqft (approx)</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Spacer Calculation</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${tilesNeeded.toLocaleString()} tiles × 4 spacers = ${spacerPcs.toLocaleString()} pcs ÷ 100 pcs/packet</div>
+      <div style="font-size:22px;font-weight:800;color:var(--gold)">${spacerQty} packets</div>
+      <div style="font-size:11px;color:var(--text3)">${totalSqft.toFixed(1)} sqft · tile size ${sz?.label||'—'} · ${sqftPerTile.toFixed(2)} sqft/tile</div>
     </div>` : `
     <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center;color:var(--text3);font-size:13px">
       No spacers will be added to this quotation
@@ -22012,28 +22551,50 @@ function tqSelectProduct(p) {
 function _renderStep7() {
   const grout = _tqState.grout;
   const sz = _tqState.selectedSize;
-  const spacerMm = _tqState.spacer.use ? _tqState.spacer.mm : 3;
-  const suggestEpoxy = spacerMm >= 3 && sz && parseInt(sz.mm.split('×')[0]) >= 400;
+  const spacerMm = _tqState.spacer.use ? (_tqState.spacer.mm || 3) : 3;
+  const suggestEpoxy = sz && parseInt((sz.mm||'600×600').split('×')[0]) >= 400;
+  const totalSqft = _tqTotalSqft();
+
+  // ── CORRECT GROUT FORMULA (Saint-Gobain method) ──
+  // kg = ((L+W)/(L×W)) × T × J × Area_m2 × 1.6 × (1+wastage)
+  // L,W in metres, T=tile thickness mm, J=joint width mm, Area in m2
+  // Cement grout wastage factor: ~5%, Epoxy: ~5%
+  function calcGroutKg(isEpoxy) {
+    if (!sz) return Math.ceil(totalSqft * 0.01); // fallback if no size
+    const parts = (sz.mm||'600×600').split('×');
+    const L = parseFloat(parts[0]||600) / 1000; // metres
+    const W = parseFloat(parts[1]||600) / 1000;
+    const T = sz.thickness || 8; // mm, default 8mm
+    const J = spacerMm; // mm
+    const Area_m2 = totalSqft / 10.764; // convert sqft to m²
+    // Saint-Gobain formula
+    const raw = ((L + W) / (L * W)) * T * J * Area_m2 * 1.6;
+    const withWaste = raw * 1.05; // +5% wastage
+    return Math.max(1, Math.ceil(withWaste * 10) / 10); // round up to 0.1
+  }
+
+  const cementKg = calcGroutKg(false);
+  const epoxyKg = calcGroutKg(true);
+  const displayKg = grout.type === 'epoxy' ? epoxyKg : cementKg;
+
+  // Coverage reference (approximate, for display)
+  const cementCoverage = Math.round(totalSqft / cementKg);
+  const epoxyCoverage = Math.round(totalSqft / epoxyKg);
 
   const COLORS = [
     {id:'white', label:'White', hex:'#F5F5F0', note:'Classic. Shows dirt more.'},
     {id:'ivory', label:'Ivory', hex:'#F0EBD8', note:'Warm. Hides light dirt.'},
-    {id:'beige', label:'Beige/Sand', hex:'#D4C5A0', note:'Match terracotta/buff tiles.'},
-    {id:'grey', label:'Grey', hex:'#9CA3AF', note:'Most popular. Hides dirt well.'},
-    {id:'dark_grey', label:'Dark Grey', hex:'#4B5563', note:'Premium look. Best for dark tiles.'},
-    {id:'black', label:'Black', hex:'#1F2937', note:'Bold. Dramatic look.'},
-    {id:'brown', label:'Brown', hex:'#78543A', note:'Natural. Earthy tiles.'},
-    {id:'red', label:'Red Oxide', hex:'#9B3C2A', note:'Traditional Indian look.'},
+    {id:'beige', label:'Beige/Sand', hex:'#D4C5A0', note:'Earthy tiles.'},
+    {id:'grey', label:'Grey', hex:'#9CA3AF', note:'Most popular. Hides dirt.'},
+    {id:'dark_grey', label:'Dark Grey', hex:'#4B5563', note:'Premium look.'},
+    {id:'black', label:'Black', hex:'#1F2937', note:'Bold, dramatic.'},
+    {id:'brown', label:'Brown', hex:'#78543A', note:'Natural, earthy.'},
+    {id:'red', label:'Red Oxide', hex:'#9B3C2A', note:'Traditional Indian.'},
   ];
-
-  const totalSqft = _tqTotalSqft();
-  const groutKg = Math.ceil(totalSqft / 8); // 1kg per 8sqft approx
-  const epoxyKg = Math.ceil(totalSqft / 5); // 1kg per 5sqft
 
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Grout & Epoxy Selection</h3>
-
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button onclick="VW_TILES.tqSetGroutType('cement')"
         style="flex:1;padding:14px;border-radius:12px;border:${grout.type!=='epoxy'?'2px solid var(--gold)':'1px solid var(--border)'};background:${grout.type!=='epoxy'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer">
@@ -22049,8 +22610,8 @@ function _renderStep7() {
 
     ${suggestEpoxy && grout.type !== 'epoxy' ? `
     <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--gold)">💡 We recommend Epoxy for your tile size</div>
-      <div style="font-size:11px;color:var(--text2);margin-top:2px">For tiles ≥ 400mm, epoxy grout provides better durability, is waterproof, and prevents staining.</div>
+      <div style="font-size:12px;font-weight:600;color:var(--gold)">💡 Recommended: Epoxy for tiles ≥ 400mm</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">Waterproof, anti-stain, and longer lasting.</div>
     </div>` : ''}
 
     <div style="font-size:12px;font-weight:600;margin-bottom:8px">Select Grout Color</div>
@@ -22063,17 +22624,25 @@ function _renderStep7() {
       </button>`).join('')}
     </div>
 
-    ${grout.color ? `
     <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Estimated Grout Required</div>
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:11px;color:var(--text3)">${grout.type==='epoxy'?'Epoxy grout (1kg/5sqft)':'Cement grout (1kg/8sqft)'}</div>
-          <div style="font-size:11px;color:var(--text3)">${totalSqft.toFixed(0)} sqft total</div>
-        </div>
-        <div style="font-size:18px;font-weight:800;color:var(--gold)">${grout.type==='epoxy'?epoxyKg:groutKg} kg</div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Grout Calculation (Saint-Gobain method)</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        Tile: ${sz?.label||'—'} · Thickness: ${sz?.thickness||8}mm · Joint: ${spacerMm}mm · Area: ${totalSqft.toFixed(0)} sqft
       </div>
-    </div>` : ''}
+      <div style="display:flex;gap:10px">
+        <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">Cement Grout</div>
+          <div style="font-size:16px;font-weight:800;color:${grout.type!=='epoxy'?'var(--gold)':'var(--text)'}">${cementKg} kg</div>
+          <div style="font-size:10px;color:var(--text3)">≈${cementCoverage} sqft/kg</div>
+        </div>
+        <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">Epoxy Grout</div>
+          <div style="font-size:16px;font-weight:800;color:${grout.type==='epoxy'?'var(--gold)':'var(--text)'}">${epoxyKg} kg</div>
+          <div style="font-size:10px;color:var(--text3)">≈${epoxyCoverage} sqft/kg</div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 5% wastage. Confirm quantity with installer.</div>
+    </div>
   </div>
   ${grout.color ? `<button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Quotation Summary</button>` : ''}
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
@@ -22416,34 +22985,248 @@ async function _renderStep8() {
     </div>` : ''}
   </div>
 
+  <!-- ADDONS: Cement, Sand, Tile Cleaner, Accessories -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🧱 Material Addons <span style="font-size:11px;color:var(--text3);font-weight:400">(optional — add to quote)</span></h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+      Based on ${totalSqft.toFixed(0)} sqft floor area. Rough estimates — confirm with installer.
+    </div>
+    ${await _renderAddonSuggestions(totalSqft, boxesNeeded)}
+  </div>
+
+  <!-- LABOR QUESTION -->
+  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
+    <h3 class="card-title">🔨 Tile Laying Labor</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Do you need a professional tile layer? V Wholesale can connect you with verified contractors who procure material from us — quality assured.
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="VW_TILES.setLaborRequired(true)"
+        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired?'2px solid var(--green)':'1px solid var(--border)'};background:${_tqState.laborRequired?'rgba(34,197,94,0.08)':'var(--bg2)'};cursor:pointer;font-size:13px;font-weight:700;color:${_tqState.laborRequired?'var(--green)':'var(--text)'}">
+        ✅ Yes, need labor
+      </button>
+      <button onclick="VW_TILES.setLaborRequired(false)"
+        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired===false?'2px solid var(--gold)':'1px solid var(--border)'};background:${_tqState.laborRequired===false?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;color:${_tqState.laborRequired===false?'var(--gold)':'var(--text)'}">
+        Not required
+      </button>
+    </div>
+    ${_tqState.laborRequired ? `
+    <div style="background:rgba(34,197,94,0.06);border-radius:10px;padding:10px;font-size:11px;color:var(--text2)">
+      ✅ Labor requirement will be posted to our contractor network after saving this quote.<br>
+      Verified contractors bid on the work. Customer number is masked. All procurement through V Wholesale. V Wholesale margin: ₹2/sqft.
+    </div>` : ''}
+  </div>
+
   <!-- T&C -->
   <div class="card" style="margin-bottom:14px">
     <h3 class="card-title">Terms & Conditions</h3>
     <ol style="padding-left:16px">
       ${[
-        'Quantities include standard wastage. Final measurement by V Wholesale team is binding.',
-        'Tile colours vary between batches. Purchase full requirement in one order to ensure batch match.',
-        'Prices valid for 7 days from quotation date. Stock availability may change.',
-        'Loading, unloading, and transport charges extra. Floor delivery charges apply for upper floors.',
-        'Payment: 50% advance on order; balance before dispatch.',
-        'Goods once dispatched are non-returnable unless manufacturing defect reported within 48 hours.',
-        'This quotation covers material supply only. Installation, labour, waterproofing not included.',
-        'V Wholesale is not liable for tile laying quality, adhesive application, or grout workmanship.',
-        'Waterproofing must be completed and ponding-tested before tile laying. V Wholesale is not responsible for leakage due to inadequate waterproofing.',
-        'All disputes subject to Vijayawada jurisdiction only.',
-        'GST as applicable will be charged extra at billing.',
-      ].map(t=>`<li style="font-size:11px;color:var(--text2);margin-bottom:4px;line-height:1.5">${t}</li>`).join('')}
+        'All prices are GST inclusive. GST breakup provided at invoice.',
+        'Returns accepted within 30 days from the date of dispatch only. Original invoice mandatory for all return requests.',
+        'Transit damage due to road conditions, handling, weather, or any cause beyond our control is not the responsibility of V Wholesale or our contracted labor. We recommend customers inspect material at time of delivery.',
+        'Measurements in this quotation are indicative only, provided to assist planning. Customer must verify all dimensions with their tile layer before purchase. V Wholesale is not responsible for any discrepancy between quoted and actual measurements.',
+        'All material quantities are suggested as per industry standard. Please confirm final quantities with your installer before purchase.',
+        'Tile designs and stock are subject to change without notice. Discontinued or out-of-stock designs cannot be guaranteed for future supply.',
+        'If additional tiles are required after purchase, immediate availability of the same design and batch cannot be promised. Plan your requirement with adequate buffer (we recommend 5–10% extra).',
+        'Tile colours may vary slightly between manufacturing batches. Purchase the full requirement in one order to ensure batch consistency.',
+        'Prices valid for 7 days from quotation date. Stock availability may change. Payment: 50% advance on order, balance before dispatch.',
+        'This quotation covers material supply only. Tile laying, waterproofing, adhesive application, and workmanship quality are the responsibility of the customer and their contractor.',
+        'Waterproofing must be completed and ponding-tested before tile laying begins. V Wholesale is not responsible for leakage or damage due to inadequate waterproofing.',
+        'All disputes are subject to Vijayawada jurisdiction only.',
+      ].map(t=>`<li style="font-size:11px;color:var(--text2);margin-bottom:5px;line-height:1.5">${t}</li>`).join('')}
     </ol>
   </div>
 
+  <!-- SUBMIT FOR APPROVAL — executive cannot take advance directly -->
+  ${(() => {
+    const profile = VW_AUTH.getCurrentProfile();
+    const isApprover = ['admin','management','store_manager','floor_manager','tl','sr_executive'].includes(profile?.role||'');
+    const isCashier = ['admin','accounts'].includes(profile?.role||'');
+
+    if (isApprover) {
+      // Approver sees price edit + approve/reject
+      return `
+      <div class="card" style="margin-bottom:10px;border-color:rgba(245,200,66,0.4)">
+        <h3 class="card-title">⚙️ Approver Actions</h3>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Edit pricing if needed, then approve (passes to next level) or reject (returns to executive). Approval chain: <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong></p>
+        <div class="form-row">
+          <div class="form-group" style="margin:0;flex:1">
+            <label>Price/Sqft (₹)</label>
+            <input type="number" id="tq-quoted-sqft" placeholder="e.g. 55" step="0.5"
+              oninput="_tqState.quotedPricePerSqft=parseFloat(this.value)||0">
+          </div>
+          <div class="form-group" style="margin:0;flex:1">
+            <label>Price/Box (₹)</label>
+            <input type="number" id="tq-quoted-box" placeholder="e.g. 880" step="1"
+              oninput="_tqState.quotedPricePerBox=parseFloat(this.value)||0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Price Note <span style="font-size:10px;color:var(--text3)">(optional)</span></label>
+          <input type="text" id="tq-price-note" placeholder="e.g. Special rate for contractor · Seasonal offer">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="VW_TILES.tqApprove()"
+            style="flex:2;padding:12px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
+            ✅ Approve & Pass to Next Level
+          </button>
+          <button onclick="VW_TILES.tqReject()"
+            style="flex:1;padding:12px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+            ❌ Reject
+          </button>
+        </div>
+      </div>`;
+    }
+
+    // Executive — submit for approval only
+    return `
+    <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
+      <h3 class="card-title">📤 Submit for Approval</h3>
+      <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+        Once submitted, the Store Manager / Management will review and approve this quotation. Advance collection and stock hold will be enabled only after approval.
+      </p>
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;font-size:12px;color:var(--text3);margin-bottom:12px">
+        <div style="font-weight:600;color:var(--text);margin-bottom:4px">Approval workflow:</div>
+        <div>1️⃣ Executive saves & submits → 2️⃣ Manager reviews & can edit price → 3️⃣ Cashier collects advance + holds stock</div>
+      </div>
+    </div>`;
+  })()}
+
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqBack()">← Edit</button>
-    <button class="btn-primary" style="flex:1;min-width:80px;background:#25D366" onclick="VW_TILES.tqSharePDF()">📄 PDF to WA</button>
-    <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqPrint()">🖨 Print</button>
-    <button class="btn-primary" style="flex:1;min-width:80px" onclick="VW_TILES.tqConvertToInvoice()">🧾 To Invoice</button>
-    <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqSaveQuote()">💾 Save</button>
+    <button class="btn-primary" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqSubmitForApproval()">📤 Submit for Approval</button>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">
+    Print & Share with customer enabled only after management approves this quotation
   </div>`;
 }
+
+// ───── NAV HELPERS ──────────────────────────────────────────
+async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
+  // Determine if rooms are floor or wall (mix likely)
+  const rooms = _tqState.rooms || [];
+  const floorSqft = rooms.reduce((s,r) => s + r.areas.filter(a=>a.subType!=='wall').reduce((ss,a)=>ss+a.sqft,0), 0) || totalSqft;
+  const wallSqft = rooms.reduce((s,r) => s + r.areas.filter(a=>a.subType==='wall').reduce((ss,a)=>ss+a.sqft,0), 0);
+
+  // ── CEMENT + SAND (mortar bed method, floor only) ──
+  // 4 bags cement (50kg) per 100 sqft floor · 1:3 ratio
+  // Sand: 12.5 CFT per 100 sqft ≈ 560kg ≈ 11 × 50kg TISAN bags
+  const cementBags = Math.ceil(floorSqft * 4 / 100);
+  const sandBags = Math.ceil(floorSqft * 11 / 100);
+
+  // ── ADHESIVE ──
+  // Floor (adhesive method, alternative to mortar): ~44 sqft/20kg bag
+  // Wall tiles (adhesive always recommended): ~50 sqft/20kg bag
+  // C1 standard: 44-50 sqft/bag · C2 premium (large/heavy tiles): 30-40 sqft/bag
+  const sz = _tqState.selectedSize;
+  const sizeMm = sz ? parseInt((sz.mm||'600×600').split('×')[0]) : 600;
+  const isLargeTile = sizeMm >= 600;
+  const floorAdhesiveCoverage = isLargeTile ? 40 : 44; // sqft per 20kg bag
+  const wallAdhesiveCoverage = isLargeTile ? 30 : 50;  // sqft per 20kg bag (walls need more grip)
+  const adhesiveGradeNote = isLargeTile
+    ? 'C2 grade recommended for large tiles (≥600mm) — better grip & flexibility'
+    : 'C1 standard grade works for most tiles up to 600mm';
+  const floorAdhesiveBags = Math.ceil(floorSqft / floorAdhesiveCoverage);
+  const wallAdhesiveBags = wallSqft > 0 ? Math.ceil(wallSqft / wallAdhesiveCoverage) : 0;
+  const totalAdhesiveBags = floorAdhesiveBags + wallAdhesiveBags;
+
+  // Try to get pricing from inventory/products
+  let cementPrice = '', sandPrice = '', adhesivePrice = '', cleanerPrice = '';
+  try {
+    const { data: cp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%cement%').limit(3);
+    if (cp?.length) cementPrice = `₹${cp[0].price||cp[0].mrp}/bag`;
+    const { data: sp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%TISAN%').limit(3);
+    if (sp?.length) sandPrice = `₹${sp[0].price||sp[0].mrp}/bag`;
+    const { data: ap } = await VW_DB.client.from('products').select('name,mrp,price').or('name.ilike.%adhesive%,name.ilike.%tile fix%').limit(3);
+    if (ap?.length) adhesivePrice = `₹${ap[0].price||ap[0].mrp}/bag`;
+    const { data: clp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%tile cleaner%').limit(1);
+    if (clp?.length) cleanerPrice = `₹${clp[0].price||clp[0].mrp}`;
+  } catch(e) {}
+
+  const addons = [
+    // Section header: Mortar bed method (floor)
+    { id:'cement', icon:'🏗', label:'Cement', qty:`${cementBags} bags (50kg)`,
+      note:`Floor bedding · 4 bags/100 sqft · Mix 1:3 with sand`, price: cementPrice||'Check stock', section:'mortar' },
+    { id:'sand', icon:'🪨', label:'TISAN River Sand', qty:`${sandBags} bags (50kg)`,
+      note:`Floor bedding · ~11 bags/100 sqft`, price: sandPrice||'Check stock', section:'mortar' },
+    // Adhesive (wall always, floor optional)
+    { id:'adhesive_floor', icon:'🧲', label:`Tile Adhesive (Floor)`, qty:`${floorAdhesiveBags} bags (20kg)`,
+      note:`${adhesiveGradeNote} · ${floorAdhesiveCoverage} sqft/bag`, price: adhesivePrice||'Check stock', section:'adhesive' },
+    ...(wallSqft > 0 ? [{ id:'adhesive_wall', icon:'🧲', label:`Tile Adhesive (Wall)`, qty:`${wallAdhesiveBags} bags (20kg)`,
+      note:`C2 recommended for walls — stronger grip · ${wallAdhesiveCoverage} sqft/bag`, price: adhesivePrice||'Check stock', section:'adhesive' }] : []),
+    // Accessories
+    { id:'cleaner', icon:'🧴', label:'Tile Cleaner', qty:'1–2 bottles',
+      note:'Post-installation cleaning — removes grout haze, cement residue', price: cleanerPrice||'Check stock', section:'acc' },
+    { id:'sponge', icon:'🧽', label:'Grouting Sponge', qty:'2–3 pcs',
+      note:'For grout application and wiping', price:'Check stock', section:'acc' },
+    { id:'cloth', icon:'🧻', label:'Waste Cloth Packet', qty:'1 packet',
+      note:'For tile wiping and surface cleaning during installation', price:'Check stock', section:'acc' },
+  ];
+
+  const selected = _tqState.addons || {};
+
+  const sections = [
+    { key:'mortar', label:'🏗 Mortar Bed Method (Floor)', sub:'Traditional cement + sand bed — skip if using adhesive method' },
+    { key:'adhesive', label:'🧲 Tile Adhesive', sub:'Always required for walls · Optional for floor (choose one method)' },
+    { key:'acc', label:'🧴 Cleaning & Accessories', sub:'Post-installation supplies' },
+  ];
+
+  return sections.map(sec => {
+    const secAddons = addons.filter(a => a.section === sec.key);
+    if (!secAddons.length) return '';
+    return `
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px">${sec.label}</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${sec.sub}</div>
+      ${secAddons.map(a => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--bg2);border-radius:10px;border:1px solid ${selected[a.id]?'var(--gold-border)':'var(--border)'};margin-bottom:6px">
+        <input type="checkbox" id="addon-${a.id}" ${selected[a.id]?'checked':''} onchange="VW_TILES.toggleAddon('${a.id}',this.checked)" style="width:18px;height:18px;flex-shrink:0">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${a.icon} ${a.label} <span style="color:var(--text3);font-weight:400">— ${a.qty}</span></div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${a.note}</div>
+        </div>
+        <div style="font-size:11px;color:var(--gold);font-weight:600;flex-shrink:0;text-align:right">${a.price}</div>
+      </div>`).join('')}
+    </div>`;
+  }).join('') + `<div style="font-size:10px;color:var(--text3);padding:8px;background:rgba(245,200,66,0.06);border-radius:8px;border:1px solid var(--gold-border)">💡 Floor: Use either mortar bed OR tile adhesive — not both. Walls always use adhesive. Confirm quantities with your tile layer.</div>`;
+}
+
+function toggleAddon(id, checked) {
+  if (!_tqState.addons) _tqState.addons = {};
+  _tqState.addons[id] = checked;
+}
+
+function setLaborRequired(val) {
+  _tqState.laborRequired = val;
+  _rerenderStep8();
+}
+
+async function postLaborFromQuotation() {
+  const st = _tqState;
+  if (!st.laborRequired) return;
+  const fy = getFinancialYearLabel();
+  const { data: seq } = await VW_DB.client.from('settings').select('value').eq('key','labor_seq_'+fy).single().catch(()=>({data:null}));
+  const next = ((seq?.value)||0)+1;
+  const reqNo = `LAB/${fy}/${String(next).padStart(4,'0')}`;
+  await VW_DB.client.from('settings').upsert({ key:'labor_seq_'+fy, value:next });
+  await VW_DB.client.from('labor_requirements').insert({
+    req_no: reqNo,
+    customer_name: st.customer.name || 'Unknown',
+    customer_phone: st.customer.phone || '',
+    site_address: st.customer.site || '',
+    work_type: 'tile_laying',
+    total_area_sqft: _tqTotalSqft(),
+    tile_brand: st.selectedProduct?.brand || '',
+    tile_size: st.selectedSize?.label || '',
+    start_date: null,
+    procurement_confirmed: true,
+    posted_by: VW_AUTH.getCurrentProfile()?.name || '',
+    status: 'open',
+  });
+  showToast(`Labor requirement ${reqNo} posted ✓ — contractors will bid`, 'success');
+}
+
 
 // ───── NAV HELPERS ──────────────────────────────────────────
 async function tqNext() {
@@ -22544,6 +23327,21 @@ async function _rerenderStep8() {
 
 // ───── PDF SHARE (generates printable HTML, opens print dialog) ─
 function tqSharePDF() {
+  // Print/Share only allowed after management approval
+  // If we have a saved quote ID with approval status, check it
+  const savedId = _tqState._savedQuoteId;
+  const approvalStatus = _tqState._approvalStatus;
+
+  if (savedId && approvalStatus && approvalStatus !== 'approved') {
+    const statusMsg = {
+      pending_approval: 'still pending approval from management',
+      rejected: 'was rejected — revise and resubmit first',
+      draft: 'not yet submitted for approval',
+    }[approvalStatus] || approvalStatus;
+    showToast(`Cannot print — quotation is ${statusMsg}`, 'warn');
+    return;
+  }
+
   const html = _buildPrintHTML();
   const win = window.open('','_blank');
   if (!win) { showToast('Allow popups to open PDF','warn'); return; }
@@ -22563,6 +23361,20 @@ function tqSharePDF() {
 
 // ───── PRINT ────────────────────────────────────────────────
 function tqPrint() {
+  // Print/Share only allowed after management approval
+  const savedId = _tqState._savedQuoteId;
+  const approvalStatus = _tqState._approvalStatus;
+
+  if (savedId && approvalStatus && approvalStatus !== 'approved') {
+    const statusMsg = {
+      pending_approval: 'still pending approval from management',
+      rejected: 'was rejected — revise and resubmit first',
+      draft: 'not yet submitted for approval',
+    }[approvalStatus] || approvalStatus;
+    showToast(`Cannot print — quotation is ${statusMsg}`, 'warn');
+    return;
+  }
+
   const html = _buildPrintHTML();
   const win = window.open('','_blank');
   if (!win) { showToast('Allow popups to print','warn'); return; }
@@ -22755,25 +23567,559 @@ async function tqConvertToInvoice() {
 }
 
 // ───── SAVE QUOTE ────────────────────────────────────────────
-async function tqSaveQuote() {
+async function tqSubmitForApproval() {
   const st = _tqState;
+  if (!st.customer.name) { showToast('Enter customer name first', 'warn'); return; }
+  if (!st.rooms.length) { showToast('Add at least one room', 'warn'); return; }
+  const profile = VW_AUTH.getCurrentProfile();
+  const fy = getFinancialYearLabel();
+
   try {
+    const { data: seqRow } = await VW_DB.client.from('settings').select('value').eq('key','tq_seq_'+fy).maybeSingle();
+    const next = ((seqRow?.value)||0)+1;
+    const tqNo = `TQ/${fy}/${String(next).padStart(4,'0')}`;
+    await VW_DB.client.from('settings').upsert({ key:'tq_seq_'+fy, value:next });
+
     const { data, error } = await VW_DB.client.from('tile_quotations').insert({
+      tq_no: tqNo,
       customer_name: st.customer.name,
       customer_phone: st.customer.phone,
+      customer_id: st.customer.id || null,
       site_address: st.customer.site,
       rooms: st.rooms,
-      tile_selections: st.selectedProduct ? [st.selectedProduct] : [],
-      accessories: [...(st.beading||[]), ...(st.floorTraps||[])],
+      selected_size: st.selectedSize,
+      selected_product: st.selectedProduct || null,
+      spacer: st.spacer,
+      adhesive: st.adhesive,
+      beading: st.beading || [],
+      grout: st.grout,
+      addons: st.addons || {},
+      floor_traps: st.floorTraps || [],
+      soffit: st.soffit || {},
+      delivery: st.delivery || {},
       total_area_sqft: _tqTotalSqft(),
-      status: 'draft',
-      created_by: VW_AUTH.getCurrentProfile()?.name || '',
+      labor_required: st.laborRequired || false,
+      approval_status: 'pending_approval',
+      approval_submitted_at: new Date().toISOString(),
+      approval_submitted_by: profile?.name || '',
+      approval_submitted_by_id: profile?.id || null,
+      status: 'pending_approval',
+      created_by: profile?.name || '',
+      created_by_id: profile?.id || null,
     }).select().single();
     if (error) throw error;
-    showToast('Tile quotation saved ✓', 'success');
+
+    // Start the escalation chain: TL/SrExec → FloorMgr → StoreMgr → Management (30s each)
+    await VW_ESCALATION.startTileQuoteApproval(data.id);
+
+    if (st.laborRequired) await postLaborFromQuotation(data.id, tqNo);
+
+    await auditLog('tile_quotation_submitted', 'tile_quotation', data.id, st.customer.name, null,
+      { tqNo }, 'Submitted — escalation chain started');
+
+    // Reset state but keep quote ID + status so executive can track
+    _tqState = { step:1, customer:{name:'',phone:'',site:'',id:null}, rooms:[], selectedSize:null, spacer:{use:false,mm:3}, adhesive:{type:'C1',brand:''}, beading:[], selectedProduct:null, grout:{type:'cement',color:'',colorHex:''}, floorTraps:[], soffit:{enabled:false}, delivery:{type:'self',floors:[],beyondFt:false,distanceKm:0}, addons:{}, laborRequired:null, _savedQuoteId: data.id, _approvalStatus: 'pending_approval' };
+
+    // Navigate to the tile quotation list
+    setTimeout(() => navigateTo('tile_quotes'), 600);
+
   } catch(e) {
-    showToast('Saved locally (Supabase sync pending)', 'warn');
+    console.error('Submit error:', e);
+    showToast('Error submitting — check connection', 'warn');
   }
+}
+
+async function tqSaveQuote() { return tqSubmitForApproval(); }
+
+// ───── APPROVER: tqApprove / tqReject — delegate to escalation engine ────────
+async function tqApprove() {
+  const quoteId = _tqState._reviewingQuoteId;
+  if (!quoteId) { showToast('No quotation selected', 'warn'); return; }
+  const sqft = parseFloat(document.getElementById('tq-quoted-sqft')?.value||0)||0;
+  const box = parseFloat(document.getElementById('tq-quoted-box')?.value||0)||0;
+  const note = document.getElementById('tq-price-note')?.value||'';
+  await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note);
+  closeSheet();
+  navigateTo('tile_quotes');
+}
+
+async function tqReject() {
+  const quoteId = _tqState._reviewingQuoteId;
+  if (!quoteId) { showToast('No quotation selected', 'warn'); return; }
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('tq_no,customer_name').eq('id',quoteId).single();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="color:var(--red)">❌ Reject Tile Quotation</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">${q?.tq_no} · ${q?.customer_name}</p>
+    <div class="form-group">
+      <label>Reason *</label>
+      <textarea id="tq-reject-reason" rows="3" placeholder="e.g. Price too low — minimum ₹65/sqft · Tile not available · Needs re-measurement"
+        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button style="flex:2;padding:12px;border-radius:10px;background:var(--red);border:none;color:#fff;font-weight:700;cursor:pointer"
+        onclick="VW_TILES.tqConfirmReject(${quoteId})">❌ Reject & Notify Executive</button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function tqConfirmReject(quoteId) {
+  const reason = document.getElementById('tq-reject-reason')?.value.trim();
+  if (!reason) { showToast('Enter a rejection reason', 'warn'); return; }
+  await VW_ESCALATION.rejectTileQuoteStep(quoteId, reason);
+  await auditLog('tile_quote_rejected','tile_quotation',quoteId,'','',{reason},'Rejected');
+  closeSheet();
+  showToast('Rejected — executive will be notified', 'info');
+  navigateTo('tile_quotes');
+}
+
+
+// ───── CASHIER: Collect advance on approved quote ────────────
+async function tqCollectAdvance(quoteId) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',quoteId).single();
+  if (!q) return;
+  if (q.approval_status !== 'approved') { showToast('Quote must be approved first', 'warn'); return; }
+
+  const totalSqft = parseFloat(q.total_area_sqft||0);
+  const pricePerSqft = q.quoted_price_per_sqft || (q.selected_product?.price_per_sqft || 0);
+  const suggestedTotal = pricePerSqft > 0 ? Math.round(totalSqft * pricePerSqft) : 0;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>💰 Collect Advance — ${q.tq_no}</h3>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700">${q.customer_name}</div>
+      <div style="font-size:12px;color:var(--text3)">${q.site_address||''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:6px">${totalSqft.toFixed(1)} sqft · ${q.tq_no}</div>
+      ${pricePerSqft > 0 ? `<div style="font-size:14px;font-weight:700;color:var(--gold);margin-top:4px">₹${pricePerSqft}/sqft · Est. Total ₹${suggestedTotal.toLocaleString('en-IN')}</div>` : ''}
+      ${q.quoted_price_per_box ? `<div style="font-size:12px;color:var(--text3)">₹${q.quoted_price_per_box}/box</div>` : ''}
+      ${q.price_edit_note ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">Note: ${q.price_edit_note}</div>` : ''}
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Advance Amount (₹) *</label>
+        <input type="number" id="adv-amount" placeholder="e.g. 10000" min="1" step="500">
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Payment Mode *</label>
+        <select id="adv-mode">
+          <option value="cash">Cash</option>
+          <option value="upi">UPI / GPay</option>
+          <option value="card">Card</option>
+          <option value="neft">NEFT / Transfer</option>
+          <option value="cheque">Cheque</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Transaction Ref / UPI ID / Cheque No <span style="color:var(--text3);font-size:10px">(optional)</span></label>
+      <input type="text" id="adv-ref" placeholder="e.g. UPI Ref: 4281930847">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button class="btn-primary" style="flex:2;background:var(--gold);color:#000" onclick="VW_TILES.tqConfirmAdvance(${quoteId})">
+        ✅ Collect Advance & Hold Stock
+      </button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function tqConfirmAdvance(quoteId) {
+  const amount = parseFloat(document.getElementById('adv-amount')?.value||0);
+  const mode = document.getElementById('adv-mode')?.value || 'cash';
+  const ref = document.getElementById('adv-ref')?.value.trim() || '';
+  if (!amount || amount < 1) { showToast('Enter advance amount', 'warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const fy = getFinancialYearLabel();
+
+  // Get receipt number
+  const { data: seqRow } = await VW_DB.client.from('settings').select('value').eq('key','advance_receipt_seq').maybeSingle();
+  const next = ((seqRow?.value)||0) + 1;
+  const receiptNo = `ARN/${fy}/${String(next).padStart(4,'0')}`;
+  await VW_DB.client.from('settings').upsert({ key:'advance_receipt_seq', value:next });
+
+  // Update quote
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',quoteId).single();
+  const log = q?.approval_log || [];
+  log.push({ action:'advance_collected', by:profile?.name||'', at:new Date().toISOString(), amount, mode, ref, receiptNo });
+
+  await VW_DB.client.from('tile_quotations').update({
+    advance_amount: amount,
+    advance_mode: mode,
+    advance_receipt_no: receiptNo,
+    advance_collected_at: new Date().toISOString(),
+    advance_collected_by: profile?.name||'',
+    advance_collected_by_id: profile?.id||null,
+    stock_hold_placed_at: new Date().toISOString(),
+    hold_active: true,
+    hold_expires_at: new Date(Date.now() + 90*24*60*60*1000).toISOString(),
+    advance_received_at: new Date().toISOString(),
+    status: 'advance_collected',
+    approval_log: log,
+  }).eq('id', quoteId);
+
+  // Place hold on stock
+  if (q.selected_product?.id) await placeStockHold(quoteId, amount);
+
+  await auditLog('advance_collected','tile_quotation',quoteId,q.customer_name,null,{amount,mode,receiptNo},'Advance collected');
+
+  closeSheet();
+
+  // Print receipt
+  tqPrintAdvanceReceipt({ ...q, advance_amount:amount, advance_mode:mode, advance_receipt_no:receiptNo }, ref);
+  showToast(`₹${amount.toLocaleString('en-IN')} collected · ${receiptNo} · Stock held`, 'success');
+  navigateTo('tile_quotes');
+}
+
+function tqPrintAdvanceReceipt(q, txnRef) {
+  const win = window.open('', '_blank');
+  const now = new Date();
+  win.document.write(`<!DOCTYPE html><html><head><title>Advance Receipt ${q.advance_receipt_no}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:420px;margin:20px auto;padding:24px;color:#111;font-size:13px}
+    .brand{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px}
+    .brand-sub{font-size:11px;color:#666;text-align:center;margin-bottom:16px}
+    .receipt-title{text-align:center;font-size:16px;font-weight:700;border:2px solid #111;padding:8px;margin-bottom:14px;letter-spacing:1px}
+    .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:12px}
+    .row strong{color:#111}
+    .amount-box{background:#f9f5e8;border:2px solid #C8972B;border-radius:8px;padding:12px;text-align:center;margin:14px 0}
+    .amount{font-size:28px;font-weight:800;color:#C8972B}
+    .note{font-size:11px;color:#666;text-align:center;margin-top:16px;line-height:1.5}
+    .sign{display:flex;justify-content:space-between;margin-top:36px;font-size:11px}
+    .sign div{text-align:center;border-top:1px solid #999;padding-top:4px;width:140px}
+    .print-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#C8972B;color:#000;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
+    @media print{.print-btn{display:none}}
+    .wa-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#25D366;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
+    @media print{.wa-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
+  <button class="wa-btn" onclick="shareReceiptWA()">💬 Share via WhatsApp</button>
+  <div class="brand">Vassure Wholesale Pvt Ltd</div>
+  <div class="brand-sub">1-1-153, NH-65, Bhavanipuram, Vijayawada · 8712697930</div>
+  <div class="receipt-title">ADVANCE RECEIPT</div>
+
+  <div class="row"><span>Receipt No.</span><strong>${q.advance_receipt_no}</strong></div>
+  <div class="row"><span>Date</span><strong>${now.toLocaleDateString('en-IN',{dateStyle:'long'})}</strong></div>
+  <div class="row"><span>Time</span><strong>${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</strong></div>
+  <div class="row"><span>Quote No.</span><strong>${q.tq_no}</strong></div>
+  <div class="row"><span>Customer Name</span><strong>${q.customer_name}</strong></div>
+  <div class="row"><span>Phone</span><strong>${q.customer_phone||'—'}</strong></div>
+  <div class="row"><span>Site Address</span><strong>${q.site_address||'—'}</strong></div>
+  <div class="row"><span>Tile / Product</span><strong>${q.selected_product?.name||q.selected_product?.brand||'As per quotation'}</strong></div>
+  <div class="row"><span>Total Area</span><strong>${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft</strong></div>
+  ${q.quoted_price_per_sqft ? `<div class="row"><span>Agreed Rate</span><strong>₹${q.quoted_price_per_sqft}/sqft</strong></div>` : ''}
+
+  <div class="amount-box">
+    <div style="font-size:12px;margin-bottom:4px">Amount Received</div>
+    <div class="amount">₹${(q.advance_amount||0).toLocaleString('en-IN')}</div>
+    <div style="font-size:12px;margin-top:4px;color:#666">Mode: ${(q.advance_mode||'cash').toUpperCase()}${txnRef?' · Ref: '+txnRef:''}</div>
+  </div>
+
+  <div class="row"><span>Stock Hold Valid Until</span><strong>${new Date(Date.now()+90*24*60*60*1000).toLocaleDateString('en-IN')}</strong></div>
+
+  <div class="note">
+    This advance confirms your order and holds the selected tile stock for 90 days.<br>
+    Balance payment due before dispatch. This receipt is not a tax invoice.<br>
+    Returns subject to V Wholesale terms & conditions.
+  </div>
+
+  <div class="sign">
+    <div>Customer Signature</div>
+    <div>For Vassure Wholesale Pvt Ltd<br>Authorised by</div>
+  </div>
+
+  <script>
+  function shareReceiptWA() {
+    const msg = encodeURIComponent('V Wholesale Advance Receipt\\n\\nReceipt No: ${q.advance_receipt_no}\\nQuote: ${q.tq_no}\\nCustomer: ${q.customer_name}\\nAmount Paid: ₹${(q.advance_amount||0).toLocaleString()}\\nMode: ${(q.advance_mode||'cash').toUpperCase()}\\n\\nStock is held for 90 days.\\n\\nThank you for choosing V Wholesale, Vijayawada.\\n8712697930');
+    window.open('https://wa.me/91${q.customer_phone||''}?text=' + msg, '_blank');
+  }
+  <\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// ───── TILE QUOTATION DASHBOARD LIST ────────────────────────
+async function renderTileQuotesList() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+  // Who can action pending approvals at their level:
+  const isApprover = ['admin','management','store_manager','floor_manager','tl','sr_executive'].includes(myRole);
+  const isCashier = ['admin','accounts'].includes(myRole);
+  const isExec = ['executive','reception'].includes(myRole);
+
+  // Fetch quotes
+  let query = VW_DB.client.from('tile_quotations')
+    .select('id,tq_no,customer_name,customer_phone,total_area_sqft,approval_status,status,created_by,created_at,advance_amount,quoted_price_per_sqft,selected_size,advance_receipt_no,rejection_reason,approval_log')
+    .order('created_at', {ascending:false}).limit(50);
+
+  // Executives see only their own quotes
+  if (isExec) query = query.eq('created_by', profile?.name||'');
+
+  const { data: quotes } = await query;
+  const allQuotes = quotes || [];
+
+  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+
+  // Get current chain level label from approval_log
+  const currentLevel = (q) => {
+    const log = q.approval_log || [];
+    const last = log[log.length-1];
+    if (!last || q.approval_status !== 'pending_approval') return '';
+    return LEVEL_LABELS_TQ[last.level] || last.level;
+  };
+
+  // Can I action this quote right now?
+  const canIApprove = (q) => {
+    if (q.approval_status !== 'pending_approval') return false;
+    const log = q.approval_log || [];
+    const last = log[log.length-1];
+    if (!last || last.status !== 'pending') return false;
+    const allowedRoles = (window.TQ_LEVEL_ROLES || {})[last.level] || [last.level];
+    return myRole === 'admin' || allowedRoles.includes(myRole);
+  };
+
+  const statusBadge = (s, q) => {
+    const lvl = currentLevel(q);
+    const map = {
+      draft: ['Draft','#888'],
+      pending_approval: [`⏳ ${lvl||'Pending'}`,canIApprove(q)?'#EF9F27':'#888'],
+      approved: ['✅ Approved','#22c55e'],
+      rejected: ['❌ Rejected','#ef4444'],
+      advance_collected: ['💰 Advance Collected','#378ADD'],
+      converted: ['🧾 Invoiced','#7F77DD'],
+    };
+    const [label, color] = map[s] || [s,'#888'];
+    return `<span style="font-size:10px;font-weight:700;color:${color};background:${color}18;padding:2px 8px;border-radius:6px">${label}</span>`;
+  };
+
+  const pendingApproval = allQuotes.filter(q => q.approval_status === 'pending_approval');
+  const myPending = pendingApproval.filter(canIApprove); // Quotes I can action NOW
+  const otherPending = pendingApproval.filter(q => !canIApprove(q)); // Awaiting other levels
+  const approved = allQuotes.filter(q => q.approval_status === 'approved' && !q.advance_amount);
+  const withAdvance = allQuotes.filter(q => q.advance_amount > 0);
+  const rejected = allQuotes.filter(q => q.approval_status === 'rejected');
+  const myDrafts = allQuotes.filter(q => q.approval_status === 'draft');
+
+  const renderCard = (q, highlight) => `
+  <div onclick="VW_TILES.openTileQuote(${q.id})"
+    style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;
+      border:1px solid ${highlight?'var(--gold-border)':q.approval_status==='approved'?'rgba(34,197,94,0.2)':q.approval_status==='rejected'?'rgba(239,68,68,0.2)':'var(--border)'}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div>
+        <div style="font-size:13px;font-weight:700">${q.customer_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft${q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:''}</div>
+      </div>
+      ${statusBadge(q.approval_status, q)}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;color:var(--text3)">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
+      ${q.advance_amount > 0 ? `<div style="font-size:12px;font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} advance</div>` : ''}
+    </div>
+    ${q.rejection_reason ? `<div style="font-size:11px;color:var(--red);margin-top:4px;padding:4px 8px;background:rgba(239,68,68,0.06);border-radius:6px">Rejected: ${q.rejection_reason}</div>` : ''}
+  </div>`;
+
+  return `
+  <div class="module-header">
+    <h2>🏠 Tile Quotations</h2>
+    <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('tiles')">+ New Quote</button>
+  </div>
+
+  <!-- MY ACTION REQUIRED — quotes at my level right now -->
+  ${myPending.length ? `
+  <div style="background:rgba(245,200,66,0.08);border:2px solid var(--gold-border);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:4px">⏳ Needs Your Approval (${myPending.length})</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Auto-escalates to next level in 30 seconds if no action</div>
+    ${myPending.map(q => renderCard(q, true)).join('')}
+  </div>` : ''}
+
+  <!-- PENDING AT OTHER LEVELS -->
+  ${isApprover && otherPending.length ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--text3);margin-bottom:8px">⏳ Pending at Other Levels (${otherPending.length})</div>
+    ${otherPending.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  <!-- APPROVED — CASHIER ACTION NEEDED -->
+  ${(isCashier || myRole === 'admin') && approved.length ? `
+  <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ Approved — Collect Advance (${approved.length})</div>
+    ${approved.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${withAdvance.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">💰 Advance Collected (${withAdvance.length})</h3>
+    ${withAdvance.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${myDrafts.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">📝 My Drafts (${myDrafts.length})</h3>
+    ${myDrafts.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${rejected.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">❌ Rejected — Revise & Resubmit (${rejected.length})</h3>
+    ${rejected.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  <!-- CHAIN INFO for executives -->
+  ${isExec && !allQuotes.length ? `
+  <div class="card"><p class="empty-msg">No tile quotations yet — tap + New Quote to start</p></div>` : ''}
+
+  ${!allQuotes.length && !isExec ? `
+  <div class="card"><p class="empty-msg">No tile quotations in the system yet</p></div>` : ''}
+
+  <div style="margin-top:8px;padding:10px;background:var(--bg2);border-radius:10px;font-size:11px;color:var(--text3)">
+    📋 Approval chain: <strong>TL / Sr Executive → Floor Manager → Store Manager → Management</strong> · 30 sec auto-escalation at each level
+  </div>`;
+}
+
+// ───── OPEN INDIVIDUAL QUOTE (different view per role) ───────
+async function openTileQuote(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+
+  // Determine if I can action the current pending step
+  const log = q.approval_log || [];
+  const lastStep = log[log.length - 1];
+  const myAllowedRoles = lastStep ? ((window.TQ_LEVEL_ROLES||{})[lastStep.level] || [lastStep.level]) : [];
+  const canIAction = q.approval_status === 'pending_approval' && lastStep?.status === 'pending' &&
+    (myRole === 'admin' || myAllowedRoles.includes(myRole));
+  const isCashier = ['admin','accounts'].includes(myRole);
+
+  const sheet = document.getElementById('bottom-sheet');
+  const totalSqft = parseFloat(q.total_area_sqft||0);
+  const pricePerSqft = q.quoted_price_per_sqft || 0;
+  const pricePerBox = q.quoted_price_per_box || 0;
+  const estTotal = pricePerSqft > 0 ? Math.round(totalSqft * pricePerSqft) : 0;
+
+  // Store quote ID for approve/reject/print functions
+  _tqState._reviewingQuoteId = id;
+  _tqState._savedQuoteId = id;
+  _tqState._approvalStatus = q.approval_status;
+
+  // Build escalation chain timeline
+  const chainTimeline = log.length ? `
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Approval Chain</div>
+    ${log.map((step, idx) => {
+      const isLast = idx === log.length - 1;
+      const stepLabel = LEVEL_LABELS_TQ[step.level] || step.level;
+      const statusIcon = step.status === 'approved' ? '✅' : step.status === 'rejected' ? '❌' : step.status === 'timeout' ? '⏭' : isLast ? '⏳' : '○';
+      const statusColor = step.status === 'approved' ? 'var(--green)' : step.status === 'rejected' ? 'var(--red)' : step.status === 'timeout' ? 'var(--text3)' : isLast ? 'var(--gold)' : 'var(--text3)';
+      const approverNames = step.approverNames?.length ? step.approverNames.join(', ') : step.roles?.join('/') || '';
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;${idx < log.length-1 ? 'border-bottom:1px solid var(--border2)' : ''}">
+        <span style="font-size:14px;flex-shrink:0">${statusIcon}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:${statusColor}">${stepLabel}</div>
+          <div style="font-size:10px;color:var(--text3)">${approverNames}${step.approvedBy ? ' · Approved by '+step.approvedBy : ''}${step.rejectedBy ? ' · Rejected by '+step.rejectedBy : ''}${step.editedPricePerSqft ? ` · Price: ₹${step.editedPricePerSqft}/sqft` : ''}</div>
+          ${step.rejectReason ? `<div style="font-size:10px;color:var(--red)">${step.rejectReason}</div>` : ''}
+        </div>
+        <div style="font-size:10px;color:var(--text3)">${new Date(step.notifiedAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <h3 style="margin:0">${q.customer_name}</h3>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${q.tq_no} · ${new Date(q.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--bg2)">
+        ${q.approval_status?.replace('_',' ')||'draft'}
+      </span>
+    </div>
+
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Site</span><span>${q.site_address||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Total Area</span><span style="font-weight:700">${totalSqft.toFixed(1)} sqft</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Tile Size</span><span>${q.selected_size?.label||'—'}</span></div>
+      ${pricePerSqft>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Price</span><span style="font-weight:700;color:var(--gold)">₹${pricePerSqft}/sqft${pricePerBox?` · ₹${pricePerBox}/box`:''}</span></div>`:''}
+      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Est. Total</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
+      ${q.price_edit_note?`<div style="font-size:11px;color:var(--gold);padding:4px 0">Note: ${q.price_edit_note}</div>`:''}
+      ${q.rejection_reason?`<div style="color:var(--red);padding:4px 0">Rejected: ${q.rejection_reason}</div>`:''}
+      ${q.advance_amount>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Advance</span><span style="font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} · ${q.advance_receipt_no}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Submitted by</span><span>${q.created_by||'—'}</span></div>
+    </div>
+
+    ${chainTimeline}
+
+    ${canIAction ? `
+    <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
+      <div class="form-row" style="margin-bottom:8px">
+        <div class="form-group" style="margin:0;flex:1">
+          <label style="font-size:11px">₹/sqft (edit if needed)</label>
+          <input type="number" id="tq-quoted-sqft" placeholder="${pricePerSqft||'Enter price'}" value="${pricePerSqft||''}" step="0.5" style="font-size:14px;font-weight:600">
+        </div>
+        <div class="form-group" style="margin:0;flex:1">
+          <label style="font-size:11px">₹/box</label>
+          <input type="number" id="tq-quoted-box" placeholder="${pricePerBox||'Optional'}" value="${pricePerBox||''}" step="1">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px">Price note / reason</label>
+        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer" value="${q.price_edit_note||''}">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
+          ✅ Approve${lastStep.level !== 'management' ? ' & Pass Up' : ' — Final'}
+        </button>
+        <button onclick="VW_TILES.tqReject()" style="flex:1;padding:13px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+          ❌ Reject
+        </button>
+      </div>
+    </div>` : ''}
+
+    ${(isCashier || myRole === 'admin') && q.approval_status === 'approved' && !q.advance_amount ? `
+    <button class="btn-primary full-width" style="background:var(--gold);color:#000;font-size:14px;padding:14px;margin-bottom:8px" onclick="closeSheet();VW_TILES.tqCollectAdvance(${id})">
+      💰 Collect Advance & Hold Stock
+    </button>` : ''}
+
+    ${q.advance_amount > 0 ? `
+    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>` : ''}
+
+    ${q.approval_status === 'approved' ? `
+    <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Print & Share enabled after final approval
+    </div>`}
+    <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function tqReprintReceipt(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  tqPrintAdvanceReceipt(q, '');
+}
+
+async function tqPrintFromId(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  if (q.approval_status !== 'approved') {
+    showToast('Cannot print — quotation not yet approved by management', 'warn');
+    return;
+  }
+  // Load into state for printing — mark as approved so guard passes
+  _tqState = { ...q, customer:{ name:q.customer_name, phone:q.customer_phone, site:q.site_address }, rooms:q.rooms||[], selectedSize:q.selected_size, selectedProduct:q.selected_product, step:8, _savedQuoteId:id, _approvalStatus:q.approval_status };
+  closeSheet();
+  tqPrint();
 }
 
 // ───── GRANITE (preserved + improved) ──────────────────────
@@ -23044,58 +24390,13 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
   }
 }
 
-async function lookupTileCustomer(phone, prefix) {
-  if ((phone||'').replace(/\D/g,'').length < 10) return;
-  const el = document.getElementById(`${prefix}-cust-lookup`);
-
-  // Try Supabase first, then IndexedDB
-  let found = null;
-  try {
-    const { data } = await VW_DB.client
-      .from('customers')
-      .select('id,name,phone,address,area,totalSpend,total_spend')
-      .or(`phone.eq.${phone},phone.ilike.%${phone}%`)
-      .limit(1)
-      .single();
-    found = data;
-  } catch(e) {
-    const local = await VW_DB.all(VW_DB.STORES.customers);
-    found = local.find(c => (c.phone||'').replace(/\D/g,'').includes(phone.replace(/\D/g,'')));
-  }
-
-  if (found) {
-    // Auto-fill name field
-    const nameEl = document.getElementById(`${prefix}-cname`) || document.getElementById(`${prefix}-cust-name`);
-    if (nameEl && !nameEl.value) {
-      nameEl.value = found.name || '';
-      // Also update state
-      if (prefix === 'tq') _tqState.customer.name = found.name || '';
-      else if (prefix === 'gq') graniteCustomer.name = found.name || '';
-    }
-
-    // Auto-fill site/address field
-    const siteEl = document.getElementById(`${prefix}-site`);
-    if (siteEl && !siteEl.value) {
-      const addr = found.area || found.address || '';
-      siteEl.value = addr;
-      if (prefix === 'tq') _tqState.customer.site = addr;
-    }
-
-    // Store customer ID for linking
-    if (prefix === 'tq') _tqState.customer.id = found.id;
-    else if (prefix === 'gq') graniteCustomer.id = found.id;
-
-    const spend = found.totalSpend || found.total_spend || 0;
-    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${found.name}</span>${spend ? ` — ₹${spend.toLocaleString('en-IN')} spent` : ''}`;
-  } else {
-    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer — details will be saved on quotation</span>`;
-  }
-}
+async function lookupTileCustomer(phone, prefix, showOwnershipWarning) { return lookupTileCustomerFull(phone, prefix, showOwnershipWarning); }
 
 window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack,
-  tqAddRoom, tqSelectRoomType, tqSaveRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
+  // Rooms
+  tqAddRoom, tqSelectRoomType, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading,
   tqSelectProduct,
@@ -23103,7 +24404,11 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote,
+  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval,
+  tqApprove, tqReject, tqConfirmReject,
+  tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
+  renderTileQuotesList, openTileQuote, tqPrintFromId,
+  toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance,
   // Inventory
@@ -23112,7 +24417,7 @@ window.VW_TILES = {
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
   // Shared
-  lookupTileCustomer,
+  lookupTileCustomer, lookupTileCustomerFull,
   forwardToExecutive,
   confirmAddAccessories: async () => {},
   // Quotation history
@@ -23293,42 +24598,17 @@ async function placePreOrder(productInfo) {
 // ADVANCE PAYMENT SHEET (shown in Step 8)
 // =====================================================
 function renderAdvanceSection(savedQuoteId) {
-  if (!savedQuoteId) return `
-  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--text3)">
-    💾 Save the quotation first to place an advance payment and block stock.
-  </div>`;
-
+  // Advance is now only allowed AFTER management approval chain
+  // Cashier collects advance via TQ List → openTileQuote → tqCollectAdvance
   return `
-  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
-    <h3 class="card-title">💳 Advance Payment & Stock Hold</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">Collect advance to block selected tile designs for 90 days. Customer's tiles won't be sold to anyone else.</p>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1">
-        <label>Advance Amount (₹)</label>
-        <input type="number" id="tq-advance-amt" placeholder="e.g. 10000" min="0">
-      </div>
-      <div class="form-group" style="margin:0;flex:1">
-        <label>Payment Mode</label>
-        <select id="tq-advance-mode">
-          <option value="cash">Cash</option>
-          <option value="upi">UPI / QR</option>
-          <option value="bank_transfer">Bank Transfer</option>
-          <option value="cheque">Cheque</option>
-        </select>
-      </div>
-    </div>
-    <button class="btn-primary full-width" style="background:var(--green)" onclick="VW_TILES.collectAdvance(${savedQuoteId})">
-      🔒 Collect Advance & Block Stock (90 days)
-    </button>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px;text-align:center">Stock hold auto-expires after 90 days. SM/Management can extend or release.</div>
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
+    💡 Advance collection is handled by Cashier / Accounts after this quotation is approved by management. Go to <strong>More → TQ List</strong> to track approval status.
   </div>`;
 }
 
 async function collectAdvance(tileQuoteId) {
-  const amt = parseFloat(document.getElementById('tq-advance-amt')?.value||0);
-  if (!amt) { showToast('Enter advance amount','warn'); return; }
-  if (!_tqState.selectedProduct) { showToast('No tile selected — go back and select a tile','warn'); return; }
-  await placeStockHold(tileQuoteId, amt);
+  // Legacy stub — redirect to proper cashier flow
+  showToast('Use TQ List → open the approved quote → Collect Advance', 'info');
 }
 
 
@@ -23420,61 +24700,79 @@ if (typeof window !== 'undefined') {
 // ===== ENHANCED CUSTOMER LOOKUP WITH OWNERSHIP WARNING =====
 // Override the previous lookupTileCustomer with full version
 async function lookupTileCustomerFull(phone, prefix, showOwnershipWarning) {
-  if ((phone||'').replace(/\D/g,'').length < 10) return;
+  const digits = (phone||'').replace(/\D/g,'');
+  if (digits.length < 10) return;
+  const last10 = digits.slice(-10);
   const el = document.getElementById(`${prefix}-cust-lookup`);
   const ownerWarn = document.getElementById(`${prefix}-ownership-warning`);
+  if (el) el.innerHTML = `<span style="color:var(--text3)">Searching...</span>`;
 
   let found = null;
   try {
-    const { data } = await VW_DB.client.from('customers')
-      .select('id,name,phone,address,area,totalSpend,total_spend,assigned_to,assigned_to_name')
-      .or(`phone.eq.${phone},phone.ilike.%${phone}%`).limit(1).single();
-    found = data;
+    // Try exact match on last 10 digits first
+    const { data: exact } = await VW_DB.client.from('customers')
+      .select('id,name,phone,address,area,city,total_spend,assigned_to,assigned_to_name')
+      .or(`phone.eq.${last10},phone.ilike.%${last10}`)
+      .limit(5);
+    if (exact?.length) {
+      // Pick best match — exact phone match preferred
+      found = exact.find(c => (c.phone||'').replace(/\D/g,'').endsWith(last10)) || exact[0];
+    }
   } catch(e) {
-    const local = await VW_DB.all(VW_DB.STORES.customers);
-    found = local.find(c=>(c.phone||'').replace(/\D/g,'').includes(phone.replace(/\D/g,'')));
+    console.log('Supabase lookup error:', e.message);
+  }
+
+  // Fallback to IndexedDB if Supabase returned nothing
+  if (!found) {
+    try {
+      const local = await VW_DB.all(VW_DB.STORES.customers);
+      found = local.find(c => (c.phone||'').replace(/\D/g,'').endsWith(last10));
+    } catch(e) {}
   }
 
   if (found) {
-    const nameEl = document.getElementById(`${prefix}-cname`)||document.getElementById(`${prefix}-cust-name`);
+    // Auto-fill name (only if empty)
+    const nameEl = document.getElementById(`${prefix}-cname`) || document.getElementById(`${prefix}-cust-name`);
     if (nameEl && !nameEl.value) {
-      nameEl.value = found.name||'';
-      if (prefix==='tq') _tqState.customer.name = found.name||'';
-      else if (prefix==='gq') graniteCustomer.name = found.name||'';
+      nameEl.value = found.name || '';
+      if (prefix==='tq') _tqState.customer.name = found.name || '';
+      else if (prefix==='gq') graniteCustomer.name = found.name || '';
     }
+    // Auto-fill site
     const siteEl = document.getElementById(`${prefix}-site`);
     if (siteEl && !siteEl.value) {
-      const addr = found.area||found.address||'';
+      const addr = found.area || found.city || found.address || '';
       siteEl.value = addr;
       if (prefix==='tq') _tqState.customer.site = addr;
     }
     if (prefix==='tq') _tqState.customer.id = found.id;
     else if (prefix==='gq') graniteCustomer.id = found.id;
 
-    const spend = found.totalSpend||found.total_spend||0;
-    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${found.name}</span>${spend?` — ₹${spend.toLocaleString('en-IN')} spent`:''}`;
+    const spend = found.total_spend || found.totalSpend || 0;
+    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${found.name}</span>${spend ? ` — ₹${Math.round(spend).toLocaleString('en-IN')} spent` : ' — existing customer'}`;
 
     // Ownership warning
     const profile = VW_AUTH.getCurrentProfile();
-    const assignedTo = found.assigned_to_name||found.assigned_to;
+    const assignedTo = found.assigned_to_name || found.assigned_to;
     const isQuotTeam = ['admin','management','store_manager','floor_manager','tl'].includes(profile?.role||'');
-    if (showOwnershipWarning && ownerWarn && assignedTo && assignedTo!==profile?.name && !isQuotTeam) {
-      ownerWarn.style.display='block';
+    if (showOwnershipWarning && ownerWarn && assignedTo && assignedTo !== profile?.name && !isQuotTeam) {
+      ownerWarn.style.display = 'block';
       ownerWarn.innerHTML = `
       <div style="background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-top:6px">
-        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">⚠️ Handled by <strong>${assignedTo}</strong></div>
-        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Do you want to proceed or forward to ${assignedTo}?</div>
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">⚠️ Previously handled by <strong>${assignedTo}</strong></div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Continue with this quotation or forward to ${assignedTo}?</div>
         <div style="display:flex;gap:6px">
           <button onclick="document.getElementById('${prefix}-ownership-warning').style.display='none'" style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:11px;cursor:pointer">Continue (Take Over)</button>
           <button onclick="VW_TILES.forwardToExecutive('${assignedTo}','${found.name}')" style="flex:1;background:var(--gold);color:#000;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">Forward to ${assignedTo}</button>
         </div>
       </div>`;
-    } else if (ownerWarn) ownerWarn.style.display='none';
+    } else if (ownerWarn) ownerWarn.style.display = 'none';
   } else {
-    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer</span>`;
-    if (ownerWarn) ownerWarn.style.display='none';
+    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer — will be saved with this quotation</span>`;
+    if (ownerWarn) ownerWarn.style.display = 'none';
   }
 }
+
 
 async function forwardToExecutive(execName, customerName) {
   const profile = VW_AUTH.getCurrentProfile();
@@ -23491,12 +24789,13 @@ async function forwardToExecutive(execName, customerName) {
   setTimeout(()=>navigateTo('dashboard'),1500);
 }
 
-// Replace in VW_TILES export
-window.VW_TILES.lookupTileCustomer = lookupTileCustomerFull;
-window.VW_TILES.forwardToExecutive = forwardToExecutive;
+
+
+
 
 
 /* === autotest.js === */
+
 // =====================================================
 // V WHOLESALE — COMPREHENSIVE TEST SUITE v4
 // Tests: infrastructure + database + business logic +
@@ -24568,7 +25867,10 @@ Object.assign(TEST_SUITES, {
 });
 
 
+
+
 /* === ledger.js === */
+
 // ============================================================
 // CUSTOMER LEDGER — full financial history per customer
 // Accessed via: navigateTo('ledger', {customerId})
@@ -24857,7 +26159,10 @@ window.saveCustomerDetails = saveCustomerDetails;
 window.VW_LEDGER = { renderCustomerLedger };
 
 
+
+
 /* === visualizer.js === */
+
 // =====================================================
 // V WHOLESALE — ROOM VISUALIZER v2
 // "Instagram filter" model — AI is completely invisible
@@ -25246,7 +26551,10 @@ window.VW_VIS = {
 window.PAINT_SWATCHES = PAINT_SWATCHES;
 
 
+
+
 /* === field_team.js === */
+
 // =====================================================
 // V WHOLESALE — FIELD TEAM APP
 // On-site order collection, GPS check-in/out,
@@ -25588,7 +26896,10 @@ window.VW_FIELD = {
 };
 
 
+
+
 /* === grn.js === */
+
 // =====================================================
 // GRN — GOODS RECEIPT NOTE
 // Scan supplier invoice → AI extracts items →
@@ -25916,7 +27227,10 @@ window.VW_GRN = {
 };
 
 
+
+
 /* === contractor.js === */
+
 // =====================================================
 // CONTRACTOR PORTAL v2 — Complete B2B Module
 // Features:
@@ -27341,7 +28655,10 @@ function addToMeasurement(productId, productName) {
 window.VW_CONTRACTOR.addToMeasurement = addToMeasurement;
 
 
+
+
 /* === tile_inventory.js === */
+
 // =====================================================
 // TILE INVENTORY MODULE v1
 // - Dedicated tile add flow (separate from general inventory)
@@ -27581,7 +28898,24 @@ async function showAddTileForm(prefill) {
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1"><label>Tiles/Box</label><input type="number" id="at-tpb" placeholder="4" min="1"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Sqft/Box</label><input type="number" id="at-spb" placeholder="16" step="0.1"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>MRP/Box (₹)</label><input type="number" id="at-mrp" placeholder="850" step="1"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Sale Price/Box (₹) *</label>
+        <input type="number" id="at-price-box" placeholder="e.g. 780" step="1"
+          oninput="const spb=parseFloat(document.getElementById('at-spb')?.value)||0;const pb=parseFloat(this.value)||0;if(spb>0)document.getElementById('at-price-sqft').value=Math.round(pb/spb*100)/100">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">What you sell it at</div>
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Sale Price/Sqft (₹)</label>
+        <input type="number" id="at-price-sqft" placeholder="Auto-calc" step="0.1" readonly style="background:var(--bg2)">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Auto from price/box ÷ sqft</div>
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>MRP/Box (₹)</label>
+        <input type="number" id="at-mrp" placeholder="850" step="1">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Brand MRP (for reference)</div>
+      </div>
     </div>
 
     <!-- WAREHOUSE LOCATION -->
@@ -27859,6 +29193,8 @@ async function saveTileProduct() {
     description: document.getElementById('at-desc')?.value||'',
     tiles_per_box: parseInt(document.getElementById('at-tpb')?.value||4),
     coverage_per_box: parseFloat(document.getElementById('at-spb')?.value||0)||null,
+    price: parseFloat(document.getElementById('at-price-box')?.value||0)||null,
+    price_per_sqft: parseFloat(document.getElementById('at-price-sqft')?.value||0)||null,
     mrp: parseFloat(document.getElementById('at-mrp')?.value||0)||null,
     stock: boxes,
     has_live_photo: true,
@@ -28279,7 +29615,10 @@ window.VW_TILE_INV = {
 };
 
 
+
+
 /* === customer_portal.js === */
+
 // =====================================================
 // CUSTOMER PORTAL v1
 // - ?customer=TOKEN public portal
@@ -28626,7 +29965,10 @@ window.VW_CUSTOMER_PORTAL = {
 };
 
 
+
+
 /* === app.js === */
+
 let currentPage = 'dashboard';
 const _pageCache = {}; // Simple in-memory cache keyed by page name
 const _pageCacheTTL = {}; // TTL timestamps
@@ -28812,6 +30154,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'rewards') html = await renderRewardsStorePage();
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
+    else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
@@ -31118,6 +32461,6 @@ window.awardContractorBid = awardContractorBid;
 window.renderRewardsStorePage = renderRewardsStorePage;
 window.renderLaborMarketplacePage = renderLaborMarketplacePage;
 
-  </script>
-</body>
-</html>
+  
+
+</script>
