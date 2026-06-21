@@ -22244,6 +22244,36 @@ function tqPickRoomType(type, btn) {
   tqSelectRoomType(type);
 }
 
+// Auto-calculate skirting from L and W when either changes
+// Skirting = (L + W) × 2 running feet (room perimeter)
+// If user has manually cleared it, don't overwrite — only auto-fill
+function _autoSkirting(pfx) {
+  const l = parseFloat(document.getElementById(`${pfx}-l`)?.value) || 0;
+  const w = parseFloat(document.getElementById(`${pfx}-w`)?.value) || 0;
+  const skirtEl = document.getElementById(`${pfx}-skirt`);
+  const noteEl = document.getElementById(`${pfx}-skirt-note`);
+  if (!skirtEl) return;
+
+  // Only auto-fill if field is not manually cleared to 0 or empty by user action
+  // We track whether user touched it via data-manual attribute
+  const wasManuallyCleared = skirtEl.dataset.manual === 'true';
+
+  if (!wasManuallyCleared && l > 0 && w > 0) {
+    const perimeter = (l + w) * 2;
+    skirtEl.value = perimeter;
+    if (noteEl) noteEl.innerHTML = `✓ Auto: (${l}+${w})×2 = <strong>${perimeter} ft</strong> perimeter · 4" height · tap ✕ None to remove`;
+  } else if (l > 0 && w > 0 && noteEl) {
+    const perimeter = (l + w) * 2;
+    if (noteEl) noteEl.innerHTML = `Perimeter would be ${perimeter} ft · skirting cleared`;
+  }
+}
+
+// When user explicitly clears skirting, mark it as manual so auto-fill won't re-fill
+function _skirtingManualClear(pfx) {
+  const el = document.getElementById(`${pfx}-skirt`);
+  if (el) { el.value = ''; el.dataset.manual = 'true'; }
+}
+
 function _renderMeasureForm(type, areaIdx, prefill) {
   const pfx = `tq-m${areaIdx}`;
   const def = ROOM_DEFS[type] || ROOM_DEFS['Custom Area'];
@@ -22251,19 +22281,29 @@ function _renderMeasureForm(type, areaIdx, prefill) {
 
   if (def.measureType === 'floor_lw' || def.measureType === 'floor_lw_skirting') return `
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft) *</label><input type="number" id="${pfx}-l" value="${p.l||''}" placeholder="e.g. 12" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft) *</label><input type="number" id="${pfx}-w" value="${p.w||''}" placeholder="e.g. 10" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Length (ft) *</label>
+        <input type="number" id="${pfx}-l" value="${p.l||''}" placeholder="e.g. 13" min="0.5" step="0.5"
+          oninput="VW_TILES._autoSkirting('${pfx}')"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Width (ft) *</label>
+        <input type="number" id="${pfx}-w" value="${p.w||''}" placeholder="e.g. 14" min="0.5" step="0.5"
+          oninput="VW_TILES._autoSkirting('${pfx}')"></div>
     </div>
     ${def.measureType==='floor_lw_skirting'?`
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1">
         <label>Wastage % <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-        <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
+        <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="0% if blank" min="0" max="30" step="1">
       </div>
       <div class="form-group" style="margin:0;flex:1">
-        <label>Skirting <span style="color:var(--text3);font-weight:400;font-size:10px">running ft · optional</span></label>
-        <input type="number" id="${pfx}-skirt" value="${p.skirting||''}" placeholder="e.g. 54 ft perimeter" min="0" step="0.5">
-        <div style="font-size:9px;color:var(--text3);margin-top:1px">Room perimeter in ft · (L+W)×2 · 4-inch height assumed</div>
+        <label>Skirting <span style="color:var(--text3);font-weight:400;font-size:10px">running ft</span></label>
+        <div style="display:flex;gap:4px;align-items:center">
+          <input type="number" id="${pfx}-skirt" value="${p.skirting||''}" placeholder="auto from L+W" min="0" step="0.5" style="flex:1">
+          <button type="button" onclick="VW_TILES._skirtingManualClear('${pfx}')"
+            style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:11px;color:var(--text3);cursor:pointer;white-space:nowrap;flex-shrink:0">✕ None</button>
+        </div>
+        <div id="${pfx}-skirt-note" style="font-size:9px;color:var(--text3);margin-top:2px">
+          ${p.l && p.w ? `Auto: (${p.l}+${p.w})×2 = ${(parseFloat(p.l)+parseFloat(p.w))*2} ft perimeter · 4" height` : 'Auto-fills from L & W · 4-inch height · clear to skip'}
+        </div>
       </div>
     </div>`:''}`;
 
@@ -24617,7 +24657,7 @@ window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack,
   // Rooms
-  tqAddRoom, tqSelectRoomType, tqPickRoomType, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
+  tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading,
   tqSelectProduct,
