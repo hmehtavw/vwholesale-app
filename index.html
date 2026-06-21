@@ -12009,51 +12009,6 @@ async function renderSettingsStore() {
   const waConfig = await VW_DB.getSetting('whatsapp_config', {});
   const loyaltyConfig = await VW_DB.getSetting('loyalty_config', { pointValue:1, earnRate:1, maxRedeemPct:10 });
   const categories = await VW_DB.getSetting('product_categories', ['Tiles','Sanitary','Electrical','Paints','Plumbing','Hardware','Plywood','Steel','Waterproofing','Glass','Appliances']);
-  const loadingConfig = await VW_DB.getSetting('loading_config', {
-    rules: [
-      { category: 'Tiles', chargePerUnit: 15, unit: 'box', minCharge: 200 },
-      { category: 'Granite', chargePerUnit: 50, unit: 'slab', minCharge: 300 },
-      { category: 'Sanitary', chargePerUnit: 30, unit: 'pc', minCharge: 150 },
-    ],
-    ccSilverDiscount: 10,
-    ccGoldDiscount: 20,
-  });
-  const transportConfig = await VW_DB.getSetting('transport_config', {
-    lightVehiclePerKm: 25,
-    heavyVehiclePerKm: 45,
-    minimumCharge: 300,
-    freeAbove: 0,
-    storeLat: 16.5206153,
-    storeLng: 80.5999189,
-  });
-  const escalationConfig = await VW_DB.getSetting('escalation_config', {
-    tlMinutes: 60, fmMinutes: 180, smMinutes: 360,
-    managementPhone: '', businessHoursStart: 9, businessHoursEnd: 21
-  });
-  const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
-  const floorCfg = await VW_DB.getSetting('floor_delivery_config', {
-    loading_within_10ft:5, loading_beyond_10ft:8,
-    floor_rates_per_box:{'G':0,'1':6,'2':10,'3':14,'4':18,'5':22}
-  });
-  // Pull escalation staff from HR by designation
-  const allStaff = await VW_DB.all(VW_DB.STORES.staff);
-  const allAtt = await VW_DB.all(VW_DB.STORES.attendance);
-  const today = new Date().toISOString().split('T')[0];
-  const escalationDesignations = ['TL', 'floor_manager', 'store_manager'];
-  const escalationStaff = allStaff
-    .filter(s => escalationDesignations.includes(s.designation) && s.active !== false)
-    .map(s => {
-      const todayAtt = allAtt.find(a => a.staffId === s.id && a.date === today);
-      const onBreak = todayAtt?.currentlyOnBreak || false;
-      const punchedOut = todayAtt?.punchOut && !todayAtt?.punchIn;
-      const isAvailable = todayAtt?.punchIn && !onBreak && !punchedOut;
-      return { ...s, onBreak, isAvailable };
-    })
-    .sort((a,b) => {
-      const order = { TL:0, floor_manager:1, store_manager:2 };
-      return (order[a.designation]||3) - (order[b.designation]||3);
-    });
-
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">📱 WhatsApp & Store Info</h3>
@@ -12097,80 +12052,9 @@ async function renderSettingsStore() {
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">📦 Loading, Unloading & Transport</h3>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Packing is always <strong>free</strong>. Configure loading/unloading per category and transport rates per vehicle type.</p>
-
-    <!-- LOADING CHARGES PER CATEGORY -->
-    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Loading & Unloading — Per Unit/Slab</div>
-    <div id="loading-rules-ui">
-      ${(loadingConfig.rules||[]).map((r,i) => `
-      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 28px;gap:6px;margin-bottom:6px;align-items:center">
-        <div class="form-group" style="margin:0">
-          <input type="text" value="${r.category||''}" placeholder="Category (e.g. Tiles)" 
-            oninput="VW_SETTINGS.updateLoadingRule(${i},'category',this.value)" style="font-size:13px">
-        </div>
-        <div class="form-group" style="margin:0">
-          <input type="number" value="${r.chargePerUnit||0}" placeholder="₹/unit" 
-            oninput="VW_SETTINGS.updateLoadingRule(${i},'chargePerUnit',this.value)" style="font-size:13px">
-        </div>
-        <div class="form-group" style="margin:0">
-          <input type="text" value="${r.unit||'box'}" placeholder="unit" 
-            oninput="VW_SETTINGS.updateLoadingRule(${i},'unit',this.value)" style="font-size:13px">
-        </div>
-        <div class="form-group" style="margin:0">
-          <input type="number" value="${r.minCharge||0}" placeholder="Min ₹" 
-            oninput="VW_SETTINGS.updateLoadingRule(${i},'minCharge',this.value)" style="font-size:13px">
-        </div>
-        <button onclick="VW_SETTINGS.removeLoadingRule(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0">✕</button>
-      </div>`).join('')}
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:16px">
-      <button class="btn-sm" onclick="VW_SETTINGS.addLoadingRule()">+ Add Category</button>
-      <button class="btn-primary" onclick="VW_SETTINGS.saveLoadingConfig()">Save Loading Rules</button>
-    </div>
-
-    <!-- CONTRACTOR CLUB DISCOUNTS -->
-    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Contractor Club Discounts on Loading</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
-      <div class="form-group" style="margin:0">
-        <label>Silver Tier Discount %</label>
-        <input type="number" id="cc-silver-disc" value="${loadingConfig.ccSilverDiscount||10}" min="0" max="100" placeholder="e.g. 10">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>Gold Tier Discount %</label>
-        <input type="number" id="cc-gold-disc" value="${loadingConfig.ccGoldDiscount||20}" min="0" max="100" placeholder="e.g. 20">
-      </div>
-    </div>
-
-    <!-- TRANSPORT RATES -->
-    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Transport Rates (₹ per km)</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div class="form-group" style="margin:0">
-        <label>🚐 Light Vehicle ₹/km</label>
-        <input type="number" id="transport-light" value="${transportConfig.lightVehiclePerKm||25}" min="0" placeholder="e.g. 25">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>🚛 Heavy Vehicle ₹/km<br><span style="font-size:10px;color:var(--text3)">(Tiles/Granite truck)</span></label>
-        <input type="number" id="transport-heavy" value="${transportConfig.heavyVehiclePerKm||45}" min="0" placeholder="e.g. 45">
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div class="form-group" style="margin:0">
-        <label>Minimum transport charge ₹</label>
-        <input type="number" id="transport-min" value="${transportConfig.minimumCharge||300}" min="0" placeholder="e.g. 300">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>Free transport above ₹ order value</label>
-        <input type="number" id="transport-free-above" value="${transportConfig.freeAbove||0}" min="0" placeholder="0 = never free">
-      </div>
-    </div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Store location: 16.5206153°N, 80.5999189°E (NH-65 Bhavanipuram) — used to auto-calculate distance to site pincode</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="form-group" style="margin:0"><label>Store Lat</label><input type="number" id="store-lat" value="${transportConfig.storeLat||16.5206153}" step="0.0001"></div>
-      <div class="form-group" style="margin:0"><label>Store Lng</label><input type="number" id="store-lng" value="${transportConfig.storeLng||80.5999189}" step="0.0001"></div>
-    </div>
-    <button class="btn-primary full-width" onclick="VW_SETTINGS.saveTransportConfig()">Save Transport Config</button>
+  <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--text2)">
+    📦 Loading, unloading, transport rates and floor delivery charges have been moved to <strong>Tile Settings</strong> tab for a cleaner setup experience.
+    <button class="btn-sm" style="margin-left:8px;margin-top:4px" onclick="VW_SETTINGS.switchSettingsTab('tile',document.getElementById('stab-tile'))">→ Open Tile Settings</button>
   </div>
 
   <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:10px;font-size:12px;color:var(--text2)">
@@ -12192,21 +12076,26 @@ async function renderTileSettings() {
     wastage_pct: 5,
   });
   const spacerCfg = await VW_DB.getSetting('tile_spacer_config', {
-    pcs_per_packet: 100,
-    spacers_per_tile: 4,
-    min_size_mm: 300,
+    pcs_per_packet: 100, spacers_per_tile: 4, min_size_mm: 300,
+  });
+  const transportConfig = await VW_DB.getSetting('transport_config', {
+    lightVehiclePerKm: 25, heavyVehiclePerKm: 45, minimumCharge: 300, freeAbove: 0,
   });
 
   // All tile sizes from TILE_SIZES constant in tiles_granite.js
+  // Exact inch conversion: mm ÷ 25.4 = inches, sqft = (L_inch × W_inch) / 144
+  function mmToSqft(mm) {
+    const [l,w] = mm.split('×').map(Number);
+    if(!l||!w) return 0;
+    const li = l/25.4, wi = w/25.4;
+    return Math.round((li*wi/144)*1000)/1000; // keep 3 decimal places, no rounding
+  }
   const SIZES = window.TILE_SIZES_SETTINGS || [
-    {mm:'100×100',label:'100×100mm (4×4")'},{mm:'150×150',label:'150×150mm (6×6")'},
-    {mm:'200×200',label:'200×200mm (8×8")'},{mm:'200×300',label:'200×300mm (8×12")'},
-    {mm:'300×300',label:'300×300mm (12×12")'},{mm:'300×450',label:'300×450mm (12×18")'},
-    {mm:'300×600',label:'300×600mm (12×24")'},{mm:'400×400',label:'400×400mm (16×16")'},
-    {mm:'400×800',label:'400×800mm (16×32")'},{mm:'450×900',label:'450×900mm (18×36")'},
-    {mm:'600×600',label:'600×600mm (2×2 ft)'},{mm:'600×900',label:'600×900mm (2×3 ft)'},
-    {mm:'600×1200',label:'600×1200mm (2×4 ft)'},{mm:'800×800',label:'800×800mm (32×32")'},
-    {mm:'800×1600',label:'800×1600mm (32×64")'},{mm:'1000×1000',label:'1000×1000mm (40×40")'},
+    {mm:'100×100'},{mm:'150×150'},{mm:'200×200'},{mm:'200×300'},{mm:'250×375'},
+    {mm:'300×300'},{mm:'300×450'},{mm:'300×600'},{mm:'400×400'},{mm:'400×800'},
+    {mm:'450×900'},{mm:'600×600'},{mm:'600×900'},{mm:'600×1200'},{mm:'800×800'},
+    {mm:'800×1600'},{mm:'1000×1000'},{mm:'1200×1200'},{mm:'1200×1800'},
+    {mm:'2400×800'},{mm:'3000×800'},{mm:'1200×2400'},{mm:'800×2400'},
   ];
 
   // Merge stored weights into size list
@@ -12215,10 +12104,7 @@ async function renderTileSettings() {
   const sizeRows = SIZES.map(s => ({
     ...s,
     weight: weightMap[s.mm]?.weight_per_box || '',
-    sqft: (() => {
-      const [l,w] = s.mm.split('×').map(Number);
-      return l && w ? Math.round((l/1000)*(w/1000)*10.764*100)/100 : '';
-    })(),
+    sqft: mmToSqft(s.mm),
     tiles_per_box: weightMap[s.mm]?.tiles_per_box || '',
     thickness_mm: weightMap[s.mm]?.thickness_mm || '',
     spacer_required: weightMap[s.mm]?.spacer_required !== false,
@@ -12231,55 +12117,78 @@ async function renderTileSettings() {
     <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_SETTINGS.saveTileSettings()">💾 Save All</button>
   </div>
 
+
   <!-- TILE SIZE MASTER TABLE -->
   <div class="card" style="margin-bottom:14px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h3 class="card-title" style="margin:0">📐 Tile Size Configuration</h3>
-      <div style="font-size:11px;color:var(--text3)">Sqft/tile auto-calculated from dimensions</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="VW_SETTINGS.autoFillDefaultWeights()">⚡ Auto-fill</button>
+        <button class="btn-sm" onclick="VW_SETTINGS.addCustomSize()">+ Add Size</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+      Sqft/tile = (L × W in inches) ÷ 144 · Exact 3-decimal precision · Checkboxes auto-save on change
     </div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:600px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px">
         <thead>
-          <tr style="border-bottom:2px solid var(--border)">
+          <tr style="border-bottom:2px solid var(--border);background:var(--bg2)">
             <th style="text-align:left;padding:8px 6px;color:var(--text3);font-weight:600;white-space:nowrap">Size (mm)</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Sqft/Tile</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Tiles/Box</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Thickness (mm)</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Wt/Box (kg)</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Spacer</th>
-            <th style="text-align:center;padding:8px 6px;color:var(--text3);font-weight:600">Active</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--gold);font-weight:700">Sqft/pc</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Tiles/Box</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Thick mm</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Wt/Box kg</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Spacer ✓</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Active ✓</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Del</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="ts-size-tbody">
           ${sizeRows.map((s, i) => `
-          <tr style="border-bottom:1px solid var(--border2);${!s.active?'opacity:0.45':''}">
-            <td style="padding:7px 6px;font-weight:600;white-space:nowrap">${s.mm}<div style="font-size:10px;color:var(--text3);font-weight:400">${s.label.split('(')[1]?.replace(')','')?.trim()||''}</div></td>
-            <td style="text-align:center;padding:7px 6px;color:var(--gold);font-weight:700">${s.sqft||'—'}</td>
-            <td style="text-align:center;padding:7px 4px">
+          <tr id="ts-row-${i}" style="border-bottom:1px solid var(--border2);${!s.active?'opacity:0.5':''}">
+            <td style="padding:7px 6px;font-weight:700;white-space:nowrap;font-size:13px">${s.mm}
+              <div style="font-size:9px;color:var(--text3);font-weight:400">${(() => {
+                const [l,w] = s.mm.split('×').map(Number);
+                const li = Math.round(l/25.4*10)/10, wi = Math.round(w/25.4*10)/10;
+                return li+'×'+wi+'"';
+              })()}</div>
+            </td>
+            <td style="text-align:center;padding:7px 4px;color:var(--gold);font-weight:800;font-size:13px">${s.sqft}</td>
+            <td style="text-align:center;padding:4px 2px">
               <input type="number" id="ts-tpb-${i}" value="${s.tiles_per_box||''}" placeholder="—"
-                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="1" step="1">
+                style="width:46px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" min="1" step="1"
+                onchange="VW_SETTINGS.saveTileWeightTable()">
             </td>
-            <td style="text-align:center;padding:7px 4px">
+            <td style="text-align:center;padding:4px 2px">
               <input type="number" id="ts-thick-${i}" value="${s.thickness_mm||''}" placeholder="—"
-                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="5" max="25" step="1">
+                style="width:46px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" min="5" max="25" step="1"
+                onchange="VW_SETTINGS.saveTileWeightTable()">
             </td>
-            <td style="text-align:center;padding:7px 4px">
+            <td style="text-align:center;padding:4px 2px">
               <input type="number" id="ts-wt-${i}" value="${s.weight||''}" placeholder="—"
-                style="width:55px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)" min="1" max="100" step="0.5">
+                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" min="1" max="150" step="0.5"
+                onchange="VW_SETTINGS.saveTileWeightTable()">
             </td>
-            <td style="text-align:center;padding:7px 4px">
-              <input type="checkbox" id="ts-spc-${i}" ${s.spacer_required?'checked':''} style="width:18px;height:18px">
+            <td style="text-align:center;padding:4px 2px">
+              <input type="checkbox" id="ts-spc-${i}" ${s.spacer_required?'checked':''}
+                style="width:18px;height:18px;cursor:pointer" onchange="VW_SETTINGS.saveTileWeightTable()">
             </td>
-            <td style="text-align:center;padding:7px 4px">
-              <input type="checkbox" id="ts-act-${i}" ${s.active?'checked':''} style="width:18px;height:18px">
+            <td style="text-align:center;padding:4px 2px">
+              <input type="checkbox" id="ts-act-${i}" ${s.active?'checked':''}
+                style="width:18px;height:18px;cursor:pointer"
+                onchange="document.getElementById('ts-row-${i}').style.opacity=this.checked?'1':'0.5';VW_SETTINGS.saveTileWeightTable()">
+            </td>
+            <td style="text-align:center;padding:4px 2px">
+              <button onclick="VW_SETTINGS.deleteTileSize(${i})"
+                style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px" title="Delete size">✕</button>
             </td>
           </tr>`).join('')}
         </tbody>
       </table>
     </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn-primary" style="flex:1" onclick="VW_SETTINGS.saveTileWeightTable()">💾 Save Size Config</button>
-      <button class="btn-secondary" onclick="VW_SETTINGS.autoFillDefaultWeights()">Auto-fill Default Weights</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-primary" style="flex:1" onclick="VW_SETTINGS.saveTileWeightTable()">💾 Save All Changes</button>
     </div>
   </div>
 
@@ -12361,27 +12270,116 @@ async function renderTileSettings() {
       </div>
     </div>
     <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveSpacerConfig()">💾 Save Spacer Config</button>
+  </div>
+
+  <!-- TRANSPORT CONFIG — moved here from Store tab -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">🚛 Transport Rates</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Per km pricing for tile deliveries. Set category-wise in next step.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="margin:0">
+        <label>🚐 Mini Truck / Tata Ace ₹/km</label>
+        <input type="number" id="ts-transport-light" value="${transportConfig?.lightVehiclePerKm||25}" min="0" placeholder="e.g. 25">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>🚛 Large Truck ₹/km</label>
+        <input type="number" id="ts-transport-heavy" value="${transportConfig?.heavyVehiclePerKm||45}" min="0" placeholder="e.g. 45">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div class="form-group" style="margin:0">
+        <label>Minimum charge ₹</label>
+        <input type="number" id="ts-transport-min" value="${transportConfig?.minimumCharge||300}" min="0" placeholder="300">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Free above ₹ order value</label>
+        <input type="number" id="ts-transport-free" value="${transportConfig?.freeAbove||0}" min="0" placeholder="0 = never free">
+      </div>
+    </div>
+    <button class="btn-primary" onclick="VW_SETTINGS.saveTileTransportConfig()">💾 Save Transport Rates</button>
   </div>`;
 }
 
+async function saveTileTransportConfig() {
+  await VW_DB.setSetting('transport_config', {
+    lightVehiclePerKm: parseFloat(document.getElementById('ts-transport-light')?.value||25)||25,
+    heavyVehiclePerKm: parseFloat(document.getElementById('ts-transport-heavy')?.value||45)||45,
+    minimumCharge: parseFloat(document.getElementById('ts-transport-min')?.value||300)||300,
+    freeAbove: parseFloat(document.getElementById('ts-transport-free')?.value||0)||0,
+    storeLat: 16.5206153, storeLng: 80.5999189,
+  });
+  showToast('Transport rates saved ✓', 'success');
+}
+const ALL_TILE_SIZES_DEFAULT = [
+  '100×100','150×150','200×200','200×300','250×375',
+  '300×300','300×450','300×600','400×400','400×800',
+  '450×900','600×600','600×900','600×1200','800×800',
+  '800×1600','1000×1000','1200×1200','1200×1800',
+  '2400×800','3000×800','1200×2400','800×2400',
+];
+
+async function _getTileSizes() {
+  const stored = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
+  if (stored?.sizes?.length) return stored.sizes;
+  return ALL_TILE_SIZES_DEFAULT.map(mm => ({ mm }));
+}
+
 async function saveTileWeightTable() {
-  // Collect all size data from the table
-  const SIZES = window.TILE_SIZES_SETTINGS || [
-    {mm:'100×100'},{mm:'150×150'},{mm:'200×200'},{mm:'200×300'},
-    {mm:'300×300'},{mm:'300×450'},{mm:'300×600'},{mm:'400×400'},
-    {mm:'400×800'},{mm:'450×900'},{mm:'600×600'},{mm:'600×900'},
-    {mm:'600×1200'},{mm:'800×800'},{mm:'800×1600'},{mm:'1000×1000'},
-  ];
-  const sizes = SIZES.map((s, i) => ({
-    mm: s.mm, label: s.label || s.mm,
-    tiles_per_box: parseFloat(document.getElementById(`ts-tpb-${i}`)?.value||0)||null,
-    thickness_mm: parseFloat(document.getElementById(`ts-thick-${i}`)?.value||0)||null,
-    weight_per_box: parseFloat(document.getElementById(`ts-wt-${i}`)?.value||0)||null,
-    spacer_required: document.getElementById(`ts-spc-${i}`)?.checked !== false,
-    active: document.getElementById(`ts-act-${i}`)?.checked !== false,
-  }));
+  const tbody = document.getElementById('ts-size-tbody');
+  if (!tbody) { showToast('Tile size table not visible', 'warn'); return; }
+  const rows = tbody.querySelectorAll('tr[id^="ts-row-"]');
+  const sizes = [];
+  rows.forEach((row, i) => {
+    const mmEl = row.querySelector('td:first-child');
+    const mm = mmEl?.textContent?.trim().split('\n')[0]?.trim();
+    if (!mm) return;
+    const [l,w] = mm.split('×').map(Number);
+    const li = l/25.4, wi = w/25.4;
+    const sqft = Math.round(li*wi/144*1000)/1000;
+    sizes.push({
+      mm,
+      sqft,
+      tiles_per_box: parseFloat(document.getElementById(`ts-tpb-${i}`)?.value||0)||null,
+      thickness_mm: parseFloat(document.getElementById(`ts-thick-${i}`)?.value||0)||null,
+      weight_per_box: parseFloat(document.getElementById(`ts-wt-${i}`)?.value||0)||null,
+      spacer_required: document.getElementById(`ts-spc-${i}`)?.checked !== false,
+      active: document.getElementById(`ts-act-${i}`)?.checked !== false,
+    });
+  });
   await VW_DB.setSetting('tile_weight_config', { sizes });
-  showToast('Tile size configuration saved ✓', 'success');
+  showToast('Saved ✓', 'success');
+}
+
+async function deleteTileSize(i) {
+  if (!confirm('Delete this tile size?')) return;
+  const row = document.getElementById(`ts-row-${i}`);
+  if (row) { row.remove(); await saveTileWeightTable(); }
+}
+
+async function addCustomSize() {
+  const mm = prompt('Enter size in mm (e.g. 1500×3000):');
+  if (!mm || !mm.includes('×')) { showToast('Enter format like 600×1200', 'warn'); return; }
+  const tbody = document.getElementById('ts-size-tbody');
+  if (!tbody) return;
+  const i = tbody.querySelectorAll('tr').length;
+  const [l,w] = mm.split('×').map(Number);
+  const li = l/25.4, wi = w/25.4;
+  const sqft = Math.round(li*wi/144*1000)/1000;
+  const tr = document.createElement('tr');
+  tr.id = `ts-row-${i}`;
+  tr.style.borderBottom = '1px solid var(--border2)';
+  tr.innerHTML = `
+    <td style="padding:7px 6px;font-weight:700;white-space:nowrap;font-size:13px">${mm}</td>
+    <td style="text-align:center;padding:7px 4px;color:var(--gold);font-weight:800">${sqft}</td>
+    <td style="text-align:center;padding:4px 2px"><input type="number" id="ts-tpb-${i}" placeholder="—" style="width:46px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" onchange="VW_SETTINGS.saveTileWeightTable()"></td>
+    <td style="text-align:center;padding:4px 2px"><input type="number" id="ts-thick-${i}" placeholder="—" style="width:46px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" onchange="VW_SETTINGS.saveTileWeightTable()"></td>
+    <td style="text-align:center;padding:4px 2px"><input type="number" id="ts-wt-${i}" placeholder="—" style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" onchange="VW_SETTINGS.saveTileWeightTable()"></td>
+    <td style="text-align:center;padding:4px 2px"><input type="checkbox" id="ts-spc-${i}" checked style="width:18px;height:18px" onchange="VW_SETTINGS.saveTileWeightTable()"></td>
+    <td style="text-align:center;padding:4px 2px"><input type="checkbox" id="ts-act-${i}" checked style="width:18px;height:18px" onchange="VW_SETTINGS.saveTileWeightTable()"></td>
+    <td style="text-align:center;padding:4px 2px"><button onclick="VW_SETTINGS.deleteTileSize(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px">✕</button></td>
+  `;
+  tbody.appendChild(tr);
+  showToast(`${mm} added — fill in details and save`, 'info');
 }
 
 async function saveFloorConfig() {
@@ -12860,6 +12858,7 @@ window.VW_SETTINGS = {
   renderSettingsPage, switchSettingsTab,
   renderTileSettings, saveTileSettings, saveTileWeightTable, saveFloorConfig,
   saveGroutConfig, saveSpacerConfig, autoFillDefaultWeights,
+  deleteTileSize, addCustomSize, saveTileTransportConfig,
   saveAccountName, changePIN, approveResetPin,
   approveProfile, updateProfileRole,
   togglePersonPerm, resetToRoleDefaults,
@@ -22116,9 +22115,9 @@ function _renderStep1() {
           style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:12px;color:var(--text)">
           📷 Upload Floor Plan
         </button>
-        <button onclick="document.getElementById('tq-rooms-list').scrollIntoView()"
-          style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:12px;color:var(--text3)">
-          ✍️ Enter Manually
+        <button onclick="closeSheet();VW_TILES.tqAddRoom()" 
+          style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer;font-size:12px;color:var(--text)">
+          ✍️ Add Room Manually
         </button>
       </div>
       <input type="file" id="tq-floorplan-input" accept="image/*,application/pdf" style="display:none" onchange="VW_TILES.tqReadFloorPlan(this)">
@@ -22262,8 +22261,9 @@ function _renderMeasureForm(type, areaIdx, prefill) {
         <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
       </div>
       <div class="form-group" style="margin:0;flex:1">
-        <label>Skirting (running ft) <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-        <input type="number" id="${pfx}-skirt" value="${p.skirting||''}" placeholder="Leave blank = none" min="0" step="0.5">
+        <label>Skirting <span style="color:var(--text3);font-weight:400;font-size:10px">running ft · optional</span></label>
+        <input type="number" id="${pfx}-skirt" value="${p.skirting||''}" placeholder="e.g. 54 ft perimeter" min="0" step="0.5">
+        <div style="font-size:9px;color:var(--text3);margin-top:1px">Room perimeter in ft · (L+W)×2 · 4-inch height assumed</div>
       </div>
     </div>`:''}`;
 
@@ -22705,8 +22705,14 @@ async function _renderStep6() {
   }
 
   // Calculate box requirement
-  const sz_sqft = sz ? sz.ft * sz.ft : 1;
-  const reqBoxes = products.length ? Math.ceil(totalSqft / (products[0]?.coveragePerBox || sz_sqft*4)) : 0;
+  // Sqft per tile from actual mm dimensions (not sz.ft which is a ratio, not sqft)
+  let sz_sqft_actual = 4.0; // default 600×600 ≈ 4 sqft
+  if (sz?.mm) {
+    const [mmL, mmW] = sz.mm.split('×').map(Number);
+    if (mmL && mmW) sz_sqft_actual = (mmL * mmW) / (304.8 * 304.8); // mm² → sqft
+  }
+  const sz_coverage = sz?.coverage_per_box || (sz_sqft_actual * 4); // 4 tiles/box default
+  const reqBoxes = products.length ? Math.ceil(totalSqft / (products[0]?.coveragePerBox || products[0]?.coverage_per_box || sz_coverage)) : Math.ceil(totalSqft / sz_coverage);
 
   // Dead stock scoring: combine age score + quantity match score
   const scored = products.map(p => {
@@ -22799,7 +22805,7 @@ function _renderStep7() {
     const parts = (sz.mm||'600×600').split('×');
     const L = parseFloat(parts[0]||600) / 1000; // metres
     const W = parseFloat(parts[1]||600) / 1000;
-    const T = sz.thickness || 8; // mm, default 8mm
+    const T = sz.thickness || sz.thicknessMm || 9; // mm, default 9mm (industry standard for vitrified)
     const J = spacerMm; // mm
     const Area_m2 = totalSqft / 10.764; // convert sqft to m²
     // Saint-Gobain formula
@@ -23247,8 +23253,7 @@ async function _renderStep8() {
     </div>
     ${_tqState.laborRequired ? `
     <div style="background:rgba(34,197,94,0.06);border-radius:10px;padding:10px;font-size:11px;color:var(--text2)">
-      ✅ Labor requirement will be posted to our contractor network after saving this quote.<br>
-      Verified contractors bid on the work. Customer number is masked. All procurement through V Wholesale. V Wholesale margin: ₹2/sqft.
+      ✅ Your requirement will be shared with our verified contractor network. They will contact you with competitive rates. All material procurement through V Wholesale — quality assured.
     </div>` : ''}
   </div>
 
@@ -23404,7 +23409,7 @@ async function postLaborFromQuotation() {
   await VW_DB.client.from('labor_requirements').insert({
     req_no: reqNo,
     customer_name: st.customer.name || 'Unknown',
-    customer_phone: st.customer.phone || '',
+    customer_phone: (st.customer.phone || '').replace(/(\d{6})(\d{4})/, 'XXXXXX$2'), // mask first 6 digits
     site_address: st.customer.site || '',
     work_type: 'tile_laying',
     total_area_sqft: _tqTotalSqft(),
@@ -23420,6 +23425,22 @@ async function postLaborFromQuotation() {
 
 
 // ───── NAV HELPERS ──────────────────────────────────────────
+function _updateStepHeader() {
+  const steps = ['Rooms','Tile Size','Spacer','Adhesive','Beading','Stock','Grout/Epoxy','Summary'];
+  const s = _tqState.step;
+  // Update the step indicator in the module header
+  const headerEl = document.querySelector('.module-header h2')?.nextElementSibling;
+  if (headerEl) {
+    headerEl.innerHTML = steps.map((l,i) => {
+      const active = i+1 === s;
+      const done = i+1 < s;
+      return `<span style="color:${active?'var(--gold)':done?'var(--green)':'var(--text3)'};font-weight:${active?700:400}">${done?'✓':i+1}.${l}</span>`;
+    }).join(' → ');
+  }
+  // Also scroll to top of page
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
 async function tqNext() {
   _tqState.step = Math.min(8, _tqState.step + 1);
   const el = document.getElementById('tq-step-content');
@@ -23434,6 +23455,7 @@ async function tqNext() {
                  _tqState.step === 5 ? _renderStep5() :
                  _renderStep7();
     el.innerHTML = html;
+    _updateStepHeader();
   }
 }
 
@@ -23450,6 +23472,7 @@ async function tqBack() {
                  _tqState.step === 5 ? _renderStep5() :
                  _renderStep7();
     el.innerHTML = html;
+    _updateStepHeader();
   }
 }
 
