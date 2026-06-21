@@ -21973,18 +21973,19 @@ const ADHESIVE_TYPES = {
   },
 };
 
-// ───── BEADING CATALOG ─────────────────────────────────────
+// ─── BEADING: 3 materials, colour from inventory ────────────
+// SS: premium, rust-proof, wet areas | Aluminium: budget, dry areas | PVC: economy, flexible
 const BEADING_CATALOG = [
-  { id:'b1', name:'L-Bead 8mm Aluminum Silver', material:'Aluminum', size:8, finish:'Silver', placement:'corner', rm_per_pc:2.5, suits:['floor','wall'] },
-  { id:'b2', name:'L-Bead 10mm Aluminum Silver', material:'Aluminum', size:10, finish:'Silver', placement:'corner', rm_per_pc:2.5, suits:['floor','wall','elevation'] },
-  { id:'b3', name:'L-Bead 12mm Aluminum Silver', material:'Aluminum', size:12, finish:'Silver', placement:'corner', rm_per_pc:2.5, suits:['floor','elevation'] },
-  { id:'b4', name:'L-Bead 8mm SS Gold', material:'SS', size:8, finish:'Gold', placement:'corner', rm_per_pc:2.5, suits:['wall','bathroom'] },
-  { id:'b5', name:'L-Bead 10mm SS Gold', material:'SS', size:10, finish:'Gold', placement:'corner', rm_per_pc:2.5, suits:['wall','bathroom','kitchen'] },
-  { id:'b6', name:'T-Bead 10mm Aluminum', material:'Aluminum', size:10, finish:'Silver', placement:'floor-wall-junction', rm_per_pc:2.5, suits:['floor'] },
-  { id:'b7', name:'Schluter Edge 8mm SS', material:'SS', size:8, finish:'Brushed', placement:'edge', rm_per_pc:2.44, suits:['wall','elevation'] },
-  { id:'b8', name:'PVC Corner Bead 10mm White', material:'PVC', size:10, finish:'White', placement:'corner', rm_per_pc:2.5, suits:['wall','dado'] },
-  { id:'b9', name:'Stair Nosing 40mm SS', material:'SS', size:40, finish:'Brushed', placement:'staircase', rm_per_pc:2.44, suits:['staircase'] },
-  { id:'b10', name:'Round Edge 6mm Aluminum', material:'Aluminum', size:6, finish:'Silver', placement:'edge', rm_per_pc:2.5, suits:['wall','dado','bathroom'] },
+  { id:'ss_8',  name:'SS Corner Bead 8mm',          material:'SS',        size:8,  finish:'Silver', note:'Wet areas · Does not rust · Premium', rmsPerMeter:1 },
+  { id:'ss_10', name:'SS Corner Bead 10mm',          material:'SS',        size:10, finish:'Silver', note:'Standard wall/floor choice · Durable',  rmsPerMeter:1 },
+  { id:'ss_12', name:'SS Corner Bead 12mm',          material:'SS',        size:12, finish:'Silver', note:'Thick tiles ≥10mm · Elevation',          rmsPerMeter:1 },
+  { id:'al_8',  name:'Aluminium Bead 8mm',           material:'Aluminium', size:8,  finish:'Silver', note:'Budget · Anodised · Dry areas',           rmsPerMeter:1 },
+  { id:'al_10', name:'Aluminium Bead 10mm',          material:'Aluminium', size:10, finish:'Silver', note:'Living room/bedroom · Popular size',       rmsPerMeter:1 },
+  { id:'al_12', name:'Aluminium Bead 12mm',          material:'Aluminium', size:12, finish:'Silver', note:'Large format tiles · Elevation frames',    rmsPerMeter:1 },
+  { id:'pv_8',  name:'PVC Corner Bead 8mm',          material:'PVC',       size:8,  finish:'White',  note:'Economy · Flexible for curves',            rmsPerMeter:1 },
+  { id:'pv_10', name:'PVC Corner Bead 10mm',         material:'PVC',       size:10, finish:'White',  note:'Most popular economy bead',                rmsPerMeter:1 },
+  { id:'sn_al', name:'Stair Nosing Aluminium 40mm',  material:'Aluminium', size:40, finish:'Silver', note:'Stairs · Anti-skid · Safety',              rmsPerMeter:1 },
+  { id:'sn_ss', name:'Stair Nosing SS 40mm',         material:'SS',        size:40, finish:'Silver', note:'Premium stairs · Outdoor/wet',             rmsPerMeter:1 },
 ];
 
 // ───── ROOM TYPE DEFINITIONS ────────────────────────────────
@@ -22103,7 +22104,6 @@ function _renderStep1() {
   <div class="card" style="margin-bottom:10px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
       <h3 class="card-title" style="margin:0">Rooms & Areas</h3>
-      <button class="btn-sm" onclick="VW_TILES.tqAddRoom()" style="background:var(--gold);color:#000">+ Add Room</button>
     </div>
 
     <!-- FLOOR PLAN UPLOAD OPTION -->
@@ -22485,21 +22485,27 @@ function _refreshStep1() {
 }
 
 // ───── STEP 2: TILE SIZE ────────────────────────────────────
-function _renderStep2() {
+async function _renderStep2() {
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Select Tile Size</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Sizes shown in mm with inch equivalent. Final calculation in sqft.</p>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px" id="tq-size-grid">
-      ${TILE_SIZES.map(ts => {
-        const sel = _tqState.selectedSize?.id === ts.id;
-        return `<button onclick="VW_TILES.tqSelectSize('${ts.id}')"
-          style="background:${sel?'var(--gold-muted)':'var(--bg2)'};border:${sel?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:10px;padding:10px 8px;cursor:pointer;text-align:left">
-          <div style="font-size:13px;font-weight:700;color:${sel?'var(--gold)':'var(--text)'}">${ts.mm}mm</div>
-          <div style="font-size:10px;color:var(--text3)">(${ts.inch})</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${ts.type.join(', ')}</div>
-        </button>`;
-      }).join('')}
+      ${await (async () => {
+        // Only show sizes marked 'active' in Tile Settings
+        const cfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
+        const activeMms = (cfg.sizes||[]).filter(s=>s.active!==false).map(s=>s.mm);
+        const visible = activeMms.length > 0 ? TILE_SIZES.filter(ts=>activeMms.includes(ts.mm)) : TILE_SIZES;
+        return visible.map(ts => {
+          const sel = _tqState.selectedSize?.id === ts.id;
+          return `<button onclick="VW_TILES.tqSelectSize('${ts.id}')"
+            style="background:${sel?'var(--gold-muted)':'var(--bg2)'};border:${sel?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:10px;padding:10px 8px;cursor:pointer;text-align:left">
+            <div style="font-size:13px;font-weight:700;color:${sel?'var(--gold)':'var(--text)'}">${ts.mm}mm</div>
+            <div style="font-size:10px;color:var(--text3)">(${ts.inch})</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${ts.type.join(', ')}</div>
+          </button>`;
+        }).join('');
+      })()}
     </div>
   </div>
 
@@ -22652,55 +22658,60 @@ function _renderStep4() {
 // ───── STEP 5: BEADING ──────────────────────────────────────
 function _renderStep5() {
   const selectedBeads = _tqState.beading;
-  const totalSqft = _tqTotalSqft();
-
-  // Auto-suggest beads based on tile size
   const sz = _tqState.selectedSize;
   const szMm = sz ? parseInt(sz.mm.split('×')[0]) : 300;
   const suggestedSize = szMm >= 800 ? 12 : szMm >= 600 ? 10 : 8;
+  const isWet = _tqState.rooms.some(r=>r.type==='Bathroom'||r.type==='Utility');
+
+  const MATERIALS = [
+    { key:'SS', label:'Stainless Steel', icon:'⭐', desc:'Premium · Rust-proof · Recommended for wet areas & kitchen', color:'rgba(245,200,66,0.1)', border:'var(--gold-border)' },
+    { key:'Aluminium', label:'Aluminium', icon:'🔘', desc:'Good quality · Budget-friendly · Anodised finish · Dry areas', color:'var(--bg2)', border:'var(--border)' },
+    { key:'PVC', label:'PVC', icon:'⚪', desc:'Economy · Flexible · Easy to cut · Not for wet/outdoor use', color:'var(--bg2)', border:'var(--border)' },
+  ];
 
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Corner Beading & Edge Profiles</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Beading protects tile edges, gives a premium finish, and prevents chipping at corners.
-      Auto-suggested: <strong>${suggestedSize}mm</strong> for your tile size.
-    </p>
-
-    <!-- Visual placement guide -->
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Where beading is typically used:</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${['External corners (wall-to-wall)','Floor-to-wall junction','Window sill edges','Shower niches','Step edges','Tile-to-tile different heights'].map(p=>`
-        <span style="background:var(--bg3);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text2)">${p}</span>`).join('')}
-      </div>
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--text2)">
+      Suggested: <strong>${suggestedSize}mm</strong> for ${sz?.mm||'your'} tile size
+      ${isWet?' · <strong style="color:var(--gold)">Wet area detected — SS recommended</strong>':''}
     </div>
 
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Select beading (multiple allowed)</div>
-    ${BEADING_CATALOG.map(b => {
-      const isSelected = selectedBeads.find(sb=>sb.id===b.id);
+    ${MATERIALS.map(mat => {
+      const beads = BEADING_CATALOG.filter(b => b.material === mat.key);
       return `
-      <div style="background:${isSelected?'var(--gold-muted)':'var(--bg2)'};border:${isSelected?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:12px;padding:10px;margin-bottom:6px;display:flex;align-items:center;gap:10px">
-        <input type="checkbox" ${isSelected?'checked':''} onchange="VW_TILES.tqToggleBead('${b.id}',this.checked)" style="width:16px;height:16px;flex-shrink:0">
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:var(--text)">${b.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${b.material} · ${b.size}mm · ${b.placement} · ${b.rm_per_pc}m/pc</div>
-        </div>
-        ${isSelected ? `
-        <div style="text-align:right">
-          <input type="number" value="${isSelected.rm||5}" min="1" step="0.5"
-            onchange="VW_TILES.tqSetBeadRm('${b.id}',this.value)"
-            style="width:55px;text-align:center;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:12px;color:var(--text)">
-          <div style="font-size:10px;color:var(--text3)">metres</div>
-          <div style="font-size:11px;color:var(--gold)">${Math.ceil((isSelected.rm||5)/b.rm_per_pc)} pcs</div>
-        </div>` : ''}
+      <div style="background:${mat.color};border:1px solid ${mat.border};border-radius:12px;padding:10px;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:4px">${mat.icon} ${mat.label}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${mat.desc}</div>
+        ${beads.map(b => {
+          const isSelected = selectedBeads.find(sb=>sb.id===b.id);
+          return `
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 8px;background:${isSelected?'rgba(245,200,66,0.12)':'var(--bg3)'};border:${isSelected?'1px solid var(--gold-border)':'1px solid transparent'};border-radius:8px;margin-bottom:4px">
+            <input type="checkbox" ${isSelected?'checked':''} onchange="VW_TILES.tqToggleBead('${b.id}',this.checked)" style="width:16px;height:16px;flex-shrink:0">
+            <div style="flex:1">
+              <div style="font-size:12px;font-weight:${isSelected?700:400};color:${isSelected?'var(--gold)':'var(--text)'}">${b.size}mm ${b.material} Bead</div>
+              <div style="font-size:10px;color:var(--text3)">${b.note}</div>
+            </div>
+            ${isSelected ? `
+            <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+              <input type="number" value="${isSelected.rm||5}" min="0.5" step="0.5"
+                onchange="VW_TILES.tqSetBeadRm('${b.id}',this.value)"
+                style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)">
+              <span style="font-size:10px;color:var(--text3)">m</span>
+            </div>` : ''}
+          </div>`;
+        }).join('')}
       </div>`;
     }).join('')}
 
-    ${selectedBeads.length===0 ? `
+    ${selectedBeads.length > 0 ? `
+    <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:10px;font-size:12px">
+      <div style="font-weight:600;margin-bottom:4px">Selected (${selectedBeads.length}):</div>
+      ${selectedBeads.map(b=>`<div style="color:var(--text2)">${b.size}mm ${b.material} — ${b.rm||5} metres</div>`).join('')}
+    </div>` : `
     <button onclick="VW_TILES.tqSkipBeading()" style="width:100%;padding:10px;border-radius:10px;background:none;border:1px dashed var(--border);font-size:13px;color:var(--text3);cursor:pointer;margin-top:4px">
-      Skip — No beading required
-    </button>` : ''}
+      Skip — No beading required for this project
+    </button>`}
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Select Brand & Tiles</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
@@ -22745,14 +22756,31 @@ async function _renderStep6() {
   }
 
   // Calculate box requirement
-  // Sqft per tile from actual mm dimensions (not sz.ft which is a ratio, not sqft)
-  let sz_sqft_actual = 4.0; // default 600×600 ≈ 4 sqft
+  // Sqft per tile from actual mm dimensions (mm ÷ 25.4 = inches, L×W ÷ 144 = sqft)
+  let sz_sqft_actual = 3.875; // default 600×600
   if (sz?.mm) {
     const [mmL, mmW] = sz.mm.split('×').map(Number);
-    if (mmL && mmW) sz_sqft_actual = (mmL * mmW) / (304.8 * 304.8); // mm² → sqft
+    if (mmL && mmW) {
+      const li = mmL / 25.4, wi = mmW / 25.4; // mm to inches (exact)
+      sz_sqft_actual = (li * wi) / 144; // sq inches to sqft
+    }
   }
-  const sz_coverage = sz?.coverage_per_box || (sz_sqft_actual * 4); // 4 tiles/box default
-  const reqBoxes = products.length ? Math.ceil(totalSqft / (products[0]?.coveragePerBox || products[0]?.coverage_per_box || sz_coverage)) : Math.ceil(totalSqft / sz_coverage);
+  // Tiles per box: get from settings first, then TILE_SIZES, else estimate
+  const sizeConfig = (await VW_DB.getSetting('tile_weight_config', {sizes:[]})).sizes
+    ?.find(s=>s.mm===sz?.mm);
+  const tilesPerBox = sizeConfig?.tiles_per_box || sz?.tilesPerBox || (
+    sz_sqft_actual < 0.5 ? 20 :   // tiny tiles ~20/box
+    sz_sqft_actual < 1.5 ? 12 :   // small-medium
+    sz_sqft_actual < 3.0 ? 6 :    // medium (300x600, 400x800)
+    sz_sqft_actual < 5.0 ? 4 :    // large (600x600)
+    sz_sqft_actual < 9.0 ? 2 :    // very large (800x800)
+    1                              // slab size
+  );
+  const sqftPerBox = sz_sqft_actual * tilesPerBox;
+  const sz_coverage = sqftPerBox;
+  const reqBoxes = products.length
+    ? Math.ceil(totalSqft / (products[0]?.coverage_per_box || products[0]?.coveragePerBox || sqftPerBox))
+    : Math.ceil(totalSqft / sqftPerBox);
 
   // Dead stock scoring: combine age score + quantity match score
   const scored = products.map(p => {
@@ -22798,7 +22826,9 @@ async function _renderStep6() {
           </div>
           <div style="text-align:right;flex-shrink:0">
             ${p.mrp ? `<div style="font-size:13px;font-weight:700;color:var(--gold)">₹${p.mrp}/box</div>` : ''}
-            <div style="font-size:11px;color:${p.stock>=pBoxes?'var(--green)':'var(--red)'}">Need: ${pBoxes} boxes ${p.stock>=pBoxes?'✓':'⚠️ low stock'}</div>
+            <div style="font-size:11px;color:${(p.stock||0)>=(typeof pBoxes==='number'?pBoxes:0)?'var(--green)':'var(--red)'}">
+            Need: ${pBoxes} boxes · In stock: ${p.stock||0} ${(p.stock||0)>=(typeof pBoxes==='number'?pBoxes:0)?'✅ Sufficient':'⚠️ Insufficient — check with manager'}
+          </div>
           </div>
         </div>
         ${isDead && p.executive_incentive_pct ? `
@@ -22841,17 +22871,22 @@ function _renderStep7() {
   // L,W in metres, T=tile thickness mm, J=joint width mm, Area in m2
   // Cement grout wastage factor: ~5%, Epoxy: ~5%
   function calcGroutKg(isEpoxy) {
-    if (!sz) return Math.ceil(totalSqft * 0.01); // fallback if no size
-    const parts = (sz.mm||'600×600').split('×');
-    const L = parseFloat(parts[0]||600) / 1000; // metres
-    const W = parseFloat(parts[1]||600) / 1000;
-    const T = sz.thickness || sz.thicknessMm || 9; // mm, default 9mm (industry standard for vitrified)
-    const J = spacerMm; // mm
-    const Area_m2 = totalSqft / 10.764; // convert sqft to m²
-    // Saint-Gobain formula
-    const raw = ((L + W) / (L * W)) * T * J * Area_m2 * 1.6;
-    const withWaste = raw * 1.05; // +5% wastage
-    return Math.max(1, Math.ceil(withWaste * 10) / 10); // round up to 0.1
+    if (!sz) return Math.ceil(totalSqft / 80); // fallback
+    const parts = (sz.mm||'600×600').split('×').map(Number);
+    const L_mm = parts[0] || 600;
+    const W_mm = parts[1] || 600;
+    const T_mm = sz.thickness || sz.thicknessMm || 9; // tile thickness mm
+    const J_mm = spacerMm || 3; // joint width mm
+
+    // Correct Saint-Gobain formula — ALL dimensions in mm, area in mm²
+    // kg = [(L+W)/(L×W)] × T × J × Area_mm² × density (kg/mm³)
+    // Cement grout density ≈ 1.6 g/cm³ = 1.6e-6 kg/mm³
+    // Epoxy grout density ≈ 1.8 g/cm³ = 1.8e-6 kg/mm³
+    const density = isEpoxy ? 1.8e-6 : 1.6e-6;
+    const Area_mm2 = (totalSqft / 10.764) * 1e6; // sqft → m² → mm²
+    const raw = ((L_mm + W_mm) / (L_mm * W_mm)) * T_mm * J_mm * Area_mm2 * density;
+    const withWaste = raw * 1.10; // +10% wastage buffer
+    return Math.max(0.5, Math.round(withWaste * 10) / 10);
   }
 
   const cementKg = calcGroutKg(false);
@@ -22956,8 +22991,15 @@ async function _renderStep8() {
   const totalWeightKg = weightPerBox * boxesNeeded;
 
   // Auto-select vehicle based on weight
-  const vehicles = vehicleCfg.vehicles || [];
-  const autoVehicle = vehicles.find(v=>totalWeightKg <= v.max_kg) || vehicles[vehicles.length-1];
+  // vehicle_config may be empty — fall back to transport_config rates
+  const transportConfig = await VW_DB.getSetting('transport_config', {
+    lightVehiclePerKm: 25, heavyVehiclePerKm: 45, minimumCharge: 300
+  });
+  const vehicles = vehicleCfg.vehicles?.length ? vehicleCfg.vehicles : [
+    { label:'Mini Truck / Tata Ace', icon:'🚐', max_kg:1500, per_km: transportConfig.lightVehiclePerKm||25, base_fare: transportConfig.minimumCharge||300 },
+    { label:'Large Truck', icon:'🚛', max_kg:8000, per_km: transportConfig.heavyVehiclePerKm||45, base_fare: transportConfig.minimumCharge||300 },
+  ];
+  const autoVehicle = vehicles.find(v=>totalWeightKg <= (v.max_kg||9999)) || vehicles[vehicles.length-1];
 
   // Floor delivery state (stored in _tqState.delivery)
   if (!st.delivery) st.delivery = { type:'self', dropPin:null, distanceKm:0, floors:[], beyondFt:false };
@@ -22970,7 +23012,9 @@ async function _renderStep8() {
   let floorCost = 0;
   let loadingCost = 0;
   if (st.delivery.type === 'delivery') {
-    loadingCost = (st.delivery.beyondFt ? loadingExtra : loadingBase) * boxesNeeded;
+    // Loading at store (mandatory) + unloading at site (within or beyond 10ft)
+    const unloadRate = st.delivery.beyondFt ? (loadingBase + loadingExtra) : loadingBase;
+    loadingCost = (loadingBase + unloadRate) * boxesNeeded;
     for (const f of (st.delivery.floors||[])) {
       const rate = floorRates[String(f.floor)] || 0;
       floorCost += rate * (f.boxes || 0);
@@ -23088,11 +23132,23 @@ async function _renderStep8() {
     <!-- DISTANCE / DROP PIN -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">📍 Customer Site Distance</div>
-      <div class="form-row">
+      <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0;flex:1"><label>Site Pincode</label>
-          <input type="text" id="tq-del-pin" value="${st.delivery.pincode||''}" placeholder="520010" maxlength="6" oninput="VW_TILES.calcDeliveryDistance(this.value)"></div>
+          <input type="text" id="tq-del-pin" value="${st.delivery.pincode||''}" placeholder="e.g. 520010" maxlength="6"
+            oninput="VW_TILES.calcDeliveryDistance(this.value)"></div>
         <div class="form-group" style="margin:0;flex:1"><label>Distance (km)</label>
-          <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="Auto or enter" step="0.5" min="0" oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;_rerenderStep8()"></div>
+          <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="Auto or enter manually" step="0.5" min="0"
+            oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;VW_TILES._rerenderStep8()"></div>
+      </div>
+      <div style="display:flex;gap:6px;font-size:11px">
+        <a href="https://www.google.com/maps/dir/16.5206153,80.5999189/${encodeURIComponent(st.customer.site||st.delivery.pincode||'')}"
+          target="_blank" rel="noopener"
+          style="flex:1;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text2);text-align:center;text-decoration:none">
+          🗺 Open in Google Maps
+        </a>
+        <div style="flex:1;padding:6px 8px;background:var(--bg3);border-radius:7px;color:var(--text3);font-size:10px;text-align:center">
+          Enter km from map · Auto-fills from pincode
+        </div>
       </div>
       ${distKm>0?`
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px">
@@ -23101,20 +23157,35 @@ async function _renderStep8() {
       </div>`:''}
     </div>
 
-    <!-- LOADING ZONE -->
+    <!-- LOADING + UNLOADING -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px">🏗 Loading Distance</div>
-      <div style="display:flex;gap:8px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">🏗 Loading & Unloading</div>
+
+      <!-- LOADING at store (mandatory) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3);border-radius:7px;margin-bottom:6px">
+        <div>
+          <div style="font-size:11px;font-weight:600">Loading at Store</div>
+          <div style="font-size:10px;color:var(--text3)">Mandatory · ${boxesNeeded} boxes × ₹${loadingBase}/box</div>
+        </div>
+        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingBase).toLocaleString('en-IN')}</span>
+      </div>
+
+      <!-- UNLOADING at site: within or beyond 10ft -->
+      <div style="font-size:11px;font-weight:600;margin-bottom:5px;margin-top:8px">Unloading at Customer Site</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
         <button onclick="VW_TILES.setLoadingType(false)"
           style="flex:1;padding:8px;border-radius:8px;border:${!st.delivery.beyondFt?'2px solid var(--gold)':'1px solid var(--border)'};background:${!st.delivery.beyondFt?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:11px;color:${!st.delivery.beyondFt?'var(--gold)':'var(--text)'}">
-          ✓ Within 10ft<br>₹${loadingBase}/box
+          ✓ Within 10ft of vehicle<br><span style="font-size:10px;font-weight:400">₹${loadingBase}/box</span>
         </button>
         <button onclick="VW_TILES.setLoadingType(true)"
           style="flex:1;padding:8px;border-radius:8px;border:${st.delivery.beyondFt?'2px solid var(--gold)':'1px solid var(--border)'};background:${st.delivery.beyondFt?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:11px;color:${st.delivery.beyondFt?'var(--gold)':'var(--text)'}">
-          Beyond 10ft<br>₹${loadingExtra}/box
+          Beyond 10ft / Manual lift<br><span style="font-size:10px;font-weight:400">₹${loadingBase} + ₹${loadingExtra}/box</span>
         </button>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px">Loading: ${boxesNeeded} boxes × ₹${st.delivery.beyondFt?loadingExtra:loadingBase} = <strong>₹${loadingCost.toLocaleString('en-IN')}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 8px;background:var(--bg3);border-radius:7px">
+        <span>Unloading: ${boxesNeeded} × ₹${st.delivery.beyondFt?loadingBase+loadingExtra:loadingBase}/box</span>
+        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*(st.delivery.beyondFt?loadingBase+loadingExtra:loadingBase)).toLocaleString('en-IN')}</span>
+      </div>
     </div>
 
     <!-- FLOOR DELIVERY -->
@@ -23125,7 +23196,10 @@ async function _renderStep8() {
         ${(st.delivery.floors||[]).map((f,i)=>`
         <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
           <select onchange="VW_TILES.setFloorLine(${i},'floor',this.value)" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)">
-            ${['G','1','2','3','4','5'].map(fl=>`<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${fl==='G'?'Ground Floor':fl+'st/nd/rd/th Floor'} · ₹${floorRates[fl]||0}/box</option>`).join('')}
+            ${['1','2','3','4','5'].map((fl,idx)=>{
+              const label = ['1st','2nd','3rd','4th','5th'][idx];
+              return `<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${label} Floor · ₹${floorRates[fl]||0}/box</option>`;
+            }).join('')}
           </select>
           <input type="number" value="${f.boxes||0}" min="1" placeholder="boxes" style="width:60px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)" onchange="VW_TILES.setFloorLine(${i},'boxes',this.value)">
           <button onclick="VW_TILES.removeFloorLine(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>
@@ -23149,7 +23223,12 @@ async function _renderStep8() {
     ` : `
     <!-- SELF PICKUP: Loading only -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px">
-      <div style="font-size:12px;color:var(--text2)">Self pickup. Loading at store: ${boxesNeeded} boxes × ₹${loadingBase}/box = <strong>₹${(boxesNeeded*loadingBase).toLocaleString('en-IN')}</strong></div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">🏗 Loading at Store</div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0">
+        <span style="font-size:12px;color:var(--text2)">${boxesNeeded} boxes × ₹${loadingBase}/box</span>
+        <span style="font-size:13px;font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingBase).toLocaleString('en-IN')}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Rate from Tile Settings · Packing is free</div>
     </div>`}
   </div>
 
@@ -23489,7 +23568,7 @@ async function tqNext() {
     const html = _tqState.step === 6 ? await _renderStep6() :
                  _tqState.step === 8 ? await _renderStep8() :
                  _tqState.step === 1 ? _renderStep1() :
-                 _tqState.step === 2 ? _renderStep2() :
+                 _tqState.step === 2 ? await _renderStep2() :
                  _tqState.step === 3 ? _renderStep3() :
                  _tqState.step === 4 ? _renderStep4() :
                  _tqState.step === 5 ? _renderStep5() :
@@ -23506,7 +23585,7 @@ async function tqBack() {
     const html = _tqState.step === 6 ? await _renderStep6() :
                  _tqState.step === 8 ? await _renderStep8() :
                  _tqState.step === 1 ? _renderStep1() :
-                 _tqState.step === 2 ? _renderStep2() :
+                 _tqState.step === 2 ? await _renderStep2() :
                  _tqState.step === 3 ? _renderStep3() :
                  _tqState.step === 4 ? _renderStep4() :
                  _tqState.step === 5 ? _renderStep5() :
@@ -23525,7 +23604,7 @@ function setLoadingType(beyond) { _tqState.delivery.beyondFt=beyond; _rerenderSt
 function addFloorLine() {
   if(!_tqState.delivery) _tqState.delivery={type:'delivery',distanceKm:0,floors:[],beyondFt:false};
   if(!_tqState.delivery.floors) _tqState.delivery.floors=[];
-  _tqState.delivery.floors.push({floor:'G',boxes:_tqState.selectedProduct?.reqBoxes||1});
+  _tqState.delivery.floors.push({floor:'1',boxes:10}); // default 1st floor, 10 boxes
   _rerenderStep8();
 }
 function removeFloorLine(i){_tqState.delivery.floors.splice(i,1);_rerenderStep8();}
@@ -23825,6 +23904,10 @@ async function tqSubmitForApproval() {
   const st = _tqState;
   if (!st.customer.name) { showToast('Enter customer name first', 'warn'); return; }
   if (!st.rooms.length) { showToast('Add at least one room', 'warn'); return; }
+  // Disable button to prevent double-submit
+  const btn = document.querySelector('[onclick*="tqSubmitForApproval"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Submitting...'; }
+  const restoreBtn = () => { if (btn) { btn.disabled = false; btn.innerHTML = '📤 Submit for Approval'; } };
   const profile = VW_AUTH.getCurrentProfile();
   const fy = getFinancialYearLabel();
 
@@ -23878,8 +23961,9 @@ async function tqSubmitForApproval() {
     setTimeout(() => navigateTo('tile_quotes'), 600);
 
   } catch(e) {
-    console.error('Submit error:', e);
-    showToast('Error submitting — check connection', 'warn');
+    console.error('TQ submit error:', e);
+    restoreBtn();
+    showToast(`Submit failed: ${e?.message || 'Check connection and try again'}`, 'error');
   }
 }
 
@@ -24671,7 +24755,7 @@ window.VW_TILES = {
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
-  setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance,
+  setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan,
   // Granite
