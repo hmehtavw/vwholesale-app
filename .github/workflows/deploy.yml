@@ -1,26 +1,27 @@
-name: Deploy V Wholesale to GitHub Pages
+name: Deploy V Wholesale Customer OS
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'index.html'
+    branches: [main]
+    paths: ['index.html']
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPLOY_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ secrets.DEPLOY_TOKEN || secrets.GITHUB_TOKEN }}
           publish_dir: ./
           publish_branch: gh-pages
           keep_files: true
+          commit_message: 'Deploy: V Wholesale Customer OS'
