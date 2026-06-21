@@ -31322,7 +31322,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'kiosk') html = await VW_EMPLOYEE.renderKioskMode();
     else if (page === 'employeeapp') html = await VW_EMPLOYEE.renderEmployeeDashboard();
     else if (page === 'contractor') html = await VW_EXTRAS.renderContractorPortal();
-    else if (page === 'tiles') html = VW_TILES.renderTilesQuotationPage();
+    else if (page === 'tiles') html = await VW_TILES.renderTilesQuotationPage();
     else if (page === 'granite') html = VW_TILES.renderGraniteQuotationPage();
     else if (page === 'autotest') html = await VW_AUTOTEST.renderAutoTestPage();
     else if (page === 'ledger') {
