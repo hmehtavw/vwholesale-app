@@ -23565,6 +23565,57 @@ async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
   }).join('') + `<div style="font-size:10px;color:var(--text3);padding:8px;background:rgba(245,200,66,0.06);border-radius:8px;border:1px solid var(--gold-border)">💡 Floor: Use either mortar bed OR tile adhesive — not both. Walls always use adhesive. Confirm quantities with your tile layer.</div>`;
 }
 
+// ─── FLOOR TRAP FUNCTIONS ────────────────────────────────────
+function tqToggleTrap(t) {
+  if (!_tqState.floorTraps) _tqState.floorTraps = [];
+  const idx = _tqState.floorTraps.findIndex(x => x.id === t.id);
+  if (idx >= 0) {
+    _tqState.floorTraps.splice(idx, 1);
+  } else {
+    _tqState.floorTraps.push({ ...t, qty: 1 });
+  }
+  const grid = document.getElementById('tq-trap-grid');
+  if (grid) {
+    const traps = [
+      { id:'ft1', size:'90x50mm',  label:'90x50mm (2")',         use:'Small bathroom, hand wash',         material:'PVC Nahani' },
+      { id:'ft2', size:'90x63mm',  label:'90x63mm (2.5")',        use:'Standard bathroom, shower',         material:'PVC Nahani' },
+      { id:'ft3', size:'110x75mm', label:'110x75mm (3")',         use:'Master bathroom, wash area',        material:'PVC / SS304' },
+      { id:'ft4', size:'110x90mm', label:'110x90mm (3.5")',       use:'Bathroom with bathtub',             material:'PVC / SS304' },
+      { id:'ft5', size:'110x110mm',label:'110x110mm (4")',        use:'Kitchen, utility, large bath',      material:'PVC / SS304' },
+      { id:'ft6', size:'300x300mm',label:'300x300mm SS Square',   use:'Modern shower area, hotel style',   material:'SS304 Square' },
+      { id:'ft7', size:'200x200mm',label:'200x200mm SS Square',   use:'Compact modern bathroom',           material:'SS304 Square' },
+      { id:'ft8', size:'channel',  label:'Channel Drain (linear)',use:'Walk-in shower, balcony, terrace',  material:'SS304 / ABS' },
+    ];
+    grid.innerHTML = traps.map(trap => {
+      const sel = (_tqState.floorTraps||[]).find(x=>x.id===trap.id);
+      const selStyle = sel ? 'background:rgba(34,197,94,0.08);border:2px solid var(--green)' : 'background:var(--bg2);border:1px solid var(--border)';
+      const titleColor = sel ? 'var(--green)' : 'var(--text)';
+      const qtyHtml = sel ? `<div style="font-size:10px;color:var(--green);margin-top:3px">Qty: <input type="number" value="${sel.qty||1}" min="1" onclick="event.stopPropagation()" onchange="VW_TILES.tqSetTrapQty('${trap.id}',this.value)" style="width:36px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 4px;font-size:11px;color:var(--text)"> nos</div>` : '';
+      return `<div onclick="VW_TILES.tqToggleTrap(${JSON.stringify(trap).replace(/'/g, '').replace(/"/g,'&quot;')})" style="${selStyle};border-radius:10px;padding:10px;cursor:pointer"><div style="font-size:12px;font-weight:700;color:${titleColor}">${trap.label}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${trap.material}</div><div style="font-size:10px;color:var(--text3)">${trap.use}</div>${qtyHtml}</div>`;
+    }).join('');
+  }
+}
+
+function tqSetTrapQty(id, val) {
+  const trap = (_tqState.floorTraps||[]).find(x=>x.id===id);
+  if (trap) trap.qty = parseInt(val)||1;
+}
+
+function tqToggleSoffit(enabled) {
+  if (!_tqState.soffit) _tqState.soffit = {};
+  _tqState.soffit.enabled = enabled;
+  if (!enabled) _tqState.soffit.type = null;
+  _rerenderStep8();
+}
+
+function tqSelectSoffit(type, widthMm) {
+  if (!_tqState.soffit) _tqState.soffit = {};
+  _tqState.soffit.enabled = true;
+  _tqState.soffit.type = type;
+  _tqState.soffit.widthMm = widthMm;
+  _rerenderStep8();
+}
+
 function toggleAddon(id, checked) {
   if (!_tqState.addons) _tqState.addons = {};
   _tqState.addons[id] = checked;
