@@ -3392,6 +3392,7 @@ function setCategoriesCache(cats) { currentCategories = cats; }
 async function renderCheckin() {
   const todayVisits = await getTodayVisits(); // fetch fresh data each time
   const active = todayVisits.filter(v=>v.status==='active'||v.status==='pending').length;
+  const deptNames = await getDepartmentNames(); // needed for dept count + filter buttons
   return `
   <div class="module-header">
     <h2>Check-in</h2>
@@ -22768,13 +22769,19 @@ async function _renderStep6() {
   // Tiles per box: get from settings first, then TILE_SIZES, else estimate
   const sizeConfig = (await VW_DB.getSetting('tile_weight_config', {sizes:[]})).sizes
     ?.find(s=>s.mm===sz?.mm);
+  // Industry standard tiles per box by tile area:
+  // 100×100 (0.108 sqft) → 25/box, 150×150 (0.243) → 25, 200×200 (0.431) → 16,
+  // 300×300 (0.969) → 10, 300×450 (1.453) → 6, 300×600 (1.938) → 6,
+  // 400×400 (1.722) → 6, 600×600 (3.875) → 4, 800×800 (6.889) → 2, 800×1600 → 1
   const tilesPerBox = sizeConfig?.tiles_per_box || sz?.tilesPerBox || (
-    sz_sqft_actual < 0.5 ? 20 :   // tiny tiles ~20/box
-    sz_sqft_actual < 1.5 ? 12 :   // small-medium
-    sz_sqft_actual < 3.0 ? 6 :    // medium (300x600, 400x800)
-    sz_sqft_actual < 5.0 ? 4 :    // large (600x600)
-    sz_sqft_actual < 9.0 ? 2 :    // very large (800x800)
-    1                              // slab size
+    sz_sqft_actual < 0.15 ? 25 :  // 100×100
+    sz_sqft_actual < 0.35 ? 25 :  // 150×150
+    sz_sqft_actual < 0.60 ? 16 :  // 200×200
+    sz_sqft_actual < 1.20 ? 10 :  // 300×300
+    sz_sqft_actual < 2.50 ? 6  :  // 300×450, 300×600, 400×400, 400×800
+    sz_sqft_actual < 5.00 ? 4  :  // 600×600, 600×900, 600×1200
+    sz_sqft_actual < 9.00 ? 2  :  // 800×800, 800×1600
+    1                              // 1000×1000+, slabs
   );
   const sqftPerBox = sz_sqft_actual * tilesPerBox;
   const sz_coverage = sqftPerBox;
@@ -23092,6 +23099,21 @@ async function _renderStep8() {
     <div style="font-size:11px;color:var(--text3)">Note: Adhesive, grout, beading pricing to be confirmed at billing. Subject to GST.</div>
   </div>
 
+  <!-- AI ROOM VISUALIZER TEASER -->
+  <div class="card" style="margin-bottom:10px;background:linear-gradient(135deg,rgba(96,165,250,0.08),rgba(139,92,246,0.06));border-color:rgba(96,165,250,0.3)">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:28px">🎨</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">Room Visualizer</div>
+        <div style="font-size:11px;color:var(--text3)">See how these tiles look in your space — before buying</div>
+      </div>
+      <button onclick="VW_TILES.openTileVisualizer()"
+        style="padding:8px 12px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);border-radius:8px;color:#60A5FA;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+        ✨ Visualize
+      </button>
+    </div>
+  </div>
+
   <!-- WEIGHT + VEHICLE CARD (admin-rate, exec read-only) -->
   <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
     <h3 class="card-title">⚖️ Total Weight & Vehicle</h3>
@@ -23132,23 +23154,30 @@ async function _renderStep8() {
     <!-- DISTANCE / DROP PIN -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">📍 Customer Site Distance</div>
-      <div class="form-row" style="margin-bottom:8px">
-        <div class="form-group" style="margin:0;flex:1"><label>Site Pincode</label>
-          <input type="text" id="tq-del-pin" value="${st.delivery.pincode||''}" placeholder="e.g. 520010" maxlength="6"
-            oninput="VW_TILES.calcDeliveryDistance(this.value)"></div>
-        <div class="form-group" style="margin:0;flex:1"><label>Distance (km)</label>
-          <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="Auto or enter manually" step="0.5" min="0"
-            oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;VW_TILES._rerenderStep8()"></div>
+      <!-- Site address / distance input -->
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Customer Site Address / Pincode</label>
+        <input type="text" id="tq-del-addr" value="${st.delivery.siteAddress||st.customer.site||''}"
+          placeholder="e.g. Bhavanipuram, Vijayawada — 520012"
+          oninput="_tqState.delivery.siteAddress=this.value"
+          style="font-size:13px">
       </div>
-      <div style="display:flex;gap:6px;font-size:11px">
-        <a href="https://www.google.com/maps/dir/16.5206153,80.5999189/${encodeURIComponent(st.customer.site||st.delivery.pincode||'')}"
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button onclick="VW_TILES.calcDeliveryDistanceFromAddress()"
+          style="flex:1;padding:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;color:#60A5FA;font-size:12px;font-weight:600;cursor:pointer">
+          📍 Auto-calculate distance
+        </button>
+        <a href="https://www.google.com/maps/dir/V+Wholesale+Vijayawada/${encodeURIComponent(st.delivery.siteAddress||st.customer.site||'Vijayawada')}"
           target="_blank" rel="noopener"
-          style="flex:1;padding:6px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;color:var(--text2);text-align:center;text-decoration:none">
-          🗺 Open in Google Maps
+          style="flex:1;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:12px;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:4px">
+          🗺 Open Google Maps
         </a>
-        <div style="flex:1;padding:6px 8px;background:var(--bg3);border-radius:7px;color:var(--text3);font-size:10px;text-align:center">
-          Enter km from map · Auto-fills from pincode
-        </div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Distance (km) <span style="font-size:10px;color:var(--text3)">— enter from Maps or auto-calculate</span></label>
+        <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="e.g. 7.8"
+          step="0.1" min="0"
+          oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;VW_TILES._rerenderStep8()">
       </div>
       ${distKm>0?`
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px">
@@ -23188,27 +23217,56 @@ async function _renderStep8() {
       </div>
     </div>
 
-    <!-- FLOOR DELIVERY -->
+    <!-- FLOOR DELIVERY: per-floor box allocation from purchased tiles -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px">🏢 Floor Delivery</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Which floor(s)? Add a line for each floor group. (Ground floor = ₹0 extra)</div>
-      <div id="tq-floor-lines">
-        ${(st.delivery.floors||[]).map((f,i)=>`
-        <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center">
-          <select onchange="VW_TILES.setFloorLine(${i},'floor',this.value)" style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)">
-            ${['1','2','3','4','5'].map((fl,idx)=>{
-              const label = ['1st','2nd','3rd','4th','5th'][idx];
-              return `<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${label} Floor · ₹${floorRates[fl]||0}/box</option>`;
-            }).join('')}
-          </select>
-          <input type="number" value="${f.boxes||0}" min="1" placeholder="boxes" style="width:60px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)" onchange="VW_TILES.setFloorLine(${i},'boxes',this.value)">
-          <button onclick="VW_TILES.removeFloorLine(${i})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">✕</button>
-        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:600">🏢 Floor Distribution</div>
+        <div style="font-size:10px;color:var(--text3)">Total: ${boxesNeeded} boxes</div>
       </div>
-      <button onclick="VW_TILES.addFloorLine()" style="font-size:11px;background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 12px;color:var(--text3);cursor:pointer;width:100%">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        Select which floor each batch goes to. Rate = boxes × floor rate from Tile Settings.
+      </div>
+      <div id="tq-floor-lines">
+        ${(st.delivery.floors||[]).map((f,i)=>{
+          const floorLabel = {'1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th'}[f.floor]||f.floor;
+          const rate = floorRates[String(f.floor)]||0;
+          const lineCost = rate * (f.boxes||0);
+          return `
+          <div style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:6px">
+            <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+              <select onchange="VW_TILES.setFloorLine(${i},'floor',this.value)"
+                style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)">
+                ${['1','2','3','4','5'].map((fl,idx)=>{
+                  const lbl = ['1st','2nd','3rd','4th','5th'][idx];
+                  return `<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${lbl} Floor · ₹${floorRates[fl]||0}/box</option>`;
+                }).join('')}
+              </select>
+              <div style="display:flex;align-items:center;gap:4px">
+                <input type="number" value="${f.boxes||0}" min="0" max="${boxesNeeded}"
+                  placeholder="boxes"
+                  style="width:55px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text);text-align:center"
+                  onchange="VW_TILES.setFloorLine(${i},'boxes',this.value)">
+                <span style="font-size:10px;color:var(--text3)">boxes</span>
+              </div>
+              <button onclick="VW_TILES.removeFloorLine(${i})"
+                style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3)">
+              <span>${prod?.name||sz?.mm||'Tile'} · ${floorLabel} Floor · ₹${rate}/box</span>
+              <span style="color:var(--gold);font-weight:600">₹${lineCost.toLocaleString('en-IN')}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+      <button onclick="VW_TILES.addFloorLine()"
+        style="font-size:11px;background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 12px;color:var(--text3);cursor:pointer;width:100%;margin-top:4px">
         + Add Floor
       </button>
-      ${floorCost>0?`<div style="font-size:12px;font-weight:600;color:var(--gold);margin-top:8px;text-align:right">Floor delivery: ₹${floorCost.toLocaleString('en-IN')}</div>`:''}
+      ${floorCost>0?`
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:6px 0;border-top:1px solid var(--border);margin-top:8px">
+        <span>Total floor delivery</span>
+        <span style="color:var(--gold)">₹${floorCost.toLocaleString('en-IN')}</span>
+      </div>`:''}
     </div>
 
     <!-- DELIVERY COST TOTAL -->
@@ -23609,50 +23667,51 @@ function addFloorLine() {
 }
 function removeFloorLine(i){_tqState.delivery.floors.splice(i,1);_rerenderStep8();}
 function setFloorLine(i,field,val){if(_tqState.delivery?.floors?.[i])_tqState.delivery.floors[i][field]=field==='boxes'?parseInt(val)||0:val;}
-async function calcDeliveryDistance(pincode) {
-  if(!pincode||pincode.length<6) return;
-  _tqState.delivery.pincode=pincode;
+// Calculate delivery distance from address using Nominatim geocoding
+async function calcDeliveryDistanceFromAddress() {
+  const addr = document.getElementById('tq-del-addr')?.value?.trim() ||
+                _tqState.delivery.siteAddress || _tqState.customer.site;
+  if (!addr || addr.length < 5) { showToast('Enter site address first', 'warn'); return; }
+  _tqState.delivery.siteAddress = addr;
+  showToast('Calculating distance...', 'info');
   try {
-    const res=await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${pincode}&country=India&format=json&limit=1`);
-    const data=await res.json();
-    if(data[0]) {
-      const lat=parseFloat(data[0].lat),lng=parseFloat(data[0].lon);
-      const R=6371,dLat=(lat-16.5206153)*Math.PI/180,dLng=(lng-80.5999189)*Math.PI/180;
-      const a=Math.sin(dLat/2)**2+Math.cos(16.5206153*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)**2;
-      const dist=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-      _tqState.delivery.distanceKm=Math.round(dist*10)/10;
-      _tqState.delivery.siteLat=lat; _tqState.delivery.siteLng=lng;
-      const el=document.getElementById('tq-del-dist'); if(el)el.value=_tqState.delivery.distanceKm;
+    // Geocode address via Nominatim
+    const encoded = encodeURIComponent(addr + ', Andhra Pradesh, India');
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1`,
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'VWholesale/1.0' } });
+    const data = await res.json();
+    if (data[0]) {
+      const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+      // Haversine distance from V Wholesale store (16.5206153°N, 80.5999189°E)
+      const R = 6371;
+      const dLat = (lat - 16.5206153) * Math.PI / 180;
+      const dLng = (lng - 80.5999189) * Math.PI / 180;
+      const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+        Math.cos(16.5206153*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+      const distKm = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 10) / 10;
+      _tqState.delivery.distanceKm = distKm;
+      showToast(`Distance: ${distKm} km (straight-line · add 20-30% for road distance)`, 'success');
+      const el = document.getElementById('tq-del-dist');
+      if (el) el.value = distKm;
       _rerenderStep8();
+    } else {
+      showToast('Address not found — enter distance manually', 'warn');
     }
-  } catch(e){console.log('Distance calc:',e.message);}
+  } catch(e) {
+    showToast('Could not calculate — enter distance manually', 'warn');
+  }
 }
 
-// ───── FLOOR TRAP HELPERS ───────────────────────────────────
-function tqToggleTrap(trap) {
-  if (!_tqState.floorTraps) _tqState.floorTraps = [];
-  const idx = _tqState.floorTraps.findIndex(x=>x.id===trap.id);
-  if (idx>=0) _tqState.floorTraps.splice(idx,1);
-  else _tqState.floorTraps.push({...trap, qty:1});
-  _rerenderStep8();
-}
-function tqSetTrapQty(id, val) {
-  const t = (_tqState.floorTraps||[]).find(x=>x.id===id);
-  if (t) t.qty = parseInt(val)||1;
+// Legacy pincode-based distance (kept for backward compat)
+async function calcDeliveryDistance(pincode) {
+  if (!pincode || pincode.length < 6) return;
+  _tqState.delivery.pincode = pincode;
+  // Redirect to address-based calc
+  _tqState.delivery.siteAddress = _tqState.delivery.siteAddress || pincode;
+  calcDeliveryDistanceFromAddress();
 }
 
-// ───── SOFFIT HELPERS ───────────────────────────────────────
-function tqToggleSoffit(enabled) {
-  if (!_tqState.soffit) _tqState.soffit = {};
-  _tqState.soffit.enabled = enabled;
-  _rerenderStep8();
-}
-function tqSelectSoffit(type, width) {
-  if (!_tqState.soffit) _tqState.soffit = {};
-  _tqState.soffit.type = type;
-  _tqState.soffit.panelWidth = width;
-  _rerenderStep8();
-}
+
 async function _rerenderStep8() {
   const el = document.getElementById('tq-step-content');
   if (el) el.innerHTML = await _renderStep8();
@@ -24737,6 +24796,36 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
 
 async function lookupTileCustomer(phone, prefix, showOwnershipWarning) { return lookupTileCustomerFull(phone, prefix, showOwnershipWarning); }
 
+
+function openTileVisualizer() {
+  // Navigate to tile visualizer page or open sheet with visualizer
+  const prod = _tqState.selectedProduct;
+  const sz = _tqState.selectedSize;
+  if (!prod && !sz) { showToast('Select a tile first (Step 6)', 'warn'); return; }
+  // Open visualizer sheet
+  const sheet = document.getElementById('bottom-sheet');
+  if (sheet) {
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0">🎨 Room Visualizer</h3>
+        <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+      </div>
+      <div style="text-align:center;padding:20px;color:var(--text2)">
+        <div style="font-size:40px;margin-bottom:12px">🖼️</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:8px">Tile: ${prod?.name || sz?.label || 'Selected tile'}</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:16px">AI room visualizer available — upload a photo of your room to see how these tiles look</div>
+        <button onclick="navigateTo('tile_visualizer');closeSheet()" 
+          style="padding:12px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);border-radius:10px;color:#60A5FA;font-size:13px;font-weight:700;cursor:pointer">
+          Open Full Visualizer
+        </button>
+        <div style="margin-top:12px;font-size:11px;color:var(--text3)">Quote continues after visualizing — your selections are saved</div>
+      </div>`;
+    sheet.classList.add('open');
+    document.getElementById('sheet-overlay')?.classList.add('open');
+  }
+}
+
 window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack,
@@ -24755,9 +24844,9 @@ window.VW_TILES = {
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
-  setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, _rerenderStep8,
+  setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
-  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan,
+  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
