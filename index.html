@@ -22032,7 +22032,7 @@ let _tqState = {
 
 // ───── STEP RENDER HELPERS ─────────────────────────────────
 
-function renderTilesQuotationPage() {
+async function renderTilesQuotationPage() {
   _tqState = {
     step:1, customer:{name:'',phone:'',site:'',id:null},
     rooms:[], tileSelections:{}, spacer:{use:false,mm:3},
@@ -22053,16 +22053,24 @@ function renderTilesQuotationPage() {
   return _renderTQPage();
 }
 
-function _renderTQPage() {
+async function _renderTQPage() {
   const steps = ['Rooms','Tile Size','Spacer','Adhesive','Beading','Stock','Grout/Epoxy','Summary'];
   const s = _tqState.step;
+  const stepContent = s===1?_renderStep1():
+    s===2?(await _renderStep2()):
+    s===3?_renderStep3():
+    s===4?_renderStep4():
+    s===5?_renderStep5():
+    s===6?(await _renderStep6()):
+    s===7?_renderStep7():
+    (await _renderStep8());
   return `
   <div class="module-header">
     <h2>🏠 Tile Quotation</h2>
     <div style="font-size:11px;color:var(--text3)">${steps.map((l,i)=>{const active=i+1===s;return `<span style="color:${active?'var(--gold)':'var(--text3)'};font-weight:${active?700:400}">${i+1}.${l}</span>`;}).join(' → ')}</div>
   </div>
   <div id="tq-step-content">
-    ${s===1?_renderStep1():s===2?_renderStep2():s===3?_renderStep3():s===4?_renderStep4():s===5?_renderStep5():s===6?_renderStep6():s===7?_renderStep7():_renderStep8()}
+    ${stepContent}
   </div>`;
 }
 
@@ -22523,7 +22531,10 @@ async function _renderStep2() {
 
 function tqSelectSize(id) {
   _tqState.selectedSize = TILE_SIZES.find(s=>s.id===id);
-  document.getElementById('tq-step-content').innerHTML = _renderStep2();
+  const el = document.getElementById('tq-step-content');
+  if (el) {
+    _renderStep2().then(html => { el.innerHTML = html; });
+  }
 }
 
 // ───── STEP 3: SPACER ──────────────────────────────────────
