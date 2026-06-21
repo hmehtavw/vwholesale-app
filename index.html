@@ -965,10 +965,12 @@ td strong { color: var(--text); }
       <div class="more-section-label">Operations</div>
       <div class="more-grid">
         <button class="more-tile" data-page="inventory" onclick="closeMoreMenu();navigateTo('inventory')"><span>📦</span><span>Inventory</span></button>
+        <button class="more-tile" data-page="tile_inventory" onclick="closeMoreMenu();navigateTo('tile_inventory')"><span>🔲</span><span>Tile Stock</span></button>
         <button class="more-tile" data-page="vendors" onclick="closeMoreMenu();navigateTo('vendors')"><span>🏭</span><span>Vendors</span></button>
         <button class="more-tile" data-page="dispatch" onclick="closeMoreMenu();navigateTo('dispatch')"><span>🚚</span><span>Dispatch</span></button>
         <button class="more-tile" data-page="grn" onclick="closeMoreMenu();navigateTo('grn')"><span>🧾</span><span>GRN</span></button>
-        <button class="more-tile" data-page="tiles" onclick="closeMoreMenu();navigateTo('tiles')"><span>🔲</span><span>Tiles</span></button>
+        <button class="more-tile" data-page="returns" onclick="closeMoreMenu();navigateTo('returns')"><span>↩️</span><span>Returns</span></button>
+        <button class="more-tile" data-page="tiles" onclick="closeMoreMenu();navigateTo('tiles')"><span>🟫</span><span>Tile Quote</span></button>
         <button class="more-tile" data-page="granite" onclick="closeMoreMenu();navigateTo('granite')"><span>🪨</span><span>Granite</span></button>
       </div>
 
@@ -1009,6 +1011,7 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="catalogs" onclick="closeMoreMenu();navigateTo('catalogs')"><span>📚</span><span>Catalogs</span></button>
         <button class="more-tile" data-page="settings" onclick="closeMoreMenu();navigateTo('settings')"><span>⚙️</span><span>Settings</span></button>
         <button class="more-tile" onclick="closeMoreMenu();window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>🛡️</span><span>Security</span></button>
+        <button class="more-tile" onclick="closeMoreMenu();VW_AUTH.signOut().then(()=>location.reload())" style="color:var(--red)"><span>🚪</span><span style="color:var(--red)">Log Out</span></button>
       </div>
     </div>
   </div>
@@ -3303,6 +3306,35 @@ async function submitCheckin() {
   }
 
   showToast(`${name} checked in — ${reqItems.length} item(s) routed to team`, 'success');
+
+  // Set activeVisit so Tile Quotation auto-fills this customer
+  window.activeVisit = {
+    visitId, customerId: customer.id, customerName: customer.name,
+    customerPhone: phone, customerArea: area || customer.city || '',
+  };
+  await auditLog('customer_checkin', 'customer', customer.id, customer.name, null, { phone, area }, 'Walk-in check-in');
+
+  // Auto-generate and send portal link via WhatsApp
+  try {
+    const profile = VW_AUTH.getCurrentProfile();
+    if (typeof generateCustomerPortalLink === 'function') {
+      const token = await generateCustomerPortalLink(customer.id, phone, profile?.name||'auto_checkin');
+      const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+      // Show option to send portal link (non-blocking)
+      showToast(`${name} checked in ✓ — tap to send portal link`, 'success');
+      setTimeout(() => {
+        const el = document.getElementById('today-visits-list');
+        const banner = document.createElement('div');
+        banner.style.cssText = 'background:rgba(37,211,102,0.08);border:1px solid rgba(37,211,102,0.3);border-radius:10px;padding:10px;margin-bottom:8px';
+        banner.innerHTML = `<div style="font-size:12px;font-weight:600;margin-bottom:6px">📲 Send portal link to ${name}?</div>
+          <button onclick="window.open('https://wa.me/91${phone.replace(/\\D/g,'')}?text='+encodeURIComponent('Welcome to V Wholesale! View your quotes & wishlist: ${link}'),'_blank');this.parentElement.remove()"
+            style="background:#25D366;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;margin-right:6px">💬 Send via WhatsApp</button>
+          <button onclick="this.parentElement.remove()" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer">Skip</button>`;
+        if (el) el.insertAdjacentElement('beforebegin', banner);
+      }, 1000);
+    }
+  } catch(e) { console.log('Portal link error:', e.message); }
+
   reqItems = [];
   document.getElementById('checkin-form-area').innerHTML = renderCustomerForm();
 
@@ -11321,7 +11353,22 @@ async function renderSettingsAccount() {
         <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_SETTINGS.approveResetPin(${r.id})">Set PIN</button>
       </div>
     </div>`).join('')}
-  </div>` : ''}`;
+  </div>` : ''}
+
+  <!-- LOGOUT — always visible -->
+  <div class="card" style="border-color:rgba(239,68,68,0.3)">
+    <h3 class="card-title" style="color:var(--text)">🚪 Session</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+      Logged in as <strong>${profile?.name||'—'}</strong> · ${profile?.role||'—'} · ${profile?.phone||'—'}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+      💡 Tip: You can also log out by tapping your name in the top-right corner of any screen.
+    </div>
+    <button onclick="VW_AUTH.signOut().then(()=>location.reload())"
+      style="width:100%;background:rgba(239,68,68,0.1);border:1.5px solid rgba(239,68,68,0.4);border-radius:12px;padding:14px;font-size:14px;font-weight:700;color:var(--red);cursor:pointer">
+      🚪 Log Out
+    </button>
+  </div>`;
 }
 
 async function saveAccountName() {
@@ -14287,7 +14334,7 @@ async function renderDriverDeliveryPageDetailed(gatePassNo) {
     <!-- PER-ITEM CHECKLIST -->
     <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">Tick each item as you deliver it (${items.length} items)</div>
     ${items.map((item, i) => `
-    <div id="del-item-card-${i}" onclick="VW_DISPATCH.toggleDeliveryItem(${i},${items.length})"
+    <div id="del-item-card-${i}" onclick="toggleDeliveryItem(${i},${items.length})"
       style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;margin-bottom:8px;cursor:pointer;transition:all 0.2s;background:var(--bg2);border:2px solid var(--border)" id="del-item-card-${i}">
       <div id="del-item-check-${i}" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;transition:all 0.2s"></div>
       <div style="flex:1">
@@ -20588,7 +20635,7 @@ window.VW_EMPLOYEE = {
 // 1. CUSTOMER PORTAL — shareable quotation link
 // ?quote=QT2627XXXXX — no login needed, public read
 // =====================================================
-async function renderCustomerPortal() {
+async function renderLegacyCustomerPortal() {
   const urlParams = new URLSearchParams(window.location.search);
   const quoteRef = urlParams.get('quote');
   if (!quoteRef) return;
@@ -21136,7 +21183,7 @@ async function openStaffFull(id) {
 window.openStaff = openStaffFull;
 
 window.VW_EXTRAS = {
-  renderCustomerPortal,
+  renderLegacyCustomerPortal,
   getQuotationShareLink,
   shareQuotationLink,
   renderContractorPortal,
@@ -21277,10 +21324,22 @@ let _tqState = {
 
 function renderTilesQuotationPage() {
   _tqState = {
-    step:1, customer:{name:'',phone:'',site:''},
+    step:1, customer:{name:'',phone:'',site:'',id:null},
     rooms:[], tileSelections:{}, spacer:{use:false,mm:3},
-    adhesive:{}, beading:[], grout:{}, accessories:[]
+    adhesive:{}, beading:[], grout:{}, accessories:[],
+    delivery:{type:'self',distanceKm:0,floors:[],beyondFt:false},
+    floorTraps:[], soffit:{enabled:false},
   };
+
+  // Auto-fill from active check-in if available
+  const profile = VW_AUTH.getCurrentProfile();
+  if (window.activeVisit?.customerName) {
+    _tqState.customer.name = window.activeVisit.customerName || '';
+    _tqState.customer.phone = window.activeVisit.customerPhone || '';
+    _tqState.customer.site = window.activeVisit.customerArea || '';
+    _tqState.customer.id = window.activeVisit.customerId || null;
+  }
+
   return _renderTQPage();
 }
 
@@ -21299,18 +21358,38 @@ function _renderTQPage() {
 
 // ───── STEP 1: ROOM ENTRY ───────────────────────────────────
 function _renderStep1() {
+  // Check active visit
+  const hasActiveVisit = !!window.activeVisit?.customerName;
+  const profile = VW_AUTH.getCurrentProfile();
+  const isQuotationTeam = ['admin','management','store_manager'].includes(profile?.role||'');
+
   return `
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Customer Details</h3>
+    ${hasActiveVisit ? `
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:8px;margin-bottom:10px;font-size:11px;color:var(--green)">
+      ✓ Auto-filled from active check-in: <strong>${window.activeVisit.customerName}</strong>
+    </div>` : `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;padding:8px;margin-bottom:10px;font-size:11px;color:var(--text2)">
+      ⚠️ No active check-in — search for existing customer or enter new customer details
+    </div>`}
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Customer Name *</label>
-        <input type="text" id="tq-cname" value="${_tqState.customer.name}" placeholder="Ravi Teja" oninput="_tqState.customer.name=this.value"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Phone</label>
-        <input type="tel" id="tq-cphone" value="${_tqState.customer.phone}" placeholder="9999999999" maxlength="10" oninput="_tqState.customer.phone=this.value;VW_TILES.lookupTileCustomer(this.value,'tq')">
-        <div id="tq-cust-lookup" style="font-size:11px;color:var(--text3);margin-top:2px"></div></div>
+        <input type="tel" id="tq-cphone" value="${_tqState.customer.phone}" placeholder="9999999999" maxlength="10"
+          oninput="_tqState.customer.phone=this.value;VW_TILES.lookupTileCustomer(this.value,'tq',true)">
+        <div id="tq-cust-lookup" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <div class="form-group" style="margin:0;flex:1"><label>Customer Name *</label>
+        <input type="text" id="tq-cname" value="${_tqState.customer.name}" placeholder="Ravi Teja"
+          oninput="_tqState.customer.name=this.value">
+      </div>
     </div>
     <div class="form-group"><label>Site / Project Address</label>
-      <input type="text" id="tq-site" value="${_tqState.customer.site}" placeholder="e.g. Plot 45, Bhavanipuram" oninput="_tqState.customer.site=this.value"></div>
+      <input type="text" id="tq-site" value="${_tqState.customer.site}" placeholder="e.g. Plot 45, Bhavanipuram"
+        oninput="_tqState.customer.site=this.value">
+    </div>
+    <!-- OWNERSHIP WARNING shown by lookupTileCustomer if customer has another exec -->
+    <div id="tq-ownership-warning" style="display:none"></div>
   </div>
 
   <div class="card" style="margin-bottom:10px">
@@ -22163,7 +22242,7 @@ async function _renderStep8() {
         <div class="form-group" style="margin:0;flex:1"><label>Site Pincode</label>
           <input type="text" id="tq-del-pin" value="${st.delivery.pincode||''}" placeholder="520010" maxlength="6" oninput="VW_TILES.calcDeliveryDistance(this.value)"></div>
         <div class="form-group" style="margin:0;flex:1"><label>Distance (km)</label>
-          <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="Auto or enter" step="0.5" min="0" oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;VW_TILES._rerenderStep8()"></div>
+          <input type="number" id="tq-del-dist" value="${distKm||''}" placeholder="Auto or enter" step="0.5" min="0" oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;_rerenderStep8()"></div>
       </div>
       ${distKm>0?`
       <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px">
@@ -22966,11 +23045,51 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
 }
 
 async function lookupTileCustomer(phone, prefix) {
-  if (phone.length < 10) return;
+  if ((phone||'').replace(/\D/g,'').length < 10) return;
   const el = document.getElementById(`${prefix}-cust-lookup`);
-  const customers = await VW_DB.all(VW_DB.STORES.customers);
-  const found = customers.find(c => (c.phone||'').includes(phone));
-  if (el) el.innerHTML = found ? `✓ ${found.name} — ${found.totalSpend?'₹'+found.totalSpend.toLocaleString('en-IN')+' spent':'new customer'}` : '';
+
+  // Try Supabase first, then IndexedDB
+  let found = null;
+  try {
+    const { data } = await VW_DB.client
+      .from('customers')
+      .select('id,name,phone,address,area,totalSpend,total_spend')
+      .or(`phone.eq.${phone},phone.ilike.%${phone}%`)
+      .limit(1)
+      .single();
+    found = data;
+  } catch(e) {
+    const local = await VW_DB.all(VW_DB.STORES.customers);
+    found = local.find(c => (c.phone||'').replace(/\D/g,'').includes(phone.replace(/\D/g,'')));
+  }
+
+  if (found) {
+    // Auto-fill name field
+    const nameEl = document.getElementById(`${prefix}-cname`) || document.getElementById(`${prefix}-cust-name`);
+    if (nameEl && !nameEl.value) {
+      nameEl.value = found.name || '';
+      // Also update state
+      if (prefix === 'tq') _tqState.customer.name = found.name || '';
+      else if (prefix === 'gq') graniteCustomer.name = found.name || '';
+    }
+
+    // Auto-fill site/address field
+    const siteEl = document.getElementById(`${prefix}-site`);
+    if (siteEl && !siteEl.value) {
+      const addr = found.area || found.address || '';
+      siteEl.value = addr;
+      if (prefix === 'tq') _tqState.customer.site = addr;
+    }
+
+    // Store customer ID for linking
+    if (prefix === 'tq') _tqState.customer.id = found.id;
+    else if (prefix === 'gq') graniteCustomer.id = found.id;
+
+    const spend = found.totalSpend || found.total_spend || 0;
+    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${found.name}</span>${spend ? ` — ₹${spend.toLocaleString('en-IN')} spent` : ''}`;
+  } else {
+    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer — details will be saved on quotation</span>`;
+  }
 }
 
 window.VW_TILES = {
@@ -22994,6 +23113,7 @@ window.VW_TILES = {
   removeGranitePiece, generateGraniteQuote,
   // Shared
   lookupTileCustomer,
+  forwardToExecutive,
   confirmAddAccessories: async () => {},
   // Quotation history
   saveQuoteHistory, renderTileQuoteHistory,
@@ -23003,6 +23123,12 @@ window.VW_TILES = {
   // Hold reminders
   scheduleHoldReminders, checkAndSendHoldReminders,
 };
+
+// Export key constants to window for use in tests and tile_inventory module
+window.TILE_SIZES = TILE_SIZES;
+window.ADHESIVE_TYPES = ADHESIVE_TYPES;
+window.BEADING_CATALOG = BEADING_CATALOG;
+window.ROOM_DEFS = ROOM_DEFS;
 
 // Inject tile fields into inventory form when Tiles category selected
 function injectTileFields(category) {
@@ -23290,6 +23416,84 @@ if (typeof window !== 'undefined') {
   setInterval(checkAndSendHoldReminders, 30*60*1000);
 }
 
+
+// ===== ENHANCED CUSTOMER LOOKUP WITH OWNERSHIP WARNING =====
+// Override the previous lookupTileCustomer with full version
+async function lookupTileCustomerFull(phone, prefix, showOwnershipWarning) {
+  if ((phone||'').replace(/\D/g,'').length < 10) return;
+  const el = document.getElementById(`${prefix}-cust-lookup`);
+  const ownerWarn = document.getElementById(`${prefix}-ownership-warning`);
+
+  let found = null;
+  try {
+    const { data } = await VW_DB.client.from('customers')
+      .select('id,name,phone,address,area,totalSpend,total_spend,assigned_to,assigned_to_name')
+      .or(`phone.eq.${phone},phone.ilike.%${phone}%`).limit(1).single();
+    found = data;
+  } catch(e) {
+    const local = await VW_DB.all(VW_DB.STORES.customers);
+    found = local.find(c=>(c.phone||'').replace(/\D/g,'').includes(phone.replace(/\D/g,'')));
+  }
+
+  if (found) {
+    const nameEl = document.getElementById(`${prefix}-cname`)||document.getElementById(`${prefix}-cust-name`);
+    if (nameEl && !nameEl.value) {
+      nameEl.value = found.name||'';
+      if (prefix==='tq') _tqState.customer.name = found.name||'';
+      else if (prefix==='gq') graniteCustomer.name = found.name||'';
+    }
+    const siteEl = document.getElementById(`${prefix}-site`);
+    if (siteEl && !siteEl.value) {
+      const addr = found.area||found.address||'';
+      siteEl.value = addr;
+      if (prefix==='tq') _tqState.customer.site = addr;
+    }
+    if (prefix==='tq') _tqState.customer.id = found.id;
+    else if (prefix==='gq') graniteCustomer.id = found.id;
+
+    const spend = found.totalSpend||found.total_spend||0;
+    if (el) el.innerHTML = `<span style="color:var(--green)">✓ ${found.name}</span>${spend?` — ₹${spend.toLocaleString('en-IN')} spent`:''}`;
+
+    // Ownership warning
+    const profile = VW_AUTH.getCurrentProfile();
+    const assignedTo = found.assigned_to_name||found.assigned_to;
+    const isQuotTeam = ['admin','management','store_manager','floor_manager','tl'].includes(profile?.role||'');
+    if (showOwnershipWarning && ownerWarn && assignedTo && assignedTo!==profile?.name && !isQuotTeam) {
+      ownerWarn.style.display='block';
+      ownerWarn.innerHTML = `
+      <div style="background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-top:6px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">⚠️ Handled by <strong>${assignedTo}</strong></div>
+        <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Do you want to proceed or forward to ${assignedTo}?</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="document.getElementById('${prefix}-ownership-warning').style.display='none'" style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:11px;cursor:pointer">Continue (Take Over)</button>
+          <button onclick="VW_TILES.forwardToExecutive('${assignedTo}','${found.name}')" style="flex:1;background:var(--gold);color:#000;border:none;border-radius:6px;padding:6px;font-size:11px;font-weight:700;cursor:pointer">Forward to ${assignedTo}</button>
+        </div>
+      </div>`;
+    } else if (ownerWarn) ownerWarn.style.display='none';
+  } else {
+    if (el) el.innerHTML = `<span style="color:var(--text3)">New customer</span>`;
+    if (ownerWarn) ownerWarn.style.display='none';
+  }
+}
+
+async function forwardToExecutive(execName, customerName) {
+  const profile = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('tasks').insert({
+    title:`Tile Quotation Lead — ${customerName}`,
+    description:`${profile?.name||'Executive'} forwarding customer ${customerName} for tile quotation follow-up.`,
+    assigned_to:execName, created_by:profile?.name||'',
+    priority:'high', status:'pending',
+    due_date:new Date(Date.now()+24*60*60*1000).toISOString().split('T')[0],
+    created_at:new Date().toISOString(),
+  });
+  await auditLog('quotation_forward','customer',null,customerName,null,{to:execName},'Customer forwarded');
+  showToast(`Forwarded to ${execName} — task created`,'success');
+  setTimeout(()=>navigateTo('dashboard'),1500);
+}
+
+// Replace in VW_TILES export
+window.VW_TILES.lookupTileCustomer = lookupTileCustomerFull;
+window.VW_TILES.forwardToExecutive = forwardToExecutive;
 
 
 /* === autotest.js === */
@@ -24090,6 +24294,278 @@ async function execTest(code){
 }
 
 window.VW_AUTOTEST={renderAutoTestPage,runSuite,runAllSuites,clearResults,genTest,execTest};
+
+// =====================================================
+// TEST SUITE v5 — ADDITIONAL SUITES
+// New suites: Tile Inventory, Customer Portal,
+//   Contractor Portal, Audit Log, Stock Lifecycle
+// Dummy login credentials embedded for test automation
+// =====================================================
+
+// TEST CREDENTIALS (created in Supabase)
+const TEST_CREDS = {
+  admin:        { phone:'9000000001', pin:'123456', role:'admin', name:'Admin Test' },
+  executive:    { phone:'9000000002', pin:'123456', role:'executive', name:'Executive Test' },
+  sr_executive: { phone:'9000000003', pin:'123456', role:'sr_executive', name:'Sr Executive Test' },
+  tl:           { phone:'9000000004', pin:'123456', role:'tl', name:'TL Test' },
+  floor_manager:{ phone:'9000000005', pin:'123456', role:'floor_manager', name:'Floor Mgr Test' },
+  store_manager:{ phone:'9000000006', pin:'123456', role:'store_manager', name:'Store Mgr Test' },
+  management:   { phone:'9000000007', pin:'123456', role:'management', name:'Management Test' },
+  accounts:     { phone:'9000000008', pin:'123456', role:'accounts', name:'Accounts Test' },
+  dispatch:     { phone:'9000000009', pin:'123456', role:'dispatch', name:'Dispatch Test' },
+  contractor_portal: '?contractor=test_contractor_token_123',
+  customer_portal:   '?customer=test_customer_token_123',
+  signup_url:        '?signup=contractor',
+  register_url:      '?register=customer',
+};
+window.TEST_CREDS = TEST_CREDS;
+
+Object.assign(TEST_SUITES, {
+
+  // ─── TILE INVENTORY ────────────────────────────────
+  tile_inv: {
+    label: '🔲 Tile Inventory',
+    tests: [
+      { id:'ti01', name:'Tile inventory page renders', run: async () => {
+        const html = await VW_TILE_INV.renderTileInventoryPage();
+        if (!html||html.length<100) throw new Error('Empty');
+        if (!html.includes('renderTileInventoryPage') && !html.includes('Tile Inventory') && !html.includes('Add Tile')) throw new Error('Missing key elements');
+        return `${Math.round(html.length/1000)}KB ✓`;
+      }},
+      { id:'ti02', name:'showAddTileForm opens', run: async () => {
+        // Function exists and is callable
+        if (typeof VW_TILE_INV.showAddTileForm !== 'function') throw new Error('Missing');
+        // Check TILE_SIZES is accessible
+        if (typeof window.TILE_SIZES === 'undefined') return '⚠️ TILE_SIZES not on window scope — form will show empty size list';
+        return `showAddTileForm exists · ${window.TILE_SIZES?.length||0} tile sizes available`;
+      }},
+      { id:'ti03', name:'AI design matcher function', run: async () => {
+        if (typeof VW_TILE_INV.matchDesign !== 'function') throw new Error('matchDesign missing');
+        return 'matchDesign ✓';
+      }},
+      { id:'ti04', name:'Excel import + template download', run: async () => {
+        if (typeof VW_TILE_INV.showExcelImport !== 'function') throw new Error('showExcelImport missing');
+        if (typeof VW_TILE_INV.downloadTileImportTemplate !== 'function') throw new Error('downloadTileImportTemplate missing');
+        if (typeof VW_TILE_INV.processExcelImport !== 'function') throw new Error('processExcelImport missing');
+        return '3 import functions ✓';
+      }},
+      { id:'ti05', name:'QR code generation', run: async () => {
+        if (typeof VW_TILE_INV.showQR !== 'function') throw new Error('showQR missing');
+        if (typeof VW_TILE_INV.printQR !== 'function') throw new Error('printQR missing');
+        // Check QR server URL used
+        const code = VW_TILE_INV.showQR.toString();
+        if (!code.includes('qrserver')) throw new Error('QR server not in showQR');
+        return 'QR functions ✓';
+      }},
+      { id:'ti06', name:'Stock lifecycle DB tables', run: async () => {
+        const tables = ['tile_stock_locations','stock_holds','audit_log','warehouse_locations','rack_config'];
+        const r = await Promise.all(tables.map(t => VW_DB.client.from(t).select('id').limit(1)));
+        const bad = r.map((x,i)=>x.error?tables[i]:null).filter(Boolean);
+        if (bad.length) throw new Error(`Missing: ${bad.join(', ')}`);
+        return `${tables.length} tables ✓`;
+      }},
+      { id:'ti07', name:'Available stock = total - held calculation', run: async () => {
+        // Check that heldMap calculation exists in the page
+        const fnStr = VW_TILE_INV.renderTileInventoryPage.toString();
+        if (!fnStr.includes('heldMap')) throw new Error('heldMap not in renderTileInventoryPage');
+        if (!fnStr.includes('available')) throw new Error('available not calculated');
+        return 'Stock calc logic ✓';
+      }},
+      { id:'ti08', name:'Warehouse locations in DB', run: async () => {
+        const { data } = await VW_DB.client.from('warehouse_locations').select('code,name').order('sort_order');
+        if (!data?.length) throw new Error('No warehouses configured');
+        return data.map(w=>w.code).join(', ') + ' ✓';
+      }},
+    ]
+  },
+
+  // ─── CUSTOMER PORTAL ───────────────────────────────
+  customer_portal: {
+    label: '👤 Customer Portal',
+    tests: [
+      { id:'cp01', name:'renderCustomerPortal function exists', run: async () => {
+        if (typeof VW_CUSTOMER_PORTAL.renderCustomerPortal !== 'function') throw new Error('Missing');
+        return '✓';
+      }},
+      { id:'cp02', name:'Invalid token handled gracefully', run: async () => {
+        const html = await VW_CUSTOMER_PORTAL.renderCustomerPortal('invalid_token_xyz');
+        if (!html.includes('Invalid') && !html.includes('invalid') && !html.includes('expired')) throw new Error('No error message for bad token');
+        return 'Invalid token handled ✓';
+      }},
+      { id:'cp03', name:'Test customer portal accessible', run: async () => {
+        const { data } = await VW_DB.client.from('customer_portal_tokens')
+          .select('customer_id,token').eq('token','test_customer_token_123').single();
+        if (!data) return '⚠️ Test customer token not in DB — run dummy data migration';
+        return `Token valid · customer_id: ${data.customer_id} ✓`;
+      }},
+      { id:'cp04', name:'Customer register page renders', run: async () => {
+        const html = await VW_CUSTOMER_PORTAL.renderCustomerRegisterPage();
+        if (!html||html.length<200) throw new Error('Empty');
+        if (!html.includes('cr-name')||!html.includes('cr-phone')) throw new Error('Missing form fields');
+        return `${Math.round(html.length/1000)}KB ✓`;
+      }},
+      { id:'cp05', name:'Portal link generation', run: async () => {
+        if (typeof generateCustomerPortalLink !== 'function') throw new Error('generateCustomerPortalLink not on window');
+        if (typeof sendPortalLinkWA !== 'function') throw new Error('sendPortalLinkWA not on window');
+        return '✓';
+      }},
+      { id:'cp06', name:'Wishlist sharing', run: async () => {
+        if (typeof VW_CUSTOMER_PORTAL.shareWishlist !== 'function') throw new Error('Missing');
+        return '✓';
+      }},
+    ]
+  },
+
+  // ─── CONTRACTOR PORTAL ─────────────────────────────
+  contractor_p: {
+    label: '🤝 Contractor Portal',
+    tests: [
+      { id:'co01', name:'Contractor admin page renders', run: async () => {
+        const html = await VW_CONTRACTOR.renderContractorPortalPage();
+        if (!html||html.length<100) throw new Error('Empty');
+        return `${Math.round(html.length/1000)}KB ✓`;
+      }},
+      { id:'co02', name:'Test contractor token in DB', run: async () => {
+        const { data } = await VW_DB.client.from('contractors')
+          .select('id,name,status,portal_token,loyalty_points').eq('portal_token','test_contractor_token_123').single();
+        if (!data) return '⚠️ Test contractor not in DB';
+        if (data.status !== 'active') throw new Error(`Status: ${data.status} (should be active)`);
+        return `${data.name} · ${data.loyalty_points} pts ✓`;
+      }},
+      { id:'co03', name:'Invalid contractor token handled', run: async () => {
+        const html = await VW_CONTRACTOR.renderContractorPublicPortal('bad_token_xyz');
+        if (!html.includes('Invalid') && !html.includes('invalid') && !html.includes('8712697930')) throw new Error('No graceful error');
+        return 'Invalid token handled ✓';
+      }},
+      { id:'co04', name:'All portal tab functions exist', run: async () => {
+        const fns = ['switchPortalTab','activateContractor','filterPortalStock','shareProductLink',
+          'addPortalRoom','removePortalRoom','readMeasurementSlip','openBidForm','submitBid',
+          'redeemReward','saveMarginSettings'];
+        const missing = fns.filter(f=>typeof VW_CONTRACTOR[f]!=='function');
+        if (missing.length) throw new Error(`Missing: ${missing.join(', ')}`);
+        return `${fns.length} tab functions ✓`;
+      }},
+      { id:'co05', name:'Signup flow (4 steps)', run: async () => {
+        const html = await VW_CONTRACTOR.renderContractorSignupPage();
+        if (!html||html.length<200) throw new Error('Empty');
+        if (!html.includes('signup-step-')) throw new Error('Missing step indicators');
+        if (!html.includes('PROFESSIONAL_TYPES') && !html.includes('tile_mestri') && !html.includes('🔲')) throw new Error('Missing professional types');
+        return `Signup page ${Math.round(html.length/1000)}KB ✓`;
+      }},
+      { id:'co06', name:'Pending approvals function', run: async () => {
+        if (typeof VW_CONTRACTOR.renderPendingContractors !== 'function') throw new Error('Missing');
+        const html = await VW_CONTRACTOR.renderPendingContractors();
+        return `Pending approvals renders ✓`;
+      }},
+      { id:'co07', name:'PROFESSIONAL_TYPES list (13 types)', run: async () => {
+        const ready = await waitFor(()=>typeof window.PROFESSIONAL_TYPES !== 'undefined' || 
+          typeof PROFESSIONAL_TYPES !== 'undefined', 3000);
+        // Check in code via signup page
+        const html = await VW_CONTRACTOR.renderContractorSignupPage();
+        const typeCount = (html.match(/data-prof-type|ptype-/g)||[]).length;
+        if (typeCount < 10) return `⚠️ Found ${typeCount} type buttons in HTML — expected 13`;
+        return `${typeCount} professional type buttons ✓`;
+      }},
+    ]
+  },
+
+  // ─── AUDIT LOG ────────────────────────────────────
+  audit: {
+    label: '📋 Audit Log',
+    tests: [
+      { id:'au01', name:'auditLog function on window', run: async () => {
+        if (typeof window.auditLog !== 'function') throw new Error('auditLog not on window');
+        return '✓';
+      }},
+      { id:'au02', name:'audit_log table accessible', run: async () => {
+        const { error } = await VW_DB.client.from('audit_log').select('id').limit(1);
+        if (error) throw new Error(error.message);
+        return '✓';
+      }},
+      { id:'au03', name:'Write audit log entry', run: async () => {
+        await auditLog('autotest', 'test', null, 'autotest_run', null, {ts:Date.now()}, 'Automated test');
+        const { data } = await VW_DB.client.from('audit_log').select('*').eq('action','autotest').order('created_at',{ascending:false}).limit(1);
+        if (!data?.[0]) throw new Error('Audit entry not found after insert');
+        return `Written · ID: ${data[0].id} ✓`;
+      }},
+    ]
+  },
+
+  // ─── STOCK LIFECYCLE ──────────────────────────────
+  stock_lifecycle: {
+    label: '📦 Stock Lifecycle',
+    tests: [
+      { id:'sl01', name:'Hold → available stock reduction', run: async () => {
+        if (typeof VW_TILES.placeStockHold !== 'function') throw new Error('placeStockHold missing');
+        if (typeof VW_TILES.releaseStockHold !== 'function') throw new Error('releaseStockHold missing');
+        if (typeof VW_TILES.extendStockHold !== 'function') throw new Error('extendStockHold missing');
+        return '3 hold functions ✓';
+      }},
+      { id:'sl02', name:'Hold dashboard alert (SM/Mgmt)', run: async () => {
+        if (typeof VW_TILES.renderHoldAlerts !== 'function') throw new Error('Missing');
+        const html = await VW_TILES.renderHoldAlerts();
+        return `Hold alerts render (${html.length} chars) ✓`;
+      }},
+      { id:'sl03', name:'Pre-order for out-of-stock', run: async () => {
+        if (typeof VW_TILES.placePreOrder !== 'function') throw new Error('Missing');
+        const { error } = await VW_DB.client.from('pre_orders').select('id').limit(1);
+        if (error) throw new Error('pre_orders table: '+error.message);
+        return 'Pre-order system ✓';
+      }},
+      { id:'sl04', name:'Hold reminders scheduler', run: async () => {
+        if (typeof VW_TILES.scheduleHoldReminders !== 'function') throw new Error('Missing');
+        if (typeof VW_TILES.checkAndSendHoldReminders !== 'function') throw new Error('Missing');
+        return '2 reminder functions ✓';
+      }},
+      { id:'sl05', name:'Return stock pending until photo', run: async () => {
+        const { error } = await VW_DB.client.from('customer_returns').select('return_photo_url,stock_pending_location').limit(1);
+        if (error) throw new Error(error.message);
+        return 'Return photo columns exist ✓';
+      }},
+    ]
+  },
+
+  // ─── TEST LOGINS (all 10 roles) ────────────────────
+  test_logins: {
+    label: '🔑 Test Login Credentials',
+    tests: [
+      { id:'tl01', name:'Test credentials defined', run: async () => {
+        if (!window.TEST_CREDS) throw new Error('TEST_CREDS not defined');
+        const roles = Object.keys(TEST_CREDS).filter(k=>TEST_CREDS[k].pin);
+        return `${roles.length} staff credentials · PIN: 123456 ✓`;
+      }},
+      { id:'tl02', name:'All 10 test profiles in Supabase', run: async () => {
+        const { data } = await VW_DB.client.from('profiles')
+          .select('name,role,phone,status').ilike('phone','900000000%').order('phone');
+        if (!data?.length) return '⚠️ No test profiles found — run dummy data migration first';
+        const missing = Object.values(TEST_CREDS).filter(c=>c.role).filter(c=>!data.find(p=>p.phone===c.phone));
+        if (missing.length) return `⚠️ Missing: ${missing.map(m=>m.role).join(', ')} — ${data.length}/10 found`;
+        return `${data.length}/10 profiles ✓`;
+      }},
+      { id:'tl03', name:'Test contractor in Supabase', run: async () => {
+        const { data } = await VW_DB.client.from('contractors').select('name,status,portal_token').eq('portal_token','test_contractor_token_123').single();
+        if (!data) return '⚠️ Test contractor not found — run dummy data migration';
+        return `${data.name} · ${data.status} ✓`;
+      }},
+      { id:'tl04', name:'Test customer portal token', run: async () => {
+        const { data } = await VW_DB.client.from('customer_portal_tokens').select('customer_id,token').eq('token','test_customer_token_123').single();
+        if (!data) return '⚠️ Test customer token not found';
+        return `Token valid · customer_id: ${data.customer_id} ✓`;
+      }},
+      { id:'tl05', name:'Test URL credentials', run: async () => {
+        const base = window.location.origin + '/vwholesale-app/';
+        return [
+          `Staff login: phone + PIN 123456`,
+          `Contractor: ${base}${TEST_CREDS.contractor_portal}`,
+          `Customer: ${base}${TEST_CREDS.customer_portal}`,
+          `Contractor signup: ${base}${TEST_CREDS.signup_url}`,
+          `Customer register: ${base}${TEST_CREDS.register_url}`,
+        ].join(' | ').slice(0,100)+'... ✓';
+      }},
+    ]
+  },
+
+});
 
 
 /* === ledger.js === */
@@ -25629,7 +26105,7 @@ async function switchPortalTab(tabId, token, lang) {
   else if (tabId === 'awards') el.innerHTML = await _renderPortalAwards(c, lang);
   else if (tabId === 'margin') el.innerHTML = _renderPortalMarginSettings(c, lang);
 }
-window.VW_CONTRACTOR = { switchPortalTab, activateContractor };
+
 
 // ===== PORTAL STOCK TAB =====
 async function _renderPortalStock(tiles, c, lang, margin_type, margin_val) {
@@ -26370,15 +26846,7 @@ function calcContractorPayout(grossMargin, entityType, annualPaid) {
   return { gstOnMargin, tdsDeducted, netPayout, tdsRate: tdsRule.rate, needsTDS };
 }
 
-window.VW_CONTRACTOR = {
-  renderContractorPortalPage, renderContractorPublicPortal,
-  addContractor, saveContractor, openContractor, sharePortalLink,
-  downloadMeasurementSheet, calcContractorPayout,
-  switchPortalTab, activateContractor, filterPortalStock, shareProductLink,
-  addPortalRoom, removePortalRoom, createPortalQuote, readMeasurementSlip,
-  openBidForm, submitBid, redeemReward, saveMarginSettings,
-  postLaborRequirement, saveLaborRequirement,
-};
+
 
 // =====================================================
 // CONTRACTOR SIGNUP — Separate URL: ?signup=contractor
@@ -26500,8 +26968,8 @@ function signupNextStep(currentStep) {
     _updateSignupProgress(3);
   }
 }
-window.VW_CONTRACTOR.signupNextStep = signupNextStep;
-window.VW_CONTRACTOR.selectProfType = selectProfType;
+
+
 
 function _renderSignupStep2() {
   return `
@@ -26719,8 +27187,8 @@ function signupBack(toStep) {
   else if (toStep===2) { el.innerHTML=_renderSignupStep2(); _updateSignupProgress(1); }
   else if (toStep===3) { el.innerHTML=_renderSignupStep3(); _updateSignupProgress(2); }
 }
-window.VW_CONTRACTOR.signupBack = signupBack;
-window.VW_CONTRACTOR.submitContractorSignup = submitContractorSignup;
+
+
 
 function _updateSignupProgress(activeIdx) {
   document.querySelectorAll('[id^="signup-step-"]').forEach((el,i) => {
@@ -26813,10 +27281,10 @@ async function rejectContractor(contractorId) {
   navigateTo('contractor_portal');
 }
 
-window.VW_CONTRACTOR.renderContractorSignupPage = renderContractorSignupPage;
-window.VW_CONTRACTOR.renderPendingContractors = renderPendingContractors;
-window.VW_CONTRACTOR.approveContractor = approveContractor;
-window.VW_CONTRACTOR.rejectContractor = rejectContractor;
+
+
+
+
 
 // ── ADMIN UTILS ──
 async function renderContractorPortalPage_WithPending() {
@@ -26845,7 +27313,1317 @@ function shareSignupLink() {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
-window.VW_CONTRACTOR.shareSignupLink = shareSignupLink;
+// ── SINGLE CLEAN EXPORT (all functions defined above) ──
+window.VW_CONTRACTOR = {
+  // Portal pages
+  renderContractorPortalPage, renderContractorPublicPortal, renderContractorSignupPage,
+  // Admin management
+  addContractor, saveContractor, openContractor, sharePortalLink, shareSignupLink,
+  downloadMeasurementSheet, calcContractorPayout,
+  renderPendingContractors, approveContractor, rejectContractor,
+  // Portal tabs
+  switchPortalTab, activateContractor, filterPortalStock, shareProductLink,
+  addPortalRoom, removePortalRoom, createPortalQuote, readMeasurementSlip,
+  openBidForm, submitBid, redeemReward, saveMarginSettings,
+  // Labor marketplace
+  postLaborRequirement, saveLaborRequirement,
+  // Signup flow
+  selectProfType, signupNextStep, signupBack, submitContractorSignup,
+};
+
+// addToMeasurement stub - adds product to active measurement session
+function addToMeasurement(productId, productName) {
+  if (!window._portalMeasurementSelection) window._portalMeasurementSelection = [];
+  window._portalMeasurementSelection.push({ productId, productName });
+  showToast(`${productName} added to measurement quote`, 'success');
+}
+// Add to VW_CONTRACTOR
+window.VW_CONTRACTOR.addToMeasurement = addToMeasurement;
+
+
+/* === tile_inventory.js === */
+// =====================================================
+// TILE INVENTORY MODULE v1
+// - Dedicated tile add flow (separate from general inventory)
+// - Multi-location stock (warehouse + rack + shelf)
+// - AI design matcher (brand-scoped visual search)
+// - Excel import (inactive until live photo + count)
+// - QR code generation (V Wholesale branded)
+// - Display stock handling
+// - Full stock lifecycle: hold → invoice → return → restock
+// =====================================================
+
+// ===== AUDIT HELPER =====
+async function auditLog(action, entityType, entityId, entityRef, oldVal, newVal, notes) {
+  const p = VW_AUTH.getCurrentProfile();
+  try {
+    await VW_DB.client.from('audit_log').insert({
+      user_name: p?.name||'unknown', user_role: p?.role||'unknown',
+      action, entity_type: entityType, entity_id: entityId||null,
+      entity_ref: entityRef||null, old_value: oldVal||null,
+      new_value: newVal||null, notes: notes||null,
+      device: navigator.userAgent.slice(0,100),
+    });
+  } catch(e) { console.log('Audit log error:', e.message); }
+}
+window.auditLog = auditLog;
+
+// ===== MAIN TILE INVENTORY PAGE =====
+async function renderTileInventoryPage() {
+  const { data: products } = await VW_DB.client
+    .from('products')
+    .select('*, tile_stock_locations(*)')
+    .eq('category','Tiles')
+    .order('brand').order('name')
+    .limit(200);
+  const tiles = products || [];
+
+  // Compute available stock per product
+  const { data: holds } = await VW_DB.client.from('stock_holds').select('product_id,boxes_held').eq('status','active');
+  const heldMap = {};
+  (holds||[]).forEach(h => { heldMap[h.product_id] = (heldMap[h.product_id]||0) + (h.boxes_held||0); });
+
+  const totalProducts = tiles.length;
+  const lowStock = tiles.filter(p => {
+    const total = (p.tile_stock_locations||[]).reduce((s,l)=>s+(l.qty_boxes||0),0);
+    const held = heldMap[p.id]||0;
+    return (total-held) <= 5;
+  }).length;
+  const displayItems = tiles.filter(p=>(p.tile_stock_locations||[]).some(l=>l.is_display)).length;
+
+  return `
+  <div class="module-header">
+    <h2>🔲 Tile Inventory</h2>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" onclick="VW_TILE_INV.showExcelImport()">📊 Import</button>
+      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_TILE_INV.showAddTileForm()">+ Add Tile</button>
+    </div>
+  </div>
+
+  <div class="metric-grid-4" style="margin-bottom:12px">
+    <div class="metric-card gold"><div class="mc-label">Total SKUs</div><div class="mc-value">${totalProducts}</div></div>
+    <div class="metric-card danger"><div class="mc-label">Low / No Stock</div><div class="mc-value">${lowStock}</div></div>
+    <div class="metric-card"><div class="mc-label">Display Items</div><div class="mc-value">${displayItems}</div></div>
+    <div class="metric-card"><div class="mc-label">Pending Photos</div><div class="mc-value">${tiles.filter(p=>!p.has_live_photo).length}</div></div>
+  </div>
+
+  <!-- SEARCH + FILTER -->
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <input type="text" id="ti-search" placeholder="🔍 Brand, size, design..." oninput="VW_TILE_INV.filterTileInventory(this.value)" style="flex:1">
+    <select id="ti-warehouse" onchange="VW_TILE_INV.filterTileInventory()" style="width:120px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;color:var(--text)">
+      <option value="">All Locations</option>
+      <option value="VJA_Store">Main Floor</option>
+      <option value="VJA_Display">Display</option>
+      <option value="VJA_BackArea">Back Area</option>
+      <option value="VJA_OpenRacks">Open Racks</option>
+    </select>
+  </div>
+
+  <!-- TILE LIST -->
+  <div id="tile-inv-list">
+    ${_renderTileList(tiles, heldMap)}
+  </div>`;
+}
+
+function _renderTileList(tiles, heldMap) {
+  if (!tiles.length) return `
+  <div style="text-align:center;padding:40px;color:var(--text3)">
+    <div style="font-size:40px;margin-bottom:10px">🔲</div>
+    <div style="font-size:14px">No tiles in inventory yet</div>
+    <button class="btn-primary" style="margin-top:14px" onclick="VW_TILE_INV.showAddTileForm()">+ Add First Tile</button>
+  </div>`;
+
+  // Group by brand
+  const byBrand = {};
+  tiles.forEach(p => { const b=p.brand||'Other'; if(!byBrand[b]) byBrand[b]=[]; byBrand[b].push(p); });
+
+  return Object.entries(byBrand).map(([brand, items]) => `
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;padding:0 2px">${brand} · ${items.length} SKUs</div>
+    ${items.map(p => {
+      const locs = p.tile_stock_locations || [];
+      const totalBoxes = locs.reduce((s,l)=>s+(l.qty_boxes||0), 0);
+      const displayBoxes = locs.filter(l=>l.is_display).reduce((s,l)=>s+(l.qty_boxes||0), 0);
+      const sellableBoxes = totalBoxes - displayBoxes;
+      const held = heldMap[p.id] || 0;
+      const available = Math.max(0, sellableBoxes - held);
+      const hasPhoto = p.has_live_photo;
+
+      return `
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:6px;border:1px solid ${available<=0?'rgba(239,68,68,0.3)':available<=5?'rgba(245,200,66,0.3)':'var(--border)'}">
+        <div style="display:flex;gap:10px;align-items:flex-start">
+          <!-- DESIGN IMAGE -->
+          <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer" onclick="VW_TILE_INV.openTileDetail(${p.id})">
+            ${p.image_url||p.thumbnail_url ? `<img src="${p.image_url||p.thumbnail_url}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:24px">🔲</span>`}
+          </div>
+          <!-- INFO -->
+          <div style="flex:1;min-width:0" onclick="VW_TILE_INV.openTileDetail(${p.id})" style="cursor:pointer">
+            <div style="font-size:13px;font-weight:700;color:var(--text)">${p.name||'—'}</div>
+            <div style="font-size:11px;color:var(--text3)">${p.tile_size_label||p.tile_size_mm||'—'} · ${p.tile_finish||''}</div>
+            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
+              <span style="font-size:11px;background:${available>10?'rgba(34,197,94,0.1)':available>0?'rgba(245,200,66,0.1)':'rgba(239,68,68,0.1)'};color:${available>10?'var(--green)':available>0?'var(--gold)':'var(--red)'};padding:1px 6px;border-radius:4px;font-weight:600">
+                ${available} avail
+              </span>
+              ${held>0?`<span style="font-size:11px;background:rgba(239,68,68,0.1);color:var(--red);padding:1px 6px;border-radius:4px">${held} held</span>`:''}
+              ${displayBoxes>0?`<span style="font-size:11px;background:rgba(96,165,250,0.1);color:#60A5FA;padding:1px 6px;border-radius:4px">🖼 ${displayBoxes} display</span>`:''}
+              ${!hasPhoto?`<span style="font-size:11px;background:rgba(245,200,66,0.1);color:var(--gold);padding:1px 6px;border-radius:4px">📷 Photo needed</span>`:''}
+            </div>
+          </div>
+          <!-- ACTIONS -->
+          <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+            <button onclick="VW_TILE_INV.showQR(${p.id},'${(p.name||'').replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text2)">📱 QR</button>
+            <button onclick="VW_TILE_INV.adjustStock(${p.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text2)">+ Stock</button>
+          </div>
+        </div>
+        <!-- LOCATION BREAKDOWN -->
+        ${locs.length > 0 ? `
+        <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+          ${locs.map(l=>`
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);padding:1px 0">
+            <span>${l.is_display?'🖼 Display':'📦'} ${l.warehouse_code||'—'} · ${l.rack_no||'—'}/${l.shelf_no||'—'}</span>
+            <span style="color:var(--text2)">${l.qty_boxes||0} boxes${l.qty_pcs?` + ${l.qty_pcs}pcs`:''}</span>
+          </div>`).join('')}
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`).join('');
+}
+
+async function filterTileInventory(search) {
+  const q = (search||document.getElementById('ti-search')?.value||'').toLowerCase();
+  const warehouse = document.getElementById('ti-warehouse')?.value||'';
+
+  let query = VW_DB.client.from('products').select('*, tile_stock_locations(*)').eq('category','Tiles');
+  if (warehouse) query = query.eq('tile_stock_locations.warehouse_code', warehouse);
+  const { data } = await query.order('brand').order('name').limit(200);
+  const tiles = (data||[]).filter(p => !q ||
+    (p.name||'').toLowerCase().includes(q) ||
+    (p.brand||'').toLowerCase().includes(q) ||
+    (p.tile_size_mm||'').toLowerCase().includes(q) ||
+    (p.tile_finish||'').toLowerCase().includes(q)
+  );
+
+  const { data: holds } = await VW_DB.client.from('stock_holds').select('product_id,boxes_held').eq('status','active');
+  const heldMap = {};
+  (holds||[]).forEach(h => { heldMap[h.product_id] = (heldMap[h.product_id]||0) + (h.boxes_held||0); });
+
+  const el = document.getElementById('tile-inv-list');
+  if (el) el.innerHTML = _renderTileList(tiles, heldMap);
+}
+
+// ===== ADD TILE FORM =====
+async function showAddTileForm(prefill) {
+  const { data: warehouses } = await VW_DB.client.from('warehouse_locations').select('*').eq('is_active',true).order('sort_order');
+  const wh = warehouses || [];
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">🔲 Add Tile Product</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="max-height:70vh;overflow-y:auto;padding-bottom:20px">
+
+    <!-- STEP 1: BRAND + DESIGN MATCH -->
+    <div class="form-group">
+      <label>Brand *</label>
+      <input type="text" id="at-brand" value="${prefill?.brand||''}" placeholder="e.g. TISAN, Kajaria, Somany"
+        oninput="VW_TILE_INV.onBrandChange(this.value)">
+    </div>
+    <div class="form-group">
+      <label>Size *</label>
+      <select id="at-size">
+        <option value="">Select size</option>
+        ${window.TILE_SIZES ? window.TILE_SIZES.map(s=>`<option value="${s.mm}" ${prefill?.size===s.mm?'selected':''}>${s.label}</option>`).join('') : ''}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Product Name *</label>
+      <input type="text" id="at-name" value="${prefill?.name||''}" placeholder="Design name / catalogue code">
+    </div>
+    <div class="form-group">
+      <label>Finish</label>
+      <select id="at-finish">
+        ${['MATT','GLOSSY','SATIN','POLISHED','SUGAR','CARVING','METALLIC','STONE LOOK'].map(f=>`<option>${f}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Description</label>
+      <textarea id="at-desc" placeholder="Notes about this tile..." style="height:60px"></textarea>
+    </div>
+
+    <!-- AI DESIGN MATCHER -->
+    <div style="background:rgba(96,165,250,0.06);border:1px dashed rgba(96,165,250,0.4);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#60A5FA;margin-bottom:4px">🤖 AI Design Match Check</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Upload a clear photo of the tile. AI will check if this design already exists in the <strong id="at-brand-label">selected brand</strong>'s catalog — prevents duplicates.</div>
+      <button onclick="document.getElementById('at-design-pic').click()"
+        style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--text)">
+        📷 Take / Upload Design Photo
+      </button>
+      <input type="file" id="at-design-pic" accept="image/*" style="display:none" onchange="VW_TILE_INV.matchDesign(this)">
+      <div id="at-match-result" style="margin-top:8px"></div>
+    </div>
+
+    <!-- PRODUCT DESIGN PICS -->
+    <div class="form-group">
+      <label>Product Design Photos</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">High quality pics used for Visualizer. Camera or gallery.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('at-pics-live').click()" style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px;font-size:11px;cursor:pointer">📷 Live Photo</button>
+        <button onclick="document.getElementById('at-pics-file').click()" style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px;font-size:11px;cursor:pointer">🖼 From Gallery</button>
+      </div>
+      <input type="file" id="at-pics-live" accept="image/*" capture="environment" multiple style="display:none" onchange="VW_TILE_INV.previewDesignPics(this)">
+      <input type="file" id="at-pics-file" accept="image/*" multiple style="display:none" onchange="VW_TILE_INV.previewDesignPics(this)">
+      <div id="at-pics-preview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Tiles/Box</label><input type="number" id="at-tpb" placeholder="4" min="1"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Sqft/Box</label><input type="number" id="at-spb" placeholder="16" step="0.1"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>MRP/Box (₹)</label><input type="number" id="at-mrp" placeholder="850" step="1"></div>
+    </div>
+
+    <!-- WAREHOUSE LOCATION -->
+    <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;margin-top:4px">📦 Storage Location</div>
+    <div class="form-group">
+      <label>Warehouse *</label>
+      <select id="at-warehouse" onchange="VW_TILE_INV.loadRacks(this.value)">
+        <option value="">Select warehouse</option>
+        ${wh.map(w=>`<option value="${w.code}">${w.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Rack No</label>
+        <select id="at-rack" onchange="VW_TILE_INV.loadShelves(this.value)">
+          <option value="">Select warehouse first</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Shelf No</label>
+        <select id="at-shelf"><option value="">Select rack first</option></select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Qty (Boxes) *</label><input type="number" id="at-qtybox" placeholder="0" min="0"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Additional (Pcs)</label><input type="number" id="at-qtypcs" placeholder="0" min="0"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <input type="checkbox" id="at-display" style="width:16px;height:16px">
+      <label style="font-size:12px">This is a Display Sample (not for sale)</label>
+    </div>
+
+    <!-- SHELF PHOTO (LIVE ONLY) -->
+    <div class="form-group">
+      <label>📷 Shelf Photo (Live Camera) *</label>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Required to activate this stock. Take photo showing tiles on shelf with quantity visible.</div>
+      <button onclick="document.getElementById('at-shelf-pic').click()" id="at-shelf-btn"
+        style="width:100%;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;padding:10px;font-size:12px;cursor:pointer;color:var(--text3)">
+        📷 Take Live Shelf Photo
+      </button>
+      <input type="file" id="at-shelf-pic" accept="image/*" capture="environment" style="display:none" onchange="VW_TILE_INV.previewShelfPic(this)">
+      <div id="at-shelf-preview" style="margin-top:8px"></div>
+    </div>
+
+    <div id="at-duplicate-warning" style="display:none;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">⚠️ Similar Product Found</div>
+      <div id="at-dup-detail" style="font-size:11px;color:var(--text2)"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="VW_TILE_INV.mergeWithExisting()" class="btn-sm" style="background:var(--green);color:#fff">Merge Stock</button>
+        <button onclick="document.getElementById('at-duplicate-warning').style.display='none'" class="btn-sm">Create New</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;padding-top:4px">
+      <button class="btn-secondary" style="flex:0.4" onclick="closeSheet()">Cancel</button>
+      <button class="btn-primary" style="flex:1" id="at-save-btn" onclick="VW_TILE_INV.saveTileProduct()">
+        Save Tile Product
+      </button>
+    </div>
+    </div>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function onBrandChange(val) {
+  const lbl = document.getElementById('at-brand-label');
+  if (lbl) lbl.textContent = val ? `"${val}"` : 'selected brand';
+  window._atCurrentBrand = val;
+}
+
+async function loadRacks(warehouseCode) {
+  if (!warehouseCode) return;
+  const { data } = await VW_DB.client.from('rack_config').select('*').eq('warehouse_code', warehouseCode).eq('is_active',true);
+  const racks = data || [];
+  const el = document.getElementById('at-rack');
+  if (el) el.innerHTML = `<option value="">Select rack</option>${racks.map(r=>`<option value="${r.rack_no}" data-shelves='${JSON.stringify(r.shelf_nos||[])}'>${r.rack_no}</option>`).join('')}`;
+}
+
+function loadShelves(rackNo) {
+  const rackEl = document.getElementById('at-rack');
+  const opt = rackEl?.querySelector(`option[value="${rackNo}"]`);
+  const shelves = opt ? JSON.parse(opt.dataset.shelves||'[]') : [];
+  const el = document.getElementById('at-shelf');
+  if (el) el.innerHTML = `<option value="">Select shelf</option>${shelves.map(s=>`<option value="${s}">${s}</option>`).join('')}`;
+}
+
+// ===== AI DESIGN MATCHER (brand-scoped) =====
+async function matchDesign(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const brand = document.getElementById('at-brand')?.value.trim();
+  const result = document.getElementById('at-match-result');
+  if (!result) return;
+  if (!brand) { result.innerHTML = `<div style="font-size:11px;color:var(--gold)">⚠️ Enter brand name first — AI only searches within the same brand</div>`; return; }
+
+  result.innerHTML = `<div style="font-size:11px;color:var(--text3)">⏳ Searching ${brand} catalog for matching designs...</div>`;
+
+  const b64 = await new Promise(res=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image(); img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const max=1200; const ratio=Math.min(max/img.width,max/img.height,1);
+        canvas.width=Math.round(img.width*ratio); canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        res(canvas.toDataURL('image/jpeg',0.9).split(',')[1]);
+      };
+      img.onerror=()=>res(e.target.result.split(',')[1]);
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Fetch all existing products for this brand
+  const { data: brandProducts } = await VW_DB.client.from('products')
+    .select('id,name,brand,tile_size_mm,tile_finish,image_url,description')
+    .ilike('brand', `%${brand}%`).eq('category','Tiles').limit(100);
+
+  const productList = (brandProducts||[]).map(p=>`ID:${p.id} | ${p.name} (${p.tile_size_mm}, ${p.tile_finish})`).join('\n');
+
+  try {
+    const res = await fetch(`${VW_DB.client.supabaseUrl}/functions/v1/room-visualizer`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${VW_DB.client.supabaseKey}`,'apikey':VW_DB.client.supabaseKey},
+      body: JSON.stringify({
+        mode:'design_match', imageBase64:b64,
+        prompt:`You are analyzing a tile design photo to check if it matches any existing product in the ${brand} catalog.
+
+Existing ${brand} products in database:
+${productList||'(No existing products for this brand yet)'}
+
+Look at the tile in the image carefully:
+- Color, pattern, texture, surface finish
+- Check if it matches any product above visually
+
+Return ONLY JSON:
+{
+  "match_found": true/false,
+  "matched_id": null or product_id_number,
+  "matched_name": null or "product name",
+  "confidence": "high/medium/low",
+  "tile_description": "brief description of what you see",
+  "color_family": "e.g. White, Grey, Beige, Black",
+  "surface": "glossy/matt/satin/etc",
+  "reason": "why you think it matches or not"
+}`
+      })
+    });
+    const data = await res.json();
+    let parsed = null;
+    try {
+      const text = data.description||data.response||JSON.stringify(data);
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) parsed = JSON.parse(match[0]);
+    } catch(e){}
+
+    if (parsed?.match_found && parsed.matched_id) {
+      window._atMatchedId = parsed.matched_id;
+      window._atMatchedName = parsed.matched_name;
+      const dupWarn = document.getElementById('at-duplicate-warning');
+      const dupDetail = document.getElementById('at-dup-detail');
+      if (dupWarn) dupWarn.style.display='block';
+      if (dupDetail) dupDetail.innerHTML = `Matches: <strong>${parsed.matched_name}</strong> (${parsed.confidence} confidence)<br>${parsed.reason}`;
+      result.innerHTML = `<div style="font-size:11px;color:var(--gold)">⚠️ Possible duplicate found (${parsed.confidence} match) — see warning above</div>`;
+      // Auto-fill description with AI analysis
+      const desc = document.getElementById('at-desc');
+      if (desc && !desc.value) desc.value = parsed.tile_description||'';
+    } else {
+      result.innerHTML = `<div style="font-size:11px;color:var(--green)">✓ No match found in ${brand} catalog — this appears to be a new design<br><span style="color:var(--text3)">${parsed?.tile_description||''} · ${parsed?.color_family||''} · ${parsed?.surface||''}</span></div>`;
+      const desc = document.getElementById('at-desc');
+      if (desc && !desc.value && parsed) desc.value = [parsed.tile_description, parsed.color_family, parsed.surface].filter(Boolean).join(', ');
+    }
+  } catch(e) {
+    result.innerHTML = `<div style="font-size:11px;color:var(--red)">Error: ${e.message}</div>`;
+  }
+}
+
+function previewDesignPics(input) {
+  const files = Array.from(input.files||[]);
+  const preview = document.getElementById('at-pics-preview');
+  if (!preview) return;
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.style.cssText = 'width:70px;height:70px;object-fit:cover;border-radius:8px;border:1px solid var(--border)';
+      preview.appendChild(img);
+    };
+    reader.readAsDataURL(f);
+  });
+  window._atDesignFiles = [...(window._atDesignFiles||[]), ...files];
+}
+
+function previewShelfPic(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const el = document.getElementById('at-shelf-preview');
+    if (el) el.innerHTML = `<img src="${e.target.result}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--green)">
+    <div style="font-size:11px;color:var(--green);margin-top:4px">✓ Live shelf photo captured — stock will be active</div>`;
+    const btn = document.getElementById('at-save-btn');
+    if (btn) btn.style.background = 'var(--green)';
+  };
+  reader.readAsDataURL(file);
+  window._atShelfFile = file;
+}
+
+// ===== MERGE WITH EXISTING =====
+async function mergeWithExisting() {
+  const matchedId = window._atMatchedId;
+  if (!matchedId) return;
+  const boxes = parseInt(document.getElementById('at-qtybox')?.value||0);
+  const pcs = parseInt(document.getElementById('at-qtypcs')?.value||0);
+  const warehouse = document.getElementById('at-warehouse')?.value;
+  const rack = document.getElementById('at-rack')?.value;
+  const shelf = document.getElementById('at-shelf')?.value;
+  if (!boxes||!warehouse||!rack) { showToast('Enter qty, warehouse and rack to merge','warn'); return; }
+
+  // Add stock at this location for existing product
+  const { data: existingLoc } = await VW_DB.client.from('tile_stock_locations')
+    .select('*').eq('product_id', matchedId).eq('warehouse_code', warehouse).eq('rack_no', rack).eq('shelf_no', shelf).single().catch(()=>({data:null}));
+
+  if (existingLoc) {
+    await VW_DB.client.from('tile_stock_locations').update({
+      qty_boxes: (existingLoc.qty_boxes||0) + boxes,
+      qty_pcs: (existingLoc.qty_pcs||0) + pcs,
+      updated_at: new Date().toISOString(),
+    }).eq('id', existingLoc.id);
+  } else {
+    await VW_DB.client.from('tile_stock_locations').insert({
+      product_id: matchedId, warehouse_code: warehouse, rack_no: rack, shelf_no: shelf,
+      qty_boxes: boxes, qty_pcs: pcs,
+    });
+  }
+  // Update total stock on products table
+  const { data: allLocs } = await VW_DB.client.from('tile_stock_locations').select('qty_boxes').eq('product_id', matchedId);
+  const totalBoxes = (allLocs||[]).reduce((s,l)=>s+(l.qty_boxes||0),0);
+  await VW_DB.client.from('products').update({ stock: totalBoxes }).eq('id', matchedId);
+
+  await auditLog('inventory_merge', 'product', matchedId, window._atMatchedName, null, {boxes, warehouse, rack, shelf}, 'Merged via AI design match');
+  closeSheet();
+  showToast(`Merged ${boxes} boxes into ${window._atMatchedName} ✓`,'success');
+  navigateTo('tile_inventory');
+}
+
+// ===== SAVE NEW TILE =====
+async function saveTileProduct() {
+  const brand = document.getElementById('at-brand')?.value.trim();
+  const name = document.getElementById('at-name')?.value.trim();
+  const size = document.getElementById('at-size')?.value;
+  const boxes = parseInt(document.getElementById('at-qtybox')?.value||0);
+  const warehouse = document.getElementById('at-warehouse')?.value;
+  const rack = document.getElementById('at-rack')?.value;
+
+  if (!brand||!name||!size) { showToast('Brand, name and size are required','warn'); return; }
+  if (!window._atShelfFile) { showToast('Live shelf photo is required to activate stock','warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const btn = document.getElementById('at-save-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Saving...'; }
+
+  // Generate QR code payload
+  const qrPayload = `${window.location.origin}/vwholesale-app/?product_qr=${Date.now()}`;
+
+  // Insert product
+  const tileSize = (window.TILE_SIZES||[]).find(s=>s.mm===size);
+  const { data: product, error } = await VW_DB.client.from('products').insert({
+    name, brand, category:'Tiles',
+    tile_size_mm: size,
+    tile_size_label: tileSize?.label||size,
+    tile_finish: document.getElementById('at-finish')?.value||'',
+    description: document.getElementById('at-desc')?.value||'',
+    tiles_per_box: parseInt(document.getElementById('at-tpb')?.value||4),
+    coverage_per_box: parseFloat(document.getElementById('at-spb')?.value||0)||null,
+    mrp: parseFloat(document.getElementById('at-mrp')?.value||0)||null,
+    stock: boxes,
+    has_live_photo: true,
+    is_active: true,
+    qr_code: qrPayload,
+    qr_generated_at: new Date().toISOString(),
+    purchase_date: new Date().toISOString().split('T')[0],
+    added_by: profile?.name||'',
+  }).select().single();
+
+  if (error) {
+    if (btn) { btn.disabled=false; btn.textContent='Save Tile Product'; }
+    showToast('Error: '+error.message,'error'); return;
+  }
+
+  // Insert stock location
+  if (warehouse && boxes > 0) {
+    await VW_DB.client.from('tile_stock_locations').insert({
+      product_id: product.id,
+      warehouse_code: warehouse,
+      rack_no: rack||'',
+      shelf_no: document.getElementById('at-shelf')?.value||'',
+      qty_boxes: boxes,
+      qty_pcs: parseInt(document.getElementById('at-qtypcs')?.value||0),
+      is_display: document.getElementById('at-display')?.checked||false,
+      last_counted_at: new Date().toISOString(),
+      last_counted_by: profile?.name||'',
+      qr_code: qrPayload,
+    });
+  }
+
+  await auditLog('inventory_add', 'product', product.id, `${brand} ${name}`, null, {boxes, warehouse, rack}, 'New tile added');
+  closeSheet();
+  showToast(`${brand} ${name} added ✓ — QR generated`,'success');
+  navigateTo('tile_inventory');
+}
+
+// ===== STOCK ADJUST (add more stock to existing) =====
+async function adjustStock(productId) {
+  const { data: p } = await VW_DB.client.from('products').select('*').eq('id',productId).single();
+  const { data: warehouses } = await VW_DB.client.from('warehouse_locations').select('*').eq('is_active',true).order('sort_order');
+  const { data: locs } = await VW_DB.client.from('tile_stock_locations').select('*').eq('product_id',productId);
+  if (!p) return;
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="margin-bottom:4px">${p.brand} ${p.name}</h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">${p.tile_size_mm||''} · ${p.tile_finish||''}</div>
+
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px">Current Stock by Location</div>
+    ${(locs||[]).map(l=>`
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 8px;background:var(--bg2);border-radius:8px;margin-bottom:4px">
+      <span>${l.warehouse_code} · ${l.rack_no||'—'}/${l.shelf_no||'—'}${l.is_display?' (Display)':''}</span>
+      <span style="font-weight:600">${l.qty_boxes} boxes</span>
+    </div>`).join('')}
+
+    <div style="font-size:12px;font-weight:600;margin:12px 0 8px">Add More Stock</div>
+    <div class="form-group"><label>Warehouse</label>
+      <select id="adj-wh" onchange="VW_TILE_INV.loadRacksForAdj(this.value)">
+        <option value="">Select</option>
+        ${(warehouses||[]).map(w=>`<option value="${w.code}">${w.name}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Rack</label><select id="adj-rack"><option>Select WH first</option></select></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Shelf</label><select id="adj-shelf"><option>Select rack first</option></select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Boxes to Add</label><input type="number" id="adj-boxes" placeholder="0" min="0"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Pcs to Add</label><input type="number" id="adj-pcs" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-group"><label>📷 Shelf Photo (Live) *</label>
+      <button onclick="document.getElementById('adj-pic').click()" style="width:100%;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;color:var(--text3)">📷 Take Live Photo</button>
+      <input type="file" id="adj-pic" accept="image/*" capture="environment" style="display:none" onchange="VW_TILE_INV.previewAdjPhoto(this)">
+      <div id="adj-pic-preview" style="margin-top:6px"></div>
+    </div>
+    <button class="btn-primary full-width" onclick="VW_TILE_INV.saveStockAdjustment(${productId})">Add Stock</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function loadRacksForAdj(wh) {
+  const { data } = await VW_DB.client.from('rack_config').select('*').eq('warehouse_code',wh).eq('is_active',true);
+  const el = document.getElementById('adj-rack');
+  if (el) el.innerHTML = `<option value="">Select</option>${(data||[]).map(r=>`<option value="${r.rack_no}" data-shelves='${JSON.stringify(r.shelf_nos||[])}'>${r.rack_no}</option>`).join('')}`;
+  document.getElementById('adj-rack')?.addEventListener('change', function() {
+    const opt = this.querySelector(`option[value="${this.value}"]`);
+    const shelves = opt ? JSON.parse(opt.dataset.shelves||'[]') : [];
+    const sel = document.getElementById('adj-shelf');
+    if (sel) sel.innerHTML = `<option value="">Select</option>${shelves.map(s=>`<option value="${s}">${s}</option>`).join('')}`;
+  });
+}
+
+function previewAdjPhoto(input) {
+  const file = input.files?.[0]; if (!file) return;
+  window._adjShelfFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const el = document.getElementById('adj-pic-preview');
+    if (el) el.innerHTML = `<img src="${e.target.result}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--green)"><div style="font-size:11px;color:var(--green);margin-top:3px">✓ Live photo captured</div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveStockAdjustment(productId) {
+  if (!window._adjShelfFile) { showToast('Live shelf photo required','warn'); return; }
+  const boxes = parseInt(document.getElementById('adj-boxes')?.value||0);
+  const pcs = parseInt(document.getElementById('adj-pcs')?.value||0);
+  const wh = document.getElementById('adj-wh')?.value;
+  const rack = document.getElementById('adj-rack')?.value;
+  const shelf = document.getElementById('adj-shelf')?.value;
+  if (!boxes && !pcs) { showToast('Enter quantity','warn'); return; }
+  if (!wh || !rack) { showToast('Select warehouse and rack','warn'); return; }
+
+  const { data: existing } = await VW_DB.client.from('tile_stock_locations')
+    .select('*').eq('product_id',productId).eq('warehouse_code',wh).eq('rack_no',rack).eq('shelf_no',shelf||'')
+    .single().catch(()=>({data:null}));
+
+  if (existing) {
+    await VW_DB.client.from('tile_stock_locations').update({
+      qty_boxes:(existing.qty_boxes||0)+boxes, qty_pcs:(existing.qty_pcs||0)+pcs,
+      last_counted_at:new Date().toISOString(), last_counted_by:VW_AUTH.getCurrentProfile()?.name||'',
+    }).eq('id',existing.id);
+  } else {
+    await VW_DB.client.from('tile_stock_locations').insert({
+      product_id:productId, warehouse_code:wh, rack_no:rack, shelf_no:shelf||'',
+      qty_boxes:boxes, qty_pcs:pcs, last_counted_at:new Date().toISOString(),
+      last_counted_by:VW_AUTH.getCurrentProfile()?.name||'',
+    });
+  }
+
+  // Update product total stock
+  const { data: allLocs } = await VW_DB.client.from('tile_stock_locations').select('qty_boxes').eq('product_id',productId);
+  const total = (allLocs||[]).reduce((s,l)=>s+(l.qty_boxes||0),0);
+  await VW_DB.client.from('products').update({ stock:total, has_live_photo:true }).eq('id',productId);
+
+  await auditLog('stock_adjust', 'product', productId, null, null, {boxes, wh, rack}, 'Manual stock addition');
+  window._adjShelfFile = null;
+  closeSheet();
+  showToast(`+${boxes} boxes added to stock ✓`,'success');
+  navigateTo('tile_inventory');
+}
+
+// ===== TILE DETAIL PAGE =====
+async function openTileDetail(productId) {
+  const { data: p } = await VW_DB.client.from('products').select('*').eq('id',productId).single();
+  const { data: locs } = await VW_DB.client.from('tile_stock_locations').select('*').eq('product_id',productId);
+  const { data: holds } = await VW_DB.client.from('stock_holds').select('*').eq('product_id',productId).eq('status','active');
+  if (!p) return;
+
+  const totalBoxes = (locs||[]).filter(l=>!l.is_display).reduce((s,l)=>s+(l.qty_boxes||0),0);
+  const displayBoxes = (locs||[]).filter(l=>l.is_display).reduce((s,l)=>s+(l.qty_boxes||0),0);
+  const heldBoxes = (holds||[]).reduce((s,h)=>s+(h.boxes_held||0),0);
+  const available = Math.max(0, totalBoxes - heldBoxes);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:700">${p.brand} — ${p.name}</div>
+        <div style="font-size:12px;color:var(--text3)">${p.tile_size_label||p.tile_size_mm||''} · ${p.tile_finish||''}</div>
+      </div>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <!-- STOCK SUMMARY -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px">
+      ${[['Total',totalBoxes,'var(--text)'],['Available',available,'var(--green)'],['On Hold',heldBoxes,'var(--red)'],['Display',displayBoxes,'#60A5FA']].map(([l,v,c])=>`
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:${c}">${v}</div>
+        <div style="font-size:10px;color:var(--text3)">${l}</div>
+      </div>`).join('')}
+    </div>
+    <!-- LOCATIONS -->
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px">Stock Locations</div>
+    ${(locs||[]).map(l=>`
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:12px;font-weight:600">${l.is_display?'🖼 Display — ':''}${l.warehouse_code||'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">Rack ${l.rack_no||'—'} · Shelf ${l.shelf_no||'—'}</div>
+        ${l.last_counted_by?`<div style="font-size:10px;color:var(--text3)">Last count: ${l.last_counted_by} · ${l.last_counted_at?new Date(l.last_counted_at).toLocaleDateString('en-IN'):''}</div>`:''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${l.qty_boxes||0} boxes</div>
+        ${l.qty_pcs?`<div style="font-size:11px;color:var(--text3)">+${l.qty_pcs} pcs</div>`:''}
+      </div>
+    </div>`).join('')}
+    <!-- HOLDS -->
+    ${(holds||[]).length ? `
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px;margin-top:10px">Active Holds</div>
+    ${(holds||[]).map(h=>`
+    <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:8px;margin-bottom:4px;font-size:11px">
+      ${h.customer_name} · ${h.boxes_held} boxes · Exp: ${h.hold_expires_at?new Date(h.hold_expires_at).toLocaleDateString('en-IN'):'—'}
+    </div>`).join('')}` : ''}
+    <!-- ACTIONS -->
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet();VW_TILE_INV.adjustStock(${productId})">+ Add Stock</button>
+      <button class="btn-primary" style="flex:1" onclick="closeSheet();VW_TILE_INV.showQR(${productId},'${(p.name||'').replace(/'/g,"\\'")}')">📱 QR Code</button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// ===== QR CODE GENERATOR =====
+async function showQR(productId, productName) {
+  const { data: p } = await VW_DB.client.from('products').select('*,tile_stock_locations(*)').eq('id',productId).single();
+  if (!p) return;
+
+  const qrData = p.qr_code || `${window.location.origin}/vwholesale-app/?product_qr=${productId}`;
+  const totalBoxes = (p.tile_stock_locations||[]).filter(l=>!l.is_display).reduce((s,l)=>s+(l.qty_boxes||0),0);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">${p.brand} — ${p.name}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${p.tile_size_label||''} · ${p.tile_finish||''}</div>
+      <!-- QR CODE (using Google Charts API) -->
+      <div style="background:#fff;padding:16px;border-radius:16px;display:inline-block;margin-bottom:12px">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrData)}"
+          width="200" height="200" style="display:block">
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Scan to see live stock & request quotation</div>
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px">
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Stock Available</span><span style="font-weight:700;color:var(--green)">${totalBoxes} boxes</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span>MRP</span><span style="font-weight:700">₹${(p.mrp||0).toLocaleString('en-IN')}/box</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Coverage</span><span>${p.coverage_per_box||'—'} sqft/box</span></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" style="flex:1" onclick="VW_TILE_INV.printQR(${productId},'${(p.name||'').replace(/'/g,"\\'")}','${encodeURIComponent(qrData)}')">🖨 Print Label</button>
+        <button class="btn-primary" style="flex:1" onclick="navigator.share?navigator.share({title:'${p.brand} ${p.name}',url:'${qrData}'}):navigator.clipboard.writeText('${qrData}').then(()=>showToast('Link copied','success'))">📤 Share</button>
+      </div>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function printQR(productId, productName, qrEncoded) {
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>QR Label</title>
+  <style>body{font-family:Arial;text-align:center;padding:20px} .label{border:2px solid #C8972B;border-radius:12px;padding:16px;display:inline-block;max-width:240px} h3{color:#C8972B;margin:0 0 8px;font-size:14px} @media print{body{padding:0}}</style>
+  </head><body>
+  <div class="label">
+    <h3>V Wholesale</h3>
+    <img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${qrEncoded}" width="180" height="180">
+    <div style="font-size:13px;font-weight:700;margin-top:8px">${productName}</div>
+    <div style="font-size:10px;color:#888;margin-top:4px">Scan for live stock & price</div>
+    <div style="font-size:10px;color:#888">V Wholesale · 8712697930</div>
+  </div>
+  </body></html>`;
+  const w = window.open('','_blank');
+  if (w) { w.document.write(html); w.document.close(); setTimeout(()=>w.print(),600); }
+}
+
+// ===== PUBLIC QR SCAN PAGE (?product_qr=ID) =====
+async function renderProductQRPage(productId) {
+  const { data: p } = await VW_DB.client.from('products').select('*,tile_stock_locations(*)').eq('id',productId).single();
+  if (!p) return '<div style="padding:40px;text-align:center;color:#888">Product not found</div>';
+
+  const locs = (p.tile_stock_locations||[]).filter(l=>!l.is_display);
+  const totalBoxes = locs.reduce((s,l)=>s+(l.qty_boxes||0),0);
+  const isStaff = VW_AUTH.getCurrentProfile() !== null;
+
+  return `
+  <div style="min-height:100vh;padding:20px;max-width:420px;margin:0 auto">
+    <div style="text-align:center;padding-bottom:16px;border-bottom:2px solid #C8972B;margin-bottom:16px">
+      <div style="font-size:18px;font-weight:800;color:#C8972B;font-family:sans-serif">V Wholesale</div>
+      <div style="font-size:11px;color:#888">Vijayawada · 8712697930</div>
+    </div>
+    ${p.image_url?`<img src="${p.image_url}" style="width:100%;max-height:200px;object-fit:cover;border-radius:12px;margin-bottom:14px">`:
+    `<div style="width:100%;height:140px;background:var(--bg2);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:48px;margin-bottom:14px">🔲</div>`}
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px">${p.name}</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:12px">${p.brand} · ${p.tile_size_label||p.tile_size_mm||''} · ${p.tile_finish||''}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:${totalBoxes>10?'var(--green)':totalBoxes>0?'var(--gold)':'var(--red)'}">${totalBoxes}</div>
+        <div style="font-size:11px;color:var(--text3)">Boxes Available</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:var(--text)">${p.mrp?'₹'+(p.mrp).toLocaleString('en-IN'):'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">Price/Box</div>
+      </div>
+    </div>
+    ${p.coverage_per_box?`<div style="font-size:12px;color:var(--text2);margin-bottom:14px">Coverage: ${p.coverage_per_box} sqft/box · ${p.tiles_per_box||'—'} tiles/box</div>`:''}
+    ${isStaff ? `
+    <!-- STAFF VIEW: show all locations -->
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px">📦 Stock Locations</div>
+    ${locs.map(l=>`<div style="font-size:11px;color:var(--text2);padding:4px 0">${l.warehouse_code} · ${l.rack_no||'—'}/${l.shelf_no||'—'} — ${l.qty_boxes} boxes</div>`).join('')}
+    ` : `
+    <!-- CUSTOMER VIEW -->
+    <button onclick="window.open('https://wa.me/918712697930?text='+encodeURIComponent('I want to enquire about: ${p.brand} ${p.name} (${p.tile_size_label||p.tile_size_mm||''})\\n\\nPlease send me price and availability.'),'_blank')"
+      style="width:100%;background:#25D366;color:#fff;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">
+      💬 Ask about this tile on WhatsApp
+    </button>
+    <button onclick="VW_TILE_INV.addToWishlistFromQR(${p.id})"
+      style="width:100%;background:var(--gold-muted);border:2px solid var(--gold-border);border-radius:12px;padding:12px;font-size:13px;font-weight:600;cursor:pointer;color:var(--gold)">
+      ❤️ Add to My Wishlist
+    </button>`}
+  </div>`;
+}
+
+async function addToWishlistFromQR(productId) {
+  // Prompt for phone to link to customer account
+  const phone = prompt('Enter your phone number to save to wishlist:');
+  if (!phone || phone.length < 10) return;
+  const { data: cust } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone.replace(/\D/g,'')+'%').single().catch(()=>({data:null}));
+  if (!cust) { showToast('Phone not found — ask executive to add you first','warn'); return; }
+  await VW_DB.client.from('wishlists').upsert({ customer_id:cust.id, product_id:productId, added_at:new Date().toISOString() });
+  showToast(`Added to wishlist for ${cust.name} ✓`,'success');
+}
+
+// ===== EXCEL IMPORT =====
+async function showExcelImport() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📊 Import Tiles from Excel</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.3);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text2)">
+      <strong>Note:</strong> Imported rows are INACTIVE until each product has a live photo and stock count. You can upload photos product-by-product after import.
+    </div>
+    <div class="form-group"><label>Brand *</label><input type="text" id="xi-brand" placeholder="Brand name for all products in this sheet"></div>
+    <div class="form-group">
+      <label>Download Template first</label>
+      <button onclick="VW_TILE_INV.downloadTileImportTemplate()" class="btn-sm" style="width:100%">⬇️ Download Excel Template</button>
+    </div>
+    <div class="form-group">
+      <label>Upload Filled Excel (.xlsx or .csv)</label>
+      <input type="file" id="xi-file" accept=".xlsx,.xls,.csv" onchange="VW_TILE_INV.previewExcelImport(this)">
+    </div>
+    <div id="xi-preview" style="margin-top:10px"></div>
+    <button class="btn-primary full-width" id="xi-import-btn" onclick="VW_TILE_INV.processExcelImport()" style="display:none;margin-top:10px">
+      Import Products (Inactive — add photos to activate)
+    </button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function downloadTileImportTemplate() {
+  const headers = ['Brand','Product Name','Size (mm)','Finish','Description','Tiles Per Box','Sqft Per Box','MRP Per Box','Warehouse','Rack No','Shelf No','Qty Boxes','Qty Pcs','Is Display (Y/N)'];
+  const sample = ['TISAN','Pearl White 600x600','600×600','MATT','White marble look',4,16,1200,'VJA_Store','A1','S1',50,0,'N'];
+  const csv = [headers.join(','), sample.join(',')].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'V_Wholesale_Tile_Import_Template.csv';
+  a.click();
+}
+
+async function previewExcelImport(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const preview = document.getElementById('xi-preview');
+  const importBtn = document.getElementById('xi-import-btn');
+
+  if (file.name.endsWith('.csv')) {
+    const text = await file.text();
+    const lines = text.split('\n').filter(l=>l.trim());
+    const headers = lines[0].split(',').map(h=>h.trim().replace(/"/g,''));
+    const rows = lines.slice(1).map(l=>l.split(',').map(c=>c.trim().replace(/"/g,'')));
+    window._xiRows = rows.map(r => Object.fromEntries(headers.map((h,i)=>[h,r[i]||''])));
+    if (preview) preview.innerHTML = `
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Preview — ${rows.length} products</div>
+      ${rows.slice(0,5).map(r=>`<div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">${r[1]||'—'} · ${r[2]||'—'} · ${r[3]||'—'} · ${r[11]||'0'} boxes</div>`).join('')}
+      ${rows.length>5?`<div style="font-size:11px;color:var(--text3);margin-top:4px">+${rows.length-5} more rows</div>`:''}`;
+    if (importBtn) importBtn.style.display='block';
+  } else {
+    if (preview) preview.innerHTML='<div style="font-size:12px;color:var(--text3)">📁 File selected — click Import to process</div>';
+    if (importBtn) importBtn.style.display='block';
+    window._xiFile = file;
+  }
+}
+
+async function processExcelImport() {
+  const brand = document.getElementById('xi-brand')?.value.trim();
+  if (!brand) { showToast('Enter brand name first','warn'); return; }
+  const rows = window._xiRows || [];
+  if (!rows.length) { showToast('No data to import','warn'); return; }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  let imported = 0;
+  for (const r of rows) {
+    try {
+      await VW_DB.client.from('products').insert({
+        brand: r['Brand']||brand,
+        name: r['Product Name']||'Unknown',
+        category: 'Tiles',
+        tile_size_mm: r['Size (mm)']||'',
+        tile_finish: r['Finish']||'',
+        description: r['Description']||'',
+        tiles_per_box: parseInt(r['Tiles Per Box'])||4,
+        coverage_per_box: parseFloat(r['Sqft Per Box'])||null,
+        mrp: parseFloat(r['MRP Per Box'])||null,
+        stock: 0,
+        is_active: false,         // inactive until photo added
+        has_live_photo: false,
+        added_by: profile?.name||'import',
+      });
+      imported++;
+    } catch(e) { console.log('Import row error:', e.message); }
+  }
+  await auditLog('excel_import', 'product', null, brand, null, {rows:rows.length, imported}, 'Excel import');
+  closeSheet();
+  showToast(`${imported} products imported (inactive) — add photos to activate`,'success');
+  navigateTo('tile_inventory');
+}
+
+window.VW_TILE_INV = {
+  renderTileInventoryPage, filterTileInventory,
+  showAddTileForm, onBrandChange, loadRacks, loadShelves,
+  matchDesign, previewDesignPics, previewShelfPic,
+  mergeWithExisting, saveTileProduct,
+  adjustStock, loadRacksForAdj, previewAdjPhoto, saveStockAdjustment,
+  openTileDetail, showQR, printQR, renderProductQRPage, addToWishlistFromQR,
+  showExcelImport, downloadTileImportTemplate, previewExcelImport, processExcelImport,
+};
+
+
+/* === customer_portal.js === */
+// =====================================================
+// CUSTOMER PORTAL v1
+// - ?customer=TOKEN public portal
+// - Quotations, invoices, wishlist, delivery tracking
+// - Wishlist sharing (WhatsApp group link)
+// - Request quotation from portal
+// - Auto-send on check-in
+// - Self-registration via ?register=customer
+// =====================================================
+
+// ===== GENERATE + SEND PORTAL LINK =====
+async function generateCustomerPortalLink(customerId, customerPhone, createdBy) {
+  // Check if token already exists
+  const { data: existing } = await VW_DB.client.from('customer_portal_tokens')
+    .select('token').eq('customer_id', customerId).eq('is_active', true).single().catch(()=>({data:null}));
+  if (existing?.token) return existing.token;
+
+  const token = Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
+  await VW_DB.client.from('customer_portal_tokens').insert({
+    customer_id: customerId, token, phone: customerPhone,
+    created_by: createdBy||'system', is_active: true,
+  });
+  await auditLog('portal_link_generated', 'customer', customerId, null, null, {createdBy}, 'Customer portal link generated');
+  return token;
+}
+
+async function sendPortalLinkWA(customerId, customerName, customerPhone, createdBy) {
+  const token = await generateCustomerPortalLink(customerId, customerPhone, createdBy);
+  const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+  const msg = encodeURIComponent(
+    `*V Wholesale — Your Account Portal* 🏠\n\n` +
+    `Dear ${customerName},\n\n` +
+    `Your personal V Wholesale account is ready!\n\n` +
+    `🔗 ${link}\n\n` +
+    `You can view:\n✅ Your quotations & invoices\n✅ Delivery status\n✅ Your tile wishlist\n✅ Share wishlist with family\n\n` +
+    `📞 V Wholesale · Vijayawada · 8712697930`
+  );
+  const phone = (customerPhone||'').replace(/\D/g,'');
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  return token;
+}
+window.generateCustomerPortalLink = generateCustomerPortalLink;
+window.sendPortalLinkWA = sendPortalLinkWA;
+
+// ===== PUBLIC CUSTOMER PORTAL =====
+async function renderCustomerPortal(token) {
+  // Validate token
+  const { data: tokenRow } = await VW_DB.client.from('customer_portal_tokens')
+    .select('*, customers(*)').eq('token', token).eq('is_active', true).single().catch(()=>({data:null}));
+
+  if (!tokenRow) return `
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center">
+    <div>
+      <div style="font-size:48px;margin-bottom:16px">🔒</div>
+      <div style="font-size:18px;font-weight:700">Invalid Link</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:8px">This link may have expired. Contact V Wholesale for a new link.</div>
+      <div style="margin-top:16px"><a href="tel:8712697930" style="color:var(--gold);font-size:14px">📞 8712697930</a></div>
+    </div>
+  </div>`;
+
+  const customer = tokenRow.customers;
+  // Update last active
+  await VW_DB.client.from('customer_portal_tokens').update({ last_active: new Date().toISOString() }).eq('token', token);
+  await auditLog('portal_visit', 'customer', customer?.id, customer?.name, null, null, 'Customer portal visit');
+
+  // Fetch customer data
+  const customerId = customer?.id;
+  const [quotationsRes, invoicesRes, wishlistRes, trackingRes] = await Promise.all([
+    VW_DB.client.from('quotations').select('id,quote_no,grand_total,status,created_at,quote_type').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(10),
+    VW_DB.client.from('invoices').select('id,invoice_no,grand_total,created_at,payment_status,delivery_status').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(10),
+    VW_DB.client.from('wishlists').select('*, products(id,name,brand,tile_size_label,image_url,mrp,tile_stock_locations(qty_boxes))').eq('customer_id', customerId),
+    VW_DB.client.from('delivery_tracking').select('*').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(5),
+  ]);
+
+  const quotes = quotationsRes.data || [];
+  const invoices = invoicesRes.data || [];
+  const wishlist = wishlistRes.data || [];
+  const tracking = trackingRes.data || [];
+
+  const activeDeliveries = tracking.filter(t=>t.status!=='delivered').length;
+
+  return `
+  <div style="min-height:100vh;background:var(--bg);padding-bottom:80px">
+    <!-- HEADER -->
+    <div style="background:var(--header-bg);padding:20px 16px;position:sticky;top:0;z-index:50">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#F5C842;font-family:'Syne',sans-serif">V Wholesale</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6)">Welcome, ${customer?.name||'Customer'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:rgba(255,255,255,0.5)">${customer?.phone||''}</div>
+          ${activeDeliveries>0?`<div style="font-size:11px;color:var(--gold)">${activeDeliveries} active delivery</div>`:''}
+        </div>
+      </div>
+    </div>
+
+    <!-- QUICK STATS -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px 16px">
+      ${[
+        ['Quotes', quotes.length, 'var(--text)'],
+        ['Orders', invoices.length, 'var(--green)'],
+        ['Wishlist', wishlist.length, 'var(--gold)'],
+      ].map(([l,v,c])=>`
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:800;color:${c}">${v}</div>
+        <div style="font-size:11px;color:var(--text3)">${l}</div>
+      </div>`).join('')}
+    </div>
+
+    <div style="padding:0 16px">
+
+    <!-- ACTIVE DELIVERIES -->
+    ${tracking.filter(t=>t.status!=='delivered').map(t=>`
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px">🚚 Active Delivery — ${t.gate_pass_no||'—'}</div>
+      <div style="font-size:11px;color:var(--text2)">${t.driver_name||'Driver'} · ${t.driver_phone||'—'}</div>
+      <div style="font-size:11px;color:var(--text3);text-transform:capitalize">Status: ${t.status||'In progress'}</div>
+    </div>`).join('')}
+
+    <!-- QUOTATIONS -->
+    ${quotes.length ? `
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px;margin-top:6px">📋 My Quotations</div>
+    ${quotes.map(q=>_renderCustomerCard(
+      `${q.quote_type==='tiles'?'🔲':q.quote_type==='granite'?'🪨':'📄'} ${q.quote_no||'Draft'}`,
+      q.grand_total?`₹${q.grand_total.toLocaleString('en-IN')}`:'',
+      q.status, new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})
+    )).join('')}` : ''}
+
+    <!-- INVOICES -->
+    ${invoices.length ? `
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px;margin-top:14px">🧾 My Orders</div>
+    ${invoices.map(inv=>_renderCustomerCard(
+      `🧾 ${inv.invoice_no}`,
+      inv.grand_total?`₹${inv.grand_total.toLocaleString('en-IN')}`:'',
+      inv.payment_status, new Date(inv.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})
+    )).join('')}` : ''}
+
+    <!-- WISHLIST -->
+    ${wishlist.length ? `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700">❤️ My Wishlist (${wishlist.length})</div>
+      <button onclick="VW_CUSTOMER_PORTAL.shareWishlist('${token}')" style="background:none;border:none;font-size:12px;color:var(--gold);cursor:pointer">📤 Share</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      ${wishlist.slice(0,6).map(w=>{
+        const p = w.products;
+        const stock = (p?.tile_stock_locations||[]).reduce((s,l)=>s+(l.qty_boxes||0),0);
+        return `
+        <div style="background:var(--bg2);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+          ${p?.image_url?`<img src="${p.image_url}" style="width:100%;height:80px;object-fit:cover">`:
+          `<div style="width:100%;height:80px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:28px">🔲</div>`}
+          <div style="padding:8px">
+            <div style="font-size:11px;font-weight:600;color:var(--text)">${p?.name||'—'}</div>
+            <div style="font-size:10px;color:var(--text3)">${p?.brand||''} · ${p?.tile_size_label||''}</div>
+            ${p?.mrp?`<div style="font-size:11px;color:var(--gold);margin-top:2px">₹${(p.mrp).toLocaleString('en-IN')}/box</div>`:''}
+            <div style="font-size:10px;color:${stock>5?'var(--green)':stock>0?'var(--gold)':'var(--red)'};margin-top:2px">${stock>0?stock+' boxes avail':'Out of stock'}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : `
+    <div style="text-align:center;padding:24px;color:var(--text3);margin-top:10px">
+      <div style="font-size:32px;margin-bottom:8px">❤️</div>
+      <div style="font-size:13px">Your wishlist is empty</div>
+      <div style="font-size:11px;margin-top:4px">Scan a tile QR code to add designs</div>
+    </div>`}
+
+    <!-- REQUEST NEW QUOTATION -->
+    <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:14px;padding:16px;margin-top:8px">
+      <div style="font-size:14px;font-weight:700;color:var(--gold);margin-bottom:6px">Need a Tile Quotation?</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Share your measurements or connect with our team</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="window.open('https://wa.me/918712697930?text='+encodeURIComponent('Hi V Wholesale, I need a tile quotation. Customer: ${customer?.name||''} · Phone: ${customer?.phone||''}'),'_blank')"
+          style="flex:1;background:#25D366;color:#fff;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer">
+          💬 WhatsApp
+        </button>
+        <button onclick="window.location.href='tel:8712697930'"
+          style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px;font-size:13px;cursor:pointer;color:var(--text)">
+          📞 Call Us
+        </button>
+      </div>
+    </div>
+
+    </div><!-- /padding -->
+  </div>`;
+}
+
+function _renderCustomerCard(title, amount, status, date) {
+  const statusColor = {converted:'var(--green)',paid:'var(--green)',pending:'var(--gold)',draft:'var(--text3)',approved:'var(--blue)'}[status]||'var(--text3)';
+  return `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--text)">${title}</div>
+      <div style="font-size:11px;color:var(--text3)">${date}</div>
+    </div>
+    <div style="text-align:right">
+      ${amount?`<div style="font-size:13px;font-weight:700;color:var(--gold)">${amount}</div>`:''}
+      <div style="font-size:11px;color:${statusColor}">● ${status||'—'}</div>
+    </div>
+  </div>`;
+}
+
+async function shareWishlist(token) {
+  // Generate a shareable wishlist link (public, no login needed)
+  const shareToken = 'wl_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  await VW_DB.client.from('customer_portal_tokens').update({ shared_token: shareToken }).eq('token', token).catch(()=>{});
+  const link = `${window.location.origin}/vwholesale-app/?wishlist=${shareToken}`;
+  const msg = encodeURIComponent(`*My V Wholesale Tile Wishlist* 🏠\n\nHere are the tiles I'm considering for my home:\n${link}\n\nYou can view designs, availability and prices.\n\n— via V Wholesale, Vijayawada`);
+  if (navigator.share) {
+    navigator.share({ title:'My Tile Wishlist', url: link });
+  } else {
+    window.open(`https://wa.me/?text=${msg}`, '_blank');
+  }
+}
+
+// ===== CUSTOMER SELF-REGISTRATION =====
+async function renderCustomerRegisterPage() {
+  return `
+  <div style="min-height:100vh;background:var(--bg);padding:24px 16px">
+    <!-- HEADER -->
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:24px;font-weight:800;color:#F5C842;font-family:'Syne',sans-serif;margin-bottom:4px">V Wholesale</div>
+      <div style="font-size:13px;color:var(--text2)">Create your home-building account</div>
+    </div>
+
+    <div style="max-width:420px;margin:0 auto">
+      <div class="form-group"><label>Full Name *</label><input type="text" id="cr-name" placeholder="Your full name" autocomplete="name"></div>
+      <div class="form-group"><label>Mobile Number *</label><input type="tel" id="cr-phone" placeholder="10-digit mobile number" maxlength="10" autocomplete="tel"></div>
+      <div class="form-group"><label>WhatsApp Number <span style="color:var(--text3)">(if different)</span></label><input type="tel" id="cr-wa" placeholder="Same as mobile if blank" maxlength="10"></div>
+      <div class="form-group"><label>City / Area</label><input type="text" id="cr-area" placeholder="e.g. Bhavanipuram, Vijayawada"></div>
+      <div class="form-group">
+        <label>Project Type <span style="color:var(--text3)">(optional)</span></label>
+        <select id="cr-project">
+          <option value="">Select</option>
+          <option value="new_home">New Home Construction</option>
+          <option value="renovation">Home Renovation</option>
+          <option value="bathroom">Bathroom Renovation</option>
+          <option value="kitchen">Kitchen Renovation</option>
+          <option value="commercial">Commercial Space</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>How did you hear about us?</label>
+        <select id="cr-heard">
+          <option value="">Select</option>
+          <option value="walk_in">Visited store</option>
+          <option value="referral">Friend/Contractor referral</option>
+          <option value="google">Google search</option>
+          <option value="social">Social media</option>
+          <option value="wa_link">WhatsApp link</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:16px;font-size:12px;color:var(--text2)">
+        <div style="font-weight:700;color:var(--gold);margin-bottom:4px">What you get:</div>
+        <div>✅ View your quotations and invoices anytime</div>
+        <div>✅ Track your tile delivery live</div>
+        <div>✅ Save tile designs to wishlist and share with family</div>
+        <div>✅ Scan any tile QR code for live stock and price</div>
+      </div>
+      <button class="btn-primary full-width" id="cr-submit" onclick="VW_CUSTOMER_PORTAL.submitCustomerRegistration()" style="padding:16px;font-size:15px">
+        Create My Account →
+      </button>
+      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--text3)">
+        Already registered? Check your WhatsApp for your portal link.
+      </div>
+    </div>
+  </div>`;
+}
+
+async function submitCustomerRegistration() {
+  const name = document.getElementById('cr-name')?.value.trim();
+  const phone = document.getElementById('cr-phone')?.value.trim().replace(/\D/g,'');
+  if (!name||phone.length<10) { showToast('Name and 10-digit phone required','warn'); return; }
+  const btn = document.getElementById('cr-submit');
+  if (btn) { btn.disabled=true; btn.textContent='Creating account...'; }
+
+  // Check if customer exists
+  let customerId;
+  const { data: existing } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone+'%').single().catch(()=>({data:null}));
+  if (existing) {
+    customerId = existing.id;
+  } else {
+    const { data: newCust } = await VW_DB.client.from('customers').insert({
+      name, phone,
+      whatsapp: document.getElementById('cr-wa')?.value.trim()||phone,
+      address: document.getElementById('cr-area')?.value.trim()||'',
+      source: document.getElementById('cr-heard')?.value||'self_register',
+      project_type: document.getElementById('cr-project')?.value||'',
+      created_at: new Date().toISOString(),
+    }).select().single().catch(()=>({data:null}));
+    customerId = newCust?.id;
+  }
+
+  if (!customerId) {
+    if (btn) { btn.disabled=false; btn.textContent='Create My Account →'; }
+    showToast('Error creating account — try again','error'); return;
+  }
+
+  const token = await generateCustomerPortalLink(customerId, phone, 'self_register');
+  const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+  const wa = (document.getElementById('cr-wa')?.value.trim()||phone).replace(/\D/g,'');
+  const msg = encodeURIComponent(
+    `*Welcome to V Wholesale, ${name}!* 🏠\n\n` +
+    `Your account is ready.\n\n🔗 Your portal link:\n${link}\n\n` +
+    `Save this link to:\n✅ View your quotations\n✅ Track deliveries\n✅ Build your tile wishlist\n\n` +
+    `V Wholesale · Vijayawada · 8712697930`
+  );
+
+  await auditLog('customer_register', 'customer', customerId, name, null, {phone, source:'self_register'}, 'Self registration');
+
+  const el = document.getElementById('app-content') || document.body;
+  el.innerHTML = `
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center">
+    <div>
+      <div style="font-size:56px;margin-bottom:16px">🎉</div>
+      <div style="font-size:22px;font-weight:800;color:var(--gold);margin-bottom:8px">Account Created!</div>
+      <div style="font-size:14px;color:var(--text2);margin-bottom:20px">Welcome to V Wholesale, ${name}</div>
+      <div style="background:var(--bg2);border-radius:14px;padding:16px;margin-bottom:20px;font-size:13px;color:var(--text2);text-align:left">
+        <div style="font-weight:700;margin-bottom:8px">Your portal link:</div>
+        <div style="font-size:11px;word-break:break-all;color:var(--text3)">${link}</div>
+      </div>
+      <button onclick="window.open('https://wa.me/91${wa}?text=${msg}','_blank')"
+        style="width:100%;background:#25D366;color:#fff;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:10px">
+        📲 Open My Portal on WhatsApp
+      </button>
+      <button onclick="navigator.clipboard.writeText('${link}').then(()=>showToast('Link copied ✓','success'))"
+        style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;font-size:13px;cursor:pointer;color:var(--text)">
+        📋 Copy Portal Link
+      </button>
+      <div style="margin-top:16px;font-size:12px;color:var(--text3)">V Wholesale · NH-65 Bhavanipuram, Vijayawada</div>
+    </div>
+  </div>`;
+
+  // Alert V Wholesale team
+  const notify = encodeURIComponent(`New customer self-registered:\n${name} · ${phone}\nArea: ${document.getElementById('cr-area')?.value||'—'}\nPortal: ${link}`);
+  setTimeout(()=>window.open(`https://wa.me/918712697930?text=${notify}`,'_blank'),1500);
+}
+
+window.VW_CUSTOMER_PORTAL = {
+  renderCustomerPortal, shareWishlist,
+  renderCustomerRegisterPage, submitCustomerRegistration,
+};
 
 
 /* === app.js === */
@@ -27033,6 +28811,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'contractor_portal') html = await VW_CONTRACTOR.renderContractorPortalPage();
     else if (page === 'rewards') html = await renderRewardsStorePage();
     else if (page === 'labor') html = await renderLaborMarketplacePage();
+    else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
@@ -28299,6 +30078,33 @@ async function init() {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').innerHTML = await VW_CONTRACTOR.renderContractorSignupPage();
+    return;
+  }
+
+  // CUSTOMER PORTAL — ?customer=TOKEN
+  const customerToken = urlParams.get('customer');
+  if (customerToken) {
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_CUSTOMER_PORTAL.renderCustomerPortal(customerToken);
+    return;
+  }
+
+  // CUSTOMER SELF-REGISTER — ?register=customer
+  const registerParam = urlParams.get('register');
+  if (registerParam === 'customer') {
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_CUSTOMER_PORTAL.renderCustomerRegisterPage();
+    return;
+  }
+
+  // PRODUCT QR SCAN — ?product_qr=ID
+  const productQR = urlParams.get('product_qr');
+  if (productQR) {
+    document.getElementById('app-header')?.style.setProperty('display','none','important');
+    document.getElementById('app-nav')?.style.setProperty('display','none','important');
+    document.getElementById('app-content').innerHTML = await VW_TILE_INV.renderProductQRPage(productQR);
     return;
   }
 
