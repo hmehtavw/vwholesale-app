@@ -22015,39 +22015,50 @@ const ROOM_DEFS = {
 
 // ───── STATE ────────────────────────────────────────────────
 let _tqState = {
-  step: 1, // 1=rooms, 2=tile size, 3=spacer, 4=adhesive, 5=beading, 6=stock, 7=grout, 8=summary
-  customer: { name:'', phone:'', site:'' },
-  rooms: [],         // { id, type, label, areas:[], totalSqft }
-  tileSelections: {}, // roomId → { tileSize, tileId, boxes, product }
-  spacer: { use:false, mm:3 },
-  adhesive: {},      // roomId → { type, bags, exclude }
-  beading: [],       // selected beads with qty
-  grout: {},         // roomId → { type, color, kgs }
-  accessories: [],
-};
-
-// ───── STEP RENDER HELPERS ─────────────────────────────────
+    step: 0,
+    customer: { name:'', phone:'', site:'', id:null },
+    contractor: null,
+    rooms: [],
+    tileSelections: {},
+    spacerSelections: {},
+    adhesiveSelections: {},
+    beading: [],
+    groutSelections: {},
+    quotedPrices: {},
+    accessories: [],
+    floorTraps: [],
+    soffit: {enabled:false},
+    delivery: {type:'self', distanceKm:0, floors:[], beyondFt:false, siteAddress:''},
+    laborRequired: null,
+    addons: {},
+    wallDesigns: {},
+    _inWallDesign: false,
+    _designSlot: null,
+    currentRoomIdx: 0,
+  };
 
 async function renderTilesQuotationPage() {
   _tqState = {
-    step:1,
-    customer:{name:'',phone:'',site:'',id:null},
-    rooms:[],
-    // Per-room selections (keyed by roomId)
-    tileSelections:{},   // roomId → {sizeId, sizeMm, sizeLabel, productId, product, boxes, sqft}
-    spacerSelections:{}, // roomId → {use:bool, mm:int, qty:int}
-    adhesiveSelections:{},// roomId → {type, bags, method:'adhesive'|'mortar'}
-    beading:[],           // global beading selections
-    groutSelections:{},  // roomId → {type, color, colorHex, kgs}
-    accessories:[],
-    floorTraps:[],
-    soffit:{enabled:false},
-    delivery:{type:'self',distanceKm:0,floors:[],beyondFt:false},
+    step: 0,
+    customer: { name:'', phone:'', site:'', id:null },
+    contractor: null,
+    rooms: [],
+    tileSelections: {},
+    spacerSelections: {},
+    adhesiveSelections: {},
+    beading: [],
+    groutSelections: {},
+    quotedPrices: {},
+    accessories: [],
+    floorTraps: [],
+    soffit: {enabled:false},
+    delivery: {type:'self', distanceKm:0, floors:[], beyondFt:false, siteAddress:''},
     laborRequired: null,
-    addons:{},
-    wallDesigns: {},     // slotId → { rows:[{design:'Light',...}], totalByDesign:{Light:boxes,...}, confirmed:bool }
-    // Step navigation within multi-room flow
-    currentRoomIdx: 0,   // which room we're currently selecting for
+    addons: {},
+    wallDesigns: {},
+    _inWallDesign: false,
+    _designSlot: null,
+    currentRoomIdx: 0,
   };
 
   // Auto-fill from active check-in if available
@@ -22062,10 +22073,209 @@ async function renderTilesQuotationPage() {
   return _renderTQPage();
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STEP 0: WHO'S INVOLVED — Customer + Contractor/Professional
+// ══════════════════════════════════════════════════════════════════════════════
+async function _renderStep0() {
+  const st = _tqState;
+  const c = st.contractor;
+
+  // Search contractors in DB
+  let contractorResults = [];
+  const searchQuery = st._contractorSearch || '';
+  if (searchQuery.length >= 2) {
+    try {
+      const { data } = await VW_DB.client.from('contractor_profiles')
+        .select('id,name,phone,tier,total_spend')
+        .or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`)
+        .limit(5);
+      contractorResults = data || [];
+    } catch(e) {}
+  }
+
+  return `
+  <!-- Customer Details -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">👤 Customer Details</h3>
+    <div class="form-group">
+      <label>Customer Name *</label>
+      <input type="text" id="tq-cust-name" value="${st.customer.name||''}"
+        placeholder="Full name" oninput="_tqState.customer.name=this.value">
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Phone</label>
+        <input type="tel" id="tq-cust-phone" value="${st.customer.phone||''}"
+          placeholder="10-digit mobile" maxlength="10"
+          oninput="_tqState.customer.phone=this.value">
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label>Site / Area</label>
+        <input type="text" id="tq-cust-site" value="${st.customer.site||''}"
+          placeholder="e.g. Bhavanipuram"
+          oninput="_tqState.customer.site=this.value">
+      </div>
+    </div>
+    ${st.customer.phone && st.customer.phone.length===10 ? `
+    <div style="margin-top:8px">
+      <button onclick="VW_TILES.sendCustomerRegistrationLink()"
+        style="font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:7px;color:#60A5FA;cursor:pointer">
+        📲 Send quote tracker link to customer
+      </button>
+    </div>` : ''}
+  </div>
+
+  <!-- Contractor / Professional -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🔨 Contractor / Professional <span style="font-size:11px;font-weight:400;color:var(--text3)">(optional)</span></h3>
+
+    ${c ? `
+    <!-- Contractor linked -->
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${c.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.phone} ${c.tier?'· '+c.tier+' Member':''}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:3px">
+            Commission: <strong style="color:${c.customCommission?'var(--gold)':'var(--green)'}">
+              ${c.commissionPct}%</strong>
+            ${c.customCommission?'<span style="font-size:10px;color:var(--gold)"> · Needs approval</span>':'<span style="font-size:10px;color:var(--text3)"> · Standard rate</span>'}
+          </div>
+        </div>
+        <button onclick="VW_TILES.unlinkContractor()"
+          style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0">✕</button>
+      </div>
+      <!-- Commission % override -->
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(34,197,94,0.2)">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Commission rate (standard = 2%):</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${[1,1.5,2,2.5,3,5].map(pct=>`
+          <button onclick="VW_TILES.setContractorCommission(${pct})"
+            style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
+              border:${c.commissionPct===pct?'2px solid var(--gold)':'1px solid var(--border)'};
+              background:${c.commissionPct===pct?'var(--gold-muted)':'var(--bg2)'};
+              color:${c.commissionPct===pct?'var(--gold)':'var(--text)'}">
+            ${pct}%
+          </button>`).join('')}
+        </div>
+        ${c.commissionPct > 2 ? `
+        <div style="font-size:10px;color:var(--gold);margin-top:5px">
+          ⚠️ Above 2% requires management approval during review
+        </div>` : ''}
+      </div>
+    </div>` : `
+    <!-- Search / Add contractor -->
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Search by name or phone</label>
+      <input type="text" id="tq-cont-search" value="${searchQuery}"
+        placeholder="Type name or number..." style="font-size:14px"
+        oninput="_tqState._contractorSearch=this.value;_renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h})">
+    </div>
+
+    ${contractorResults.length > 0 ? `
+    <div style="margin-bottom:8px">
+      ${contractorResults.map(ct=>`
+      <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:'${(ct.name||'').replace(/'/g,"\\'")}',phone:'${ct.phone||''}',tier:'${ct.tier||''}',isExisting:true,commissionPct:2,customCommission:false})"
+        style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600">${ct.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${ct.phone} ${ct.tier?'· '+ct.tier:''}</div>
+        </div>
+        <span style="color:var(--gold);font-size:12px;font-weight:700">Link →</span>
+      </div>`).join('')}
+    </div>` : searchQuery.length>=2 ? `
+    <div style="padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:8px;font-size:12px;color:var(--text3)">
+      No registered contractor found — add new below
+    </div>` : ''}
+
+    <!-- Add new contractor -->
+    <div style="background:var(--bg2);border-radius:10px;padding:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Add New Contractor</div>
+      <div class="form-row">
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Name</label>
+          <input type="text" id="tq-new-cont-name" placeholder="Contractor name">
+        </div>
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Phone</label>
+          <input type="tel" id="tq-new-cont-phone" placeholder="10-digit" maxlength="10">
+        </div>
+      </div>
+      <button onclick="VW_TILES.addAndLinkContractor()"
+        class="btn-primary" style="margin-top:8px;width:100%">
+        + Link & Send Registration WhatsApp
+      </button>
+    </div>`}
+  </div>
+
+  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()"
+    ${!st.customer.name?'disabled style="opacity:0.5"':''}>
+    Next → Rooms & Areas
+  </button>`;
+}
+
+// ─── Contractor helpers ───────────────────────────────────────────────────────
+function linkContractor(ct) {
+  _tqState.contractor = ct;
+  _tqState._contractorSearch = '';
+  _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
+}
+
+function unlinkContractor() {
+  _tqState.contractor = null;
+  _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
+}
+
+function setContractorCommission(pct) {
+  if (!_tqState.contractor) return;
+  _tqState.contractor.commissionPct = pct;
+  _tqState.contractor.customCommission = pct > 2;
+  _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
+}
+
+async function addAndLinkContractor() {
+  const name = document.getElementById('tq-new-cont-name')?.value.trim();
+  const phone = document.getElementById('tq-new-cont-phone')?.value.trim();
+  if (!name || !phone || phone.length < 10) { showToast('Enter name and 10-digit phone','warn'); return; }
+  // Link immediately (registration happens via WhatsApp)
+  linkContractor({ id: null, name, phone, isExisting: false, commissionPct: 2, customCommission: false });
+  // Send WhatsApp registration message
+  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'9000000001' });
+  const msg = encodeURIComponent(
+    `Hi ${name}! You've been linked to a tile quotation at V Wholesale, Vijayawada.
+
+Register as a Contractor Club member to track your commission and rewards:
+https://hmehtavw.github.io/vwholesale-app/?contractor=register&phone=${phone}
+
+For queries: ${storeInfo.phone||'call us'}`
+  );
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  showToast(`${name} linked · WhatsApp sent ✓`, 'success');
+}
+
+async function sendCustomerRegistrationLink() {
+  const phone = _tqState.customer.phone;
+  const name = _tqState.customer.name;
+  if (!phone) return;
+  const msg = encodeURIComponent(
+    `Hi ${name||''}! Your tile quotation from V Wholesale, Vijayawada is being prepared.
+
+Track your quote status here:
+https://hmehtavw.github.io/vwholesale-app/?customer=register&phone=${phone}
+
+Questions? Call us anytime.`
+  );
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  showToast('Customer link sent via WhatsApp ✓', 'success');
+}
+
 async function _renderTQPage() {
-  const steps = ['Rooms','Tile Size','Spacer','Adhesive','Beading','Stock','Grout/Epoxy','Summary'];
+  const steps = ['Project','Rooms','Tile Size','Spacer','Stock & Price','Adhesive','Beading','Addons','Delivery','Summary'];
   const s = _tqState.step;
-  const stepContent = s===1?_renderStep1():
+  const stepContent =
+    s===0?(await _renderStep0()):
+    s===1?_renderStep1():
     s===2?(await _renderStep2()):
     s===3?_renderStep3():
     s===4?_renderStep4():
@@ -23122,23 +23332,149 @@ async function _renderStep6() {
     </div>`}
   </div>
   ${_tqState.selectedProduct ? `
+  <!-- PRICING CARD -->
+  ${(() => {
+    const prod = _tqState.selectedProduct;
+    const slots = _getTileSlots();
+    // One pricing card covering all slots (same product selected for all)
+    const firstSlot = slots[0];
+    const qp = _tqState.quotedPrices[firstSlot?.id] || {};
+    const invPrice = prod.price || prod.sale_price || prod.mrp || 0;
+    const quotedBox = qp.pricePerBox || invPrice;
+    // Calculate per-sqft from box price
+    const sel = firstSlot ? (_tqState.tileSelections[firstSlot.id] || {}) : {};
+    const sz = sel.size;
+    const cfgEntry = sz ? ((_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm)) : null;
+    const tilesPerBox = cfgEntry?.tiles_per_box || 4;
+    const sqftPerBox = sz ? (() => {
+      const [mmL,mmW] = sz.mm.split('×').map(Number);
+      return (mmL/25.4)*(mmW/25.4)/144 * tilesPerBox;
+    })() : 0;
+    const quotedSqft = sqftPerBox > 0 ? Math.round(quotedBox/sqftPerBox*100)/100 : 0;
+    const totalBoxes = _getTileSlots().reduce((s,sl)=>{
+      const b = _tqState.tileSelections[sl.id];
+      if(!b?.size) return s;
+      const [mmL,mmW] = b.size.mm.split('×').map(Number);
+      const spf = (mmL/25.4)*(mmW/25.4)/144;
+      const tpb = cfgEntry?.tiles_per_box || 4;
+      const spb = spf * tpb;
+      return s + (spb > 0 ? Math.ceil(sl.sqft/spb) : 0);
+    }, 0);
+    const totalValue = quotedBox * totalBoxes;
+    const commissionAmt = _tqState.contractor ? Math.round(totalValue * (_tqState.contractor.commissionPct/100)) : 0;
+    const isAboveInv = quotedBox > invPrice && invPrice > 0;
+    return `
+    <div class="card" style="margin-bottom:10px;border-color:${isAboveInv?'rgba(34,197,94,0.4)':'var(--gold-border)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <h3 class="card-title" style="margin:0">💰 Pricing</h3>
+        ${invPrice>0?`<div style="font-size:10px;color:var(--text3)">Inventory ref: ₹${invPrice}/box</div>`:''}
+      </div>
+      <div class="form-row" style="margin-bottom:8px">
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Price per Box (₹)</label>
+          <input type="number" id="tq-price-box" value="${quotedBox||''}" placeholder="Enter price"
+            step="10" min="0" style="font-size:16px;font-weight:700"
+            oninput="VW_TILES._updateQuotedPrice(this.value,'box')">
+        </div>
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Price per Sqft (₹) <span style="font-size:9px;color:var(--text3)">auto</span></label>
+          <input type="number" id="tq-price-sqft" value="${quotedSqft||''}" placeholder="Auto"
+            step="0.5" min="0" readonly
+            style="font-size:16px;font-weight:700;background:var(--bg3);color:var(--text2)">
+        </div>
+      </div>
+      ${isAboveInv?`<div style="font-size:11px;color:var(--green);margin-bottom:6px">✨ Premium pricing — ₹${quotedBox-invPrice}/box above inventory price</div>`:''}
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Pricing Note <span style="font-size:10px;color:var(--text3)">(optional — shown to approver)</span></label>
+        <input type="text" id="tq-price-note" value="${qp.note||''}" placeholder="e.g. Contractor deal, bulk rate"
+          oninput="VW_TILES._updatePriceNote(this.value)">
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;font-size:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="color:var(--text3)">Total (${totalBoxes} boxes × ₹${quotedBox})</span>
+          <strong>₹${totalValue.toLocaleString('en-IN')}</strong>
+        </div>
+        ${commissionAmt>0?`<div style="display:flex;justify-content:space-between;font-size:11px">
+          <span style="color:var(--text3)">Contractor commission (${_tqState.contractor.commissionPct}%)</span>
+          <span style="color:var(--gold)">₹${commissionAmt.toLocaleString('en-IN')}</span>
+        </div>`:''}
+      </div>
+    </div>`;
+  })()}
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Grout & Epoxy</button>` : ''}
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
 
 function tqSelectProduct(p) {
   _tqState.selectedProduct = p;
+  // Auto-populate quoted price from inventory sale price per box
+  // Executive can override upward — no MRP ceiling
+  const slots = _getTileSlots();
+  const firstWallOrFloor = slots[0];
+  if (firstWallOrFloor && !_tqState.quotedPrices[firstWallOrFloor.id]) {
+    _tqState.quotedPrices[firstWallOrFloor.id] = {
+      pricePerBox: p.price || p.sale_price || 0,
+      pricePerSqft: 0,
+      note: '',
+      upsell: false,
+    };
+  }
+  // Auto-suggest grout colour from tile
+  _autoSuggestGroutColour(p);
   document.getElementById('tq-step-content').innerHTML = '<div style="padding:16px;text-align:center"><div class="spinner"></div></div>';
   _renderStep6().then(html => { document.getElementById('tq-step-content').innerHTML = html; });
 }
 
+// Auto-suggest grout colour based on tile brand/finish/colour
+function _autoSuggestGroutColour(product) {
+  const GROUT_COLOURS = [
+    { id:'white',      name:'White',       hex:'#f8f8f8' },
+    { id:'ivory',      name:'Ivory',       hex:'#f5edd5' },
+    { id:'light_grey', name:'Light Grey',  hex:'#c8c8c8' },
+    { id:'grey',       name:'Grey',        hex:'#888888' },
+    { id:'dark_grey',  name:'Dark Grey',   hex:'#444444' },
+    { id:'charcoal',   name:'Charcoal',    hex:'#2a2a2a' },
+    { id:'mocha',      name:'Mocha',       hex:'#8b7355' },
+    { id:'beige',      name:'Beige',       hex:'#d4bc94' },
+  ];
+  if (!product) return;
+  const name = (product.name || product.design_name || '').toLowerCase();
+  const finish = (product.tile_finish || product.finish || '').toLowerCase();
+  // Heuristic: guess from product name keywords
+  let suggestions = ['white','light_grey']; // default
+  if (/dark|black|charcoal|anthracite|nero/.test(name)) suggestions = ['charcoal','dark_grey'];
+  else if (/wood|teak|oak|timber|brown|walnut/.test(name)) suggestions = ['mocha','beige'];
+  else if (/beige|cream|sand|stone|marble/.test(name)) suggestions = ['ivory','beige'];
+  else if (/grey|gray|ash|concrete|cement/.test(name)) suggestions = ['grey','light_grey'];
+  else if (/white|bianco|snow/.test(name)) suggestions = ['white','ivory'];
+  // Store suggestions in state (not auto-selected — user confirms)
+  _tqState._groutSuggestions = suggestions;
+}
+
 // ───── STEP 7: GROUT / EPOXY ────────────────────────────────
 function _renderStep7() {
-  const grout = _tqState.grout;
-  const sz = _tqState.selectedSize;
-  const spacerMm = _tqState.spacer.use ? (_tqState.spacer.mm || 3) : 3;
+  const grout = _tqState.grout || {};
+  // Use first wall slot for primary size reference
+  const slots = _getTileSlots();
+  const primarySlot = slots.find(s=>s.subType==='wall') || slots[0];
+  const primarySel = primarySlot ? _tqState.tileSelections[primarySlot.id] : null;
+  const sz = primarySel?.size || _tqState.selectedSize;
+  const spacerMm = primarySlot ? (_tqState.spacerSelections[primarySlot.id]?.mm || 3) : 3;
   const suggestEpoxy = sz && parseInt((sz.mm||'600×600').split('×')[0]) >= 400;
   const totalSqft = _tqTotalSqft();
+
+  const GROUT_COLOURS = [
+    { id:'white',      name:'White',       hex:'#f8f8f8', desc:'Best for light/white tiles' },
+    { id:'ivory',      name:'Ivory',       hex:'#f5edd5', desc:'Warm beige/marble tiles' },
+    { id:'light_grey', name:'Light Grey',  hex:'#c8c8c8', desc:'Grey/stone tiles' },
+    { id:'grey',       name:'Grey',        hex:'#888888', desc:'Neutral — works everywhere' },
+    { id:'dark_grey',  name:'Dark Grey',   hex:'#444444', desc:'Dark tiles, bold contrast' },
+    { id:'charcoal',   name:'Charcoal',    hex:'#2a2a2a', desc:'Dark/black tiles' },
+    { id:'mocha',      name:'Mocha',       hex:'#8b7355', desc:'Wood-look / terracotta tiles' },
+    { id:'beige',      name:'Beige',       hex:'#d4bc94', desc:'Sand / earthy tone tiles' },
+  ];
+  const suggestions = _tqState._groutSuggestions || ['white','light_grey'];
+  const selectedColour = grout.colorId || suggestions[0];
 
   // ── CORRECT GROUT FORMULA (Saint-Gobain method) ──
   // kg = ((L+W)/(L×W)) × T × J × Area_m2 × 1.6 × (1+wastage)
@@ -23183,6 +23519,41 @@ function _renderStep7() {
   ];
 
   return `
+  <!-- Grout Colour Picker — auto-suggested based on tile -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🎨 Grout / Epoxy Colour</h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">✨ Suggested for your tile:</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      ${suggestions.slice(0,2).map(id => {
+        const col = GROUT_COLOURS.find(c=>c.id===id);
+        if (!col) return '';
+        const isSel = selectedColour === id;
+        const border = isSel ? '2px solid var(--gold)' : '1px solid var(--border)';
+        const bg = isSel ? 'var(--gold-muted)' : 'var(--bg2)';
+        const textColor = isSel ? 'var(--gold)' : 'var(--text)';
+        const checkmark = isSel ? '<div style="font-size:9px;color:var(--gold)">✓ Selected</div>' : '';
+        return '<div onclick="VW_TILES.selectGroutColour(' + "'" + id + "'" + ')" style="flex:1;padding:10px;border-radius:10px;cursor:pointer;text-align:center;border:' + border + ';background:' + bg + '">'
+          + '<div style="width:32px;height:32px;border-radius:50%;background:' + col.hex + ';border:2px solid rgba(0,0,0,0.15);margin:0 auto 5px"></div>'
+          + '<div style="font-size:11px;font-weight:700;color:' + textColor + '">' + col.name + '</div>'
+          + '<div style="font-size:9px;color:var(--text3)">' + col.desc + '</div>'
+          + checkmark + '</div>';
+      }).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px">All colours:</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+      ${GROUT_COLOURS.map(col => {
+        const isSel = selectedColour === col.id;
+        const border = isSel ? '2px solid var(--gold)' : '1px solid var(--border)';
+        const bg = isSel ? 'var(--gold-muted)' : 'var(--bg2)';
+        const fw = isSel ? 700 : 400;
+        const tc = isSel ? 'var(--gold)' : 'var(--text)';
+        return '<div onclick="VW_TILES.selectGroutColour(' + "'" + col.id + "'" + ')" style="display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:7px;cursor:pointer;border:' + border + ';background:' + bg + '">'
+          + '<div style="width:14px;height:14px;border-radius:50%;background:' + col.hex + ';border:1px solid rgba(0,0,0,0.2)"></div>'
+          + '<span style="font-size:11px;font-weight:' + fw + ';color:' + tc + '">' + col.name + '</span></div>';
+      }).join('')}
+    </div>
+  </div></div>
+
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Grout & Epoxy Selection</h3>
     <div style="display:flex;gap:8px;margin-bottom:14px">
@@ -24391,29 +24762,196 @@ function _skipWallDesign(slotId) {
   tqNext();
 }
 
+
+function _updateQuotedPrice(val, mode) {
+  const slots = _getTileSlots();
+  const firstSlot = slots[0];
+  if (!firstSlot) return;
+  if (!_tqState.quotedPrices[firstSlot.id]) _tqState.quotedPrices[firstSlot.id] = {};
+  const qp = _tqState.quotedPrices[firstSlot.id];
+  qp.pricePerBox = parseFloat(val)||0;
+  // Update sqft display
+  const el = document.getElementById('tq-price-sqft');
+  if (el) {
+    const sel = _tqState.tileSelections[firstSlot.id];
+    const sz = sel?.size;
+    if (sz) {
+      const [mmL,mmW] = sz.mm.split('×').map(Number);
+      const cfgEntry = (_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm);
+      const tpb = cfgEntry?.tiles_per_box || 4;
+      const spb = (mmL/25.4)*(mmW/25.4)/144 * tpb;
+      el.value = spb > 0 ? Math.round(qp.pricePerBox/spb*100)/100 : '';
+    }
+  }
+}
+
+function _updatePriceNote(val) {
+  const slots = _getTileSlots();
+  const firstSlot = slots[0];
+  if (!firstSlot) return;
+  if (!_tqState.quotedPrices[firstSlot.id]) _tqState.quotedPrices[firstSlot.id] = {};
+  _tqState.quotedPrices[firstSlot.id].note = val;
+}
+
+
+function selectGroutColour(colourId) {
+  if (!_tqState.grout) _tqState.grout = {};
+  _tqState.grout.colorId = colourId;
+  const GROUT_COLOURS = [
+    {id:'white',hex:'#f8f8f8',name:'White'},{id:'ivory',hex:'#f5edd5',name:'Ivory'},
+    {id:'light_grey',hex:'#c8c8c8',name:'Light Grey'},{id:'grey',hex:'#888888',name:'Grey'},
+    {id:'dark_grey',hex:'#444444',name:'Dark Grey'},{id:'charcoal',hex:'#2a2a2a',name:'Charcoal'},
+    {id:'mocha',hex:'#8b7355',name:'Mocha'},{id:'beige',hex:'#d4bc94',name:'Beige'},
+  ];
+  const col = GROUT_COLOURS.find(c=>c.id===colourId);
+  if (col) { _tqState.grout.colorHex = col.hex; _tqState.grout.colorName = col.name; }
+  // Also save to all slot groutSelections
+  _getTileSlots().forEach(s => {
+    if (!_tqState.groutSelections[s.id]) _tqState.groutSelections[s.id] = {};
+    Object.assign(_tqState.groutSelections[s.id], { colorId: colourId, colorHex: col?.hex, colorName: col?.name });
+  });
+  document.getElementById('tq-step-content').innerHTML = _renderStep7();
+}
+
+
+// ─── WALL VISUALIZER — rendered after design planning ─────────────────────────
+function _renderWallVisualizer() {
+  const slots = _getTileSlots().filter(s => _tqState.tileSelections[s.id]?.size && _tqState.wallDesigns[s.id]?.cells);
+
+  if (!slots.length) {
+    // No designs — skip
+    tqNext();
+    return '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  }
+
+  return `
+  <div style="padding:0 0 8px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)">🖼 Wall Preview</div>
+
+    ${slots.map(slot => {
+      const g = _getWallGrid(slot.id);
+      if (!g) return '';
+      const wd = _tqState.wallDesigns[slot.id];
+      const grout = _tqState.groutSelections[slot.id] || _tqState.grout || {};
+      const groutColor = grout.colorHex || '#888';
+      const GAP = 2; // px gap to simulate grout joint
+      const cellW = Math.max(14, Math.min(32, Math.floor(280 / g.cols)));
+      const cellH = Math.round(cellW * g.tileHeightMm / g.tileWidthMm);
+
+      return `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase">
+          ${slot.label} · ${g.wallH}ft × ${g.wallLengthFt.toFixed(1)}ft · ${g.orient==='H'?'Horizontal':'Vertical'} lay
+        </div>
+        <!-- Grout background = grout colour, tiles shown as coloured cells with gap -->
+        <div style="display:inline-block;background:${groutColor};border-radius:4px;padding:${GAP}px;
+          box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+          ${Array.from({length:g.rows},(_,r)=>`
+          <div style="display:flex;gap:${GAP}px;margin-bottom:${GAP}px">
+            ${Array.from({length:g.cols},(_,c)=>{
+              const idx = r*g.cols+c;
+              const dId = (wd.cells||[])[idx]||'L';
+              const d = WALL_DESIGNS.find(x=>x.id===dId)||WALL_DESIGNS[0];
+              return `<div style="width:${cellW}px;height:${cellH}px;background:${d.color};border-radius:1px"></div>`;
+            }).join('')}
+          </div>`).join('')}
+        </div>
+        <!-- Legend -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+          ${WALL_DESIGNS.filter(d=>(wd.cells||[]).includes(d.id)).map(d=>{
+            const count = (wd.cells||[]).filter(c=>c===d.id).length;
+            const boxes = wd[d.id+'_boxes'] || Math.ceil(count*g.sqftPerTile/g.sqftPerBox);
+            return `<div style="display:flex;align-items:center;gap:4px;font-size:10px">
+              <div style="width:10px;height:10px;background:${d.color};border:1px solid rgba(0,0,0,0.2)"></div>
+              <span>${d.label}: <strong>${boxes} boxes</strong></span>
+            </div>`;
+          }).join('')}
+          <div style="display:flex;align-items:center;gap:4px;font-size:10px;color:var(--text3)">
+            <div style="width:10px;height:10px;background:${groutColor};border:1px solid rgba(0,0,0,0.2)"></div>
+            <span>Grout: ${grout.colorName||'Selected'}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-secondary" style="flex:1" onclick="VW_TILES._redesignWall()">
+        ← Redesign
+      </button>
+      <button class="btn-primary" style="flex:1" onclick="VW_TILES.tqNext()">
+        Looks Good → Continue
+      </button>
+    </div>
+  </div>`;
+}
+
+function _redesignWall() {
+  // Go back to first wall/floor slot's design planner
+  const allSlots = _getTileSlots().filter(s => _tqState.tileSelections[s.id]?.size);
+  if (allSlots.length > 0) {
+    // Reset first slot's confirmation
+    allSlots.forEach(s => { if (_tqState.wallDesigns[s.id]) _tqState.wallDesigns[s.id].confirmed = false; });
+    _tqState._inWallDesign = true;
+    _tqState._showVisualizer = false;
+    const el = document.getElementById('tq-step-content');
+    if (el) el.innerHTML = _renderWallDesignPlanner(allSlots[0]);
+  }
+}
+
 async function tqNext() {
-  // After step 2, check if any wall slots need the design planner
-  if (_tqState.step === 2) {
+  // Step 0: validate customer name
+  if (_tqState.step === 0) {
+    const name = document.getElementById('tq-cust-name')?.value.trim() || _tqState.customer.name;
+    if (!name) { showToast('Enter customer name to continue', 'warn'); return; }
+    _tqState.customer.name = name;
+    _tqState.customer.phone = document.getElementById('tq-cust-phone')?.value.trim() || _tqState.customer.phone;
+    _tqState.customer.site = document.getElementById('tq-cust-site')?.value.trim() || _tqState.customer.site;
+  }
+  // After step 7 (Grout/Epoxy), show Wall Design Planner for wall slots
+  if (_tqState.step === 7) {
     const wallSlots = _getTileSlots().filter(s =>
       s.subType === 'wall' && _tqState.tileSelections[s.id]?.size
     );
     const unplanned = wallSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
     if (unplanned.length > 0) {
+      _tqState._inWallDesign = true;
       const el = document.getElementById('tq-step-content');
       if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
-      return; // don't advance step yet
+      return;
     }
   }
-  // After wall design planner (step 2.5), check if more slots need planning
+  // Similarly for floor slots after grout
+  if (_tqState.step === 7) {
+    const floorSlots = _getTileSlots().filter(s =>
+      s.subType === 'floor' && _tqState.tileSelections[s.id]?.size
+    );
+    const unplanned = floorSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
+    if (unplanned.length > 0) {
+      _tqState._inWallDesign = true;
+      const el = document.getElementById('tq-step-content');
+      if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
+      return;
+    }
+  }
+  // After wall/floor design planner, check next unplanned slot
   if (_tqState._inWallDesign) {
-    const wallSlots = _getTileSlots().filter(s => s.subType === 'wall' && _tqState.tileSelections[s.id]?.size);
-    const unplanned = wallSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
+    const allSlots = _getTileSlots().filter(s => _tqState.tileSelections[s.id]?.size);
+    const unplanned = allSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
     if (unplanned.length > 0) {
       const el = document.getElementById('tq-step-content');
       if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
       return;
     }
     _tqState._inWallDesign = false;
+    // After all design planning, show a combined visualizer before step 8
+    _tqState._showVisualizer = true;
+  }
+  // Show visualizer after all designs confirmed
+  if (_tqState._showVisualizer) {
+    _tqState._showVisualizer = false;
+    const el = document.getElementById('tq-step-content');
+    if (el) el.innerHTML = _renderWallVisualizer();
+    return;
   }
 
   _tqState.step = Math.min(8, _tqState.step + 1);
@@ -24790,12 +25328,45 @@ async function tqSubmitForApproval() {
       totalWeightSub += boxes * (cfg?.weight_per_box || 20);
     });
 
+    // Compute commission
+    const contractorCommission = (() => {
+      if (!st.contractor) return null;
+      const slots = _getTileSlots();
+      let totalBoxes = 0;
+      slots.forEach(s => {
+        const sel = st.tileSelections[s.id];
+        if (!sel?.size) return;
+        const [mmL,mmW] = sel.size.mm.split('×').map(Number);
+        const spf = (mmL/25.4)*(mmW/25.4)/144;
+        const qp = st.quotedPrices[s.id];
+        const tpb = 4; // fallback
+        const spb = spf * tpb;
+        totalBoxes += spb > 0 ? Math.ceil(s.sqft/spb) : 0;
+      });
+      const firstSlot = slots[0];
+      const pricePerBox = firstSlot ? (st.quotedPrices[firstSlot.id]?.pricePerBox || 0) : 0;
+      const totalValue = pricePerBox * totalBoxes;
+      const pct = st.contractor.commissionPct || 2;
+      return {
+        contractor_name: st.contractor.name,
+        contractor_phone: st.contractor.phone,
+        contractor_id: st.contractor.id || null,
+        commission_pct: pct,
+        commission_amount: Math.round(totalValue * pct / 100),
+        needs_approval: pct > 2,
+        status: 'pending',
+      };
+    })();
+
     const { data, error } = await VW_DB.client.from('tile_quotations').insert({
       tq_no: tqNo,
       customer_name: st.customer.name,
       customer_phone: st.customer.phone,
       customer_id: st.customer.id || null,
       site_address: st.customer.site,
+      contractor_commission: contractorCommission,
+      quoted_prices: st.quotedPrices || {},
+      wall_designs: st.wallDesigns || {},
       rooms: st.rooms,
       tile_selections: st.tileSelections || {},
       spacer_selections: st.spacerSelections || {},
@@ -24845,11 +25416,16 @@ async function tqSubmitForApproval() {
         <div style="font-size:52px;margin-bottom:12px">✅</div>
         <h2 style="margin-bottom:6px;font-size:18px">Submitted for Approval</h2>
         <div style="font-size:15px;font-weight:800;color:var(--gold);margin-bottom:4px">${tqNoSaved}</div>
-        <p style="color:var(--text2);font-size:12px;margin-bottom:20px">
+        <p style="color:var(--text2);font-size:12px;margin-bottom:12px">
           Approval chain started automatically.<br>
-          <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong><br>
-          <span style="font-size:11px">30 seconds at each level. You'll see it in Tile Quotes once approved.</span>
+          <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong>
         </p>
+        ${contractorCommission ? `
+        <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px">
+          <div style="font-weight:700;margin-bottom:3px">🔨 ${contractorCommission.contractor_name}</div>
+          <div style="color:var(--text2)">Commission: ₹${contractorCommission.commission_amount.toLocaleString('en-IN')} (${contractorCommission.commission_pct}%)</div>
+          ${contractorCommission.needs_approval?'<div style="color:var(--gold);font-size:11px;margin-top:2px">⚠️ Above 2% — needs management approval</div>':''}
+        </div>` : ''}
         <div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:12px;padding:16px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:700;margin-bottom:6px">💡 While you wait for approval…</div>
           <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Show the customer how their space will look with these tiles — increase confidence and conversion</div>
@@ -25677,7 +26253,7 @@ function openTileVisualizer() {
 
 window.VW_TILES = {
   // New tiles quotation
-  renderTilesQuotationPage, tqNext, tqBack,
+  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, setAdhMethodForRoom, tqSetBeadPcs,
