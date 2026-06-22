@@ -22132,7 +22132,7 @@ async function _renderStep0() {
         <div class="form-group" style="margin-bottom:8px">
           <label>Full Name *</label>
           <input type="text" id="tq-cust-name" value="${st.customer.name||''}"
-            placeholder="Customer name" oninput="_tqState.customer.name=this.value"
+            placeholder="Customer name" oninput="_tqState.customer.name=this.value;VW_TILES._updateStep0NextBtn()"
             style="font-size:14px">
         </div>
         <div class="form-group" style="margin-bottom:8px">
@@ -22253,11 +22253,21 @@ async function _renderStep0() {
     </div>`}
   </div>
 
-  <button class="btn-primary full-width"
+  <button class="btn-primary full-width" id="tq-step0-next"
     onclick="VW_TILES.tqNext()"
     ${(!st.customer.name && !st.customer._found)?'disabled style="opacity:0.5"':''}>
     ${!st.customer.name && !st.customer._found ? 'Enter customer details first' : 'Next → Rooms & Areas'}
   </button>`;
+}
+
+
+function _updateStep0NextBtn() {
+  const btn = document.getElementById('tq-step0-next');
+  if (!btn) return;
+  const ready = !!(_tqState.customer.name || _tqState.customer._found);
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? '1' : '0.5';
+  btn.textContent = ready ? 'Next → Rooms & Areas' : 'Enter customer details first';
 }
 
 
@@ -22292,6 +22302,7 @@ function _onCustPhoneInput(val) {
     _tqState.customer._found = null;
     _tqState.customer.name = '';
     _tqState.customer.id = null;
+    _updateStep0NextBtn();
     const el = document.getElementById('tq-cust-result');
     if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:4px 0">${10-digits.length} more digits...</div>`;
   }
@@ -22303,29 +22314,31 @@ async function searchCustomerByPhone(phone) {
   if (el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching...</div>';
 
   try {
-    // Search in customers table (CRM)
-    const { data: custRows } = await VW_DB.client
+    // Search in customers table (CRM). NOTE: schema has `address`, not `area`,
+    // and has no `total_quotes` column — selecting those made the query fail silently.
+    const { data: custRows, error: custErr } = await VW_DB.client
       .from('customers')
-      .select('id, name, phone, area, total_quotes, last_visit')
+      .select('id, name, phone, address, last_visit')
       .eq('phone', phone)
       .limit(1);
+
+    if (custErr) console.error('Customer search query error:', custErr);
 
     const found = custRows?.[0];
 
     if (found) {
       _tqState.customer = {
         ...found,
-        site: found.area || '',
+        site: found.address || '',
         _found: true,
-        totalQuotes: found.total_quotes || 0,
+        totalQuotes: 0,
       };
       if (el) el.innerHTML = `
         <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${found.name}</div>
-              <div style="font-size:11px;color:var(--text3)">${found.phone}${found.area?' · '+found.area:''}</div>
-              ${found.total_quotes ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${found.total_quotes} previous quote(s)</div>` : ''}
+              <div style="font-size:11px;color:var(--text3)">${found.phone}${found.address?' · '+found.address:''}</div>
             </div>
             <button onclick="VW_TILES._clearCustomer()"
               style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
@@ -22335,6 +22348,7 @@ async function searchCustomerByPhone(phone) {
           style="margin-top:6px;font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:7px;color:#60A5FA;cursor:pointer">
           📲 Send quote tracker link
         </button>`;
+      _updateStep0NextBtn();
     } else {
       _tqState.customer._found = false;
       if (el) el.innerHTML = `
@@ -22343,7 +22357,7 @@ async function searchCustomerByPhone(phone) {
           <div class="form-group" style="margin-bottom:8px">
             <label>Full Name *</label>
             <input type="text" id="tq-cust-name" value="${_tqState.customer.name||''}"
-              placeholder="Customer name" oninput="_tqState.customer.name=this.value"
+              placeholder="Customer name" oninput="_tqState.customer.name=this.value;VW_TILES._updateStep0NextBtn()"
               style="font-size:14px" autofocus>
           </div>
           <div class="form-group" style="margin-bottom:10px">
@@ -22356,11 +22370,13 @@ async function searchCustomerByPhone(phone) {
             ✅ Save & Continue
           </button>
         </div>`;
+      _updateStep0NextBtn();
     }
   } catch(e) {
     console.error('Customer search error:', e);
     if (el) el.innerHTML = `<div style="color:var(--red);font-size:12px">Search failed — enter details manually</div>`;
     _tqState.customer._found = false;
+    _updateStep0NextBtn();
   }
 }
 
@@ -22368,6 +22384,7 @@ function _clearCustomer() {
   _tqState.customer = { name:'', phone:'', site:'', id:null, _found:null };
   const phoneEl = document.getElementById('tq-cust-phone');
   if (phoneEl) { phoneEl.value = ''; phoneEl.focus(); }
+  _updateStep0NextBtn();
   const el = document.getElementById('tq-cust-result');
   if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:4px 0">Enter mobile number to search existing customers</div>`;
 }
@@ -22380,24 +22397,37 @@ async function _saveNewCustomer() {
 
   _tqState.customer.name = name;
   _tqState.customer.site = site;
-  _tqState.customer._found = true;
 
-  // Check if phone already exists before inserting
+  // Check if phone already exists before inserting. Use limit(1) (not maybeSingle)
+  // so pre-existing duplicates don't throw and cascade into yet another insert.
+  let saveError = null;
   try {
-    const { data: existing } = await VW_DB.client.from('customers')
-      .select('id, name').eq('phone', phone).maybeSingle();
+    const { data: existRows, error: selErr } = await VW_DB.client.from('customers')
+      .select('id, name').eq('phone', phone).limit(1);
+    if (selErr) throw selErr;
+    const existing = existRows?.[0];
     if (existing) {
-      // Phone exists — update name/area and link
+      // Phone exists — update and link to the existing record (no duplicate created)
       _tqState.customer.id = existing.id;
-      await VW_DB.client.from('customers').update({ name, area: site }).eq('id', existing.id);
+      const { error } = await VW_DB.client.from('customers').update({ name, address: site }).eq('id', existing.id);
+      if (error) saveError = error;
     } else {
-      const { data } = await VW_DB.client.from('customers')
-        .insert({ name, phone, area: site }).select().single();
-      if (data?.id) _tqState.customer.id = data.id;
+      const { data, error } = await VW_DB.client.from('customers')
+        .insert({ name, phone, address: site }).select().single();
+      if (error) saveError = error;
+      else if (data?.id) _tqState.customer.id = data.id;
     }
-  } catch(e) { console.error('Customer save error:', e); }
+  } catch(e) { saveError = e; }
 
-  showToast(`${name} saved ✓`, 'success');
+  // Mark confirmed regardless so the staffer can proceed; warn if the write failed.
+  _tqState.customer._found = true;
+  if (saveError) {
+    console.error('Customer save error:', saveError);
+    showToast('Could not save customer to server — proceeding with entered details', 'warn');
+  } else {
+    showToast(`${name} saved ✓`, 'success');
+  }
+
   // Re-render result area to show confirmed card
   const el = document.getElementById('tq-cust-result');
   if (el) el.innerHTML = `
@@ -22406,12 +22436,13 @@ async function _saveNewCustomer() {
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${name}</div>
           <div style="font-size:11px;color:var(--text3)">${phone}${site?' · '+site:''}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">New customer saved</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${saveError?'Saved locally — sync pending':'New customer saved'}</div>
         </div>
         <button onclick="VW_TILES._clearCustomer()"
           style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
       </div>
     </div>`;
+  _updateStep0NextBtn();
 }
 
 // ─── CONTRACTOR HELPERS ───────────────────────────────────────────────────────
@@ -22431,12 +22462,14 @@ function _debouncedContractorSearch(val) {
 
   _contSearchTimer = setTimeout(async () => {
     try {
-      const { data } = await VW_DB.client
+      // Search ALL contractors (not just approved) — staff add new ones as `pending`,
+      // and they must be linkable to a quote immediately after saving.
+      const { data, error } = await VW_DB.client
         .from('contractors')
         .select('id, name, phone, company_name, professional_type, approval_status, loyalty_points')
         .or(`name.ilike.%${val}%,phone.ilike.%${val}%,company_name.ilike.%${val}%`)
-        .eq('approval_status','approved')
         .limit(6);
+      if (error) console.error('Contractor search error:', error);
 
       if (!data?.length) {
         if (resultsEl) resultsEl.innerHTML = `
@@ -22451,7 +22484,7 @@ function _debouncedContractorSearch(val) {
         <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:${JSON.stringify(ct.name||'')},phone:'${ct.phone||''}',trade:'${ct.professional_type||''}',company:'${(ct.company_name||'').replace(/'/g,'')}',isExisting:true,commissionPct:2,customCommission:false,loyaltyPoints:${ct.loyalty_points||0}})"
           style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-size:13px;font-weight:600">${ct.name}</div>
+            <div style="font-size:13px;font-weight:600">${ct.name}${ct.approval_status && ct.approval_status!=='approved'?` <span style="font-size:9px;font-weight:700;color:var(--gold);background:var(--gold-muted);border-radius:4px;padding:1px 5px;vertical-align:middle">${ct.approval_status}</span>`:''}</div>
             <div style="font-size:11px;color:var(--text3)">${ct.phone||''}${ct.professional_type?' · '+ct.professional_type:''}</div>
             ${ct.company_name?`<div style="font-size:10px;color:var(--text3)">${ct.company_name}</div>`:''}
             <div style="font-size:10px;color:var(--gold)">${ct.loyalty_points||0} loyalty pts</div>
@@ -22829,8 +22862,9 @@ function _renderMeasureForm(type, areaIdx, prefill) {
     </div>`;
 
   if (def.measureType === 'bathroom') {
-    // Pre-fill from existing room data when editing
-    const ba = p?.areas || [];
+    // Pre-fill from existing room data when editing.
+    // `p` is areas[0]; the full sub-area list lives on `prefill.areas`.
+    const ba = prefill?.areas || [];
     const wallArea = ba.find(a=>a.subType==='wall') || {};
     const floorArea = ba.find(a=>a.subType==='floor'||!a.subType) || {};
     const bh   = wallArea.h   !== undefined ? wallArea.h   : (p?.h   || '');
@@ -23229,7 +23263,7 @@ function _renderStep3() {
       Spacers ensure consistent grout joint width. Large tiles (≥600mm) need 6 per tile, standard tiles need 4.
     </p>
 
-    ${roomSpacers.map(({room, use, sp, roomSqft, spacerQty, sz, tilesNeeded, spacersPerTile}) => `
+    ${roomSpacers.map(({room, slot, use, sp, roomSqft, spacerQty, sz, tilesNeeded, spacersPerTile}) => `
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
@@ -25227,6 +25261,10 @@ async function tqNext() {
     _tqState.customer.name = name;
     _tqState.customer.phone = _tqState.customer.phone || document.getElementById('tq-cust-phone')?.value.trim() || '';
     _tqState.customer.site = _tqState.customer.site || document.getElementById('tq-cust-site')?.value.trim() || '';
+    // Persist a brand-new customer if it hasn't been saved yet (no DB id)
+    if (!_tqState.customer.id && _tqState.customer.phone?.length === 10) {
+      await _saveNewCustomer();
+    }
     // Contractor is optional — no validation needed
   }
   // After step 7 (Grout/Epoxy), show Wall Design Planner for wall slots
@@ -25280,16 +25318,21 @@ async function tqNext() {
   const el = document.getElementById('tq-step-content');
   if (el) {
     el.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
-    const html = _tqState.step === 6 ? await _renderStep6() :
-                 _tqState.step === 8 ? await _renderStep8() :
-                 _tqState.step === 1 ? _renderStep1() :
-                 _tqState.step === 2 ? await _renderStep2() :
-                 _tqState.step === 3 ? _renderStep3() :
-                 _tqState.step === 4 ? _renderStep4() :
-                 _tqState.step === 5 ? _renderStep5() :
-                 _renderStep7();
-    el.innerHTML = html;
-    _updateStepHeader();
+    try {
+      const html = _tqState.step === 6 ? await _renderStep6() :
+                   _tqState.step === 8 ? await _renderStep8() :
+                   _tqState.step === 1 ? _renderStep1() :
+                   _tqState.step === 2 ? await _renderStep2() :
+                   _tqState.step === 3 ? _renderStep3() :
+                   _tqState.step === 4 ? _renderStep4() :
+                   _tqState.step === 5 ? _renderStep5() :
+                   _renderStep7();
+      el.innerHTML = html;
+      _updateStepHeader();
+    } catch(err) {
+      console.error('tqNext render error (step '+_tqState.step+'):', err);
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Could not load this step — <button onclick="VW_TILES.tqBack()" style="color:var(--gold);background:none;border:none;cursor:pointer">go back</button></div>';
+    }
   }
 }
 
@@ -26575,7 +26618,7 @@ function openTileVisualizer() {
 
 window.VW_TILES = {
   // New tiles quotation
-  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
+  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, setAdhMethodForRoom, tqSetBeadPcs,
