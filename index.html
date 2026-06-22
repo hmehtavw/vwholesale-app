@@ -25456,6 +25456,16 @@ async function tqNext() {
 }
 
 async function tqBack() {
+  // If we're inside an interstitial (wall designer / preview), exit it back to the
+  // current step rather than decrementing — otherwise the step counter desyncs.
+  if (_tqState._inWallDesign || _tqState._showVisualizer) {
+    _tqState._inWallDesign = false;
+    _tqState._showVisualizer = false;
+    const el = document.getElementById('tq-step-content');
+    if (el) el.innerHTML = _renderStep7();
+    _updateStepHeader();
+    return;
+  }
   _tqState.step = Math.max(1, _tqState.step - 1);
   const el = document.getElementById('tq-step-content');
   if (el) {
