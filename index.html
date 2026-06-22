@@ -1233,8 +1233,12 @@ async function getSetting(key, fallback) {
 }
 
 async function setSetting(key, value) {
-  const { error } = await sb.from('settings').upsert({ key, value });
-  if (error) { console.error(`setSetting(${key}) error:`, error); throw error; }
+  const { error } = await sb.from('settings').upsert({ key, value }, { onConflict: 'key' });
+  if (error) {
+    console.error(`setSetting(${key}) error:`, error);
+    try { if (typeof showToast === 'function') showToast(`Couldn't save (${key}): ${error.message||'server error'}`, 'error'); } catch(_) {}
+    throw error;
+  }
   return true;
 }
 
@@ -22855,6 +22859,20 @@ function _skirtingManualClear(pfx) {
   if (el) { el.value = ''; el.dataset.manual = 'true'; }
 }
 
+// Skirting tile height: 3" or 4". Stored in a hidden input read by tqSaveRoom.
+function _setSkirtHeight(pfx, h) {
+  const hidden = document.getElementById(`${pfx}-skirt-h`);
+  if (hidden) hidden.value = h;
+  [3,4].forEach(x => {
+    const b = document.getElementById(`${pfx}-skirt-h-${x}`);
+    if (!b) return;
+    const on = x === h;
+    b.style.border = on ? '2px solid var(--gold)' : '1px solid var(--border)';
+    b.style.background = on ? 'var(--gold-muted)' : 'var(--bg3)';
+    b.style.color = on ? 'var(--gold)' : 'var(--text)';
+  });
+}
+
 function _renderMeasureForm(type, areaIdx, prefill) {
   const pfx = `tq-m${areaIdx}`;
   const def = ROOM_DEFS[type] || ROOM_DEFS['Custom Area'];
@@ -22882,8 +22900,18 @@ function _renderMeasureForm(type, areaIdx, prefill) {
           <button type="button" onclick="VW_TILES._skirtingManualClear('${pfx}')"
             style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:11px;color:var(--text3);cursor:pointer;white-space:nowrap;flex-shrink:0">✕ None</button>
         </div>
+        <div style="display:flex;gap:5px;align-items:center;margin-top:4px">
+          <span style="font-size:10px;color:var(--text3)">Height:</span>
+          ${[3,4].map(h=>`<button type="button" onclick="VW_TILES._setSkirtHeight('${pfx}',${h})"
+            id="${pfx}-skirt-h-${h}"
+            style="flex:1;padding:3px;border-radius:6px;font-size:11px;cursor:pointer;
+              border:${(p.skirtingHeightIn||4)===h?'2px solid var(--gold)':'1px solid var(--border)'};
+              background:${(p.skirtingHeightIn||4)===h?'var(--gold-muted)':'var(--bg3)'};
+              color:${(p.skirtingHeightIn||4)===h?'var(--gold)':'var(--text)'}">${h}"</button>`).join('')}
+          <input type="hidden" id="${pfx}-skirt-h" value="${p.skirtingHeightIn||4}">
+        </div>
         <div id="${pfx}-skirt-note" style="font-size:9px;color:var(--text3);margin-top:2px">
-          ${p.l && p.w ? `Auto: (${p.l}+${p.w})×2 = ${(parseFloat(p.l)+parseFloat(p.w))*2} ft perimeter · 4" height` : 'Auto-fills from L & W · 4-inch height · clear to skip'}
+          ${p.l && p.w ? `Auto: (${p.l}+${p.w})×2 = ${(parseFloat(p.l)+parseFloat(p.w))*2} ft perimeter` : 'Auto-fills from L & W · clear to skip'}
         </div>
       </div>
     </div>`:''}`;
@@ -22972,12 +23000,13 @@ function tqSaveRoom(type, editIdx) {
     const w = parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
     if (!l||!w) { showToast('Enter length and width','warn'); return; }
     const base = l*w;
-    // Skirting is in running feet (not %), convert to sqft at ~0.33ft height
-    const skirtSqft = skirtRm > 0 ? skirtRm * 0.33 : 0;
+    // Skirting is in running feet; convert to sqft using chosen height (3" or 4")
+    const skirtHIn = parseInt(document.getElementById(`${pfx}-skirt-h`)?.value || 4) || 4;
+    const skirtSqft = skirtRm > 0 ? skirtRm * (skirtHIn/12) : 0;
     const sqft = base*(1+waste) + skirtSqft;
     const wasteLabel = waste>0 ? ` +${Math.round(waste*100)}% wastage` : '';
-    const skirtLabel = skirtRm>0 ? ` +${skirtRm}ft skirting` : '';
-    areas.push({ label:`${l}ft × ${w}ft${wasteLabel}${skirtLabel}`, sqft, base, l, w, wastage:waste>0?Math.round(waste*100):0, skirting:skirtRm });
+    const skirtLabel = skirtRm>0 ? ` +${skirtRm}ft skirting (${skirtHIn}")` : '';
+    areas.push({ label:`${l}ft × ${w}ft${wasteLabel}${skirtLabel}`, sqft, base, l, w, wastage:waste>0?Math.round(waste*100):0, skirting:skirtRm, skirtingHeightIn:skirtHIn });
   } else if (def.measureType === 'wall_hw') {
     const h = parseFloat(document.getElementById(`${pfx}-h`)?.value)||0;
     const w = parseFloat(document.getElementById(`${pfx}-w`)?.value)||0;
@@ -26710,7 +26739,7 @@ window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
-  tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
+  tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading,
