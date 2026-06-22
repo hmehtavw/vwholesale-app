@@ -22218,19 +22218,19 @@ async function _renderStep0() {
     </div>
 
     <!-- Add contractor form (hidden by default) -->
-    <div id="tq-cont-add-form" style="display:none;background:var(--bg2);border-radius:10px;padding:10px;margin-top:8px">
+     <div id="tq-cont-add-form" style="display:none;background:var(--bg2);border-radius:10px;padding:10px;margin-top:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Add Contractor</div>
-        <button onclick="VW_TILES._showAddContractorForm()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
+        <button type="button" onclick="VW_TILES._showAddContractorForm()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
       </div>
       <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0;flex:1">
-          <label>Name *</label>
-          <input type="text" id="tq-new-cont-name" placeholder="Full name">
+          <label>Name</label>
+          <input type="text" id="tq-new-cont-name" placeholder="Full name" onkeydown="if(event.key==='Enter'){event.preventDefault();VW_TILES.addAndLinkContractor();}">
         </div>
         <div class="form-group" style="margin:0;flex:1">
-          <label>Phone *</label>
-          <input type="tel" id="tq-new-cont-phone" placeholder="10-digit" maxlength="10" inputmode="numeric">
+          <label>Phone</label>
+          <input type="tel" id="tq-new-cont-phone" placeholder="10-digit" maxlength="10" inputmode="numeric" onkeydown="if(event.key==='Enter'){event.preventDefault();VW_TILES.addAndLinkContractor();}">
         </div>
       </div>
       <div class="form-row" style="margin-bottom:10px">
@@ -22247,14 +22247,8 @@ async function _renderStep0() {
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="VW_TILES.addAndLinkContractor()"
-          class="btn-primary" style="flex:2">
-          ✅ Save & Link
-        </button>
-        <button onclick="VW_TILES._sendContractorRegLink()"
-          style="flex:1;padding:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;font-size:11px;font-weight:600;color:#60A5FA;cursor:pointer">
-          📲 Send Reg Link
-        </button>
+        <button type="button" onclick="VW_TILES.addAndLinkContractor()" class="btn-primary" style="flex:2">✅ Save & Link</button>
+        <button type="button" onclick="VW_TILES._sendContractorRegLink()" style="flex:1;padding:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;color:#60A5FA;font-size:12px;cursor:pointer">📲 Send Reg Link</button>
       </div>
     </div>`}
   </div>
