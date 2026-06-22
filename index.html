@@ -22746,7 +22746,7 @@ function _renderRoomCard(r, i) {
     </div>
     ${r.areas.map((a,ai) => `
     <div style="font-size:11px;color:var(--text2);padding:3px 0;border-bottom:1px solid var(--border)">
-      ${a.label}: ${a.sqft.toFixed(2)} sqft${a.wastage ? ` +${a.wastage}% wastage` : ''}${a.skirting ? ` · Skirting ${a.skirting}m` : ''}
+      ${a.label}: ${a.sqft.toFixed(2)} sqft${a.wastage ? ` +${a.wastage}% wastage` : ''}${a.skirting ? ` · Skirting ${a.skirting} ft (run)` : ''}
       ${r.type==='Bathroom'&&a.subType?`<span style="color:var(--text3)"> · ${a.subType}</span>`:''}
     </div>`).join('')}
     <button onclick="VW_TILES.tqAddArea(${i})" style="margin-top:6px;background:none;border:1px dashed var(--border);border-radius:8px;padding:4px 10px;font-size:11px;color:var(--text3);cursor:pointer;width:100%">
@@ -23439,17 +23439,15 @@ function _renderStep4() {
     const floorCoverage = isLarge ? 40 : 44;   // sqft per 20kg bag for floor
     const wallCoverage = isLarge ? 30 : 40;    // sqft per 20kg bag for wall (more adhesive needed)
 
-    // Calculate bags
+    // Calculate bags — the chosen method drives the whole area (wall or floor, any size)
+    const coverage = isWall ? wallCoverage : floorCoverage;
     let adhBags = 0, cemBags = 0, sandBags = 0;
-    if (method === 'adhesive') {
-      adhBags += floorSqft > 0 ? Math.ceil(floorSqft / floorCoverage) : 0;
-      adhBags += wallSqft > 0 ? Math.ceil(wallSqft / wallCoverage) : 0;
+    if (method === 'mortar') {
+      // Cement + sand for this area (≈4 cement + 11 sand bags per 100 sqft)
+      cemBags = Math.ceil(roomSqft * 4 / 100);
+      sandBags = Math.ceil(roomSqft * 11 / 100);
     } else {
-      // Mortar: cement + sand
-      cemBags = Math.ceil(floorSqft * 4 / 100);
-      sandBags = Math.ceil(floorSqft * 11 / 100);
-      // Wall still uses adhesive even with mortar floor
-      adhBags = wallSqft > 0 ? Math.ceil(wallSqft / wallCoverage) : 0;
+      adhBags = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
     }
 
     // Auto-populate adhesiveSelections so BOM is always accurate
@@ -23474,7 +23472,7 @@ function _renderStep4() {
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Adhesive — Per Room</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Wall tiles always use adhesive. Floor tiles: adhesive for large/premium tiles (≥600mm), mortar option for smaller tiles.
+      Pick adhesive or cement mortar for each area. Default is ready-mix adhesive; switch any area to traditional cement + sand.
     </p>
 
     ${roomAdh.map(({room, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags}) => `
@@ -23487,21 +23485,21 @@ function _renderStep4() {
         ${isLarge || isWall ? `<span style="font-size:10px;background:rgba(245,200,66,0.15);color:var(--gold);border-radius:5px;padding:2px 7px;font-weight:600">${isWall?'Wall':'Large'} · ${adhType}</span>` : ''}
       </div>
 
-      ${!isWall && floorSqft > 0 && !isLarge ? `
+      ${roomSqft > 0 ? `
       <div style="display:flex;gap:6px;margin-bottom:8px">
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','adhesive')"
           style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='adhesive'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='adhesive'?'var(--gold-muted)':'var(--bg3)'}">
           <div style="font-weight:600;color:${method==='adhesive'?'var(--gold)':'var(--text)'}">Ready-mix Adhesive</div>
-          <div style="font-size:9px;color:var(--text3)">${adhType} · ${floorCoverage} sqft/bag</div>
+          <div style="font-size:9px;color:var(--text3)">${adhType} · ${isWall?wallCoverage:floorCoverage} sqft/bag</div>
         </button>
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mortar')"
           style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='mortar'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='mortar'?'var(--gold-muted)':'var(--bg3)'}">
           <div style="font-weight:600;color:${method==='mortar'?'var(--gold)':'var(--text)'}">Cement Mortar</div>
-          <div style="font-size:9px;color:var(--text3)">Traditional · tiles ≤600mm only</div>
+          <div style="font-size:9px;color:var(--text3)">Traditional · cement + sand</div>
         </button>
       </div>` : ''}
 
@@ -24044,7 +24042,7 @@ function _renderStep7() {
       <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 5% wastage. Confirm quantity with installer.</div>
     </div>
   </div>
-  ${grout.color ? `<button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Quotation Summary</button>` : ''}
+  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Quotation Summary</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
 
