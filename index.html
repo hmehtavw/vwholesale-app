@@ -23233,6 +23233,25 @@ async function _renderStep6() {
     products = local.filter(p => (p.category||'').toLowerCase().includes('tile') && (p.stock||0) > 0);
   }
 
+  // Fetch non-inventory tiles (approved, order-based)
+  let nonInvProducts = [];
+  try {
+    const slots = _getTileSlots();
+    const primarySlot = slots.find(s=>_tqState.tileSelections[s.id]?.size) || slots[0];
+    const sizeMm = primarySlot ? (_tqState.tileSelections[primarySlot.id]?.sizeMm || '') : '';
+    const surface = primarySlot?.subType || 'both';
+    if (window.VW_NON_INV) {
+      const niResult = await VW_NON_INV.fetchTilesForQuotation(sizeMm, surface);
+      nonInvProducts = niResult.onRequest || [];
+    }
+  } catch(e) {}
+
+  // Combine: stock first, then non-inventory
+  const allProducts = [
+    ...products.map(p => ({...p, _isStock: true})),
+    ...nonInvProducts,
+  ];
+
   // Calculate box requirement
   // Sqft per tile from actual mm dimensions (mm ÷ 25.4 = inches, L×W ÷ 144 = sqft)
   let sz_sqft_actual = 3.875; // default 600×600
@@ -23282,7 +23301,7 @@ async function _renderStep6() {
 
   return `
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">Available Stock — Select Tile</h3>
+    <h3 class="card-title">Select Tile — Stock & Order-Based</h3>
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:12px;display:flex;justify-content:space-between">
       <div><div style="font-size:12px;color:var(--text3)">Area needed</div><div style="font-size:15px;font-weight:700">${totalSqft.toFixed(1)} sqft</div></div>
       <div><div style="font-size:12px;color:var(--text3)">Tile size</div><div style="font-size:13px;font-weight:600">${sz?.mm||'—'}mm</div></div>
@@ -23295,10 +23314,11 @@ async function _renderStep6() {
       <div style="font-size:11px;color:var(--text2)">These tiles are aged stock — available at special pricing. Executive incentive applies.</div>
     </div>` : ''}
 
-    ${scored.length ? scored.map((p, i) => {
+    ${[...(scored||[]), ...nonInvProducts].length ? [...(scored||[]), ...nonInvProducts].map((p, i) => {
       const isDead = p.dead_stock_flag || p.ageScore > 90;
       const sel = _tqState.selectedProduct?.id === p.id;
-      const pBoxes = p.coveragePerBox ? Math.ceil(totalSqft / p.coveragePerBox) : '—';
+      const pBoxes = p.is_non_inventory ? reqBoxes : (p.coveragePerBox ? Math.ceil(totalSqft / p.coveragePerBox) : '—');
+      const isNI = !!p.is_non_inventory;
       const ageLabel = p.purchase_date ? Math.floor(p.ageScore) + ' days' : 'New stock';
       return `
       <div onclick="VW_TILES.tqSelectProduct(${JSON.stringify({id:p.id,name:p.name||p.model,brand:p.brand,coverage:p.coveragePerBox,stock:p.stock,reqBoxes:pBoxes}).replace(/"/g,'&quot;')})"
@@ -32140,6 +32160,661 @@ window.VW_TILE_INV = {
 
 
 
+/* === non_inventory.js === */
+// ══════════════════════════════════════════════════════════════════════════════
+// NON-INVENTORY TILES — Catalog upload, AI extraction, verification, quotation
+// ══════════════════════════════════════════════════════════════════════════════
+
+const FINISH_OPTIONS = ['Glossy','Matt','Sugar','Carving','Rustic','Lappato','Satin','Polished','Natural'];
+const COLOUR_FAMILIES = ['White','Ivory/Cream','Beige','Light Grey','Grey','Dark Grey','Charcoal/Black','Brown','Wood Look','Marble Look','Stone Look','Terracotta','Blue','Green','Other'];
+const SURFACE_OPTIONS = [{v:'floor',l:'Floor'},{v:'wall',l:'Wall'},{v:'both',l:'Both'}];
+
+// ─── CATALOG MANAGEMENT PAGE ──────────────────────────────────────────────────
+async function renderCatalogUploadPage() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const isAdmin = profile?.role === 'admin';
+
+  const { data: uploads } = await VW_DB.client
+    .from('catalog_uploads')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  // Stats
+  const { data: stats } = await VW_DB.client
+    .from('non_inventory_tiles')
+    .select('status');
+  const total = stats?.length || 0;
+  const approved = stats?.filter(s=>s.status==='approved').length || 0;
+  const draft = stats?.filter(s=>s.status==='draft').length || 0;
+
+  return `
+  <div class="module-header">
+    <h2>📚 Tile Catalogs</h2>
+    ${isAdmin ? `<button class="btn-primary" onclick="VW_NON_INV.showUploadSheet()">+ Upload Catalog</button>` : ''}
+  </div>
+
+  <!-- Stats -->
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card gold">
+      <div class="mc-label">Total Designs</div>
+      <div class="mc-value">${total}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Approved</div>
+      <div class="mc-value" style="color:var(--green)">${approved}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Pending Review</div>
+      <div class="mc-value" style="color:var(--gold)">${draft}</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Catalogs Uploaded</div>
+      <div class="mc-value">${uploads?.length||0}</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:8px;margin-bottom:12px;overflow-x:auto">
+    <button class="entry-type-btn active" id="cat-tab-browse" onclick="VW_NON_INV.switchNonInvTab('browse',this)">🔍 Browse Designs</button>
+    <button class="entry-type-btn" id="cat-tab-pending" onclick="VW_NON_INV.switchNonInvTab('pending',this)">⏳ Pending Review${draft>0?` <span style="background:var(--gold);color:#000;border-radius:10px;padding:1px 6px;font-size:10px">${draft}</span>`:''}</button>
+    <button class="entry-type-btn" id="cat-tab-uploads" onclick="VW_NON_INV.switchNonInvTab('uploads',this)">📤 Uploads</button>
+  </div>
+
+  <div id="catalog-tab-content">
+    ${await _renderCatalogBrowse()}
+  </div>`;
+}
+
+async function switchNonInvTab(tab, btn) {
+  document.querySelectorAll('[id^="cat-tab-"]').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const el = document.getElementById('catalog-tab-content');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
+  if (tab === 'browse')  el.innerHTML = await _renderCatalogBrowse();
+  if (tab === 'pending') el.innerHTML = await _renderPendingVerification();
+  if (tab === 'uploads') el.innerHTML = await _renderCatalogUploads();
+}
+
+// ─── BROWSE DESIGNS (approved non-inventory) ──────────────────────────────────
+async function _renderCatalogBrowse(filter={}) {
+  let query = VW_DB.client.from('non_inventory_tiles')
+    .select('*')
+    .eq('status','approved')
+    .order('brand')
+    .limit(60);
+
+  if (filter.brand) query = query.eq('brand', filter.brand);
+  if (filter.size)  query = query.eq('size_mm', filter.size);
+  if (filter.surface) query = query.eq('surface_type', filter.surface);
+
+  const { data: tiles } = await query;
+  const brands = [...new Set((tiles||[]).map(t=>t.brand))].sort();
+
+  return `
+  <!-- Filters -->
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+    <input type="text" id="cat-search" placeholder="Search design, brand, size..."
+      style="flex:1;min-width:150px;font-size:13px"
+      oninput="VW_NON_INV.searchCatalog(this.value)">
+    <select onchange="VW_NON_INV._filterCatalog('surface',this.value)"
+      style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;color:var(--text);font-size:12px">
+      <option value="">All surfaces</option>
+      <option value="floor">Floor</option>
+      <option value="wall">Wall</option>
+    </select>
+  </div>
+
+  <!-- Brand groups -->
+  ${brands.length === 0 ? `
+  <div class="empty-state">
+    <div style="font-size:40px;margin-bottom:10px">📚</div>
+    <p>No approved designs yet. Upload a catalog to get started.</p>
+  </div>` : brands.map(brand => {
+    const brandTiles = (tiles||[]).filter(t=>t.brand===brand);
+    return `
+    <div style="margin-bottom:20px">
+      <div style="font-size:13px;font-weight:800;color:var(--text);margin-bottom:8px;
+        padding-bottom:6px;border-bottom:2px solid var(--gold-border)">
+        ${brand} <span style="font-size:11px;font-weight:400;color:var(--text3)">${brandTiles.length} designs</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        ${brandTiles.map(t => _renderTileCard(t)).join('')}
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+function _renderTileCard(t, showAddToQuote=true) {
+  return `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer"
+    onclick="VW_NON_INV.openNonInvDetail('${t.id}')">
+    <!-- Image -->
+    <div style="height:120px;background:var(--bg3);position:relative;overflow:hidden">
+      ${t.image_url
+        ? `<img src="${t.image_url}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.style.display='none'">`
+        : `<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:32px">🔲</div>`}
+      <div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);border-radius:5px;padding:2px 6px;font-size:10px;color:#fff">
+        ${t.size_mm}mm
+      </div>
+      <div style="position:absolute;bottom:6px;left:6px;background:rgba(245,200,66,0.9);border-radius:5px;padding:2px 6px;font-size:9px;font-weight:700;color:#000">
+        📦 On Request
+      </div>
+    </div>
+    <!-- Info -->
+    <div style="padding:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px">${t.design_name||'Unnamed'}</div>
+      <div style="font-size:10px;color:var(--text3)">${t.series||''} ${t.finish?'· '+t.finish:''}</div>
+      <div style="font-size:10px;color:var(--text3)">${t.colour_family||''} ${t.surface_type?'· '+t.surface_type:''}</div>
+      ${showAddToQuote ? `
+      <button onclick="event.stopPropagation();VW_NON_INV.addToActiveQuote('${t.id}')"
+        style="margin-top:6px;width:100%;padding:5px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:7px;font-size:11px;font-weight:700;color:var(--gold);cursor:pointer">
+        + Add to Quote
+      </button>` : ''}
+    </div>
+  </div>`;
+}
+
+async function searchCatalog(q) {
+  if (!q || q.length < 2) {
+    const el = document.getElementById('catalog-tab-content');
+    if (el) el.innerHTML = await _renderCatalogBrowse();
+    return;
+  }
+  const { data } = await VW_DB.client.from('non_inventory_tiles')
+    .select('*')
+    .eq('status','approved')
+    .or(`design_name.ilike.%${q}%,brand.ilike.%${q}%,series.ilike.%${q}%,colour_family.ilike.%${q}%`)
+    .limit(40);
+  const el = document.getElementById('catalog-tab-content');
+  if (el) el.innerHTML = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text3)">${(data||[]).length} results for "${q}"</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+      ${(data||[]).map(t=>_renderTileCard(t)).join('')}
+    </div>`;
+}
+
+// ─── PENDING VERIFICATION ─────────────────────────────────────────────────────
+async function _renderPendingVerification() {
+  const { data: drafts } = await VW_DB.client
+    .from('non_inventory_tiles')
+    .select('*, catalog_uploads(brand, file_name)')
+    .eq('status','draft')
+    .order('created_at', { ascending: false });
+
+  if (!drafts?.length) return `<div class="empty-state"><p>No pending items — all verified ✅</p></div>`;
+
+  // Group by catalog
+  const byCatalog = {};
+  drafts.forEach(t => {
+    const key = t.catalog_id || 'manual';
+    const label = t.catalog_uploads?.file_name || 'Manual Entry';
+    if (!byCatalog[key]) byCatalog[key] = { label, tiles:[] };
+    byCatalog[key].tiles.push(t);
+  });
+
+  return `
+  <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:12px;color:var(--text3)">${drafts.length} designs awaiting review</div>
+    <button onclick="VW_NON_INV.bulkApproveVisible()" class="btn-sm" style="background:var(--gold);color:#000">
+      ✅ Approve All Visible
+    </button>
+  </div>
+  ${Object.entries(byCatalog).map(([key, group]) => `
+  <div style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">
+      📤 ${group.label} · ${group.tiles.length} designs
+    </div>
+    ${group.tiles.map(t => `
+    <div id="draft-${t.id}" style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;gap:10px">
+        <!-- Thumbnail -->
+        <div style="width:80px;height:80px;background:var(--bg3);border-radius:8px;flex-shrink:0;overflow:hidden">
+          ${t.image_url
+            ? `<img src="${t.image_url}" style="width:100%;height:100%;object-fit:cover">`
+            : `<div style="height:100%;display:flex;align-items:center;justify-content:center;font-size:24px">🔲</div>`}
+        </div>
+        <!-- Extracted fields (editable inline) -->
+        <div style="flex:1;min-width:0">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Brand</div>
+              <input type="text" value="${t.brand||''}" id="f-brand-${t.id}"
+                style="width:100%;padding:4px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:12px;color:var(--text)">
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Size (mm)</div>
+              <input type="text" value="${t.size_mm||''}" id="f-size-${t.id}"
+                style="width:100%;padding:4px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:12px;color:var(--text)">
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Design Name</div>
+              <input type="text" value="${t.design_name||''}" id="f-name-${t.id}"
+                style="width:100%;padding:4px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:12px;color:var(--text)">
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Series</div>
+              <input type="text" value="${t.series||''}" id="f-series-${t.id}"
+                style="width:100%;padding:4px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:12px;color:var(--text)">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px">Finish</div>
+              <select id="f-finish-${t.id}"
+                style="width:100%;padding:4px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">
+                ${FINISH_OPTIONS.map(f=>`<option ${t.finish===f?'selected':''}>${f}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px">Colour</div>
+              <select id="f-colour-${t.id}"
+                style="width:100%;padding:4px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">
+                ${COLOUR_FAMILIES.map(c=>`<option ${t.colour_family===c?'selected':''}>${c}</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <div style="font-size:9px;color:var(--text3);margin-bottom:2px">Surface</div>
+              <select id="f-surface-${t.id}"
+                style="width:100%;padding:4px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text)">
+                ${SURFACE_OPTIONS.map(s=>`<option value="${s.v}" ${t.surface_type===s.v?'selected':''}>${s.l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <!-- Actions -->
+          <div style="display:flex;gap:6px">
+            <button onclick="VW_NON_INV.approveDraft('${t.id}')"
+              style="flex:2;padding:6px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.4);border-radius:7px;font-size:12px;font-weight:700;color:var(--green);cursor:pointer">
+              ✅ Approve
+            </button>
+            <button onclick="VW_NON_INV.rejectDraft('${t.id}')"
+              style="flex:1;padding:6px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:12px;color:var(--red);cursor:pointer">
+              🗑 Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>`).join('')}`;
+}
+
+async function approveDraft(id) {
+  const updates = {
+    brand:        document.getElementById(`f-brand-${id}`)?.value?.trim(),
+    design_name:  document.getElementById(`f-name-${id}`)?.value?.trim(),
+    series:       document.getElementById(`f-series-${id}`)?.value?.trim(),
+    size_mm:      document.getElementById(`f-size-${id}`)?.value?.trim(),
+    finish:       document.getElementById(`f-finish-${id}`)?.value,
+    colour_family:document.getElementById(`f-colour-${id}`)?.value,
+    surface_type: document.getElementById(`f-surface-${id}`)?.value,
+    status: 'approved',
+    verified_at: new Date().toISOString(),
+  };
+  if (!updates.brand || !updates.design_name) { showToast('Brand and Design Name are required','warn'); return; }
+  const { error } = await VW_DB.client.from('non_inventory_tiles').update(updates).eq('id', id);
+  if (error) { showToast('Error approving: ' + error.message, 'error'); return; }
+  const row = document.getElementById(`draft-${id}`);
+  if (row) {
+    row.style.background = 'rgba(34,197,94,0.06)';
+    row.style.border = '1px solid rgba(34,197,94,0.3)';
+    row.innerHTML = `<div style="padding:8px;font-size:12px;color:var(--green)">✅ Approved — ${updates.design_name} (${updates.size_mm}mm)</div>`;
+  }
+  showToast(`${updates.design_name} approved ✓`, 'success');
+}
+
+async function rejectDraft(id) {
+  if (!confirm('Delete this draft tile?')) return;
+  await VW_DB.client.from('non_inventory_tiles').delete().eq('id', id);
+  const row = document.getElementById(`draft-${id}`);
+  if (row) row.remove();
+  showToast('Deleted', 'info');
+}
+
+async function bulkApproveVisible() {
+  const buttons = document.querySelectorAll('[id^="draft-"] button[onclick*="approveDraft"]');
+  let count = 0;
+  for (const btn of buttons) {
+    const id = btn.getAttribute('onclick').match(/'([^']+)'/)?.[1];
+    if (id) { await approveDraft(id); count++; }
+  }
+  showToast(`${count} designs approved ✓`, 'success');
+}
+
+// ─── CATALOG UPLOADS LIST ─────────────────────────────────────────────────────
+async function _renderCatalogUploads() {
+  const { data: uploads } = await VW_DB.client
+    .from('catalog_uploads')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return `
+  <button class="btn-primary" style="margin-bottom:12px" onclick="VW_NON_INV.showUploadSheet()">
+    + Upload New Catalog
+  </button>
+  ${(uploads||[]).length === 0 ? '<div class="empty-state"><p>No catalogs uploaded yet</p></div>' :
+  (uploads||[]).map(u => `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:13px;font-weight:700">${u.brand}</div>
+        <div style="font-size:11px;color:var(--text3)">${u.file_name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          ${u.tiles_extracted||0} extracted · ${u.tiles_approved||0} approved
+        </div>
+      </div>
+      <span style="font-size:11px;padding:3px 8px;border-radius:6px;
+        background:${u.status==='completed'?'rgba(34,197,94,0.1)':u.status==='processing'?'rgba(245,200,66,0.1)':'var(--bg3)'};
+        color:${u.status==='completed'?'var(--green)':u.status==='processing'?'var(--gold)':'var(--text3)'}">
+        ${u.status}
+      </span>
+    </div>
+  </div>`).join('')}`;
+}
+
+// ─── UPLOAD SHEET ─────────────────────────────────────────────────────────────
+function showUploadSheet() {
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet) return;
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📤 Upload Catalog</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Brand Name *</label>
+      <input type="text" id="up-brand" placeholder="e.g. Kajaria, RAK, Somany, TISAN">
+    </div>
+    <div class="form-group">
+      <label>Catalog File (PDF or Images) *</label>
+      <input type="file" id="up-file" accept=".pdf,.jpg,.jpeg,.png,.webp"
+        multiple style="padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;width:100%;color:var(--text);font-size:13px">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">
+        PDF (multi-page catalog) or multiple image files
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <input type="text" id="up-notes" placeholder="e.g. FY2025 catalog, premium range only">
+    </div>
+    <div id="up-status" style="display:none;padding:10px;background:var(--bg2);border-radius:8px;font-size:12px;margin-bottom:10px"></div>
+    <button class="btn-primary full-width" onclick="VW_NON_INV.processCatalogUpload()">
+      🤖 Upload & Extract with AI
+    </button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay')?.classList.add('open');
+}
+
+async function processCatalogUpload() {
+  const brand = document.getElementById('up-brand')?.value?.trim();
+  const files = document.getElementById('up-file')?.files;
+  const notes = document.getElementById('up-notes')?.value?.trim();
+  const statusEl = document.getElementById('up-status');
+
+  if (!brand) { showToast('Enter brand name', 'warn'); return; }
+  if (!files?.length) { showToast('Select at least one file', 'warn'); return; }
+
+  const btn = document.querySelector('#bottom-sheet .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Processing...'; }
+  if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Creating catalog record...'; }
+
+  try {
+    // Create catalog upload record
+    const { data: catalog, error: catErr } = await VW_DB.client
+      .from('catalog_uploads')
+      .insert({ brand, file_name: files[0].name, file_type: files[0].type, status: 'processing', notes })
+      .select().single();
+    if (catErr) throw catErr;
+
+    if (statusEl) statusEl.textContent = `Processing ${files.length} file(s) with AI...`;
+
+    let totalExtracted = 0;
+
+    // Process each file
+    for (let i=0; i<files.length; i++) {
+      const file = files[i];
+      if (statusEl) statusEl.textContent = `Extracting from file ${i+1}/${files.length}: ${file.name}...`;
+
+      const extracted = await _extractTilesFromFile(file, brand, catalog.id);
+      totalExtracted += extracted;
+
+      if (statusEl) statusEl.textContent = `File ${i+1}/${files.length}: Found ${extracted} designs`;
+    }
+
+    // Update catalog record
+    await VV_DB.client.from('catalog_uploads').update({
+      status: 'extracted',
+      tiles_extracted: totalExtracted,
+    }).eq('id', catalog.id);
+
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✅ Done! ${totalExtracted} designs extracted and ready for review.</span>`;
+    showToast(`${totalExtracted} designs extracted → go to Pending Review`, 'success');
+    if (btn) { btn.textContent = 'Close'; btn.disabled = false; btn.onclick = closeSheet; }
+
+  } catch(e) {
+    console.error('Upload error:', e);
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Error: ${e.message}</span>`;
+    if (btn) { btn.disabled = false; btn.textContent = 'Try Again'; }
+    showToast('Upload failed: ' + e.message, 'error');
+  }
+}
+
+async function _extractTilesFromFile(file, brand, catalogId) {
+  // Convert file to base64 for Claude API
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const mediaType = file.type || 'image/jpeg';
+  const isPDF = mediaType === 'application/pdf';
+
+  // Call Claude API with vision to extract tile designs
+  const prompt = `You are analyzing a tile catalog page. Extract ALL tile designs visible.
+
+For each tile design found, provide:
+- design_name: the design/pattern name (e.g. "Carrara White", "Wood Ash")
+- sku_code: product code if visible (e.g. "KVF-601")
+- series: collection/series name if visible
+- size_mm: tile size in format "600×600" or "300×450" (use × not x)
+- finish: one of Glossy/Matt/Sugar/Carving/Rustic/Lappato/Satin/Polished/Natural
+- colour_family: one of White/Ivory-Cream/Beige/Light Grey/Grey/Dark Grey/Charcoal-Black/Brown/Wood Look/Marble Look/Stone Look/Terracotta/Blue/Green/Other
+- surface_type: floor/wall/both
+
+Return ONLY a JSON array. No explanation. No markdown.
+Example: [{"design_name":"Carrara White","sku_code":"KVF-601","series":"Marble Marvel","size_mm":"600×600","finish":"Glossy","colour_family":"White","surface_type":"floor"}]
+
+If you cannot determine a field, use null. Extract every tile you can see.`;
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4000,
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: isPDF ? 'document' : 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64,
+            }
+          },
+          { type: 'text', text: prompt }
+        ]
+      }]
+    })
+  });
+
+  const data = await response.json();
+  const text = data.content?.[0]?.text || '[]';
+
+  let tiles = [];
+  try {
+    const clean = text.replace(/```json\n?|```/g, '').trim();
+    tiles = JSON.parse(clean);
+  } catch(e) {
+    console.error('Parse error:', e, 'Raw:', text.slice(0,200));
+    tiles = [];
+  }
+
+  // Save extracted tiles to DB
+  if (tiles.length > 0) {
+    const rows = tiles.map(t => ({
+      brand,
+      catalog_id: catalogId,
+      design_name: t.design_name || 'Unknown Design',
+      sku_code:    t.sku_code || null,
+      series:      t.series || null,
+      size_mm:     t.size_mm || '600×600',
+      finish:      t.finish || null,
+      colour_family: t.colour_family || null,
+      surface_type: t.surface_type || 'both',
+      status: 'draft',
+      extracted_by: 'ai',
+    }));
+
+    const { error } = await VW_DB.client.from('non_inventory_tiles').insert(rows);
+    if (error) console.error('DB insert error:', error);
+  }
+
+  return tiles.length;
+}
+
+// ─── TILE DETAIL SHEET ────────────────────────────────────────────────────────
+async function openNonInvDetail(id) {
+  const { data: t } = await VW_DB.client.from('non_inventory_tiles').select('*').eq('id',id).single();
+  if (!t) return;
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet) return;
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0">${t.design_name}</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    ${t.image_url ? `<img src="${t.image_url}" style="width:100%;height:200px;object-fit:cover;border-radius:10px;margin-bottom:12px">` : ''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      ${[
+        ['Brand', t.brand],
+        ['Size', t.size_mm+'mm'],
+        ['Series', t.series||'—'],
+        ['SKU', t.sku_code||'—'],
+        ['Finish', t.finish||'—'],
+        ['Colour', t.colour_family||'—'],
+        ['Surface', t.surface_type||'—'],
+        ['Lead Time', (t.lead_time_days||18)+' days'],
+      ].map(([k,v])=>`
+      <div style="background:var(--bg2);border-radius:8px;padding:8px">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase">${k}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">${v}</div>
+      </div>`).join('')}
+    </div>
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2)">
+      📦 Available on Request · Estimated delivery: ${t.lead_time_days||18} days from order confirmation
+    </div>
+    <button class="btn-primary full-width" onclick="VW_NON_INV.addToActiveQuote('${t.id}');closeSheet()">
+      + Add to Active Quotation
+    </button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay')?.classList.add('open');
+}
+
+// ─── ADD TO ACTIVE QUOTE ──────────────────────────────────────────────────────
+async function addToActiveQuote(tileId) {
+  // Check if there's an active tile quotation in progress
+  if (!window._tqState || !window._tqState.rooms?.length) {
+    showToast('Start a tile quotation first, then add from catalog', 'warn');
+    return;
+  }
+  const { data: t } = await VW_DB.client.from('non_inventory_tiles').select('*').eq('id',tileId).single();
+  if (!t) return;
+
+  // Convert non-inventory tile to the format expected by _tqState.tileSelections
+  const syntheticProduct = {
+    id: 'ni_' + t.id,
+    name: `${t.brand} ${t.design_name}`,
+    brand: t.brand,
+    tile_size_mm: t.size_mm,
+    tile_finish: t.finish,
+    colour_family: t.colour_family,
+    surface_type: t.surface_type,
+    is_non_inventory: true,
+    non_inventory_id: t.id,
+    lead_time_days: t.lead_time_days || 18,
+    image_url: t.image_url,
+    price: 0, // manual pricing
+    coverage_per_box: null, // calculated from size
+  };
+
+  // Set as selected product for all pending slots
+  window._tqState.selectedProduct = syntheticProduct;
+  window._tqState._isNonInventory = true;
+
+  showToast(`${t.brand} ${t.design_name} added to quotation`, 'success');
+  // Navigate back to quotation if on catalog page
+  if (window.currentPage === 'catalogs') navigateTo('tiles');
+}
+
+// ─── FETCH FOR QUOTATION (stock + non-inventory) ──────────────────────────────
+async function fetchTilesForQuotation(sizeMm, surfaceType) {
+  // Fetch from actual inventory
+  const { data: stockTiles } = await VW_DB.client
+    .from('products')
+    .select('*')
+    .eq('tile_size_mm', sizeMm)
+    .gt('stock_quantity', 0)
+    .order('brand');
+
+  // Fetch from non-inventory (approved, matching size)
+  let niQuery = VW_DB.client
+    .from('non_inventory_tiles')
+    .select('*')
+    .eq('status','approved')
+    .eq('size_mm', sizeMm);
+  if (surfaceType && surfaceType !== 'both') {
+    niQuery = niQuery.or(`surface_type.eq.${surfaceType},surface_type.eq.both`);
+  }
+  const { data: niTiles } = await niQuery.order('brand');
+
+  return {
+    inStock: stockTiles || [],
+    onRequest: (niTiles || []).map(t => ({
+      ...t,
+      id: 'ni_' + t.id,
+      name: `${t.brand} ${t.design_name}`,
+      is_non_inventory: true,
+      lead_time_days: t.lead_time_days || 18,
+    }))
+  };
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+window.VW_NON_INV = {
+  renderCatalogUploadPage,
+  switchNonInvTab,
+  searchCatalog,
+  _filterCatalog: async (field, val) => {
+    const el = document.getElementById('catalog-tab-content');
+    if (el) el.innerHTML = await _renderCatalogBrowse({ [field]: val });
+  },
+  showUploadSheet,
+  processCatalogUpload,
+  openNonInvDetail,
+  addToActiveQuote,
+  approveDraft,
+  rejectDraft,
+  bulkApproveVisible,
+  fetchTilesForQuotation,
+};
+
+
 /* === customer_portal.js === */
 
 // =====================================================
@@ -32677,6 +33352,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'rewards') html = await renderRewardsStorePage();
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
+    else if (page === 'catalogs') html = await VW_NON_INV.renderCatalogUploadPage();
     else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
