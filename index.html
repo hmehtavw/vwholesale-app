@@ -21998,17 +21998,13 @@ const ROOM_DEFS = {
   'Master Bedroom':    { icon:'🛏', measureType:'floor_lw_skirting', areaType:'floor', note:'L × W + optional skirting' },
   'Bedroom':           { icon:'🛏', measureType:'floor_lw_skirting', areaType:'floor', note:'L × W + optional skirting' },
   'Kids Room':         { icon:'🧒', measureType:'floor_lw_skirting', areaType:'floor', note:'L × W + optional skirting' },
-  'Kitchen Floor':     { icon:'🍳', measureType:'floor_lw_skirting', areaType:'floor', note:'L × W + optional skirting' },
-  'Kitchen Wall':      { icon:'🧱', measureType:'wall_hw', areaType:'wall', note:'H × W per section' },
+  'Kitchen':           { icon:'🍳', measureType:'bathroom', areaType:'both', note:'Floor (L×W) + Wall sections (H×W)' },
   'Bathroom':          { icon:'🚿', measureType:'bathroom', areaType:'both', note:'4 walls (H×W) + floor (L×W)' },
   'Toilet':            { icon:'🚽', measureType:'bathroom', areaType:'both', note:'4 walls + floor' },
-  'Wash Area Floor':   { icon:'🫧', measureType:'floor_lw', areaType:'floor', note:'L × W' },
-  'Wash Area Wall':    { icon:'🧱', measureType:'wall_hw', areaType:'wall', note:'H × W' },
-  'Balcony Floor':     { icon:'🌿', measureType:'floor_lw', areaType:'floor', note:'L × W' },
-  'Balcony Wall':      { icon:'🧱', measureType:'wall_hw', areaType:'wall', note:'H × W' },
+  'Wash Area':         { icon:'🫧', measureType:'bathroom', areaType:'both', note:'Floor (L×W) + Wall sections (H×W)' },
+  'Balcony':           { icon:'🌿', measureType:'bathroom', areaType:'both', note:'Floor (L×W) + Wall sections (H×W)' },
   'Parking':           { icon:'🚗', measureType:'floor_lw', areaType:'floor', note:'L × W' },
-  'Pooja Room Floor':  { icon:'🪔', measureType:'floor_lw', areaType:'floor', note:'L × W' },
-  'Pooja Room Wall':   { icon:'🪔', measureType:'wall_hw', areaType:'wall', note:'H × W' },
+  'Pooja Room':        { icon:'🪔', measureType:'bathroom', areaType:'both', note:'Floor (L×W) + Wall sections (H×W)' },
   'Elevation / Exterior': { icon:'🏠', measureType:'wall_hw', areaType:'wall', note:'H × W (external facade)' },
   'Staircase':         { icon:'🪜', measureType:'staircase', areaType:'floor', note:'Step W × Depth × No. of steps' },
   'Terrace / Outdoor': { icon:'☀️', measureType:'floor_lw', areaType:'floor', note:'L × W' },
@@ -22507,6 +22503,26 @@ function _refreshStep1() {
 
 // ───── STEP 2: TILE SIZE (per room) ─────────────────────────
 // Each room gets its own tile size selection. We show one room at a time.
+
+// ─── SHARED: get all tile selection slots (expands bathroom into wall+floor) ──
+function _getTileSlots() {
+  const slots = [];
+  (_tqState.rooms || []).forEach(r => {
+    const hasWall  = r.areas?.some(a => a.subType === 'wall');
+    const hasFloor = r.areas?.some(a => a.subType === 'floor' || !a.subType);
+    if ((r.def?.areaType === 'both') || (hasWall && hasFloor)) {
+      const wallSqft  = r.areas.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0);
+      const floorSqft = r.areas.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0);
+      if (wallSqft  > 0) slots.push({ id: r.id+'_wall',  room:r, subType:'wall',  sqft:wallSqft,  label:(r.label||r.type)+' — Wall',  icon:'🧱' });
+      if (floorSqft > 0) slots.push({ id: r.id+'_floor', room:r, subType:'floor', sqft:floorSqft, label:(r.label||r.type)+' — Floor', icon:'🔲' });
+    } else {
+      const sqft = r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0;
+      slots.push({ id: r.id, room:r, subType: hasWall ? 'wall' : 'floor', sqft, label:r.label||r.type, icon: ROOM_DEFS[r.type]?.icon||'🏠' });
+    }
+  });
+  return slots;
+}
+
 async function _renderStep2() {
   const rooms = _tqState.rooms;
   if (!rooms.length) return `<div class="card"><p style="color:var(--text3)">Add rooms first</p></div>`;
@@ -22515,40 +22531,74 @@ async function _renderStep2() {
   const activeMms = (cfg.sizes||[]).filter(s=>s.active!==false).map(s=>s.mm);
   const visible = activeMms.length > 0 ? TILE_SIZES.filter(ts=>activeMms.includes(ts.mm)) : TILE_SIZES;
 
-  // Check which rooms still need tile selection
-  const pending = rooms.filter(r => !_tqState.tileSelections[r.id]);
-  const done = rooms.filter(r => _tqState.tileSelections[r.id]);
+  // Expand rooms into SELECTION SLOTS
+  // Bathroom/Toilet with both wall + floor areas → two slots: roomId_wall and roomId_floor
+  // All other rooms → one slot: roomId
+  const slots = [];
+  rooms.forEach(r => {
+    const hasWall = r.areas?.some(a => a.subType === 'wall');
+    const hasFloor = r.areas?.some(a => a.subType === 'floor' || !a.subType);
+    if (r.def?.areaType === 'both' || (hasWall && hasFloor)) {
+      // Bathroom/Toilet — two slots
+      slots.push({ id: r.id + '_wall',  room: r, label: `${r.label||r.type} — Wall`,  icon:'🧱', subType:'wall',  sqft: r.areas?.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0)||0 });
+      slots.push({ id: r.id + '_floor', room: r, label: `${r.label||r.type} — Floor`, icon:'🔲', subType:'floor', sqft: r.areas?.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0)||0 });
+    } else {
+      slots.push({ id: r.id, room: r, label: r.label||r.type, icon: ROOM_DEFS[r.type]?.icon||'🏠', subType: hasWall ? 'wall' : 'floor', sqft: r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0 });
+    }
+  });
 
-  // Show summary of done rooms + selection for first pending
-  const currentRoom = pending[0] || rooms[rooms.length-1];
-  const currentSel = _tqState.tileSelections[currentRoom?.id];
+  const pendingSlots = slots.filter(s => !_tqState.tileSelections[s.id]);
+  const doneSlots = slots.filter(s => _tqState.tileSelections[s.id]);
+  const currentSlot = pendingSlots[0] || slots[slots.length-1];
+  const currentSel = _tqState.tileSelections[currentSlot?.id];
+
+  // Filter sizes by subType (wall tiles vs floor tiles)
+  const wallTypes = ['wall','dado','bathroom','kitchen'];
+  const floorTypes = ['floor','parking','elevation'];
+  const visibleSizes = visible.filter(ts => {
+    if (!currentSlot) return true;
+    if (currentSlot.subType === 'wall') return ts.type?.some(t => wallTypes.includes(t));
+    if (currentSlot.subType === 'floor') return ts.type?.some(t => floorTypes.includes(t));
+    return true;
+  });
+  // If filtered set is empty (unusual size config), show all
+  const sizesToShow = visibleSizes.length >= 3 ? visibleSizes : visible;
 
   return `
-  <!-- Progress: rooms done vs total -->
+  <!-- Progress: all slots (rooms × subtype) -->
   <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap">
-    ${rooms.map(r => {
-      const sel = _tqState.tileSelections[r.id];
-      const isCurrent = r.id === currentRoom?.id;
+    ${slots.map(s => {
+      const sel = _tqState.tileSelections[s.id];
+      const isCurrent = s.id === currentSlot?.id;
       return `<div style="flex:1;min-width:80px;padding:6px 8px;border-radius:8px;
         background:${sel?'rgba(34,197,94,0.1)':isCurrent?'var(--gold-muted)':'var(--bg2)'};
         border:1px solid ${sel?'var(--green)':isCurrent?'var(--gold)':'var(--border)'};
         font-size:10px;text-align:center">
-        <div style="font-weight:700;color:${sel?'var(--green)':isCurrent?'var(--gold)':'var(--text3)'}">${r.label||r.type}</div>
+        <div style="font-size:14px">${s.icon}</div>
+        <div style="font-weight:700;color:${sel?'var(--green)':isCurrent?'var(--gold)':'var(--text3)'}">${s.label}</div>
         <div style="color:var(--text3)">${sel?sel.sizeMm+'mm ✓':isCurrent?'Selecting...':'Pending'}</div>
+        <div style="color:var(--text3);font-size:9px">${s.sqft.toFixed(1)} sqft</div>
       </div>`;
     }).join('')}
   </div>
 
-  ${currentRoom ? `
+  ${currentSlot ? `
   <div class="card" style="border-color:var(--gold-border)">
-    <h3 class="card-title">🏠 ${currentRoom.label||currentRoom.type}
-      <span style="font-size:11px;color:var(--text3);font-weight:400"> · ${currentRoom.areas?.reduce((s,a)=>s+(a.sqft||0),0).toFixed(1)} sqft</span>
-    </h3>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Select tile size for this room/area</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:22px">${currentSlot.icon}</span>
+      <div>
+        <h3 class="card-title" style="margin:0">${currentSlot.label}</h3>
+        <div style="font-size:11px;color:var(--text3)">${currentSlot.sqft.toFixed(1)} sqft · ${currentSlot.subType === 'wall' ? 'Wall tiles — thinner, finer finish' : 'Floor tiles — anti-skid, durable'}</div>
+      </div>
+    </div>
+    ${sizesToShow.length < visible.length ? `
+    <div style="font-size:11px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:7px;padding:6px 10px;margin-bottom:10px;color:var(--text2)">
+      Showing ${currentSlot.subType === 'wall' ? 'wall tile sizes' : 'floor tile sizes'} · <button onclick="VW_TILES._showAllSizesForSlot('${currentSlot.id}')" style="background:none;border:none;color:#60A5FA;cursor:pointer;font-size:11px;padding:0">Show all sizes</button>
+    </div>` : ''}
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
-      ${visible.map(ts => {
+      ${sizesToShow.map(ts => {
         const sel = currentSel?.sizeId === ts.id;
-        return `<button onclick="VW_TILES.tqSelectSizeForRoom('${currentRoom.id}','${ts.id}')"
+        return `<button onclick="VW_TILES.tqSelectSizeForRoom('${currentSlot.id}','${ts.id}','${currentSlot.room.id}')"
           style="padding:10px 8px;border-radius:10px;cursor:pointer;text-align:left;
             background:${sel?'var(--gold-muted)':'var(--bg2)'};
             border:${sel?'2px solid var(--gold)':'1px solid var(--border)'}">
@@ -22560,38 +22610,51 @@ async function _renderStep2() {
     </div>
   </div>
 
-  <!-- Nav: if this room has a selection, show next room or proceed -->
+  <!-- Nav -->
   ${currentSel ? `
   <div class="card" style="border-color:rgba(34,197,94,0.3);margin-top:10px">
-    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px">✓ ${currentRoom.label} — ${currentSel.sizeMm}mm selected</div>
-    ${pending.length > 1 ? `
+    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">✓ ${currentSlot.label} — ${currentSel.sizeMm}mm selected</div>
+    ${pendingSlots.length > 1 ? `
     <button class="btn-primary full-width" onclick="VW_TILES.tqNextRoom()">
-      Next Room → ${pending[1]?.label||pending[1]?.type}
+      Next → ${pendingSlots[1]?.label}
     </button>` : `
-    <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">All rooms set → Next: Spacer</button>`}
+    <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">All areas set → Next: Spacer</button>`}
   </div>` : ''}` : ''}
 
-  <!-- Already selected rooms summary -->
-  ${done.length && pending.length ? `
+  <!-- Already selected summary -->
+  ${doneSlots.length && pendingSlots.length ? `
   <div style="margin-top:10px;font-size:11px;color:var(--text3)">
-    <strong>Already selected:</strong> ${done.map(r=>`${r.label} (${_tqState.tileSelections[r.id]?.sizeMm}mm)`).join(' · ')}
+    <strong>Done:</strong> ${doneSlots.map(s=>`${s.label} (${_tqState.tileSelections[s.id]?.sizeMm}mm)`).join(' · ')}
   </div>` : ''}
 
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back to Rooms</button>`;
 }
 
-function tqSelectSizeForRoom(roomId, sizeId) {
+function _showAllSizesForSlot(slotId) {
+  // Remove the subType filter and re-render step 2 showing all sizes
+  // Achieved by temporarily storing a flag in tileSelections
+  if (!_tqState._showAllSizes) _tqState._showAllSizes = {};
+  _tqState._showAllSizes[slotId] = true;
+  _renderStep2().then(html => { const el = document.getElementById('tq-step-content'); if(el) el.innerHTML = html; });
+}
+function tqSelectSizeForRoom(slotId, sizeId, roomId) {
   const sz = TILE_SIZES.find(s=>s.id===sizeId);
   if (!sz) return;
-  if (!_tqState.tileSelections[roomId]) _tqState.tileSelections[roomId] = {};
-  _tqState.tileSelections[roomId].sizeId = sizeId;
-  _tqState.tileSelections[roomId].sizeMm = sz.mm;
-  _tqState.tileSelections[roomId].sizeLabel = sz.label;
-  _tqState.tileSelections[roomId].size = sz;
-  // Auto-init spacer for large tiles (≥600mm = 6 spacers/tile, smaller = 4)
-  if (!_tqState.spacerSelections[roomId]) {
+  // slotId may be roomId or roomId_wall or roomId_floor
+  const actualRoomId = roomId || slotId;
+  if (!_tqState.tileSelections[slotId]) _tqState.tileSelections[slotId] = {};
+  _tqState.tileSelections[slotId].sizeId = sizeId;
+  _tqState.tileSelections[slotId].sizeMm = sz.mm;
+  _tqState.tileSelections[slotId].sizeLabel = sz.label;
+  _tqState.tileSelections[slotId].size = sz;
+  _tqState.tileSelections[slotId].slotId = slotId;
+  _tqState.tileSelections[slotId].roomId = actualRoomId;
+  // subType: detect from slotId suffix
+  _tqState.tileSelections[slotId].subType = slotId.endsWith('_wall') ? 'wall' : slotId.endsWith('_floor') ? 'floor' : null;
+  // Auto-init spacer for this slot
+  if (!_tqState.spacerSelections[slotId]) {
     const mmVal = parseInt(sz.mm.split('×')[0]);
-    _tqState.spacerSelections[roomId] = { use: mmVal >= 300, mm: 3, qty: 0 };
+    _tqState.spacerSelections[slotId] = { use: mmVal >= 300, mm: 3 };
   }
   _renderStep2().then(html => {
     const el = document.getElementById('tq-step-content');
@@ -22599,6 +22662,8 @@ function tqSelectSizeForRoom(roomId, sizeId) {
   });
 }
 
+// Legacy compat — single room selection
+function tqSelectSize(id) { tqSelectSizeForRoom(_tqState.rooms[0]?.id, id, _tqState.rooms[0]?.id); }
 function tqNextRoom() {
   // Navigate to next pending room in step 2
   _renderStep2().then(html => {
@@ -22608,7 +22673,6 @@ function tqNextRoom() {
 }
 
 // Legacy compat
-function tqSelectSize(id) { tqSelectSizeForRoom(_tqState.rooms[0]?.id, id); }
 
 // ───── STEP 3: SPACER (per room) ────────────────────────────
 function _renderStep3() {
@@ -22616,23 +22680,23 @@ function _renderStep3() {
 
   // Per-room spacer summary
   let totalSpacerPkts = 0;
-  const roomSpacers = rooms.map(r => {
-    const sel = _tqState.tileSelections[r.id] || {};
-    const sp = _tqState.spacerSelections[r.id] || { use: true, mm: 3 };
-    const roomSqft = r.areas?.reduce((s,a)=>s+(a.sqft||0), 0) || 0;
+  // Use slots so bathroom wall and floor get separate spacer selection
+  const slots3 = _getTileSlots();
+  const roomSpacers = slots3.map(slot => {
+    const r = slot.room;
+    const sel = _tqState.tileSelections[slot.id] || {};
+    const sp = _tqState.spacerSelections[slot.id] || { use: true, mm: 3 };
     const sz = sel.size;
-
-    if (!sp.use || !sz) return { room: r, use: false, sp, roomSqft, spacerQty: 0, sz };
-
-    const [mmL, mmW] = (sz.mm||'600×600').split('×').map(Number);
-    const sqftPerTile = (mmL/25.4) * (mmW/25.4) / 144;
+    const roomSqft = slot.sqft;
+    const sizeMm = sz ? sz.mm.split('×').map(Number) : [600,600];
+    const [mmL, mmW] = sizeMm;
+    const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+    const spacersPerTile = Math.max(mmL,mmW) >= 600 ? 6 : 4;
     const tilesNeeded = sqftPerTile > 0 ? Math.ceil(roomSqft / sqftPerTile) : 0;
-    // Spacers per tile: large tiles (≥600mm) need 6 (4 corners + 2 edges), smaller = 4
-    const spacersPerTile = Math.max(mmL, mmW) >= 800 ? 6 : Math.max(mmL, mmW) >= 600 ? 6 : 4;
-    const spacerQty = Math.ceil(tilesNeeded * spacersPerTile / 100); // packets of 100
-    totalSpacerPkts += sp.use ? spacerQty : 0;
-    return { room: r, use: sp.use, sp, roomSqft, spacerQty, sz, tilesNeeded, spacersPerTile, sqftPerTile };
-  });
+    const spacerQty = sp.use && sz ? Math.ceil(tilesNeeded * spacersPerTile / 100) : 0;
+    totalSpacerPkts += spacerQty;
+    return { room: r, slot, use: sp.use, sp, roomSqft, spacerQty, sz, tilesNeeded, spacersPerTile };
+  });;
 
   return `
   <div class="card" style="margin-bottom:10px">
@@ -22645,16 +22709,16 @@ function _renderStep3() {
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:700">${room.label||room.type}</div>
+          <div style="font-size:13px;font-weight:700">${slot?.label || room.label||room.type}</div>
           <div style="font-size:11px;color:var(--text3)">${sz?.mm||'No tile selected'}mm · ${roomSqft.toFixed(1)} sqft</div>
         </div>
         <div style="display:flex;gap:6px">
-          <button onclick="VW_TILES.tqSetSpacerForRoom('${room.id}',true)"
+          <button onclick="VW_TILES.tqSetSpacerForRoom('${slot?.id||room.id}',true)"
             style="padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
               border:${use?'2px solid var(--gold)':'1px solid var(--border)'};
               background:${use?'var(--gold-muted)':'var(--bg3)'};
               color:${use?'var(--gold)':'var(--text3)'}">Yes</button>
-          <button onclick="VW_TILES.tqSetSpacerForRoom('${room.id}',false)"
+          <button onclick="VW_TILES.tqSetSpacerForRoom('${slot?.id||room.id}',false)"
             style="padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;
               border:${!use?'2px solid var(--red)':'1px solid var(--border)'};
               background:${!use?'rgba(239,68,68,0.1)':'var(--bg3)'};
@@ -22664,7 +22728,7 @@ function _renderStep3() {
       ${use && sz ? `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3)">Joint width:</span>
-        ${[2,3,4,5].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${room.id}',${mm})"
+        ${[2,3,4,5].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
           style="padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;
             border:${(sp.mm||3)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${(sp.mm||3)===mm?'var(--gold-muted)':'var(--bg3)'};
@@ -22710,20 +22774,22 @@ function _renderStep4() {
   const rooms = _tqState.rooms;
   let totalAdhBags = 0, totalCemBags = 0, totalSandBags = 0;
 
-  const roomAdh = rooms.map(r => {
-    const sel = _tqState.tileSelections[r.id] || {};
+  // Use slots so bathroom wall and floor get separate adhesive calculation
+  const slots4 = _getTileSlots();
+  const roomAdh = slots4.map(slot => {
+    const r = slot.room;
+    const sel = _tqState.tileSelections[slot.id] || {};
     const sz = sel.size;
     const sizeMm = sz ? parseInt(sz.mm.split('×')[0]) : 300;
     const isLarge = sizeMm >= 600;
-    // Wall = Bathroom/Kitchen/explicitly tagged wall areas
-    const isWall = r.type==='Bathroom'||r.type==='Kitchen'||r.areas?.every(a=>a.subType==='wall');
-    const roomSqft = r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0;
-    const wallSqft = isWall ? roomSqft : (r.areas?.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0)||0);
-    const floorSqft = Math.max(0, roomSqft - wallSqft);
-    const isFloor = floorSqft > 0;
+    const isWall = slot.subType === 'wall';
+    const isFloor = slot.subType === 'floor' || !slot.subType;
+    const roomSqft = slot.sqft;
+    const wallSqft = isWall ? roomSqft : 0;
+    const floorSqft = isFloor ? roomSqft : 0;
 
     // Method: stored in adhesiveSelections, or auto-pick
-    const existingMethod = _tqState.adhesiveSelections?.[r.id]?.method;
+    const existingMethod = _tqState.adhesiveSelections?.[slot.id]?.method;
     // Wall: always adhesive. Floor + large tile: adhesive. Floor + small: mortar option
     const method = existingMethod || (isWall ? 'adhesive' : isLarge ? 'adhesive' : 'adhesive');
     const adhType = isLarge ? 'C2 Premium (T2)' : 'C1 Standard (T1)';
@@ -22745,14 +22811,15 @@ function _renderStep4() {
 
     // Auto-populate adhesiveSelections so BOM is always accurate
     if (!_tqState.adhesiveSelections) _tqState.adhesiveSelections = {};
-    _tqState.adhesiveSelections[r.id] = { method, adhBags, cemBags, sandBags };
+    _tqState.adhesiveSelections[slot.id] = { method, adhBags, cemBags, sandBags };
 
-    return { room: r, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags };
+    return { room: r, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags };
   });
 
-  // Aggregate totals
-  rooms.forEach(r => {
-    const adh = _tqState.adhesiveSelections?.[r.id];
+  // Aggregate totals from slots
+  _getTileSlots().forEach(slot => {
+    const adh = _tqState.adhesiveSelections?.[slot.id];
+    const r = slot.room;
     if (adh) {
       totalAdhBags += adh.adhBags || 0;
       totalCemBags += adh.cemBags || 0;
@@ -22771,22 +22838,22 @@ function _renderStep4() {
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
-          <div style="font-size:13px;font-weight:700">${room.label||room.type}</div>
-          <div style="font-size:10px;color:var(--text3)">${sz?.mm||'No tile'}mm · ${roomSqft.toFixed(1)} sqft · ${isWall?'Wall':'Floor'}${isLarge?' · Large format':''}</div>
+          <div style="font-size:13px;font-weight:700">${slot?.label||room.label||room.type}</div>
+          <div style="font-size:10px;color:var(--text3)">${sz?.mm||'No tile'}mm · ${roomSqft.toFixed(1)} sqft · ${isWall?'Wall tile':'Floor tile'}${isLarge?' · Large format':''}</div>
         </div>
         ${isLarge || isWall ? `<span style="font-size:10px;background:rgba(245,200,66,0.15);color:var(--gold);border-radius:5px;padding:2px 7px;font-weight:600">${isWall?'Wall':'Large'} · ${adhType}</span>` : ''}
       </div>
 
       ${!isWall && floorSqft > 0 && !isLarge ? `
       <div style="display:flex;gap:6px;margin-bottom:8px">
-        <button onclick="VW_TILES.setAdhMethodForRoom('${room.id}','adhesive')"
+        <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','adhesive')"
           style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='adhesive'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='adhesive'?'var(--gold-muted)':'var(--bg3)'}">
           <div style="font-weight:600;color:${method==='adhesive'?'var(--gold)':'var(--text)'}">Ready-mix Adhesive</div>
           <div style="font-size:9px;color:var(--text3)">${adhType} · ${floorCoverage} sqft/bag</div>
         </button>
-        <button onclick="VW_TILES.setAdhMethodForRoom('${room.id}','mortar')"
+        <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mortar')"
           style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='mortar'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='mortar'?'var(--gold-muted)':'var(--bg3)'}">
@@ -23171,21 +23238,24 @@ async function _renderStep8() {
   const weightCfg0 = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
 
   // Per-room tile BOM
-  const roomBOMs = rooms.map(r => {
-    const sel = st.tileSelections[r.id] || {};
+  // BOM uses slots so bathroom wall+floor tiles calculated separately
+  const slotsForBOM = _getTileSlots();
+  const roomBOMs = slotsForBOM.map(slot => {
+    const r = slot.room;
+    const sel = st.tileSelections[slot.id] || {};
     const sz = sel.size;
-    const roomSqft = r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0;
-    if (!sz || !roomSqft) return { room:r, roomSqft, boxes:0, sz:null, weightKg:0 };
+    const roomSqft = slot.sqft;
+    if (!sz || !roomSqft) return { room:r, slot, roomSqft, boxes:0, sz:null, weightKg:0 };
 
     const [mmL, mmW] = sz.mm.split('×').map(Number);
     const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
     const cfgEntry = (weightCfg0.sizes||[]).find(s=>s.mm===sz.mm);
-    const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:sqftPerTile<9?2:1);
+    const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
     const sqftPerBox = sqftPerTile * tilesPerBox;
     const boxes = sqftPerBox > 0 ? Math.ceil(roomSqft / sqftPerBox) : 0;
     const wtPerBox = cfgEntry?.weight_per_box || 20;
-    return { room:r, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox, cfgEntry };
-  });
+    return { room:r, slot, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox };
+  });;
 
   const boxesNeeded = roomBOMs.reduce((s,b)=>s+b.boxes, 0);
   const totalWeightKgCalc = roomBOMs.reduce((s,b)=>s+b.weightKg, 0);
@@ -23331,17 +23401,17 @@ async function _renderStep8() {
 
     <!-- Per-room tile breakdown -->
     ${roomBOMs.filter(b=>b.sz).map(b=>{
-      const sp = st.spacerSelections[b.room.id] || {};
-      const adh = st.adhesiveSelections[b.room.id] || {};
+      const sp = st.spacerSelections[b.slot?.id||b.room.id] || {};
+      const adh = st.adhesiveSelections[b.slot?.id||b.room.id] || {};
       const [mmL,mmW] = (b.sz.mm||"600×600").split("×").map(Number);
-      const spPerTile = Math.max(mmL,mmW)>=600?6:4;
+      const spPerTile = Math.max(mmL,mmW)>=600?6:4; // 6 for large tiles, 4 for standard
       const tiles = b.sqftPerTile>0?Math.ceil(b.roomSqft/b.sqftPerTile):0;
       const spPkts = sp.use ? Math.ceil(tiles*spPerTile/100) : 0;
       return `
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div>
-          <div style="font-size:13px;font-weight:700">${b.room.label||b.room.type}</div>
+          <div style="font-size:13px;font-weight:700">${b.slot?.label||b.room.label||b.room.type}</div>
           <div style="font-size:10px;color:var(--text3)">${b.sz.mm}mm · ${b.roomSqft.toFixed(1)} sqft · ${(b.sqftPerTile||0).toFixed(3)} sqft/tile · ${b.tilesPerBox} tiles/box</div>
         </div>
         <div style="text-align:right">
@@ -25254,7 +25324,7 @@ window.VW_TILES = {
   // Delivery + floor
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
-  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer,
+  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
