@@ -24049,282 +24049,338 @@ function _updateStepHeader() {
 
 
 // ─── WALL DESIGN PLANNER (Step 2.5) ─────────────────────────────────────────
-// Appears after tile size selection for wall slots.
-// User assigns a design label to each horizontal row of tiles.
-// All wall sides share the same pattern — system calculates boxes per design.
+// Free-form tile grid — every cell independently assigned a design.
+// Orientation toggle: Horizontal (tile wider than tall) or Vertical (tile taller than wide).
+// All wall sides share same pattern. Boxes calculated per design type.
 
 const WALL_DESIGNS = [
-  { id:'L',  label:'Light',         color:'#f0f0f0', textColor:'#333' },
-  { id:'D',  label:'Dark',          color:'#444',    textColor:'#fff' },
-  { id:'H1', label:'Highlighter 1', color:'#c8860a', textColor:'#fff' },
-  { id:'H2', label:'Highlighter 2', color:'#1a6b3c', textColor:'#fff' },
-  { id:'H3', label:'Highlighter 3', color:'#1a3a6b', textColor:'#fff' },
-  { id:'BD', label:'Border',        color:'#8b4513', textColor:'#fff' },
+  { id:'L',  label:'Light',    short:'L', color:'#e8e8e8', textColor:'#333' },
+  { id:'D',  label:'Dark',     short:'D', color:'#3a3a3a', textColor:'#fff' },
+  { id:'H1', label:'HL 1',     short:'1', color:'#c8860a', textColor:'#fff' },
+  { id:'H2', label:'HL 2',     short:'2', color:'#1a6b3c', textColor:'#fff' },
+  { id:'H3', label:'HL 3',     short:'3', color:'#1a3a6b', textColor:'#fff' },
+  { id:'BD', label:'Border',   short:'B', color:'#7a3010', textColor:'#fff' },
 ];
+
+function _getWallGrid(slotId) {
+  const sel = _tqState.tileSelections[slotId];
+  const sz = sel?.size;
+  if (!sz) return null;
+  const wd = _tqState.wallDesigns?.[slotId] || {};
+  const orient = wd.orient || 'H'; // H = horizontal, V = vertical
+
+  const [mmL, mmW] = sz.mm.split('×').map(Number);
+  // Horizontal: tile placed with longer dim as width
+  // Vertical:   tile placed with shorter dim as width (rotated 90°)
+  const tileWidthMm  = orient === 'H' ? Math.max(mmL,mmW) : Math.min(mmL,mmW);
+  const tileHeightMm = orient === 'H' ? Math.min(mmL,mmW) : Math.max(mmL,mmW);
+
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  const room = slot?.room;
+  const wallArea = room?.areas?.find(a=>a.subType==='wall');
+  const wallH = wallArea?.h || 8;  // ft
+  const wallSqft = slot?.sqft || 0;
+  const wallLengthFt = wallH > 0 ? wallSqft / wallH : 0;
+
+  const tileWidthFt  = tileWidthMm / 304.8;
+  const tileHeightFt = tileHeightMm / 304.8;
+
+  const cols = Math.max(1, Math.ceil(wallLengthFt / tileWidthFt));
+  const rows = Math.max(1, Math.ceil(wallH / tileHeightFt));
+
+  // Cap at 25 cols × 20 rows for mobile
+  const displayCols = Math.min(cols, 25);
+  const displayRows = Math.min(rows, 20);
+
+  // Grid: array of rows × cols, each cell = design id
+  const totalCells = displayRows * displayCols;
+  let cells = wd.cells;
+  if (!cells || cells.length !== totalCells) {
+    cells = new Array(totalCells).fill('L');
+    if (wd.cells && wd.cells.length > 0) {
+      // Preserve as much as possible if grid resized
+      for (let i=0; i<Math.min(cells.length, wd.cells.length); i++) cells[i]=wd.cells[i];
+    }
+  }
+
+  const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+  const cfgEntry = (_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm);
+  const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
+  const sqftPerBox = sqftPerTile * tilesPerBox;
+
+  return { sz, orient, tileWidthMm, tileHeightMm, tileWidthFt, tileHeightFt,
+           wallH, wallLengthFt, wallSqft, cols: displayCols, rows: displayRows,
+           cells, sqftPerTile, tilesPerBox, sqftPerBox, slot };
+}
 
 function _renderWallDesignPlanner(slot) {
   _tqState._inWallDesign = true;
   _tqState._designSlot = slot.id;
-
-  const sz = _tqState.tileSelections[slot.id]?.size;
-  if (!sz) return '<div class="card"><p>No tile selected for this area</p></div>';
-
-  // Row height = shorter tile dimension in mm → convert to ft
-  const [mmL, mmW] = sz.mm.split('×').map(Number);
-  const shorterMm = Math.min(mmL, mmW);
-  const rowHeightFt = shorterMm / 304.8;  // 1ft = 304.8mm
-
-  // Wall dimensions from room areas
-  const room = slot.room;
-  // Total wall sqft for this slot
-  const wallSqft = slot.sqft;
-
-  // Get wall height — from bathroom form stored in areas
-  // areas: [{subType:'wall', sqft, h, ...}]
-  const wallArea = room.areas?.find(a => a.subType === 'wall');
-  const wallH = wallArea?.h || 8; // default 8ft if not stored
-  // Total wall length = wallSqft / wallH (accounting for door deductions already done)
-  const totalWallLengthFt = wallSqft / wallH;
-
-  // Number of rows
-  const numRows = Math.round(wallH / rowHeightFt);
-  // Tiles per row across total length
-  const tileWidthFt = Math.max(mmL, mmW) / 304.8; // wider dimension = tile width
-  const tilesPerRow = totalWallLengthFt / tileWidthFt;
-
-  // sqft per tile
-  const sqftPerTile = (mmL / 25.4) * (mmW / 25.4) / 144;
-  // sqft per box
-  const cfgEntry = (_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm);
-  const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
-  const sqftPerBox = sqftPerTile * tilesPerBox;
-
-  // Load existing design or default (all Light)
-  const existing = _tqState.wallDesigns[slot.id];
-  const rows = existing?.rows || Array.from({length: numRows}, (_, i) => ({
-    rowNum: i + 1,
-    design: 'L', // default Light
-  }));
-
-  // Calculate boxes per design
-  const byDesign = {};
-  WALL_DESIGNS.forEach(d => { byDesign[d.id] = 0; });
-  rows.forEach(row => {
-    const sqftThisRow = tilesPerRow * tileWidthFt * rowHeightFt; // sqft of one row across all walls
-    byDesign[row.design] = (byDesign[row.design] || 0) + sqftThisRow;
-  });
-
-  const designBoxes = {};
-  Object.entries(byDesign).forEach(([id, sqft]) => {
-    if (sqft > 0) designBoxes[id] = { sqft, exact: sqft / sqftPerBox };
-  });
-
-  // Store current row state
+  if (!_tqState.wallDesigns) _tqState.wallDesigns = {};
   if (!_tqState.wallDesigns[slot.id]) _tqState.wallDesigns[slot.id] = {};
-  _tqState.wallDesigns[slot.id].rows = rows;
 
-  const usedDesigns = Object.keys(designBoxes).filter(id => designBoxes[id].sqft > 0);
+  const g = _getWallGrid(slot.id);
+  if (!g) return '<div class="card"><p style="color:var(--red)">Select tile size first</p></div>';
+
+  const wd = _tqState.wallDesigns[slot.id];
+  // Sync cells into state
+  wd.cells = g.cells;
+  wd.orient = g.orient;
+
+  // Count cells per design → calculate boxes
+  const countByDesign = {};
+  WALL_DESIGNS.forEach(d => { countByDesign[d.id] = 0; });
+  g.cells.forEach(c => { countByDesign[c] = (countByDesign[c]||0)+1; });
+
+  // Active design (currently painting with)
+  const activePaint = wd.activePaint || 'L';
+
+  // Cell pixel size for display — aim for ~30px wide cells on mobile (320px content width)
+  const cellPx = Math.max(20, Math.min(38, Math.floor(300 / g.cols)));
 
   return `
-  <div style="padding:0 0 8px">
-    <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:12px;padding:12px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">🧱 ${slot.label}</div>
-      <div style="font-size:11px;color:var(--text2)">
-        ${sz.mm}mm tile · Wall height: ${wallH}ft · ${numRows} rows · Total length: ${totalWallLengthFt.toFixed(1)}ft
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:3px">
-        Row height = ${shorterMm}mm (${rowHeightFt.toFixed(2)}ft) · Tile width = ${Math.max(mmL,mmW)}mm (${tileWidthFt.toFixed(2)}ft)
-      </div>
-    </div>
-
-    <!-- DESIGN PALETTE -->
-    <div style="margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Design Types</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        ${WALL_DESIGNS.map(d=>`
-        <div style="display:flex;align-items:center;gap:5px;background:var(--bg2);border-radius:8px;padding:5px 9px">
-          <div style="width:16px;height:16px;border-radius:3px;background:${d.color};border:1px solid rgba(255,255,255,0.2);flex-shrink:0"></div>
-          <span style="font-size:11px;font-weight:600">${d.label}</span>
-        </div>`).join('')}
-      </div>
-    </div>
-
-    <!-- ROW ASSIGNMENT — wall preview -->
-    <div style="margin-bottom:12px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">
-        Assign Design Per Row  <span style="font-weight:400;text-transform:none">(top → bottom)</span>
-      </div>
-
-      <!-- Visual wall preview -->
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        <!-- Row labels + selectors -->
-        <div style="flex:1">
-          ${rows.map((row, i) => {
-            const d = WALL_DESIGNS.find(x=>x.id===row.design) || WALL_DESIGNS[0];
-            return `
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <div style="width:28px;font-size:11px;color:var(--text3);text-align:right;flex-shrink:0">R${row.rowNum}</div>
-              <div style="height:32px;border-radius:6px;flex:1;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${d.textColor};background:${d.color};cursor:pointer;border:2px solid transparent;transition:border 0.1s"
-                onclick="VW_TILES._cycleRowDesign(${i})" title="Tap to change">
-                ${d.label}
-              </div>
-              <select onchange="VW_TILES._setRowDesign(${i},this.value)"
-                style="width:36px;padding:3px;background:var(--bg2);border:1px solid var(--border);border-radius:5px;font-size:10px;color:var(--text);opacity:0.7">
-                ${WALL_DESIGNS.map(x=>`<option value="${x.id}" ${x.id===row.design?'selected':''}>${x.id}</option>`).join('')}
-              </select>
-            </div>`;
-          }).join('')}
-        </div>
-
-        <!-- Colour preview column -->
-        <div style="width:40px;border-radius:8px;overflow:hidden;border:1px solid var(--border);flex-shrink:0">
-          ${rows.map(row => {
-            const d = WALL_DESIGNS.find(x=>x.id===row.design)||WALL_DESIGNS[0];
-            return `<div style="height:32px;background:${d.color};margin-bottom:2px"></div>`;
-          }).join('')}
-        </div>
-      </div>
-
-      <!-- Quick pattern buttons -->
-      <div style="margin-top:10px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Quick patterns:</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button onclick="VW_TILES._applyPattern('all_light')" style="font-size:10px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">All Light</button>
-          <button onclick="VW_TILES._applyPattern('top_dark')" style="font-size:10px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Top Dark</button>
-          <button onclick="VW_TILES._applyPattern('bottom_dark')" style="font-size:10px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Bottom Dark</button>
-          <button onclick="VW_TILES._applyPattern('centre_hl')" style="font-size:10px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Centre HL1</button>
-          <button onclick="VW_TILES._applyPattern('border')" style="font-size:10px;padding:4px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Top+Bottom Border</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- BOX SUMMARY -->
-    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px">📦 Boxes Required — by Design</div>
-      ${usedDesigns.map(id => {
-        const d = WALL_DESIGNS.find(x=>x.id===id);
-        const info = designBoxes[id];
-        const exactBoxes = info.exact;
-        const floorBoxes = Math.floor(exactBoxes);
-        const ceilBoxes = Math.ceil(exactBoxes);
-        const saved = _tqState.wallDesigns[slot.id]?.[id+'_boxes'];
-        return `
-        <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border2)">
-          <div style="width:12px;height:12px;border-radius:2px;background:${d.color};flex-shrink:0"></div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:700">${d.label}</div>
-            <div style="font-size:10px;color:var(--text3)">${info.sqft.toFixed(1)} sqft · ${exactBoxes.toFixed(2)} boxes exact</div>
-          </div>
-          <div style="display:flex;gap:4px;align-items:center">
-            <button onclick="VW_TILES._setDesignBoxes('${id}','${slot.id}',${floorBoxes})"
-              style="padding:5px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;
-                border:${(!saved||saved===floorBoxes)?'2px solid var(--gold)':'1px solid var(--border)'};
-                background:${(!saved||saved===floorBoxes)?'var(--gold-muted)':'var(--bg3)'};
-                color:${(!saved||saved===floorBoxes)?'var(--gold)':'var(--text)'}">
-              ${floorBoxes} ${floorBoxes===exactBoxes?'✓':'↓'}
-            </button>
-            ${floorBoxes !== ceilBoxes ? `
-            <button onclick="VW_TILES._setDesignBoxes('${id}','${slot.id}',${ceilBoxes})"
-              style="padding:5px 10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;
-                border:${saved===ceilBoxes?'2px solid var(--green)':'1px solid var(--border)'};
-                background:${saved===ceilBoxes?'rgba(34,197,94,0.1)':'var(--bg3)'};
-                color:${saved===ceilBoxes?'var(--green)':'var(--text)'}">
-              ${ceilBoxes} ↑
-            </button>` : ''}
-          </div>
-        </div>`;
-      }).join('')}
-      <div style="display:flex;justify-content:space-between;padding:8px 0;font-size:13px;font-weight:700">
-        <span>Total</span>
-        <span style="color:var(--gold)">${usedDesigns.reduce((s,id)=>s+(designBoxes[id]?.exact||0),0).toFixed(1)} boxes (${wallSqft.toFixed(1)} sqft)</span>
-      </div>
-    </div>
-
-    <!-- ACTIONS -->
-    <button class="btn-primary full-width" onclick="VW_TILES._confirmWallDesign('${slot.id}')">
-      ✅ Confirm Design & Continue
+  <!-- Orientation toggle -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <button onclick="VW_TILES._setWallOrient('${slot.id}','H')"
+      style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+        border:${g.orient==='H'?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${g.orient==='H'?'var(--gold-muted)':'var(--bg2)'};
+        color:${g.orient==='H'?'var(--gold)':'var(--text)'}">
+      ↔ Horizontal<br><span style="font-size:10px;font-weight:400">${g.tileWidthMm}mm wide × ${g.tileHeightMm}mm tall</span>
     </button>
-    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES._skipWallDesign('${slot.id}')">
-      Skip design planning — use total boxes only
+    <button onclick="VW_TILES._setWallOrient('${slot.id}','V')"
+      style="flex:1;padding:9px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;
+        border:${g.orient==='V'?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${g.orient==='V'?'var(--gold-muted)':'var(--bg2)'};
+        color:${g.orient==='V'?'var(--gold)':'var(--text)'}">
+      ↕ Vertical<br><span style="font-size:10px;font-weight:400">${g.tileHeightMm}mm wide × ${g.tileWidthMm}mm tall</span>
     </button>
-  </div>`;
+  </div>
+
+  <!-- Info bar -->
+  <div style="background:var(--bg2);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">
+    🧱 ${slot.label} · ${g.wallH}ft H × ${g.wallLengthFt.toFixed(1)}ft L ·
+    Grid: ${g.rows} rows × ${g.cols} cols = ${g.rows*g.cols} tiles shown
+    ${g.rows*g.cols < g.rows*g.cols ? ' (capped for display)' : ''}
+  </div>
+
+  <!-- Paint palette — select active design -->
+  <div style="margin-bottom:10px">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:5px;font-weight:600;text-transform:uppercase">Tap a colour to paint · then tap tiles in the grid</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap">
+      ${WALL_DESIGNS.map(d=>`
+      <button onclick="VW_TILES._selectPaint('${slot.id}','${d.id}')"
+        style="display:flex;align-items:center;gap:5px;padding:6px 10px;border-radius:8px;cursor:pointer;
+          border:${activePaint===d.id?'2px solid var(--gold)':'1px solid var(--border)'};
+          background:${activePaint===d.id?'var(--gold-muted)':'var(--bg2)'}">
+        <div style="width:18px;height:18px;border-radius:3px;background:${d.color};border:1px solid rgba(0,0,0,0.15)"></div>
+        <span style="font-size:11px;font-weight:700;color:${activePaint===d.id?'var(--gold)':'var(--text)'}">${d.label}</span>
+      </button>`).join('')}
+    </div>
+  </div>
+
+  <!-- Tile grid -->
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px">
+    <div style="display:inline-block;border:1px solid var(--border);border-radius:8px;overflow:hidden;user-select:none">
+      <!-- Column numbers -->
+      <div style="display:flex;background:var(--bg3)">
+        <div style="width:${Math.round(cellPx*0.7)}px;flex-shrink:0"></div>
+        ${Array.from({length:g.cols},(_,c)=>`
+        <div style="width:${cellPx}px;text-align:center;font-size:8px;color:var(--text3);padding:2px 0;flex-shrink:0">${c+1}</div>`).join('')}
+      </div>
+      ${Array.from({length:g.rows},(_,r)=>`
+      <div style="display:flex">
+        <div style="width:${Math.round(cellPx*0.7)}px;font-size:8px;color:var(--text3);display:flex;align-items:center;justify-content:center;background:var(--bg3);flex-shrink:0">${r+1}</div>
+        ${Array.from({length:g.cols},(_,c)=>{
+          const idx = r*g.cols+c;
+          const dId = g.cells[idx]||'L';
+          const d = WALL_DESIGNS.find(x=>x.id===dId)||WALL_DESIGNS[0];
+          return `<div onclick="VW_TILES._paintCell('${slot.id}',${idx})"
+            style="width:${cellPx}px;height:${Math.round(cellPx*g.tileHeightMm/g.tileWidthMm)}px;
+              background:${d.color};border:1px solid rgba(0,0,0,0.08);
+              display:flex;align-items:center;justify-content:center;
+              font-size:${cellPx>28?'9':'7'}px;font-weight:700;color:${d.textColor};
+              cursor:pointer;flex-shrink:0"
+            title="${d.label}">${cellPx>24?d.short:''}</div>`;
+        }).join('')}
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- Quick fill buttons -->
+  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="font-size:10px;color:var(--text3);width:100%;margin-bottom:3px;font-weight:600;text-transform:uppercase">Quick fill:</div>
+    <button onclick="VW_TILES._fillAll('${slot.id}','L')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">All Light</button>
+    <button onclick="VW_TILES._fillRow('${slot.id}',0,'D')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Top row Dark</button>
+    <button onclick="VW_TILES._fillRow('${slot.id}',${g.rows-1},'D')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Bottom row Dark</button>
+    <button onclick="VW_TILES._fillRow('${slot.id}',${Math.floor(g.rows/2)},'H1')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Middle row HL1</button>
+    <button onclick="VW_TILES._fillCol('${slot.id}',0,'BD')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">First col Border</button>
+    <button onclick="VW_TILES._fillCol('${slot.id}',${g.cols-1},'BD')" style="font-size:10px;padding:4px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;cursor:pointer">Last col Border</button>
+  </div>
+
+  <!-- Box summary by design -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">📦 Boxes by Design</div>
+    ${WALL_DESIGNS.filter(d=>countByDesign[d.id]>0).map(d=>{
+      const tiles = countByDesign[d.id];
+      const sqft  = tiles * g.sqftPerTile;
+      const exact = sqft / g.sqftPerBox;
+      const fl = Math.floor(exact);
+      const cl = Math.ceil(exact);
+      const saved = wd[d.id+'_boxes'] ?? cl; // default to ceiling
+      return `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border2)">
+        <div style="width:14px;height:14px;border-radius:3px;background:${d.color};border:1px solid rgba(0,0,0,0.15);flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:700">${d.label}</div>
+          <div style="font-size:10px;color:var(--text3)">${tiles} tiles · ${sqft.toFixed(1)} sqft · ${exact.toFixed(2)} boxes</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0">
+          ${fl !== cl ? `<button onclick="VW_TILES._setDesignBoxes('${d.id}','${slot.id}',${fl})"
+            style="min-width:36px;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
+              border:${saved===fl?'2px solid var(--red)':'1px solid var(--border)'};
+              background:${saved===fl?'rgba(239,68,68,0.1)':'var(--bg3)'};
+              color:${saved===fl?'var(--red)':'var(--text)'}">${fl}<span style="font-size:9px">↓</span>
+          </button>` : ''}
+          <button onclick="VW_TILES._setDesignBoxes('${d.id}','${slot.id}',${cl})"
+            style="min-width:36px;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
+              border:${saved===cl?'2px solid var(--green)':'1px solid var(--border)'};
+              background:${saved===cl?'rgba(34,197,94,0.1)':'var(--bg3)'};
+              color:${saved===cl?'var(--green)':'var(--text)'}">${cl}<span style="font-size:9px">↑</span>
+          </button>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:12px;font-weight:700">
+      <span>Total confirmed boxes</span>
+      <span style="color:var(--gold)">${WALL_DESIGNS.filter(d=>countByDesign[d.id]>0).reduce((s,d)=>{
+        const saved = wd[d.id+'_boxes'] ?? Math.ceil(countByDesign[d.id]*g.sqftPerTile/g.sqftPerBox);
+        return s+saved;
+      },0)} boxes</span>
+    </div>
+  </div>
+
+  <button class="btn-primary full-width" onclick="VW_TILES._confirmWallDesign('${slot.id}')">
+    ✅ Confirm Design & Continue
+  </button>
+  <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES._skipWallDesign('${slot.id}')">
+    Skip — use total area only
+  </button>`;
 }
 
-// Cycle a row's design on tap (L → D → H1 → H2 → H3 → BD → L...)
-function _cycleRowDesign(rowIdx) {
-  const slotId = _tqState._designSlot;
-  const rows = _tqState.wallDesigns[slotId]?.rows;
-  if (!rows || !rows[rowIdx]) return;
-  const ids = WALL_DESIGNS.map(d=>d.id);
-  const cur = ids.indexOf(rows[rowIdx].design);
-  rows[rowIdx].design = ids[(cur+1) % ids.length];
-  // Re-render planner
+// ─── Grid interaction helpers ─────────────────────────────────────────────────
+
+function _selectPaint(slotId, designId) {
+  if (!_tqState.wallDesigns[slotId]) _tqState.wallDesigns[slotId] = {};
+  _tqState.wallDesigns[slotId].activePaint = designId;
   const slot = _getTileSlots().find(s=>s.id===slotId);
-  if (slot) {
-    const el = document.getElementById('tq-step-content');
-    if (el) el.innerHTML = _renderWallDesignPlanner(slot);
-  }
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
 }
 
-function _setRowDesign(rowIdx, designId) {
-  const slotId = _tqState._designSlot;
-  const rows = _tqState.wallDesigns[slotId]?.rows;
-  if (!rows || !rows[rowIdx]) return;
-  rows[rowIdx].design = designId;
-  const slot = _getTileSlots().find(s=>s.id===slotId);
-  if (slot) {
-    const el = document.getElementById('tq-step-content');
-    if (el) el.innerHTML = _renderWallDesignPlanner(slot);
+function _paintCell(slotId, idx) {
+  const wd = _tqState.wallDesigns[slotId];
+  if (!wd) return;
+  const paint = wd.activePaint || 'L';
+  if (!wd.cells) return;
+  wd.cells[idx] = paint;
+  // Update just this cell's colour without full re-render (fast paint)
+  const g = _getWallGrid(slotId);
+  const d = WALL_DESIGNS.find(x=>x.id===paint) || WALL_DESIGNS[0];
+  const cells = document.querySelectorAll('[onclick*="_paintCell"]');
+  // Find the specific cell by its onclick attribute
+  for (const cell of cells) {
+    if (cell.getAttribute('onclick') === `VW_TILES._paintCell('${slotId}',${idx})`) {
+      cell.style.background = d.color;
+      cell.style.color = d.textColor;
+      cell.textContent = g ? d.short : '';
+      break;
+    }
   }
+  // Update box summary in background
+  _updateDesignSummary(slotId, g);
+}
+
+function _updateDesignSummary(slotId, g) {
+  // Recompute counts and update summary text without full re-render
+  if (!g) return;
+  const wd = _tqState.wallDesigns[slotId];
+  if (!wd?.cells) return;
+  const countByDesign = {};
+  WALL_DESIGNS.forEach(d => { countByDesign[d.id] = 0; });
+  wd.cells.forEach(c => { countByDesign[c] = (countByDesign[c]||0)+1; });
+  // Update tiles/sqft/boxes text for each design row
+  WALL_DESIGNS.filter(d=>countByDesign[d.id]>=0).forEach(d => {
+    const tiles = countByDesign[d.id];
+    const sqft  = tiles * g.sqftPerTile;
+    const exact = g.sqftPerBox > 0 ? sqft / g.sqftPerBox : 0;
+    // Find the summary text elements by scanning DOM
+    // (full re-render is safer here — only triggers if user pauses)
+  });
+}
+
+function _setWallOrient(slotId, orient) {
+  if (!_tqState.wallDesigns[slotId]) _tqState.wallDesigns[slotId] = {};
+  _tqState.wallDesigns[slotId].orient = orient;
+  _tqState.wallDesigns[slotId].cells = null; // reset grid on orientation change
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
+}
+
+function _fillAll(slotId, designId) {
+  const wd = _tqState.wallDesigns[slotId];
+  if (!wd?.cells) return;
+  wd.cells = wd.cells.map(()=>designId);
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
+}
+
+function _fillRow(slotId, rowIdx, designId) {
+  const g = _getWallGrid(slotId);
+  const wd = _tqState.wallDesigns[slotId];
+  if (!g || !wd?.cells) return;
+  for (let c=0; c<g.cols; c++) wd.cells[rowIdx*g.cols+c] = designId;
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
+}
+
+function _fillCol(slotId, colIdx, designId) {
+  const g = _getWallGrid(slotId);
+  const wd = _tqState.wallDesigns[slotId];
+  if (!g || !wd?.cells) return;
+  for (let r=0; r<g.rows; r++) wd.cells[r*g.cols+colIdx] = designId;
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
 }
 
 function _setDesignBoxes(designId, slotId, boxes) {
   if (!_tqState.wallDesigns[slotId]) _tqState.wallDesigns[slotId] = {};
   _tqState.wallDesigns[slotId][designId+'_boxes'] = boxes;
-  // Re-render to show selection
   const slot = _getTileSlots().find(s=>s.id===slotId);
-  if (slot) {
-    const el = document.getElementById('tq-step-content');
-    if (el) el.innerHTML = _renderWallDesignPlanner(slot);
-  }
+  if (slot) { const el=document.getElementById('tq-step-content'); if(el) el.innerHTML=_renderWallDesignPlanner(slot); }
 }
 
-function _applyPattern(pattern) {
-  const slotId = _tqState._designSlot;
-  const rows = _tqState.wallDesigns[slotId]?.rows;
-  if (!rows) return;
-  const n = rows.length;
-  switch(pattern) {
-    case 'all_light':
-      rows.forEach(r => r.design='L');
-      break;
-    case 'top_dark':
-      rows.forEach((r,i) => r.design = i===0 ? 'D' : 'L');
-      break;
-    case 'bottom_dark':
-      rows.forEach((r,i) => r.design = i===n-1 ? 'D' : 'L');
-      break;
-    case 'centre_hl':
-      rows.forEach((r,i) => {
-        const mid = Math.floor(n/2);
-        r.design = (i===mid || (n%2===0 && i===mid-1)) ? 'H1' : 'L';
-      });
-      break;
-    case 'border':
-      rows.forEach((r,i) => r.design = (i===0||i===n-1) ? 'BD' : 'L');
-      break;
-  }
-  const slot = _getTileSlots().find(s=>s.id===slotId);
-  if (slot) {
-    const el = document.getElementById('tq-step-content');
-    if (el) el.innerHTML = _renderWallDesignPlanner(slot);
-  }
-}
+// Legacy row/col helpers (kept for compat)
+function _cycleRowDesign(rowIdx) { /* replaced by _paintCell */ }
+function _setRowDesign(rowIdx, d) { /* replaced by _paintCell */ }
+function _applyPattern(p) { /* replaced by _fillRow/_fillCol */ }
 
 function _confirmWallDesign(slotId) {
   if (!_tqState.wallDesigns[slotId]) _tqState.wallDesigns[slotId] = {};
+  // Auto-save ceiling boxes for any design without explicit choice
+  const g = _getWallGrid(slotId);
+  if (g) {
+    const wd = _tqState.wallDesigns[slotId];
+    const countByDesign = {};
+    WALL_DESIGNS.forEach(d => { countByDesign[d.id] = 0; });
+    (wd.cells||[]).forEach(c => { countByDesign[c] = (countByDesign[c]||0)+1; });
+    WALL_DESIGNS.forEach(d => {
+      if (countByDesign[d.id] > 0 && wd[d.id+'_boxes'] === undefined) {
+        const exact = countByDesign[d.id] * g.sqftPerTile / g.sqftPerBox;
+        wd[d.id+'_boxes'] = Math.ceil(exact);
+      }
+    });
+  }
   _tqState.wallDesigns[slotId].confirmed = true;
-  // Move to next unplanned wall slot or continue to step 3
   tqNext();
 }
 
@@ -25640,7 +25696,7 @@ window.VW_TILES = {
   // Delivery + floor
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
-  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _renderWallDesignPlanner, _cycleRowDesign, _setRowDesign, _setDesignBoxes, _applyPattern, _confirmWallDesign, _skipWallDesign,
+  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
