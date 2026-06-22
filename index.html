@@ -22219,7 +22219,10 @@ async function _renderStep0() {
 
     <!-- Add contractor form (hidden by default) -->
     <div id="tq-cont-add-form" style="display:none;background:var(--bg2);border-radius:10px;padding:10px;margin-top:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Add Contractor</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase">Add Contractor</div>
+        <button onclick="VW_TILES._showAddContractorForm()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0;line-height:1">✕</button>
+      </div>
       <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0;flex:1">
           <label>Name *</label>
@@ -22385,13 +22388,20 @@ async function _saveNewCustomer() {
   _tqState.customer.site = site;
   _tqState.customer._found = true;
 
-  // Save to customers table
+  // Check if phone already exists before inserting
   try {
-    const { data } = await VW_DB.client.from('customers')
-      .insert({ name, phone, area: site })
-      .select().single();
-    if (data?.id) _tqState.customer.id = data.id;
-  } catch(e) { /* may fail if phone already exists */ }
+    const { data: existing } = await VW_DB.client.from('customers')
+      .select('id, name').eq('phone', phone).maybeSingle();
+    if (existing) {
+      // Phone exists — update name/area and link
+      _tqState.customer.id = existing.id;
+      await VW_DB.client.from('customers').update({ name, area: site }).eq('id', existing.id);
+    } else {
+      const { data } = await VW_DB.client.from('customers')
+        .insert({ name, phone, area: site }).select().single();
+      if (data?.id) _tqState.customer.id = data.id;
+    }
+  } catch(e) { console.error('Customer save error:', e); }
 
   showToast(`${name} saved ✓`, 'success');
   // Re-render result area to show confirmed card
@@ -22428,9 +22438,10 @@ function _debouncedContractorSearch(val) {
   _contSearchTimer = setTimeout(async () => {
     try {
       const { data } = await VW_DB.client
-        .from('contractor_profiles')
-        .select('id, name, phone, tier, trade, business_name, total_spend')
-        .or(`name.ilike.%${val}%,phone.ilike.%${val}%,business_name.ilike.%${val}%`)
+        .from('contractors')
+        .select('id, name, phone, company_name, professional_type, approval_status, loyalty_points')
+        .or(`name.ilike.%${val}%,phone.ilike.%${val}%,company_name.ilike.%${val}%`)
+        .eq('approval_status','approved')
         .limit(6);
 
       if (!data?.length) {
@@ -22443,12 +22454,13 @@ function _debouncedContractorSearch(val) {
       }
 
       if (resultsEl) resultsEl.innerHTML = data.map(ct => `
-        <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:${JSON.stringify(ct.name)},phone:'${ct.phone||''}',tier:'${ct.tier||''}',trade:'${ct.trade||''}',isExisting:true,commissionPct:2,customCommission:false})"
+        <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:${JSON.stringify(ct.name||'')},phone:'${ct.phone||''}',trade:'${ct.professional_type||''}',company:'${(ct.company_name||'').replace(/'/g,'')}',isExisting:true,commissionPct:2,customCommission:false,loyaltyPoints:${ct.loyalty_points||0}})"
           style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:13px;font-weight:600">${ct.name}</div>
-            <div style="font-size:11px;color:var(--text3)">${ct.phone||''}${ct.trade?' · '+ct.trade:''}${ct.tier?' · '+ct.tier:''}</div>
-            ${ct.business_name?`<div style="font-size:10px;color:var(--text3)">${ct.business_name}</div>`:''}
+            <div style="font-size:11px;color:var(--text3)">${ct.phone||''}${ct.professional_type?' · '+ct.professional_type:''}</div>
+            ${ct.company_name?`<div style="font-size:10px;color:var(--text3)">${ct.company_name}</div>`:''}
+            <div style="font-size:10px;color:var(--gold)">${ct.loyalty_points||0} loyalty pts</div>
           </div>
           <span style="color:var(--gold);font-size:13px;font-weight:700;flex-shrink:0">Link →</span>
         </div>`).join('');
@@ -22476,7 +22488,7 @@ async function _sendContractorRegLink() {
   const name  = document.getElementById('tq-new-cont-name')?.value.trim();
   const phone = document.getElementById('tq-new-cont-phone')?.value.trim();
   if (!phone || phone.length < 10) { showToast('Enter phone number first', 'warn'); return; }
-  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'9038010175' });
+  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'8712697930' });
   const msg = encodeURIComponent(
     `Hi ${name||''}! V Wholesale, Vijayawada invites you to join the Contractor Club.\n\nRegister to earn 2% commission on every sale you refer:\nhttps://hmehtavw.github.io/vwholesale-app/?contractor=register&phone=${phone}\n\nBenefits: Commission tracking, reward points, bank transfer or store credit.\n\nFor queries: ${storeInfo.phone}`
   );
@@ -22491,11 +22503,29 @@ async function _sendContractorRegLink() {
 async function addAndLinkContractor() {
   const name = document.getElementById('tq-new-cont-name')?.value.trim();
   const phone = document.getElementById('tq-new-cont-phone')?.value.trim();
+  const trade = document.getElementById('tq-new-cont-trade')?.value;
+  const biz   = document.getElementById('tq-new-cont-biz')?.value.trim();
   if (!name || !phone || phone.length < 10) { showToast('Enter name and 10-digit phone','warn'); return; }
-  // Link immediately (registration happens via WhatsApp)
-  linkContractor({ id: null, name, phone, isExisting: false, commissionPct: 2, customCommission: false });
+
+  // Check if contractor already exists
+  try {
+    const { data: existing } = await VW_DB.client.from('contractors')
+      .select('id, name, approval_status').eq('phone', phone).maybeSingle();
+    if (existing) {
+      linkContractor({ id: existing.id, name: existing.name||name, phone, isExisting: true, commissionPct: 2, customCommission: false });
+      showToast(`${existing.name||name} already registered — linked ✓`, 'success');
+      return;
+    }
+    // New contractor — insert
+    const { data: inserted } = await VW_DB.client.from('contractors')
+      .insert({ name, phone, company_name: biz||null, professional_type: trade||null, approval_status:'pending', signup_source:'staff' })
+      .select().single();
+    linkContractor({ id: inserted?.id||null, name, phone, trade, isExisting: false, commissionPct: 2, customCommission: false });
+  } catch(e) {
+    linkContractor({ id: null, name, phone, isExisting: false, commissionPct: 2, customCommission: false });
+  }
   // Send WhatsApp registration message
-  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'9000000001' });
+  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'8712697930' });
   const msg = encodeURIComponent(
     `Hi ${name}! You've been linked to a tile quotation at V Wholesale, Vijayawada.
 
@@ -22804,32 +22834,46 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
     </div>`;
 
-  if (def.measureType === 'bathroom') return `
+  if (def.measureType === 'bathroom') {
+    // Pre-fill from existing room data when editing
+    const ba = p?.areas || [];
+    const wallArea = ba.find(a=>a.subType==='wall') || {};
+    const floorArea = ba.find(a=>a.subType==='floor'||!a.subType) || {};
+    const bh   = wallArea.h   !== undefined ? wallArea.h   : (p?.h   || '');
+    const bw1l = wallArea.w1l !== undefined ? wallArea.w1l : (p?.w1l || '');
+    const bw2w = wallArea.w2w !== undefined ? wallArea.w2w : (p?.w2w || '');
+    const bw3l = wallArea.w3l !== undefined ? wallArea.w3l : (bw1l   || '');
+    const bw4w = wallArea.w4w !== undefined ? wallArea.w4w : (p?.w4w || '');
+    const bdw  = wallArea.dw  !== undefined ? wallArea.dw  : (p?.dw  || '');
+    const bdh  = wallArea.dh  !== undefined ? wallArea.dh  : (p?.dh  || '');
+    const bfl  = floorArea.l  !== undefined ? floorArea.l  : (p?.fl  || '');
+    const bfw  = floorArea.w  !== undefined ? floorArea.w  : (p?.fw  || '');
+    const bwaste = p?.wastage || '';
+    return `
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 1 (Long Wall)</div>
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" placeholder="8" min="1" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-w1l" placeholder="5" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" value="${bh}" placeholder="8" min="1" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-w1l" value="${bw1l}" placeholder="10" min="0.5" step="0.5"></div>
     </div>
     <div style="font-size:12px;font-weight:600;color:var(--text);margin:10px 0 8px">Wall 2 (Back Wall)</div>
-    <div class="form-group" style="margin-bottom:8px"><label>Width (ft)</label><input type="number" id="${pfx}-w2w" placeholder="3" min="0.5" step="0.5"></div>
+    <div class="form-group" style="margin-bottom:8px"><label>Width (ft)</label><input type="number" id="${pfx}-w2w" value="${bw2w}" placeholder="6" min="0.5" step="0.5"></div>
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 3 (same as Wall 1 usually)</div>
-    <div class="form-group" style="margin-bottom:8px"><label>Length (ft)</label><input type="number" id="${pfx}-w3l" placeholder="5" min="0.5" step="0.5"></div>
+    <div class="form-group" style="margin-bottom:8px"><label>Length (ft)</label><input type="number" id="${pfx}-w3l" value="${bw3l}" placeholder="10" min="0.5" step="0.5"></div>
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 4 (Front — deduct door)</div>
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w4w" placeholder="3" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Door Width (ft)</label><input type="number" id="${pfx}-dw" placeholder="2.5" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Door Height (ft)</label><input type="number" id="${pfx}-dh" placeholder="6.5" min="1" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w4w" value="${bw4w}" placeholder="6" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Door Width (ft)</label><input type="number" id="${pfx}-dw" value="${bdw}" placeholder="2.5" min="0" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Door Height (ft)</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>
     </div>
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:10px;margin-bottom:8px">Floor</div>
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" placeholder="5" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" placeholder="3" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" value="${bfl}" placeholder="10" min="0.5" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" value="${bfw}" placeholder="6" min="0.5" step="0.5"></div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Wastage %</label><input type="number" id="${pfx}-waste" placeholder="10" min="0" max="30" step="1"></div>
-    </div>`;
-
-  if (def.measureType === 'staircase') return `
+      <div class="form-group" style="margin:0;flex:1"><label>Wastage %</label><input type="number" id="${pfx}-waste" value="${bwaste}" placeholder="5" min="0" max="30" step="1"></div>
+    </div>`;}
+    if (def.measureType === 'staircase') return `
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1"><label>Step Width (ft)</label><input type="number" id="${pfx}-sw" placeholder="3.5" min="0.5" step="0.5"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Step Depth (ft)</label><input type="number" id="${pfx}-sd" placeholder="1" min="0.5" step="0.25"></div>
@@ -23088,7 +23132,14 @@ async function _renderStep2() {
     <button class="btn-primary full-width" onclick="VW_TILES.tqNextRoom()">
       Next → ${pendingSlots[1]?.label}
     </button>` : `
-    <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">All areas set → Next: Spacer</button>`}
+    <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">✅ All areas done → Next: Spacer</button>`}
+  </div>` : ''}
+
+  ${doneSlots.length > 0 && pendingSlots.length === 0 && !currentSel ? `
+  <div class="card" style="border-color:rgba(34,197,94,0.3);margin-top:10px;background:rgba(34,197,94,0.04)">
+    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">✅ All ${doneSlots.length} area(s) done</div>
+    ${doneSlots.map(s=>`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">${s.label} — ${_tqState.tileSelections[s.id]?.sizeMm}mm</div>`).join('')}
+    <button class="btn-primary full-width" style="margin-top:10px" onclick="VW_TILES.tqNext()">Continue → Spacer</button>
   </div>` : ''}` : ''}
 
   <!-- Already selected summary -->
@@ -25173,13 +25224,15 @@ function _redesignWall() {
 }
 
 async function tqNext() {
-  // Step 0: validate customer name
+  // Step 0: validate customer — contractor is OPTIONAL
   if (_tqState.step === 0) {
-    const name = document.getElementById('tq-cust-name')?.value.trim() || _tqState.customer.name;
-    if (!name) { showToast('Enter customer name to continue', 'warn'); return; }
+    // Accept name from: found customer, check-in pre-fill, or new customer form
+    const name = _tqState.customer.name || document.getElementById('tq-cust-name')?.value.trim();
+    if (!name) { showToast('Enter or search customer to continue', 'warn'); return; }
     _tqState.customer.name = name;
-    _tqState.customer.phone = document.getElementById('tq-cust-phone')?.value.trim() || _tqState.customer.phone;
-    _tqState.customer.site = document.getElementById('tq-cust-site')?.value.trim() || _tqState.customer.site;
+    _tqState.customer.phone = _tqState.customer.phone || document.getElementById('tq-cust-phone')?.value.trim() || '';
+    _tqState.customer.site = _tqState.customer.site || document.getElementById('tq-cust-site')?.value.trim() || '';
+    // Contractor is optional — no validation needed
   }
   // After step 7 (Grout/Epoxy), show Wall Design Planner for wall slots
   if (_tqState.step === 7) {
