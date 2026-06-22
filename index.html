@@ -23117,24 +23117,25 @@ async function _renderStep2() {
       }).join('')}
     </div>
   </div>
+  ` : ''}
 
   <!-- Nav -->
-  ${currentSel ? `
-  <div class="card" style="border-color:rgba(34,197,94,0.3);margin-top:10px">
-    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">✓ ${currentSlot.label} — ${currentSel.sizeMm}mm selected</div>
-    ${pendingSlots.length > 1 ? `
-    <button class="btn-primary full-width" onclick="VW_TILES.tqNextRoom()">
-      Next → ${pendingSlots[1]?.label}
-    </button>` : `
-    <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">✅ All areas done → Next: Spacer</button>`}
-  </div>` : ''}
-
-  ${doneSlots.length > 0 && pendingSlots.length === 0 && !currentSel ? `
+  ${pendingSlots.length === 0 ? `
+  <!-- ALL SLOTS DONE -->
   <div class="card" style="border-color:rgba(34,197,94,0.3);margin-top:10px;background:rgba(34,197,94,0.04)">
-    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">✅ All ${doneSlots.length} area(s) done</div>
-    ${doneSlots.map(s=>`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">${s.label} — ${_tqState.tileSelections[s.id]?.sizeMm}mm</div>`).join('')}
-    <button class="btn-primary full-width" style="margin-top:10px" onclick="VW_TILES.tqNext()">Continue → Spacer</button>
-  </div>` : ''}` : ''}
+    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">✅ All areas selected</div>
+    ${slots.map(s=>`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">${s.label} — ${(_tqState.tileSelections[s.id]?.sizeMm||'?')}mm ✓</div>`).join('')}
+    <button class="btn-primary full-width" style="margin-top:10px" onclick="VW_TILES.tqNext()">
+      Continue → Spacer
+    </button>
+  </div>` : currentSel ? `
+  <!-- CURRENT SLOT SELECTED, MORE PENDING -->
+  <div class="card" style="border-color:rgba(34,197,94,0.3);margin-top:10px">
+    <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:6px">✓ ${currentSlot.label} — ${currentSel.sizeMm}mm</div>
+    <button class="btn-primary full-width" onclick="VW_TILES.tqNextRoom()">
+      Next → ${pendingSlots[0]?.label}
+    </button>
+  </div>` : ''}
 
   <!-- Already selected summary -->
   ${doneSlots.length && pendingSlots.length ? `
