@@ -35587,7 +35587,7 @@ function showQuotationPicker() {
         <div style="font-size:11px;color:var(--text3);margin-top:4px">W×H inches → SFT calculation</div>
       </button>
     </div>
-    <button onclick="closeSheet();navigateTo('quotations')"
+    <button onclick="closeSheet();newQuotation()"
       style="width:100%;background:var(--gold-muted);border:2px solid var(--gold-border);border-radius:16px;padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px">
       <div style="font-size:32px">📄</div>
       <div style="text-align:left">
@@ -35614,6 +35614,7 @@ window.showQuotationPicker = showQuotationPicker;
 // =====================================================
 async function renderStandaloneQuotationPage() {
   const profile = VW_AUTH.getCurrentProfile();
+  _saPeriod = 'all'; // reset filter state on a fresh page open (buttons render with "All" active)
   const today = new Date().toISOString().split('T')[0];
   const weekAgo = new Date(Date.now()-7*24*60*60*1000).toISOString().split('T')[0];
 
@@ -35722,14 +35723,19 @@ function _renderStandaloneQuotesList(quotes) {
   }).join('');
 }
 
+let _saPeriod = 'all';
 function filterStandaloneQuotes(period, btn) {
+  _saPeriod = period;
   if (btn) {
     document.querySelectorAll('#qf-all,#qf-today,#qf-week,#qf-custom').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
   }
   const customDates = document.getElementById('qf-custom-dates');
   if (customDates) customDates.style.display = period==='custom' ? 'flex' : 'none';
-  if (period !== 'custom') _applyStandaloneFilter();
+  // Clicking the "Custom Date" tab (btn present) just reveals the date inputs;
+  // the actual filter runs when "Apply" calls this again with no btn.
+  if (period === 'custom' && btn) return;
+  _applyStandaloneFilter();
 }
 
 function filterStandaloneType(type, btn) {
@@ -35743,9 +35749,7 @@ function filterStandaloneType(type, btn) {
 function searchStandaloneQuotes(val) { _applyStandaloneFilter(val); }
 
 async function _applyStandaloneFilter(searchVal) {
-  const period = document.querySelector('#qf-all.active') ? 'all' :
-                 document.querySelector('#qf-today.active') ? 'today' :
-                 document.querySelector('#qf-week.active') ? 'week' : 'custom';
+  const period = _saPeriod;
   const type = document.querySelector('#qt-tiles.active') ? 'tiles' :
                document.querySelector('#qt-granite.active') ? 'granite' :
                document.querySelector('#qt-general.active') ? 'general' : 'all';
