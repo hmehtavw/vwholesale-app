@@ -22081,141 +22081,189 @@ async function _renderStep0() {
   const st = _tqState;
   const c = st.contractor;
 
-  // Search contractors in DB
-  let contractorResults = [];
-  const searchQuery = st._contractorSearch || '';
-  if (searchQuery.length >= 2) {
-    try {
-      const { data } = await VW_DB.client.from('contractor_profiles')
-        .select('id,name,phone,tier,total_spend')
-        .or(`name.ilike.%${searchQuery}%,phone.ilike.%${searchQuery}%`)
-        .limit(5);
-      contractorResults = data || [];
-    } catch(e) {}
+  // Pre-fill from active check-in if available
+  if (window.activeVisit?.customerName && !st.customer.name) {
+    st.customer.name  = window.activeVisit.customerName  || '';
+    st.customer.phone = window.activeVisit.customerPhone || '';
+    st.customer.site  = window.activeVisit.customerArea  || '';
+    st.customer.id    = window.activeVisit.customerId    || null;
   }
 
+  const custFound = st.customer._found; // set by searchCustomerByPhone
+
   return `
-  <!-- Customer Details -->
+  <!-- CUSTOMER DETAILS -->
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">👤 Customer Details</h3>
-    <div class="form-group">
-      <label>Customer Name *</label>
-      <input type="text" id="tq-cust-name" value="${st.customer.name||''}"
-        placeholder="Full name" oninput="_tqState.customer.name=this.value">
-    </div>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1">
-        <label>Phone</label>
+    <h3 class="card-title">👤 Customer</h3>
+
+    <!-- Phone-first search -->
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Mobile Number *</label>
+      <div style="display:flex;gap:6px">
         <input type="tel" id="tq-cust-phone" value="${st.customer.phone||''}"
-          placeholder="10-digit mobile" maxlength="10"
-          oninput="_tqState.customer.phone=this.value">
-      </div>
-      <div class="form-group" style="margin:0;flex:1">
-        <label>Site / Area</label>
-        <input type="text" id="tq-cust-site" value="${st.customer.site||''}"
-          placeholder="e.g. Bhavanipuram"
-          oninput="_tqState.customer.site=this.value">
+          placeholder="Search by 10-digit mobile" maxlength="10" inputmode="numeric"
+          style="flex:1;font-size:15px;font-weight:700;letter-spacing:0.05em"
+          oninput="VW_TILES._onCustPhoneInput(this.value)">
+        <button onclick="VW_TILES.searchCustomerByPhone(document.getElementById('tq-cust-phone')?.value)"
+          style="padding:0 14px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;flex-shrink:0">
+          🔍
+        </button>
       </div>
     </div>
-    ${st.customer.phone && st.customer.phone.length===10 ? `
-    <div style="margin-top:8px">
-      <button onclick="VW_TILES.sendCustomerRegistrationLink()"
-        style="font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:7px;color:#60A5FA;cursor:pointer">
-        📲 Send quote tracker link to customer
-      </button>
-    </div>` : ''}
+
+    <!-- Customer search results / form -->
+    <div id="tq-cust-result">
+      ${custFound === true ? `
+      <!-- Found existing customer -->
+      <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${st.customer.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${st.customer.phone} ${st.customer.site?'· '+st.customer.site:''}</div>
+            ${st.customer.totalQuotes?`<div style="font-size:10px;color:var(--text3);margin-top:2px">${st.customer.totalQuotes} previous quotes</div>`:''}
+          </div>
+          <button onclick="VW_TILES._clearCustomer()"
+            style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
+        </div>
+      </div>` : custFound === false ? `
+      <!-- Not found — show add form -->
+      <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--gold);font-weight:600;margin-bottom:8px">New customer — fill details</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Full Name *</label>
+          <input type="text" id="tq-cust-name" value="${st.customer.name||''}"
+            placeholder="Customer name" oninput="_tqState.customer.name=this.value"
+            style="font-size:14px">
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Site / Area</label>
+          <input type="text" id="tq-cust-site" value="${st.customer.site||''}"
+            placeholder="e.g. Bhavanipuram" oninput="_tqState.customer.site=this.value">
+        </div>
+        <button onclick="VW_TILES._saveNewCustomer()"
+          style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">
+          ✅ Save & Continue
+        </button>
+      </div>` : st.customer.name ? `
+      <!-- Pre-filled from check-in -->
+      <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:10px;padding:10px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:#60A5FA;margin-bottom:4px">From check-in</div>
+        <div style="font-size:13px;font-weight:600">${st.customer.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${st.customer.phone} ${st.customer.site?'· '+st.customer.site:''}</div>
+      </div>` : `
+      <!-- Idle — prompt to enter phone -->
+      <div style="font-size:12px;color:var(--text3);padding:8px 0">
+        Enter mobile number and tap 🔍 to search existing customers
+      </div>`}
+    </div>
+
+    ${(st.customer.phone?.length===10 && (custFound || st.customer.name)) ? `
+    <button onclick="VW_TILES.sendCustomerRegistrationLink()"
+      style="font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:7px;color:#60A5FA;cursor:pointer;margin-top:4px">
+      📲 Send quote tracker link
+    </button>` : ''}
   </div>
 
-  <!-- Contractor / Professional -->
+  <!-- CONTRACTOR / PROFESSIONAL -->
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">🔨 Contractor / Professional <span style="font-size:11px;font-weight:400;color:var(--text3)">(optional)</span></h3>
+    <h3 class="card-title">🔨 Contractor / Professional
+      <span style="font-size:11px;font-weight:400;color:var(--text3)"> — optional</span>
+    </h3>
 
     ${c ? `
     <!-- Contractor linked -->
-    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${c.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${c.phone} ${c.tier?'· '+c.tier+' Member':''}</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:3px">
-            Commission: <strong style="color:${c.customCommission?'var(--gold)':'var(--green)'}">
-              ${c.commissionPct}%</strong>
-            ${c.customCommission?'<span style="font-size:10px;color:var(--gold)"> · Needs approval</span>':'<span style="font-size:10px;color:var(--text3)"> · Standard rate</span>'}
+          <div style="font-size:11px;color:var(--text3)">${c.phone}${c.tier?' · '+c.tier+' Member':''}</div>
+          <div style="font-size:11px;margin-top:2px">
+            Commission:
+            <strong style="color:${c.commissionPct>2?'var(--gold)':'var(--green)'}">${c.commissionPct}%</strong>
+            ${c.commissionPct>2?'<span style="font-size:10px;color:var(--gold)"> · Needs approval</span>':''}
           </div>
         </div>
         <button onclick="VW_TILES.unlinkContractor()"
           style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0">✕</button>
       </div>
-      <!-- Commission % override -->
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(34,197,94,0.2)">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">Commission rate (standard = 2%):</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${[1,1.5,2,2.5,3,5].map(pct=>`
-          <button onclick="VW_TILES.setContractorCommission(${pct})"
-            style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
-              border:${c.commissionPct===pct?'2px solid var(--gold)':'1px solid var(--border)'};
-              background:${c.commissionPct===pct?'var(--gold-muted)':'var(--bg2)'};
-              color:${c.commissionPct===pct?'var(--gold)':'var(--text)'}">
-            ${pct}%
-          </button>`).join('')}
-        </div>
-        ${c.commissionPct > 2 ? `
-        <div style="font-size:10px;color:var(--gold);margin-top:5px">
-          ⚠️ Above 2% requires management approval during review
-        </div>` : ''}
+      <!-- Commission % -->
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${[1,1.5,2,2.5,3,5].map(pct=>`
+        <button onclick="VW_TILES.setContractorCommission(${pct})"
+          style="padding:4px 9px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
+            border:${c.commissionPct===pct?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${c.commissionPct===pct?'var(--gold-muted)':'var(--bg2)'};
+            color:${c.commissionPct===pct?'var(--gold)':'var(--text)'}">${pct}%
+        </button>`).join('')}
       </div>
     </div>` : `
-    <!-- Search / Add contractor -->
-    <div class="form-group" style="margin-bottom:8px">
-      <label>Search by name or phone</label>
-      <input type="text" id="tq-cont-search" value="${searchQuery}"
-        placeholder="Type name or number..." style="font-size:14px"
-        oninput="_tqState._contractorSearch=this.value;_renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h})">
+
+    <!-- Contractor search — debounced, updates results div only -->
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <input type="text" id="tq-cont-search"
+        placeholder="Search by name or phone..."
+        style="flex:1;font-size:14px"
+        oninput="VW_TILES._debouncedContractorSearch(this.value)">
+      <button onclick="VW_TILES._showAddContractorForm()"
+        style="padding:0 12px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;flex-shrink:0;color:var(--text)">
+        + Add
+      </button>
     </div>
 
-    ${contractorResults.length > 0 ? `
-    <div style="margin-bottom:8px">
-      ${contractorResults.map(ct=>`
-      <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:'${(ct.name||'').replace(/'/g,"\\'")}',phone:'${ct.phone||''}',tier:'${ct.tier||''}',isExisting:true,commissionPct:2,customCommission:false})"
-        style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:13px;font-weight:600">${ct.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${ct.phone} ${ct.tier?'· '+ct.tier:''}</div>
-        </div>
-        <span style="color:var(--gold);font-size:12px;font-weight:700">Link →</span>
-      </div>`).join('')}
-    </div>` : searchQuery.length>=2 ? `
-    <div style="padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:8px;font-size:12px;color:var(--text3)">
-      No registered contractor found — add new below
-    </div>` : ''}
+    <!-- Results inject here without full re-render -->
+    <div id="tq-cont-results">
+      <div style="font-size:11px;color:var(--text3);padding:4px 0">
+        Type to search registered contractors/professionals
+      </div>
+    </div>
 
-    <!-- Add new contractor -->
-    <div style="background:var(--bg2);border-radius:10px;padding:10px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">Add New Contractor</div>
-      <div class="form-row">
+    <!-- Add contractor form (hidden by default) -->
+    <div id="tq-cont-add-form" style="display:none;background:var(--bg2);border-radius:10px;padding:10px;margin-top:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Add Contractor</div>
+      <div class="form-row" style="margin-bottom:8px">
         <div class="form-group" style="margin:0;flex:1">
-          <label>Name</label>
-          <input type="text" id="tq-new-cont-name" placeholder="Contractor name">
+          <label>Name *</label>
+          <input type="text" id="tq-new-cont-name" placeholder="Full name">
         </div>
         <div class="form-group" style="margin:0;flex:1">
-          <label>Phone</label>
-          <input type="tel" id="tq-new-cont-phone" placeholder="10-digit" maxlength="10">
+          <label>Phone *</label>
+          <input type="tel" id="tq-new-cont-phone" placeholder="10-digit" maxlength="10" inputmode="numeric">
         </div>
       </div>
-      <button onclick="VW_TILES.addAndLinkContractor()"
-        class="btn-primary" style="margin-top:8px;width:100%">
-        + Link & Send Registration WhatsApp
-      </button>
+      <div class="form-row" style="margin-bottom:10px">
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Trade / Speciality</label>
+          <select id="tq-new-cont-trade" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text);font-size:13px;width:100%">
+            <option value="">Select...</option>
+            ${['Tile Layer','Mason','Interior Designer','Architect','Builder/Contractor','Plumber','Electrician','Other'].map(t=>`<option>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin:0;flex:1">
+          <label>Business Name</label>
+          <input type="text" id="tq-new-cont-biz" placeholder="Optional">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_TILES.addAndLinkContractor()"
+          class="btn-primary" style="flex:2">
+          ✅ Save & Link
+        </button>
+        <button onclick="VW_TILES._sendContractorRegLink()"
+          style="flex:1;padding:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:8px;font-size:11px;font-weight:600;color:#60A5FA;cursor:pointer">
+          📲 Send Reg Link
+        </button>
+      </div>
     </div>`}
   </div>
 
-  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()"
-    ${!st.customer.name?'disabled style="opacity:0.5"':''}>
-    Next → Rooms & Areas
+  <button class="btn-primary full-width"
+    onclick="VW_TILES.tqNext()"
+    ${(!st.customer.name && !st.customer._found)?'disabled style="opacity:0.5"':''}>
+    ${!st.customer.name && !st.customer._found ? 'Enter customer details first' : 'Next → Rooms & Areas'}
   </button>`;
 }
 
-// ─── Contractor helpers ───────────────────────────────────────────────────────
+
 function linkContractor(ct) {
   _tqState.contractor = ct;
   _tqState._contractorSearch = '';
@@ -22232,6 +22280,212 @@ function setContractorCommission(pct) {
   _tqState.contractor.commissionPct = pct;
   _tqState.contractor.customCommission = pct > 2;
   _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
+}
+
+// ─── CUSTOMER HELPERS ─────────────────────────────────────────────────────────
+
+// Auto-search when 10 digits entered — no button press needed
+function _onCustPhoneInput(val) {
+  const digits = val.replace(/\D/g,'');
+  _tqState.customer.phone = digits;
+  if (digits.length === 10) {
+    searchCustomerByPhone(digits);
+  } else {
+    // Clear previous result if editing
+    _tqState.customer._found = null;
+    _tqState.customer.name = '';
+    _tqState.customer.id = null;
+    const el = document.getElementById('tq-cust-result');
+    if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:4px 0">${10-digits.length} more digits...</div>`;
+  }
+}
+
+async function searchCustomerByPhone(phone) {
+  if (!phone || phone.length < 10) return;
+  const el = document.getElementById('tq-cust-result');
+  if (el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching...</div>';
+
+  try {
+    // Search in customers table (CRM)
+    const { data: custRows } = await VW_DB.client
+      .from('customers')
+      .select('id, name, phone, area, total_quotes, last_visit')
+      .eq('phone', phone)
+      .limit(1);
+
+    const found = custRows?.[0];
+
+    if (found) {
+      _tqState.customer = {
+        ...found,
+        site: found.area || '',
+        _found: true,
+        totalQuotes: found.total_quotes || 0,
+      };
+      if (el) el.innerHTML = `
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${found.name}</div>
+              <div style="font-size:11px;color:var(--text3)">${found.phone}${found.area?' · '+found.area:''}</div>
+              ${found.total_quotes ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${found.total_quotes} previous quote(s)</div>` : ''}
+            </div>
+            <button onclick="VW_TILES._clearCustomer()"
+              style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
+          </div>
+        </div>
+        <button onclick="VW_TILES.sendCustomerRegistrationLink()"
+          style="margin-top:6px;font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:7px;color:#60A5FA;cursor:pointer">
+          📲 Send quote tracker link
+        </button>`;
+    } else {
+      _tqState.customer._found = false;
+      if (el) el.innerHTML = `
+        <div style="background:var(--bg2);border-radius:10px;padding:10px">
+          <div style="font-size:11px;color:var(--gold);font-weight:600;margin-bottom:8px">✦ New customer — ${phone}</div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label>Full Name *</label>
+            <input type="text" id="tq-cust-name" value="${_tqState.customer.name||''}"
+              placeholder="Customer name" oninput="_tqState.customer.name=this.value"
+              style="font-size:14px" autofocus>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Site / Area</label>
+            <input type="text" id="tq-cust-site" value="${_tqState.customer.site||''}"
+              placeholder="e.g. Bhavanipuram" oninput="_tqState.customer.site=this.value">
+          </div>
+          <button onclick="VW_TILES._saveNewCustomer()"
+            style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">
+            ✅ Save & Continue
+          </button>
+        </div>`;
+    }
+  } catch(e) {
+    console.error('Customer search error:', e);
+    if (el) el.innerHTML = `<div style="color:var(--red);font-size:12px">Search failed — enter details manually</div>`;
+    _tqState.customer._found = false;
+  }
+}
+
+function _clearCustomer() {
+  _tqState.customer = { name:'', phone:'', site:'', id:null, _found:null };
+  const phoneEl = document.getElementById('tq-cust-phone');
+  if (phoneEl) { phoneEl.value = ''; phoneEl.focus(); }
+  const el = document.getElementById('tq-cust-result');
+  if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:4px 0">Enter mobile number to search existing customers</div>`;
+}
+
+async function _saveNewCustomer() {
+  const name = document.getElementById('tq-cust-name')?.value.trim() || _tqState.customer.name;
+  const site = document.getElementById('tq-cust-site')?.value.trim() || _tqState.customer.site;
+  const phone = _tqState.customer.phone;
+  if (!name) { showToast('Enter customer name', 'warn'); return; }
+
+  _tqState.customer.name = name;
+  _tqState.customer.site = site;
+  _tqState.customer._found = true;
+
+  // Save to customers table
+  try {
+    const { data } = await VW_DB.client.from('customers')
+      .insert({ name, phone, area: site })
+      .select().single();
+    if (data?.id) _tqState.customer.id = data.id;
+  } catch(e) { /* may fail if phone already exists */ }
+
+  showToast(`${name} saved ✓`, 'success');
+  // Re-render result area to show confirmed card
+  const el = document.getElementById('tq-cust-result');
+  if (el) el.innerHTML = `
+    <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${name}</div>
+          <div style="font-size:11px;color:var(--text3)">${phone}${site?' · '+site:''}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">New customer saved</div>
+        </div>
+        <button onclick="VW_TILES._clearCustomer()"
+          style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
+      </div>
+    </div>`;
+}
+
+// ─── CONTRACTOR HELPERS ───────────────────────────────────────────────────────
+
+// Debounced search — waits 400ms after last keystroke, then searches
+let _contSearchTimer = null;
+function _debouncedContractorSearch(val) {
+  clearTimeout(_contSearchTimer);
+  const resultsEl = document.getElementById('tq-cont-results');
+
+  if (!val || val.length < 2) {
+    if (resultsEl) resultsEl.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:4px 0">Type to search registered contractors/professionals</div>`;
+    return;
+  }
+
+  if (resultsEl) resultsEl.innerHTML = `<div style="font-size:11px;color:var(--text3);padding:4px 0">Searching...</div>`;
+
+  _contSearchTimer = setTimeout(async () => {
+    try {
+      const { data } = await VW_DB.client
+        .from('contractor_profiles')
+        .select('id, name, phone, tier, trade, business_name, total_spend')
+        .or(`name.ilike.%${val}%,phone.ilike.%${val}%,business_name.ilike.%${val}%`)
+        .limit(6);
+
+      if (!data?.length) {
+        if (resultsEl) resultsEl.innerHTML = `
+          <div style="padding:10px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text3)">
+            No contractor found for "<strong>${val}</strong>" —
+            <button onclick="VW_TILES._showAddContractorForm()" style="background:none;border:none;color:var(--gold);cursor:pointer;font-size:12px;font-weight:700;padding:0">+ Add New</button>
+          </div>`;
+        return;
+      }
+
+      if (resultsEl) resultsEl.innerHTML = data.map(ct => `
+        <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:${JSON.stringify(ct.name)},phone:'${ct.phone||''}',tier:'${ct.tier||''}',trade:'${ct.trade||''}',isExisting:true,commissionPct:2,customCommission:false})"
+          style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:600">${ct.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${ct.phone||''}${ct.trade?' · '+ct.trade:''}${ct.tier?' · '+ct.tier:''}</div>
+            ${ct.business_name?`<div style="font-size:10px;color:var(--text3)">${ct.business_name}</div>`:''}
+          </div>
+          <span style="color:var(--gold);font-size:13px;font-weight:700;flex-shrink:0">Link →</span>
+        </div>`).join('');
+    } catch(e) {
+      if (resultsEl) resultsEl.innerHTML = `<div style="color:var(--red);font-size:12px">Search failed</div>`;
+    }
+  }, 400); // 400ms debounce — fast enough, no per-keystroke DB call
+}
+
+function _showAddContractorForm() {
+  const form = document.getElementById('tq-cont-add-form');
+  const resultsEl = document.getElementById('tq-cont-results');
+  if (form) {
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    if (form.style.display === 'block') {
+      if (resultsEl) resultsEl.style.display = 'none';
+      document.getElementById('tq-new-cont-name')?.focus();
+    } else {
+      if (resultsEl) resultsEl.style.display = 'block';
+    }
+  }
+}
+
+async function _sendContractorRegLink() {
+  const name  = document.getElementById('tq-new-cont-name')?.value.trim();
+  const phone = document.getElementById('tq-new-cont-phone')?.value.trim();
+  if (!phone || phone.length < 10) { showToast('Enter phone number first', 'warn'); return; }
+  const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'9038010175' });
+  const msg = encodeURIComponent(
+    `Hi ${name||''}! V Wholesale, Vijayawada invites you to join the Contractor Club.\n\nRegister to earn 2% commission on every sale you refer:\nhttps://hmehtavw.github.io/vwholesale-app/?contractor=register&phone=${phone}\n\nBenefits: Commission tracking, reward points, bank transfer or store credit.\n\nFor queries: ${storeInfo.phone}`
+  );
+  window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
+  showToast('Registration link sent via WhatsApp ✓', 'success');
+  // Also link them immediately with the name+phone provided
+  if (name) {
+    linkContractor({ id:null, name, phone, isExisting:false, commissionPct:2, customCommission:false });
+  }
 }
 
 async function addAndLinkContractor() {
@@ -26273,7 +26527,7 @@ function openTileVisualizer() {
 
 window.VW_TILES = {
   // New tiles quotation
-  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
+  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, setAdhMethodForRoom, tqSetBeadPcs,
