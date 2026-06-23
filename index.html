@@ -25577,7 +25577,11 @@ function _dsRenderInner() {
     const fl = Math.floor(exact), cl = Math.ceil(exact);
     const boxes = st.boxesOverride[pi] ?? cl;
     const sqftPerBox = sqftPerTile*tpb;
-    const perSft = st.priceOverride[pi] ?? t.perSft ?? 0;
+    // Price is a function of Brand + Size + Finish — same combo, same price everywhere.
+    if (!_tqState._dsPriceByCombo) _tqState._dsPriceByCombo = {};
+    const _combo = `${(t.brand||'').toLowerCase().trim()}|${sizeMm}|${(t.finish||'').toLowerCase().trim()}`;
+    if (_tqState._dsPriceByCombo[_combo] == null) _tqState._dsPriceByCombo[_combo] = (st.priceOverride[pi] ?? t.perSft ?? 0);
+    const perSft = _tqState._dsPriceByCombo[_combo];
     const boxPrice = Math.round(perSft*sqftPerBox);
     const lineTotal = boxes*boxPrice;
     const spare = boxes*tpb - pcs;
@@ -25656,7 +25660,18 @@ function _dsPaint(ci){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); 
 function _dsFillAll(){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); st.cells=(st.cells||[]).map(()=>st.activeIdx||0); _dsRerender(); }
 function _dsOrient(o){ const s=_dsCur(); if(!s)return; if(!_tqState.wallDesigns)_tqState.wallDesigns={}; if(!_tqState.wallDesigns[s.id])_tqState.wallDesigns[s.id]={}; _tqState.wallDesigns[s.id].orient=o; _dsState(s.id).cells=null; _dsRerender(); }
 function _dsBoxes(pi,n){ const s=_dsCur(); if(!s)return; _dsState(s.id).boxesOverride[pi]=n; _dsRerender(); }
-function _dsPrice(pi,v){ const s=_dsCur(); if(!s)return; _dsState(s.id).priceOverride[pi]=parseFloat(v)||0; _dsRerender(); }
+function _dsPrice(pi,v){
+  const s=_dsCur(); if(!s)return;
+  const st=_dsState(s.id);
+  const t=((_tqState._dsTilesCache||{})[s.id]||[]).find(x=>x.key===(st.palette||[])[pi]);
+  const sizeMm=_tqState.tileSelections[s.id]?.size?.mm||'';
+  if(t){
+    if(!_tqState._dsPriceByCombo)_tqState._dsPriceByCombo={};
+    const combo=`${(t.brand||'').toLowerCase().trim()}|${sizeMm}|${(t.finish||'').toLowerCase().trim()}`;
+    _tqState._dsPriceByCombo[combo]=parseFloat(v)||0;
+  }
+  _dsRerender();
+}
 function _dsEditSizes(){ _tqState.step=2; _renderStep2().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html; _updateStepHeader();}); }
 async function _dsContinue(){
   const slots=_dsSlots(); const idx=_tqState._designIdx||0;
