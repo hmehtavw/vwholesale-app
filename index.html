@@ -21753,16 +21753,13 @@ async function renderLegacyCustomerPortal() {
   const quoteRef = urlParams.get('quote');
   if (!quoteRef) return;
 
-  // Fetch directly from Supabase — customer is not logged in so IndexedDB is empty
+  // Fetch directly from Supabase — customer is not logged in so IndexedDB is empty.
+  // Uses a security-definer RPC because the quotations table itself is read-restricted
+  // to approved staff; the RPC returns only the single quote matching this reference.
   let q = null;
   try {
-    // Try by quoteNo first, then by id
-    const { data: byNo } = await VW_DB.client
-      .from('quotations')
-      .select('*')
-      .or(`quote_no.eq.${quoteRef},id.eq.${isNaN(quoteRef)?0:parseInt(quoteRef)}`)
-      .limit(1);
-    q = byNo?.[0] || null;
+    const { data: rows } = await VW_DB.client.rpc('get_public_quotation', { ref: String(quoteRef) });
+    q = (rows && rows[0]) || null;
 
     // Normalize field names (Supabase uses snake_case, app uses camelCase)
     if (q) {
@@ -21774,7 +21771,7 @@ async function renderLegacyCustomerPortal() {
       q.items = q.items || [];
     }
   } catch(e) {
-    // Fallback to IndexedDB if Supabase fails
+    // Fallback to IndexedDB if the RPC fails
     const quotations = await VW_DB.all(VW_DB.STORES.quotations);
     q = quotations.find(x => x.quoteNo === quoteRef || x.quote_no === quoteRef || String(x.id) === quoteRef);
   }
