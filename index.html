@@ -33280,7 +33280,7 @@ async function processCatalogUpload() {
     }
 
     // Update catalog record
-    await VV_DB.client.from('catalog_uploads').update({
+    await VW_DB.client.from('catalog_uploads').update({
       status: 'extracted',
       tiles_extracted: totalExtracted,
     }).eq('id', catalog.id);
@@ -33326,31 +33326,19 @@ Example: [{"design_name":"Carrara White","sku_code":"KVF-601","series":"Marble M
 
 If you cannot determine a field, use null. Extract every tile you can see.`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  // Route through the tile-catalog-ocr edge function (server-side AI proxy).
+  // The browser cannot call the AI API directly — no key, and blocked by CORS.
+  const { data: sessionData } = await sb.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/tile-catalog-ocr`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: isPDF ? 'document' : 'image',
-            source: {
-              type: 'base64',
-              media_type: mediaType,
-              data: base64,
-            }
-          },
-          { type: 'text', text: prompt }
-        ]
-      }]
-    })
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ base64, mediaType, isPDF, prompt })
   });
-
   const data = await response.json();
-  const text = data.content?.[0]?.text || '[]';
+  if (!response.ok) throw new Error(data.error || 'Extraction service failed');
+  // Edge function returns {data:[...]} (parsed) or {text:"..."} (raw)
+  const text = Array.isArray(data.data) ? JSON.stringify(data.data) : (data.text || '[]');
 
   let tiles = [];
   try {
