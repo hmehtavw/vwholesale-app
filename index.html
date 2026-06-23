@@ -9289,7 +9289,28 @@ async function showAddProduct() {
       <div class="form-group" style="margin:0"><label>Shelf No</label>
         <select id="np-shelf"><option value="">Rack first</option></select></div>
     </div>
-    <button type="button" onclick="VW_INVENTORY.addManualRack()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--text2);cursor:pointer;margin-bottom:10px">+ Add rack manually</button>
+    <div class="form-group" style="margin-bottom:6px"><label>Qty at this location</label>
+      <input type="number" id="np-loc1qty" placeholder="Leave blank = all opening stock"></div>
+    <button type="button" onclick="VW_INVENTORY.addManualRack()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--text2);cursor:pointer;margin-bottom:8px">+ Add rack manually</button>
+    <button type="button" id="np-add-loc-btn" onclick="VW_INVENTORY.showSecondLocation()" style="display:block;background:none;border:1px dashed var(--gold-border);border-radius:8px;padding:7px 10px;font-size:12px;color:var(--gold);cursor:pointer;margin-bottom:10px;width:100%">+ Add second location (split stock)</button>
+
+    <div id="np-loc2-block" style="display:none;border:1px solid var(--border2);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">SECOND LOCATION</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+        <div class="form-group" style="margin:0"><label>Zone</label>
+          <select id="np-zone2" onchange="VW_INVENTORY.loadInvRacks(this.value,'2')">
+            <option value="">Select zone</option>
+            ${_zones.map(z=>`<option value="${z.code}">${z.name}</option>`).join('')}
+          </select></div>
+        <div class="form-group" style="margin:0"><label>Rack No</label>
+          <select id="np-rack2" onchange="VW_INVENTORY.loadInvShelves(this.value,'2')"><option value="">Zone first</option></select></div>
+        <div class="form-group" style="margin:0"><label>Shelf No</label>
+          <select id="np-shelf2"><option value="">Rack first</option></select></div>
+      </div>
+      <div class="form-group" style="margin:0"><label>Qty at this location</label>
+        <input type="number" id="np-loc2qty" placeholder="e.g. 100"></div>
+      <p style="font-size:11px;color:var(--text3);margin:6px 0 0">Total on hand = sum of both locations. Adjust the quantities above to split the opening stock.</p>
+    </div>
     
     <!-- Warranty -->
     <div class="form-group">
@@ -9387,19 +9408,26 @@ function updateProductPricePreview(prefix = 'np') {
   }
 }
 
-async function loadInvRacks(zoneCode){
-  const el=document.getElementById('np-rack'); if(!el) return;
-  if(!zoneCode){ el.innerHTML='<option value="">Zone first</option>'; const sh=document.getElementById('np-shelf'); if(sh) sh.innerHTML='<option value="">Rack first</option>'; return; }
+async function loadInvRacks(zoneCode, suffix=''){
+  const el=document.getElementById('np-rack'+suffix); if(!el) return;
+  if(!zoneCode){ el.innerHTML='<option value="">Zone first</option>'; const sh=document.getElementById('np-shelf'+suffix); if(sh) sh.innerHTML='<option value="">Rack first</option>'; return; }
   const { data }=await VW_DB.client.from('rack_config').select('rack_no,shelf_nos').eq('warehouse_code',zoneCode).eq('is_active',true);
   const racks=(data||[]).sort((a,b)=>(parseInt(String(a.rack_no).replace(/\D/g,''))||0)-(parseInt(String(b.rack_no).replace(/\D/g,''))||0));
   el.innerHTML=`<option value="">Select rack</option>${racks.map(r=>`<option value="${r.rack_no}" data-shelves='${JSON.stringify(r.shelf_nos||[])}'>${r.rack_no}</option>`).join('')}`;
-  const sh=document.getElementById('np-shelf'); if(sh) sh.innerHTML='<option value="">Rack first</option>';
+  const sh=document.getElementById('np-shelf'+suffix); if(sh) sh.innerHTML='<option value="">Rack first</option>';
 }
-function loadInvShelves(rackNo){
-  const opt=document.getElementById('np-rack')?.querySelector(`option[value="${rackNo}"]`);
+function loadInvShelves(rackNo, suffix=''){
+  const opt=document.getElementById('np-rack'+suffix)?.querySelector(`option[value="${rackNo}"]`);
   const shelves=opt?JSON.parse(opt.dataset.shelves||'[]'):[];
-  const el=document.getElementById('np-shelf');
+  const el=document.getElementById('np-shelf'+suffix);
   if(el) el.innerHTML=`<option value="">Select shelf</option>${shelves.map(s=>`<option value="${s}">${s}</option>`).join('')}`;
+}
+function showSecondLocation(){
+  const b=document.getElementById('np-loc2-block'); if(b) b.style.display='block';
+  const btn=document.getElementById('np-add-loc-btn'); if(btn) btn.style.display='none';
+  const stockEl=document.getElementById('np-stock');
+  const q1=document.getElementById('np-loc1qty');
+  if(q1 && !q1.value && stockEl && stockEl.value) q1.value=stockEl.value;
 }
 async function addManualRack(){
   const zone=document.getElementById('np-zone')?.value;
@@ -9523,19 +9551,33 @@ async function saveNewProduct() {
 
   // Multi-location stock: record the opening quantity at its zone/rack/shelf so the
   // same product can later live in several locations (total = sum of all rows).
-  const _zone = document.getElementById('np-zone')?.value.trim() || '';
-  if (_zone && stock > 0) {
-    await VW_DB.client.from('product_stock_locations').insert({
-      product_id: newId, warehouse_code: _zone,
-      rack_no: document.getElementById('np-rack')?.value.trim() || '',
-      shelf_no: document.getElementById('np-shelf')?.value.trim() || '',
-      qty: stock
-    }).catch(()=>{});
+  // Stock locations (one or two). Per-location quantities are editable so
+  // the opening stock can be split across two places; when split, the
+  // product's on-hand total = the sum of the locations.
+  const loc1Zone = document.getElementById('np-zone')?.value.trim() || '';
+  const loc2Block = document.getElementById('np-loc2-block');
+  const loc2On = loc2Block && loc2Block.style.display !== 'none';
+  const loc2Zone = loc2On ? (document.getElementById('np-zone2')?.value.trim() || '') : '';
+  const q2 = loc2Zone ? (parseFloat(document.getElementById('np-loc2qty')?.value) || 0) : 0;
+  const q1raw = document.getElementById('np-loc1qty')?.value;
+  const q1 = (q1raw !== '' && q1raw != null) ? (parseFloat(q1raw) || 0) : (loc2Zone ? Math.max(0, (stock||0) - q2) : stock);
+
+  const locRows = [];
+  if (loc1Zone && q1 > 0) locRows.push({ product_id:newId, warehouse_code:loc1Zone, rack_no:document.getElementById('np-rack')?.value.trim()||'', shelf_no:document.getElementById('np-shelf')?.value.trim()||'', qty:q1 });
+  if (loc2Zone && q2 > 0) locRows.push({ product_id:newId, warehouse_code:loc2Zone, rack_no:document.getElementById('np-rack2')?.value.trim()||'', shelf_no:document.getElementById('np-shelf2')?.value.trim()||'', qty:q2 });
+  if (locRows.length) await VW_DB.client.from('product_stock_locations').insert(locRows).catch(()=>{});
+
+  // When split across two locations, the locations are authoritative — keep
+  // the product's on-hand total in sync with their sum.
+  const effectiveStock = loc2Zone ? (q1 + q2) : stock;
+  if (loc2Zone && effectiveStock !== stock) {
+    const prod = await VW_DB.getById(VW_DB.STORES.products, newId);
+    if (prod) { prod.stock = effectiveStock; await VW_DB.put(VW_DB.STORES.products, prod); }
   }
-  if (!isNaN(stock)) {
+  if (!isNaN(effectiveStock)) {
     await recordStockMovement({
-      productId: newId, productName: name, delta: stock, kind: 'opening',
-      reason: 'Opening stock', locationCode: _zone, stockBefore: 0, stockAfter: stock
+      productId: newId, productName: name, delta: effectiveStock, kind: 'opening',
+      reason: loc2Zone ? 'Opening stock (2 locations)' : 'Opening stock', locationCode: loc1Zone, stockBefore: 0, stockAfter: effectiveStock
     });
   }
   // Any photos captured during this same form are already uploaded to
@@ -9733,7 +9775,7 @@ async function addInlineSubcategory() {
   showToast(`Sub-category "${name}" added`, 'success');
 }
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory };
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory, showSecondLocation };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
