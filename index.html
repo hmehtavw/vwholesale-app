@@ -22998,23 +22998,43 @@ function _renderMeasureForm(type, areaIdx, prefill) {
     const bfl  = floorArea.l  !== undefined ? floorArea.l  : (p?.fl  || '');
     const bfw  = floorArea.w  !== undefined ? floorArea.w  : (p?.fw  || '');
     const bwaste = p?.wastage || '';
+    const bwtl  = wallArea.l   !== undefined ? wallArea.l   : '';
+    const wm    = (wallArea.w1l !== undefined && wallArea.w1l !== '') ? 'wallwise' : 'full';
     return `
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 1 (Long Wall)</div>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" value="${bh}" placeholder="8" min="1" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-w1l" value="${bw1l}" placeholder="10" min="0.5" step="0.5"></div>
+    <!-- Wall measurement mode: full single length vs 4 separate walls -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;background:var(--bg3);border-radius:10px;padding:4px">
+      <button type="button" id="${pfx}-wm-full" onclick="VW_TILES._tqWallMode('${pfx}','full')" style="flex:1;padding:7px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:${wm==='full'?'var(--gold)':'transparent'};color:${wm==='full'?'#000':'var(--text2)'}">Full Wall (25×7)</button>
+      <button type="button" id="${pfx}-wm-wise" onclick="VW_TILES._tqWallMode('${pfx}','wallwise')" style="flex:1;padding:7px;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;background:${wm==='wallwise'?'var(--gold)':'transparent'};color:${wm==='wallwise'?'#000':'var(--text2)'}">Wall-wise (4 sides)</button>
     </div>
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin:10px 0 8px">Wall 2 (Back Wall)</div>
-    <div class="form-group" style="margin-bottom:8px"><label>Width (ft)</label><input type="number" id="${pfx}-w2w" value="${bw2w}" placeholder="6" min="0.5" step="0.5"></div>
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 3 (same as Wall 1 usually)</div>
-    <div class="form-group" style="margin-bottom:8px"><label>Length (ft)</label><input type="number" id="${pfx}-w3l" value="${bw3l}" placeholder="10" min="0.5" step="0.5"></div>
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 4 (Front — deduct door)</div>
+    <input type="hidden" id="${pfx}-wallmode" value="${wm}">
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w4w" value="${bw4w}" placeholder="6" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Door Width (ft)</label><input type="number" id="${pfx}-dw" value="${bdw}" placeholder="2.5" min="0" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Door Height (ft)</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Wall Height (ft)</label><input type="number" id="${pfx}-h" value="${bh}" placeholder="7" min="1" step="0.5"></div>
     </div>
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:10px;margin-bottom:8px">Floor</div>
+    <!-- FULL: one total length for all four walls -->
+    <div id="${pfx}-wallfull" style="display:${wm==='full'?'block':'none'}">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin:10px 0 8px">Total Wall Length <span style="font-weight:400;color:var(--text3)">— all sides added (e.g. 25)</span></div>
+      <div class="form-row">
+        <div class="form-group" style="margin:0;flex:1"><label>Total Length (ft)</label><input type="number" id="${pfx}-wtl" value="${bwtl}" placeholder="25" min="0.5" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door W (ft)</label><input type="number" id="${pfx}-dwf" value="${bdw}" placeholder="0" min="0" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door H (ft)</label><input type="number" id="${pfx}-dhf" value="${bdh}" placeholder="0" min="0" step="0.5"></div>
+      </div>
+    </div>
+    <!-- WALL-WISE: 4 separate walls -->
+    <div id="${pfx}-wallwise" style="display:${wm==='wallwise'?'block':'none'}">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin:10px 0 8px">Wall 1 (Long Wall) — Length</div>
+      <div class="form-group" style="margin-bottom:8px"><input type="number" id="${pfx}-w1l" value="${bw1l}" placeholder="10" min="0.5" step="0.5"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 2 (Back) — Width</div>
+      <div class="form-group" style="margin-bottom:8px"><input type="number" id="${pfx}-w2w" value="${bw2w}" placeholder="6" min="0.5" step="0.5"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 3 (≈ Wall 1) — Length</div>
+      <div class="form-group" style="margin-bottom:8px"><input type="number" id="${pfx}-w3l" value="${bw3l}" placeholder="10" min="0.5" step="0.5"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 4 (Front — deduct door) — Width</div>
+      <div class="form-row">
+        <div class="form-group" style="margin:0;flex:1"><label>Width</label><input type="number" id="${pfx}-w4w" value="${bw4w}" placeholder="6" min="0.5" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door W</label><input type="number" id="${pfx}-dw" value="${bdw}" placeholder="2.5" min="0" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door H</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>
+      </div>
+    </div>
+    <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:10px;margin-bottom:8px">Floor <span style="font-weight:400;color:var(--text3)">(optional — skip if measured elsewhere)</span></div>
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" value="${bfl}" placeholder="10" min="0.5" step="0.5"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" value="${bfw}" placeholder="6" min="0.5" step="0.5"></div>
@@ -23038,6 +23058,16 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" placeholder="8" min="0.5" step="0.5"></div>
     </div>
     <div class="form-group"><label>Wastage %</label><input type="number" id="${pfx}-waste" placeholder="5" min="0" max="30" step="1"></div>`;
+}
+
+function _tqWallMode(pfx, mode){
+  const hid=document.getElementById(`${pfx}-wallmode`); if(hid) hid.value=mode;
+  const full=document.getElementById(`${pfx}-wallfull`), wise=document.getElementById(`${pfx}-wallwise`);
+  if(full) full.style.display = mode==='full'?'block':'none';
+  if(wise) wise.style.display = mode==='wallwise'?'block':'none';
+  const bf=document.getElementById(`${pfx}-wm-full`), bw=document.getElementById(`${pfx}-wm-wise`);
+  if(bf){ bf.style.background=mode==='full'?'var(--gold)':'transparent'; bf.style.color=mode==='full'?'#000':'var(--text2)'; }
+  if(bw){ bw.style.background=mode==='wallwise'?'var(--gold)':'transparent'; bw.style.color=mode==='wallwise'?'#000':'var(--text2)'; }
 }
 
 function tqSaveRoom(type, editIdx) {
@@ -23071,24 +23101,37 @@ function tqSaveRoom(type, editIdx) {
     const sqft = base*(1+waste);
     areas.push({ label:`${h}ft H × ${w}ft W${waste>0?` +${Math.round(waste*100)}% wastage`:''}`, sqft, base, h, w, wastage:waste>0?Math.round(waste*100):0 });
   } else if (def.measureType === 'bathroom') {
+    const wm = document.getElementById(`${pfx}-wallmode`)?.value || 'full';
     const h = parseFloat(document.getElementById(`${pfx}-h`)?.value)||0;
-    const w1l = parseFloat(document.getElementById(`${pfx}-w1l`)?.value)||0;
-    const w2w = parseFloat(document.getElementById(`${pfx}-w2w`)?.value)||0;
-    const w3l = parseFloat(document.getElementById(`${pfx}-w3l`)?.value)||w1l;
-    const w4w = parseFloat(document.getElementById(`${pfx}-w4w`)?.value)||0;
-    const dw = parseFloat(document.getElementById(`${pfx}-dw`)?.value)||0;
-    const dh = parseFloat(document.getElementById(`${pfx}-dh`)?.value)||0;
     const fl = parseFloat(document.getElementById(`${pfx}-fl`)?.value)||0;
     const fw = parseFloat(document.getElementById(`${pfx}-fw`)?.value)||0;
     const floor = fl&&fw ? fl*fw*(1+waste) : 0;
-    // Floor is optional (may be measured under Living/Dining); walls optional too —
-    // but at least one is required.
-    if (!h && !floor) { showToast('Enter wall height, or floor dimensions','warn'); return; }
-    if (h) {
-      const wall1=h*w1l, wall2=h*w2w, wall3=h*w3l, wall4=Math.max(0,h*w4w-dw*dh);
-      const totalWall=(wall1+wall2+wall3+wall4)*(1+waste);
-      if (wall1||wall2||wall3||wall4) areas.push({ label:`Walls (4 sides)`, sqft:totalWall, base:wall1+wall2+wall3+wall4, subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, wastage:waste>0?Math.round(waste*100):0 });
+    let wallBase = 0, wallMeta = null, wallLabel = '';
+    if (wm === 'full') {
+      // Customer gives one full perimeter length × height (e.g. 25 × 7).
+      const wtl = parseFloat(document.getElementById(`${pfx}-wtl`)?.value)||0;
+      const dwf = parseFloat(document.getElementById(`${pfx}-dwf`)?.value)||0;
+      const dhf = parseFloat(document.getElementById(`${pfx}-dhf`)?.value)||0;
+      if (h && wtl) {
+        wallBase = Math.max(0, wtl*h - dwf*dhf);
+        wallMeta = { subType:'wall', l:wtl, w:h, h, dw:dwf, dh:dhf, mode:'full' };
+        wallLabel = `Wall ${wtl}×${h}ft`;
+      }
+    } else {
+      const w1l = parseFloat(document.getElementById(`${pfx}-w1l`)?.value)||0;
+      const w2w = parseFloat(document.getElementById(`${pfx}-w2w`)?.value)||0;
+      const w3l = parseFloat(document.getElementById(`${pfx}-w3l`)?.value)||w1l;
+      const w4w = parseFloat(document.getElementById(`${pfx}-w4w`)?.value)||0;
+      const dw = parseFloat(document.getElementById(`${pfx}-dw`)?.value)||0;
+      const dh = parseFloat(document.getElementById(`${pfx}-dh`)?.value)||0;
+      if (h) {
+        const wall1=h*w1l, wall2=h*w2w, wall3=h*w3l, wall4=Math.max(0,h*w4w-dw*dh);
+        wallBase = wall1+wall2+wall3+wall4;
+        if (wallBase>0) { wallMeta = { subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, l:(w1l+w2w+w3l+w4w), w:h, mode:'wallwise' }; wallLabel = 'Walls (4 sides)'; }
+      }
     }
+    if (!wallBase && !floor) { showToast('Enter wall height + length, or floor dimensions','warn'); return; }
+    if (wallBase > 0 && wallMeta) areas.push({ label:wallLabel, sqft:wallBase*(1+waste), base:wallBase, ...wallMeta, wastage:waste>0?Math.round(waste*100):0 });
     if (floor) areas.push({ label:`Floor ${fl}×${fw}ft`, sqft:floor, base:fl*fw, subType:'floor', l:fl, w:fw, wastage:waste>0?Math.round(waste*100):0 });
   } else if (def.measureType === 'staircase') {
     const sw=parseFloat(document.getElementById(`${pfx}-sw`)?.value)||0;
@@ -27120,7 +27163,7 @@ window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
-  tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom,
+  tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom, _tqWallMode,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading,
