@@ -5230,7 +5230,9 @@ async function generateInvoiceInner() {
   // with no matched Inventory product (productId null, e.g. a brand-new
   // item never formally added) are skipped since there's no row to
   // deduct from.
-  for (const item of activeCart.items) {
+  let _dispatchSnapshotChanged = false;
+  for (let _i = 0; _i < activeCart.items.length; _i++) {
+    const item = activeCart.items[_i];
     if (!item.productId) continue;
     const product = await VW_DB.getById(VW_DB.STORES.products, item.productId);
     if (!product) continue;
@@ -5243,11 +5245,31 @@ async function generateInvoiceInner() {
       product.heldStock = Math.max(0, (parseFloat(product.heldStock) || 0) - (parseFloat(item.qty) || 0));
     }
     await VW_DB.put(VW_DB.STORES.products, product);
+    // Keep the per-location rows in sync with the flat on-hand: snapshot the
+    // lowest-first pick plan onto the invoice item first (so Dispatch still
+    // shows where to pick after the sale), then deduct those locations and
+    // log a user-attributed movement so the sale shows in Stock History.
+    const _qtySold = parseFloat(item.qty) || 0;
+    if (_qtySold > 0) {
+      try {
+        const { locations } = await getProductStockLocations(item.productId);
+        if (locations.length && invoice.items[_i]) {
+          const { plan } = pickStockLowestFirst(locations, _qtySold);
+          invoice.items[_i].dispatchPick = plan.map(p => ({ warehouse_code:p.warehouse_code, rack_no:p.rack_no, shelf_no:p.shelf_no, take:p.take }));
+          _dispatchSnapshotChanged = true;
+        }
+      } catch(_) {}
+      try { await VW_STOCK.deductLowestFirst(item.productId, _qtySold); } catch(_) {}
+      try {
+        await recordStockMovement({
+          productId: item.productId, productName: product.name, delta: -_qtySold, kind: 'sale',
+          reason: `Sale — ${invoiceNo||''}`, ref: invoiceNo||'',
+          stockBefore: (parseFloat(product.stock)||0) + _qtySold, stockAfter: parseFloat(product.stock)||0
+        });
+      } catch(_) {}
+    }
   }
-  if (activeCart.quotationId) {
-    const q2 = await VW_DB.getById(VW_DB.STORES.quotations, activeCart.quotationId);
-    if (q2 && !q2.holdReleased) { q2.holdReleased = true; await VW_DB.put(VW_DB.STORES.quotations, q2); }
-  }
+  if (_dispatchSnapshotChanged) { try { invoice.id = invId; await VW_DB.put(VW_DB.STORES.invoices, invoice); } catch(_) {} }
 
   activeCart.quotationId = null;
   activeCart.quotationAdvance = 0;
@@ -9695,6 +9717,12 @@ async function confirmRestock(productId) {
     reason: `Restock from ${supplier}`, ref: billNo,
     stockBefore: before, stockAfter: p.stock
   });
+
+  // Keep per-location rows in sync: add the restocked qty to the product's
+  // primary location (its saved zone/rack/shelf) when it has one.
+  if (p.warehouseZone) {
+    try { await VW_STOCK.addToLocation(productId, p.warehouseZone, p.rackNo||'', p.shelfNo||'', qty); } catch(_) {}
+  }
 
   closeSheet();
   showStockAddedConfirm({ name: p.name, unit: p.unit, added: qty, before, after: p.stock, byName: profile ? profile.name : '' });
@@ -14907,10 +14935,16 @@ async function openDispatchDetail(invoiceId) {
   const items = inv.items || [];
 
   // Lowest-qty-first pick plan per item (from multi-location stock), shown on the checklist.
+  // Prefer the snapshot taken at billing (locations are deducted at sale, so a
+  // live recompute would read post-sale rows); fall back to live for older invoices.
   const pickInfo = {};
   for (let i = 0; i < items.length; i++) {
     const pid = items[i].productId;
     if (!pid) continue;
+    if (Array.isArray(items[i].dispatchPick) && items[i].dispatchPick.length) {
+      pickInfo[i] = { plan: items[i].dispatchPick, shortfall: 0 };
+      continue;
+    }
     try {
       const { locations } = await getProductStockLocations(pid);
       if (locations.length) pickInfo[i] = pickStockLowestFirst(locations, items[i].qty);
@@ -31284,11 +31318,24 @@ async function approveGRN(id) {
       item.name?.toLowerCase().includes(p.name?.toLowerCase().slice(0,10))
     );
     if (match) {
+      const before = parseFloat(match.stock)||0;
+      const addQty = parseFloat(item.qty)||0;
       await VW_DB.put(VW_DB.STORES.products, {
         ...match,
-        stock: (match.stock||0) + (item.qty||0),
+        stock: before + addQty,
         lastGRN: new Date().toISOString()
       });
+      // Keep per-location rows in sync and log a user-attributed movement.
+      if (match.warehouseZone && addQty > 0) {
+        try { await VW_STOCK.addToLocation(match.id, match.warehouseZone, match.rackNo||'', match.shelfNo||'', addQty); } catch(_) {}
+      }
+      try {
+        await recordStockMovement({
+          productId: match.id, productName: match.name, delta: addQty, kind: 'restock',
+          reason: `GRN — ${g.po_no||g.vendor_name||''}`, ref: g.invoice_no||'',
+          stockBefore: before, stockAfter: before + addQty
+        });
+      } catch(_) {}
     }
   }
 
