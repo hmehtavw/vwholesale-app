@@ -2173,6 +2173,7 @@ const MESSAGES = {
     feedback: (name) => `⭐ Feedback received from ${name}`,
     visitor: (name, type) => `🚪 Visitor: ${name} (${type}) is here to see you. Accept or Decline.`,
     quotation_approval: (name, quoteNo) => `📝 Quotation ${quoteNo||''} for ${name} needs your approval before it can be sent to the customer.`,
+    quotation_delay: (dept, quoteNo) => `⏰ Approval delay: the ${dept} TL hasn't actioned quotation ${quoteNo||''} in time. Escalated to Management — please review.`,
     invoice_approval: (invoiceNo, reasonText) => `🧾 Invoice ${invoiceNo||''} needs your approval${reasonText ? ' — '+reasonText : ''} before it can be finalized.`,
     quote_request_received: (name) => `📋 ${name} brought in an existing quotation/estimate — please prepare a matching quote and share it back to the executive on WhatsApp.`
   },
@@ -2190,6 +2191,7 @@ const MESSAGES = {
     feedback: (name) => `⭐ ${name} నుండి అభిప్రాయం వచ్చింది`,
     visitor: (name, type) => `🚪 విజిటర్: ${name} (${type}) మీ కోసం వచ్చారు.`,
     quotation_approval: (name, quoteNo) => `📝 ${name} కోసం కొటేషన్ ${quoteNo||''} మీ ఆమోదం కోసం వేచి ఉంది.`,
+    quotation_delay: (dept, quoteNo) => `⏰ ఆమోద ఆలస్యం: ${dept} TL కొటేషన్ ${quoteNo||''}ను సకాలంలో ఆమోదించలేదు. మేనేజ్‌మెంట్‌కు ఎస్కలేట్ చేయబడింది.`,
     invoice_approval: (invoiceNo, reasonText) => `🧾 ఇన్వాయిస్ ${invoiceNo||''}కి మీ ఆమోదం అవసరం.`,
     quote_request_received: (name) => `📋 ${name} ఒక కొటేషన్/అంచనా తీసుకువచ్చారు — దయచేసి సరిపోలే కొటేషన్ తయారు చేసి వాట్సాప్‌లో పంచుకోండి.`
   }
@@ -2580,6 +2582,24 @@ async function checkEscalations() {
           const staffList = await VW_DB.all(VW_DB.STORES.staff);
           const tls = staffList.filter(s => branch.staffIds.includes(s.id));
           for (const tl of tls) await notifyPerson(tl.phone, 'quotation_approval', [q.customerName || q.siteName || 'a customer', `${q.quoteNo||''} (${branch.department}) — reminder`], tl.language || 'en', `quote-${q.id}-tl-${branch.department}-reminder`);
+        }
+        // First time this branch overruns, escalate it to Management so a
+        // stuck department can't hold the whole quote hostage: Management
+        // (admin) can approve any pending branch directly, and a Delay
+        // Report is filed once so the holdup is on record + visible on the
+        // dashboard's pending-approvals surface.
+        if (!branch.escalatedToManagement) {
+          branch.escalatedToManagement = true;
+          branch.escalatedAt = new Date().toISOString();
+          await VW_NOTIFY.notify('quotation_delay', null, [branch.department, q.quoteNo || ''], 'en', `quote-${q.id}-delay-${branch.department}`);
+          await createPersistedNotification({
+            category: 'approval_delay',
+            title: `Approval delayed — ${branch.department}`,
+            body: `${branch.department} TL hasn't approved quotation ${q.quoteNo||''} for ${q.customerName||q.siteName||'a customer'} in time. Escalated to Management.`,
+            recipientRole: 'management',
+            relatedTable: 'quotations',
+            relatedId: q.id
+          });
         }
       }
       if (changed) { q.approvalLog = qlog; await VW_DB.put(VW_DB.STORES.quotations, q); }
@@ -34805,7 +34825,7 @@ async function renderDashboard() {
     VW_DB.client.from('visits').select('*').gte('date', today + 'T00:00:00').limit(100),
     VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason,escalation_log,closure_photo').gte('date', today + 'T00:00:00').limit(100),
     VW_DB.client.from('tasks').select('*').in('status', ['pending','in_progress']).limit(50),
-    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at,status,items').in('approval_status', ['pending_approval','approved','sent','draft']).limit(100),
+    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at,status,items,approval_log').in('approval_status', ['pending_approval','approved','sent','draft']).limit(100),
     VW_DB.client.from('leads').select('id,name,stage,assigned_to,assigned_to_name,created_at').limit(100),
     VW_DB.client.from('feedback').select('id,rating,visit_id,customer_id,created_at').order('created_at', { ascending: false }).limit(50),
     VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit,active').eq('active', true).limit(200),
@@ -34833,6 +34853,7 @@ async function renderDashboard() {
     approvalStatus: q.approval_status || q.approvalStatus,
     customerName: q.customer_name || q.customerName,
     grandTotal: q.grand_total || q.grandTotal,
+    approvalLog: q.approval_log || q.approvalLog || [],
   }));
   const pendingQuotes = quotations.filter(q => q.approvalStatus === 'pending_approval');
   const leads = (leadsRes.data || []).map(l => ({
@@ -35185,7 +35206,10 @@ async function renderDashboard() {
     ${quotePending.length ? `
     <div class="card approval-card" onclick="goToQuotations()" style="cursor:pointer">
       <h3 class="card-title">📄 Quotations <span class="badge">${quotePending.length}</span></h3>
-      ${quotePending.slice(0,3).map(q => `<div style="font-size:12px;padding:3px 0">${q.quoteNo||''} — ${q.customerName||''}</div>`).join('')}
+      ${quotePending.slice(0,3).map(q => {
+        const delayed = (q.approvalLog||[]).some(e => e.level==='tl' && (e.branches||[]).some(b => b.escalatedToManagement && b.status==='pending'));
+        return `<div style="font-size:12px;padding:3px 0">${delayed?'⏰ ':''}${q.quoteNo||''} — ${q.customerName||''}${delayed?' <span style="color:var(--red)">(delayed)</span>':''}</div>`;
+      }).join('')}
     </div>` : ''}
   </div>` : '';
 
