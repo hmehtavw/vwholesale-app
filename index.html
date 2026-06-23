@@ -16838,7 +16838,7 @@ async function renderCatalogsPage() {
 
   return `
   <div class="module-header"><h2>Catalogs & Pricesheets</h2>
-    <button class="btn-sm" onclick="VW_FEATURES.showUploadCatalog()">+ Upload</button>
+    ${VW_AUTH.isAdmin() ? `<button class="btn-sm" onclick="VW_FEATURES.showUploadCatalog()">+ Upload</button>` : ''}
   </div>
   <div class="entry-type-grid" style="margin-bottom:14px">
     <button class="entry-type-btn active" onclick="VW_FEATURES.switchCatalogTab('upload',this)"><span class="et-icon">📄</span>Brand Catalogs</button>
@@ -16984,6 +16984,7 @@ function uploadCatalogAsPriceList() {
 }
 
 async function showUploadCatalog() {
+  if (!VW_AUTH.isAdmin()) { showToast('Only Admin can add catalogs', 'warn'); return; }
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
