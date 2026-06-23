@@ -22481,25 +22481,11 @@ async function _renderStep0() {
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${c.name}</div>
           <div style="font-size:11px;color:var(--text3)">${c.phone}${c.tier?' · '+c.tier+' Member':''}</div>
-          <div style="font-size:11px;margin-top:2px">
-            Commission:
-            <strong style="color:${c.commissionPct>2?'var(--gold)':'var(--green)'}">${c.commissionPct}%</strong>
-            ${c.commissionPct>2?'<span style="font-size:10px;color:var(--gold)"> · Needs approval</span>':''}
-          </div>
         </div>
         <button onclick="VW_TILES.unlinkContractor()"
           style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0">✕</button>
       </div>
-      <!-- Commission % -->
-      <div style="display:flex;gap:5px;flex-wrap:wrap">
-        ${[1,1.5,2,2.5,3,5].map(pct=>`
-        <button onclick="VW_TILES.setContractorCommission(${pct})"
-          style="padding:4px 9px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;
-            border:${c.commissionPct===pct?'2px solid var(--gold)':'1px solid var(--border)'};
-            background:${c.commissionPct===pct?'var(--gold-muted)':'var(--bg2)'};
-            color:${c.commissionPct===pct?'var(--gold)':'var(--text)'}">${pct}%
-        </button>`).join('')}
-      </div>
+      <div style="font-size:10px;color:var(--text3)">Commission is set &amp; approved in the back-office Commissions module — never shown on the quote.</div>
     </div>` : `
 
     <!-- Contractor search — debounced, updates results div only -->
