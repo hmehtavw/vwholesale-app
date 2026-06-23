@@ -2268,7 +2268,16 @@ async function getMyPersistedNotifications() {
   const all = await VW_DB.all(VW_DB.STORES.persistedNotifications);
   return all.filter(n => {
     if (n.recipientId) return n.recipientId === profile.id;
-    if (n.recipientRole) return allowedPages.includes(PERMISSION_PAGES_FOR_NOTIF[n.recipientRole] || n.recipientRole);
+    if (n.recipientRole) {
+      const page = PERMISSION_PAGES_FOR_NOTIF[n.recipientRole];
+      if (page) return allowedPages.includes(page);
+      // No page mapping (e.g. 'management') — match on the user's actual role.
+      // A 'management' notification also reaches Sales Head and Admin so the
+      // owner/leadership tier always sees escalations like delay reports.
+      if (n.recipientRole === profile.role) return true;
+      if (n.recipientRole === 'management' && ['management','sales_head','admin'].includes(profile.role)) return true;
+      return allowedPages.includes(n.recipientRole);
+    }
     return false;
   }).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
