@@ -22331,6 +22331,12 @@ async function renderStockHistory(productId) {
   });
 
   movements.sort((a,b)=>new Date(b.date)-new Date(a.date));
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3>📦 ${product.name}</h3>
+    <p class="sheet-meta">Current stock: ${product.stock||0} ${product.unit||'pc'}</p>
     <div style="max-height:400px;overflow-y:auto">
       ${!movements.length ? '<p class="empty-msg">No movement history yet</p>' :
       movements.map(m=>`
