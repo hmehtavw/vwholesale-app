@@ -23023,11 +23023,15 @@ function tqSaveRoom(type, editIdx) {
     const dh = parseFloat(document.getElementById(`${pfx}-dh`)?.value)||0;
     const fl = parseFloat(document.getElementById(`${pfx}-fl`)?.value)||0;
     const fw = parseFloat(document.getElementById(`${pfx}-fw`)?.value)||0;
-    if (!h) { showToast('Enter wall height','warn'); return; }
-    const wall1=h*w1l, wall2=h*w2w, wall3=h*w3l, wall4=Math.max(0,h*w4w-dw*dh);
-    const totalWall=(wall1+wall2+wall3+wall4)*(1+waste);
-    const floor=fl&&fw?fl*fw*(1+waste):0;
-    if (wall1||wall2||wall3||wall4) areas.push({ label:`Walls (4 sides)`, sqft:totalWall, base:wall1+wall2+wall3+wall4, subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, wastage:waste>0?Math.round(waste*100):0 });
+    const floor = fl&&fw ? fl*fw*(1+waste) : 0;
+    // Floor is optional (may be measured under Living/Dining); walls optional too —
+    // but at least one is required.
+    if (!h && !floor) { showToast('Enter wall height, or floor dimensions','warn'); return; }
+    if (h) {
+      const wall1=h*w1l, wall2=h*w2w, wall3=h*w3l, wall4=Math.max(0,h*w4w-dw*dh);
+      const totalWall=(wall1+wall2+wall3+wall4)*(1+waste);
+      if (wall1||wall2||wall3||wall4) areas.push({ label:`Walls (4 sides)`, sqft:totalWall, base:wall1+wall2+wall3+wall4, subType:'wall', h, w1l, w2w, w3l, w4w, dw, dh, wastage:waste>0?Math.round(waste*100):0 });
+    }
     if (floor) areas.push({ label:`Floor ${fl}×${fw}ft`, sqft:floor, base:fl*fw, subType:'floor', l:fl, w:fw, wastage:waste>0?Math.round(waste*100):0 });
   } else if (def.measureType === 'staircase') {
     const sw=parseFloat(document.getElementById(`${pfx}-sw`)?.value)||0;
@@ -25539,7 +25543,31 @@ function _dsRenderInner() {
   // The display grid is capped for mobile; scale painted proportions up to the
   // real tile count (area ÷ tile area) so box counts stay accurate on big areas.
   const totalCells = (st.cells||[]).length || 1;
-  const realTiles = (g && sqftPerTile) ? Math.ceil((g.wallSqft||0)/sqftPerTile) : totalCells;
+  // Accurate cut-waste: tiles = ceil(roomL/tileL) × ceil(roomW/tileW) per area,
+  // using the better of the two tile orientations, summed across the slot's areas.
+  // Falls back to area-based when an area has no L×W (e.g. direct-area walls/steps).
+  let realTiles;
+  {
+    const slotNow = _dsCur();
+    const mm = (sizeMm||'').match(/(\d+)\D+(\d+)/);
+    const tA = mm ? parseInt(mm[1])/304.8 : 0, tB = mm ? parseInt(mm[2])/304.8 : 0;
+    const areas = (slotNow?.room?.areas||[]).filter(a =>
+      slotNow.subType==='wall' ? a.subType==='wall' : (a.subType==='floor'||!a.subType));
+    let geo = 0, used = false;
+    if (tA && tB && sqftPerTile) {
+      for (const a of areas) {
+        if (a.l && a.w) {
+          const o1 = Math.ceil(a.l/tA)*Math.ceil(a.w/tB);
+          const o2 = Math.ceil(a.l/tB)*Math.ceil(a.w/tA);
+          geo += Math.min(o1, o2); used = true;
+          if (a.skirting && a.skirtingHeightIn) geo += Math.ceil((a.skirting*(a.skirtingHeightIn/12))/sqftPerTile);
+        } else {
+          geo += Math.ceil((a.sqft||0)/sqftPerTile);
+        }
+      }
+    }
+    realTiles = used ? geo : ((g && sqftPerTile) ? Math.ceil((g.wallSqft||0)/sqftPerTile) : totalCells);
+  }
   const scale = totalCells ? realTiles/totalCells : 1;
   let totalAmount = 0, totalBoxes = 0;
   const lines = pal.map((t,pi)=>{
