@@ -8847,7 +8847,10 @@ async function renderInventory() {
     ${lowStock.map(p => `
     <div class="followup-row">
       <div class="fu-info"><div class="fu-name">${p.name}</div><div class="fu-dept">${p.category} · ${p.stock} ${p.unit} left</div></div>
-      <button class="btn-sm" onclick="showRestock(${p.id})">Restock</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm" onclick="VW_VENDOR.createPOForProduct(${p.id})">🛒 PO</button>
+        <button class="btn-sm" onclick="showRestock(${p.id})">Restock</button>
+      </div>
     </div>`).join('')}
   </div>` : ''}
 
@@ -8987,9 +8990,10 @@ async function openProduct(id) {
       <div id="product-photo-gallery">${renderProductPhotoGallery(p.photos || [])}</div>
       <button type="button" class="btn-sm" style="margin-top:6px" onclick="showSubmitProductPhoto(${id}, null, '${(p.name||'').replace(/'/g,"\\'")}')">+ Add Photo</button>
     </div>
-    <div style="display:flex;gap:8px;margin-top:12px">
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
       <button class="btn-primary" onclick="updateProduct(${id})">Save Changes</button>
       <button class="btn-secondary" onclick="showRestock(${id})">📦 Restock</button>
+      <button class="btn-secondary" onclick="VW_VENDOR.createPOForProduct(${id})">🛒 Raise PO</button>
       <button class="btn-secondary" onclick="VW_EXTRAS.renderStockHistory(${id})">📊 History</button>
     </div>
     <div style="margin-top:14px;background:var(--bg2);border-radius:10px;padding:12px">
@@ -18615,6 +18619,8 @@ async function showAddVendor(vendorId) {
       </div>
     </div>
     <div class="form-group"><label>GST Number</label><input type="text" id="vnd-gst" value="${v?.gstNo||''}" placeholder="e.g. 37AABCV1234Z1Z5" style="text-transform:uppercase"></div>
+    <div class="form-group"><label>Brands Supplied <span style="color:var(--text3);font-weight:400">(comma-separated — used to route POs)</span></label>
+      <input type="text" id="vnd-brands" value="${(v?.brands||[]).join(', ')}" placeholder="e.g. Kajaria, Ashirvad, Asian Paints"></div>
     <div class="form-group"><label>Payment Terms</label>
       <select id="vnd-terms">
         <option value="" ${!v?.paymentTerms?'selected':''}>Select...</option>
@@ -18647,6 +18653,7 @@ async function saveVendor(vendorId) {
     phone,
     whatsapp: document.getElementById('vnd-wa')?.value.trim() || phone,
     categories,
+    brands: (document.getElementById('vnd-brands')?.value||'').split(',').map(b=>b.trim()).filter(Boolean),
     gstNo: (document.getElementById('vnd-gst')?.value||'').toUpperCase().trim(),
     paymentTerms: document.getElementById('vnd-terms')?.value||'',
     address: document.getElementById('vnd-address')?.value.trim()||'',
@@ -18722,31 +18729,40 @@ async function openVendor(id) {
 }
 
 // ===== CREATE PURCHASE ORDER =====
-async function showCreatePO(vendorId) {
+async function showCreatePO(vendorId, preselectProductId = null) {
   const [vendor, products] = await Promise.all([
     VW_DB.getById(VW_DB.STORES.vendors, vendorId),
     VW_DB.all(VW_DB.STORES.products)
   ]);
   if (!vendor) return;
-  // Filter to products in vendor's categories
-  const relevantProducts = vendor.categories?.length
-    ? products.filter(p => vendor.categories.includes(p.category))
-    : products;
+  const vendorBrands = (vendor.brands||[]).map(b=>String(b).toLowerCase());
+  // Products this vendor supplies: brand match takes priority, then category.
+  const brandMatched = vendorBrands.length ? products.filter(p => p.brand && vendorBrands.includes(String(p.brand).toLowerCase())) : [];
+  const sortedProducts = [...products].sort((a,b) => {
+    const aB = a.brand && vendorBrands.includes(String(a.brand).toLowerCase()) ? 0 : 1;
+    const bB = b.brand && vendorBrands.includes(String(b.brand).toLowerCase()) ? 0 : 1;
+    return aB - bB;
+  });
 
   window._poDraft = { vendorId, vendorName: vendor.name, items: [], notes: '' };
+  // Pre-add the product that triggered this PO (e.g. "Raise PO" from a low-stock item).
+  if (preselectProductId) {
+    const p = products.find(x => x.id === preselectProductId);
+    if (p) window._poDraft.items.push({ productId: p.id, name: p.name, unit: p.unit||'pc', qty: 1, expectedRate: 0 });
+  }
 
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <h3>Create Purchase Order</h3>
-    <p class="sheet-meta">${vendor.name} · ${vendor.paymentTerms||'No terms set'}</p>
+    <p class="sheet-meta">${vendor.name} · ${vendor.paymentTerms||'No terms set'}${vendorBrands.length ? ' · Brands: '+(vendor.brands||[]).join(', ') : ''}</p>
 
     <div class="form-group">
-      <label>Add Items</label>
+      <label>Add Items${brandMatched.length ? ` <span style="color:var(--gold);font-weight:400">(${brandMatched.length} match this vendor's brands)</span>` : ''}</label>
       <div style="display:flex;gap:8px">
         <select id="po-product-select" style="flex:1">
           <option value="">— Select product —</option>
-          ${products.map(p => `<option value="${p.id}" data-name="${p.name}" data-unit="${p.unit||'pc'}">${p.name} (${p.category}) — Stock: ${p.stock||0}</option>`).join('')}
+          ${sortedProducts.map(p => `<option value="${p.id}" data-name="${p.name}" data-unit="${p.unit||'pc'}">${(p.brand && vendorBrands.includes(String(p.brand).toLowerCase()))?'⭐ ':''}${p.name} (${p.category}) — Stock: ${p.stock||0}</option>`).join('')}
         </select>
         <button class="btn-sm" onclick="VW_VENDOR.addPOItem()">+ Add</button>
       </div>
@@ -18765,6 +18781,28 @@ async function showCreatePO(vendorId) {
   `;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
+  renderPOItemsList();
+}
+
+// Raise a PO starting from a product/brand: find the vendor that supplies
+// the product's brand (falls back to a vendor covering its category), then
+// open the PO form with that vendor and the item pre-added.
+async function createPOForProduct(productId) {
+  const [product, vendors] = await Promise.all([
+    VW_DB.getById(VW_DB.STORES.products, productId),
+    VW_DB.all(VW_DB.STORES.vendors)
+  ]);
+  if (!product) return;
+  const brand = (product.brand||'').toLowerCase();
+  let vendor = brand ? vendors.find(v => (v.brands||[]).some(b => String(b).toLowerCase() === brand)) : null;
+  let routedBy = vendor ? 'brand' : '';
+  if (!vendor) { vendor = vendors.find(v => (v.categories||[]).includes(product.category)); routedBy = vendor ? 'category' : ''; }
+  if (!vendor) {
+    showToast(`No vendor linked to ${product.brand||product.category||'this item'} yet — add the brand to a vendor first`, 'warn');
+    return navigateTo('vendors');
+  }
+  showToast(`Routed to ${vendor.name}${routedBy==='brand'?` (supplies ${product.brand})`:` (${product.category})`}`, 'success');
+  showCreatePO(vendor.id, productId);
 }
 
 function addPOItem() {
@@ -19195,7 +19233,7 @@ async function copyRFQText() {
 
 window.VW_VENDOR = {
   renderVendorsPage, openVendor, showAddVendor, saveVendor,
-  showCreatePO, addPOItem, renderPOItemsList, updatePOTotal, savePO,
+  showCreatePO, addPOItem, renderPOItemsList, updatePOTotal, savePO, createPOForProduct,
   sendPOWhatsApp, openPO, showReceivePO, confirmReceivePO,
   rateVendorDelivery, switchVendorTab, quickPOFromLowStock, saveQuickPO,
   renderRFQTab, sendRFQToAll, copyRFQText
