@@ -34839,6 +34839,7 @@ async function navigateTo(page, params) {
     if (cached && cacheAge < CACHE_TTL_MS) {
       content.innerHTML = cached; // Instant — show cache immediately
       applyRolePermissions();
+      if (_currentLang !== 'en') translatePageChrome(content);
       // Refresh in background silently after 500ms
       setTimeout(() => navigateToFresh(page, params, cacheKey), 500);
       return;
@@ -35053,6 +35054,7 @@ async function navigateToFresh(page, params, cacheKey) {
     content.innerHTML = finalHtml;
     content.scrollTop = 0;
     applyRolePermissions();
+    if (_currentLang !== 'en') translatePageChrome(content);
 
   } catch(err) {
     console.error('Navigation error:', err);
@@ -36348,6 +36350,7 @@ async function init() {
   try { await VW_NOTIFY.requestNotifPermission(); } catch(e) {}
 
   await navigateTo('dashboard');
+  try { _initI18nObserver(); if (_currentLang !== 'en') setTimeout(() => translatePageChrome(document.body), 100); } catch(e) {}
   try { await refreshNotifBadge(); } catch(e) { console.warn('Notif badge refresh error', e); }
 
   // Init data protection for non-admin staff
@@ -36729,12 +36732,110 @@ function setLanguage(lang) {
   });
   const langNames = {en:'English',te:'Telugu',hi:'Hindi',bn:'Bengali',or:'Odia'};
   showToast(`Language: ${langNames[lang]||lang}`, 'success');
+  _initI18nObserver();
   // Re-render the current page so localized labels apply immediately (otherwise the
-  // change is invisible and the button feels broken).
+  // change is invisible and the button feels broken), then translate the chrome.
   try { if (typeof navigateTo==='function') navigateTo(window.currentPage || 'dashboard'); } catch(_) {}
+  setTimeout(() => translatePageChrome(document.body), 80);
 }
 
 window.TRANSLATIONS = TRANSLATIONS;
+
+// ===== POST-RENDER UI TRANSLATION (phrase layer) =====
+// The screens are authored in English. Rather than wrap thousands of strings,
+// we translate the rendered DOM in place: for the active non-English language,
+// any text node / placeholder whose trimmed value EXACTLY matches a known UI
+// phrase is swapped for its translation. Exact whole-string match only, so
+// dynamic data (names, numbers, ₹ amounts) is never touched. Telugu + Hindi
+// are filled; other languages fall back to English where a phrase is missing.
+const PHRASE_I18N = {
+  // Navigation & chrome
+  'Home':{te:'హోమ్',hi:'होम'},'Check-in':{te:'చెక్-ఇన్',hi:'चेक-इन'},'Billing':{te:'బిల్లింగ్',hi:'बिलिंग'},
+  'Tasks':{te:'టాస్క్‌లు',hi:'काम'},'More':{te:'మరిన్ని',hi:'और'},'Dashboard':{te:'డాష్‌బోర్డ్',hi:'डैशबोर्ड'},
+  'Inventory':{te:'స్టాక్',hi:'स्टॉक'},'Customers':{te:'కస్టమర్లు',hi:'ग्राहक'},'Quotations':{te:'కొటేషన్లు',hi:'कोटेशन'},
+  'Settings':{te:'సెట్టింగ్‌లు',hi:'सेटिंग्स'},'Reports':{te:'రిపోర్టులు',hi:'रिपोर्ट'},'Analytics':{te:'విశ్లేషణ',hi:'विश्लेषण'},
+  'Vendors':{te:'వెండర్లు',hi:'विक्रेता'},'Dispatch':{te:'డిస్పాచ్',hi:'डिस्पैच'},'Catalogs':{te:'క్యాటలాగ్‌లు',hi:'कैटलॉग'},
+  'Returns':{te:'రిటర్న్‌లు',hi:'वापसी'},'Notifications':{te:'నోటిఫికేషన్లు',hi:'सूचनाएं'},'Purchase':{te:'కొనుగోలు',hi:'खरीद'},
+  // Common actions
+  'Save':{te:'సేవ్ చేయి',hi:'सेव करें'},'Cancel':{te:'రద్దు చేయి',hi:'रद्द करें'},'Close':{te:'మూసివేయి',hi:'बंद करें'},
+  'Delete':{te:'తొలగించు',hi:'हटाएं'},'Edit':{te:'మార్చు',hi:'बदलें'},'Submit':{te:'సమర్పించు',hi:'जमा करें'},
+  'Confirm':{te:'నిర్ధారించు',hi:'पुष्टि करें'},'Approve':{te:'ఆమోదించు',hi:'मंजूर करें'},'Reject':{te:'తిరస్కరించు',hi:'अस्वीकार करें'},
+  'Print':{te:'ప్రింట్',hi:'प्रिंट'},'Share':{te:'షేర్ చేయి',hi:'शेयर करें'},'Send':{te:'పంపు',hi:'भेजें'},
+  'Back':{te:'వెనుకకు',hi:'वापस'},'Next':{te:'తదుపరి',hi:'अगला'},'Done':{te:'పూర్తయింది',hi:'पूर्ण'},
+  'Update':{te:'అప్‌డేట్',hi:'अपडेट'},'Continue':{te:'కొనసాగించు',hi:'जारी रखें'},'Try Again':{te:'మళ్లీ ప్రయత్నించు',hi:'पुनः प्रयास करें'},
+  'Save Changes':{te:'మార్పులు సేవ్ చేయి',hi:'बदलाव सेव करें'},'Add Item':{te:'ఐటెమ్ జోడించు',hi:'आइटम जोड़ें'},
+  'Add Product':{te:'ప్రొడక్ట్ జోడించు',hi:'उत्पाद जोड़ें'},'Add New Product':{te:'కొత్త ప్రొడక్ట్ జోడించు',hi:'नया उत्पाद जोड़ें'},
+  'Add Customer':{te:'కస్టమర్ జోడించు',hi:'ग्राहक जोड़ें'},'Add Vendor':{te:'వెండర్ జోడించు',hi:'विक्रेता जोड़ें'},
+  'New Quotation':{te:'కొత్త కొటేషన్',hi:'नया कोटेशन'},'New Invoice':{te:'కొత్త ఇన్వాయిస్',hi:'नया इनवॉइस'},
+  'Restock':{te:'రీస్టాక్',hi:'रीस्टॉक'},'Raise PO':{te:'PO సృష్టించు',hi:'PO बनाएं'},'Skip for now':{te:'ప్రస్తుతానికి దాటవేయి',hi:'अभी छोड़ें'},
+  // Statuses
+  'Pending':{te:'పెండింగ్',hi:'लंबित'},'Approved':{te:'ఆమోదించబడింది',hi:'मंजूर'},'Rejected':{te:'తిరస్కరించబడింది',hi:'अस्वीकृत'},
+  'Draft':{te:'డ్రాఫ్ట్',hi:'ड्राफ्ट'},'Paid':{te:'చెల్లించబడింది',hi:'भुगतान हुआ'},'Sent':{te:'పంపబడింది',hi:'भेजा गया'},
+  'Pending Approval':{te:'ఆమోదం పెండింగ్',hi:'मंजूरी लंबित'},'Low Stock':{te:'తక్కువ స్టాక్',hi:'कम स्टॉक'},
+  'In Stock':{te:'స్టాక్‌లో ఉంది',hi:'स्टॉक में'},'Out of Stock':{te:'స్టాక్ లేదు',hi:'स्टॉक खत्म'},
+  'Active':{te:'యాక్టివ్',hi:'सक्रिय'},'Completed':{te:'పూర్తయింది',hi:'पूर्ण'},'Cancelled':{te:'రద్దు చేయబడింది',hi:'रद्द'},
+  // Common labels
+  'Name':{te:'పేరు',hi:'नाम'},'Phone':{te:'ఫోన్',hi:'फोन'},'Address':{te:'చిరునామా',hi:'पता'},'Amount':{te:'మొత్తం',hi:'राशि'},
+  'Quantity':{te:'పరిమాణం',hi:'मात्रा'},'Price':{te:'ధర',hi:'मूल्य'},'Rate':{te:'రేటు',hi:'दर'},'Total':{te:'మొత్తం',hi:'कुल'},
+  'Grand Total':{te:'మొత్తం కూడిక',hi:'कुल योग'},'Subtotal':{te:'సబ్‌టోటల్',hi:'उप-योग'},'Discount':{te:'తగ్గింపు',hi:'छूट'},
+  'Date':{te:'తేదీ',hi:'तारीख'},'Notes':{te:'గమనికలు',hi:'टिप्पणी'},'Category':{te:'వర్గం',hi:'श्रेणी'},
+  'Sub-Category':{te:'ఉప-వర్గం',hi:'उप-श्रेणी'},'Brand':{te:'బ్రాండ్',hi:'ब्रांड'},'Model':{te:'మోడల్',hi:'मॉडल'},
+  'Stock':{te:'స్టాక్',hi:'स्टॉक'},'Customer':{te:'కస్టమర్',hi:'ग्राहक'},'Vendor':{te:'వెండర్',hi:'विक्रेता'},
+  'Supplier':{te:'సప్లయర్',hi:'आपूर्तिकर्ता'},'Unit':{te:'యూనిట్',hi:'इकाई'},'Status':{te:'స్థితి',hi:'स्थिति'},
+  'Category *':{te:'వర్గం *',hi:'श्रेणी *'},'Product Name *':{te:'ప్రొడక్ట్ పేరు *',hi:'उत्पाद नाम *'},
+  'Opening Stock *':{te:'ప్రారంభ స్టాక్ *',hi:'प्रारंभिक स्टॉक *'},'Qty at this location':{te:'ఈ లొకేషన్‌లో పరిమాణం',hi:'इस स्थान पर मात्रा'},
+  'Today':{te:'ఈరోజు',hi:'आज'},'This Week':{te:'ఈ వారం',hi:'इस सप्ताह'},'This Month':{te:'ఈ నెల',hi:'इस महीने'},
+  // Dashboard
+  'Welcome back':{te:'తిరిగి స్వాగతం',hi:'वापसी पर स्वागत है'},'Good Morning':{te:'శుభోదయం',hi:'शुभ प्रभात'},
+  'Good Evening':{te:'శుభ సాయంత్రం',hi:'शुभ संध्या'},"Today's Billing":{te:'ఈరోజు బిల్లింగ్',hi:'आज की बिलिंग'},
+  "Today's Walk-ins":{te:'ఈరోజు వచ్చినవారు',hi:'आज के ग्राहक'},'Quick Actions':{te:'త్వరిత చర్యలు',hi:'त्वरित क्रियाएं'},
+  'Pending Approvals':{te:'ఆమోదం పెండింగ్‌లు',hi:'लंबित मंजूरी'}
+};
+
+function _i18nLookup(text){
+  if (_currentLang === 'en' || text == null) return null;
+  const key = String(text).trim();
+  if (!key) return null;
+  const entry = PHRASE_I18N[key];
+  const val = entry && entry[_currentLang];
+  if (!val) return null;
+  return String(text).replace(key, val); // preserve surrounding whitespace
+}
+
+// Translate matching UI phrases inside a rendered subtree, in place.
+function translatePageChrome(root){
+  try {
+    if (_currentLang === 'en') return;
+    root = root || document.body;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node){
+        const p = node.parentNode; if (!p) return NodeFilter.FILTER_REJECT;
+        const tag = p.nodeName;
+        if (tag==='SCRIPT'||tag==='STYLE'||tag==='TEXTAREA'||tag==='OPTION') return NodeFilter.FILTER_SKIP;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    const nodes = []; let n; while ((n = walker.nextNode())) nodes.push(n);
+    for (const node of nodes){ const tr = _i18nLookup(node.nodeValue); if (tr != null && tr !== node.nodeValue) node.nodeValue = tr; }
+    root.querySelectorAll && root.querySelectorAll('[placeholder]').forEach(el => { const tr = _i18nLookup(el.getAttribute('placeholder')); if (tr != null) el.setAttribute('placeholder', tr); });
+  } catch(_) {}
+}
+window.translatePageChrome = translatePageChrome;
+
+// Translate bottom-sheet forms as they open, without editing every sheet.
+let _i18nObserverSet = false;
+function _initI18nObserver(){
+  if (_i18nObserverSet) return;
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet || typeof MutationObserver === 'undefined') return;
+  _i18nObserverSet = true;
+  let _t = null;
+  new MutationObserver(() => {
+    if (_currentLang === 'en') return;
+    clearTimeout(_t); _t = setTimeout(() => translatePageChrome(sheet), 30);
+  }).observe(sheet, { childList:true, subtree:true });
+}
+window._initI18nObserver = _initI18nObserver;
 window.t = t;
 window.setLanguage = setLanguage;
 
