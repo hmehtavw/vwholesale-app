@@ -23251,8 +23251,8 @@ function _renderMeasureForm(type, areaIdx, prefill) {
     ${def.measureType==='floor_lw_skirting'?`
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1">
-        <label>Wastage % <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-        <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="0% if blank" min="0" max="30" step="1">
+        <label>Wastage</label>
+        <div style="font-size:11px;color:var(--green);padding-top:7px">✓ Auto at design</div>
       </div>
       <div class="form-group" style="margin:0;flex:1">
         <label>Skirting <span style="color:var(--text3);font-weight:400;font-size:10px">running ft</span></label>
@@ -23282,10 +23282,7 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label><input type="number" id="${pfx}-h" value="${p.h||''}" placeholder="e.g. 9" min="1" step="0.5"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" value="${p.w||''}" placeholder="e.g. 8" min="0.5" step="0.5"></div>
     </div>
-    <div class="form-group">
-      <label>Wastage % <span style="color:var(--text3);font-weight:400">(optional)</span></label>
-      <input type="number" id="${pfx}-waste" value="${p.wastage||''}" placeholder="Leave blank = 0%" min="0" max="30" step="1">
-    </div>`;
+    <div style="font-size:11px;color:var(--green);margin-top:6px">✓ Wastage auto-calculated at the design step.</div>`;
 
   if (def.measureType === 'bathroom') {
     // Pre-fill from existing room data when editing.
@@ -23305,6 +23302,7 @@ function _renderMeasureForm(type, areaIdx, prefill) {
     const bwaste = p?.wastage || '';
     const bwtl  = wallArea.l   !== undefined ? wallArea.l   : '';
     const wm    = (wallArea.w1l !== undefined && wallArea.w1l !== '') ? 'wallwise' : 'full';
+    const noDoor = type === 'Kitchen'; // kitchens are open — no door deduction
     return `
     <!-- Wall measurement mode: full single length vs 4 separate walls -->
     <div style="display:flex;gap:6px;margin-bottom:10px;background:var(--bg3);border-radius:10px;padding:4px">
@@ -23320,8 +23318,8 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div style="font-size:12px;font-weight:600;color:var(--text);margin:10px 0 8px">Total Wall Length <span style="font-weight:400;color:var(--text3)">— all sides added (e.g. 25)</span></div>
       <div class="form-row">
         <div class="form-group" style="margin:0;flex:1"><label>Total Length (ft)</label><input type="number" id="${pfx}-wtl" value="${bwtl}" placeholder="25" min="0.5" step="0.5"></div>
-        <div class="form-group" style="margin:0;flex:1"><label>Door W (ft)</label><input type="number" id="${pfx}-dwf" value="${bdw}" placeholder="0" min="0" step="0.5"></div>
-        <div class="form-group" style="margin:0;flex:1"><label>Door H (ft)</label><input type="number" id="${pfx}-dhf" value="${bdh}" placeholder="0" min="0" step="0.5"></div>
+        ${noDoor?'':`<div class="form-group" style="margin:0;flex:1"><label>Door W (ft)</label><input type="number" id="${pfx}-dwf" value="${bdw}" placeholder="0" min="0" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door H (ft)</label><input type="number" id="${pfx}-dhf" value="${bdh}" placeholder="0" min="0" step="0.5"></div>`}
       </div>
     </div>
     <!-- WALL-WISE: 4 separate walls -->
@@ -23332,11 +23330,11 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div class="form-group" style="margin-bottom:8px"><input type="number" id="${pfx}-w2w" value="${bw2w}" placeholder="6" min="0.5" step="0.5"></div>
       <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 3 (≈ Wall 1) — Length</div>
       <div class="form-group" style="margin-bottom:8px"><input type="number" id="${pfx}-w3l" value="${bw3l}" placeholder="10" min="0.5" step="0.5"></div>
-      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 4 (Front — deduct door) — Width</div>
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Wall 4 (Front${noDoor?'':' — deduct door'}) — Width</div>
       <div class="form-row">
         <div class="form-group" style="margin:0;flex:1"><label>Width</label><input type="number" id="${pfx}-w4w" value="${bw4w}" placeholder="6" min="0.5" step="0.5"></div>
-        <div class="form-group" style="margin:0;flex:1"><label>Door W</label><input type="number" id="${pfx}-dw" value="${bdw}" placeholder="2.5" min="0" step="0.5"></div>
-        <div class="form-group" style="margin:0;flex:1"><label>Door H</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>
+        ${noDoor?'':`<div class="form-group" style="margin:0;flex:1"><label>Door W</label><input type="number" id="${pfx}-dw" value="${bdw}" placeholder="2.5" min="0" step="0.5"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Door H</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>`}
       </div>
     </div>
     <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:10px;margin-bottom:8px">Floor <span style="font-weight:400;color:var(--text3)">(optional — skip if measured elsewhere)</span></div>
@@ -23344,9 +23342,7 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" value="${bfl}" placeholder="10" min="0.5" step="0.5"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" value="${bfw}" placeholder="6" min="0.5" step="0.5"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Wastage %</label><input type="number" id="${pfx}-waste" value="${bwaste}" placeholder="5" min="0" max="30" step="1"></div>
-    </div>`;}
+    <div style="font-size:11px;color:var(--green);margin-top:8px">✓ Wastage auto-calculated from tile size &amp; cuts at the design step — no manual % needed.</div>`;}
     if (def.measureType === 'staircase') return `
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1"><label>Step Width (ft)</label><input type="number" id="${pfx}-sw" placeholder="3.5" min="0.5" step="0.5"></div>
@@ -23362,7 +23358,7 @@ function _renderMeasureForm(type, areaIdx, prefill) {
       <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-l" placeholder="10" min="0.5" step="0.5"></div>
       <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-w" placeholder="8" min="0.5" step="0.5"></div>
     </div>
-    <div class="form-group"><label>Wastage %</label><input type="number" id="${pfx}-waste" placeholder="5" min="0" max="30" step="1"></div>`;
+    <div style="font-size:11px;color:var(--green);margin-top:6px">✓ Wastage auto-calculated at the design step.</div>`;
 }
 
 function _tqWallMode(pfx, mode){
@@ -23555,9 +23551,11 @@ async function _renderStep2() {
     const hasWall = r.areas?.some(a => a.subType === 'wall');
     const hasFloor = r.areas?.some(a => a.subType === 'floor' || !a.subType);
     if (r.def?.areaType === 'both' || (hasWall && hasFloor)) {
-      // Bathroom/Toilet — two slots
-      slots.push({ id: r.id + '_wall',  room: r, label: `${r.label||r.type} — Wall`,  icon:'🧱', subType:'wall',  sqft: r.areas?.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0)||0 });
-      slots.push({ id: r.id + '_floor', room: r, label: `${r.label||r.type} — Floor`, icon:'🔲', subType:'floor', sqft: r.areas?.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0)||0 });
+      const wallSqft  = r.areas?.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0)||0;
+      const floorSqft = r.areas?.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0)||0;
+      // Only the surfaces actually measured — walls-only rooms don't ask for floor tile, and vice-versa.
+      if (wallSqft  > 0) slots.push({ id: r.id + '_wall',  room: r, label: `${r.label||r.type} — Wall`,  icon:'🧱', subType:'wall',  sqft: wallSqft });
+      if (floorSqft > 0) slots.push({ id: r.id + '_floor', room: r, label: `${r.label||r.type} — Floor`, icon:'🔲', subType:'floor', sqft: floorSqft });
     } else {
       slots.push({ id: r.id, room: r, label: r.label||r.type, icon: ROOM_DEFS[r.type]?.icon||'🏠', subType: hasWall ? 'wall' : 'floor', sqft: r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0 });
     }
@@ -25969,11 +25967,11 @@ function _dsRenderInner() {
           geo += Math.min(o1, o2); used = true;
           if (a.skirting && a.skirtingHeightIn) geo += Math.ceil((a.skirting*(a.skirtingHeightIn/12))/sqftPerTile);
         } else {
-          geo += Math.ceil((a.sqft||0)/sqftPerTile);
+          geo += Math.ceil((a.sqft||0)*1.07/sqftPerTile); // +7% auto cut-waste where no L×W to compute geometry
         }
       }
     }
-    realTiles = used ? geo : ((g && sqftPerTile) ? Math.ceil((g.wallSqft||0)/sqftPerTile) : totalCells);
+    realTiles = used ? geo : ((g && sqftPerTile) ? Math.ceil((g.wallSqft||0)*1.07/sqftPerTile) : totalCells);
   }
   const scale = totalCells ? realTiles/totalCells : 1;
   let totalAmount = 0, totalBoxes = 0;
