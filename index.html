@@ -23544,6 +23544,10 @@ function _renderStep4() {
         </button>
       </div>` : ''}
 
+      ${method==='mix' && roomSqft>0 ? `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:7px 9px;margin-bottom:8px;font-size:10px;color:var(--text2);line-height:1.45">
+        ⚠️ <strong style="color:var(--red)">Not recommended.</strong> Tile adhesive already contains cement in a balanced ratio. Adding more dilutes the polymers and lowers bond strength &amp; flexibility (can crack/hollow). V Wholesale does not advise this — it's here only because some Mestris insist on it.
+      </div>` : ''}
+
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${adhBags > 0 ? `<div style="flex:1;background:var(--bg3);border-radius:7px;padding:7px;min-width:80px;text-align:center">
           <div style="font-size:10px;color:var(--text3)">Adhesive (20kg)</div>
