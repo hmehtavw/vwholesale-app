@@ -24426,6 +24426,8 @@ async function _renderStep8() {
     </div>
   </div>
 
+  ${_renderClubbedOrder()}
+
   <!-- BOM -->
   <!-- BILL OF MATERIALS — per room breakdown -->
   <div class="card" style="margin-bottom:10px">
@@ -25570,6 +25572,7 @@ function _dsRenderInner() {
   }
   const scale = totalCells ? realTiles/totalCells : 1;
   let totalAmount = 0, totalBoxes = 0;
+  const resultTiles = [];
   const lines = pal.map((t,pi)=>{
     const pcs = Math.round((counts[pi]||0) * scale);
     const tpb = t.tilesPerBox||4;
@@ -25586,6 +25589,8 @@ function _dsRenderInner() {
     const lineTotal = boxes*boxPrice;
     const spare = boxes*tpb - pcs;
     totalAmount += lineTotal; totalBoxes += boxes;
+    resultTiles.push({ key:t.key, name:t.name, brand:t.brand||'', finish:t.finish||'', size:sizeMm,
+      pcs, tpb, boxes, perSft, sqftPerTile, lineTotal, isStock:t.isStock });
     const swatch = _DS_SWATCH[pi%_DS_SWATCH.length];
     return `
     <div style="padding:8px 0;border-bottom:1px solid var(--border2)">
@@ -25608,7 +25613,7 @@ function _dsRenderInner() {
       </div>
     </div>`;
   }).join('');
-  st.result = { totalBoxes, totalAmount };
+  st.result = { totalBoxes, totalAmount, tiles: resultTiles };
 
   const last = idx >= slots.length-1;
   return `
@@ -25688,6 +25693,50 @@ function _dsPrev(){
   const idx=_tqState._designIdx||0;
   if (idx>0){ _tqState._designIdx=idx-1; const s=_dsCur(); if(s){_dsFetchTiles(s).then(()=>_dsRerender());} }
   else { tqBack(); }
+}
+
+// Club the same design across rooms so box rounding happens once on the combined
+// piece count (Brand+Design+Size+Finish), not per room.
+function _tqClubbedTiles() {
+  const byDesign = {};
+  Object.values(_tqState.design||{}).forEach(d => {
+    (d.result?.tiles||[]).forEach(t => {
+      const key = `${t.brand}|${t.name}|${t.size}|${t.finish}`.toLowerCase();
+      if (!byDesign[key]) byDesign[key] = { name:t.name, brand:t.brand, size:t.size, finish:t.finish,
+        tpb:t.tpb||1, perSft:t.perSft||0, sqftPerTile:t.sqftPerTile||0, isStock:t.isStock, pcs:0, roomBoxes:0 };
+      byDesign[key].pcs += t.pcs||0;
+      byDesign[key].roomBoxes += t.boxes||0;
+    });
+  });
+  return Object.values(byDesign).map(d => {
+    const clubbedBoxes = Math.ceil(d.pcs / (d.tpb||1));
+    const amount = clubbedBoxes * Math.round((d.perSft||0) * (d.sqftPerTile||0) * (d.tpb||1));
+    return { ...d, clubbedBoxes, saved: Math.max(0, d.roomBoxes - clubbedBoxes), amount };
+  });
+}
+function _renderClubbedOrder() {
+  const clubbed = _tqClubbedTiles();
+  if (!clubbed.length) return '';
+  const totalBoxes = clubbed.reduce((s,d)=>s+d.clubbedBoxes,0);
+  const totalSaved = clubbed.reduce((s,d)=>s+d.saved,0);
+  const totalAmount = clubbed.reduce((s,d)=>s+d.amount,0);
+  return `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:8px">📦 Combined Tile Order <span style="font-size:10px;font-weight:400;color:var(--text3)">— clubbed by design across rooms</span></div>
+    ${clubbed.map(d=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2)">
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">${d.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${[d.brand,d.size?d.size+'mm':'',d.finish].filter(Boolean).join(' · ')} · ${d.pcs} pcs${d.saved>0?` · <span style="color:var(--green)">saved ${d.saved} box${d.saved>1?'es':''}</span>`:''}</div></div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:14px;font-weight:800;color:var(--gold)">${d.clubbedBoxes} box${d.clubbedBoxes>1?'es':''}</div>
+        <div style="font-size:10px;color:var(--text3)">₹${d.amount.toLocaleString('en-IN')}</div>
+      </div>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:800">
+      <span>${totalBoxes} boxes${totalSaved>0?` · ${totalSaved} saved by clubbing`:''}</span>
+      <span style="color:var(--gold)">₹${totalAmount.toLocaleString('en-IN')}</span>
+    </div>
+  </div>`;
 }
 
 // Unified step dispatch for the reordered flow:
