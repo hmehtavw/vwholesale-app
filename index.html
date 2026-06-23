@@ -27412,12 +27412,19 @@ window.ADHESIVE_TYPES = ADHESIVE_TYPES;
 window.BEADING_CATALOG = BEADING_CATALOG;
 window.ROOM_DEFS = ROOM_DEFS;
 
-// Inject tile fields into inventory form when Tiles category selected
+// Tiles have their own inventory (size/finish/photo/coverage + rack-shelf stock).
+// In the general product form, selecting Tiles redirects to that dedicated flow
+// rather than mixing tile fields in here.
 function injectTileFields(category) {
   const el = document.getElementById('np-tile-fields');
   if (!el) return;
   if ((category||'').toLowerCase().includes('tile')) {
-    el.innerHTML = renderTileInventoryAddForm();
+    el.innerHTML = `
+    <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin:8px 0">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">🔲 Tiles use a dedicated inventory</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Tiles need size, finish, coverage, photo and rack/shelf stock — add them in Tile Stock for accurate quoting, not the general product form.</div>
+      <button type="button" class="btn-primary" style="padding:7px 12px" onclick="closeSheet(); navigateTo('tile_inventory');">Go to Tile Stock →</button>
+    </div>`;
   } else {
     el.innerHTML = '';
   }
