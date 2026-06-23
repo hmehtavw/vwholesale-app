@@ -8811,6 +8811,7 @@ async function updateProduct(id) {
 
 async function showAddProduct() {
   const cats = await VW_CHECKIN.getDepartmentNames();
+  const _zones = ((await VW_DB.client.from('warehouse_locations').select('code,name').eq('is_active',true).order('sort_order')).data) || [];
   newProductPhotos = []; // reset on every fresh open, so an abandoned previous attempt's photos never leak in
   newProductPhotoTempKey = `new-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
   _inventoryProductsCache = null; // reset so the duplicate check fetches fresh data next time it runs
@@ -8870,11 +8871,18 @@ async function showAddProduct() {
     
     <!-- Warehouse Location -->
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin:16px 0 8px">📦 Warehouse Location</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="form-group" style="margin:0"><label>Zone</label><input type="text" id="np-zone" placeholder="e.g. A, B, C"></div>
-      <div class="form-group" style="margin:0"><label>Rack No</label><input type="text" id="np-rack" placeholder="e.g. R3"></div>
-      <div class="form-group" style="margin:0"><label>Shelf No</label><input type="text" id="np-shelf" placeholder="e.g. S2"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+      <div class="form-group" style="margin:0"><label>Zone</label>
+        <select id="np-zone" onchange="VW_INVENTORY.loadInvRacks(this.value)">
+          <option value="">Select zone</option>
+          ${_zones.map(z=>`<option value="${z.code}">${z.name}</option>`).join('')}
+        </select></div>
+      <div class="form-group" style="margin:0"><label>Rack No</label>
+        <select id="np-rack" onchange="VW_INVENTORY.loadInvShelves(this.value)"><option value="">Zone first</option></select></div>
+      <div class="form-group" style="margin:0"><label>Shelf No</label>
+        <select id="np-shelf"><option value="">Rack first</option></select></div>
     </div>
+    <button type="button" onclick="VW_INVENTORY.addManualRack()" style="background:none;border:1px dashed var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--text2);cursor:pointer;margin-bottom:10px">+ Add rack manually</button>
     
     <!-- Warranty -->
     <div class="form-group">
@@ -8970,6 +8978,33 @@ function updateProductPricePreview(prefix = 'np') {
   } else {
     previewEl.innerHTML = `Final price: <strong>₹${finalPrice.toFixed(2)}</strong> <span style="color:var(--text3);font-size:12px">(Basic ₹${basicPrice.toFixed(2)} + GST ₹${gstAmt.toFixed(2)} @ ${gstPct}%)</span>`;
   }
+}
+
+async function loadInvRacks(zoneCode){
+  const el=document.getElementById('np-rack'); if(!el) return;
+  if(!zoneCode){ el.innerHTML='<option value="">Zone first</option>'; const sh=document.getElementById('np-shelf'); if(sh) sh.innerHTML='<option value="">Rack first</option>'; return; }
+  const { data }=await VW_DB.client.from('rack_config').select('rack_no,shelf_nos').eq('warehouse_code',zoneCode).eq('is_active',true);
+  const racks=(data||[]).sort((a,b)=>(parseInt(String(a.rack_no).replace(/\D/g,''))||0)-(parseInt(String(b.rack_no).replace(/\D/g,''))||0));
+  el.innerHTML=`<option value="">Select rack</option>${racks.map(r=>`<option value="${r.rack_no}" data-shelves='${JSON.stringify(r.shelf_nos||[])}'>${r.rack_no}</option>`).join('')}`;
+  const sh=document.getElementById('np-shelf'); if(sh) sh.innerHTML='<option value="">Rack first</option>';
+}
+function loadInvShelves(rackNo){
+  const opt=document.getElementById('np-rack')?.querySelector(`option[value="${rackNo}"]`);
+  const shelves=opt?JSON.parse(opt.dataset.shelves||'[]'):[];
+  const el=document.getElementById('np-shelf');
+  if(el) el.innerHTML=`<option value="">Select shelf</option>${shelves.map(s=>`<option value="${s}">${s}</option>`).join('')}`;
+}
+async function addManualRack(){
+  const zone=document.getElementById('np-zone')?.value;
+  if(!zone){ showToast('Select a zone first','warn'); return; }
+  const rackNo=(prompt('New rack number (e.g. R61 or COLD-1):')||'').trim();
+  if(!rackNo) return;
+  const { error }=await VW_DB.client.from('rack_config').insert({ warehouse_code:zone, rack_no:rackNo, shelf_nos:['A','B','C','D','E','UP','Down'], is_active:true });
+  if(error){ showToast('Could not add rack','err'); return; }
+  await loadInvRacks(zone);
+  const el=document.getElementById('np-rack'); if(el) el.value=rackNo;
+  loadInvShelves(rackNo);
+  showToast(`Rack ${rackNo} added ✓`,'success');
 }
 
 async function saveNewProduct() {
@@ -9109,7 +9144,7 @@ async function confirmDeleteProduct(id) {
 }
 window.confirmDeleteProduct = confirmDeleteProduct;
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory };
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
