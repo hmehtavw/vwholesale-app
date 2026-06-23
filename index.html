@@ -7822,6 +7822,121 @@ async function deleteQuotation(id) {
   navigateTo('cart');
 }
 
+// ===== CATEGORY-WISE APPROVAL helpers =====
+// Group a quotation's line items by department (category), preserving the
+// original index so edits can be written back to the right item.
+function quoteCategoryGroups(q) {
+  const groups = {};
+  (q.items||[]).forEach((it, idx) => {
+    const dept = it.department || 'General';
+    if (!groups[dept]) groups[dept] = { department: dept, items: [], subtotal: 0 };
+    const total = (it.total!=null ? it.total : computeLine(it).total);
+    groups[dept].items.push({ it, idx });
+    groups[dept].subtotal += total;
+  });
+  return Object.values(groups);
+}
+
+// Renders the items section of the approval detail, grouped by category.
+// A TL acting on their branch(es) sees ONLY their category — with editable
+// price + discount and an Approve/Reject per category. Everyone else
+// (Floor/Store/Management/Admin/viewer) sees the full MERGED quote, grouped
+// by category with per-category subtotals.
+function renderQuoteApprovalItems(q, myTlBranches) {
+  const groups = quoteCategoryGroups(q);
+  const myDepts = (myTlBranches||[]).map(b => b.department);
+  const actingAsTl = myDepts.length > 0;
+  const fmt = n => '₹'+Math.round(n).toLocaleString('en-IN');
+  const esc = s => String(s).replace(/'/g,"\\'");
+
+  if (actingAsTl) {
+    const mine = groups.filter(g => myDepts.includes(g.department));
+    const otherDepts = groups.filter(g => !myDepts.includes(g.department)).map(g=>g.department);
+    let html = mine.map(g => {
+      const rows = g.items.map(({it, idx}) => {
+        const unit = computeLine(it).netPrice;
+        const pricePrefill = ((it.mode==='mrp_disc'||it.mode==='mrp_disc_gst') && parseFloat(it.mrp)) ? parseFloat(it.mrp) : unit;
+        const discPrefill = parseFloat(it.discPct)||0;
+        return `
+        <div style="padding:8px 0;border-top:1px solid var(--border2)">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${[it.brand,it.model,it.description].filter(Boolean).join(' · ')||'Item'}</div>
+          <div style="display:flex;gap:10px;align-items:center;font-size:12px;flex-wrap:wrap">
+            <span style="color:var(--text3)">Qty ${it.qty}</span>
+            <label style="color:var(--text3)">Price ₹<input type="number" inputmode="decimal" id="qce-${q.id}-${idx}-price" value="${Math.round(pricePrefill*100)/100}" style="width:88px;padding:4px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text)"></label>
+            <label style="color:var(--text3)">Disc %<input type="number" inputmode="decimal" id="qce-${q.id}-${idx}-disc" value="${discPrefill}" style="width:62px;padding:4px;border:1px solid var(--border2);border-radius:6px;background:var(--bg2);color:var(--text)"></label>
+          </div>
+        </div>`;
+      }).join('');
+      return `
+      <div class="req-item-card" style="margin:8px 0;border:1px solid var(--gold-border)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700;font-size:13px;color:var(--gold)">${g.department} — your items</div>
+          <div style="font-size:12px;color:var(--text2)">Subtotal ${fmt(g.subtotal)}</div>
+        </div>
+        ${rows}
+        <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="saveQuotationCategoryEdits(${q.id},'${esc(g.department)}')">💾 Save Price Changes</button>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn-primary" onclick="approveQuotationTlBranch(${q.id},'${esc(g.department)}');closeSheet();navigateTo('cart')">✓ Approve ${g.department}</button>
+          <button class="btn-secondary" style="color:var(--red)" onclick="promptRejectQuotationBranch(${q.id},'${esc(g.department)}')">✕ Reject</button>
+        </div>
+      </div>`;
+    }).join('');
+    if (otherDepts.length) {
+      html += `<p style="font-size:11px;color:var(--text3);text-align:center;margin:6px 0">Other categories handled by their Team Leads: ${otherDepts.join(', ')}</p>`;
+    }
+    return html;
+  }
+
+  // Manager / viewer — full merged quote, grouped by category with subtotals
+  return groups.map(g => `
+    <div class="req-item-card" style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+        <div style="font-weight:700;font-size:13px;color:var(--text)">${g.department}</div>
+        <div style="font-size:12px;color:var(--text2)">${fmt(g.subtotal)}</div>
+      </div>
+      ${g.items.map(({it}) => `
+        <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border2);font-size:12px">
+          <span>${[it.brand,it.model,it.description].filter(Boolean).join(' · ')||'Item'} <span style="color:var(--text3)">· Qty ${it.qty}</span></span>
+          <span style="font-weight:600">${fmt(it.total!=null?it.total:computeLine(it).total)}</span>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+// TL saves price/discount changes for their category only. Normalises each
+// edited line to GST-inclusive MRP-minus-discount so the customer-facing
+// price is exactly what the TL set, recomputes the grand total, and logs an
+// audit entry. Does NOT approve — the TL taps Approve separately.
+async function saveQuotationCategoryEdits(quoteId, department) {
+  const q = await VW_DB.getById(VW_DB.STORES.quotations, quoteId);
+  if (!q) return;
+  const profile = VW_AUTH.getCurrentProfile();
+  let changed = 0;
+  (q.items||[]).forEach((it, idx) => {
+    if ((it.department||'General') !== department) return;
+    const priceEl = document.getElementById(`qce-${quoteId}-${idx}-price`);
+    if (!priceEl) return;
+    const discEl = document.getElementById(`qce-${quoteId}-${idx}-disc`);
+    const price = Math.max(0, parseFloat(priceEl.value)||0);
+    const disc = Math.min(100, Math.max(0, parseFloat(discEl && discEl.value)||0));
+    const before = computeLine(it).netPrice;
+    it.mode = 'mrp_disc';   // GST-inclusive MRP minus discount
+    it.mrp = price;
+    it.discPct = disc;
+    const { netPrice, total } = computeLine(it);
+    it.netPrice = netPrice;
+    it.total = total;
+    if (Math.abs(netPrice - before) > 0.001) changed++;
+  });
+  q.grandTotal = (q.items||[]).reduce((s,it)=>s+computeLine(it).total,0);
+  const auditLog = q.editAuditLog || [];
+  auditLog.push({ editedByName: profile ? profile.name : '', editedAt: new Date().toISOString(), changesSummary: `${department} prices updated (${changed} item${changed===1?'':'s'})` });
+  q.editAuditLog = auditLog;
+  await VW_DB.put(VW_DB.STORES.quotations, q);
+  showToast(`${department} prices saved`, 'success');
+  openQuotationDetail(quoteId);
+}
+window.saveQuotationCategoryEdits = saveQuotationCategoryEdits;
+
 // ---------- DETAIL VIEW ----------
 async function openQuotationDetail(id) {
   const q = await VW_DB.getById(VW_DB.STORES.quotations, id);
@@ -7834,20 +7949,10 @@ async function openQuotationDetail(id) {
     <h3>${q.quoteNo || 'Q-'+q.id}</h3>
     <p class="sheet-meta">${quoteDisplayLabel(q)} &middot; ${statusLabels[q.status]||q.status}</p>
     ${renderApprovalStatus(q)}
-    <div class="visit-list" style="margin:10px 0">
-      ${(q.items||[]).map(it => `
-        <div class="cust-row" style="cursor:default">
-          <div class="cust-info"><div class="cust-name">${[it.brand,it.model,it.description].filter(Boolean).join(' · ')||'Item'}</div><div class="cust-meta">${it.department||''} &middot; Qty ${it.qty} &middot; ₹${(it.netPrice||computeLine(it).netPrice).toFixed(2)} each</div></div>
-          <div style="font-weight:600;font-size:13px">₹${Math.round(it.total||computeLine(it).total).toLocaleString('en-IN')}</div>
-        </div>`).join('')}
+    <div style="margin:10px 0">
+      ${renderQuoteApprovalItems(q, myTlBranches)}
     </div>
     <div class="qtotal-row"><span>Grand Total</span><span>₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</span></div>
-    ${myTlBranches.length ? myTlBranches.map(b => `
-    <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
-      <span style="font-size:12px;color:var(--text2);flex:1">${b.department}</span>
-      <button class="btn-primary" onclick="approveQuotationTlBranch(${q.id},'${b.department}');closeSheet();navigateTo('cart')">✓ Approve</button>
-      <button class="btn-secondary" style="color:var(--red)" onclick="promptRejectQuotationBranch(${q.id},'${b.department}')">✕ Reject</button>
-    </div>`).join('') : ''}
     ${(canActOnApproval && !myTlBranches.length) ? `
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn-primary" onclick="approveQuotationStep(${q.id});closeSheet();navigateTo('cart')">✓ Approve</button>
@@ -34634,7 +34739,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'rewards') html = await renderRewardsStorePage();
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
-    else if (page === 'catalogs') html = await VW_NON_INV.renderCatalogUploadPage();
+    else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
     else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
