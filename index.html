@@ -1020,7 +1020,6 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="marketing" onclick="closeMoreMenu();navigateTo('marketing')"><span>📣</span><span>Marketing</span></button>
         <button class="more-tile" data-page="promotions" onclick="closeMoreMenu();navigateTo('promotions')"><span>🎁</span><span>Promos</span></button>
         <button class="more-tile" data-page="catalogs" onclick="closeMoreMenu();navigateTo('catalogs')"><span>📚</span><span>Catalogs</span></button>
-        <button class="more-tile" data-page="settings" onclick="closeMoreMenu();navigateTo('settings')"><span>⚙️</span><span>Settings</span></button>
         <button class="more-tile" onclick="closeMoreMenu();window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>🛡️</span><span>Security</span></button>
         <button class="more-tile" onclick="closeMoreMenu();VW_AUTH.signOut().then(()=>location.reload())" style="color:var(--red)"><span>🚪</span><span style="color:var(--red)">Log Out</span></button>
       </div>
@@ -36304,10 +36303,11 @@ function setLanguage(lang) {
     const btn = document.querySelector(`.nav-btn[data-page="${page}"] .nav-label`);
     if (btn) btn.textContent = t(page==='cart'?'billing':page) || fallback;
   });
-  const toggle = document.getElementById('lang-toggle');
-  if (toggle) toggle.textContent = {en:'EN',te:'తె',hi:'हि',bn:'বা',or:'ଓ'}[lang]||'EN';
   const langNames = {en:'English',te:'Telugu',hi:'Hindi',bn:'Bengali',or:'Odia'};
   showToast(`Language: ${langNames[lang]||lang}`, 'success');
+  // Re-render the current page so localized labels apply immediately (otherwise the
+  // change is invisible and the button feels broken).
+  try { if (typeof navigateTo==='function') navigateTo(window.currentPage || 'dashboard'); } catch(_) {}
 }
 
 window.TRANSLATIONS = TRANSLATIONS;
