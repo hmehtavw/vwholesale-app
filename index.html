@@ -33309,6 +33309,18 @@ async function _extractTilesFromFile(file, brand, catalogId) {
   const mediaType = file.type || 'image/jpeg';
   const isPDF = mediaType === 'application/pdf';
 
+  // Save the source file to the catalogs bucket so each design shows an image
+  let imageUrl = null;
+  try {
+    const ext = (file.name.split('.').pop() || (isPDF ? 'pdf' : 'jpg')).toLowerCase();
+    const path = `tile-designs/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+    const { error: upErr } = await sb.storage.from('catalogs').upload(path, file, { contentType: mediaType, upsert: false });
+    if (!upErr) {
+      const { data: urlData } = sb.storage.from('catalogs').getPublicUrl(path);
+      imageUrl = urlData?.publicUrl || null;
+    } else { console.warn('catalog image upload error:', upErr.message); }
+  } catch(e) { console.warn('catalog image upload failed:', e); }
+
   // Call Claude API with vision to extract tile designs
   const prompt = `You are analyzing a tile catalog page. Extract ALL tile designs visible.
 
@@ -33361,6 +33373,8 @@ If you cannot determine a field, use null. Extract every tile you can see.`;
       finish:      t.finish || null,
       colour_family: t.colour_family || null,
       surface_type: t.surface_type || 'both',
+      image_url:        isPDF ? null : imageUrl,
+      catalog_page_url: imageUrl,
       status: 'draft',
       extracted_by: 'ai',
     }));
