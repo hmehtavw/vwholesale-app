@@ -22567,6 +22567,12 @@ function linkContractor(ct) {
   _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
 }
 
+function linkContractorById(id) {
+  const ct = (_tqState._contractorResults||[]).find(c=>String(c.id)===String(id));
+  if (!ct) { showToast('Contractor not found — search again','warn'); return; }
+  linkContractor({ id:ct.id, name:ct.name||'', phone:ct.phone||'', trade:ct.professional_type||'', company:ct.company_name||'', tier:ct.tier||'', isExisting:true, loyaltyPoints:ct.loyalty_points||0 });
+}
+
 function unlinkContractor() {
   _tqState.contractor = null;
   _renderStep0().then(h=>{const el=document.getElementById('tq-step-content');if(el)el.innerHTML=h;});
@@ -22770,8 +22776,9 @@ function _debouncedContractorSearch(val) {
         return;
       }
 
+      _tqState._contractorResults = data;
       if (resultsEl) resultsEl.innerHTML = data.map(ct => `
-        <div onclick="VW_TILES.linkContractor({id:'${ct.id}',name:${JSON.stringify(ct.name||'')},phone:'${ct.phone||''}',trade:'${ct.professional_type||''}',company:'${(ct.company_name||'').replace(/'/g,'')}',isExisting:true,commissionPct:2,customCommission:false,loyaltyPoints:${ct.loyalty_points||0}})"
+        <div onclick="VW_TILES.linkContractorById('${ct.id}')"
           style="padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:13px;font-weight:600">${ct.name}${ct.approval_status && ct.approval_status!=='approved'?` <span style="font-size:9px;font-weight:700;color:var(--gold);background:var(--gold-muted);border-radius:4px;padding:1px 5px;vertical-align:middle">${ct.approval_status}</span>`:''}</div>
@@ -27362,7 +27369,7 @@ function openTileVisualizer() {
 
 window.VW_TILES = {
   // New tiles quotation
-  renderTilesQuotationPage, tqNext, tqBack, linkContractor, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
+  renderTilesQuotationPage, tqNext, tqBack, linkContractor, linkContractorById, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
   // Rooms
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom, _tqWallMode,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
