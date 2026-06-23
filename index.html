@@ -9222,6 +9222,41 @@ async function addManualRack(){
   showToast(`Rack ${rackNo} added ✓`,'success');
 }
 
+// ===== MULTI-LOCATION STOCK (general products) =====
+async function getProductStockLocations(productId){
+  const { data } = await VW_DB.client.from('product_stock_locations').select('*').eq('product_id', productId).order('qty',{ascending:true});
+  const locs = data || [];
+  return { total: locs.reduce((s,l)=>s+(Number(l.qty)||0),0), locations: locs };
+}
+// Lowest-qty-first picking: clears the smallest pockets first (good for audit + consolidation)
+function pickStockLowestFirst(locations, needed){
+  const sorted = (locations||[]).filter(l=>Number(l.qty)>0).sort((a,b)=>Number(a.qty)-Number(b.qty));
+  const plan=[]; let rem=Number(needed)||0;
+  for(const l of sorted){ if(rem<=0)break; const take=Math.min(Number(l.qty), rem); plan.push({...l, take}); rem-=take; }
+  return { plan, shortfall: Math.max(0, rem) };
+}
+async function addStockToLocation(productId, warehouse_code, rack_no, shelf_no, qty){
+  const { data: ex } = await VW_DB.client.from('product_stock_locations').select('id,qty')
+    .eq('product_id',productId).eq('warehouse_code',warehouse_code||'').eq('rack_no',rack_no||'').eq('shelf_no',shelf_no||'').limit(1);
+  const existing = ex && ex[0];
+  if (existing){
+    await VW_DB.client.from('product_stock_locations').update({ qty:(Number(existing.qty)||0)+Number(qty), updated_at:new Date().toISOString() }).eq('id',existing.id);
+  } else {
+    await VW_DB.client.from('product_stock_locations').insert({ product_id:productId, warehouse_code:warehouse_code||'', rack_no:rack_no||'', shelf_no:shelf_no||'', qty:Number(qty) });
+  }
+}
+async function deductStockLowestFirst(productId, qty){
+  const { locations } = await getProductStockLocations(productId);
+  const { plan, shortfall } = pickStockLowestFirst(locations, qty);
+  for (const p of plan){
+    const left = Number(p.qty) - p.take;
+    if (left <= 0) await VW_DB.client.from('product_stock_locations').delete().eq('id',p.id);
+    else await VW_DB.client.from('product_stock_locations').update({ qty:left, updated_at:new Date().toISOString() }).eq('id',p.id);
+  }
+  return { plan, shortfall };
+}
+window.VW_STOCK = { getLocations:getProductStockLocations, pickLowestFirst:pickStockLowestFirst, addToLocation:addStockToLocation, deductLowestFirst:deductStockLowestFirst };
+
 async function saveNewProduct() {
   const name = document.getElementById('np-name').value.trim();
   const { finalPrice, gstPct } = computeProductPrice();
@@ -9256,6 +9291,17 @@ async function saveNewProduct() {
     createdAt: new Date().toISOString()
   });
 
+  // Multi-location stock: record the opening quantity at its zone/rack/shelf so the
+  // same product can later live in several locations (total = sum of all rows).
+  const _zone = document.getElementById('np-zone')?.value.trim() || '';
+  if (_zone && stock > 0) {
+    await VW_DB.client.from('product_stock_locations').insert({
+      product_id: newId, warehouse_code: _zone,
+      rack_no: document.getElementById('np-rack')?.value.trim() || '',
+      shelf_no: document.getElementById('np-shelf')?.value.trim() || '',
+      qty: stock
+    }).catch(()=>{});
+  }
   // Any photos captured during this same form are already uploaded to
   // Storage — now that the product has a real ID, formally submit each
   // one through the same approval queue every other photo goes through,
