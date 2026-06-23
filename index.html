@@ -23475,6 +23475,12 @@ function _renderStep4() {
       // Cement + sand for this area (≈4 cement + 11 sand bags per 100 sqft)
       cemBags = Math.ceil(roomSqft * 4 / 100);
       sandBags = Math.ceil(roomSqft * 11 / 100);
+    } else if (method === 'mix') {
+      // Mestri practice: ready-mix adhesive base with cement mixed in for extra bond
+      // (~1 cement bag per 3 adhesive bags — adjust ADH_CEMENT_MIX to change ratio)
+      const ADH_CEMENT_MIX = 0.33;
+      adhBags = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
+      cemBags = Math.ceil(adhBags * ADH_CEMENT_MIX);
     } else {
       adhBags = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
     }
@@ -23523,6 +23529,13 @@ function _renderStep4() {
           <div style="font-weight:600;color:${method==='adhesive'?'var(--gold)':'var(--text)'}">Ready-mix Adhesive</div>
           <div style="font-size:9px;color:var(--text3)">${adhType} · ${isWall?wallCoverage:floorCoverage} sqft/bag</div>
         </button>
+        <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mix')"
+          style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
+            border:${method==='mix'?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${method==='mix'?'var(--gold-muted)':'var(--bg3)'}">
+          <div style="font-weight:600;color:${method==='mix'?'var(--gold)':'var(--text)'}">Adhesive + Cement</div>
+          <div style="font-size:9px;color:var(--text3)">Mestri mix · adhesive + cement (1:3)</div>
+        </button>
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mortar')"
           style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='mortar'?'2px solid var(--gold)':'1px solid var(--border)'};
@@ -23542,8 +23555,8 @@ function _renderStep4() {
           <div style="font-size:10px;color:var(--text3)">Cement (50kg)</div>
           <div style="font-size:18px;font-weight:800;color:var(--gold)">${cemBags}</div>
           <div style="font-size:9px;color:var(--text3)">bags</div>
-        </div>
-        <div style="flex:1;background:var(--bg3);border-radius:7px;padding:7px;min-width:80px;text-align:center">
+        </div>` : ''}
+        ${sandBags > 0 ? `<div style="flex:1;background:var(--bg3);border-radius:7px;padding:7px;min-width:80px;text-align:center">
           <div style="font-size:10px;color:var(--text3)">Sand (50kg)</div>
           <div style="font-size:18px;font-weight:800;color:var(--gold)">${sandBags}</div>
           <div style="font-size:9px;color:var(--text3)">bags</div>
@@ -23557,7 +23570,7 @@ function _renderStep4() {
     </div>
     ${totalCemBags > 0 ? `
     <div style="margin-top:6px;font-size:11px;color:var(--text3);text-align:center">
-      + ${totalCemBags} bags cement · ${totalSandBags} bags sand (mortar areas)
+      + ${totalCemBags} bags cement · ${totalSandBags} bags sand (mortar / mix areas)
     </div>` : ''}
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Beading</button>
@@ -24748,12 +24761,7 @@ async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
   } catch(e) {}
 
   const addons = [
-    // Section header: Mortar bed method (floor only — skip if no floor area)
-    ...(floorSqft > 0 ? [{ id:'cement', icon:'🏗', label:'Cement', qty:`${cementBags} bags (50kg)`,
-      note:`Floor bedding · 4 bags/100 sqft · Mix 1:3 with sand`, price: cementPrice||'Check stock', section:'mortar' },
-      { id:'sand', icon:'🪨', label:'TISAN River Sand', qty:`${sandBags} bags (50kg)`,
-        note:`Floor bedding · ~11 bags/100 sqft`, price: sandPrice||'Check stock', section:'mortar' }
-      ] : []),
+    // Cement & sand are now chosen on the Adhesive step (Cement Mortar / Adhesive+Cement) — not duplicated here
     // Adhesive (wall always, floor optional)
     { id:'adhesive_floor', icon:'🧲', label:`Tile Adhesive (Floor)`, qty:`${floorAdhesiveBags} bags (20kg)`,
       note:`${adhesiveGradeNote} · ${floorAdhesiveCoverage} sqft/bag`, price: adhesivePrice||'Check stock', section:'adhesive' },
