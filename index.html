@@ -2855,14 +2855,14 @@ async function renderCommissionsPage(){
 }
 
 async function openAddCommission(){
-  const { data: contractors } = await VW_DB.client.from('customers').select('id,name').eq('type','contractor_club').order('name');
+  const { data: contractors } = await VW_DB.client.from('contractors').select('id,name,company_name').order('name');
   const list = contractors || [];
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <h3 style="margin-bottom:12px">Add Commission</h3>
     <div class="form-group"><label>Contractor *</label>
-      <select id="cm-contractor">${list.length?list.map(c=>`<option value="${c.id}">${c.name}</option>`).join(''):'<option value="">No Contractor-Club members found</option>'}</select></div>
+      <select id="cm-contractor">${list.length?list.map(c=>`<option value="${c.id}">${c.name}${c.company_name?' · '+c.company_name:''}</option>`).join(''):'<option value="">No contractors found</option>'}</select></div>
     <div class="form-group"><label>Category *</label>
       <select id="cm-cat" onchange="VW_COMMISSION.onCatChange(this.value)">
         <option value="first_referral">1st Referral (default 2%)</option>
@@ -31715,6 +31715,17 @@ async function saveContractor() {
 }
 
 async function sharePortalLink(id, token) {
+  // Commission share-gate: if this contractor has a commission still in approval,
+  // the portal/profile link stays locked until it clears Management.
+  try {
+    const { data: comm } = await VW_DB.client.from('contractor_commissions').select('status').eq('contractor_id', id);
+    const rows = comm || [];
+    if (rows.some(r=>r.status==='pending') && !rows.some(r=>r.status==='approved')) {
+      showToast('Portal link locked — commission is still pending approval','warn');
+      if (typeof navigateTo==='function') navigateTo('commissions');
+      return;
+    }
+  } catch(_) {}
   if (!token) {
     token = Math.random().toString(36).slice(2)+Date.now().toString(36);
     await VW_DB.client.from('contractors').update({portal_token:token}).eq('id',id);
