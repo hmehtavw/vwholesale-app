@@ -14587,6 +14587,17 @@ async function openDispatchDetail(invoiceId) {
   const gatePasses = (await VW_DB.all(VW_DB.STORES.gatePasses)).filter(gp => gp.invoiceId === invoiceId);
   const items = inv.items || [];
 
+  // Lowest-qty-first pick plan per item (from multi-location stock), shown on the checklist.
+  const pickInfo = {};
+  for (let i = 0; i < items.length; i++) {
+    const pid = items[i].productId;
+    if (!pid) continue;
+    try {
+      const { locations } = await getProductStockLocations(pid);
+      if (locations.length) pickInfo[i] = pickStockLowestFirst(locations, items[i].qty);
+    } catch(_) {}
+  }
+
   if (!inv.paymentVerified) {
     showToast('Accounts must verify payment first', 'warn');
     return;
@@ -14667,7 +14678,7 @@ async function openDispatchDetail(invoiceId) {
 
     <h4 style="margin:12px 0 8px;font-size:14px">Items Checklist</h4>
     <div id="dp-items-list">
-      ${items.map((item, idx) => renderDispatchItem(item, idx, invoiceId)).join('')}
+      ${items.map((item, idx) => renderDispatchItem(item, idx, invoiceId, pickInfo[idx])).join('')}
     </div>
 
     ${gatePasses.length ? `
@@ -14698,8 +14709,14 @@ async function openDispatchDetail(invoiceId) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
-function renderDispatchItem(item, idx, invoiceId) {
+function renderDispatchItem(item, idx, invoiceId, pick) {
   const isChecked = item.dispatchStatus === 'checked';
+  const pickBlock = pick && pick.plan && pick.plan.length ? `
+    <div style="background:rgba(245,200,66,0.07);border:1px solid var(--gold-border);border-radius:8px;padding:7px 9px;margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:3px">📍 PICK (lowest stock first)</div>
+      ${pick.plan.map(p=>`<div style="font-size:11px;display:flex;justify-content:space-between"><span>${p.warehouse_code||'—'} · ${p.rack_no||'—'}/${p.shelf_no||'—'}</span><strong>${p.take}</strong></div>`).join('')}
+      ${pick.shortfall>0?`<div style="font-size:10px;color:var(--red);margin-top:3px">⚠ Short by ${pick.shortfall} — not enough in recorded locations</div>`:''}
+    </div>` : '';
   return `
   <div class="req-item-card" id="dp-item-${idx}" style="margin-bottom:8px;border-color:${isChecked ? '#22c55e' : 'var(--border2)'}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
@@ -14711,6 +14728,7 @@ function renderDispatchItem(item, idx, invoiceId) {
         ${isChecked ? '✓ Checked' : 'Pending'}
       </span>
     </div>
+    ${pickBlock}
     ${item.dispatchPhoto ? `<img src="${item.dispatchPhotoUrl||''}" style="width:100%;max-height:140px;object-fit:cover;border-radius:8px;margin-top:8px" onclick="window.open('${item.dispatchPhotoUrl||''}','_blank')">` : ''}
     <div style="display:flex;gap:6px;margin-top:8px">
       <input type="file" accept="image/*" capture="environment" style="display:none" id="dp-photo-${idx}" onchange="VW_DISPATCH.handleItemPhoto(this, ${invoiceId}, ${idx})">
