@@ -22834,6 +22834,7 @@ let _tqState = {
     customer: { name:'', phone:'', site:'', id:null },
     contractor: null,
     rooms: [],
+    currentFlat: '',
     tileSelections: {},
     spacerSelections: {},
     adhesiveSelections: {},
@@ -22862,6 +22863,7 @@ async function renderTilesQuotationPage() {
     customer: { name:'', phone:'', site:'', id:null },
     contractor: null,
     rooms: [],
+    currentFlat: '',
     tileSelections: {},
     spacerSelections: {},
     spacerType: 'plus',
@@ -23487,8 +23489,17 @@ function _renderStep1() {
       <div id="tq-floorplan-status" style="margin-top:8px;font-size:11px;color:var(--text3)"></div>
     </div>
 
+    <!-- MULTI-FLAT / PROJECT MODE -->
+    <div style="background:rgba(245,200,66,0.05);border:1px dashed var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">🏢 Flat / Unit <span style="color:var(--text3);font-weight:400">(optional — for multi-flat projects)</span></div>
+      <input type="text" id="tq-flat" value="${_tqState.currentFlat||''}" placeholder="e.g. Flat 101, Tower A 2BHK — leave blank for a single home"
+        oninput="_tqState.currentFlat=this.value"
+        style="width:100%;font-size:13px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:7px 9px;color:var(--text)">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Set this, add that flat's rooms, then change it for the next flat. The summary shows a per-flat breakdown plus a combined total.</div>
+    </div>
+
     <div id="tq-rooms-list">
-      ${_tqState.rooms.length ? _tqState.rooms.map((r,i) => _renderRoomCard(r,i)).join('') : `
+      ${_tqState.rooms.length ? _renderRoomsGrouped() : `
       <div style="text-align:center;padding:24px;color:var(--text3)">
         <div style="font-size:32px;margin-bottom:8px">🏠</div>
         <div style="font-size:13px">Tap "Add Room" to start measuring</div>
@@ -23508,6 +23519,63 @@ function _renderStep1() {
     </div>
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Choose Tile Size</button>` : ''}`;
+}
+
+// Per-flat summary for multi-flat projects: area + boxes + price subtotal per
+// flat, then the project total. Returns '' when no flats are tagged (single home).
+function _renderTqFlatBreakdown(roomBOMs, st) {
+  const anyFlat = (st.rooms||[]).some(r => r.flat);
+  if (!anyFlat) return '';
+  const qp = st.quotedPrices || {};
+  const groups = {};
+  (roomBOMs||[]).forEach(b => {
+    const k = b.room?.flat || '— Unassigned —';
+    const g = groups[k] || (groups[k] = { sqft:0, boxes:0, price:0 });
+    g.sqft += b.roomSqft || 0;
+    g.boxes += b.boxes || 0;
+    const sp = qp[b.slot?.id] || {};
+    if (sp.pricePerBox > 0) g.price += sp.pricePerBox * (b.boxes||0);
+    else if (sp.pricePerSqft > 0) g.price += sp.pricePerSqft * (b.roomSqft||0);
+    else if (st.selectedProduct?.mrp) g.price += st.selectedProduct.mrp * (b.boxes||0);
+  });
+  const entries = Object.entries(groups);
+  const totSqft = entries.reduce((s,[,g])=>s+g.sqft,0);
+  const totPrice = entries.reduce((s,[,g])=>s+g.price,0);
+  return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🏢 Per-Flat Breakdown</h3>
+    ${entries.map(([flat,g])=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:13px;font-weight:700">${flat}</div>
+        <div style="font-size:11px;color:var(--text3)">${g.sqft.toFixed(1)} sqft · ${g.boxes} boxes</div>
+      </div>
+      ${g.price>0?`<div style="font-size:14px;font-weight:700;color:var(--gold)">₹${Math.round(g.price).toLocaleString('en-IN')}</div>`:''}
+    </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:14px;font-weight:700">
+      <span>Project Total · ${entries.length} flat(s)</span>
+      <span style="color:var(--gold)">${totSqft.toFixed(1)} sqft${totPrice>0?` · ₹${Math.round(totPrice).toLocaleString('en-IN')}`:''}</span>
+    </div>
+  </div>`;
+}
+
+function _renderRoomsGrouped() {
+  const rooms = _tqState.rooms || [];
+  const anyFlat = rooms.some(r => r.flat);
+  if (!anyFlat) return rooms.map((r,i) => _renderRoomCard(r,i)).join('');
+  // Group by flat, preserving each room's original index for edit/remove.
+  const groups = {};
+  rooms.forEach((r,i) => { const k = r.flat || '— Unassigned —'; (groups[k] = groups[k] || []).push({ r, i }); });
+  return Object.entries(groups).map(([flat, list]) => {
+    const flatSqft = list.reduce((s,{r}) => s + r.areas.reduce((t,a)=>t+(a.sqft||0),0), 0);
+    return `<div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:8px;padding:5px 10px;margin-bottom:6px">
+        <span style="font-size:12px;font-weight:700;color:var(--gold)">🏢 ${flat}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--gold)">${flatSqft.toFixed(1)} sqft · ${list.length} room(s)</span>
+      </div>
+      ${list.map(({r,i}) => _renderRoomCard(r,i)).join('')}
+    </div>`;
+  }).join('');
 }
 
 function _renderRoomCard(r, i) {
@@ -23878,10 +23946,10 @@ function tqSaveRoom(type, editIdx) {
   if (!areas.length || !areas[0].sqft) { showToast('Could not calculate area — check dimensions','warn'); return; }
 
   if (editIdx !== undefined && editIdx >= 0) {
-    _tqState.rooms[editIdx] = { id: _tqState.rooms[editIdx].id, type, label, areas, def };
+    _tqState.rooms[editIdx] = { id: _tqState.rooms[editIdx].id, type, label, areas, def, flat: _tqState.rooms[editIdx].flat || '' };
     showToast('Room updated ✓', 'success');
   } else {
-    _tqState.rooms.push({ id: Date.now(), type, label, areas, def });
+    _tqState.rooms.push({ id: Date.now(), type, label, areas, def, flat: _tqState.currentFlat || '' });
   }
   closeSheet();
   _refreshStep1();
@@ -25259,6 +25327,8 @@ async function _renderStep8() {
       <span style="color:var(--gold)">${totalSqft.toFixed(1)} sqft</span>
     </div>
   </div>
+
+  ${_renderTqFlatBreakdown(roomBOMs, st)}
 
   ${_renderClubbedOrder()}
 
@@ -27049,7 +27119,7 @@ async function tqSubmitForApproval() {
     // Show "under review" screen with upsell instead of navigating away
     const tqNoSaved = tqNo;
     const quoteIdSaved = data.id;
-    _tqState = { step:1, customer:{name:'',phone:'',site:'',id:null}, rooms:[], tileSelections:{}, spacerSelections:{}, adhesiveSelections:{}, beading:[], groutSelections:{}, floorTraps:[], soffit:{enabled:false}, delivery:{type:'self',floors:[],beyondFt:false,distanceKm:0}, addons:{}, laborRequired:null };
+    _tqState = { step:1, customer:{name:'',phone:'',site:'',id:null}, rooms:[], currentFlat:'', tileSelections:{}, spacerSelections:{}, adhesiveSelections:{}, beading:[], groutSelections:{}, floorTraps:[], soffit:{enabled:false}, delivery:{type:'self',floors:[],beyondFt:false,distanceKm:0}, addons:{}, laborRequired:null };
     // Prevent realtime liveRefresh from overwriting the success screen
     if (typeof window !== 'undefined') window.currentPage = 'tile_quote_submitted';
     const appDiv = document.getElementById('app-content');
@@ -27848,6 +27918,7 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
             label: r.type || type,
             areas: [{ label:`${l}ft × ${w}ft (from floor plan)`, sqft:l*w*1.05, base:l*w, l, w, waste:0.05, fromFloorPlan:true }],
             def: ROOM_DEFS[type]||ROOM_DEFS['Custom Area'],
+            flat: _tqState.currentFlat || '',
           });
         }
       }
