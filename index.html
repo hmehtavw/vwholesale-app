@@ -25117,12 +25117,18 @@ async function _renderStep8() {
   const sz = roomBOMs.find(b=>b.sz)?.sz || st.selectedSize;
   const prod = st.selectedProduct;
   // Show MRP from selected product(s) as indicative pricing
+  // Price each slot from the per-slot price captured in the Design step
+  // (pricePerBox, else pricePerSqft); fall back to the selected product's MRP.
+  // Iterates slots (not rooms) so a bathroom's wall + floor both count.
   const tileTotal = (() => {
     let total = 0;
-    rooms.forEach(r => {
-      const selProd = st.selectedProduct; // TODO: per-room products when implemented
-      const bom = roomBOMs.find(b=>b.room.id===r.id);
-      if (selProd?.mrp && bom?.boxes) total += selProd.mrp * bom.boxes;
+    const qp = st.quotedPrices || {};
+    roomBOMs.forEach(bom => {
+      if (!bom?.boxes) return;
+      const sp = qp[bom.slot?.id] || {};
+      if (sp.pricePerBox > 0) total += sp.pricePerBox * bom.boxes;
+      else if (sp.pricePerSqft > 0) total += sp.pricePerSqft * bom.roomSqft;
+      else if (st.selectedProduct?.mrp) total += st.selectedProduct.mrp * bom.boxes;
     });
     return total;
   })();
