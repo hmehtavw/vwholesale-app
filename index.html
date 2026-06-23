@@ -37357,6 +37357,7 @@ async function renderRewardsStorePage() {
   return `
   <div class="module-header">
     <h2>🎁 Rewards Store</h2>
+    ${VW_AUTH.isAdmin() ? `<button class="btn-sm" onclick="showAddReward()">+ Add Reward</button>` : ''}
   </div>
 
   <!-- BALANCE CARD -->
@@ -37381,8 +37382,10 @@ async function renderRewardsStorePage() {
         ${catItems.map(r => {
           const canAfford = myPoints >= r.points_required;
           const hasStock = r.stock_qty === -1 || r.stock_qty > 0;
+          const _rwName = (r.name||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
           return `
-          <div style="background:var(--bg2);border-radius:12px;padding:12px;border:1px solid ${canAfford&&hasStock?'var(--gold-border)':'var(--border)'}">
+          <div style="background:var(--bg2);border-radius:12px;padding:12px;border:1px solid ${canAfford&&hasStock?'var(--gold-border)':'var(--border)'};position:relative">
+            ${VW_AUTH.isAdmin() ? `<button onclick="deactivateReward(${r.id},'${_rwName}')" title="Remove reward" style="position:absolute;top:6px;right:6px;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer">✕</button>` : ''}
             <div style="font-size:24px;margin-bottom:6px">${catIcons[r.category]||'🎁'}</div>
             <div style="font-size:12px;font-weight:700;margin-bottom:3px;line-height:1.3">${r.name}</div>
             ${r.description?`<div style="font-size:10px;color:var(--text3);margin-bottom:6px">${r.description}</div>`:''}
@@ -37403,8 +37406,8 @@ async function renderRewardsStorePage() {
   ${items.length === 0 ? `
   <div style="text-align:center;padding:40px;color:var(--text3)">
     <div style="font-size:40px;margin-bottom:12px">🎁</div>
-    <div style="font-size:14px;font-weight:600">Rewards catalog coming soon</div>
-    <div style="font-size:12px;margin-top:6px">Admin can add rewards via Supabase dashboard</div>
+    <div style="font-size:14px;font-weight:600">No rewards in the catalog yet</div>
+    <div style="font-size:12px;margin-top:6px">${VW_AUTH.isAdmin() ? 'Tap “+ Add Reward” above to add the first item' : 'Check back soon — rewards are on the way'}</div>
   </div>` : ''}
 
   ${(myRedemptions||[]).length ? `
@@ -37427,10 +37430,87 @@ async function redeemStaffReward(rewardId, rewardName, pointsCost) {
     reward_id: rewardId, reward_name: rewardName, points_used: pointsCost,
   });
   if (error) { showToast('Error: '+error.message,'error'); return; }
+  // Decrement catalog stock when this reward is finite (-1 = unlimited).
+  try {
+    const { data: r } = await VW_DB.client.from('rewards_catalog').select('stock_qty').eq('id', rewardId).single();
+    if (r && r.stock_qty != null && r.stock_qty > 0) {
+      await VW_DB.client.from('rewards_catalog').update({ stock_qty: r.stock_qty - 1 }).eq('id', rewardId);
+    }
+  } catch(_) {}
   showToast(`${rewardName} redeemed ✓ — Admin will arrange delivery`, 'success');
   navigateTo('rewards');
 }
 window.redeemStaffReward = redeemStaffReward;
+
+// Admin: add a reward to the catalog (replaces the old "add via Supabase" gap).
+function showAddReward() {
+  if (!VW_AUTH.isAdmin()) { showToast('Only Admin can add rewards', 'warn'); return; }
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">🎁 Add Reward</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div class="form-group"><label>Reward Name *</label><input type="text" id="rw-name" placeholder="e.g. Bosch Cordless Drill"></div>
+    <div class="form-group"><label>Description</label><input type="text" id="rw-desc" placeholder="e.g. 12V, 2 batteries"></div>
+    <div class="form-group"><label>Category</label>
+      <select id="rw-cat">
+        <option value="tool">🔧 Tool</option><option value="voucher">🎫 Voucher</option>
+        <option value="gift">🎁 Gift</option><option value="discount">💰 Discount</option><option value="training">🎓 Training</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <div class="form-group" style="flex:1"><label>Points Required *</label><input type="number" id="rw-points" min="1" placeholder="e.g. 5000"></div>
+      <div class="form-group" style="flex:1"><label>Stock Qty</label><input type="number" id="rw-stock" value="-1" placeholder="-1 = unlimited"></div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <div class="form-group" style="flex:1"><label>Cash Price ₹ (optional)</label><input type="number" id="rw-cash" min="0" placeholder="for cash-or-points"></div>
+      <div class="form-group" style="flex:1"><label>Discount % (optional)</label><input type="number" id="rw-disc" min="0" max="100"></div>
+    </div>
+    <div class="form-group"><label>Vendor / Source (optional)</label><input type="text" id="rw-vendor" placeholder="e.g. Bosch Distributor"></div>
+    <button class="btn-primary full-width" onclick="saveReward()">Save Reward</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+window.showAddReward = showAddReward;
+
+async function saveReward() {
+  if (!VW_AUTH.isAdmin()) return;
+  const name = document.getElementById('rw-name')?.value.trim();
+  const points = parseInt(document.getElementById('rw-points')?.value||0);
+  if (!name) { showToast('Reward name is required', 'warn'); return; }
+  if (!points || points <= 0) { showToast('Enter the points required', 'warn'); return; }
+  const stockRaw = document.getElementById('rw-stock')?.value;
+  const cash = parseFloat(document.getElementById('rw-cash')?.value||0);
+  const disc = parseFloat(document.getElementById('rw-disc')?.value||0);
+  const { error } = await VW_DB.client.from('rewards_catalog').insert({
+    name,
+    description: document.getElementById('rw-desc')?.value.trim()||'',
+    category: document.getElementById('rw-cat')?.value||'gift',
+    points_required: points,
+    stock_qty: (stockRaw===''||stockRaw==null) ? -1 : parseInt(stockRaw),
+    cash_price: cash || null,
+    discount_pct: disc || null,
+    vendor_name: document.getElementById('rw-vendor')?.value.trim()||'',
+    is_active: true
+  });
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast(`${name} added to rewards ✓`, 'success');
+  closeSheet();
+  navigateTo('rewards');
+}
+window.saveReward = saveReward;
+
+async function deactivateReward(rewardId, rewardName) {
+  if (!VW_AUTH.isAdmin()) return;
+  if (!confirm(`Remove "${rewardName}" from the rewards store?`)) return;
+  const { error } = await VW_DB.client.from('rewards_catalog').update({ is_active: false }).eq('id', rewardId);
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast(`${rewardName} removed`, 'info');
+  navigateTo('rewards');
+}
+window.deactivateReward = deactivateReward;
 
 // =====================================================
 // LABOR MARKETPLACE PAGE (admin view of all requirements + bids)
