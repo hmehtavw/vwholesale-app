@@ -6294,6 +6294,7 @@ let quoteStockByKey = {}; // "brand|model" -> live available stock (real Invento
 let quoteExpandedId = null; // id of the one item currently shown in full (others collapse to a summary row)
 let isApproverEditingPending = false; // true when an approver (not the original maker) opened Edit on a pending_approval quotation
 let quoteBeforeEditSnapshot = null; // deep copy of items/totals at the moment Edit was opened, used to build the audit diff
+let _approverDeptFilter = null; // when a department TL opens a multi-department quote for approval, this holds THEIR department(s); the items list then shows only their lines (they approve only their category). null = show every line (maker, or FM/SM/Management seeing the merged quote).
 
 async function loadQuoteBrandData() {
   const [products, pending] = await Promise.all([
@@ -6532,6 +6533,8 @@ async function newQuotation() {
   quoteEditingId = null;
   quoteItems = [];
   quoteExpandedId = null;
+  isApproverEditingPending = false;
+  _approverDeptFilter = null;
   quoteHeaderDraft = { siteName:'', customerName:'', address:'', contact:'', area:'', deliveryAddress:'', otherContactName:'', otherContactNumber:'', customFields: [], terms: DEFAULT_QUOTE_TERMS };
   await getCategories();
   await loadQuoteBrandData();
@@ -6730,6 +6733,17 @@ async function editQuotation(id) {
   isApproverEditingPending = q.approvalStatus === 'pending_approval' && !isOriginalMaker && await currentUserCanApprove(q);
   quoteBeforeEditSnapshot = isApproverEditingPending ? JSON.parse(JSON.stringify(q.items || [])) : null;
 
+  // If the approver is a department TL on a multi-department quote, restrict
+  // the items list to THEIR department(s) only — each category's TL reviews
+  // and re-prices just their own lines. Floor Manager / Store Manager /
+  // Management (and the original maker) see the full merged quote, so the
+  // filter stays null for them.
+  _approverDeptFilter = null;
+  if (isApproverEditingPending) {
+    const myBranches = await getMyPendingTlBranches(q);
+    if (myBranches.length) _approverDeptFilter = [...new Set(myBranches.map(b => b.department).filter(Boolean))];
+  }
+
   showQuoteForm(q);
 }
 
@@ -6802,11 +6816,12 @@ function showQuoteForm(q = null) {
       <h3 class="card-title">Items <span class="badge" id="qitem-count">${quoteItems.length}</span></h3>
     </div>
     <div id="quote-items-list"></div>
+    ${(Array.isArray(_approverDeptFilter) && _approverDeptFilter.length) ? '' : `
     <div class="add-item-row" style="margin:6px 0">
       <button class="btn-sm" onclick="addQuoteItemFromInventory()">🔍 From Inventory</button>
       <button class="btn-sm" onclick="addQuoteItem()">✏️ Custom Item</button>
-    </div>
-    <div class="qtotal-row"><span>Grand Total</span><span id="quote-grand-total">₹0</span></div>
+    </div>`}
+    <div class="qtotal-row"><span id="quote-grand-total-label">Grand Total</span><span id="quote-grand-total">₹0</span></div>
 
     <div class="form-group"><label>Terms &amp; Conditions</label>
       <textarea id="q-terms" rows="3" style="width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px;color:var(--text);font-family:inherit;font-size:13px">${quoteHeaderDraft.terms}</textarea>
@@ -6814,7 +6829,7 @@ function showQuoteForm(q = null) {
 
     <div style="display:flex;gap:8px;margin-top:10px">
       ${isApproverEditingPending ? `
-        <button class="btn-primary full-width" onclick="saveApproverEditAndApprove()">✓ Save Edits &amp; Approve</button>
+        <button class="btn-primary full-width" onclick="saveApproverEditAndApprove()">✓ ${(Array.isArray(_approverDeptFilter)&&_approverDeptFilter.length)?'Approve '+_approverDeptFilter.join(', ')+' Lines':'Save Edits &amp; Approve'}</button>
       ` : `
         <button class="btn-primary full-width" onclick="saveQuotation('draft')">💾 Save Draft</button>
         <button class="btn-wa full-width" onclick="saveQuotation('sent')">📤 Submit for Approval</button>
@@ -6966,26 +6981,40 @@ function updateQuoteTotalsOnly() {
     if (npEl) npEl.textContent = '₹'+netPrice.toFixed(2);
     if (totEl) totEl.textContent = '₹'+total.toFixed(2);
   });
+  // While a department TL is reviewing, the total reflects only their lines.
+  const filtering = Array.isArray(_approverDeptFilter) && _approverDeptFilter.length;
+  const sumItems = filtering ? quoteItems.filter(it => _approverDeptFilter.includes(it.department)) : quoteItems;
+  const shown = sumItems.reduce((s,it) => s + computeLine(it).total, 0);
   const gt = document.getElementById('quote-grand-total');
-  if (gt) gt.textContent = '₹'+quoteGrandTotal().toLocaleString('en-IN', {maximumFractionDigits:0});
+  if (gt) gt.textContent = '₹'+shown.toLocaleString('en-IN', {maximumFractionDigits:0});
+  const gtLabel = document.getElementById('quote-grand-total-label');
+  if (gtLabel) gtLabel.textContent = filtering ? 'Your Section Subtotal' : 'Grand Total';
 }
 
 function renderQuoteItems() {
+  // When a department TL is approving, show only their category's lines.
+  const filtering = Array.isArray(_approverDeptFilter) && _approverDeptFilter.length;
+  const visibleItems = filtering ? quoteItems.filter(it => _approverDeptFilter.includes(it.department)) : quoteItems;
   const countEl = document.getElementById('qitem-count');
-  if (countEl) countEl.textContent = quoteItems.length;
+  if (countEl) countEl.textContent = visibleItems.length;
   const list = document.getElementById('quote-items-list');
   if (!list) return;
-  if (!quoteItems.length) { list.innerHTML = '<p class="empty-msg">No items yet — add from inventory or as a custom item</p>'; updateQuoteTotalsOnly(); return; }
+  if (!visibleItems.length) { list.innerHTML = '<p class="empty-msg">No items yet — add from inventory or as a custom item</p>'; updateQuoteTotalsOnly(); return; }
 
   const cats = currentCategories || DEFAULT_CATEGORIES;
   const depts = Object.keys(cats);
 
+  const deptBanner = filtering ? `
+    <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text)">
+      🏷️ You're reviewing only <strong>${_approverDeptFilter.join(', ')}</strong>. Re-price or adjust the discount on these lines, then approve. Other departments are reviewed by their own TLs and merged automatically.
+    </div>` : '';
+
   // Only one item is shown fully expanded at a time — the rest collapse to
   // a compact summary row so a long item list doesn't bury the form you're
   // actively working on. Tap a collapsed row to expand it.
-  list.innerHTML = quoteItems.map((item, i) => {
+  list.innerHTML = deptBanner + visibleItems.map((item, i) => {
     const { netPrice, total } = computeLine(item);
-    const isExpanded = quoteExpandedId === item.id || quoteItems.length === 1;
+    const isExpanded = quoteExpandedId === item.id || visibleItems.length === 1;
 
     if (!isExpanded) {
       const label = [item.brand, item.model, item.description].filter(Boolean).join(' · ') || `Item ${i+1}`;
@@ -7205,7 +7234,12 @@ function buildEditAuditSummary(before, after) {
 async function saveApproverEditAndApprove() {
   if (!quoteItems.length) return showToast('Add at least one item', 'warn');
 
-  const missingBrand = quoteItems.find(it => !it.brand);
+  // A department TL only reviews their own lines, so validation (and the
+  // "expand the offending item" jump) must target just those — they can't
+  // fix another department's blank fields.
+  const _filtering = Array.isArray(_approverDeptFilter) && _approverDeptFilter.length;
+  const _checkItems = _filtering ? quoteItems.filter(it => _approverDeptFilter.includes(it.department)) : quoteItems;
+  const missingBrand = _checkItems.find(it => !it.brand);
   if (missingBrand) {
     quoteExpandedId = missingBrand.id;
     renderQuoteItems();
@@ -7257,6 +7291,7 @@ async function saveApproverEditAndApprove() {
   showToast('Edits saved and approved', 'success');
   isApproverEditingPending = false;
   quoteBeforeEditSnapshot = null;
+  _approverDeptFilter = null;
   closeSheet();
   navigateTo('cart');
 }
