@@ -9208,6 +9208,8 @@ async function updateProduct(id) {
 
 async function showAddProduct() {
   const cats = await VW_CHECKIN.getDepartmentNames();
+  const _catMap = await getCategories();
+  const _firstSubs = (_catMap[cats[0]] || []);
   const _zones = ((await VW_DB.client.from('warehouse_locations').select('code,name').eq('is_active',true).order('sort_order')).data) || [];
   newProductPhotos = []; // reset on every fresh open, so an abandoned previous attempt's photos never leak in
   newProductPhotoTempKey = `new-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
@@ -9218,7 +9220,15 @@ async function showAddProduct() {
     <h3>Add New Product</h3>
     <div class="form-group"><label>Product Name *</label><input type="text" id="np-name" placeholder="e.g. Premium Vitrified Tile 60x60"></div>
     <div class="form-group"><label>Category *</label>
-      <select id="np-cat" onchange="VW_TILES.injectTileFields(this.value)">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
+      <div style="display:flex;gap:8px">
+        <select id="np-cat" style="flex:1" onchange="VW_INVENTORY.onAddProductCatChange(this.value)">${cats.map(c=>`<option>${c}</option>`).join('')}</select>
+        <button type="button" class="btn-secondary" style="white-space:nowrap;padding:0 12px" onclick="VW_INVENTORY.addInlineCategory()">+ New</button>
+      </div></div>
+    <div class="form-group"><label>Sub-Category</label>
+      <div style="display:flex;gap:8px">
+        <select id="np-subcat" style="flex:1">${_firstSubs.length ? _firstSubs.map(s=>`<option>${s}</option>`).join('') : '<option value="">— none —</option>'}</select>
+        <button type="button" class="btn-secondary" style="white-space:nowrap;padding:0 12px" onclick="VW_INVENTORY.addInlineSubcategory()">+ New</button>
+      </div></div>
     <!-- Tile-specific fields inject here when Tiles selected -->
     <div id="np-tile-fields"></div>
     <div class="input-row">
@@ -9485,6 +9495,7 @@ async function saveNewProduct() {
   const pricingMode = document.getElementById('np-pricing-mode').value;
   const newId = await VW_DB.put(VW_DB.STORES.products, {
     name, category: document.getElementById('np-cat').value,
+    subcategory: document.getElementById('np-subcat')?.value || '',
     brand: document.getElementById('np-brand').value.trim(),
     model: document.getElementById('np-model').value.trim(),
     barcode: document.getElementById('np-barcode').value.trim() || `VW-${Date.now().toString(36).toUpperCase().slice(-6)}`,
@@ -9678,7 +9689,51 @@ async function confirmDeleteProduct(id) {
 }
 window.confirmDeleteProduct = confirmDeleteProduct;
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL };
+// Category / Sub-Category inline add from the Add Product form. Writes to
+// the same 'categories' map the rest of the app reads ({dept:[subcats]}),
+// so a category created here shows up everywhere (quotes, tasks, etc.).
+function onAddProductCatChange(cat) {
+  try { VW_TILES.injectTileFields(cat); } catch(_) {}
+  const sub = document.getElementById('np-subcat');
+  if (sub) {
+    const subs = (currentCategories || {})[cat] || [];
+    sub.innerHTML = subs.length ? subs.map(s=>`<option>${s}</option>`).join('') : '<option value="">— none —</option>';
+  }
+}
+async function addInlineCategory() {
+  const name = (prompt('New category name:')||'').trim();
+  if (!name) return;
+  const cats = await getCategories();
+  if (!cats[name]) { cats[name] = []; await VW_DB.setSetting('categories', cats); setCategoriesCache(cats); }
+  const sel = document.getElementById('np-cat');
+  if (sel) {
+    if (!Array.from(sel.options).some(o=>o.value===name || o.textContent===name)) {
+      const opt = document.createElement('option'); opt.textContent = name; sel.appendChild(opt);
+    }
+    sel.value = name;
+  }
+  onAddProductCatChange(name);
+  showToast(`Category "${name}" added`, 'success');
+}
+async function addInlineSubcategory() {
+  const cat = document.getElementById('np-cat')?.value;
+  if (!cat) return showToast('Pick a category first', 'warn');
+  const name = (prompt(`New sub-category under ${cat}:`)||'').trim();
+  if (!name) return;
+  const cats = await getCategories();
+  cats[cat] = cats[cat] || [];
+  if (!cats[cat].includes(name)) { cats[cat].push(name); await VW_DB.setSetting('categories', cats); setCategoriesCache(cats); }
+  const sel = document.getElementById('np-subcat');
+  if (sel) {
+    if (!Array.from(sel.options).some(o=>o.value===name || o.textContent===name)) {
+      const opt = document.createElement('option'); opt.textContent = name; sel.appendChild(opt);
+    }
+    sel.value = name;
+  }
+  showToast(`Sub-category "${name}" added`, 'success');
+}
+
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
