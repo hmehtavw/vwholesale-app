@@ -8755,6 +8755,7 @@ async function openProduct(id) {
     Object.entries(mMap).forEach(([b,s]) => { _inventoryModelsByBrand[b] = [...s].sort(); });
   }
   const sheet = document.getElementById('bottom-sheet');
+  const _stockLoc = await getProductStockLocations(id);
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <h3>${p.name}</h3>
@@ -8800,6 +8801,19 @@ async function openProduct(id) {
       <button class="btn-primary" onclick="updateProduct(${id})">Save Changes</button>
       <button class="btn-secondary" onclick="showRestock(${id})">📦 Restock</button>
       <button class="btn-secondary" onclick="VW_EXTRAS.renderStockHistory(${id})">📊 History</button>
+    </div>
+    <div style="margin-top:14px;background:var(--bg2);border-radius:10px;padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700">📍 Stock by Location</span>
+        <span style="font-size:12px;color:var(--text3)">Total: <strong style="color:var(--gold)">${_stockLoc.total}</strong> ${p.unit||''}</span>
+      </div>
+      ${_stockLoc.locations.length ? _stockLoc.locations.map(l=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border2)">
+          <span style="font-size:12px">${l.warehouse_code||'—'} · ${l.rack_no||'—'}/${l.shelf_no||'—'}</span>
+          <span style="font-size:12px;font-weight:700">${l.qty}</span>
+        </div>`).join('') : '<div style="font-size:11px;color:var(--text3)">No location records yet — add stock to a zone/rack/shelf below.</div>'}
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Dispatch picks lowest-qty location first.</div>
+      <button type="button" class="btn-sm" style="margin-top:8px" onclick="VW_INVENTORY.addProductLocation(${id})">+ Add to location</button>
     </div>
     ${p.customFields && Object.keys(p.customFields).length ? `
     <div class="req-item-card" style="margin-top:10px">
@@ -9257,6 +9271,43 @@ async function deductStockLowestFirst(productId, qty){
 }
 window.VW_STOCK = { getLocations:getProductStockLocations, pickLowestFirst:pickStockLowestFirst, addToLocation:addStockToLocation, deductLowestFirst:deductStockLowestFirst };
 
+async function addProductLocation(productId){
+  const zones = ((await VW_DB.client.from('warehouse_locations').select('code,name').eq('is_active',true).order('sort_order')).data)||[];
+  const sheet=document.getElementById('bottom-sheet');
+  sheet.innerHTML=`
+    <div class="sheet-handle"></div>
+    <h3 style="margin-bottom:12px">Add Stock to Location</h3>
+    <div class="form-group"><label>Zone</label><select id="pl-zone" onchange="VW_INVENTORY.plLoadRacks(this.value)"><option value="">Select zone</option>${zones.map(z=>`<option value="${z.code}">${z.name}</option>`).join('')}</select></div>
+    <div class="input-row">
+      <div class="form-group" style="flex:1"><label>Rack</label><select id="pl-rack" onchange="VW_INVENTORY.plLoadShelves(this.value)"><option value="">Zone first</option></select></div>
+      <div class="form-group" style="flex:1"><label>Shelf</label><select id="pl-shelf"><option value="">Rack first</option></select></div>
+    </div>
+    <div class="form-group"><label>Quantity to add</label><input type="number" id="pl-qty" min="0" placeholder="0"></div>
+    <button class="btn-primary full-width" onclick="VW_INVENTORY.savePL(${productId})">Add to Location</button>`;
+  sheet.classList.add('open'); document.getElementById('sheet-overlay')?.classList.add('open');
+}
+async function plLoadRacks(zone){
+  const el=document.getElementById('pl-rack'); if(!el)return;
+  if(!zone){ el.innerHTML='<option value="">Zone first</option>'; return; }
+  const { data }=await VW_DB.client.from('rack_config').select('rack_no,shelf_nos').eq('warehouse_code',zone).eq('is_active',true);
+  const racks=(data||[]).sort((a,b)=>(parseInt(String(a.rack_no).replace(/\D/g,''))||0)-(parseInt(String(b.rack_no).replace(/\D/g,''))||0));
+  el.innerHTML=`<option value="">Select rack</option>${racks.map(r=>`<option value="${r.rack_no}" data-shelves='${JSON.stringify(r.shelf_nos||[])}'>${r.rack_no}</option>`).join('')}`;
+  const sh=document.getElementById('pl-shelf'); if(sh) sh.innerHTML='<option value="">Rack first</option>';
+}
+function plLoadShelves(rack){
+  const opt=document.getElementById('pl-rack')?.querySelector(`option[value="${rack}"]`);
+  const shelves=opt?JSON.parse(opt.dataset.shelves||'[]'):[];
+  const el=document.getElementById('pl-shelf'); if(el) el.innerHTML=`<option value="">Select shelf</option>${shelves.map(s=>`<option value="${s}">${s}</option>`).join('')}`;
+}
+async function savePL(productId){
+  const zone=document.getElementById('pl-zone')?.value, rack=document.getElementById('pl-rack')?.value||'', shelf=document.getElementById('pl-shelf')?.value||'';
+  const qty=parseFloat(document.getElementById('pl-qty')?.value);
+  if(!zone||isNaN(qty)||qty<=0){ showToast('Select a zone and quantity','warn'); return; }
+  await addStockToLocation(productId, zone, rack, shelf, qty);
+  showToast('Stock added to location ✓','success');
+  closeSheet(); openProduct(productId);
+}
+
 async function saveNewProduct() {
   const name = document.getElementById('np-name').value.trim();
   const { finalPrice, gstPct } = computeProductPrice();
@@ -9405,7 +9456,7 @@ async function confirmDeleteProduct(id) {
 }
 window.confirmDeleteProduct = confirmDeleteProduct;
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack };
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
