@@ -9521,6 +9521,12 @@ async function saveNewProduct() {
       qty: stock
     }).catch(()=>{});
   }
+  if (!isNaN(stock)) {
+    await recordStockMovement({
+      productId: newId, productName: name, delta: stock, kind: 'opening',
+      reason: 'Opening stock', locationCode: _zone, stockBefore: 0, stockAfter: stock
+    });
+  }
   // Any photos captured during this same form are already uploaded to
   // Storage — now that the product has a real ID, formally submit each
   // one through the same approval queue every other photo goes through,
@@ -9566,6 +9572,46 @@ async function showRestock(productId) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
+// Records a stock movement to the user-wise audit log (who added/removed
+// what, when, and how on-hand changed). Best-effort — never blocks the
+// stock update itself if the log insert fails.
+async function recordStockMovement(m) {
+  try {
+    const profile = VW_AUTH.getCurrentProfile();
+    await VW_DB.client.from('stock_movements').insert({
+      product_id: m.productId, product_name: m.productName || '',
+      delta: m.delta, kind: m.kind || 'adjustment',
+      reason: m.reason || '', ref: m.ref || '', location_code: m.locationCode || '',
+      stock_before: m.stockBefore, stock_after: m.stockAfter,
+      by_name: profile ? profile.name : '', by_staff_id: profile ? profile.staffId : null
+    });
+  } catch (_) {}
+}
+window.recordStockMovement = recordStockMovement;
+
+// Clear confirmation popup after stock is added, so it's obvious the system
+// recorded it (a quick toast was too easy to miss).
+function showStockAddedConfirm({ name, unit, added, before, after, byName }) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:8px 0">
+      <div style="font-size:44px;margin-bottom:6px">✅</div>
+      <h3 style="margin:0 0 4px">Stock Added</h3>
+      <p class="sheet-meta" style="margin-bottom:14px">${name}</p>
+      <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:14px;padding:14px;margin-bottom:12px">
+        <div style="font-size:30px;font-weight:800;color:#22c55e">+${added} ${unit||''}</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:6px">${before} → <strong>${after}</strong> ${unit||''} on hand</div>
+      </div>
+      ${byName ? `<div style="font-size:12px;color:var(--text3)">Added by ${byName} · ${new Date().toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+    </div>
+    <button class="btn-primary full-width" style="margin-top:6px" onclick="closeSheet();navigateTo('inventory')">Done</button>
+  `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+window.showStockAddedConfirm = showStockAddedConfirm;
+
 async function confirmRestock(productId) {
   const qty = parseFloat(document.getElementById('rs-qty').value);
   const supplier = document.getElementById('rs-supplier').value.trim();
@@ -9577,20 +9623,28 @@ async function confirmRestock(productId) {
   if (!billNo) return showToast('Invoice / bill number is required', 'warn');
 
   const p = await VW_DB.getById(VW_DB.STORES.products, productId);
-  p.stock += qty;
+  const before = parseFloat(p.stock) || 0;
+  p.stock = before + qty;
   p.lastRestocked = new Date().toISOString();
   await VW_DB.put(VW_DB.STORES.products, p);
 
+  const profile = VW_AUTH.getCurrentProfile();
   await VW_DB.put(VW_DB.STORES.purchaseOrders, {
     productId, productName: p.name, qty,
     supplier, rate, billNo,
     date: document.getElementById('rs-date').value,
+    addedByName: profile ? profile.name : '', addedByStaffId: profile ? profile.staffId : null,
     status: 'received', createdAt: new Date().toISOString()
   });
 
-  showToast(`+${qty} ${p.unit} restocked for ${p.name}`, 'success');
+  await recordStockMovement({
+    productId, productName: p.name, delta: qty, kind: 'restock',
+    reason: `Restock from ${supplier}`, ref: billNo,
+    stockBefore: before, stockAfter: p.stock
+  });
+
   closeSheet();
-  navigateTo('inventory');
+  showStockAddedConfirm({ name: p.name, unit: p.unit, added: qty, before, after: p.stock, byName: profile ? profile.name : '' });
 }
 
 async function showAddPO(preselectedProductId = null) {
@@ -22260,11 +22314,23 @@ async function renderStockHistory(productId) {
 
   movements.sort((a,b)=>new Date(b.date)-new Date(a.date));
 
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <h3>📦 ${product.name}</h3>
-    <p class="sheet-meta">Current stock: ${product.stock||0} ${product.unit||'pc'}</p>
+  // User-wise movement log (opening stock, manual restocks, adjustments) —
+  // these carry who did it, which the derived sales/PO/return rows don't.
+  let logged = [];
+  try {
+    const res = await VW_DB.client.from('stock_movements').select('*').eq('product_id', productId).order('created_at', { ascending: false });
+    logged = (res && res.data) || [];
+  } catch (_) {}
+  logged.forEach(m => {
+    const isIn = (parseFloat(m.delta)||0) >= 0;
+    movements.push({
+      date: m.created_at, type: isIn ? 'in' : 'out', qty: parseFloat(m.delta)||0,
+      reason: `${m.reason||m.kind||'Adjustment'}${m.by_name ? ' · by '+m.by_name : ''}`,
+      ref: m.ref || '', color: isIn ? '#22c55e' : 'var(--red)'
+    });
+  });
+
+  movements.sort((a,b)=>new Date(b.date)-new Date(a.date));
     <div style="max-height:400px;overflow-y:auto">
       ${!movements.length ? '<p class="empty-msg">No movement history yet</p>' :
       movements.map(m=>`
