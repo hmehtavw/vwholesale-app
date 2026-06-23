@@ -22615,7 +22615,7 @@ Questions? Call us anytime.`
 
 // Step labels indexed by _tqState.step (0-8). 9 numbered steps; the wall-design
 // planner and visualizer are interstitial and keep the surrounding step's number.
-const TQ_STEP_NAMES = ['Customer','Rooms & Areas','Tile Size','Design, Tile & Price','Spacer','Adhesive','Grout & Epoxy','Add-ons','Summary'];
+const TQ_STEP_NAMES = ['Customer','Rooms & Areas','Tile Size','Spacer','Adhesive','Beading','Brand & Stock','Grout & Epoxy','Summary'];
 function _renderStepHeaderInner() {
   const s = _tqState.step;
   const total = TQ_STEP_NAMES.length;
@@ -22631,7 +22631,16 @@ function _renderStepHeaderInner() {
 
 async function _renderTQPage() {
   const s = _tqState.step;
-  const stepContent = await _tqRenderStep(s);
+  const stepContent =
+    s===0?(await _renderStep0()):
+    s===1?_renderStep1():
+    s===2?(await _renderStep2()):
+    s===3?_renderStep3():
+    s===4?_renderStep4():
+    s===5?_renderStep5():
+    s===6?(await _renderStep6()):
+    s===7?_renderStep7():
+    (await _renderStep8());
   return `
   <div id="tq-step-header" style="padding:10px 16px 4px;display:flex;align-items:center;gap:10px">
     ${_renderStepHeaderInner()}
@@ -23217,7 +23226,7 @@ async function _renderStep2() {
     <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:8px">✅ All areas selected</div>
     ${slots.map(s=>`<div style="font-size:11px;color:var(--text3);margin-bottom:2px">${s.label} — ${(_tqState.tileSelections[s.id]?.sizeMm||'?')}mm ✓</div>`).join('')}
     <button class="btn-primary full-width" style="margin-top:10px" onclick="VW_TILES.tqNext()">
-      Continue → Design
+      Continue → Spacer
     </button>
   </div>` : currentSel ? `
   <!-- CURRENT SLOT SELECTED, MORE PENDING -->
@@ -23551,7 +23560,7 @@ function _renderStep4() {
       + ${totalCemBags} bags cement · ${totalSandBags} bags sand (mortar areas)
     </div>` : ''}
   </div>
-  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Grout</button>
+  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Beading</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
 
@@ -24062,7 +24071,7 @@ function _renderStep7() {
       <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 5% wastage. Confirm quantity with installer.</div>
     </div>
   </div>
-  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Add-ons</button>
+  <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Quotation Summary</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
 
@@ -24070,161 +24079,6 @@ function tqSetGroutType(t) { _tqState.grout.type=t; document.getElementById('tq-
 function tqSetGroutColor(c,hex) { _tqState.grout.color=c; _tqState.grout.colorHex=hex; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
 
 // ───── STEP 8: SUMMARY + T&C ────────────────────────────────
-// ════════════ STEP: ADD-ONS & MATERIALS (own step before Summary) ════════════
-async function _renderStepAddons() {
-  const totalSqft = _tqTotalSqft();
-  const boxesNeeded = Math.max(1, Math.ceil(totalSqft / 15));
-  return `
-  <!-- FLOOR TRAP SELECTOR -->
-  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
-    <h3 class="card-title">🕳 Floor Trap / Nahani Trap Selection</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Floor traps must be positioned and fixed <strong>before</strong> tiles are laid. Select size now so it goes on the quotation.
-    </p>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px" id="tq-trap-grid">
-      ${[
-        { id:'ft1', size:'90×50mm', label:'90×50mm (2")', use:'Small bathroom, hand wash', material:'PVC Nahani' },
-        { id:'ft2', size:'90×63mm', label:'90×63mm (2.5")', use:'Standard bathroom, shower', material:'PVC Nahani' },
-        { id:'ft3', size:'110×75mm', label:'110×75mm (3")', use:'Master bathroom, wash area', material:'PVC / SS304' },
-        { id:'ft4', size:'110×90mm', label:'110×90mm (3.5")', use:'Bathroom with bathtub', material:'PVC / SS304' },
-        { id:'ft5', size:'110×110mm', label:'110×110mm (4")', use:'Kitchen, utility, large bath', material:'PVC / SS304' },
-        { id:'ft6', size:'300×300mm', label:'300×300mm SS Square', use:'Modern shower area, hotel style', material:'SS304 Square' },
-        { id:'ft7', size:'200×200mm', label:'200×200mm SS Square', use:'Compact modern bathroom', material:'SS304 Square' },
-        { id:'ft8', size:'channel', label:'Channel Drain (linear)', use:'Walk-in shower, balcony, terrace', material:'SS304 / ABS' },
-      ].map(t => {
-        const sel = (_tqState.floorTraps||[]).find(x=>x.id===t.id);
-        return `<div onclick="VW_TILES.tqToggleTrap(${JSON.stringify(t).replace(/"/g,'&quot;')})"
-          style="background:${sel?'rgba(34,197,94,0.08)':'var(--bg2)'};border:${sel?'2px solid var(--green)':'1px solid var(--border)'};border-radius:10px;padding:10px;cursor:pointer">
-          <div style="font-size:12px;font-weight:700;color:${sel?'var(--green)':'var(--text)'}">${t.label}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.material}</div>
-          <div style="font-size:10px;color:var(--text3)">${t.use}</div>
-          ${sel?`<div style="font-size:10px;color:var(--green);margin-top:3px">✓ Selected · Qty: <input type="number" value="${sel.qty||1}" min="1" onclick="event.stopPropagation()" onchange="VW_TILES.tqSetTrapQty('${t.id}',this.value)" style="width:36px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 4px;font-size:11px;color:var(--text)"> nos</div>`:''}
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
-
-  <!-- CORRECT SEQUENCE / WATERPROOFING -->
-  <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
-    <h3 class="card-title">🔴 Critical Sequence — Do This Before Tiles</h3>
-    <p style="font-size:12px;color:var(--gold);font-weight:600;margin-bottom:10px">
-      Wrong sequence = tile failure. Follow this order exactly:
-    </p>
-    <div style="position:relative;padding-left:24px">
-      ${[
-        { step:1, icon:'🔧', title:'Plumbing First (CPVC/PVC pipes)', note:'All hot & cold water lines, drainage pipes. Cannot change after waterproofing.', urgent:true, advisory:true },
-        { step:2, icon:'🕳', title:'Fix Floor Trap Position', note:'Mark and fix drain position. Height must account for tile thickness (8–15mm) + adhesive (6–10mm).', urgent:true, advisory:true },
-        { step:3, icon:'💧', title:'Waterproofing Membrane (BEFORE tiles)', note:'2–3 coats of Dr. Fixit / MYK Laticrete / Pidilite on floor + 150mm up walls. Ponding test 48 hrs. Only then tile.', urgent:true, advisory:true },
-        { step:4, icon:'🔲', title:'Tile Laying', note:'Use tile adhesive (not cement for tiles ≥ 600mm). Bottom to top for walls.', urgent:false, advisory:false },
-        { step:5, icon:'✅', title:'Grout / Epoxy', note:'After adhesive cures 24hrs. Epoxy grout at floor-wall junction is mandatory.', urgent:false, advisory:false },
-      ].map(s=>`
-      <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="width:22px;height:22px;border-radius:50%;background:${s.urgent?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.1)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${s.urgent?'var(--red)':'var(--green)'};flex-shrink:0">${s.step}</div>
-        <div>
-          <div style="font-size:12px;font-weight:700">${s.icon} ${s.title}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${s.note}</div>
-          ${s.advisory?`<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">Advisory only — V Wholesale does not supply plumbing services</div>`:''}
-        </div>
-      </div>`).join('')}
-    </div>
-  </div>
-
-  <!-- SOFFIT PANEL / PVC CEILING ADDON -->
-  <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
-    <h3 class="card-title">✨ Add-on: Soffit Panel / PVC Ceiling</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Available for washrooms, balconies, and bathrooms. Want to add a ceiling or soffit panel to this quotation?
-    </p>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <button onclick="VW_TILES.tqToggleSoffit(true)"
-        style="flex:1;padding:12px;border-radius:12px;border:${_tqState.soffit?.enabled?'2px solid var(--gold)':'1px solid var(--border)'};background:${_tqState.soffit?.enabled?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;font-weight:700;color:${_tqState.soffit?.enabled?'var(--gold)':'var(--text)'}">
-        ✅ Yes — Add Soffit Panel
-      </button>
-      <button onclick="VW_TILES.tqToggleSoffit(false)"
-        style="flex:1;padding:12px;border-radius:12px;border:${!_tqState.soffit?.enabled?'2px solid var(--gold)':'1px solid var(--border)'};background:${!_tqState.soffit?.enabled?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;color:${!_tqState.soffit?.enabled?'var(--gold)':'var(--text)'}">
-        Skip for now
-      </button>
-    </div>
-
-    ${_tqState.soffit?.enabled ? `
-    <div style="background:var(--bg2);border-radius:12px;padding:12px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Select Panel Type</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
-        ${[
-          {id:'pvc_3inch', label:'PVC Panel 3"', width:75, note:'Most common bathroom ceiling'},
-          {id:'pvc_4inch', label:'PVC Panel 4"', width:100, note:'Balcony, larger washrooms'},
-          {id:'pvc_5inch', label:'PVC Panel 5"', width:125, note:'Wide panel, fewer joints'},
-          {id:'soffit_8mm', label:'Soffit Panel 8mm', width:200, note:'Premium look, hotels, restaurants'},
-          {id:'pvc_louver', label:'PVC Louver', width:100, note:'Ventilated ceiling'},
-          {id:'wpc_wall', label:'WPC Wall Panel', width:150, note:'Wall cladding, not ceiling'},
-        ].map(p=>{
-          const sel = _tqState.soffit?.type===p.id;
-          return `<button onclick="VW_TILES.tqSelectSoffit('${p.id}',${p.width})"
-            style="background:${sel?'var(--gold-muted)':'var(--bg2)'};border:${sel?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:8px;padding:8px;cursor:pointer;text-align:left">
-            <div style="font-size:12px;font-weight:700;color:${sel?'var(--gold)':'var(--text)'}">${p.label}</div>
-            <div style="font-size:10px;color:var(--text3)">${p.note}</div>
-          </button>`;
-        }).join('')}
-      </div>
-
-      ${_tqState.soffit?.type ? (() => {
-        const bathrooms = _tqState.rooms.filter(r=>r.type==='Bathroom'||r.type==='Toilet'||r.type.includes('Wash')||r.type.includes('Balcony'));
-        const totalCeilSqft = bathrooms.reduce((s,r)=>s+r.areas.reduce((ss,a)=>ss+(a.base||a.sqft||0),0),0)*1.1;
-        const panelWidthFt = (_tqState.soffit?.panelWidth||100)/304.8;
-        const roomLen = 10; // avg
-        const stripsPerSqft = 1/panelWidthFt;
-        const totalStrips = Math.ceil(totalCeilSqft * stripsPerSqft);
-        const panelLen = 10; // 10ft standard
-        const pcs = Math.ceil(totalStrips * (roomLen/panelLen));
-        return `
-        <div style="background:rgba(245,200,66,0.08);border-radius:10px;padding:10px">
-          <div style="font-size:12px;font-weight:600;margin-bottom:6px">Auto-calculated Requirement</div>
-          <div style="font-size:13px;color:var(--text2)">Wet areas: <strong style="color:var(--gold)">${totalCeilSqft.toFixed(1)} sqft</strong></div>
-          <div style="font-size:13px;color:var(--text2)">Panels needed: <strong style="color:var(--gold)">${pcs} pcs</strong> (10ft × ${_tqState.soffit.panelWidth}mm)</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:4px">Bathrooms: ${bathrooms.map(r=>r.label).join(', ')||'None added'}</div>
-          <div style="font-size:11px;color:var(--text3)">Price to be confirmed from inventory</div>
-        </div>`;
-      })() : ''}
-    </div>` : ''}
-  </div>
-
-  <!-- ADDONS: Cement, Sand, Tile Cleaner, Accessories -->
-  <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">🧱 Material Addons <span style="font-size:11px;color:var(--text3);font-weight:400">(optional — add to quote)</span></h3>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-      Based on ${totalSqft.toFixed(0)} sqft floor area. Rough estimates — confirm with installer.
-    </div>
-    ${await _renderAddonSuggestions(totalSqft, boxesNeeded)}
-  </div>
-
-  <!-- LABOR QUESTION -->
-  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
-    <h3 class="card-title">🔨 Tile Laying Labor</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
-      Do you need a professional tile layer? V Wholesale can connect you with verified contractors who procure material from us — quality assured.
-    </p>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button onclick="VW_TILES.setLaborRequired(true)"
-        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired?'2px solid var(--green)':'1px solid var(--border)'};background:${_tqState.laborRequired?'rgba(34,197,94,0.08)':'var(--bg2)'};cursor:pointer;font-size:13px;font-weight:700;color:${_tqState.laborRequired?'var(--green)':'var(--text)'}">
-        ✅ Yes, need labor
-      </button>
-      <button onclick="VW_TILES.setLaborRequired(false)"
-        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired===false?'2px solid var(--gold)':'1px solid var(--border)'};background:${_tqState.laborRequired===false?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;color:${_tqState.laborRequired===false?'var(--gold)':'var(--text)'}">
-        Not required
-      </button>
-    </div>
-    ${_tqState.laborRequired ? `
-    <div style="background:rgba(34,197,94,0.06);border-radius:10px;padding:10px;font-size:11px;color:var(--text2)">
-      ✅ Your requirement will be shared with our verified contractor network. They will contact you with competitive rates. All material procurement through V Wholesale — quality assured.
-    </div>` : ''}
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
-    <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqBack()">← Back</button>
-    <button class="btn-primary" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqNext()">Continue → Summary</button>
-  </div>`;
-}
-function _rerenderStepAddons(){ _renderStepAddons().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html;}); }
-
 async function _renderStep8() {
   const st = _tqState;
   const totalSqft = _tqTotalSqft();
@@ -24661,6 +24515,149 @@ async function _renderStep8() {
     </div>`}
   </div>
 
+  <!-- FLOOR TRAP SELECTOR -->
+  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
+    <h3 class="card-title">🕳 Floor Trap / Nahani Trap Selection</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      Floor traps must be positioned and fixed <strong>before</strong> tiles are laid. Select size now so it goes on the quotation.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px" id="tq-trap-grid">
+      ${[
+        { id:'ft1', size:'90×50mm', label:'90×50mm (2")', use:'Small bathroom, hand wash', material:'PVC Nahani' },
+        { id:'ft2', size:'90×63mm', label:'90×63mm (2.5")', use:'Standard bathroom, shower', material:'PVC Nahani' },
+        { id:'ft3', size:'110×75mm', label:'110×75mm (3")', use:'Master bathroom, wash area', material:'PVC / SS304' },
+        { id:'ft4', size:'110×90mm', label:'110×90mm (3.5")', use:'Bathroom with bathtub', material:'PVC / SS304' },
+        { id:'ft5', size:'110×110mm', label:'110×110mm (4")', use:'Kitchen, utility, large bath', material:'PVC / SS304' },
+        { id:'ft6', size:'300×300mm', label:'300×300mm SS Square', use:'Modern shower area, hotel style', material:'SS304 Square' },
+        { id:'ft7', size:'200×200mm', label:'200×200mm SS Square', use:'Compact modern bathroom', material:'SS304 Square' },
+        { id:'ft8', size:'channel', label:'Channel Drain (linear)', use:'Walk-in shower, balcony, terrace', material:'SS304 / ABS' },
+      ].map(t => {
+        const sel = (_tqState.floorTraps||[]).find(x=>x.id===t.id);
+        return `<div onclick="VW_TILES.tqToggleTrap(${JSON.stringify(t).replace(/"/g,'&quot;')})"
+          style="background:${sel?'rgba(34,197,94,0.08)':'var(--bg2)'};border:${sel?'2px solid var(--green)':'1px solid var(--border)'};border-radius:10px;padding:10px;cursor:pointer">
+          <div style="font-size:12px;font-weight:700;color:${sel?'var(--green)':'var(--text)'}">${t.label}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.material}</div>
+          <div style="font-size:10px;color:var(--text3)">${t.use}</div>
+          ${sel?`<div style="font-size:10px;color:var(--green);margin-top:3px">✓ Selected · Qty: <input type="number" value="${sel.qty||1}" min="1" onclick="event.stopPropagation()" onchange="VW_TILES.tqSetTrapQty('${t.id}',this.value)" style="width:36px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:1px 4px;font-size:11px;color:var(--text)"> nos</div>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- CORRECT SEQUENCE / WATERPROOFING -->
+  <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
+    <h3 class="card-title">🔴 Critical Sequence — Do This Before Tiles</h3>
+    <p style="font-size:12px;color:var(--gold);font-weight:600;margin-bottom:10px">
+      Wrong sequence = tile failure. Follow this order exactly:
+    </p>
+    <div style="position:relative;padding-left:24px">
+      ${[
+        { step:1, icon:'🔧', title:'Plumbing First (CPVC/PVC pipes)', note:'All hot & cold water lines, drainage pipes. Cannot change after waterproofing.', urgent:true, advisory:true },
+        { step:2, icon:'🕳', title:'Fix Floor Trap Position', note:'Mark and fix drain position. Height must account for tile thickness (8–15mm) + adhesive (6–10mm).', urgent:true, advisory:true },
+        { step:3, icon:'💧', title:'Waterproofing Membrane (BEFORE tiles)', note:'2–3 coats of Dr. Fixit / MYK Laticrete / Pidilite on floor + 150mm up walls. Ponding test 48 hrs. Only then tile.', urgent:true, advisory:true },
+        { step:4, icon:'🔲', title:'Tile Laying', note:'Use tile adhesive (not cement for tiles ≥ 600mm). Bottom to top for walls.', urgent:false, advisory:false },
+        { step:5, icon:'✅', title:'Grout / Epoxy', note:'After adhesive cures 24hrs. Epoxy grout at floor-wall junction is mandatory.', urgent:false, advisory:false },
+      ].map(s=>`
+      <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:22px;height:22px;border-radius:50%;background:${s.urgent?'rgba(239,68,68,0.15)':'rgba(34,197,94,0.1)'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${s.urgent?'var(--red)':'var(--green)'};flex-shrink:0">${s.step}</div>
+        <div>
+          <div style="font-size:12px;font-weight:700">${s.icon} ${s.title}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${s.note}</div>
+          ${s.advisory?`<div style="font-size:10px;color:var(--text3);margin-top:2px;font-style:italic">Advisory only — V Wholesale does not supply plumbing services</div>`:''}
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- SOFFIT PANEL / PVC CEILING ADDON -->
+  <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
+    <h3 class="card-title">✨ Add-on: Soffit Panel / PVC Ceiling</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      Available for washrooms, balconies, and bathrooms. Want to add a ceiling or soffit panel to this quotation?
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button onclick="VW_TILES.tqToggleSoffit(true)"
+        style="flex:1;padding:12px;border-radius:12px;border:${_tqState.soffit?.enabled?'2px solid var(--gold)':'1px solid var(--border)'};background:${_tqState.soffit?.enabled?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;font-weight:700;color:${_tqState.soffit?.enabled?'var(--gold)':'var(--text)'}">
+        ✅ Yes — Add Soffit Panel
+      </button>
+      <button onclick="VW_TILES.tqToggleSoffit(false)"
+        style="flex:1;padding:12px;border-radius:12px;border:${!_tqState.soffit?.enabled?'2px solid var(--gold)':'1px solid var(--border)'};background:${!_tqState.soffit?.enabled?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;color:${!_tqState.soffit?.enabled?'var(--gold)':'var(--text)'}">
+        Skip for now
+      </button>
+    </div>
+
+    ${_tqState.soffit?.enabled ? `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">Select Panel Type</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
+        ${[
+          {id:'pvc_3inch', label:'PVC Panel 3"', width:75, note:'Most common bathroom ceiling'},
+          {id:'pvc_4inch', label:'PVC Panel 4"', width:100, note:'Balcony, larger washrooms'},
+          {id:'pvc_5inch', label:'PVC Panel 5"', width:125, note:'Wide panel, fewer joints'},
+          {id:'soffit_8mm', label:'Soffit Panel 8mm', width:200, note:'Premium look, hotels, restaurants'},
+          {id:'pvc_louver', label:'PVC Louver', width:100, note:'Ventilated ceiling'},
+          {id:'wpc_wall', label:'WPC Wall Panel', width:150, note:'Wall cladding, not ceiling'},
+        ].map(p=>{
+          const sel = _tqState.soffit?.type===p.id;
+          return `<button onclick="VW_TILES.tqSelectSoffit('${p.id}',${p.width})"
+            style="background:${sel?'var(--gold-muted)':'var(--bg2)'};border:${sel?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:8px;padding:8px;cursor:pointer;text-align:left">
+            <div style="font-size:12px;font-weight:700;color:${sel?'var(--gold)':'var(--text)'}">${p.label}</div>
+            <div style="font-size:10px;color:var(--text3)">${p.note}</div>
+          </button>`;
+        }).join('')}
+      </div>
+
+      ${_tqState.soffit?.type ? (() => {
+        const bathrooms = _tqState.rooms.filter(r=>r.type==='Bathroom'||r.type==='Toilet'||r.type.includes('Wash')||r.type.includes('Balcony'));
+        const totalCeilSqft = bathrooms.reduce((s,r)=>s+r.areas.reduce((ss,a)=>ss+(a.base||a.sqft||0),0),0)*1.1;
+        const panelWidthFt = (_tqState.soffit?.panelWidth||100)/304.8;
+        const roomLen = 10; // avg
+        const stripsPerSqft = 1/panelWidthFt;
+        const totalStrips = Math.ceil(totalCeilSqft * stripsPerSqft);
+        const panelLen = 10; // 10ft standard
+        const pcs = Math.ceil(totalStrips * (roomLen/panelLen));
+        return `
+        <div style="background:rgba(245,200,66,0.08);border-radius:10px;padding:10px">
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px">Auto-calculated Requirement</div>
+          <div style="font-size:13px;color:var(--text2)">Wet areas: <strong style="color:var(--gold)">${totalCeilSqft.toFixed(1)} sqft</strong></div>
+          <div style="font-size:13px;color:var(--text2)">Panels needed: <strong style="color:var(--gold)">${pcs} pcs</strong> (10ft × ${_tqState.soffit.panelWidth}mm)</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px">Bathrooms: ${bathrooms.map(r=>r.label).join(', ')||'None added'}</div>
+          <div style="font-size:11px;color:var(--text3)">Price to be confirmed from inventory</div>
+        </div>`;
+      })() : ''}
+    </div>` : ''}
+  </div>
+
+  <!-- ADDONS: Cement, Sand, Tile Cleaner, Accessories -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🧱 Material Addons <span style="font-size:11px;color:var(--text3);font-weight:400">(optional — add to quote)</span></h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+      Based on ${totalSqft.toFixed(0)} sqft floor area. Rough estimates — confirm with installer.
+    </div>
+    ${await _renderAddonSuggestions(totalSqft, boxesNeeded)}
+  </div>
+
+  <!-- LABOR QUESTION -->
+  <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
+    <h3 class="card-title">🔨 Tile Laying Labor</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Do you need a professional tile layer? V Wholesale can connect you with verified contractors who procure material from us — quality assured.
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="VW_TILES.setLaborRequired(true)"
+        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired?'2px solid var(--green)':'1px solid var(--border)'};background:${_tqState.laborRequired?'rgba(34,197,94,0.08)':'var(--bg2)'};cursor:pointer;font-size:13px;font-weight:700;color:${_tqState.laborRequired?'var(--green)':'var(--text)'}">
+        ✅ Yes, need labor
+      </button>
+      <button onclick="VW_TILES.setLaborRequired(false)"
+        style="flex:1;padding:12px;border-radius:10px;border:${_tqState.laborRequired===false?'2px solid var(--gold)':'1px solid var(--border)'};background:${_tqState.laborRequired===false?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:13px;color:${_tqState.laborRequired===false?'var(--gold)':'var(--text)'}">
+        Not required
+      </button>
+    </div>
+    ${_tqState.laborRequired ? `
+    <div style="background:rgba(34,197,94,0.06);border-radius:10px;padding:10px;font-size:11px;color:var(--text2)">
+      ✅ Your requirement will be shared with our verified contractor network. They will contact you with competitive rates. All material procurement through V Wholesale — quality assured.
+    </div>` : ''}
+  </div>
 
   <!-- T&C -->
   <div class="card" style="margin-bottom:14px">
@@ -24839,7 +24836,8 @@ function tqToggleSoffit(enabled) {
   if (!_tqState.soffit) _tqState.soffit = {};
   _tqState.soffit.enabled = enabled;
   if (!enabled) _tqState.soffit.type = null;
-  _rerenderStepAddons();
+  if (typeof _rerenderStep8 === 'function') _rerenderStep8();
+  else _renderStep8().then(html => { const el = document.getElementById('tq-step-content'); if(el) el.innerHTML = html; });
 }
 
 function tqSelectSoffit(type, widthMm) {
@@ -24847,7 +24845,7 @@ function tqSelectSoffit(type, widthMm) {
   _tqState.soffit.enabled = true;
   _tqState.soffit.type = type;
   _tqState.soffit.widthMm = widthMm;
-  _rerenderStepAddons();
+  _rerenderStep8();
 }
 
 function toggleAddon(id, checked) {
@@ -24857,7 +24855,7 @@ function toggleAddon(id, checked) {
 
 function setLaborRequired(val) {
   _tqState.laborRequired = val;
-  _rerenderStepAddons();
+  _rerenderStep8();
 }
 
 async function postLaborFromQuotation() {
@@ -25373,297 +25371,82 @@ function _redesignWall() {
   }
 }
 
-// ════════════ STEP: DESIGN, TILE & PRICE (per slot) ════════════
-// Evolves the wall designer: real tiles per slot (size-filtered, inventory-first +
-// non-inventory fallback), grid painting, box-by-tile (auto round-up + manual ↓/↑),
-// per-SFT price → box rate → line total.
-const _DS_SWATCH = ['#c8860a','#1a6b3c','#1a3a6b','#7a3010','#6b1a5a','#0a6b6b','#8a6d1a','#555'];
-
-function _dsSlots() { return _getTileSlots().filter(s => _tqState.tileSelections[s.id]?.size); }
-function _dsCur() {
-  const slots = _dsSlots();
-  if (!slots.length) return null;
-  let i = _tqState._designIdx || 0;
-  if (i >= slots.length) i = slots.length - 1;
-  if (i < 0) i = 0;
-  _tqState._designIdx = i;
-  return slots[i];
-}
-function _dsState(slotId) {
-  if (!_tqState.design) _tqState.design = {};
-  if (!_tqState.design[slotId]) _tqState.design[slotId] = { palette:[], activeIdx:0, boxesOverride:{}, priceOverride:{}, cells:null };
-  return _tqState.design[slotId];
-}
-function _dsTPB(sizeMm) {
-  const norm = (sizeMm||'').replace(/\s/g,'');
-  const cfg = ((_tqSizeCfg||{}).sizes||[]).find(s=>(s.mm||'').replace(/\s/g,'')===norm);
-  return cfg?.tiles_per_box || 0;
-}
-function _dsMapProduct(p, sizeMm, isStock) {
-  const tpb = p.tiles_per_box || _dsTPB(sizeMm) || 4;
-  const cov = p.coverage_per_box || 0;
-  const perSft = p.price_per_sqft || (cov ? (p.price||p.mrp||0)/cov : 0);
-  return { key:(isStock?'':'ni_')+String(p.id||p.name||Math.random()), name:p.name||'Tile', brand:p.brand||'',
-           finish:p.tile_finish||p.finish||'', tilesPerBox:tpb, coverage:cov,
-           perSft:Math.round((perSft||0)*100)/100, boxPrice:p.price||p.mrp||0, stock:p.stock||0, isStock };
-}
-async function _dsFetchTiles(slot) {
-  if (!_tqState._dsTilesCache) _tqState._dsTilesCache = {};
-  if (_tqState._dsTilesCache[slot.id]) return _tqState._dsTilesCache[slot.id];
-  const sel = _tqState.tileSelections[slot.id];
-  const sizeMm = sel?.size?.mm || sel?.sizeMm || '';
-  const want = sizeMm.replace(/\s/g,'').toLowerCase();
-  let tiles = [];
-  try {
-    const { data } = await VW_DB.client.from('products').select('*').eq('category','Tiles').gt('stock',0);
-    tiles = (data||[]).filter(p => {
-      const ps = (p.tile_size_mm||'').replace(/\s/g,'').toLowerCase();
-      return want ? ps === want : true;   // strict size match — never a wrong size
-    }).map(p => _dsMapProduct(p, sizeMm, true));
-  } catch(e){}
-  if (window.VW_NON_INV) {
-    try {
-      const ni = await VW_NON_INV.fetchTilesForQuotation(sizeMm, slot.subType||'both');
-      (ni.onRequest||[]).forEach(p => tiles.push(_dsMapProduct(p, sizeMm, false)));
-    } catch(e){}
-  }
-  _tqState._dsTilesCache[slot.id] = tiles;
-  return tiles;
-}
-async function _renderStepDesign() {
-  const slot = _dsCur();
-  if (!slot) return _dsRenderInner();
-  await _dsFetchTiles(slot);
-  return _dsRenderInner();
-}
-function _dsRerender() {
-  const el = document.getElementById('tq-step-content');
-  if (el) el.innerHTML = _dsRenderInner();
-}
-function _dsRenderInner() {
-  const slot = _dsCur();
-  if (!slot) return `<div class="card"><p style="color:var(--text2)">Pick tile sizes first (Step 3).</p>
-    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button></div>`;
-  const slots = _dsSlots();
-  const idx = _tqState._designIdx || 0;
-  const tiles = (_tqState._dsTilesCache||{})[slot.id] || [];
-  const st = _dsState(slot.id);
-  const sel = _tqState.tileSelections[slot.id];
-  const sizeMm = sel?.size?.mm || '';
-  const g = _getWallGrid(slot.id);
-  // keep cells sized to the current grid
-  if (g) {
-    const need = g.rows * g.cols;
-    if (!Array.isArray(st.cells) || st.cells.length !== need) st.cells = new Array(need).fill(0);
-  }
-  // map palette keys → tile objects
-  const pal = (st.palette||[]).map(k => tiles.find(t=>t.key===k)).filter(Boolean);
-  if (st.activeIdx >= pal.length) st.activeIdx = 0;
-
-  // --- palette picker ---
-  const inPal = k => (st.palette||[]).includes(k);
-  const palettePicker = `
-    <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;margin-bottom:6px">
-      Tiles for ${sizeMm}mm ${slot.subType==='wall'?'wall':'floor'} · tap to add to this room${tiles.length?'':' — none in stock'}
-    </div>
-    ${tiles.length ? `<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">
-      ${tiles.map((t,i)=>{
-        const on = inPal(t.key);
-        const swatch = on ? _DS_SWATCH[(st.palette.indexOf(t.key))%_DS_SWATCH.length] : 'var(--bg3)';
-        return `<div onclick="VW_TILES._dsTogglePalette('${t.key}')" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;
-          border:${on?'2px solid var(--gold)':'1px solid var(--border)'};background:${on?'var(--gold-muted)':'var(--bg2)'}">
-          <div style="width:18px;height:18px;border-radius:4px;flex-shrink:0;border:1px solid rgba(0,0,0,0.2);background:${swatch}"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:700">${t.name}</div>
-            <div style="font-size:10px;color:var(--text3)">${[t.brand,t.finish].filter(Boolean).join(' · ')||'—'} · ${t.isStock?`Stock ${t.stock}`:'Non-inventory (order)'} · ${t.tilesPerBox}/box</div>
-          </div>
-          <div style="font-size:11px;color:var(--gold);font-weight:700;flex-shrink:0">${t.perSft?`₹${t.perSft}/sft`:'set price'}</div>
-        </div>`;
-      }).join('')}
-    </div>` : `<div style="font-size:11px;color:var(--text2);padding:10px;background:var(--bg2);border-radius:9px;margin-bottom:6px">
-      No ${sizeMm}mm tile in live inventory. Non-inventory options are pulled automatically when available; otherwise change the size in Step 3.
-    </div>`}`;
-
-  if (!pal.length) {
-    return `
-    <div style="background:var(--bg2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text2);display:flex;justify-content:space-between;align-items:center">
-      <span>🎨 ${slot.label} · ${sizeMm}mm · ${(g?g.wallSqft:0).toFixed?.(0)||''} · ${idx+1} of ${slots.length}</span>
-      <button onclick="VW_TILES._dsEditSizes()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer">✎ Edit sizes</button>
-    </div>
-    ${palettePicker}
-    <div style="font-size:11px;color:var(--text3);text-align:center;padding:10px">Add at least one tile to design this area.</div>
-    <button class="btn-secondary full-width" style="margin-top:6px" onclick="VW_TILES.tqBack()">← Back</button>`;
-  }
-
-  // --- grid ---
-  const cellPx = g ? Math.max(20, Math.min(38, Math.floor(300 / g.cols))) : 30;
-  const grid = g ? `
-  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin-bottom:10px">
-    <div style="display:inline-block;border:1px solid var(--border);border-radius:8px;overflow:hidden;user-select:none">
-      ${Array.from({length:g.rows},(_,r)=>`
-      <div style="display:flex">
-        ${Array.from({length:g.cols},(_,c)=>{
-          const ci = r*g.cols+c;
-          const pi = st.cells[ci] ?? 0;
-          const col = _DS_SWATCH[pi%_DS_SWATCH.length];
-          return `<div onclick="VW_TILES._dsPaint(${ci})" style="width:${cellPx}px;height:${Math.round(cellPx*g.tileHeightMm/g.tileWidthMm)}px;
-            background:${col};border:1px solid rgba(0,0,0,0.12);cursor:pointer;flex-shrink:0"></div>`;
-        }).join('')}
-      </div>`).join('')}
-    </div>
-  </div>` : '';
-
-  // --- box-by-tile summary ---
-  const counts = {};
-  (st.cells||[]).forEach(pi => counts[pi]=(counts[pi]||0)+1);
-  const sqftPerTile = g ? g.sqftPerTile : 0;
-  // The display grid is capped for mobile; scale painted proportions up to the
-  // real tile count (area ÷ tile area) so box counts stay accurate on big areas.
-  const totalCells = (st.cells||[]).length || 1;
-  const realTiles = (g && sqftPerTile) ? Math.ceil((g.wallSqft||0)/sqftPerTile) : totalCells;
-  const scale = totalCells ? realTiles/totalCells : 1;
-  let totalAmount = 0, totalBoxes = 0;
-  const lines = pal.map((t,pi)=>{
-    const pcs = Math.round((counts[pi]||0) * scale);
-    const tpb = t.tilesPerBox||4;
-    const exact = pcs/tpb;
-    const fl = Math.floor(exact), cl = Math.ceil(exact);
-    const boxes = st.boxesOverride[pi] ?? cl;
-    const sqftPerBox = sqftPerTile*tpb;
-    const perSft = st.priceOverride[pi] ?? t.perSft ?? 0;
-    const boxPrice = Math.round(perSft*sqftPerBox);
-    const lineTotal = boxes*boxPrice;
-    const spare = boxes*tpb - pcs;
-    totalAmount += lineTotal; totalBoxes += boxes;
-    const swatch = _DS_SWATCH[pi%_DS_SWATCH.length];
-    return `
-    <div style="padding:8px 0;border-bottom:1px solid var(--border2)">
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:14px;height:14px;border-radius:3px;background:${swatch};flex-shrink:0;border:1px solid rgba(0,0,0,0.2)"></div>
-        <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">${t.name}</div>
-          <div style="font-size:10px;color:var(--text3)">${pcs} pcs · ${(pcs*sqftPerTile).toFixed(1)} sqft · ${exact.toFixed(2)} box${spare>0?` · ${spare} spare`:''}</div></div>
-        <div style="display:flex;gap:4px;flex-shrink:0">
-          ${fl!==cl?`<button onclick="VW_TILES._dsBoxes(${pi},${fl})" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===fl?'2px solid var(--red)':'1px solid var(--border)'};background:${boxes===fl?'rgba(239,68,68,0.1)':'var(--bg3)'};color:${boxes===fl?'var(--red)':'var(--text)'}">${fl}<span style="font-size:9px">↓</span></button>`:''}
-          <button onclick="VW_TILES._dsBoxes(${pi},${cl})" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===cl?'2px solid var(--gold)':'1px solid var(--border)'};background:${boxes===cl?'var(--gold-muted)':'var(--bg3)'};color:${boxes===cl?'var(--gold)':'var(--text)'}">${cl}<span style="font-size:9px">↑</span></button>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:22px">
-        <span style="font-size:10px;color:var(--text3)">₹</span>
-        <input type="number" value="${perSft||''}" placeholder="per sft" min="0" step="0.5"
-          oninput="VW_TILES._dsPrice(${pi},this.value)"
-          style="width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;color:var(--text)">
-        <span style="font-size:10px;color:var(--text3)">/sft → ₹${boxPrice}/box × ${boxes}</span>
-        <span style="flex:1;text-align:right;font-size:13px;font-weight:700;color:var(--gold)">₹${lineTotal.toLocaleString('en-IN')}</span>
-      </div>
-    </div>`;
-  }).join('');
-  st.result = { totalBoxes, totalAmount };
-
-  const last = idx >= slots.length-1;
-  return `
-  <div style="background:var(--bg2);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:var(--text2);display:flex;justify-content:space-between;align-items:center">
-    <span>🎨 ${slot.label} · ${sizeMm}mm · ${slot.subType==='wall'?'Wall':'Floor'} · room ${idx+1} of ${slots.length}</span>
-    <button onclick="VW_TILES._dsEditSizes()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer">✎ Edit sizes</button>
-  </div>
-  ${palettePicker}
-  ${pal.length>1?`<div style="font-size:10px;color:var(--text3);margin-bottom:5px">Tap a tile below, then tap grid cells to design. One tile fills the whole room by default.</div>
-  <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
-    ${pal.map((t,pi)=>`<button onclick="VW_TILES._dsSetActive(${pi})" style="display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:8px;cursor:pointer;border:${st.activeIdx===pi?'2px solid var(--gold)':'1px solid var(--border)'};background:${st.activeIdx===pi?'var(--gold-muted)':'var(--bg2)'}">
-      <div style="width:14px;height:14px;border-radius:3px;background:${_DS_SWATCH[pi%_DS_SWATCH.length]}"></div>
-      <span style="font-size:11px;font-weight:700;color:${st.activeIdx===pi?'var(--gold)':'var(--text)'}">${t.name.length>14?t.name.slice(0,14)+'…':t.name}</span></button>`).join('')}
-    <button onclick="VW_TILES._dsFillAll()" style="font-size:10px;padding:5px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;cursor:pointer">Fill all</button>
-  </div>
-  ${g?`<div style="display:flex;gap:6px;margin-bottom:8px">
-    <button onclick="VW_TILES._dsOrient('H')" style="flex:1;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${g.orient==='H'?'2px solid var(--gold)':'1px solid var(--border)'};background:${g.orient==='H'?'var(--gold-muted)':'var(--bg2)'};color:${g.orient==='H'?'var(--gold)':'var(--text)'}">↔ Horizontal</button>
-    <button onclick="VW_TILES._dsOrient('V')" style="flex:1;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${g.orient==='V'?'2px solid var(--gold)':'1px solid var(--border)'};background:${g.orient==='V'?'var(--gold-muted)':'var(--bg2)'};color:${g.orient==='V'?'var(--gold)':'var(--text)'}">↕ Vertical</button>
-  </div>`:''}
-  ${grid}`:''}
-  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
-    <div style="font-size:12px;font-weight:700;margin-bottom:4px">📦 Boxes &amp; price by tile</div>
-    ${lines}
-    <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:800">
-      <span>${totalBoxes} boxes</span><span style="color:var(--gold)">₹${totalAmount.toLocaleString('en-IN')}</span>
-    </div>
-  </div>
-  <button class="btn-primary full-width" style="background:var(--gold);color:#000" onclick="VW_TILES._dsContinue()">${last?'Confirm Design → Spacer':'Confirm → Next Room'}</button>
-  <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES._dsPrev()">← ${idx>0?'Previous Room':'Back'}</button>`;
-}
-function _dsTogglePalette(key) {
-  const slot = _dsCur(); if(!slot) return;
-  const st = _dsState(slot.id);
-  const i = st.palette.indexOf(key);
-  if (i>=0) {
-    st.palette.splice(i,1);
-    // remap any cells that pointed at/after removed index
-    st.cells = (st.cells||[]).map(pi => pi===i?0:(pi>i?pi-1:pi));
-    if (st.activeIdx>=st.palette.length) st.activeIdx=0;
-  } else {
-    if (st.palette.length>=4) { showToast('Up to 4 tiles per room','warn'); return; }
-    st.palette.push(key);
-    st.activeIdx = st.palette.length-1;
-  }
-  _dsRerender();
-}
-function _dsSetActive(i){ const s=_dsCur(); if(s){_dsState(s.id).activeIdx=i; _dsRerender();} }
-function _dsPaint(ci){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); if(!st.cells)return; st.cells[ci]=st.activeIdx||0; _dsRerender(); }
-function _dsFillAll(){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); st.cells=(st.cells||[]).map(()=>st.activeIdx||0); _dsRerender(); }
-function _dsOrient(o){ const s=_dsCur(); if(!s)return; if(!_tqState.wallDesigns)_tqState.wallDesigns={}; if(!_tqState.wallDesigns[s.id])_tqState.wallDesigns[s.id]={}; _tqState.wallDesigns[s.id].orient=o; _dsState(s.id).cells=null; _dsRerender(); }
-function _dsBoxes(pi,n){ const s=_dsCur(); if(!s)return; _dsState(s.id).boxesOverride[pi]=n; _dsRerender(); }
-function _dsPrice(pi,v){ const s=_dsCur(); if(!s)return; _dsState(s.id).priceOverride[pi]=parseFloat(v)||0; _dsRerender(); }
-function _dsEditSizes(){ _tqState.step=2; _renderStep2().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html; _updateStepHeader();}); }
-async function _dsContinue(){
-  const slots=_dsSlots(); const idx=_tqState._designIdx||0;
-  const slot=_dsCur(); if(slot){ const st=_dsState(slot.id); if(!st.palette||!st.palette.length){ showToast('Add a tile for this room','warn'); return; } st.confirmed=true; }
-  if (idx < slots.length-1) {
-    _tqState._designIdx = idx+1;
-    const ns=_dsCur(); if(ns) await _dsFetchTiles(ns);
-    _dsRerender();
-  } else {
-    tqNext();
-  }
-}
-function _dsPrev(){
-  const idx=_tqState._designIdx||0;
-  if (idx>0){ _tqState._designIdx=idx-1; const s=_dsCur(); if(s){_dsFetchTiles(s).then(()=>_dsRerender());} }
-  else { tqBack(); }
-}
-
-// Unified step dispatch for the reordered flow:
-// 0 Customer · 1 Rooms · 2 Tile Size · 3 Design/Tile/Price · 4 Spacer ·
-// 5 Adhesive · 6 Grout · 7 Add-ons · 8 Summary
-async function _tqRenderStep(s) {
-  switch (s) {
-    case 0: return await _renderStep0();
-    case 1: return _renderStep1();
-    case 2: return await _renderStep2();
-    case 3: return await _renderStepDesign();
-    case 4: return _renderStep3();          // Spacer
-    case 5: return _renderStep4();          // Adhesive
-    case 6: return _renderStep7();          // Grout & Epoxy
-    case 7: return await _renderStepAddons();
-    case 8: return await _renderStep8();    // Summary
-    default: return _renderStep1();
-  }
-}
-
 async function tqNext() {
   // Step 0: validate customer — contractor is OPTIONAL
   if (_tqState.step === 0) {
+    // Accept name from: found customer, check-in pre-fill, or new customer form
     const name = _tqState.customer.name || document.getElementById('tq-cust-name')?.value.trim();
     if (!name) { showToast('Enter or search customer to continue', 'warn'); return; }
     _tqState.customer.name = name;
     _tqState.customer.phone = _tqState.customer.phone || document.getElementById('tq-cust-phone')?.value.trim() || '';
     _tqState.customer.site = _tqState.customer.site || document.getElementById('tq-cust-site')?.value.trim() || '';
+    // Persist a brand-new customer if it hasn't been saved yet (no DB id)
     if (!_tqState.customer.id && _tqState.customer.phone?.length === 10) {
       await _saveNewCustomer();
     }
+    // Contractor is optional — no validation needed
   }
+  // After step 7 (Grout/Epoxy), show Wall Design Planner for wall slots
+  if (_tqState.step === 7) {
+    const wallSlots = _getTileSlots().filter(s =>
+      s.subType === 'wall' && _tqState.tileSelections[s.id]?.size
+    );
+    const unplanned = wallSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
+    if (unplanned.length > 0) {
+      _tqState._inWallDesign = true;
+      const el = document.getElementById('tq-step-content');
+      if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
+      return;
+    }
+  }
+  // Similarly for floor slots after grout
+  if (_tqState.step === 7) {
+    const floorSlots = _getTileSlots().filter(s =>
+      s.subType === 'floor' && _tqState.tileSelections[s.id]?.size
+    );
+    const unplanned = floorSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
+    if (unplanned.length > 0) {
+      _tqState._inWallDesign = true;
+      const el = document.getElementById('tq-step-content');
+      if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
+      return;
+    }
+  }
+  // After wall/floor design planner, check next unplanned slot
+  if (_tqState._inWallDesign) {
+    const allSlots = _getTileSlots().filter(s => _tqState.tileSelections[s.id]?.size);
+    const unplanned = allSlots.filter(s => !_tqState.wallDesigns[s.id]?.confirmed);
+    if (unplanned.length > 0) {
+      const el = document.getElementById('tq-step-content');
+      if (el) el.innerHTML = _renderWallDesignPlanner(unplanned[0]);
+      return;
+    }
+    _tqState._inWallDesign = false;
+    // After all design planning, show a combined visualizer before step 8
+    _tqState._showVisualizer = true;
+  }
+  // Show visualizer after all designs confirmed
+  if (_tqState._showVisualizer) {
+    _tqState._showVisualizer = false;
+    const el = document.getElementById('tq-step-content');
+    if (el) el.innerHTML = _renderWallVisualizer();
+    return;
+  }
+
   _tqState.step = Math.min(8, _tqState.step + 1);
   const el = document.getElementById('tq-step-content');
   if (el) {
     el.innerHTML = '<div style="padding:20px;text-align:center"><div class="spinner"></div></div>';
     try {
-      el.innerHTML = await _tqRenderStep(_tqState.step);
+      const html = _tqState.step === 6 ? await _renderStep6() :
+                   _tqState.step === 8 ? await _renderStep8() :
+                   _tqState.step === 1 ? _renderStep1() :
+                   _tqState.step === 2 ? await _renderStep2() :
+                   _tqState.step === 3 ? _renderStep3() :
+                   _tqState.step === 4 ? _renderStep4() :
+                   _tqState.step === 5 ? _renderStep5() :
+                   _renderStep7();
+      el.innerHTML = html;
       _updateStepHeader();
     } catch(err) {
       console.error('tqNext render error (step '+_tqState.step+'):', err);
@@ -25673,15 +25456,29 @@ async function tqNext() {
 }
 
 async function tqBack() {
+  // If we're inside an interstitial (wall designer / preview), exit it back to the
+  // current step rather than decrementing — otherwise the step counter desyncs.
+  if (_tqState._inWallDesign || _tqState._showVisualizer) {
+    _tqState._inWallDesign = false;
+    _tqState._showVisualizer = false;
+    const el = document.getElementById('tq-step-content');
+    if (el) el.innerHTML = _renderStep7();
+    _updateStepHeader();
+    return;
+  }
   _tqState.step = Math.max(1, _tqState.step - 1);
   const el = document.getElementById('tq-step-content');
   if (el) {
-    try {
-      el.innerHTML = await _tqRenderStep(_tqState.step);
-      _updateStepHeader();
-    } catch(err) {
-      console.error('tqBack render error (step '+_tqState.step+'):', err);
-    }
+    const html = _tqState.step === 6 ? await _renderStep6() :
+                 _tqState.step === 8 ? await _renderStep8() :
+                 _tqState.step === 1 ? _renderStep1() :
+                 _tqState.step === 2 ? await _renderStep2() :
+                 _tqState.step === 3 ? _renderStep3() :
+                 _tqState.step === 4 ? _renderStep4() :
+                 _tqState.step === 5 ? _renderStep5() :
+                 _renderStep7();
+    el.innerHTML = html;
+    _updateStepHeader();
   }
 }
 
@@ -26970,7 +26767,6 @@ window.VW_TILES = {
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
-  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsOrient, _dsBoxes, _dsPrice, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
