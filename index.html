@@ -31396,14 +31396,68 @@ async function rejectGRN(id) {
   navigateTo('grn');
 }
 
+function _manualGRNRow(i) {
+  return `
+  <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px" id="grn-row-${i}">
+    <input type="text" placeholder="Item name" style="width:100%;font-size:13px;font-weight:600;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;color:var(--text);margin-bottom:6px" id="grn-item-name-${i}">
+    <div style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1"><label style="font-size:10px;color:var(--text3)">QTY</label>
+        <input type="number" value="1" min="0" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-qty-${i}"></div>
+      <div style="flex:1"><label style="font-size:10px;color:var(--text3)">UNIT</label>
+        <input type="text" value="pc" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-unit-${i}"></div>
+      <div style="flex:1"><label style="font-size:10px;color:var(--text3)">RATE ₹</label>
+        <input type="number" value="0" min="0" style="width:100%;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text)" id="grn-item-rate-${i}"></div>
+      <button onclick="document.getElementById('grn-row-${i}').remove()" style="background:none;border:none;color:var(--red);font-size:18px;cursor:pointer;padding:0 4px">✕</button>
+    </div>
+  </div>`;
+}
+
 async function openManualGRN() {
-  // TODO: manual entry form
-  showToast('Manual GRN — use the same form, just skip the photo', 'warn');
+  const openPOs = (await VW_DB.all(VW_DB.STORES.purchaseOrders)).filter(p => p.status !== 'received' && p.status !== 'cancelled');
+  window._grnManualCount = 3;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">📦 Manual GRN Entry</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Type the received items directly. Submitted for approval just like a scanned GRN.</p>
+    ${openPOs.length ? `
+    <div class="form-group"><label>Link to Purchase Order (optional)</label>
+      <select id="grn-po-select">
+        <option value="">No PO — direct purchase</option>
+        ${openPOs.map(p=>`<option value="${p.id}">${p.poNo||'PO-'+p.id} · ${p.vendorName||'Vendor'} · ₹${Math.round(p.total||0).toLocaleString('en-IN')}</option>`).join('')}
+      </select>
+    </div>` : ''}
+    <div class="form-group"><label>Vendor Name *</label><input type="text" id="grn-vendor-name" placeholder="e.g. Ravi Tiles Depot"></div>
+    <div style="display:flex;gap:8px">
+      <div class="form-group" style="flex:1"><label>Invoice No.</label><input type="text" id="grn-invoice-no" placeholder="e.g. INV-1234"></div>
+      <div class="form-group" style="flex:1"><label>Invoice Date</label><input type="date" id="grn-invoice-date"></div>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:6px 0 8px">Items received</div>
+    <div id="grn-items-review">
+      ${[0,1,2].map(i => _manualGRNRow(i)).join('')}
+    </div>
+    <button class="btn-secondary full-width" style="margin-bottom:12px" onclick="VW_GRN.addManualGRNRow()">+ Add Item Row</button>
+    <button class="btn-primary full-width" onclick="VW_GRN.saveGRN(window._grnManualCount, '', document.getElementById('grn-invoice-no').value.trim(), document.getElementById('grn-invoice-date').value, 0)">
+      💾 Save GRN — Submit for Approval
+    </button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function addManualGRNRow() {
+  const container = document.getElementById('grn-items-review');
+  if (!container) return;
+  const i = window._grnManualCount || 0;
+  container.insertAdjacentHTML('beforeend', _manualGRNRow(i));
+  window._grnManualCount = i + 1;
 }
 
 window.VW_GRN = {
   renderGRNPage, newGRN, processGRNPhoto, showGRNReview,
-  saveGRN, openGRN, approveGRN, rejectGRN, openManualGRN
+  saveGRN, openGRN, approveGRN, rejectGRN, openManualGRN, addManualGRNRow
 };
 
 
