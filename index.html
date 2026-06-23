@@ -1134,6 +1134,7 @@ const STORES = {
   catalogs: 'catalogs',
   eodReconciliations: 'eod_reconciliations',
   referralLedger: 'referral_ledger',
+  commissions: 'contractor_commissions',
   trainingCompletions: 'training_completions',
   incentiveRules: 'incentive_rules',
   pettyCash: 'petty_cash',
@@ -1566,10 +1567,19 @@ function phoneToEmail(phone) { return phone.replace(/\D/g, '') + EMAIL_DOMAIN; }
 // Pages a role gets by default. Admin always gets everything and is never
 // restricted by the permissions array below — only non-admin roles can
 // have their access narrowed or widened per person via Settings.
+const ROLE_DISPLAY = {
+  admin:'Admin', management:'Management', sales_head:'Sales Head', asm:'ASM',
+  sr_sales:'Sr Sales', sr_executive:'Sr Executive', executive:'Executive', tl:'Team Lead',
+  floor_manager:'Floor Manager', store_manager:'Store Manager', staff:'Staff',
+  reception:'Reception', accounts:'Accounts', dispatch:'Dispatch', pending:'Pending'
+};
 const ROLE_PAGES = {
   admin:        ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal'],
   executive:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist'],
   sr_executive: ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics'],
+  sr_sales:     ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','contractor_portal'],
+  asm:          ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','contractor_portal'],
+  sales_head:   ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal'],
   tl:           ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports'],
   floor_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal'],
   store_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','contractor_portal'],
@@ -2663,6 +2673,18 @@ const TQ_LEVEL_ROLES = {
   store_manager:['store_manager'],
   management:   ['management', 'admin'],
 };
+
+// Contractor-Club commission approval chain (sequential):
+// Sr Sales → ASM → Sales Head → Management. Share-profile link unlocks only after
+// Management (final) approval. Commission is admin/backend-only, never on quotes.
+const COMMISSION_CHAIN = ['sr_sales', 'asm', 'sales_head', 'management'];
+const COMMISSION_LEVEL_ROLES = {
+  sr_sales:   ['sr_sales', 'admin'],
+  asm:        ['asm', 'admin'],
+  sales_head: ['sales_head', 'admin'],
+  management: ['management', 'admin'],
+};
+const COMMISSION_DEFAULTS = { first_referral: 2, other_category: 0.5 }; // % — management may override
 
 async function startTileQuoteApproval(tileQuoteId) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
@@ -11812,7 +11834,7 @@ async function approveResetPin(requestId) {
 // ===== TAB 2: TEAM =====
 async function renderSettingsTeam() {
   const profiles = await VW_DB.all(VW_DB.STORES.profiles);
-  const roles = ['admin','executive','staff','reception','accounts','dispatch','pending'];
+  const roles = ['admin','management','sales_head','asm','sr_sales','executive','staff','reception','accounts','dispatch','pending'];
   const roleColors = { admin:'var(--gold)', executive:'#378ADD', staff:'#22c55e', reception:'#7F77DD', accounts:'#06b6d4', dispatch:'#f97316', pending:'#888' };
   const pending = profiles.filter(p=>p.role==='pending'||p.status==='pending');
   const active = profiles.filter(p=>p.role!=='pending'&&p.status!=='pending');
@@ -11836,7 +11858,7 @@ async function renderSettingsTeam() {
       <div style="font-size:14px;font-weight:600;margin-bottom:8px">${p.name||'Unknown'} · <span style="color:var(--text2);font-weight:400">${p.phone||'—'}</span></div>
       <div class="form-group" style="margin:0 0 8px">
         <select id="role-select-${p.id}">
-          ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}">${r}</option>`).join('')}
+          ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}">${ROLE_DISPLAY[r]||r}</option>`).join('')}
         </select>
       </div>
       <button class="btn-primary full-width" onclick="VW_SETTINGS.approveProfile('${p.id}')">✓ Approve</button>
@@ -11853,7 +11875,7 @@ async function renderSettingsTeam() {
         <div style="font-size:12px;color:var(--text2)">${p.phone||'—'}</div>
       </div>
       <select onchange="VW_SETTINGS.updateProfileRole('${p.id}',this.value)" style="font-size:12px;padding:5px 8px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text);max-width:90px">
-        ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${r}</option>`).join('')}
+        ${roles.filter(r=>r!=='pending').map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${ROLE_DISPLAY[r]||r}</option>`).join('')}
       </select>
       <button class="btn-sm" onclick="VW_SETTINGS.openUserPermissions('${p.id}')" style="flex-shrink:0">🔐 Rights</button>
     </div>`).join('')}
