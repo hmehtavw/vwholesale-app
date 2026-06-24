@@ -24554,6 +24554,7 @@ function _renderStep4() {
     </div>
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Grout</button>
+  <button onclick="VW_TILES.tqSkipAdhesive()" style="width:100%;padding:10px;border-radius:10px;background:none;border:1px dashed var(--border);font-size:13px;color:var(--text3);cursor:pointer;margin-top:8px">Skip — no adhesive for this project</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
 
@@ -24648,6 +24649,40 @@ function tqSetBeadPcs(id, val) {
 }
 function tqSetBeadRm(id, val) { tqSetBeadPcs(id, Math.round(parseFloat(val||0)/2.13)||1); }
 function tqSkipBeading() { tqNext(); }
+function tqSkipAdhesive() { _tqState.adhesiveSelections = {}; tqNext(); }
+// Check live stock for an Add-ons item (cleaner/sponge/cloth/cement/sand) by name keyword.
+async function tqCheckAddonStock(label, el) {
+  const orig = el ? el.textContent : '';
+  if (el) { el.textContent = '…'; el.disabled = true; }
+  try {
+    const l = (label||'').toLowerCase();
+    const kw = l.includes('cleaner') ? 'cleaner'
+      : l.includes('sponge') ? 'sponge'
+      : l.includes('cloth') ? 'cloth'
+      : l.includes('cement') ? 'cement'
+      : l.includes('sand') ? 'sand'
+      : l.includes('mortar') ? 'cement'
+      : label;
+    const { data } = await VW_DB.client.from('products').select('name,stock,price,mrp').ilike('name','%'+kw+'%').limit(8);
+    if (!data || !data.length) {
+      if (el) { el.textContent = 'Not in catalog'; el.style.color = 'var(--text3)'; el.style.borderColor = 'var(--border)'; el.disabled = false; }
+      showToast(`No "${label}" product in catalog yet`, 'warn');
+      return;
+    }
+    const totalStock = data.reduce((s,p)=>s+(p.stock||0),0);
+    const p0 = data[0];
+    if (el) {
+      el.textContent = totalStock>0 ? `${totalStock} in stock` : 'Out of stock';
+      el.style.color = totalStock>0 ? 'var(--green)' : 'var(--red)';
+      el.style.borderColor = totalStock>0 ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+      el.disabled = false;
+    }
+    showToast(`${p0.name}: ${totalStock>0?totalStock+' in stock':'out of stock'}${(p0.price||p0.mrp)?' · ₹'+(p0.price||p0.mrp):''}`, totalStock>0?'success':'warn');
+  } catch(e) {
+    if (el) { el.textContent = orig||'Check stock'; el.disabled = false; }
+    showToast('Could not check stock', 'warn');
+  }
+}
 
 // ───── STEP 6: STOCK PUSH (DEAD STOCK PRIORITY) ─────────────
 async function _renderStep6() {
@@ -25790,7 +25825,7 @@ async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
 
   const sections = [
     { key:'mortar', label:'🏗 Mortar Bed Method (Floor)', sub:'Traditional cement + sand bed — skip if using adhesive method' },
-    { key:'adhesive', label:'🧲 Tile Adhesive', sub:'Always required for walls · Optional for floor (choose one method)' },
+    // Tile Adhesive is selected & costed in the dedicated Adhesive step — not repeated here (avoids double-counting).
     { key:'acc', label:'🧴 Cleaning & Accessories', sub:'Post-installation supplies' },
   ];
 
@@ -25808,7 +25843,7 @@ async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
           <div style="font-size:13px;font-weight:600">${a.icon} ${a.label} <span style="color:var(--text3);font-weight:400">— ${a.qty}</span></div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">${a.note}</div>
         </div>
-        <div style="font-size:11px;color:var(--gold);font-weight:600;flex-shrink:0;text-align:right">${a.price}</div>
+        <div style="font-size:11px;font-weight:600;flex-shrink:0;text-align:right">${a.price==='Check stock' ? `<button onclick="event.stopPropagation();VW_TILES.tqCheckAddonStock('${(a.label||'').replace(/['\\]/g,'')}',this)" style="background:none;border:1px solid var(--gold-border);color:var(--gold);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer">Check stock</button>` : `<span style="color:var(--gold)">${a.price}</span>`}</div>
       </div>`).join('')}
     </div>`;
   }).join('') + `<div style="font-size:10px;color:var(--text3);padding:8px;background:rgba(245,200,66,0.06);border-radius:8px;border:1px solid var(--gold-border)">💡 Floor: Use either mortar bed OR tile adhesive — not both. Walls always use adhesive. Confirm quantities with your tile layer.</div>`;
@@ -28214,7 +28249,7 @@ window.VW_TILES = {
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom, _tqWallMode,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
-  tqToggleBead, tqSetBeadRm, tqSkipBeading,
+  tqToggleBead, tqSetBeadRm, tqSkipBeading, tqSkipAdhesive, tqCheckAddonStock,
   tqSelectProduct,
   tqSetGroutType, tqSetGroutColor,
   // Floor trap + soffit
