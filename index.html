@@ -25252,7 +25252,7 @@ async function _renderStep8() {
   });;
 
   const boxesNeeded = roomBOMs.reduce((s,b)=>s+b.boxes, 0);
-  const totalWeightKgCalc = roomBOMs.reduce((s,b)=>s+b.weightKg, 0);
+  const totalWeightKg = roomBOMs.reduce((s,b)=>s+b.weightKg, 0);
 
   // Primary tile/size for grout (use most common or first)
   const sz = roomBOMs.find(b=>b.sz)?.sz || st.selectedSize;
@@ -25387,13 +25387,13 @@ async function _renderStep8() {
   <!-- ROOMS SUMMARY -->
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Measurement Summary</h3>
-    ${st.rooms.map(r=>`
+    ${(st.rooms||[]).map(r=>`
     <div style="padding:8px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between">
         <span style="font-size:13px;font-weight:600">${ROOM_DEFS[r.type]?.icon||'🏠'} ${r.label}</span>
-        <span style="font-size:13px;font-weight:700;color:var(--gold)">${r.areas.reduce((s,a)=>s+(a.sqft||0),0).toFixed(1)} sqft</span>
+        <span style="font-size:13px;font-weight:700;color:var(--gold)">${(r.areas||[]).reduce((s,a)=>s+(a.sqft||0),0).toFixed(1)} sqft</span>
       </div>
-      ${r.areas.map(a=>`<div style="font-size:11px;color:var(--text3);margin-top:2px">${a.label}</div>`).join('')}
+      ${(r.areas||[]).map(a=>`<div style="font-size:11px;color:var(--text3);margin-top:2px">${a.label}</div>`).join('')}
     </div>`).join('')}
     <div style="display:flex;justify-content:space-between;padding:10px 0;font-size:14px;font-weight:700">
       <span>Total Area</span>
