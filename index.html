@@ -3212,7 +3212,7 @@ window.TQ_CHAIN = TQ_CHAIN;
 window.TQ_LEVEL_ROLES = TQ_LEVEL_ROLES;
 window.TQ_TRANSITION_MS = TQ_TRANSITION_MS;
 
-window.VW_ESCALATION = { assignNextExecutive, startVisitRouting, acceptVisit, routeTask, checkEscalations, closeVisit, LEVEL_LABELS, TRANSITION_MS, startQuotationApproval, approveQuotationStep, rejectQuotationStep, startInvoiceApproval, approveInvoiceStep, rejectInvoiceStep, startTileQuoteApproval, checkTileQuoteEscalations, approveTileQuoteStep, rejectTileQuoteStep, TQ_CHAIN, TQ_LEVEL_ROLES, TQ_TRANSITION_MS };
+window.VW_ESCALATION = { assignNextExecutive, startVisitRouting, acceptVisit, routeTask, checkEscalations, closeVisit, LEVEL_LABELS, TRANSITION_MS, startQuotationApproval, approveQuotationStep, rejectQuotationStep, approveQuotationTlBranch, rejectQuotationTlBranch, startInvoiceApproval, approveInvoiceStep, rejectInvoiceStep, startTileQuoteApproval, checkTileQuoteEscalations, approveTileQuoteStep, rejectTileQuoteStep, TQ_CHAIN, TQ_LEVEL_ROLES, TQ_TRANSITION_MS };
 
 // ===== QUOTATION APPROVAL CHAIN =====
 // Every Quotation must be approved by: Department TL -> Floor Manager ->
@@ -36499,7 +36499,7 @@ async function init() {
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').style.padding = '0';
-    await VW_EXTRAS.renderCustomerPortal();
+    await VW_CUSTOMER_PORTAL.renderCustomerPortal();
     return;
   }
   const onboardOfferId = urlParams.get('onboard');
@@ -36812,8 +36812,8 @@ window.saveNewProduct = () => VW_INVENTORY.saveNewProduct();
 window.showRestock = (id) => VW_INVENTORY.showRestock(id);
 window.confirmRestock = (id) => VW_INVENTORY.confirmRestock(id);
 window.showAddPO = () => VW_INVENTORY.showAddPO();
-window.savePO = () => VW_INVENTORY.savePO();
-window.openPO = (id) => VW_INVENTORY.openPO(id);
+window.savePO = (s) => VW_VENDOR.savePO(s);
+window.openPO = (id) => VW_VENDOR.openPO(id);
 
 window.markAtt = (id,s) => VW_HR.markAtt(id,s);
 window.markAllPresent = () => VW_HR.markAllPresent();
@@ -37264,6 +37264,28 @@ async function callCustomerMasked(customerId, customerName) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 window.callCustomerMasked = callCustomerMasked;
+
+// Direct call / WhatsApp from the masked-calling sheet. These resolve the
+// customer's number on demand and hand off to the phone's dialer / WhatsApp.
+async function callCustomerDirect(customerId) {
+  const cust = await VW_DB.getById(VW_DB.STORES.customers, customerId);
+  const num = (cust?.phone || '').toString().replace(/\D/g,'');
+  if (!num) { showToast('No phone number on file', 'warn'); return; }
+  try { trackEvent('action', window._currentPage, 'call_direct', { customerId }); } catch(_) {}
+  window.location.href = `tel:${num}`;
+}
+async function waCustomer(customerId) {
+  const cust = await VW_DB.getById(VW_DB.STORES.customers, customerId);
+  let num = (cust?.whatsapp || cust?.phone || '').toString().replace(/\D/g,'');
+  if (!num) { showToast('No WhatsApp number on file', 'warn'); return; }
+  if (num.length === 10) num = '91' + num;
+  try { trackEvent('action', window._currentPage, 'wa_customer', { customerId }); } catch(_) {}
+  window.open(`https://wa.me/${num}`, '_blank');
+}
+VW_CRM.callCustomerDirect = callCustomerDirect;
+VW_CRM.waCustomer = waCustomer;
+window.callCustomerDirect = callCustomerDirect;
+window.waCustomer = waCustomer;
 
 // =====================================================
 // QUOTATION PICKER — Dashboard "Quotation" button
