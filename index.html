@@ -28363,56 +28363,48 @@ async function lookupTileCustomer(phone, prefix, showOwnershipWarning) { return 
 
 
 // ───── Parametric (basic) room render — to-scale, design-applied, free & instant ─────
-function _tqParametricWallSVG(slotId) {
+function _tqParametricSVG(slotId) {
   const g = (typeof _getWallGrid==='function') ? _getWallGrid(slotId) : null;
-  if (!g || !g.cells || !g.cols || !g.rows) return '';
-  const COL = {}; WALL_DESIGNS.forEach(d=>COL[d.id]=d.color);
+  if (!g || !g.cols || !g.rows) return '';
+  const st = (typeof _dsState==='function') ? _dsState(slotId) : null;
+  const tiles = (_tqState._dsTilesCache||{})[slotId] || [];
+  const pal = (st?.palette||[]).map(k => tiles.find(t=>t.key===k)).filter(Boolean);
+  const slot = _getTileSlots().find(s=>s.id===slotId);
+  const need = g.rows*g.cols;
+  const cells = (st?.cells && st.cells.length===need) ? st.cells : new Array(need).fill(0);
   const W = 320;
-  let H = (g.wallLengthFt>0) ? Math.round(W*(g.wallH/g.wallLengthFt)) : 96;
-  H = Math.max(72, Math.min(H, 240));
+  let aspect = (g.wallLengthFt>0) ? (g.wallH/g.wallLengthFt)
+            : (g.tileWidthMm>0 ? (g.tileHeightMm*g.rows)/(g.tileWidthMm*g.cols) : 0.4);
+  let H = Math.round(W*aspect); H = Math.max(72, Math.min(H, 240));
   const cw = W/g.cols, ch = H/g.rows;
-  let rects = '';
+  let body = '';
   for (let r=0;r<g.rows;r++) for (let c=0;c<g.cols;c++) {
-    const id = g.cells[r*g.cols+c]||'L';
-    rects += `<rect x="${(c*cw).toFixed(1)}" y="${(r*ch).toFixed(1)}" width="${(cw+0.5).toFixed(1)}" height="${(ch+0.5).toFixed(1)}" fill="${COL[id]||'#e8e8e8'}" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>`;
+    const ci = r*g.cols+c;
+    const pi = cells[ci] ?? 0;
+    const col = _DS_SWATCH[pi%_DS_SWATCH.length];
+    const img = pal[pi]?.imageUrl;
+    const x=(c*cw).toFixed(1), y=(r*ch).toFixed(1), w=(cw+0.6).toFixed(1), h=(ch+0.6).toFixed(1);
+    body += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}"/>`;
+    if (img) body += `<image href="${img}" xlink:href="${img}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice"/>`;
+    body += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="rgba(0,0,0,0.16)" stroke-width="0.5"/>`;
   }
+  const icon = slot?.subType==='wall' ? '🧱' : '🔲';
+  const dim = (g.wallLengthFt>0) ? `${g.wallLengthFt.toFixed(1)} ft × ${g.wallH.toFixed(1)} ft` : '';
   return `<div style="margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
-      <span>🧱 ${g.slot?.label||'Wall'}</span><span>${g.wallLengthFt.toFixed(1)} ft × ${g.wallH.toFixed(1)} ft</span>
+      <span>${icon} ${slot?.label||'Area'}</span><span>${dim}</span>
     </div>
     <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#222">
-      <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${rects}</svg>
+      <svg viewBox="0 0 ${W} ${H}" width="100%" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="display:block">${body}</svg>
     </div>
-  </div>`;
-}
-function _tqParametricFloorSVG(slotId) {
-  const slot = _getTileSlots().find(s=>s.id===slotId); if (!slot) return '';
-  const sz = _tqState.tileSelections[slotId]?.size; if (!sz) return '';
-  const fa = (slot.room?.areas||[]).find(a=>a.subType==='floor'||!a.subType) || {};
-  const fl = fa.l||0, fw = fa.w||0; if (!fl || !fw) return '';
-  const mmL = parseInt((sz.mm||'600×600').split('×')[0]) || 600;
-  const tF = mmL/304.8;
-  const cols = Math.max(1, Math.min(20, Math.ceil(fl/tF)));
-  const rows = Math.max(1, Math.min(20, Math.ceil(fw/tF)));
-  const W = 320; let H = Math.max(72, Math.min(220, Math.round(W*(fw/fl)))); 
-  const cw = W/cols, ch = H/rows;
-  let rects = '';
-  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
-    rects += `<rect x="${(c*cw).toFixed(1)}" y="${(r*ch).toFixed(1)}" width="${(cw+0.5).toFixed(1)}" height="${(ch+0.5).toFixed(1)}" fill="#ece3d0" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>`;
-  }
-  return `<div style="margin-bottom:14px">
-    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
-      <span>🔲 ${slot.label||'Floor'}</span><span>${fl} ft × ${fw} ft</span>
-    </div>
-    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${rects}</svg></div>
   </div>`;
 }
 function _tqRenderParametricRoom() {
   const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
   if (!slots.length) return '<div style="padding:20px;text-align:center;color:var(--text3)">Select tiles first to preview the design</div>';
   let out = '';
-  slots.forEach(s => { out += (s.subType==='wall') ? _tqParametricWallSVG(s.id) : _tqParametricFloorSVG(s.id); });
-  return out || '<div style="padding:20px;text-align:center;color:var(--text3)">No design laid out yet — build a wall design to preview</div>';
+  slots.forEach(s => { out += _tqParametricSVG(s.id); });
+  return out || '<div style="padding:20px;text-align:center;color:var(--text3)">No design laid out yet — build a design to preview</div>';
 }
 function openTileVisualizer() {
   const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
