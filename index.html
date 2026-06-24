@@ -21870,7 +21870,7 @@ async function openDM(toStaffId, toName) {
     await VW_DB.put(VW_DB.STORES.chatMessages, {
       toId: String(toStaffId), text,
       fromId: profile?.id, senderName: profile?.name||'',
-      isDM: true, createdAt: new Date().toISOString()
+      isDm: true, createdAt: new Date().toISOString()
     });
   });
 }
@@ -28389,10 +28389,14 @@ async function lookupTileCustomerFull(phone, prefix, showOwnershipWarning) {
 
 async function forwardToExecutive(execName, customerName) {
   const profile = VW_AUTH.getCurrentProfile();
+  // assigned_to is a bigint (staff id) and tasks route by it — resolve the name.
+  const { data: execRows } = await VW_DB.client.from('staff').select('id').ilike('name', execName).limit(1);
+  const execId = execRows?.[0]?.id || null;
   await VW_DB.client.from('tasks').insert({
     title:`Tile Quotation Lead — ${customerName}`,
     description:`${profile?.name||'Executive'} forwarding customer ${customerName} for tile quotation follow-up.`,
-    assigned_to:execName, created_by:profile?.name||'',
+    assigned_to:execId, assigned_to_name:execName, created_by:profile?.name||'',
+    department:'Tiles',
     priority:'high', status:'pending',
     due_date:new Date(Date.now()+24*60*60*1000).toISOString().split('T')[0],
     created_at:new Date().toISOString(),
@@ -31101,13 +31105,14 @@ async function confirmCheckOut(visitId) {
 
   // If order placed, add to CRM follow-up
   if (orderValue > 0 && nextAction) {
-    const { data: visit } = await VW_DB.client.from('field_visits').select('customer_id,customer_name,executive_name').eq('id', visitId).single();
+    const { data: visit } = await VW_DB.client.from('field_visits').select('customer_id,customer_name,executive_name,executive_id').eq('id', visitId).single();
     if (visit?.customer_id) {
       await VW_DB.client.from('tasks').insert({
         type: 'follow_up',
         customer_id: visit.customer_id,
         customer_name: visit.customer_name,
-        assigned_to: visit.executive_name,
+        assigned_to: visit.executive_id || null,
+        assigned_to_name: visit.executive_name,
         description: `Field visit follow-up: ${nextAction}`,
         due_date: nextDate,
         status: 'pending',
@@ -31471,7 +31476,7 @@ async function approveGRN(id) {
       await VW_DB.put(VW_DB.STORES.products, {
         ...match,
         stock: before + addQty,
-        lastGRN: new Date().toISOString()
+        lastGrn: new Date().toISOString()
       });
       // Keep per-location rows in sync and log a user-attributed movement.
       if (match.warehouseZone && addQty > 0) {
@@ -33856,7 +33861,7 @@ async function addToWishlistFromQR(productId) {
   if (!phone || phone.length < 10) return;
   const { data: cust } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone.replace(/\D/g,'')+'%').single().catch(()=>({data:null}));
   if (!cust) { showToast('Phone not found — ask executive to add you first','warn'); return; }
-  await VW_DB.client.from('wishlists').upsert({ customer_id:cust.id, product_id:productId, added_at:new Date().toISOString() });
+  await VW_DB.client.from('wishlists').upsert({ customer_id:cust.id, product_id:productId, created_at:new Date().toISOString() });
   showToast(`Added to wishlist for ${cust.name} ✓`,'success');
 }
 
