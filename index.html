@@ -5280,6 +5280,7 @@ async function generateInvoiceInner() {
   if (needsApproval) {
     await VW_ESCALATION.startInvoiceApproval(invId, approvalReason);
     if (activeCart.customerId) await VW_FEATURES.earnLoyaltyPoints(activeCart.customerId, invId, total);
+    await VW_FEATURES.earnStaffPoints(total, invId);
     const spinActive = await VW_FEATURES.showSpinWheel(invId, total);
     const popupDelay = spinActive ? 4000 : 800;
     setTimeout(() => showInvoicePendingApprovalPopup(invoiceNo, approvalReason), popupDelay);
@@ -5288,6 +5289,7 @@ async function generateInvoiceInner() {
 
   await VW_NOTIFY.notify('invoice', null, [invoiceNo, Math.round(total)], 'en', 'invoice');
   if (activeCart.customerId) await VW_FEATURES.earnLoyaltyPoints(activeCart.customerId, invId, total);
+    await VW_FEATURES.earnStaffPoints(total, invId);
   // Record loyalty redemption if points were used
   if (loyaltyPtsRedeemed > 0 && activeCart.customerId) {
     await VW_DB.put(VW_DB.STORES.loyaltyTransactions, {
@@ -16250,6 +16252,36 @@ async function earnLoyaltyPoints(customerId, invoiceId, invoiceTotal) {
   });
 }
 
+// ===== STAFF REWARDS POINTS =====
+// Staff earn points on the bills they finalize, at an admin-set rate
+// (setting 'staff_points_per_rs', default 0 = off, so the business controls the
+// economics). Points live in loyalty_points keyed by staff_id and are spent in
+// the Rewards Store. _adjustStaffPoints is the shared ledger writer.
+async function _adjustStaffPoints(staffId, delta) {
+  if (!staffId || !delta) return;
+  const { data: row } = await VW_DB.client.from('loyalty_points').select('*').eq('staff_id', staffId).single().catch(()=>({data:null}));
+  if (row) {
+    const update = { points: Math.max(0, (row.points||0) + delta), updated_at: new Date().toISOString() };
+    if (delta > 0) update.lifetime_earned = (row.lifetime_earned||0) + delta;
+    else update.lifetime_redeemed = (row.lifetime_redeemed||0) + Math.abs(delta);
+    await VW_DB.client.from('loyalty_points').update(update).eq('staff_id', staffId);
+  } else if (delta > 0) {
+    await VW_DB.client.from('loyalty_points').insert({ staff_id: staffId, points: delta, lifetime_earned: delta, lifetime_redeemed: 0, updated_at: new Date().toISOString() });
+  }
+}
+
+async function earnStaffPoints(invoiceTotal, invoiceId) {
+  try {
+    const profile = VW_AUTH.getCurrentProfile();
+    const staffId = profile?.staffId;
+    if (!staffId) return;
+    const rate = parseFloat(await VW_DB.getSetting('staff_points_per_rs', 0)) || 0;
+    if (rate <= 0) return;
+    const points = Math.floor((invoiceTotal||0) * rate);
+    if (points > 0) await _adjustStaffPoints(staffId, points);
+  } catch(_) {}
+}
+
 async function showRedeemPoints(customerId, invoiceTotal) {
   const cust = await VW_DB.getById(VW_DB.STORES.customers, customerId);
   if (!cust) return;
@@ -17773,7 +17805,7 @@ window.VW_FEATURES = {
   // Returns
   showSalesReturn, processReturn,
   // Loyalty
-  earnLoyaltyPoints, showRedeemPoints, updateRedeemPreview, confirmRedeem,
+  earnLoyaltyPoints, showRedeemPoints, updateRedeemPreview, confirmRedeem, earnStaffPoints,
   // Promotions
   renderPromotionsPage, showAddPromotion, updatePromoTypeUI, savePromotion,
   openPromotion, togglePromotion, showSpinWheel, doSpin, voidSpinRedemption,
@@ -37428,14 +37460,17 @@ async function renderRewardsStorePage() {
   return `
   <div class="module-header">
     <h2>🎁 Rewards Store</h2>
-    ${VW_AUTH.isAdmin() ? `<button class="btn-sm" onclick="showAddReward()">+ Add Reward</button>` : ''}
+    ${VW_AUTH.isAdmin() ? `<div style="display:flex;gap:6px">
+      <button class="btn-sm" onclick="showRewardsSettings()">⚙️ Earn rate</button>
+      <button class="btn-sm" onclick="showAddReward()">+ Add Reward</button>
+    </div>` : ''}
   </div>
 
   <!-- BALANCE CARD -->
   <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:16px;padding:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
     <div>
       <div style="font-size:13px;font-weight:600;color:var(--text)">Your Points Balance</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:2px">Earned from sales + customer reviews</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">Earned on the bills you finalize</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:28px;font-weight:800;color:var(--gold)">${myPoints}</div>
@@ -37495,12 +37530,23 @@ async function renderRewardsStorePage() {
 async function redeemStaffReward(rewardId, rewardName, pointsCost) {
   const profile = VW_AUTH.getCurrentProfile();
   if (!profile) return;
+  const staffId = profile.staffId;
+  // Confirm the staff member actually has the points (defensive — the button is
+  // also disabled when they can't afford it).
+  let balance = 0;
+  try {
+    const { data: pts } = await VW_DB.client.from('loyalty_points').select('points').eq('staff_id', staffId||0).single();
+    balance = pts?.points || 0;
+  } catch(_) {}
+  if (balance < pointsCost) { showToast(`Not enough points — you have ${balance}, need ${pointsCost}`, 'warn'); return; }
   if (!confirm(`Redeem "${rewardName}" for ${pointsCost} points?`)) return;
   const { error } = await VW_DB.client.from('rewards_redemptions').insert({
     redeemer_type: 'staff', redeemer_id: profile.id||0, redeemer_name: profile.name||'',
     reward_id: rewardId, reward_name: rewardName, points_used: pointsCost,
   });
   if (error) { showToast('Error: '+error.message,'error'); return; }
+  // Deduct the spent points from the staff ledger.
+  try { await _adjustStaffPoints(staffId, -pointsCost); } catch(_) {}
   // Decrement catalog stock when this reward is finite (-1 = unlimited).
   try {
     const { data: r } = await VW_DB.client.from('rewards_catalog').select('stock_qty').eq('id', rewardId).single();
@@ -37512,6 +37558,39 @@ async function redeemStaffReward(rewardId, rewardName, pointsCost) {
   navigateTo('rewards');
 }
 window.redeemStaffReward = redeemStaffReward;
+
+// Admin: set how many points staff earn per ₹1,000 they bill (0 = earning off).
+async function showRewardsSettings() {
+  if (!VW_AUTH.isAdmin()) { showToast('Admin only', 'warn'); return; }
+  const rate = parseFloat(await VW_DB.getSetting('staff_points_per_rs', 0)) || 0;
+  const per1000 = Math.round(rate * 1000);
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h3 style="margin:0">⚙️ Staff Points Earning</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Staff earn points on the bills they finalize. Set the rate that fits your rewards budget — set <strong>0</strong> to turn earning off.</p>
+    <div class="form-group"><label>Points per ₹1,000 billed</label>
+      <input type="number" id="rw-rate" min="0" step="1" value="${per1000}" placeholder="e.g. 10">
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px">Example: at 10 pts per ₹1,000, a ₹50,000 bill earns the biller 500 points.</div>
+    <button class="btn-primary full-width" onclick="saveRewardsRate()">Save Rate</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+window.showRewardsSettings = showRewardsSettings;
+
+async function saveRewardsRate() {
+  if (!VW_AUTH.isAdmin()) return;
+  const per1000 = parseFloat(document.getElementById('rw-rate')?.value||0) || 0;
+  await VW_DB.setSetting('staff_points_per_rs', per1000/1000);
+  showToast(per1000 > 0 ? `Staff now earn ${per1000} pts per ₹1,000 billed` : 'Staff point earning turned off', 'success');
+  closeSheet();
+  navigateTo('rewards');
+}
+window.saveRewardsRate = saveRewardsRate;
 
 // Admin: add a reward to the catalog (replaces the old "add via Supabase" gap).
 function showAddReward() {
