@@ -26608,6 +26608,11 @@ function _dsRenderInner() {
     }
     realTiles = used ? geo : ((g && sqftPerTile) ? Math.ceil((g.wallSqft||0)*1.07/sqftPerTile) : totalCells);
   }
+  // ── Breakage buffer (handling/transit/cutting cracks) — auto-applied, removable per quote ──
+  const _breakPct = (_tqState.breakageOff) ? 0 : (_tqState.breakagePct ?? 5);
+  const _tilesBeforeBuffer = realTiles;
+  const _breakTiles = Math.ceil(realTiles * _breakPct / 100);
+  realTiles = realTiles + _breakTiles;
   const scale = totalCells ? realTiles/totalCells : 1;
   let totalAmount = 0, totalBoxes = 0;
   const resultTiles = [];
@@ -26683,6 +26688,10 @@ function _dsRenderInner() {
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:800">
       <span>${totalBoxes} boxes</span><span style="color:var(--gold)">₹${totalAmount.toLocaleString('en-IN')}</span>
     </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:11px">
+      <span style="color:var(--text3)">🛡 Breakage buffer ${_breakPct>0?`<span style="color:var(--gold)">+${_breakPct}% · +${_breakTiles} tiles</span>`:'removed'}</span>
+      <button onclick="VW_TILES._dsToggleBreakage()" style="background:none;border:1px solid ${_breakPct>0?'var(--gold-border)':'var(--border)'};color:${_breakPct>0?'var(--gold)':'var(--text3)'};border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">${_breakPct>0?'Remove':'Add back'}</button>
+    </div>
   </div>
   <button class="btn-primary full-width" style="background:var(--gold);color:#000" onclick="VW_TILES._dsContinue()">${last?'Confirm Design → Spacer':'Confirm → Next Room'}</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES._dsPrev()">← ${idx>0?'Previous Room':'Back'}</button>`;
@@ -26721,6 +26730,7 @@ function _dsCopyCol1(){
 }
 function _dsOrient(o){ const s=_dsCur(); if(!s)return; if(!_tqState.wallDesigns)_tqState.wallDesigns={}; if(!_tqState.wallDesigns[s.id])_tqState.wallDesigns[s.id]={}; _tqState.wallDesigns[s.id].orient=o; _dsState(s.id).cells=null; _dsRerender(); }
 function _dsBoxes(pi,n){ const s=_dsCur(); if(!s)return; _dsState(s.id).boxesOverride[pi]=n; _dsRerender(); }
+function _dsToggleBreakage(){ _tqState.breakageOff = !_tqState.breakageOff; _dsRerender(); }
 function _dsStorePrice(pi,v){
   const s=_dsCur(); if(!s)return;
   const st=_dsState(s.id);
@@ -28270,7 +28280,7 @@ window.VW_TILES = {
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
-  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
+  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsToggleBreakage, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
