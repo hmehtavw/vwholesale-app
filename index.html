@@ -25908,7 +25908,7 @@ function _getWallGrid(slotId) {
   const sz = sel?.size;
   if (!sz) return null;
   const wd = _tqState.wallDesigns?.[slotId] || {};
-  const orient = wd.orient || 'H'; // H = horizontal, V = vertical
+  const orient = (sel?.subType==='wall') ? (wd.orient || 'H') : 'H'; // floors always horizontal; H=horiz, V=vert
 
   const [mmL, mmW] = sz.mm.split('×').map(Number);
   // Horizontal: tile placed with longer dim as width
@@ -26603,8 +26603,9 @@ function _dsRenderInner() {
       <div style="width:14px;height:14px;border-radius:3px;background:${_DS_SWATCH[pi%_DS_SWATCH.length]}"></div>
       <span style="font-size:11px;font-weight:700;color:${st.activeIdx===pi?'var(--gold)':'var(--text)'}">${t.name.length>14?t.name.slice(0,14)+'…':t.name}</span></button>`).join('')}
     <button onclick="VW_TILES._dsFillAll()" style="font-size:10px;padding:5px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;cursor:pointer">Fill all</button>
+    <button onclick="VW_TILES._dsCopyCol1()" style="font-size:10px;padding:5px 9px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;cursor:pointer">Copy 1st column →</button>
   </div>
-  ${g?`<div style="display:flex;gap:6px;margin-bottom:8px">
+  ${(g && slot.subType==='wall')?`<div style="display:flex;gap:6px;margin-bottom:8px">
     <button onclick="VW_TILES._dsOrient('H')" style="flex:1;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${g.orient==='H'?'2px solid var(--gold)':'1px solid var(--border)'};background:${g.orient==='H'?'var(--gold-muted)':'var(--bg2)'};color:${g.orient==='H'?'var(--gold)':'var(--text)'}">↔ Horizontal</button>
     <button onclick="VW_TILES._dsOrient('V')" style="flex:1;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${g.orient==='V'?'2px solid var(--gold)':'1px solid var(--border)'};background:${g.orient==='V'?'var(--gold-muted)':'var(--bg2)'};color:${g.orient==='V'?'var(--gold)':'var(--text)'}">↕ Vertical</button>
   </div>`:''}
@@ -26638,6 +26639,19 @@ function _dsTogglePalette(key) {
 function _dsSetActive(i){ const s=_dsCur(); if(s){_dsState(s.id).activeIdx=i; _dsRerender();} }
 function _dsPaint(ci){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); if(!st.cells)return; st.cells[ci]=st.activeIdx||0; _dsRerender(); }
 function _dsFillAll(){ const s=_dsCur(); if(!s)return; const st=_dsState(s.id); st.cells=(st.cells||[]).map(()=>st.activeIdx||0); _dsRerender(); }
+// Copy the design painted in the 1st column down each row across ALL columns. Lets staff lay out
+// one vertical profile, replicate it across the whole area, then tweak individual cells by hand.
+function _dsCopyCol1(){
+  const s=_dsCur(); if(!s)return;
+  const st=_dsState(s.id);
+  const g=_getWallGrid(s.id);
+  if(!g||!Array.isArray(st.cells))return;
+  for(let r=0;r<g.rows;r++){
+    const v=st.cells[r*g.cols] ?? 0;            // value in column 0 of this row
+    for(let c=1;c<g.cols;c++) st.cells[r*g.cols+c]=v;
+  }
+  _dsRerender();
+}
 function _dsOrient(o){ const s=_dsCur(); if(!s)return; if(!_tqState.wallDesigns)_tqState.wallDesigns={}; if(!_tqState.wallDesigns[s.id])_tqState.wallDesigns[s.id]={}; _tqState.wallDesigns[s.id].orient=o; _dsState(s.id).cells=null; _dsRerender(); }
 function _dsBoxes(pi,n){ const s=_dsCur(); if(!s)return; _dsState(s.id).boxesOverride[pi]=n; _dsRerender(); }
 function _dsStorePrice(pi,v){
@@ -28061,7 +28075,7 @@ window.VW_TILES = {
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
-  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsOrient, _dsBoxes, _dsPrice, _dsPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
+  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsPrice, _dsPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
