@@ -15400,7 +15400,8 @@ async function renderDriverDeliveryPage(gatePassNo) {
   const gp = gps.find(g => g.gatePassNo === gatePassNo);
   if (!gp) return `<div class="module-header"><h2>Gate Pass not found</h2></div>`;
 
-  const inv = await VW_DB.getById(VW_DB.STORES.invoices, gp.invoiceId);
+  // Anon driver link — invoice is RLS-blocked; use the gate-pass-scoped RPC (see get_driver_delivery).
+  const inv = await VW_DB.client.rpc('get_driver_delivery', { p_gate_pass_no: gp.gatePassNo }).then(r=>r.data).catch(()=>null);
   const items = (gp.itemIndexes||[]).map(i => inv?.items?.[i]).filter(Boolean);
   const isDelivered = gp.deliveryStatus === 'delivered';
 
@@ -15673,7 +15674,10 @@ async function renderDriverDeliveryPageDetailed(gatePassNo) {
   const gp = gps.find(g => g.gatePassNo === gatePassNo);
   if (!gp) return '<div style="padding:20px;text-align:center">Gate Pass not found</div>';
 
-  const inv = await VW_DB.getById(VW_DB.STORES.invoices, gp.invoiceId);
+  // Driver opens this link signed-out (anon), so the invoice is RLS-blocked. Pull the delivery
+  // essentials (invoice no, customer name via join, items) through a gate-pass-scoped SECURITY
+  // DEFINER RPC instead, without exposing the invoices table to the public.
+  const inv = await VW_DB.client.rpc('get_driver_delivery', { p_gate_pass_no: gp.gatePassNo }).then(r=>r.data).catch(()=>null);
   const items = (gp.itemIndexes||[]).map(i => inv?.items?.[i]).filter(Boolean);
   const isDelivered = gp.deliveryStatus === 'delivered';
   const isDirectDelivery = gp.pickupType === 'direct_delivery';
