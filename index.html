@@ -26629,10 +26629,10 @@ function _dsRenderInner() {
       <div style="display:flex;align-items:center;gap:8px">
         <div style="width:14px;height:14px;border-radius:3px;background:${swatch};flex-shrink:0;border:1px solid rgba(0,0,0,0.2)"></div>
         <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700">${t.name}</div>
-          <div style="font-size:10px;color:var(--text3)">${pcs} pcs · ${(pcs*sqftPerTile).toFixed(1)} sqft · ${exact.toFixed(2)} box${spare>0?` · ${spare} spare`:''}</div></div>
+          <div style="font-size:10px;color:var(--text3)">${pcs} pcs · ${(pcs*sqftPerTile).toFixed(1)} sqft · needs ${exact.toFixed(2)} box${spare>0?` · <span style="color:var(--gold)">+${spare} spare (wastage)</span>`:''}</div></div>
         <div style="display:flex;gap:4px;flex-shrink:0">
-          ${fl!==cl?`<button onclick="VW_TILES._dsBoxes(${pi},${fl})" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===fl?'2px solid var(--red)':'1px solid var(--border)'};background:${boxes===fl?'rgba(239,68,68,0.1)':'var(--bg3)'};color:${boxes===fl?'var(--red)':'var(--text)'}">${fl}<span style="font-size:9px">↓</span></button>`:''}
-          <button onclick="VW_TILES._dsBoxes(${pi},${cl})" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===cl?'2px solid var(--gold)':'1px solid var(--border)'};background:${boxes===cl?'var(--gold-muted)':'var(--bg3)'};color:${boxes===cl?'var(--gold)':'var(--text)'}">${cl}<span style="font-size:9px">↑</span></button>
+          ${fl!==cl?`<button onclick="VW_TILES._dsBoxes(${pi},${fl})" title="Trim wastage — round down to ${fl} boxes" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===fl?'2px solid var(--red)':'1px solid var(--border)'};background:${boxes===fl?'rgba(239,68,68,0.1)':'var(--bg3)'};color:${boxes===fl?'var(--red)':'var(--text)'}">${fl}<span style="font-size:9px">↓</span></button>`:''}
+          <button onclick="VW_TILES._dsBoxes(${pi},${cl})" title="Include wastage — round up to ${cl} boxes" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===cl?'2px solid var(--gold)':'1px solid var(--border)'};background:${boxes===cl?'var(--gold-muted)':'var(--bg3)'};color:${boxes===cl?'var(--gold)':'var(--text)'}">${cl}<span style="font-size:9px">↑</span></button>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding-left:22px;flex-wrap:wrap">
