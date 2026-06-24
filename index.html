@@ -34694,11 +34694,12 @@ window.sendPortalLinkWA = sendPortalLinkWA;
 
 // ===== PUBLIC CUSTOMER PORTAL =====
 async function renderCustomerPortal(token) {
-  // Validate token
-  const { data: tokenRow } = await VW_DB.client.from('customer_portal_tokens')
-    .select('*, customers(*)').eq('token', token).eq('is_active', true).single().catch(()=>({data:null}));
+  // Load portal bundle via token-scoped SECURITY DEFINER RPC. This works for the anon
+  // portal key without exposing customers/invoices/quotations/wishlists to the public,
+  // and bumps last_active server-side. Returns null only for an invalid/inactive token.
+  const { data: bundle } = await VW_DB.client.rpc('get_customer_portal', { p_token: token }).catch(()=>({ data: null }));
 
-  if (!tokenRow) return `
+  if (!bundle) return `
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center">
     <div>
       <div style="font-size:48px;margin-bottom:16px">🔒</div>
@@ -34708,24 +34709,15 @@ async function renderCustomerPortal(token) {
     </div>
   </div>`;
 
-  const customer = tokenRow.customers;
-  // Update last active
-  await VW_DB.client.from('customer_portal_tokens').update({ last_active: new Date().toISOString() }).eq('token', token);
-  await auditLog('portal_visit', 'customer', customer?.id, customer?.name, null, null, 'Customer portal visit');
-
-  // Fetch customer data
+  const customer = bundle.customer || {};
   const customerId = customer?.id;
-  const [quotationsRes, invoicesRes, wishlistRes, trackingRes] = await Promise.all([
-    VW_DB.client.from('quotations').select('id,quote_no,grand_total,status,created_at,quote_type').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(10),
-    VW_DB.client.from('invoices').select('id,invoice_no,grand_total,created_at,payment_status,delivery_status').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(10),
-    VW_DB.client.from('wishlists').select('*, products(id,name,brand,tile_size_label,image_url,mrp,tile_stock_locations(qty_boxes))').eq('customer_id', customerId),
-    VW_DB.client.from('delivery_tracking').select('*').eq('customer_id', customerId).order('created_at',{ascending:false}).limit(5),
-  ]);
+  // last_active is already bumped inside the RPC; audit is best-effort and must never block the portal
+  try { await auditLog('portal_visit', 'customer', customer?.id, customer?.name, null, null, 'Customer portal visit'); } catch(e) {}
 
-  const quotes = quotationsRes.data || [];
-  const invoices = invoicesRes.data || [];
-  const wishlist = wishlistRes.data || [];
-  const tracking = trackingRes.data || [];
+  const quotes = bundle.quotes || [];
+  const invoices = bundle.invoices || [];
+  const wishlist = bundle.wishlist || [];
+  const tracking = bundle.tracking || [];
 
   const activeDeliveries = tracking.filter(t=>t.status!=='delivered').length;
 
