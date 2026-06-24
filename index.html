@@ -25286,7 +25286,13 @@ async function _renderStep8() {
     const cfgEntry = (weightCfg0.sizes||[]).find(s=>s.mm===sz.mm);
     const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
     const sqftPerBox = sqftPerTile * tilesPerBox;
-    const boxes = sqftPerBox > 0 ? Math.ceil(roomSqft / sqftPerBox) : 0;
+    // Prefer the Design step's own box count (cut-waste + door-subtraction + breakage already
+    // applied) so the Summary matches exactly what staff saw; fall back to area-based only if
+    // this slot's design was never built.
+    const dsBoxes = _tqState.design?.[slot.id]?.result?.totalBoxes;
+    const boxes = (dsBoxes != null && dsBoxes > 0)
+      ? dsBoxes
+      : (sqftPerBox > 0 ? Math.ceil(roomSqft / sqftPerBox) : 0);
     const wtPerBox = cfgEntry?.weight_per_box || 20;
     return { room:r, slot, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox };
   });;
@@ -27250,15 +27256,18 @@ async function tqSubmitForApproval() {
     const allRooms = st.rooms || [];
     const weightCfgSub = await VW_DB.getSetting('tile_weight_config', {sizes:[]});
     let totalBoxesSub = 0, totalWeightSub = 0;
-    allRooms.forEach(r => {
-      const sel = st.tileSelections?.[r.id];
+    // Slot-based + prefers the Design step's box count (cut-waste/door/breakage applied) so the
+    // saved quote matches the Summary and the Design step exactly.
+    _getTileSlots().forEach(slot => {
+      const sel = st.tileSelections?.[slot.id];
       if (!sel?.size) return;
       const [mmL,mmW] = sel.size.mm.split('×').map(Number);
       const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
       const cfg = (weightCfgSub.sizes||[]).find(s=>s.mm===sel.size.mm);
       const tpb = cfg?.tiles_per_box || (sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
-      const roomSqft = r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0;
-      const boxes = sqftPerTile>0 ? Math.ceil(roomSqft/(sqftPerTile*tpb)) : 0;
+      const dsBoxes = _tqState.design?.[slot.id]?.result?.totalBoxes;
+      const boxes = (dsBoxes != null && dsBoxes > 0) ? dsBoxes
+        : (sqftPerTile>0 ? Math.ceil((slot.sqft||0)/(sqftPerTile*tpb)) : 0);
       totalBoxesSub += boxes;
       totalWeightSub += boxes * (cfg?.weight_per_box || 20);
     });
