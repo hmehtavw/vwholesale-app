@@ -12643,6 +12643,7 @@ async function openUserPermissions(profileId) {
 }
 
 async function approveProfile(profileId) {
+  const sel = document.getElementById('role-select-'+profileId);
   const role = sel?.value || 'staff';
   const rec = await VW_DB.getById(VW_DB.STORES.profiles, profileId);
   if (!rec) return;
@@ -19890,6 +19891,7 @@ async function printPettyCashSlip(entryId) {
 window.VW_ACCOUNTS.printPettyCashSlip = printPettyCashSlip;
 
 async function printPettyCash() {
+  const entries = await VW_DB.all(VW_DB.STORES.pettyCash);
   const sorted = [...entries].sort((a,b) => new Date(b.date)-new Date(a.date));
   const balance = entries.reduce((s,e) => s+(e.type==='in'?(e.amount||0):-(e.amount||0)),0);
   const now = new Date();
@@ -25491,6 +25493,13 @@ async function _renderStep8() {
   ];
   const autoVehicle = vehicles.find(v=>totalWeightKg <= (v.max_kg||9999)) || vehicles[vehicles.length-1];
 
+  // Weight per box for the primary tile size (from config, else averaged) — drives the weight card.
+  const weightPerBox = (() => {
+    const cfgE = (weightCfg.sizes||[]).find(s=>s.mm===sz?.mm);
+    if (cfgE?.weight_per_box) return cfgE.weight_per_box;
+    return boxesNeeded > 0 ? Math.round(totalWeightKg/boxesNeeded) : 0;
+  })();
+
   // Floor delivery state (stored in _tqState.delivery)
   if (!st.delivery) st.delivery = { type:'self', dropPin:null, distanceKm:0, floors:[], beyondFt:false };
 
@@ -30579,7 +30588,7 @@ Object.assign(TEST_SUITES, {
       }},
 
       { id:'f6_10', name:'Visualizer page renders', run: async () => {
-        if (typeof VW_VISUALIZER?.renderVisualizerPage !== 'function' &&
+        if (typeof window.VW_VIS?.renderVisualizerPage !== 'function' &&
             typeof window.renderVisualizerPage !== 'function') {
           return '⚠️ renderVisualizerPage not found — check visualizer.js module name';
         }
@@ -37162,12 +37171,12 @@ async function sendDailySummary() {
     VW_DB.all(VW_DB.STORES.tasks),
     VW_DB.all(VW_DB.STORES.feedback)
   ]);
-  // today already set above
+  const today = new Date().toDateString();
   const todayInvoices = invoices.filter(i => new Date(i.date).toDateString() === today);
   const todayVisits = visits.filter(v => new Date(v.date).toDateString() === today);
   const todayCustomers = todayVisits.filter(v=>v.visitorType==='customer');
   const todayVisitors = todayVisits.filter(v=>v.visitorType!=='customer');
-  // todayBilling already set above
+  const todayBilling = todayInvoices.filter(i => i.approvalStatus === 'approved').reduce((s,i)=>s+(i.total||0),0);
   const todayTasks = tasks.filter(t => new Date(t.createdAt).toDateString() === today);
   const deptCount = {};
   todayTasks.forEach(t => { if(t.department) deptCount[t.department]=(deptCount[t.department]||0)+1; });
