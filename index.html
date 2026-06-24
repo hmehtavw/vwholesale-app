@@ -26578,12 +26578,16 @@ function _dsRenderInner() {
           <button onclick="VW_TILES._dsBoxes(${pi},${cl})" style="min-width:34px;padding:4px 7px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;border:${boxes===cl?'2px solid var(--gold)':'1px solid var(--border)'};background:${boxes===cl?'var(--gold-muted)':'var(--bg3)'};color:${boxes===cl?'var(--gold)':'var(--text)'}">${cl}<span style="font-size:9px">↑</span></button>
         </div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:22px">
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding-left:22px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--text3)">₹</span>
-        <input type="number" value="${perSft||''}" placeholder="per sft" min="0" step="any" inputmode="decimal"
+        <input type="number" value="${perSft? (Math.round(perSft*100)/100) : ''}" placeholder="per sft" min="0" step="any" inputmode="decimal"
           oninput="VW_TILES._dsPriceLive(${pi},this.value)" onchange="VW_TILES._dsPrice(${pi},this.value)"
-          style="width:74px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;color:var(--text)">
-        <span style="font-size:10px;color:var(--text3)">/sft → ₹${boxPrice}/box × ${boxes}</span>
+          style="width:62px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;color:var(--text)">
+        <span style="font-size:10px;color:var(--text3)">/sft · or ₹</span>
+        <input type="number" value="${boxPrice||''}" placeholder="per box" min="0" step="any" inputmode="decimal"
+          oninput="VW_TILES._dsBoxPriceLive(${pi},this.value,${sqftPerBox})" onchange="VW_TILES._dsBoxPrice(${pi},this.value,${sqftPerBox})"
+          style="width:72px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:12px;color:var(--text)">
+        <span style="font-size:10px;color:var(--text3)">/box × ${boxes}</span>
         <span style="flex:1;text-align:right;font-size:13px;font-weight:700;color:var(--gold)">₹${lineTotal.toLocaleString('en-IN')}</span>
       </div>
     </div>`;
@@ -26670,6 +26674,24 @@ function _dsStorePrice(pi,v){
 function _dsPriceLive(pi,v){ _dsStorePrice(pi,v); }
 // Commit: store + re-render to refresh box price and totals. Fires on blur / change.
 function _dsPrice(pi,v){ _dsStorePrice(pi,v); _dsRerender(); }
+
+// Box-price entry (#4A): the user can price per BOX instead of per sft. We convert to the
+// single source of truth (per-sft = boxPrice / sqftPerBox) so the entered box price is honored
+// exactly (line total = boxes × box price) and both inputs stay in sync.
+function _dsStoreBoxPrice(pi,v,sqftPerBox){
+  const s=_dsCur(); if(!s)return;
+  const st=_dsState(s.id);
+  const t=((_tqState._dsTilesCache||{})[s.id]||[]).find(x=>x.key===(st.palette||[])[pi]);
+  const sizeMm=_tqState.tileSelections[s.id]?.size?.mm||'';
+  if(t && sqftPerBox>0){
+    if(!_tqState._dsPriceByCombo)_tqState._dsPriceByCombo={};
+    const combo=`${(t.brand||'').toLowerCase().trim()}|${sizeMm}|${(t.finish||'').toLowerCase().trim()}`;
+    const box=parseFloat(v)||0;
+    _tqState._dsPriceByCombo[combo]= box>0 ? (box/sqftPerBox) : 0;
+  }
+}
+function _dsBoxPriceLive(pi,v,sqftPerBox){ _dsStoreBoxPrice(pi,v,sqftPerBox); }
+function _dsBoxPrice(pi,v,sqftPerBox){ _dsStoreBoxPrice(pi,v,sqftPerBox); _dsRerender(); }
 function _dsEditSizes(){ _tqState.step=2; _renderStep2().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html; _updateStepHeader();}); }
 async function _dsContinue(){
   const slots=_dsSlots(); const idx=_tqState._designIdx||0;
@@ -28075,7 +28097,7 @@ window.VW_TILES = {
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
-  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsPrice, _dsPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
+  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
