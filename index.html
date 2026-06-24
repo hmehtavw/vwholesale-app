@@ -27957,6 +27957,39 @@ function calcCoverage() {
 }
 
 // ───── FLOOR PLAN AI READER ─────────────────────────────────
+// Robustly pull a rooms[] array out of whatever shape the OCR/vision function returns:
+// direct {rooms:[...]}, nested {data:{rooms}}, or a JSON block embedded in a text field.
+function _findRoomsArray(data){
+  if (Array.isArray(data?.rooms)) return data.rooms;
+  if (Array.isArray(data?.data?.rooms)) return data.data.rooms;
+  const texts = [];
+  for (const k of ['description','response','content','text','output','result','message']) {
+    if (typeof data?.[k] === 'string') texts.push(data[k]);
+  }
+  texts.push(typeof data === 'string' ? data : JSON.stringify(data || {}));
+  for (const t of texts){
+    if (!t) continue;
+    const i = t.indexOf('"rooms"');
+    if (i < 0) continue;
+    let start = t.lastIndexOf('{', i);
+    if (start < 0) start = t.indexOf('{');
+    if (start < 0) continue;
+    // Walk braces to find the balanced object that holds "rooms".
+    let depth = 0;
+    for (let j = start; j < t.length; j++){
+      if (t[j] === '{') depth++;
+      else if (t[j] === '}'){
+        depth--;
+        if (depth === 0){
+          try { const obj = JSON.parse(t.slice(start, j+1)); if (Array.isArray(obj.rooms)) return obj.rooms; } catch(e){}
+          break;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 async function tqReadFloorPlan(input) {
   const file = input.files?.[0];
   if (!file) return;
@@ -27991,6 +28024,8 @@ async function tqReadFloorPlan(input) {
       body: JSON.stringify({
         mode: 'floor_plan',
         imageBase64: b64,
+        image: b64,                                   // alias for compatibility
+        mimeType: file.type || 'image/jpeg',
         prompt: `Analyze this floor plan image and extract all room dimensions. 
 Return ONLY valid JSON like this:
 {
@@ -28007,13 +28042,8 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
     });
     const data = await res.json();
 
-    // Parse rooms from AI response
-    let rooms = null;
-    try {
-      const text = data.description || data.response || data.content || JSON.stringify(data);
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) rooms = JSON.parse(match[0]).rooms;
-    } catch(e) {}
+    // Parse rooms from AI response (robust to nested / text-wrapped JSON)
+    const rooms = _findRoomsArray(data);
 
     if (rooms?.length) {
       // Auto-populate rooms from floor plan
@@ -28036,7 +28066,10 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
       if (status) status.innerHTML = `<span style="color:var(--green)">✅ Found ${_tqState.rooms.length} rooms from floor plan. Review and edit below.</span>`;
       _refreshStep1();
     } else {
-      if (status) status.innerHTML = `<span style="color:var(--text3)">⚠️ Could not read dimensions from this plan. Please enter manually below.</span>`;
+      const raw = (typeof data==='string'?data:JSON.stringify(data||{})).slice(0,160).replace(/</g,'&lt;');
+      const pdfHint = (file.type||'').includes('pdf') ? ' A clear photo or screenshot of the plan usually reads better than a PDF.' : '';
+      if (status) status.innerHTML = `<span style="color:var(--text3)">⚠️ Couldn't auto-read dimensions — add rooms manually below.${pdfHint}</span>`
+        + `<div style="font-size:9px;color:var(--text3);opacity:.6;margin-top:3px;word-break:break-all">debug: ${raw}</div>`;
     }
   } catch(e) {
     if (status) status.innerHTML = `<span style="color:var(--red)">Error reading floor plan: ${e.message}</span>`;
