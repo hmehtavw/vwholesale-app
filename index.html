@@ -12820,6 +12820,7 @@ async function renderTileSettings() {
   const spacerCfg = await VW_DB.getSetting('tile_spacer_config', {
     pcs_per_packet: 100, clip_pcs_per_packet: 50, spacers_per_tile: 4, min_size_mm: 300,
   });
+  const wastageCfg = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 5 });
   const transportConfig = await VW_DB.getSetting('transport_config', {
     lightVehiclePerKm: 25, heavyVehiclePerKm: 45, minimumCharge: 300, freeAbove: 0,
   });
@@ -12999,6 +13000,18 @@ async function renderTileSettings() {
     <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveGroutConfig()">💾 Save Grout Config</button>
   </div>
 
+  <!-- TILE BREAKAGE BUFFER -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">🛡 Tile Breakage Buffer</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">Extra tiles added on top of cut/layout waste to cover handling, transit and cutting cracks. Auto-applied to every tile quote; staff can remove it per quote from the Design step.</p>
+    <div class="form-group" style="margin:0;max-width:200px">
+      <label>Default Breakage % buffer</label>
+      <input type="number" id="ts-breakage-pct" value="${wastageCfg.breakage_pct ?? 5}" min="0" max="20" step="1">
+      <div style="font-size:10px;color:var(--text3)">Industry norm: ~2–3% plain, ~5% patterned/diagonal</div>
+    </div>
+    <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveBreakageConfig()">💾 Save Breakage Buffer</button>
+  </div>
+
   <!-- SPACER CONFIG -->
   <div class="card" style="margin-bottom:14px">
     <h3 class="card-title">📦 Spacer Configuration</h3>
@@ -13164,7 +13177,11 @@ async function saveGroutConfig() {
   showToast('Grout config saved ✓', 'success');
 }
 
-async function saveSpacerConfig() {
+async function saveBreakageConfig() {
+  const pct = Math.max(0, Math.min(20, parseFloat(document.getElementById('ts-breakage-pct')?.value||5)||0));
+  await VW_DB.setSetting('tile_wastage_config', { breakage_pct: pct });
+  showToast('Breakage buffer saved ✓ — applies to new quotes', 'success');
+}
   await VW_DB.setSetting('tile_spacer_config', {
     pcs_per_packet: parseInt(document.getElementById('ts-spacer-pkt')?.value||100)||100,
     clip_pcs_per_packet: parseInt(document.getElementById('ts-spacer-clip-pkt')?.value||50)||50,
@@ -13616,7 +13633,7 @@ function showLanguagePicker() {
 window.VW_SETTINGS = {
   renderSettingsPage, switchSettingsTab,
   renderTileSettings, saveTileSettings, saveTileWeightTable, saveFloorConfig,
-  saveGroutConfig, saveSpacerConfig, autoFillDefaultWeights,
+  saveGroutConfig, saveBreakageConfig, saveSpacerConfig, autoFillDefaultWeights,
   deleteTileSize, addCustomSize, saveTileTransportConfig,
   saveAccountName, changePIN, approveResetPin,
   approveProfile, updateProfileRole,
@@ -22943,6 +22960,8 @@ async function renderTilesQuotationPage() {
   try {
     _tqSizeCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
     _tqSpacerCfg = await VW_DB.getSetting('tile_spacer_config', { pcs_per_packet:100, clip_pcs_per_packet:50, spacers_per_tile:4, min_size_mm:300 });
+    const _wc = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 5 });
+    _tqState.breakagePct = (_wc && _wc.breakage_pct != null) ? _wc.breakage_pct : 5;
   } catch(e) { console.error('Spacer config preload failed:', e); }
 
   // Auto-fill from active check-in if available
