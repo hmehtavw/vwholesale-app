@@ -8033,7 +8033,7 @@ async function sendQuotationWhatsApp(id, preloaded = null) {
   const total = Math.round(q.grandTotal || 0).toLocaleString('en-IN');
 
   // Build the portal link — customer opens this for a clean printable view
-  const portalLink = `${window.location.origin}/vwholesale-app/quote.html?quote=${quoteNo}`;
+  const portalLink = `${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(quoteNo)}`;
 
   // Short clean message with link — not all the items
   const msg = `Dear ${q.customerName||'Customer'}, 🙏\n\nYour quotation from *${storeName}, Vijayawada* is ready.\n\n📋 *${quoteNo}* — ₹${total}\n${q.siteName ? `🏠 Site: ${q.siteName}\n` : ''}\n🔗 *View & Download:*\n${portalLink}\n\nThis link shows all items, pricing, and is printable.\nValid for 7 days.\n\nFor any changes, call us: 8712697930\n— Team ${storeName}`;
@@ -22314,7 +22314,7 @@ async function renderLegacyCustomerPortal() {
 
 // Generate shareable quotation link
 function getQuotationShareLink(q) {
-  return `${window.location.origin}/vwholesale-app/quote.html?quote=${q.quoteNo||q.id}`;
+  return `${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}`;
 }
 window.getQuotationShareLink = getQuotationShareLink;
 
@@ -22444,7 +22444,7 @@ async function renderContractorPortal() {
         <div style="font-size:13px;font-weight:600">${q.quoteNo||'Q-'+q.id}</div>
         <div style="font-size:11px;color:var(--text3)">${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')} · ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
       </div>
-      <button class="btn-sm" onclick="window.open('${window.location.origin}/vwholesale-app/quote.html?quote=${q.quoteNo||q.id}','_blank')">View</button>
+      <button class="btn-sm" onclick="window.open('${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}','_blank')">View</button>
     </div>`).join('')}
   </div>` : ''}`;
 }
