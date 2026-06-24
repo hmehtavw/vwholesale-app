@@ -12821,7 +12821,7 @@ async function renderTileSettings() {
   const spacerCfg = await VW_DB.getSetting('tile_spacer_config', {
     pcs_per_packet: 100, clip_pcs_per_packet: 50, spacers_per_tile: 4, min_size_mm: 300,
   });
-  const wastageCfg = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 5 });
+  const wastageCfg = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 10 });
   const transportConfig = await VW_DB.getSetting('transport_config', {
     lightVehiclePerKm: 25, heavyVehiclePerKm: 45, minimumCharge: 300, freeAbove: 0,
   });
@@ -13001,16 +13001,16 @@ async function renderTileSettings() {
     <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveGroutConfig()">💾 Save Grout Config</button>
   </div>
 
-  <!-- TILE BREAKAGE BUFFER -->
+  <!-- TILE WASTE BUFFER -->
   <div class="card" style="margin-bottom:14px">
-    <h3 class="card-title">🛡 Tile Breakage Buffer</h3>
-    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">Extra tiles added on top of cut/layout waste to cover handling, transit and cutting cracks. Auto-applied to every tile quote; staff can remove it per quote from the Design step.</p>
+    <h3 class="card-title">🛡 Tile Waste Buffer</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">Single buffer added to the net area covering cut waste, offcuts, and breakage. Applied to every tile quote using the formula: net sqft × (1 + buffer%) ÷ sqft-per-tile.</p>
     <div class="form-group" style="margin:0;max-width:200px">
-      <label>Default Breakage % buffer</label>
-      <input type="number" id="ts-breakage-pct" value="${wastageCfg.breakage_pct ?? 5}" min="0" max="20" step="1">
-      <div style="font-size:10px;color:var(--text3)">Industry norm: ~2–3% plain, ~5% patterned/diagonal</div>
+      <label>Default Waste Buffer %</label>
+      <input type="number" id="ts-breakage-pct" value="${wastageCfg.breakage_pct ?? 10}" min="0" max="25" step="1">
+      <div style="font-size:10px;color:var(--text3)">Recommended: 10% (covers cutting, offcuts, handling). Plain small tiles can go 7–8%; diagonal/pattern layouts 12–15%.</div>
     </div>
-    <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveBreakageConfig()">💾 Save Breakage Buffer</button>
+    <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveBreakageConfig()">💾 Save Waste Buffer</button>
   </div>
 
   <!-- SPACER CONFIG -->
@@ -22964,8 +22964,8 @@ async function renderTilesQuotationPage() {
   try {
     _tqSizeCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
     _tqSpacerCfg = await VW_DB.getSetting('tile_spacer_config', { pcs_per_packet:100, clip_pcs_per_packet:50, spacers_per_tile:4, min_size_mm:300 });
-    const _wc = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 5 });
-    _tqState.breakagePct = (_wc && _wc.breakage_pct != null) ? _wc.breakage_pct : 5;
+    const _wc = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 10 });
+    _tqState.breakagePct = (_wc && _wc.breakage_pct != null) ? _wc.breakage_pct : 10;
   } catch(e) { console.error('Spacer config preload failed:', e); }
 
   // Auto-fill from active check-in if available
@@ -26644,6 +26644,16 @@ function _dsRenderInner() {
   const sel = _tqState.tileSelections[slot.id];
   const sizeMm = sel?.size?.mm || '';
   const g = _getWallGrid(slot.id);
+  // ── Re-edit invalidation: if the tile size, room dimensions, or areas changed since
+  // the last render, throw away the stale result/overrides so it recomputes fresh.
+  // (Palette and price overrides are deliberate user choices — we keep those.)
+  const _sig = `${sizeMm}|${slot.subType}|${(slot.room?.areas||[]).map(a=>`${a.l||0}×${a.w||0}:${a.base||0}:${a.skirting||0}:${a.skirtingHeightIn||0}:${a.dw||0}:${a.dh||0}`).join('|')}`;
+  if (st._sig && st._sig !== _sig) {
+    delete st.result;
+    st.boxesOverride = {};
+    st.cells = null;
+  }
+  st._sig = _sig;
   // keep cells sized to the current grid
   if (g) {
     const need = g.rows * g.cols;
@@ -26712,45 +26722,28 @@ function _dsRenderInner() {
   const counts = {};
   (st.cells||[]).forEach(pi => counts[pi]=(counts[pi]||0)+1);
   const sqftPerTile = g ? g.sqftPerTile : 0;
-  // The display grid is capped for mobile; scale painted proportions up to the
-  // real tile count (area ÷ tile area) so box counts stay accurate on big areas.
   const totalCells = (st.cells||[]).length || 1;
-  // Accurate cut-waste: tiles = ceil(roomL/tileL) × ceil(roomW/tileW) per area,
-  // using the better of the two tile orientations, summed across the slot's areas.
-  // Falls back to area-based when an area has no L×W (e.g. direct-area walls/steps).
+  // ── Area-based tile count: net sqft × (1 + waste%) ÷ sqftPerTile.
+  // Single buffer (default 10%) covers cut waste, offcuts, and breakage.
+  // No grid ceil×ceil — that method scraps every offcut and massively over-counts on large tiles.
   let realTiles;
   {
     const slotNow = _dsCur();
-    const mm = (sizeMm||'').match(/(\d+)\D+(\d+)/);
-    const tA = mm ? parseInt(mm[1])/304.8 : 0, tB = mm ? parseInt(mm[2])/304.8 : 0;
+    const wastePct = _tqState.breakagePct ?? 10;
     const areas = (slotNow?.room?.areas||[]).filter(a =>
       slotNow.subType==='wall' ? a.subType==='wall' : (a.subType==='floor'||!a.subType));
-    let geo = 0, used = false;
-    if (tA && tB && sqftPerTile) {
-      for (const a of areas) {
-        if (a.l && a.w) {
-          const o1 = Math.ceil(a.l/tA)*Math.ceil(a.w/tB);
-          const o2 = Math.ceil(a.l/tB)*Math.ceil(a.w/tA);
-          // Subtract whole tiles that fall entirely inside a door/window opening.
-          // Tiles straddling the opening edge are still cut-to-fit, so only the full
-          // interior tiles are removed (computed per orientation to match o1/o2).
-          const dw = a.dw||0, dh = a.dh||0;
-          const d1 = (dw>0&&dh>0) ? Math.floor(dw/tA)*Math.floor(dh/tB) : 0;
-          const d2 = (dw>0&&dh>0) ? Math.floor(dw/tB)*Math.floor(dh/tA) : 0;
-          geo += Math.min(Math.max(0,o1-d1), Math.max(0,o2-d2)); used = true;
-          if (a.skirting && a.skirtingHeightIn) geo += Math.ceil((a.skirting*(a.skirtingHeightIn/12))/sqftPerTile);
-        } else {
-          geo += Math.ceil((a.sqft||0)*1.07/sqftPerTile); // +7% auto cut-waste where no L×W to compute geometry
-        }
-      }
+    let netSqft = 0;
+    for (const a of areas) {
+      let base = a.base || 0;
+      if (!base) base = a.sqft || 0; // fallback for areas entered without L×W
+      if (a.dw && a.dh) base = Math.max(0, base - a.dw * a.dh); // subtract door/window
+      netSqft += base;
+      if (a.skirting && a.skirtingHeightIn) netSqft += a.skirting * (a.skirtingHeightIn / 12);
     }
-    realTiles = used ? geo : ((g && sqftPerTile) ? Math.ceil((g.wallSqft||0)*1.07/sqftPerTile) : totalCells);
+    if (!netSqft) netSqft = slot.sqft || 0; // slot-level fallback
+    realTiles = sqftPerTile > 0 ? Math.ceil(netSqft * (1 + wastePct / 100) / sqftPerTile) : totalCells;
   }
-  // ── Breakage buffer (handling/transit/cutting cracks) — auto-applied, removable per quote ──
-  const _breakPct = (_tqState.breakageOff) ? 0 : (_tqState.breakagePct ?? 5);
-  const _tilesBeforeBuffer = realTiles;
-  const _breakTiles = Math.ceil(realTiles * _breakPct / 100);
-  realTiles = realTiles + _breakTiles;
+  const _wastePct = _tqState.breakagePct ?? 10;
   const scale = totalCells ? realTiles/totalCells : 1;
   let totalAmount = 0, totalBoxes = 0;
   const resultTiles = [];
@@ -26826,9 +26819,8 @@ function _dsRenderInner() {
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:800">
       <span>${totalBoxes} boxes</span><span style="color:var(--gold)">₹${totalAmount.toLocaleString('en-IN')}</span>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:11px">
-      <span style="color:var(--text3)">🛡 Breakage buffer ${_breakPct>0?`<span style="color:var(--gold)">+${_breakPct}% · +${_breakTiles} tiles</span>`:'removed'}</span>
-      <button onclick="VW_TILES._dsToggleBreakage()" style="background:none;border:1px solid ${_breakPct>0?'var(--gold-border)':'var(--border)'};color:${_breakPct>0?'var(--gold)':'var(--text3)'};border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">${_breakPct>0?'Remove':'Add back'}</button>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:10px;color:var(--text3)">
+      🛡 +${_wastePct}% waste &amp; breakage buffer included · set in Tile Settings
     </div>
   </div>
   <button class="btn-primary full-width" style="background:var(--gold);color:#000" onclick="VW_TILES._dsContinue()">${last?'Confirm Design → Spacer':'Confirm → Next Room'}</button>
