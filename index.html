@@ -32029,8 +32029,10 @@ async function _renderPortalLaborBids(c, lang) {
   const str = PORTAL_STRINGS[lang] || PORTAL_STRINGS.en;
   const { data: requirements } = await VW_DB.client.from('labor_requirements')
     .select('*').in('status',['open','bidding']).order('created_at',{ascending:false}).limit(20);
-  const { data: myBids } = await VW_DB.client.from('contractor_bids')
-    .select('*').eq('contractor_id', c.id).limit(20);
+  // Own bids via token-scoped RPC — anon can't read contractor_bids directly (keeps rival
+  // bid amounts private); the RPC returns only this contractor's bids.
+  const { data: myBids } = await VW_DB.client.rpc('get_contractor_bids', { p_token: c.portal_token })
+    .then(r => ({ data: r.data || [] })).catch(() => ({ data: [] }));
 
   return `
   <div style="margin-bottom:12px">
