@@ -24204,6 +24204,7 @@ function _showAllSizesForSlot(slotId) {
 function tqSelectSizeForRoom(slotId, sizeId, roomId) {
   const sz = TILE_SIZES.find(s=>s.id===sizeId);
   if (!sz) return;
+  const _prevMm = _tqState.tileSelections[slotId]?.sizeMm; // detect a real size change
   // slotId may be roomId or roomId_wall or roomId_floor
   const actualRoomId = roomId || slotId;
   if (!_tqState.tileSelections[slotId]) _tqState.tileSelections[slotId] = {};
@@ -24215,6 +24216,14 @@ function tqSelectSizeForRoom(slotId, sizeId, roomId) {
   _tqState.tileSelections[slotId].roomId = actualRoomId;
   // subType: detect from slotId suffix
   _tqState.tileSelections[slotId].subType = slotId.endsWith('_wall') ? 'wall' : slotId.endsWith('_floor') ? 'floor' : null;
+  // Size actually changed → drop design-step caches built for the OLD size, so the Design
+  // step re-fetches tiles, palette and layout for the new size (fixes stale 300×450 showing
+  // after switching to e.g. 600×1200).
+  if (_prevMm && _prevMm !== sz.mm) {
+    if (_tqState._dsTilesCache) delete _tqState._dsTilesCache[slotId];
+    if (_tqState.design)        delete _tqState.design[slotId];
+    if (_tqState.wallDesigns)   delete _tqState.wallDesigns[slotId];
+  }
   // Auto-init spacer for this slot
   if (!_tqState.spacerSelections[slotId]) {
     const mmVal = parseInt(sz.mm.split('×')[0]);
@@ -26395,9 +26404,13 @@ function _dsMapProduct(p, sizeMm, isStock) {
 }
 async function _dsFetchTiles(slot) {
   if (!_tqState._dsTilesCache) _tqState._dsTilesCache = {};
-  if (_tqState._dsTilesCache[slot.id]) return _tqState._dsTilesCache[slot.id];
+  if (!_tqState._dsTilesCacheSize) _tqState._dsTilesCacheSize = {};
   const sel = _tqState.tileSelections[slot.id];
   const sizeMm = sel?.size?.mm || sel?.sizeMm || '';
+  // Cache is keyed by slot, but the tiles depend on the slot's CURRENT size. If the stamped
+  // size no longer matches, the cache is stale (size was changed) — re-fetch for the new size.
+  if (_tqState._dsTilesCache[slot.id] && _tqState._dsTilesCacheSize[slot.id] === sizeMm)
+    return _tqState._dsTilesCache[slot.id];
   const want = sizeMm.replace(/\s/g,'').toLowerCase();
   let tiles = [];
   try {
@@ -26414,6 +26427,7 @@ async function _dsFetchTiles(slot) {
     } catch(e){}
   }
   _tqState._dsTilesCache[slot.id] = tiles;
+  _tqState._dsTilesCacheSize[slot.id] = sizeMm;
   return tiles;
 }
 async function _renderStepDesign() {
