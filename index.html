@@ -7742,10 +7742,25 @@ async function currentUserCanApprove(q) {
   const profile = VW_AUTH.getCurrentProfile();
   if (!profile) return false;
 
+  // Role seniority within the approval chain. A manager-level user can edit-and-approve at the
+  // current pending stage (and any lower stage), so the same editing stays available all the way
+  // through to management approval — not only at the TL stage.
+  const RANK = { tl:1, floor_manager:2, store_manager:3, management:4 };
+  const myRank = RANK[profile.role] || 0;
+
   if (last.level === 'tl' && last.branches) {
-    return last.branches.some(b => b.status === 'pending' && (b.staffIds||[]).includes(profile.staffId) && profile.staffRef === 'staff');
+    // The assigned TL/staff for the department...
+    if (last.branches.some(b => b.status === 'pending' && (b.staffIds||[]).includes(profile.staffId) && profile.staffRef === 'staff')) return true;
+    // ...or any manager-level user (Floor Manager and above) may also act on a pending TL stage.
+    return myRank >= RANK.floor_manager && last.branches.some(b => b.status === 'pending');
   }
   if (last.status !== 'pending') return false;
+
+  // A manager whose role is at or above this stage can edit + approve here.
+  if (myRank >= (RANK[last.level] || 99)) return true;
+
+  // Fallback: explicit escalation-contact phone match (original behaviour, for non-manager roles
+  // configured as a level's contact).
   const contacts = await VW_DB.getSetting('escalationContacts', {});
   const keyMap = { floor_manager: 'floorManager', store_manager: 'storeManager', management: 'management' };
   const contact = contacts[keyMap[last.level]] || {};
