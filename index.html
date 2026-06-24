@@ -4604,7 +4604,7 @@ async function confirmSecurityNotify(type) {
     await VW_DB.client.from('visits').insert({
       visitor_type: type === 'customer' ? 'customer' : subType,
       visitor_name: name,
-      phone, status: 'pending',
+      visitor_phone: phone, status: 'pending',
       date: new Date().toISOString(),
       security_checkin: true,
       department: type === 'customer' ? 'General' : 'Management',
@@ -31105,13 +31105,13 @@ async function confirmCheckOut(visitId) {
     if (visit?.customer_id) {
       await VW_DB.client.from('tasks').insert({
         type: 'follow_up',
-        customerId: visit.customer_id,
-        customerName: visit.customer_name,
-        assignedTo: visit.executive_name,
+        customer_id: visit.customer_id,
+        customer_name: visit.customer_name,
+        assigned_to: visit.executive_name,
         description: `Field visit follow-up: ${nextAction}`,
-        dueDate: nextDate,
+        due_date: nextDate,
         status: 'pending',
-        createdAt: new Date().toISOString()
+        created_at: new Date().toISOString()
       });
     }
   }
@@ -32786,7 +32786,7 @@ async function submitContractorSignup() {
     phone: d.phone,
     whatsapp_number: d.whatsapp_number||d.phone,
     professional_type: d.professional_type,
-    business_name: d.business_name||null,
+    company_name: d.business_name||null,
     city: d.city||'Vijayawada',
     area: d.area||'',
     pincode: d.pincode||'',
