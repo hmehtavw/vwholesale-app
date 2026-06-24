@@ -28428,7 +28428,18 @@ function openTileVisualizer() {
   document.getElementById('sheet-overlay')?.classList.add('open');
 }
 function tqAiVisualize() {
-  // Premium photorealistic render — gated to serious customers by the salesperson's judgement.
+  // Premium photorealistic render — pre-select the quote's tile so it's one tap from a result.
+  try {
+    const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
+    let pid = null;
+    for (const s of slots) {
+      const st = (typeof _dsState==='function') ? _dsState(s.id) : null;
+      const key = (st?.palette||[])[0];
+      if (key) { const n = parseInt(String(key).replace(/^ni_/,'')); if (!isNaN(n)) { pid = n; break; } }
+    }
+    if (pid == null) pid = _tqState.selectedProduct?.id || null;
+    if (pid != null) _visPreseedId = pid;
+  } catch(e) {}
   if (typeof closeSheet === 'function') closeSheet();
   navigateTo('visualizer');
 }
@@ -30921,6 +30932,7 @@ window.VW_LEDGER = { renderCustomerLedger };
 
 let _visRoomPhoto = null;       // base64 of room photo
 let _visSelectedProduct = null; // single selected product/swatch
+let _visPreseedId = null; // product id to auto-select when arriving from a tile quote
 let _visLastResult = null;      // last generated result image
 
 // ===== PAINT SWATCHES (most common first entry point) =====
@@ -30945,6 +30957,12 @@ const PAINT_SWATCHES = [
 
 async function renderVisualizerPage() {
   const products = await VW_DB.all(VW_DB.STORES.products);
+  // Arriving from a tile quote? Pre-select that tile so it's highlighted and ready to apply.
+  if (_visPreseedId != null) {
+    const pp = products.find(x => x.id === _visPreseedId);
+    if (pp) _visSelectedProduct = { ...pp, type: 'product', label: pp.name };
+    _visPreseedId = null;
+  }
   const tiles = products.filter(p => p.category === 'Tiles' || (p.category||'').toLowerCase().includes('tile'));
   const granite = products.filter(p => p.category === 'Granite' || (p.category||'').toLowerCase().includes('granite'));
   const paints = products.filter(p => (p.category||'').toLowerCase().includes('paint'));
