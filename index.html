@@ -28406,8 +28406,10 @@ function openTileVisualizer() {
     </div>
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">To-scale preview with your selected design. Walls show the row-by-row layout.</div>
     <div style="max-height:48vh;overflow-y:auto;padding-right:2px">${_tqRenderParametricRoom()}</div>
-    <button onclick="VW_TILES.tqAiVisualize()" style="width:100%;margin-top:10px;padding:12px;background:linear-gradient(135deg,#60A5FA,#8B5CF6);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">✨ AI Realistic View</button>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">Basic preview is free & instant · AI render costs per image — use for closing / advance-paying customers</div>
+    <div id="tq-ai-desc" style="margin-top:8px"></div>
+    <button onclick="VW_TILES.tqAiDescribe()" style="width:100%;margin-top:8px;padding:11px;background:var(--bg2);border:1px solid var(--gold-border);border-radius:10px;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer">✨ AI Description (how it'll look)</button>
+    <button onclick="VW_TILES.tqAiVisualize()" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(135deg,#60A5FA,#8B5CF6);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">📷 AI Realistic Render (photo)</button>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">Basic preview & description are free · the photo render costs per image — use for closing / advance-paying customers</div>
     <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Close</button>`;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay')?.classList.add('open');
@@ -28416,6 +28418,36 @@ function tqAiVisualize() {
   // Premium photorealistic render — gated to serious customers by the salesperson's judgement.
   if (typeof closeSheet === 'function') closeSheet();
   navigateTo('visualizer');
+}
+// Instant AI description of the actual design + dimensions (text mode — no photo, low cost).
+async function tqAiDescribe() {
+  const box = document.getElementById('tq-ai-desc');
+  if (box) box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">✨ Generating AI description…</div>';
+  try {
+    const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
+    const products = [];
+    let dims = [];
+    slots.forEach(s => {
+      const sel = _tqState.tileSelections[s.id];
+      const dsTiles = _tqState.design?.[s.id]?.result?.tiles || [];
+      if (dsTiles.length) dsTiles.forEach(t => products.push({ name:t.name, category:'Tiles', brand:t.brand||'', size:(sel?.size?.mm||'') }));
+      else if (sel?.size) products.push({ name:(s.label||'Tile'), category:'Tiles', size:sel.size.mm });
+      const a = (s.room?.areas||[]).find(x=>x.subType===s.subType) || (s.room?.areas||[])[0];
+      if (a?.l && (a?.w||a?.h)) dims.push(`${s.label||s.subType}: ${a.l}ft × ${(a.h||a.w)}ft`);
+    });
+    const roomType = (slots[0]?.room?.type) || 'room';
+    const res = await fetch(`${VW_DB.client.supabaseUrl}/functions/v1/room-visualizer`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${VW_DB.client.supabaseKey}`,'apikey':VW_DB.client.supabaseKey},
+      body: JSON.stringify({ mode:'describe', roomType, dimensions: dims.join('; '), products })
+    });
+    const data = await res.json();
+    if (box) box.innerHTML = data?.description
+      ? `<div style="font-size:12px;line-height:1.55;color:var(--text2);background:var(--bg2);border:1px solid var(--gold-border);border-radius:10px;padding:12px">✨ ${data.description}</div>`
+      : '<div style="font-size:11px;color:var(--text3);padding:8px">AI description unavailable right now — try again.</div>';
+  } catch(e) {
+    if (box) box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">Could not reach AI — check connection.</div>';
+  }
 }
 
 window.VW_TILES = {
@@ -28439,7 +28471,7 @@ window.VW_TILES = {
   // Delivery + floor
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
-  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, tqAiVisualize, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
+  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, tqAiVisualize, tqAiDescribe, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
   _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsToggleBreakage, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
