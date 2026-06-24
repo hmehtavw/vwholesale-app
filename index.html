@@ -13182,6 +13182,8 @@ async function saveBreakageConfig() {
   await VW_DB.setSetting('tile_wastage_config', { breakage_pct: pct });
   showToast('Breakage buffer saved ✓ — applies to new quotes', 'success');
 }
+
+async function saveSpacerConfig() {
   await VW_DB.setSetting('tile_spacer_config', {
     pcs_per_packet: parseInt(document.getElementById('ts-spacer-pkt')?.value||100)||100,
     clip_pcs_per_packet: parseInt(document.getElementById('ts-spacer-clip-pkt')?.value||50)||50,
