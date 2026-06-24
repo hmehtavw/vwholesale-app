@@ -24034,7 +24034,7 @@ function tqRemoveRoom(i) {
 }
 
 function _tqTotalSqft() {
-  return _tqState.rooms.reduce((s,r)=>s+r.areas.reduce((ss,a)=>ss+(a.sqft||0),0),0);
+  return (_tqState.rooms||[]).reduce((s,r)=>s+(r.areas||[]).reduce((ss,a)=>ss+(a.sqft||0),0),0);
 }
 
 function _refreshStep1() {
@@ -24889,7 +24889,7 @@ function _renderStep7() {
   const primarySlot = slots.find(s=>s.subType==='wall') || slots[0];
   const primarySel = primarySlot ? _tqState.tileSelections[primarySlot.id] : null;
   const sz = primarySel?.size || _tqState.selectedSize;
-  const spacerMm = primarySlot ? (_tqState.spacerSelections[primarySlot.id]?.mm || 3) : 3;
+  const spacerMm = primarySlot ? (_tqState.spacerSelections?.[primarySlot.id]?.mm || 3) : 3;
   const suggestEpoxy = sz && parseInt((sz.mm||'600×600').split('×')[0]) >= 400;
   const totalSqft = _tqTotalSqft();
 
@@ -25141,8 +25141,8 @@ async function _renderStepAddons() {
       </div>
 
       ${_tqState.soffit?.type ? (() => {
-        const bathrooms = _tqState.rooms.filter(r=>r.type==='Bathroom'||r.type==='Toilet'||r.type.includes('Wash')||r.type.includes('Balcony'));
-        const totalCeilSqft = bathrooms.reduce((s,r)=>s+r.areas.reduce((ss,a)=>ss+(a.base||a.sqft||0),0),0)*1.1;
+        const bathrooms = (_tqState.rooms||[]).filter(r=>{const t=r.type||'';return t==='Bathroom'||t==='Toilet'||t.includes('Wash')||t.includes('Balcony');});
+        const totalCeilSqft = bathrooms.reduce((s,r)=>s+(r.areas||[]).reduce((ss,a)=>ss+(a.base||a.sqft||0),0),0)*1.1;
         const panelWidthFt = (_tqState.soffit?.panelWidth||100)/304.8;
         const roomLen = 10; // avg
         const stripsPerSqft = 1/panelWidthFt;
@@ -25690,8 +25690,8 @@ async function _renderStep8() {
 async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
   // Determine if rooms are floor or wall (mix likely)
   const rooms = _tqState.rooms || [];
-  const floorSqft = rooms.reduce((s,r) => s + r.areas.filter(a=>a.subType!=='wall').reduce((ss,a)=>ss+a.sqft,0), 0) || totalSqft;
-  const wallSqft = rooms.reduce((s,r) => s + r.areas.filter(a=>a.subType==='wall').reduce((ss,a)=>ss+a.sqft,0), 0);
+  const floorSqft = rooms.reduce((s,r) => s + (r.areas||[]).filter(a=>a.subType!=='wall').reduce((ss,a)=>ss+(a.sqft||0),0), 0) || totalSqft;
+  const wallSqft = rooms.reduce((s,r) => s + (r.areas||[]).filter(a=>a.subType==='wall').reduce((ss,a)=>ss+(a.sqft||0),0), 0);
 
   // ── Only show cement/sand for rooms using mortar method ──
   // Check adhesiveSelections for mortar rooms
@@ -25732,6 +25732,14 @@ async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
     const { data: clp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%tile cleaner%').limit(1);
     if (clp?.length) cleanerPrice = `₹${clp[0].price||clp[0].mrp}`;
   } catch(e) {}
+
+  // Adhesive coverage (sqft per 20kg bag). Large tiles (≥600mm) need a thicker bed → less coverage.
+  // (These were referenced below but never defined in this scope — caused the Add-ons step to throw.)
+  const _addonFirstSz = Object.values(_tqState.tileSelections||{})[0]?.size;
+  const _addonSizeMm  = _addonFirstSz ? parseInt((_addonFirstSz.mm||'600×600').split('×')[0]) : 600;
+  const _addonIsLarge = _addonSizeMm >= 600;
+  const floorAdhesiveCoverage = _addonIsLarge ? 40 : 44;
+  const wallAdhesiveCoverage  = _addonIsLarge ? 32 : 35;
 
   const addons = [
     // Cement & sand are now chosen on the Adhesive step (Cement Mortar / Adhesive+Cement) — not duplicated here
