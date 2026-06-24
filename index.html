@@ -26399,7 +26399,7 @@ function _dsMapProduct(p, sizeMm, isStock) {
   const cov = p.coverage_per_box || 0;
   const perSft = p.price_per_sqft || (cov ? (p.price||p.mrp||0)/cov : 0);
   return { key:(isStock?'':'ni_')+String(p.id||p.name||Math.random()), name:p.name||'Tile', brand:p.brand||'',
-           finish:p.tile_finish||p.finish||'', tilesPerBox:tpb, coverage:cov,
+           finish:p.tile_finish||p.finish||'', tilesPerBox:tpb, coverage:cov, imageUrl:p.image_url||'',
            perSft:Math.round((perSft||0)*100)/100, boxPrice:p.price||p.mrp||0, stock:p.stock||0, isStock };
 }
 async function _dsFetchTiles(slot) {
@@ -26472,7 +26472,7 @@ function _dsRenderInner() {
         const swatch = on ? _DS_SWATCH[(st.palette.indexOf(t.key))%_DS_SWATCH.length] : 'var(--bg3)';
         return `<div onclick="VW_TILES._dsTogglePalette('${t.key}')" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:9px;cursor:pointer;
           border:${on?'2px solid var(--gold)':'1px solid var(--border)'};background:${on?'var(--gold-muted)':'var(--bg2)'}">
-          <div style="width:18px;height:18px;border-radius:4px;flex-shrink:0;border:1px solid rgba(0,0,0,0.2);background:${swatch}"></div>
+          <div style="width:18px;height:18px;border-radius:4px;flex-shrink:0;border:1px solid rgba(0,0,0,0.2);background:${t.imageUrl?`url('${t.imageUrl}') center/cover, ${swatch}`:swatch}"></div>
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:700">${t.name}</div>
             <div style="font-size:10px;color:var(--text3)">${[t.brand,t.finish].filter(Boolean).join(' · ')||'—'} · ${t.isStock?`Stock ${t.stock}`:'Non-inventory (order)'} · ${t.tilesPerBox}/box</div>
@@ -26506,8 +26506,10 @@ function _dsRenderInner() {
           const ci = r*g.cols+c;
           const pi = st.cells[ci] ?? 0;
           const col = _DS_SWATCH[pi%_DS_SWATCH.length];
+          const _img = pal[pi]?.imageUrl;
+          const _bg = _img ? `url('${_img}') center/cover, ${col}` : col;
           return `<div onclick="VW_TILES._dsPaint(${ci})" style="width:${cellPx}px;height:${Math.round(cellPx*g.tileHeightMm/g.tileWidthMm)}px;
-            background:${col};border:1px solid rgba(0,0,0,0.12);cursor:pointer;flex-shrink:0"></div>`;
+            background:${_bg};border:1px solid rgba(0,0,0,0.12);cursor:pointer;flex-shrink:0"></div>`;
         }).join('')}
       </div>`).join('')}
     </div>
