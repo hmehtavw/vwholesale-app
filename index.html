@@ -28341,33 +28341,81 @@ Use standard room types. Convert to feet if dimensions are in meters (1m = 3.28f
 async function lookupTileCustomer(phone, prefix, showOwnershipWarning) { return lookupTileCustomerFull(phone, prefix, showOwnershipWarning); }
 
 
-function openTileVisualizer() {
-  // Navigate to tile visualizer page or open sheet with visualizer
-  const prod = _tqState.selectedProduct;
-  const sz = _tqState.selectedSize;
-  if (!prod && !sz) { showToast('Select a tile first (Step 6)', 'warn'); return; }
-  // Open visualizer sheet
-  const sheet = document.getElementById('bottom-sheet');
-  if (sheet) {
-    sheet.innerHTML = `
-      <div class="sheet-handle"></div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <h3 style="margin:0">🎨 Room Visualizer</h3>
-        <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
-      </div>
-      <div style="text-align:center;padding:20px;color:var(--text2)">
-        <div style="font-size:40px;margin-bottom:12px">🖼️</div>
-        <div style="font-size:14px;font-weight:600;margin-bottom:8px">Tile: ${prod?.name || sz?.label || 'Selected tile'}</div>
-        <div style="font-size:12px;color:var(--text3);margin-bottom:16px">AI room visualizer available — upload a photo of your room to see how these tiles look</div>
-        <button onclick="navigateTo('tile_visualizer');closeSheet()" 
-          style="padding:12px 24px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);border-radius:10px;color:#60A5FA;font-size:13px;font-weight:700;cursor:pointer">
-          Open Full Visualizer
-        </button>
-        <div style="margin-top:12px;font-size:11px;color:var(--text3)">Quote continues after visualizing — your selections are saved</div>
-      </div>`;
-    sheet.classList.add('open');
-    document.getElementById('sheet-overlay')?.classList.add('open');
+// ───── Parametric (basic) room render — to-scale, design-applied, free & instant ─────
+function _tqParametricWallSVG(slotId) {
+  const g = (typeof _getWallGrid==='function') ? _getWallGrid(slotId) : null;
+  if (!g || !g.cells || !g.cols || !g.rows) return '';
+  const COL = {}; WALL_DESIGNS.forEach(d=>COL[d.id]=d.color);
+  const W = 320;
+  let H = (g.wallLengthFt>0) ? Math.round(W*(g.wallH/g.wallLengthFt)) : 96;
+  H = Math.max(72, Math.min(H, 240));
+  const cw = W/g.cols, ch = H/g.rows;
+  let rects = '';
+  for (let r=0;r<g.rows;r++) for (let c=0;c<g.cols;c++) {
+    const id = g.cells[r*g.cols+c]||'L';
+    rects += `<rect x="${(c*cw).toFixed(1)}" y="${(r*ch).toFixed(1)}" width="${(cw+0.5).toFixed(1)}" height="${(ch+0.5).toFixed(1)}" fill="${COL[id]||'#e8e8e8'}" stroke="rgba(255,255,255,0.22)" stroke-width="0.6"/>`;
   }
+  return `<div style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+      <span>🧱 ${g.slot?.label||'Wall'}</span><span>${g.wallLengthFt.toFixed(1)} ft × ${g.wallH.toFixed(1)} ft</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#222">
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${rects}</svg>
+    </div>
+  </div>`;
+}
+function _tqParametricFloorSVG(slotId) {
+  const slot = _getTileSlots().find(s=>s.id===slotId); if (!slot) return '';
+  const sz = _tqState.tileSelections[slotId]?.size; if (!sz) return '';
+  const fa = (slot.room?.areas||[]).find(a=>a.subType==='floor'||!a.subType) || {};
+  const fl = fa.l||0, fw = fa.w||0; if (!fl || !fw) return '';
+  const mmL = parseInt((sz.mm||'600×600').split('×')[0]) || 600;
+  const tF = mmL/304.8;
+  const cols = Math.max(1, Math.min(20, Math.ceil(fl/tF)));
+  const rows = Math.max(1, Math.min(20, Math.ceil(fw/tF)));
+  const W = 320; let H = Math.max(72, Math.min(220, Math.round(W*(fw/fl)))); 
+  const cw = W/cols, ch = H/rows;
+  let rects = '';
+  for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
+    rects += `<rect x="${(c*cw).toFixed(1)}" y="${(r*ch).toFixed(1)}" width="${(cw+0.5).toFixed(1)}" height="${(ch+0.5).toFixed(1)}" fill="#ece3d0" stroke="rgba(0,0,0,0.12)" stroke-width="0.6"/>`;
+  }
+  return `<div style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+      <span>🔲 ${slot.label||'Floor'}</span><span>${fl} ft × ${fw} ft</span>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden"><svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${rects}</svg></div>
+  </div>`;
+}
+function _tqRenderParametricRoom() {
+  const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
+  if (!slots.length) return '<div style="padding:20px;text-align:center;color:var(--text3)">Select tiles first to preview the design</div>';
+  let out = '';
+  slots.forEach(s => { out += (s.subType==='wall') ? _tqParametricWallSVG(s.id) : _tqParametricFloorSVG(s.id); });
+  return out || '<div style="padding:20px;text-align:center;color:var(--text3)">No design laid out yet — build a wall design to preview</div>';
+}
+function openTileVisualizer() {
+  const slots = _getTileSlots().filter(s=>_tqState.tileSelections[s.id]?.size);
+  if (!slots.length) { showToast('Select a tile first (Step 6)', 'warn'); return; }
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet) return;
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h3 style="margin:0">🎨 Room Visualizer</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">To-scale preview with your selected design. Walls show the row-by-row layout.</div>
+    <div style="max-height:48vh;overflow-y:auto;padding-right:2px">${_tqRenderParametricRoom()}</div>
+    <button onclick="VW_TILES.tqAiVisualize()" style="width:100%;margin-top:10px;padding:12px;background:linear-gradient(135deg,#60A5FA,#8B5CF6);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">✨ AI Realistic View</button>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">Basic preview is free & instant · AI render costs per image — use for closing / advance-paying customers</div>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Close</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay')?.classList.add('open');
+}
+function tqAiVisualize() {
+  // Premium photorealistic render — gated to serious customers by the salesperson's judgement.
+  if (typeof closeSheet === 'function') closeSheet();
+  navigateTo('visualizer');
 }
 
 window.VW_TILES = {
@@ -28391,7 +28439,7 @@ window.VW_TILES = {
   // Delivery + floor
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
-  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
+  renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, tqAiVisualize, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
   _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsToggleBreakage, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
