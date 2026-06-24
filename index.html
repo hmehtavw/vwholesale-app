@@ -22908,7 +22908,11 @@ let _tqState = {
 let _tqSizeCfg = { sizes: [] };
 let _tqSpacerCfg = { pcs_per_packet:100, clip_pcs_per_packet:50, spacers_per_tile:4, min_size_mm:300 };
 
+let _tqResumeData = null;
 async function renderTilesQuotationPage() {
+  const _isResume = !!_tqResumeData;
+  if (_tqResumeData) { _tqState = _tqResumeData; _tqResumeData = null; }
+  else {
   _tqState = {
     step: 0,
     customer: { name:'', phone:'', site:'', id:null },
@@ -22933,6 +22937,7 @@ async function renderTilesQuotationPage() {
     _designSlot: null,
     currentRoomIdx: 0,
   };
+  }
 
   // Preload tile-size + spacer configs so the synchronous spacer step can read them
   try {
@@ -22942,7 +22947,7 @@ async function renderTilesQuotationPage() {
 
   // Auto-fill from active check-in if available
   const profile = VW_AUTH.getCurrentProfile();
-  if (window.activeVisit?.customerName) {
+  if (!_isResume && window.activeVisit?.customerName) {
     _tqState.customer.name = window.activeVisit.customerName || '';
     _tqState.customer.phone = window.activeVisit.customerPhone || '';
     _tqState.customer.site = window.activeVisit.customerArea || '';
@@ -26808,6 +26813,7 @@ async function tqNext() {
     try {
       el.innerHTML = await _tqRenderStep(_tqState.step);
       _updateStepHeader();
+      _tqAutoSave();
     } catch(err) {
       console.error('tqNext render error (step '+_tqState.step+'):', err);
       el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Could not load this step — <button onclick="VW_TILES.tqBack()" style="color:var(--gold);background:none;border:none;cursor:pointer">go back</button></div>';
@@ -26822,10 +26828,48 @@ async function tqBack() {
     try {
       el.innerHTML = await _tqRenderStep(_tqState.step);
       _updateStepHeader();
+      _tqAutoSave();
     } catch(err) {
       console.error('tqBack render error (step '+_tqState.step+'):', err);
     }
   }
+}
+
+// Auto-save the in-progress tile quotation as a draft so nothing is ever lost and it can be
+// resumed from the Tile Quotes list. Fire-and-forget — never blocks navigation.
+async function _tqAutoSave() {
+  const st = _tqState;
+  if (!st || !st.customer || !st.customer.name) return;          // need a customer first
+  if (st._approvalStatus && st._approvalStatus !== 'draft') return;  // never auto-touch a submitted/approved quote
+  if (st._autoSaving) return; st._autoSaving = true;
+  try {
+    const profile = VW_AUTH.getCurrentProfile();
+    const payload = {
+      customer_name: st.customer.name, customer_phone: st.customer.phone || '',
+      customer_id: st.customer.id || null, site_address: st.customer.site || '',
+      quoted_prices: st.quotedPrices || {}, wall_designs: st.wallDesigns || {},
+      rooms: st.rooms || [], tile_selections: st.tileSelections || {},
+      spacer_selections: st.spacerSelections || {}, adhesive_selections: st.adhesiveSelections || {},
+      grout_selections: st.groutSelections || {}, selected_size: st.selectedSize || null,
+      selected_product: st.selectedProduct || null, spacer: st.spacer || {}, adhesive: st.adhesive || {},
+      beading: st.beading || [], grout: st.grout || {}, addons: st.addons || {},
+      floor_traps: st.floorTraps || [], soffit: st.soffit || {}, delivery: st.delivery || {},
+      total_area_sqft: _tqTotalSqft(), labor_required: st.laborRequired || false,
+      draft_step: st.step || 0, updated_at: new Date().toISOString(),
+    };
+    const id = st._savedQuoteId || st._draftId;
+    if (id) {
+      await VW_DB.client.from('tile_quotations').update(payload).eq('id', id).eq('status','draft');
+    } else {
+      const fy = getFinancialYearLabel();
+      payload.tq_no = 'TQ/'+fy+'/D'+String(Date.now()).slice(-5);  // provisional draft number
+      payload.status = 'draft'; payload.approval_status = 'draft';
+      payload.created_by = profile?.name || ''; payload.created_by_id = profile?.id || null;
+      const { data, error } = await VW_DB.client.from('tile_quotations').insert(payload).select('id').single();
+      if (!error && data) st._draftId = data.id;
+    }
+  } catch(e) { console.warn('TQ auto-save skipped:', e?.message||e); }
+  finally { st._autoSaving = false; }
 }
 
 // ───── DELIVERY + FLOOR HELPERS ─────────────────────────────
@@ -27198,7 +27242,7 @@ async function tqSubmitForApproval() {
       };
     })();
 
-    const { data, error } = await VW_DB.client.from('tile_quotations').insert({
+    const _tqPayload = {
       tq_no: tqNo,
       customer_name: st.customer.name,
       customer_phone: st.customer.phone,
@@ -27233,8 +27277,19 @@ async function tqSubmitForApproval() {
       status: 'pending_approval',
       created_by: profile?.name || '',
       created_by_id: profile?.id || null,
-    }).select().single();
+      draft_step: 8,
+    };
+    // If this quote was auto-saved as a draft, convert that same row to a submitted quote
+    // (so we don't leave a duplicate draft behind); otherwise create it fresh.
+    const _existingId = st._savedQuoteId || st._draftId;
+    let data, error;
+    if (_existingId) {
+      ({ data, error } = await VW_DB.client.from('tile_quotations').update(_tqPayload).eq('id', _existingId).select().single());
+    } else {
+      ({ data, error } = await VW_DB.client.from('tile_quotations').insert(_tqPayload).select().single());
+    }
     if (error) throw error;
+    st._savedQuoteId = data.id; st._draftId = data.id; st._approvalStatus = 'pending_approval';
 
     // Start the escalation chain: TL/SrExec → FloorMgr → StoreMgr → Management (30s each)
     await VW_ESCALATION.startTileQuoteApproval(data.id);
@@ -27648,6 +27703,8 @@ async function renderTileQuotesList() {
 async function openTileQuote(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
+  // A draft opens straight back into the wizard to keep editing where it was left off.
+  if (q.status === 'draft' || q.approval_status === 'draft') { return tqResumeDraft(id); }
   const profile = VW_AUTH.getCurrentProfile();
   const myRole = profile?.role || '';
   const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
@@ -27770,6 +27827,31 @@ async function openTileQuote(id) {
 
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// Resume an auto-saved draft tile quotation at the step where it was left off.
+async function tqResumeDraft(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) { showToast('Draft not found','warn'); return; }
+  _tqResumeData = {
+    ...q,
+    customer:{ name:q.customer_name||'', phone:q.customer_phone||'', site:q.site_address||'', id:q.customer_id||null },
+    contractor: q.contractor_commission ? { name:q.contractor_commission.contractor_name, phone:q.contractor_commission.contractor_phone, id:q.contractor_commission.contractor_id, commissionPct:q.contractor_commission.commission_pct } : null,
+    rooms: q.rooms||[], currentFlat:'',
+    tileSelections: q.tile_selections||{}, spacerSelections: q.spacer_selections||{},
+    spacerType: q.spacer?.type||'plus', adhesiveSelections: q.adhesive_selections||{},
+    beading: q.beading||[], groutSelections: q.grout_selections||{}, quotedPrices: q.quoted_prices||{},
+    accessories: q.accessories||[], floorTraps: q.floor_traps||[], soffit: q.soffit||{enabled:false},
+    delivery: q.delivery||{type:'self',distanceKm:0,floors:[],beyondFt:false,siteAddress:''},
+    laborRequired: q.labor_required||null, addons: q.addons||{}, wallDesigns: q.wall_designs||{},
+    selectedSize: q.selected_size||null, selectedProduct: q.selected_product||null,
+    spacer: q.spacer||{}, adhesive: q.adhesive||{}, grout: q.grout||{},
+    _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
+    step: Math.min(8, Math.max(1, q.draft_step||1)),
+    _savedQuoteId: id, _draftId: (q.status==='draft' ? id : null), _approvalStatus: q.approval_status,
+  };
+  if (typeof closeSheet === 'function') closeSheet();
+  navigateTo('tiles');
 }
 
 async function tqReprintReceipt(id) {
