@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0b1e3f">
+<title>Quotation · V Wholesale</title>
+<style>
+  :root{ --navy:#0b1e3f; --gold:#e6b53c; --ink:#1a1a1a; --muted:#6b7280; --line:#e5e7eb; --bg:#f4f5f7; }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+        background:var(--bg); color:var(--ink); line-height:1.45; -webkit-font-smoothing:antialiased; }
+  .wrap{ max-width:760px; margin:0 auto; padding:14px; }
+  .card{ background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; }
+  .top{ background:var(--navy); color:#fff; padding:18px 18px 16px; display:flex; align-items:center; gap:12px; }
+  .logo{ width:46px; height:46px; border-radius:10px; background:var(--gold); color:var(--navy);
+         font-weight:800; font-size:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .brand b{ font-size:17px; letter-spacing:.2px; }
+  .brand div{ font-size:12px; opacity:.8; }
+  .meta{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px 26px; }
+  .meta .lbl{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+  .meta .val{ font-size:14px; font-weight:600; }
+  .sec-title{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;
+              padding:14px 18px 6px; font-weight:700; }
+  table{ width:100%; border-collapse:collapse; }
+  th{ text-align:left; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.3px;
+      padding:8px 18px; border-bottom:1px solid var(--line); }
+  th.num,td.num{ text-align:right; }
+  td{ padding:10px 18px; border-bottom:1px solid var(--line); font-size:13px; vertical-align:top; }
+  .desc b{ font-size:13.5px; }
+  .desc small{ display:block; color:var(--muted); font-size:11.5px; margin-top:1px; }
+  .totals{ padding:12px 18px; }
+  .totals .row{ display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:var(--muted); }
+  .grand{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; padding-top:10px;
+          border-top:2px solid var(--navy); }
+  .grand span{ font-size:14px; font-weight:700; }
+  .grand b{ font-size:22px; color:var(--navy); }
+  .note{ padding:12px 18px; font-size:12px; color:var(--muted); border-top:1px solid var(--line); }
+  .terms{ padding:10px 18px 16px; font-size:12px; color:var(--muted); white-space:pre-wrap; }
+  .foot{ text-align:center; padding:14px; font-size:12px; color:var(--muted); }
+  .foot a{ color:var(--navy); font-weight:600; text-decoration:none; }
+  .bar{ position:sticky; bottom:0; display:flex; gap:10px; padding:12px 14px;
+        background:linear-gradient(to top, var(--bg) 70%, transparent); }
+  .btn{ flex:1; padding:13px; border-radius:11px; border:none; font-size:14px; font-weight:700; cursor:pointer; }
+  .btn.print{ background:var(--navy); color:#fff; }
+  .btn.call{ background:#25D366; color:#fff; text-decoration:none; text-align:center; line-height:1.4; }
+  .state{ text-align:center; padding:60px 20px; color:var(--muted); }
+  .spin{ width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--navy);
+         border-radius:50%; margin:0 auto 14px; animation:s 0.8s linear infinite; }
+  @keyframes s{ to{ transform:rotate(360deg); } }
+  @media print{
+    body{ background:#fff; } .bar{ display:none; } .card{ box-shadow:none; border-radius:0; }
+    .top{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="content">
+    <div class="state"><div class="spin"></div>Loading your quotation…</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_rowcFNrbdc8V0pJXJfUR_w_-bM5Ld3U';
+const STORE = 'V Wholesale';
+const STORE_PHONE = '8712697930';
+
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inr = n => '₹' + Math.round(Number(n)||0).toLocaleString('en-IN');
+
+function getRef(){
+  const p = new URLSearchParams(location.search);
+  return p.get('quote') || p.get('ref') || p.get('q') || '';
+}
+
+async function load(){
+  const ref = getRef();
+  const el = document.getElementById('content');
+  if(!ref){ el.innerHTML = msg('No quotation reference in the link.'); return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_quotation`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ ref: String(ref) })
+    });
+    const rows = await res.json();
+    const q = Array.isArray(rows) ? rows[0] : (rows && rows.id ? rows : null);
+    if(!q){ el.innerHTML = msg('Quotation not found or no longer available.<br>Please contact us for a fresh link.'); return; }
+    render(q);
+  }catch(e){
+    el.innerHTML = msg('Could not load this quotation. Please check your connection and try again.');
+  }
+}
+
+function msg(html){
+  return `<div class="card"><div class="state" style="color:#1a1a1a">${html}</div></div>
+    <div class="foot">${STORE}, Vijayawada · <a href="tel:${STORE_PHONE}">${STORE_PHONE}</a></div>`;
+}
+
+function render(q){
+  const items = Array.isArray(q.items) ? q.items : [];
+  const date = q.date || (q.created_at ? String(q.created_at).slice(0,10) : '');
+  const validity = q.validity_days || 7;
+  const site = q.site_name || q.address || q.delivery_address || '';
+
+  let computed = 0;
+  const rows = items.map(it => {
+    const desc = it.description || it.name || it.model || 'Item';
+    const sub = [it.brand, it.model].filter(Boolean).join(' · ');
+    const qty = it.qty!=null ? it.qty : (it.quantity!=null ? it.quantity : '');
+    const unit = it.unit || '';
+    const rate = it.netPrice!=null ? it.netPrice : (it.rate!=null ? it.rate : (it.price!=null ? it.price : ''));
+    const total = it.total!=null ? it.total : ((Number(rate)||0)*(Number(qty)||0));
+    computed += Number(total)||0;
+    return `<tr>
+      <td class="desc"><b>${esc(desc)}</b>${sub?`<small>${esc(sub)}</small>`:''}</td>
+      <td class="num">${esc(qty)}${unit?' '+esc(unit):''}</td>
+      <td class="num">${rate!==''?inr(rate):'—'}</td>
+      <td class="num"><b>${inr(total)}</b></td>
+    </tr>`;
+  }).join('');
+
+  const grand = q.grand_total!=null ? q.grand_total : computed;
+
+  document.getElementById('content').innerHTML = `
+  <div class="card">
+    <div class="top">
+      <div class="logo">VW</div>
+      <div class="brand"><b>${STORE}</b><div>Vijayawada · Home Building & Improvement</div></div>
+    </div>
+    <div class="meta">
+      <div><div class="lbl">Quotation</div><div class="val">${esc(q.quote_no||q.id||'')}</div></div>
+      ${date?`<div><div class="lbl">Date</div><div class="val">${esc(date)}</div></div>`:''}
+      <div><div class="lbl">Customer</div><div class="val">${esc(q.customer_name||'Customer')}</div></div>
+      ${q.contact?`<div><div class="lbl">Contact</div><div class="val">${esc(q.contact)}</div></div>`:''}
+      ${site?`<div style="flex-basis:100%"><div class="lbl">Site</div><div class="val">${esc(site)}</div></div>`:''}
+    </div>
+
+    <div class="sec-title">Items</div>
+    <table>
+      <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" style="color:#6b7280">No items listed.</td></tr>`}</tbody>
+    </table>
+
+    <div class="totals">
+      <div class="grand"><span>Grand Total</span><b>${inr(grand)}</b></div>
+    </div>
+
+    <div class="note">📋 This quotation shows all items and pricing. Valid for ${esc(validity)} days from the date above. Prices are subject to stock availability.</div>
+    ${q.terms?`<div class="terms"><b style="color:#1a1a1a">Terms</b>\n${esc(q.terms)}</div>`:''}
+  </div>
+  <div class="foot">For any changes or to place your order, call us<br><a href="tel:${STORE_PHONE}">${STORE} · ${STORE_PHONE}</a></div>
+  `;
+
+  document.getElementById('bar')?.removeAttribute('hidden');
+}
+
+load();
+</script>
+
+<div class="wrap" id="barwrap">
+  <div class="bar" id="bar" hidden>
+    <button class="btn print" onclick="window.print()">⬇ Save / Print PDF</button>
+    <a class="btn call" href="tel:8712697930">📞 Call to Order</a>
+  </div>
+</div>
+</body>
+</html>
