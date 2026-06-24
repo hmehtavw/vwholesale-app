@@ -25112,6 +25112,16 @@ async function _renderStepAddons() {
   const totalSqft = _tqTotalSqft();
   const boxesNeeded = Math.max(1, Math.ceil(totalSqft / 15));
   return `
+  <!-- ADD PRODUCTS FROM INVENTORY -->
+  <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
+    <h3 class="card-title">🛒 Add Products from Inventory</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:8px">Search any product and pull it into this quotation with live stock.</p>
+    <input id="tq-inv-search" type="text" placeholder="🔍 Search product name…" oninput="VW_TILES.tqSearchInventory(this.value)" autocomplete="off"
+      style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">
+    <div id="tq-inv-results"></div>
+    <div id="tq-inv-added">${_renderExtraProductsList()}</div>
+  </div>
+
   <!-- FLOOR TRAP SELECTOR -->
   <div class="card" style="margin-bottom:10px;border-color:rgba(34,197,94,0.3)">
     <h3 class="card-title">🕳 Floor Trap / Nahani Trap Selection</h3>
@@ -25262,6 +25272,78 @@ async function _renderStepAddons() {
 }
 function _rerenderStepAddons(){ _renderStepAddons().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html;}); }
 
+// ───── Inventory → Quotation: search & add arbitrary products ─────
+let _tqInvResults = [];
+let _tqInvSearchTimer = null;
+function _renderExtraProductsList() {
+  const items = _tqState.extraProducts || [];
+  if (!items.length) return '';
+  let total = 0;
+  const rows = items.map(p => {
+    const line = (p.price||0) * (p.qty||1); total += line;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600">${p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">₹${p.price||0}/${p.unit||'unit'}${p.stock!=null?` · ${p.stock} in stock`:''}</div>
+      </div>
+      <input type="number" value="${p.qty||1}" min="1" onchange="VW_TILES.tqSetExtraQty(${p.id},this.value)" style="width:44px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text);text-align:center">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);min-width:56px;text-align:right">₹${line.toLocaleString('en-IN')}</div>
+      <button onclick="VW_TILES.tqRemoveExtra(${p.id})" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;line-height:1">✕</button>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2)">
+    <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:0.04em">ADDED PRODUCTS</div>
+    ${rows}
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;margin-top:4px"><span>Products subtotal</span><span style="color:var(--gold)">₹${total.toLocaleString('en-IN')}</span></div>
+  </div>`;
+}
+function tqSearchInventory(q) {
+  clearTimeout(_tqInvSearchTimer);
+  const box = document.getElementById('tq-inv-results');
+  if (!q || q.trim().length < 2) { if (box) box.innerHTML=''; return; }
+  _tqInvSearchTimer = setTimeout(async () => {
+    if (box) box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:6px">Searching…</div>';
+    try {
+      const { data } = await VW_DB.client.from('products')
+        .select('id,name,price,mrp,unit,stock,brand').ilike('name','%'+q.trim()+'%').eq('is_active',true).limit(12);
+      _tqInvResults = data || [];
+      if (!_tqInvResults.length) { if (box) box.innerHTML='<div style="font-size:11px;color:var(--text3);padding:6px">No products found</div>'; return; }
+      if (box) box.innerHTML = _tqInvResults.map(p => {
+        const price = p.price||p.mrp||0;
+        const added = (_tqState.extraProducts||[]).some(x=>x.id===p.id);
+        const inStock = (p.stock??0) > 0;
+        return `<div onclick="VW_TILES.tqAddInventoryProduct(${p.id})"
+          style="display:flex;align-items:center;gap:8px;padding:8px;border-bottom:1px solid var(--border);cursor:pointer;${added?'opacity:0.5':''}">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600">${p.name}</div>
+            <div style="font-size:10px;color:var(--text3)">₹${price}/${p.unit||'unit'} · ${inStock?`<span style="color:var(--green)">${p.stock} in stock</span>`:'<span style="color:var(--red)">out of stock</span>'}</div>
+          </div>
+          <span style="font-size:11px;color:var(--gold);font-weight:700;white-space:nowrap">${added?'✓ Added':'+ Add'}</span>
+        </div>`;
+      }).join('');
+    } catch(e) { if (box) box.innerHTML='<div style="font-size:11px;color:var(--red);padding:6px">Search failed</div>'; }
+  }, 300);
+}
+function tqAddInventoryProduct(id) {
+  const p = _tqInvResults.find(x=>x.id===id); if (!p) return;
+  if (!_tqState.extraProducts) _tqState.extraProducts = [];
+  if (_tqState.extraProducts.some(x=>x.id===id)) { showToast(p.name+' already added','info'); return; }
+  _tqState.extraProducts.push({ id:p.id, name:p.name, price:Number(p.price||p.mrp||0), unit:p.unit||'unit', stock:(p.stock==null?null:Number(p.stock)), qty:1 });
+  const added = document.getElementById('tq-inv-added'); if (added) added.innerHTML = _renderExtraProductsList();
+  const search = document.getElementById('tq-inv-search'); if (search) search.value='';
+  const box = document.getElementById('tq-inv-results'); if (box) box.innerHTML='';
+  showToast(p.name+' added to quote','success');
+}
+function tqSetExtraQty(id, qty) {
+  const p = (_tqState.extraProducts||[]).find(x=>x.id===id); if (!p) return;
+  p.qty = Math.max(1, parseInt(qty)||1);
+  const added = document.getElementById('tq-inv-added'); if (added) added.innerHTML = _renderExtraProductsList();
+}
+function tqRemoveExtra(id) {
+  _tqState.extraProducts = (_tqState.extraProducts||[]).filter(x=>x.id!==id);
+  const added = document.getElementById('tq-inv-added'); if (added) added.innerHTML = _renderExtraProductsList();
+}
+
 async function _renderStep8() {
   const st = _tqState;
   const totalSqft = _tqTotalSqft();
@@ -25320,6 +25402,8 @@ async function _renderStep8() {
     return total;
   })();
   const hasPricing = tileTotal > 0;
+  const extraProducts = _tqState.extraProducts || [];
+  const extraTotal = extraProducts.reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
 
   // ── Spacers — use the whole-quotation result computed in the Spacer step ──
   // (falls back to a slot-based recompute if that step wasn't visited). One
@@ -25523,6 +25607,22 @@ async function _renderStep8() {
       💡 Tile pricing will be set by management during approval
     </div>`}
   </div>
+  ${extraProducts.length ? `
+  <!-- ADDITIONAL PRODUCTS (from inventory) -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🛒 Additional Products</h3>
+    ${extraProducts.map(p=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${p.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.qty||1} ${p.unit||'unit'} × ₹${p.price||0}</div>
+      </div>
+      <span style="font-size:13px;font-weight:700;color:var(--gold)">₹${((p.price||0)*(p.qty||1)).toLocaleString('en-IN')}</span>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;padding-top:8px;font-size:13px;font-weight:800">
+      <span>Products Subtotal</span><span style="color:var(--gold)">₹${extraTotal.toLocaleString('en-IN')}</span>
+    </div>
+  </div>` : ''}
   <!-- AI ROOM VISUALIZER TEASER -->
   <div class="card" style="margin-bottom:10px;background:linear-gradient(135deg,rgba(96,165,250,0.08),rgba(139,92,246,0.06));border-color:rgba(96,165,250,0.3)">
     <div style="display:flex;align-items:center;gap:10px">
@@ -26912,6 +27012,7 @@ async function _tqAutoSave() {
       beading: st.beading || [], grout: st.grout || {}, addons: st.addons || {},
       floor_traps: st.floorTraps || [], soffit: st.soffit || {}, delivery: st.delivery || {},
       total_area_sqft: _tqTotalSqft(), labor_required: st.laborRequired || false,
+      extra_products: st.extraProducts || [],
       draft_step: st.step || 0, updated_at: new Date().toISOString(),
     };
     const id = st._savedQuoteId || st._draftId;
@@ -27330,6 +27431,7 @@ async function tqSubmitForApproval() {
       total_boxes: totalBoxesSub,
       total_weight_kg: totalWeightSub,
       labor_required: st.laborRequired || false,
+      extra_products: st.extraProducts || [],
       approval_status: 'pending_approval',
       approval_submitted_at: new Date().toISOString(),
       approval_submitted_by: profile?.name || '',
@@ -27904,6 +28006,7 @@ async function tqResumeDraft(id) {
     accessories: q.accessories||[], floorTraps: q.floor_traps||[], soffit: q.soffit||{enabled:false},
     delivery: q.delivery||{type:'self',distanceKm:0,floors:[],beyondFt:false,siteAddress:''},
     laborRequired: q.labor_required||null, addons: q.addons||{}, wallDesigns: q.wall_designs||{},
+    extraProducts: q.extra_products||[],
     selectedSize: q.selected_size||null, selectedProduct: q.selected_product||null,
     spacer: q.spacer||{}, adhesive: q.adhesive||{}, grout: q.grout||{},
     _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
@@ -28274,7 +28377,7 @@ window.VW_TILES = {
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom, _tqWallMode,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
-  tqToggleBead, tqSetBeadRm, tqSkipBeading, tqSkipAdhesive, tqCheckAddonStock,
+  tqToggleBead, tqSetBeadRm, tqSkipBeading, tqSkipAdhesive, tqCheckAddonStock, tqSearchInventory, tqAddInventoryProduct, tqSetExtraQty, tqRemoveExtra,
   tqSelectProduct,
   tqSetGroutType, tqSetGroutColor,
   // Floor trap + soffit
