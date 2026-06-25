@@ -26173,15 +26173,26 @@ async function _renderStep8() {
   })();
   const loadingExtra = floorCfg.loading_beyond_10ft || loadingRatePerBox;
 
-  // Calculate floor delivery cost from selected floors
+  // ── DELIVERY COST CALCULATION ─────────────────────────────────────
+  // Structure (per tile size loading rate = loadingRatePerBox):
+  //   Loading at store:      rate × boxes
+  //   Unloading (≤10ft):     rate × boxes
+  //   Beyond 10ft extra:     rate × boxes  (same as loading — harder site)
+  //   Floor carry (per floor level):  rate × floorLevel × boxes  (cumulative per floor)
+  //
+  // For 300×450 (₹12): beyond 10ft, 2nd floor = 12×(2+1+2)boxes = ₹60/box
+  // For 600×1200 (₹20): within 10ft, ground   = 20×2×boxes      = ₹40/box
+
   let floorCost = 0;
   let loadingCost = 0;
   if (st.delivery.type === 'delivery') {
-    const unloadRate = st.delivery.beyondFt ? (loadingRatePerBox + loadingExtra) : loadingRatePerBox;
-    loadingCost = (loadingRatePerBox + unloadRate) * boxesNeeded;
+    // Loading + unloading + optional beyond-10ft (all at per-tile-size rate)
+    const beyondMultiplier = st.delivery.beyondFt ? 3 : 2; // 3× = load+unload+beyond; 2× = load+unload
+    loadingCost = loadingRatePerBox * beyondMultiplier * boxesNeeded;
+    // Floor carrying: per-tile-size rate × floor_level × boxes at that floor
     for (const f of (st.delivery.floors||[])) {
-      const rate = floorRates[String(f.floor)] || 0;
-      floorCost += rate * (f.boxes || 0);
+      const floorLevel = f.floor === 'G' ? 0 : parseInt(f.floor) || 0;
+      floorCost += loadingRatePerBox * floorLevel * (f.boxes || 0);
     }
   }
 
@@ -26472,9 +26483,9 @@ async function _renderStep8() {
       <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3);border-radius:7px;margin-bottom:6px">
         <div>
           <div style="font-size:11px;font-weight:600">Loading at Store</div>
-          <div style="font-size:10px;color:var(--text3)">Mandatory · ${boxesNeeded} boxes × ₹${loadingBase}/box</div>
+          <div style="font-size:10px;color:var(--text3)">Mandatory · ${boxesNeeded} boxes × ₹${loadingRatePerBox}/box</div>
         </div>
-        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingBase).toLocaleString('en-IN')}</span>
+        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingRatePerBox).toLocaleString('en-IN')}</span>
       </div>
 
       <!-- UNLOADING at site: within or beyond 10ft -->
@@ -26482,16 +26493,16 @@ async function _renderStep8() {
       <div style="display:flex;gap:6px;margin-bottom:6px">
         <button onclick="VW_TILES.setLoadingType(false)"
           style="flex:1;padding:8px;border-radius:8px;border:${!st.delivery.beyondFt?'2px solid var(--gold)':'1px solid var(--border)'};background:${!st.delivery.beyondFt?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:11px;color:${!st.delivery.beyondFt?'var(--gold)':'var(--text)'}">
-          ✓ Within 10ft of vehicle<br><span style="font-size:10px;font-weight:400">₹${loadingBase}/box</span>
+          ✓ Within 10ft of vehicle<br><span style="font-size:10px;font-weight:400">₹${loadingRatePerBox}/box</span>
         </button>
         <button onclick="VW_TILES.setLoadingType(true)"
           style="flex:1;padding:8px;border-radius:8px;border:${st.delivery.beyondFt?'2px solid var(--gold)':'1px solid var(--border)'};background:${st.delivery.beyondFt?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:11px;color:${st.delivery.beyondFt?'var(--gold)':'var(--text)'}">
-          Beyond 10ft / Manual lift<br><span style="font-size:10px;font-weight:400">₹${loadingBase} + ₹${loadingExtra}/box</span>
+          Beyond 10ft / Manual lift<br><span style="font-size:10px;font-weight:400">₹${loadingRatePerBox}+₹${loadingRatePerBox}/box</span>
         </button>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:11px;padding:5px 8px;background:var(--bg3);border-radius:7px">
-        <span>Unloading: ${boxesNeeded} × ₹${st.delivery.beyondFt?loadingBase+loadingExtra:loadingBase}/box</span>
-        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*(st.delivery.beyondFt?loadingBase+loadingExtra:loadingBase)).toLocaleString('en-IN')}</span>
+        <span>Unloading: ${boxesNeeded} × ₹${loadingRatePerBox}/box${st.delivery.beyondFt?' + ₹'+loadingRatePerBox+'/box beyond':''}</span>
+        <span style="font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingRatePerBox*(st.delivery.beyondFt?2:1)).toLocaleString('en-IN')}</span>
       </div>
     </div>
 
@@ -26502,13 +26513,12 @@ async function _renderStep8() {
         <div style="font-size:10px;color:var(--text3)">Total: ${boxesNeeded} boxes</div>
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        Select which floor each batch goes to. Rate = boxes × floor rate from Tile Settings.
+        Rate = ₹${loadingRatePerBox}/box per floor (based on tile size). 2nd floor = ₹${loadingRatePerBox*2}/box, 3rd = ₹${loadingRatePerBox*3}/box, etc.
       </div>
       <div id="tq-floor-lines">
         ${(st.delivery.floors||[]).map((f,i)=>{
-          const floorLabel = {'1':'1st','2':'2nd','3':'3rd','4':'4th','5':'5th'}[f.floor]||f.floor;
-          const rate = floorRates[String(f.floor)]||0;
-          const lineCost = rate * (f.boxes||0);
+          const floorLevel = f.floor==='G'?0:parseInt(f.floor)||0;
+          const lineCost = loadingRatePerBox * floorLevel * (f.boxes||0);
           return `
           <div style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:6px">
             <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
@@ -26516,7 +26526,8 @@ async function _renderStep8() {
                 style="flex:1;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:5px;font-size:12px;color:var(--text)">
                 ${['1','2','3','4','5'].map((fl,idx)=>{
                   const lbl = ['1st','2nd','3rd','4th','5th'][idx];
-                  return `<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${lbl} Floor · ₹${floorRates[fl]||0}/box</option>`;
+                  const flr = loadingRatePerBox*(idx+1);
+                  return `<option value="${fl}" ${String(f.floor)===fl?'selected':''}>${lbl} Floor · ₹${flr}/box</option>`;
                 }).join('')}
               </select>
               <div style="display:flex;align-items:center;gap:4px">
@@ -26530,7 +26541,7 @@ async function _renderStep8() {
                 style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;flex-shrink:0">✕</button>
             </div>
             <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3)">
-              <span>${prod?.name||sz?.mm||'Tile'} · ${floorLabel} Floor · ₹${rate}/box</span>
+              <span>${['1st','2nd','3rd','4th','5th'][floorLevel-1]||f.floor+'th'} Floor · ₹${loadingRatePerBox*floorLevel}/box (${loadingRatePerBox}×${floorLevel} floors)</span>
               <span style="color:var(--gold);font-weight:600">₹${lineCost.toLocaleString('en-IN')}</span>
             </div>
           </div>`;
@@ -26552,7 +26563,7 @@ async function _renderStep8() {
     <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px">
       <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">Delivery Cost Summary</div>
       ${st.delivery.type==='delivery'&&(transportOverride??transportCost)>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>${autoVehicle?.icon||'🚚'} Transport${distKm<=freeKm?' (within '+freeKm+'km)':' ('+distKm+'km)'}</span><span>₹${(transportOverride??transportCost).toLocaleString('en-IN')}</span></div>`:''}
-      ${loadingCost>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Loading + Unloading (${boxesNeeded} boxes × ₹${loadingRatePerBox+loadingExtra}/box)</span><span>₹${loadingCost.toLocaleString('en-IN')}</span></div>`:''}
+      ${loadingCost>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Loading + Unloading (${boxesNeeded} boxes × ₹${loadingRatePerBox*(st.delivery?.beyondFt?3:2)}/box)</span><span>₹${loadingCost.toLocaleString('en-IN')}</span></div>`:''}
       ${floorCost>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Floor delivery</span><span>₹${floorCost.toLocaleString('en-IN')}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0;border-top:1px solid var(--gold-border);margin-top:4px"><span>Total Delivery</span><span style="color:var(--gold)">₹${((transportOverride??transportCost)+loadingCost+floorCost).toLocaleString('en-IN')}</span></div>
     </div>` : ''}
@@ -26620,7 +26631,7 @@ async function _renderStep8() {
     ${(effectiveTransport+effectiveLoading+effectiveFloor)>0?`
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚛 Transport & Delivery</div>
     ${effectiveTransport>0?row(autoVehicle?.icon+' '+(autoVehicle?.label||'Transport'),distKm<=freeKm?`Within ${freeKm}km — min charge`:`${distKm}km · ₹${minCharge} + ₹${perKm}/km beyond ${freeKm}km${transportOverride!=null?' (manual override)':''}`,effectiveTransport,false):''}
-    ${effectiveLoading>0?row('🏗 Loading + Unloading',`${boxesNeeded} boxes × ₹${loadingRatePerBox}/box load + ₹${loadingExtra}/box unload`,effectiveLoading,false):''}
+    ${effectiveLoading>0?row('🏗 Loading + Unloading',`${boxesNeeded} boxes × ₹${loadingRatePerBox}/box (load+unload${st.delivery?.beyondFt?'+beyond':''}${st.delivery?.floors?.length?' +floor carry':''})`,effectiveLoading,false):''}
     ${effectiveFloor>0?row('🏢 Floor Delivery',`${(st.delivery.floors||[]).map(f=>`${f.boxes||0} boxes to ${f.floor==='G'?'Ground':f.floor+'st/nd/rd floor'}`).join(' + ')}`,effectiveFloor,false):''}
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Delivery Subtotal</span><span style="color:var(--gold)">₹${(effectiveTransport+effectiveLoading+effectiveFloor).toLocaleString('en-IN')}</span>
@@ -29524,8 +29535,12 @@ const _QQ_ROOMS = [
 
 window._qqData = null;
 
-function openQuickQuote() {
+async function openQuickQuote() {
   window._qqData = { customer:{name:'',phone:'',site:'',_found:null}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:'',size:''}, matches:{floor:[],wall:[]}, confirmed:{}, adding:null };
+  // Pre-load tile size config so size chips show correctly in preferences screen
+  if (!_tqSizeCfg?.sizes?.length) {
+    try { _tqSizeCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] }); } catch(e) {}
+  }
   _qqScreen('customer');
 }
 
@@ -29771,6 +29786,11 @@ function _qqSave() {
   if (!r) return;
   // Sync latest typed values from DOM
   ['l','w','sqft','wl','wh','dw','dh'].forEach(f=>{ const el=document.getElementById('qq-'+f); if(el) r[f]=el.value; });
+  // Auto-fill wall length from floor dimensions for "both" surface rooms (bathroom, kitchen, etc.)
+  if ((r.surface==='both') && !parseFloat(r.wl) && parseFloat(r.l) && parseFloat(r.w)) {
+    r.wl = String(Math.round(2 * (parseFloat(r.l) + parseFloat(r.w)) * 10) / 10);
+    showToast(`Wall length auto-set to ${r.wl}ft (perimeter). Adjust if needed.`, 'info');
+  }
   if (_qqSqft(r)<=0) { showToast('Enter measurements first','warn'); return; }
   if ((r.surface==='floor'||r.surface==='both') && r.mode==='lw' && (!parseFloat(r.l)||!parseFloat(r.w))) { showToast('Enter floor length and width','warn'); return; }
   if ((r.surface==='wall'||r.surface==='both') && !parseFloat(r.wl)) { showToast('Enter total wall length','warn'); return; }
