@@ -28706,9 +28706,32 @@ async function tqAiDescribe() {
     if (box) box.innerHTML = data?.description
       ? `<div style="font-size:12px;line-height:1.55;color:var(--text2);background:var(--bg2);border:1px solid var(--gold-border);border-radius:10px;padding:12px">✨ ${data.description}</div>`
       : '<div style="font-size:11px;color:var(--text3);padding:8px">AI description unavailable right now — try again.</div>';
+    _logApiUsage('ai_visualizer_describe', { success:!!data?.description });
   } catch(e) {
+    _logApiUsage('ai_visualizer_describe', { success:false });
     if (box) box.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:8px">Could not reach AI — check connection.</div>';
   }
+}
+
+// ───── AI API USAGE LOGGER ───────────────────────────────────────
+const _API_COST = {
+  ai_visualizer_describe: 0.001,
+  ai_visualizer_render:   0.020,
+  grn_scan:               0.015,
+  catalog_ocr:            0.010,
+};
+async function _logApiUsage(type, opts) {
+  try {
+    const success = opts?.success !== false;
+    const meta = opts?.meta || {};
+    const model = opts?.model || 'claude-sonnet-4-6';
+    const profile = VW_AUTH.getCurrentProfile();
+    await VW_DB.client.from('api_usage_log').insert({
+      call_type: type, called_by: profile?.name||'',
+      called_by_id: profile?.id||null,
+      cost_usd: _API_COST[type]||0, model, success, meta,
+    });
+  } catch(e) {} // silent — never break the actual feature
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -32486,7 +32509,9 @@ async function processGRNPhoto(input) {
     // Store parsed data and show review
     window._grnOCRData = { ...data, photoB64: b64 };
     showGRNReview(data, b64);
+    _logApiUsage('grn_scan', { success:true, meta:{ items:data.items?.length||0 } });
   } catch(e) {
+    _logApiUsage('grn_scan', { success:false });
     if (area) area.innerHTML = `
       <div style="text-align:center">
         <div style="font-size:32px">❌</div>
@@ -35658,7 +35683,7 @@ If you cannot determine a field, use null. Extract every tile you can see.`;
     const { error } = await VW_DB.client.from('non_inventory_tiles').insert(rows);
     if (error) console.error('DB insert error:', error);
   }
-
+  _logApiUsage('catalog_ocr', { success:true, meta:{ tiles_extracted:tiles.length } });
   return tiles.length;
 }
 
@@ -36596,7 +36621,7 @@ async function renderDashboard() {
 
   // ⚡ PERFORMANCE: Load only what's needed, with limits
   // Use Supabase direct for date-filtered queries instead of loading ALL records
-  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes, leadsRes, feedbackRes, productsRes] = await Promise.all([
+  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes, leadsRes, feedbackRes, productsRes, apiUsageRes] = await Promise.all([
     VW_DB.client.from('customers').select('id,name,phone,visit_count,total_spend,last_visit').order('created_at', { ascending: false }).limit(500),
     VW_DB.client.from('visits').select('*').gte('date', today + 'T00:00:00').limit(100),
     VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason,escalation_log,closure_photo').gte('date', today + 'T00:00:00').limit(100),
@@ -36605,6 +36630,7 @@ async function renderDashboard() {
     VW_DB.client.from('leads').select('id,name,stage,assigned_to,assigned_to_name,created_at').limit(100),
     VW_DB.client.from('feedback').select('id,rating,visit_id,customer_id,created_at').order('created_at', { ascending: false }).limit(50),
     VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit,active').eq('active', true).limit(200),
+    VW_DB.client.from('api_usage_log').select('call_type,cost_usd,called_by,success,created_at').gte('created_at', new Date(Date.now()-30*24*60*60*1000).toISOString()).order('created_at',{ascending:false}).limit(500),
   ]);
 
   const customers = customersRes.data || [];
@@ -37027,6 +37053,18 @@ async function renderDashboard() {
   window._lastDailyReport = dailyReport;
   const canSeeDailyReport = await currentUserCanSeeDailyReport();
 
+  // ── API usage stats ──
+  const _apiAll = (apiUsageRes?.data||[]);
+  const _apiToday = _apiAll.filter(l=>l.created_at?.startsWith(today));
+  const _usdInr = 84;
+  const _uSum = logs => {
+    const b={},t={}; let c=0;
+    logs.forEach(l=>{ b[l.call_type]=(b[l.call_type]||0)+1; t[l.call_type]=(t[l.call_type]||0)+parseFloat(l.cost_usd||0); c+=parseFloat(l.cost_usd||0); });
+    return {b,t,c};
+  };
+  const _uDay=_uSum(_apiToday), _uMon=_uSum(_apiAll);
+  const _utl={ai_visualizer_describe:'✨ AI Describe',ai_visualizer_render:'🖼 AI Render',grn_scan:'📷 GRN Scan',catalog_ocr:'📋 Catalog OCR'};
+
   return `
   <!-- DASHBOARD HERO -->
   <div style="margin-bottom:14px">
@@ -37161,6 +37199,41 @@ async function renderDashboard() {
       <div class="dept-rank-bar-bg"><div class="dept-rank-bar" style="width:${Math.round(count/topDept[0][1]*100)}%"></div></div>
       <span class="dept-rank-count">${count}</span>
     </div>`).join('')}
+  </div>` : ''}
+
+  ${VW_AUTH.isAdmin() ? `<div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 class="card-title" style="margin:0">🤖 AI Usage</h3>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:var(--text3)">This month</div>
+        <div style="font-size:14px;font-weight:800;color:var(--gold)">₹${Math.round(_uMon.c*_usdInr).toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:10px;color:var(--text3)">Today</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gold)">${_apiToday.length}</div>
+        <div style="font-size:10px;color:var(--text3)">calls · ₹${Math.round(_uDay.c*_usdInr)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:10px;color:var(--text3)">Month</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gold)">${_apiAll.length}</div>
+        <div style="font-size:10px;color:var(--text3)">calls · $${_uMon.c.toFixed(2)}</div>
+      </div>
+    </div>
+    ${Object.keys(_utl).map(type => {
+      const tc=_uDay.b[type]||0, mc=_uMon.b[type]||0;
+      if(!tc&&!mc) return '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:600">${_utl[type]}</div>
+        <div style="display:flex;gap:14px">
+          <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">Today</div><div style="font-size:12px;font-weight:700">${tc}</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">Month</div><div style="font-size:12px;font-weight:700;color:var(--gold)">${mc}</div></div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${_apiAll.length===0?`<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">No AI calls yet — appears here once staff uses Visualizer, GRN scan, or Catalog OCR</div>`:''}
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">⚡ Quick Quote = ₹0 · $1 ≈ ₹${_usdInr}</div>
   </div>` : ''}
 
   <div class="card">
