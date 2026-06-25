@@ -26035,7 +26035,23 @@ function tqRemoveExtra(id) {
 }
 
 async function _renderStep8() {
-  const st = _tqState;
+  try {
+    return await _renderStep8Inner();
+  } catch(e) {
+    console.error('_renderStep8 crash:', e);
+    return `<div class="card" style="border-color:var(--red-border)">
+      <h3 class="card-title" style="color:var(--red)">⚠️ Summary could not load</h3>
+      <div style="font-size:12px;background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:10px;word-break:break-all;color:var(--text2)">${e?.message||String(e)}</div>
+      <p style="font-size:12px;color:var(--text3)">Your room data is safe. Try going back to an earlier step or submitting directly.</p>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button onclick="VW_TILES.tqBack()" class="btn-secondary" style="flex:1">← Go Back</button>
+        <button onclick="VW_TILES.tqSubmitForApproval()" class="btn-primary" style="flex:1;background:var(--gold);color:#000">📤 Submit Anyway</button>
+      </div>
+    </div>`;
+  }
+}
+
+async function _renderStep8Inner() {
   const totalSqft = _tqTotalSqft();
   const quoteNo = `TQ/${getFinancialYearLabel()}/${String(Date.now()).slice(-4)}`;
 
@@ -29610,7 +29626,7 @@ const _QQ_ROOMS = [
 window._qqData = null;
 
 async function openQuickQuote() {
-  window._qqData = { customer:{name:'',phone:'',site:'',_found:null}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:'',size:''}, matches:{floor:[],wall:[]}, confirmed:{}, adding:null };
+  window._qqData = { customer:{name:'',phone:'',site:'',_found:null}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:'',size:'',floorSize:'',wallSize:''}, matches:{floor:[],wall:[]}, confirmed:{}, adding:null };
   // Pre-load tile size config so size chips show correctly in preferences screen
   if (!_tqSizeCfg?.sizes?.length) {
     try { _tqSizeCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] }); } catch(e) {}
@@ -29889,15 +29905,35 @@ function _qqShowPrefs() {
     '600×600':'600×600 (Floor)','600×1200':'600×1200 (Floor)','800×1600':'800×1600 (Floor)',
     '1200×1800':'1200×1800 (Slab)','2400×800':'2400×800 (Slab)','3000×800':'3000×800 (Slab)',
   };
+  const floorSizeMms = ['300×300','400×400','600×600','600×1200','800×1600','2400×800','3000×800'];
+  const wallSizeMms  = ['300×300','300×450','1200×1800','800×2400'];
   const sizeChips = activeSizes.filter(mm=>sizeLabels[mm]).map(mm=>ch('size',mm,sizeLabels[mm]||mm)).join('');
+  const floorChips = activeSizes.filter(mm=>floorSizeMms.includes(mm)).map(mm=>ch('floorSize',mm,mm)).join('');
+  const wallChips  = activeSizes.filter(mm=>wallSizeMms.includes(mm)).map(mm=>ch('wallSize',mm,mm)).join('');
+
+  // Detect if rooms have both floor AND wall to show dual size pickers
+  const hasFloorRooms = _qqData.rooms.some(r=>r.surface==='floor'||r.surface==='both');
+  const hasWallRooms  = _qqData.rooms.some(r=>r.surface==='wall'||r.surface==='both');
+  const hasBoth = hasFloorRooms && hasWallRooms;
 
   _qqSheet(`
     <div style="font-size:12px;color:var(--text3);margin-bottom:14px">All optional. AI matches from what's in stock.</div>
 
+    ${hasBoth ? `
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Floor Tile Size</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${ch('floorSize','','Any')}${floorChips}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Wall Tile Size</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${ch('wallSize','','Any')}${wallChips}
+    </div>
+    ` : `
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Tile Size</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
       ${ch('size','','Any size')}${sizeChips}
     </div>
+    `}
 
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Brand</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
@@ -29976,17 +30012,24 @@ async function _qqMatchTiles() {
       if(p.brand&&(t.brand||'').toLowerCase().includes(p.brand.toLowerCase())) s+=4;
       if(p.finish&&(t.tile_finish||'').toLowerCase().includes(p.finish.toLowerCase())) s+=3;
       if(p.color&&(t.colour_family||'').toLowerCase().includes(p.color.toLowerCase())) s+=3;
-      if(p.size&&t.tile_size_mm===p.size) s+=6;
+      // Surface-specific size preference (from separate floor/wall size pickers)
+      if(surf==='floor'&&p.floorSize&&t.tile_size_mm===p.floorSize) s+=8;
+      if(surf==='wall' &&p.wallSize &&t.tile_size_mm===p.wallSize)  s+=8;
+      if(p.size&&t.tile_size_mm===p.size) s+=6; // single-size preference (non-bathroom)
       if((t.stock||0)>=10) s+=1;
       return s;
     };
-    // Get top matches per surface — pool filtered by surface type for strict separation
-    const poolFloor = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='floor'||st==='both'; });
-    const poolWall  = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='wall'||st==='both'; });
-    const top3=(surf)=>{
-      const p2 = surf==='floor' ? (poolFloor.length ? poolFloor : pool) : (poolWall.length ? poolWall : pool);
-      return [...p2].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,3);
+    // Apply floor/wall size filter to respective pools if preferences set
+    const poolFloorFiltered = p.floorSize ? poolFloor.filter(t=>t.tile_size_mm===p.floorSize) : poolFloor;
+    const poolWallFiltered  = p.wallSize  ? poolWall.filter(t=>t.tile_size_mm===p.wallSize)   : poolWall;
+    // Get top matches per surface — show 5 options for more choice
+    const topN=(surf)=>{
+      const base = surf==='floor'
+        ? ((poolFloorFiltered.length ? poolFloorFiltered : poolFloor.length ? poolFloor : pool))
+        : ((poolWallFiltered.length  ? poolWallFiltered  : poolWall.length  ? poolWall  : pool));
+      return [...base].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,5);
     };
+    const top3=(surf)=>topN(surf); // keep alias for compatibility
     _qqData.matches = { floor: hasFloor?top3('floor'):[], wall: hasWall?top3('wall'):[] };
     _qqData.confirmed = {};
 
@@ -30136,6 +30179,9 @@ async function _qqApply() {
       _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
       step:8, _draftId:null, _approvalStatus:null, breakagePct:10,
     };
+    // CRITICAL: bust the tiles page cache so the QQ summary shows immediately,
+    // not the stale "Customer" step that was cached from last time tiles page opened
+    delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
     closeSheet();
     showToast('Quick quote ready — review Summary','success');
     navigateTo('tiles');
