@@ -25199,7 +25199,69 @@ function tqSetGroutColor(c,hex) { _tqState.grout.color=c; _tqState.grout.colorHe
 async function _renderStepAddons() {
   const totalSqft = _tqTotalSqft();
   const boxesNeeded = Math.max(1, Math.ceil(totalSqft / 15));
+  const rooms = _tqState.rooms || [];
+
+  // Detect room types for smart suggestions
+  const hasBath  = rooms.some(r => ['Bathroom','Toilet','Wash Area','Master Bedroom'].some(t => r.type?.includes(t.split(' ')[0])));
+  const hasShower = rooms.some(r => r.type?.includes('Bathroom') || r.type?.includes('Wash'));
+  const hasKitchen = rooms.some(r => r.type?.includes('Kitchen'));
+
+  // Fetch suggested products from inventory (live stock only)
+  let bathSuggestions = [], kitchenSuggestions = [];
+  if (hasBath || hasShower) {
+    const { data } = await VW_DB.client.from('products')
+      .select('id,name,brand,subcategory,price,unit,stock')
+      .eq('is_active', true).gt('stock', 0)
+      .in('subcategory', ['Divertor','Concealed Cistern','Flush Tank','Shower','Floor Trap','Faucets','Valves'])
+      .order('subcategory').limit(12);
+    bathSuggestions = data || [];
+  }
+  if (hasKitchen) {
+    const { data } = await VW_DB.client.from('products')
+      .select('id,name,brand,subcategory,price,unit,stock')
+      .eq('is_active', true).gt('stock', 0)
+      .in('subcategory', ['Mixers','Faucets','Valves'])
+      .limit(6);
+    kitchenSuggestions = data || [];
+  }
+
+  const suggCard = (p) => {
+    const added = (_tqState.extraProducts||[]).some(x=>x.id===p.id);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:10px;margin-bottom:6px;border:${added?'1.5px solid var(--green)':'1px solid var(--border)'};background:${added?'rgba(34,197,94,0.06)':'var(--bg2)'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:${added?'var(--green)':'var(--text)'}">${p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${p.brand||''} · ₹${Number(p.price).toLocaleString('en-IN')}/${p.unit||'pc'} · ${p.stock} in stock</div>
+      </div>
+      <button onclick="VW_TILES.tqAddInventoryProduct(${p.id})"
+        style="padding:5px 12px;border-radius:8px;font-size:11px;font-weight:700;border:none;cursor:pointer;flex-shrink:0;
+          background:${added?'rgba(34,197,94,0.15)':'var(--gold)'};color:${added?'var(--green)':'#000'}">
+        ${added?'✓ Added':'+ Add'}
+      </button>
+    </div>`;
+  };
+
+  const bathCard = (hasBath || hasShower) && bathSuggestions.length ? `
+  <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.4)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <h3 class="card-title" style="margin:0">🚿 Bathroom work detected</h3>
+      <span style="font-size:10px;color:var(--text3)">Before tiling</span>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">These need to be installed <strong>before</strong> tiles go up. Add to this quote now?</p>
+    ${bathSuggestions.map(suggCard).join('')}
+  </div>` : '';
+
+  const kitCard = hasKitchen && kitchenSuggestions.length ? `
+  <div class="card" style="margin-bottom:10px;border-color:rgba(251,191,36,0.4)">
+    <h3 class="card-title">🍳 Kitchen work detected</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">Fittings that should be placed before kitchen wall tiles are laid:</p>
+    ${kitchenSuggestions.map(suggCard).join('')}
+  </div>` : '';
+
   return `
+  <!-- SMART CONTEXT SUGGESTIONS (room-type driven) -->
+  ${bathCard}
+  ${kitCard}
+
   <!-- ADD PRODUCTS FROM INVENTORY -->
   <div class="card" style="margin-bottom:10px;border-color:var(--gold-border)">
     <h3 class="card-title">🛒 Add Products from Inventory</h3>
