@@ -12912,6 +12912,7 @@ async function renderTileSettings() {
     thickness_mm: weightMap[s.mm]?.thickness_mm || '',
     spacer_required: weightMap[s.mm]?.spacer_required !== false,
     spacers_per_tile: weightMap[s.mm]?.spacers_per_tile || '',
+    loading_per_box: weightMap[s.mm]?.loading_per_box ?? 20,
     active: weightMap[s.mm]?.active !== false,
   }));
 
@@ -12943,6 +12944,7 @@ async function renderTileSettings() {
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Tiles/Box</th>
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Thick mm</th>
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Wt/Box kg</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--gold);font-weight:700;white-space:nowrap">₹/box Load</th>
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Spacer ✓</th>
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600;white-space:nowrap">Spacers/Tile</th>
             <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Active ✓</th>
@@ -12974,6 +12976,11 @@ async function renderTileSettings() {
               <input type="number" id="ts-wt-${i}" value="${s.weight||''}" placeholder="—"
                 style="width:50px;text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:3px;font-size:12px;color:var(--text)" min="1" max="150" step="0.5"
                 onchange="VW_SETTINGS.saveTileWeightTable()">
+            </td>
+            <td style="text-align:center;padding:4px 2px">
+              <input type="number" id="ts-load-${i}" value="${s.loading_per_box??20}" placeholder="20"
+                style="width:50px;text-align:center;background:var(--bg2);border:1.5px solid var(--gold-border);border-radius:6px;padding:3px;font-size:12px;font-weight:700;color:var(--gold)" min="0" step="1"
+                onchange="VW_SETTINGS.saveTileWeightTable()" title="Loading + unloading charge per box for this tile size">
             </td>
             <td style="text-align:center;padding:4px 2px">
               <input type="checkbox" id="ts-spc-${i}" ${s.spacer_required?'checked':''}
@@ -13171,6 +13178,7 @@ async function saveTileWeightTable() {
       tiles_per_box: parseFloat(document.getElementById(`ts-tpb-${i}`)?.value||0)||null,
       thickness_mm: parseFloat(document.getElementById(`ts-thick-${i}`)?.value||0)||null,
       weight_per_box: parseFloat(document.getElementById(`ts-wt-${i}`)?.value||0)||null,
+      loading_per_box: parseFloat(document.getElementById(`ts-load-${i}`)?.value||20)||20,
       spacer_required: document.getElementById(`ts-spc-${i}`)?.checked !== false,
       spacers_per_tile: parseInt(document.getElementById(`ts-spt-${i}`)?.value||0)||null,
       active: document.getElementById(`ts-act-${i}`)?.checked !== false,
@@ -25636,27 +25644,53 @@ async function _renderStep8() {
   if (!st.delivery) st.delivery = { type:'self', dropPin:null, distanceKm:0, floors:[], beyondFt:false };
 
   const floorRates = floorCfg.floor_rates_per_box || {};
-  const loadingBase = floorCfg.loading_within_10ft || 5;
-  const loadingExtra = floorCfg.loading_beyond_10ft || 8;
+  // Loading rate: use per-tile-size loading_per_box from settings; fall back to flat floor_delivery rate
+  const _loadingRateForSlot = (slotId) => {
+    const sel = st.tileSelections?.[slotId];
+    const cfgE = sel?.size?.mm ? (weightCfg.sizes||[]).find(s=>s.mm===sel.size.mm) : null;
+    return cfgE?.loading_per_box ?? floorCfg.loading_within_10ft ?? 20;
+  };
+  // Compute total loading based on per-size rate × boxes for that slot
+  const loadingRatePerBox = (() => {
+    if (!boxesNeeded) return floorCfg.loading_within_10ft || 20;
+    let weightedTotal = 0;
+    _getTileSlots().forEach(slot => {
+      const dsBoxes = st.design?.[slot.id]?.result?.totalBoxes || 0;
+      const bom = roomBOMs.find(b=>b.slot?.id===slot.id);
+      const slotBoxes = dsBoxes || bom?.boxes || 0;
+      weightedTotal += _loadingRateForSlot(slot.id) * slotBoxes;
+    });
+    return boxesNeeded > 0 ? Math.round(weightedTotal / boxesNeeded) : (floorCfg.loading_within_10ft || 20);
+  })();
+  const loadingExtra = floorCfg.loading_beyond_10ft || loadingRatePerBox;
 
   // Calculate floor delivery cost from selected floors
   let floorCost = 0;
   let loadingCost = 0;
   if (st.delivery.type === 'delivery') {
-    // Loading at store (mandatory) + unloading at site (within or beyond 10ft)
-    const unloadRate = st.delivery.beyondFt ? (loadingBase + loadingExtra) : loadingBase;
-    loadingCost = (loadingBase + unloadRate) * boxesNeeded;
+    const unloadRate = st.delivery.beyondFt ? (loadingRatePerBox + loadingExtra) : loadingRatePerBox;
+    loadingCost = (loadingRatePerBox + unloadRate) * boxesNeeded;
     for (const f of (st.delivery.floors||[])) {
       const rate = floorRates[String(f.floor)] || 0;
       floorCost += rate * (f.boxes || 0);
     }
   }
 
-  // Distance-based transport
+  // Distance-based transport — new formula: min_charge for first free_km, then +per_km beyond
+  const freeKm = vehicleCfg.free_km ?? autoVehicle?.free_km ?? 5;
   const perKm = autoVehicle?.per_km || 22;
-  const baseFare = autoVehicle?.base_fare || 0;
+  const minCharge = autoVehicle?.min_charge ?? autoVehicle?.base_fare ?? 0;
   const distKm = st.delivery.distanceKm || 0;
-  const transportCost = distKm > 0 ? Math.round(baseFare + perKm * distKm) : 0;
+  const transportCost = st.delivery.type === 'delivery' && distKm > 0
+    ? Math.max(minCharge, minCharge + Math.round(perKm * Math.max(0, distKm - freeKm)))
+    : 0;
+  // Allow staff to override transport amount manually
+  const transportOverride = st.delivery.transportOverride ?? null;
+
+  // Cache computed costs in state for submission payload
+  st.delivery._transportCost = st.delivery.type==='delivery' ? (transportOverride??transportCost) : 0;
+  st.delivery._loadingCost   = loadingCost;
+  st.delivery._floorCost     = floorCost;
 
   return `
   <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:14px;padding:16px;margin-bottom:14px">
@@ -25905,9 +25939,19 @@ async function _renderStep8() {
           oninput="_tqState.delivery.distanceKm=parseFloat(this.value)||0;VW_TILES._rerenderStep8()">
       </div>
       ${distKm>0?`
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px">
-        <span>${autoVehicle?.icon||'🚚'} ${autoVehicle?.label||'—'} · ${distKm} km · ₹${perKm}/km + ₹${baseFare} base</span>
-        <span style="font-weight:700;color:var(--gold)">₹${transportCost.toLocaleString('en-IN')}</span>
+      <div style="font-size:12px;padding:6px 0;border-top:1px solid var(--border);margin-top:6px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span>${autoVehicle?.icon||'🚚'} ${autoVehicle?.label||'—'}</span>
+          <span style="font-weight:700;color:var(--gold)">₹${(transportOverride??transportCost).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3)">${distKm<=freeKm?`Within ${freeKm}km free — min charge applies`:`${distKm}km · ₹${minCharge} min + ₹${perKm}/km × ${Math.max(0,distKm-freeKm).toFixed(1)}km beyond ${freeKm}km`}</div>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <span style="font-size:11px;color:var(--text3);flex-shrink:0">Override ₹:</span>
+          <input type="number" value="${transportOverride??''}" placeholder="Auto (${transportCost})" min="0" step="10" inputmode="numeric"
+            oninput="_tqState.delivery.transportOverride=this.value?parseFloat(this.value):null;VW_TILES._rerenderStep8()"
+            style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:12px;color:var(--text)">
+          ${transportOverride!=null?`<button onclick="_tqState.delivery.transportOverride=null;VW_TILES._rerenderStep8()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px">Reset</button>`:''}
+        </div>
       </div>`:''}
     </div>
 
@@ -25998,22 +26042,102 @@ async function _renderStep8() {
     ${(transportCost+loadingCost+floorCost)>0?`
     <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px">
       <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">Delivery Cost Summary</div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Transport (${distKm}km)</span><span>₹${transportCost.toLocaleString('en-IN')}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Loading (${boxesNeeded} boxes)</span><span>₹${loadingCost.toLocaleString('en-IN')}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Floor delivery</span><span>₹${floorCost.toLocaleString('en-IN')}</span></div>
-      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0;border-top:1px solid var(--gold-border);margin-top:4px"><span>Total Delivery</span><span style="color:var(--gold)">₹${(transportCost+loadingCost+floorCost).toLocaleString('en-IN')}</span></div>
+      ${st.delivery.type==='delivery'&&(transportOverride??transportCost)>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>${autoVehicle?.icon||'🚚'} Transport${distKm<=freeKm?' (within '+freeKm+'km)':' ('+distKm+'km)'}</span><span>₹${(transportOverride??transportCost).toLocaleString('en-IN')}</span></div>`:''}
+      ${loadingCost>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Loading + Unloading (${boxesNeeded} boxes × ₹${loadingRatePerBox+loadingExtra}/box)</span><span>₹${loadingCost.toLocaleString('en-IN')}</span></div>`:''}
+      ${floorCost>0?`<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>Floor delivery</span><span>₹${floorCost.toLocaleString('en-IN')}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;padding:6px 0;border-top:1px solid var(--gold-border);margin-top:4px"><span>Total Delivery</span><span style="color:var(--gold)">₹${((transportOverride??transportCost)+loadingCost+floorCost).toLocaleString('en-IN')}</span></div>
     </div>` : ''}
     ` : `
     <!-- SELF PICKUP: Loading only -->
     <div style="background:var(--bg2);border-radius:10px;padding:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:6px">🏗 Loading at Store</div>
       <div style="display:flex;justify-content:space-between;padding:4px 0">
-        <span style="font-size:12px;color:var(--text2)">${boxesNeeded} boxes × ₹${loadingBase}/box</span>
-        <span style="font-size:13px;font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingBase).toLocaleString('en-IN')}</span>
+        <span style="font-size:12px;color:var(--text2)">${boxesNeeded} boxes × ₹${loadingRatePerBox}/box</span>
+        <span style="font-size:13px;font-weight:700;color:var(--gold)">₹${(boxesNeeded*loadingRatePerBox).toLocaleString('en-IN')}</span>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">Rate from Tile Settings · Packing is free</div>
     </div>`}
   </div>
+
+  <!-- GRAND TOTAL — Complete line-item breakdown -->
+  ${(() => {
+    const effectiveTransport = st.delivery.type==='delivery' ? (transportOverride??transportCost) : 0;
+    const effectiveLoading = st.delivery.type==='delivery' ? loadingCost : (boxesNeeded*loadingRatePerBox);
+    const effectiveFloor = floorCost;
+    const extraTotal = (st.extraProducts||[]).reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
+    const grandTotal = tileTotal + extraTotal + effectiveTransport + effectiveLoading + effectiveFloor;
+    if (!grandTotal) return '';
+
+    // Per-room tile lines
+    const tileLines = roomBOMs.filter(b=>b.sz&&b.boxes>0).map(b => {
+      const qp = (st.quotedPrices||{})[b.slot?.id||b.room.id] || {};
+      const lineAmt = qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft * b.roomSqft) : (qp.pricePerBox>0 ? qp.pricePerBox*b.boxes : 0);
+      const tileName = (() => {
+        const ds = b.designTiles;
+        if (ds?.length>1) return ds.map(t=>t.name||'').join(' + ');
+        const sel = st.tileSelections?.[b.slot?.id||b.room.id];
+        return sel?.tile_name || b.sz.mm+'mm tile';
+      })();
+      return { label:`${b.slot?.label||b.room.label||b.room.type}`, sub:`${tileName} · ${b.sz.mm}mm · ${b.boxes} boxes`, amt:lineAmt };
+    });
+
+    const row = (lbl,sub,amt,gold)=>`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:${gold?'var(--gold)':'var(--text)'}">${lbl}</div>
+        ${sub?`<div style="font-size:10px;color:var(--text3);margin-top:1px">${sub}</div>`:''}
+      </div>
+      <div style="font-size:13px;font-weight:700;color:${gold?'var(--gold)':'var(--text)'};flex-shrink:0;margin-left:10px">${amt>0?'₹'+amt.toLocaleString('en-IN'):'—'}</div>
+    </div>`;
+
+    return `
+  <div class="card" style="margin-bottom:14px;border-color:var(--gold-border)">
+    <h3 class="card-title" style="color:var(--gold)">💰 Grand Total — Complete Breakdown</h3>
+
+    ${tileTotal>0?`
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">📦 Tiles</div>
+    ${tileLines.map(l=>row(l.label,l.sub,l.amt,false)).join('')}
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
+      <span style="color:var(--text2)">Tiles Subtotal</span><span style="color:var(--gold)">₹${tileTotal.toLocaleString('en-IN')}</span>
+    </div>`:''}
+
+    ${extraTotal>0?`
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🛒 Add-on Products</div>
+    ${(st.extraProducts||[]).map(p=>row(p.name,`${p.qty||1} ${p.unit||'pcs'} × ₹${(p.price||0).toLocaleString('en-IN')}`,Math.round((p.price||0)*(p.qty||1)),false)).join('')}
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
+      <span style="color:var(--text2)">Add-ons Subtotal</span><span style="color:var(--gold)">₹${extraTotal.toLocaleString('en-IN')}</span>
+    </div>`:''}
+
+    ${(effectiveTransport+effectiveLoading+effectiveFloor)>0?`
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚛 Transport & Delivery</div>
+    ${effectiveTransport>0?row(autoVehicle?.icon+' '+(autoVehicle?.label||'Transport'),distKm<=freeKm?`Within ${freeKm}km — min charge`:`${distKm}km · ₹${minCharge} + ₹${perKm}/km beyond ${freeKm}km${transportOverride!=null?' (manual override)':''}`,effectiveTransport,false):''}
+    ${effectiveLoading>0?row('🏗 Loading + Unloading',`${boxesNeeded} boxes × ₹${loadingRatePerBox}/box load + ₹${loadingExtra}/box unload`,effectiveLoading,false):''}
+    ${effectiveFloor>0?row('🏢 Floor Delivery',`${(st.delivery.floors||[]).map(f=>`${f.boxes||0} boxes to ${f.floor==='G'?'Ground':f.floor+'st/nd/rd floor'}`).join(' + ')}`,effectiveFloor,false):''}
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
+      <span style="color:var(--text2)">Delivery Subtotal</span><span style="color:var(--gold)">₹${(effectiveTransport+effectiveLoading+effectiveFloor).toLocaleString('en-IN')}</span>
+    </div>`:''}
+
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(245,200,66,0.1);border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--gold)">GRAND TOTAL</div>
+        <div style="font-size:10px;color:var(--text3)">GST inclusive · All charges</div>
+      </div>
+      <div style="font-size:22px;font-weight:800;color:var(--gold)">₹${grandTotal.toLocaleString('en-IN')}</div>
+    </div>
+  </div>`;
+  })()}
+
+  <!-- PLUMBING REMINDER — if bathroom rooms detected but no bathroom products added -->
+  ${(() => {
+    const hasBath = (st.rooms||[]).some(r=>['Bathroom','Toilet','Wash','Bath'].some(k=>r.type?.includes(k)));
+    const hasBathProduct = (st.extraProducts||[]).some(p=>['Divertor','Cistern','Shower','Faucet','Flush'].some(k=>p.name?.includes(k)));
+    return hasBath && !hasBathProduct ? `
+  <div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.3);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:#60A5FA;margin-bottom:4px">🚿 Bathroom plumbing reminder</div>
+    <div style="font-size:11px;color:var(--text2)">Bathroom rooms in this quote — have you checked divertor, concealed cistern, shower fittings? These must be installed before tiles go up.</div>
+    <button onclick="VW_TILES.tqBack()" style="margin-top:8px;padding:5px 14px;background:rgba(96,165,250,0.15);border:1px solid rgba(96,165,250,0.4);border-radius:8px;color:#60A5FA;font-size:11px;font-weight:700;cursor:pointer">← Go to Add-ons (Step 7)</button>
+  </div>` : '';
+  })()}
 
 
   <!-- T&C -->
@@ -27624,7 +27748,12 @@ async function tqSubmitForApproval() {
       addons: st.addons || {},
       floor_traps: st.floorTraps || [],
       soffit: st.soffit || {},
-      delivery: st.delivery || {},
+      delivery: {
+        ...(st.delivery||{}),
+        transportCost: st.delivery?._transportCost || 0,
+        loadingCost:   st.delivery?._loadingCost   || 0,
+        floorCost:     st.delivery?._floorCost      || 0,
+      },
       total_area_sqft: _tqTotalSqft(),
       total_boxes: totalBoxesSub,
       total_weight_kg: totalWeightSub,
@@ -28257,8 +28386,34 @@ async function openTileQuote(id) {
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Total Area</span><span style="font-weight:700">${totalSqft.toFixed(1)} sqft</span></div>
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Tile Size</span><span>${q.selected_size?.label||'—'}</span></div>
       ${pricePerSqft>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Price</span><span style="font-weight:700;color:var(--gold)">₹${pricePerSqft}/sqft${pricePerBox?` · ₹${pricePerBox}/box`:''}</span></div>`:''}
-      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Est. Total</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
+      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text3)">Tile Subtotal</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
       ${q.price_edit_note?`<div style="font-size:11px;color:var(--gold);padding:4px 0">Note: ${q.price_edit_note}</div>`:''}
+      ${(() => {
+        const extras = q.extra_products || [];
+        if (!extras.length) return '';
+        const extTotal = extras.reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🛒 Add-ons</div>
+          ${extras.map(p=>`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px"><span style="color:var(--text2)">${p.name} ×${p.qty||1}</span><span>₹${Math.round((p.price||0)*(p.qty||1)).toLocaleString('en-IN')}</span></div>`).join('')}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Add-ons</span><span style="color:var(--gold)">₹${extTotal.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${(() => {
+        const del = q.delivery || {};
+        const sT = del.transportCost||del.transport_cost||0;
+        const sL = del.loadingCost||del.loading_cost||0;
+        const sF = del.floorCost||del.floor_cost||0;
+        const dT = sT+sL+sF;
+        if (!dT) return '';
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🚛 Delivery</div>
+          ${sT?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Transport</span><span>₹${sT.toLocaleString('en-IN')}</span></div>`:''}
+          ${sL?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Loading + Unloading</span><span>₹${sL.toLocaleString('en-IN')}</span></div>`:''}
+          ${sF?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Floor Delivery</span><span>₹${sF.toLocaleString('en-IN')}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Delivery</span><span style="color:var(--gold)">₹${dT.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${q.grand_total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:800;background:rgba(245,200,66,0.08);margin:-2px -6px;padding:8px 6px;border-radius:7px;margin-top:4px"><span style="color:var(--gold)">GRAND TOTAL</span><span style="color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span></div>`:''}
       ${q.rejection_reason?`<div style="color:var(--red);padding:4px 0">Rejected: ${q.rejection_reason}</div>`:''}
       ${q.advance_amount>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Advance</span><span style="font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} · ${q.advance_receipt_no}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Submitted by</span><span>${q.created_by||'—'}</span></div>
