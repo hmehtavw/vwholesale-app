@@ -13647,7 +13647,7 @@ window.VW_SETTINGS = {
   addCategory, removeCategory,
   addPackingRule, removePackingRule, updatePackingRule, savePackingRules,
   addLoadingRule, removeLoadingRule, updateLoadingRule, saveLoadingConfig,
-  saveTransportConfig, saveEscalationConfig, saveTileWeights, saveFloorConfig,
+  saveTransportConfig, saveEscalationConfig, saveTileWeights,
   addEscalation, removeEscalation, updateEscalation, saveEscalation,
   approvePendingProduct, rejectPendingProduct,
   confirmDangerAction,
@@ -17855,8 +17855,7 @@ window.VW_FEATURES = {
   // Catalogs
   renderCatalogsPage, showUploadCatalog, uploadCatalogFile, shareCatalog,
   switchCatalogTab, deleteCatalog, replaceCatalog, doReplaceCatalog, uploadCatalogAsPriceList,
-  deleteCatalog, switchCatalogTab, printLivePriceList,
-  // EOD
+  printLivePriceList,
   renderEODPage, updateEODDiff, submitEOD,
   // WhatsApp
   sendPostInvoiceFeedback, checkAndSendLowStockAlerts, checkAndSendBirthdayMessages,
@@ -17870,7 +17869,7 @@ window.VW_FEATURES = {
   renderIncentivesPage, showIncentiveRules, saveIncentiveRule, switchIncentiveTab,
   switchIncentiveTab2, renderPeerReview, setReview, submitPeerReviews,
   showIncentiveSlabEditor, addSlabRow, saveSlabs,
-  switchIncentiveTab, renderPayoutCalculator, renderQualityScorecard,
+  renderPayoutCalculator, renderQualityScorecard,
   // Data tools
   exportAllData, renderDedupTool, mergeCustomers, deleteCustomer
 };
@@ -21362,6 +21361,14 @@ async function renderKioskMode() {
   const presentCount = Object.values(todayAtt).filter(a => a.punchIn && !a.punchOut).length;
   const now = new Date();
 
+  // Start clock BEFORE returning — 100ms delay lets the HTML land in the DOM first
+  setTimeout(() => {
+    setInterval(() => {
+      const el = document.getElementById('kiosk-clock');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    }, 1000);
+  }, 100);
+
   return `
   <style>
     body { overflow: hidden; }
@@ -21411,14 +21418,6 @@ async function renderKioskMode() {
       }).join('')}
     </div>
   </div>`;
-
-  // Start kiosk clock
-  setTimeout(() => {
-    setInterval(() => {
-      const el = document.getElementById('kiosk-clock');
-      if (el) el.textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    }, 1000);
-  }, 100);
 }
 
 async function openKioskPunch(staffId, staffName, currentStatus) {
@@ -26144,6 +26143,7 @@ function _getWallGrid(slotId) {
 
   return { sz, orient, tileWidthMm, tileHeightMm, tileWidthFt, tileHeightFt,
            wallH, wallLengthFt, wallSqft, cols: displayCols, rows: displayRows,
+           capped: (cols > displayCols || rows > displayRows),
            cells, sqftPerTile, tilesPerBox, sqftPerBox, slot };
 }
 
@@ -26195,7 +26195,7 @@ function _renderWallDesignPlanner(slot) {
   <div style="background:var(--bg2);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:var(--text2)">
     🧱 ${slot.label} · ${g.wallH}ft H × ${g.wallLengthFt.toFixed(1)}ft L ·
     Grid: ${g.rows} rows × ${g.cols} cols = ${g.rows*g.cols} tiles shown
-    ${g.rows*g.cols < g.rows*g.cols ? ' (capped for display)' : ''}
+    ${g.capped ? ' (capped for display)' : ''}
   </div>
 
   <!-- Paint palette — select active design -->
@@ -37471,7 +37471,7 @@ const PHRASE_I18N = {
   'Filter':{te:'ఫిల్టర్',hi:'फ़िल्टर'},'View':{te:'చూడు',hi:'देखें'},'Details':{te:'వివరాలు',hi:'विवरण'},
   'Profile':{te:'ప్రొఫైల్',hi:'प्रोफ़ाइल'},'Logout':{te:'లాగౌట్',hi:'लॉगआउट'},'Language':{te:'భాష',hi:'भाषा'},
   'Approve & Update Stock':{te:'ఆమోదించి స్టాక్ అప్‌డేట్',hi:'मंजूर करें और स्टॉक अपडेट करें'},
-  'Sub-Category':{te:'ఉప-వర్గం',hi:'उप-श्रेणी'},'Warranty':{te:'వారంటీ',hi:'वारंटी'},
+  'Warranty':{te:'వారంటీ',hi:'वारंटी'},
   // CRM
   'Add Lead':{te:'లీడ్ జోడించు',hi:'लीड जोड़ें'},'Leads':{te:'లీడ్‌లు',hi:'लीड'},'Follow-up':{te:'ఫాలో-అప్',hi:'फॉलो-अप'},
   'Follow-ups':{te:'ఫాలో-అప్‌లు',hi:'फॉलो-अप'},'New Customer':{te:'కొత్త కస్టమర్',hi:'नया ग्राहक'},'Visit':{te:'సందర్శన',hi:'विज़िट'},
