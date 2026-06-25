@@ -28060,7 +28060,10 @@ async function renderTileQuotesList() {
   return `
   <div class="module-header">
     <h2>🏠 Tile Quotations</h2>
-    <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('tiles')">+ New Quote</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" style="background:rgba(245,200,66,0.15);border:1px solid var(--gold-border);color:var(--gold)" onclick="VW_TILES.openQuickQuote()">⚡ Quick</button>
+      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('tiles')">+ New</button>
+    </div>
   </div>
 
   <!-- MY ACTION REQUIRED — quotes at my level right now -->
@@ -28708,6 +28711,433 @@ async function tqAiDescribe() {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// ⚡ QUICK QUOTE — fast tap-based room entry + smart tile matching
+// Staff: tap room → pick mode → enter 2 numbers → preference chips
+// → AI picks from live inventory → confirm → Summary in 60–90 sec
+// ═══════════════════════════════════════════════════════════════════
+
+const _QQ_ROOMS = [
+  { type:'Living Room',     icon:'🛋', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Drawing Hall',    icon:'🏛', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Dining Room',     icon:'🍽', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Master Bedroom',  icon:'🛏', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Bedroom',         icon:'🛏', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Kids Room',       icon:'🧒', def:'floor', mode:'lw',   skirting:true  },
+  { type:'Kitchen',         icon:'🍳', def:'both',  mode:'bath', skirting:false },
+  { type:'Bathroom',        icon:'🚿', def:'both',  mode:'bath', skirting:false },
+  { type:'Toilet',          icon:'🚽', def:'both',  mode:'bath', skirting:false },
+  { type:'Wash Area',       icon:'🫧', def:'both',  mode:'bath', skirting:false },
+  { type:'Balcony',         icon:'🌿', def:'floor', mode:'lw',   skirting:false },
+  { type:'Corridor / Passage',icon:'🚶',def:'floor',mode:'lw',  skirting:false },
+  { type:'Pooja Room',      icon:'🙏', def:'both',  mode:'bath', skirting:false },
+  { type:'Parking',         icon:'🚗', def:'floor', mode:'lw',   skirting:false },
+  { type:'Staircase',       icon:'🏗', def:'floor', mode:'lw',   skirting:false },
+  { type:'Elevation',       icon:'🏠', def:'wall',  mode:'bath', skirting:false },
+];
+
+window._qqData = null;
+
+function openQuickQuote() {
+  window._qqData = { customer:{name:'',phone:'',site:''}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:''}, matches:{floor:[],wall:[]}, confirmed:{}, adding:null };
+  _qqScreen('customer');
+}
+
+function _qqSheet(inner, title) {
+  const sh = document.getElementById('bottom-sheet');
+  sh.innerHTML = `<div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px">
+      <h3 style="margin:0;font-size:15px">⚡ ${title}</h3>
+      <button onclick="closeSheet()" style="background:none;border:none;font-size:22px;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+    <div style="max-height:76vh;overflow-y:auto;padding-right:2px">${inner}</div>`;
+  sh.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function _qqEsc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ── SCREEN: Customer ──────────────────────────────────────────────
+function _qqScreen(screen) {
+  if (screen==='customer') {
+    const d = _qqData.customer;
+    _qqSheet(`
+      <div class="form-group"><label>Customer Name *</label>
+        <input type="text" id="qq-name" value="${_qqEsc(d.name)}" placeholder="e.g. Ravi Kumar" autocomplete="name">
+      </div>
+      <div class="form-group"><label>Phone</label>
+        <input type="tel" id="qq-phone" value="${_qqEsc(d.phone)}" placeholder="10-digit mobile" inputmode="numeric">
+      </div>
+      <div class="form-group"><label>Site Address <span style="color:var(--text3);font-size:10px">(optional)</span></label>
+        <input type="text" id="qq-site" value="${_qqEsc(d.site)}" placeholder="e.g. Benz Circle, Plot 12">
+      </div>
+      <button class="btn-primary full-width" onclick="VW_TILES._qqFromCustomer()">Next → Add Rooms</button>
+    `, 'Quick Quote — Step 1: Customer');
+    setTimeout(()=>document.getElementById('qq-name')?.focus(),80);
+  }
+  else if (screen==='rooms') _qqShowRooms();
+  else if (screen==='prefs') _qqShowPrefs();
+  else if (screen==='match') _qqMatchTiles();
+}
+
+function _qqFromCustomer() {
+  const name = document.getElementById('qq-name')?.value.trim();
+  if (!name) { showToast('Enter customer name','warn'); return; }
+  _qqData.customer = { name, phone:document.getElementById('qq-phone')?.value.trim()||'', site:document.getElementById('qq-site')?.value.trim()||'' };
+  _qqScreen('rooms');
+}
+
+// ── SCREEN: Rooms ─────────────────────────────────────────────────
+function _qqShowRooms() {
+  const rooms = _qqData.rooms;
+  const chips = rooms.map((r,i)=>{
+    const def = _QQ_ROOMS.find(t=>t.type===r.type)||{icon:'🏠'};
+    const sq = _qqSqft(r);
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg2);border:1px solid var(--gold-border);border-radius:10px;padding:4px 8px;font-size:11px;margin:2px">
+      <span>${def.icon}</span><span style="font-weight:700">${r.type.replace(' Room','').replace(' / Passage','').replace(' Hall','')}</span>
+      <span style="color:var(--text3)">${sq.toFixed(0)} sqft</span>
+      <button onclick="VW_TILES._qqRm(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;padding:0 0 0 3px;font-size:13px">✕</button>
+    </span>`;
+  }).join('');
+
+  const addForm = _qqData.adding ? _qqAddForm() : `
+    <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Add a Room</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      ${_QQ_ROOMS.map(rt=>`<button onclick="VW_TILES._qqPick('${rt.type}')" style="display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 10px;border:1px solid var(--border);border-radius:12px;background:var(--bg2);cursor:pointer;min-width:60px;text-align:center">
+        <span style="font-size:20px">${rt.icon}</span>
+        <span style="font-size:10px;font-weight:700;color:var(--text2)">${rt.type.replace(' Room','').replace(' / Passage','').replace(' Hall','')}</span>
+      </button>`).join('')}
+    </div>`;
+
+  _qqSheet(`
+    ${rooms.length?`<div style="margin-bottom:12px">${chips}</div>`:''}
+    ${addForm}
+    ${rooms.length&&!_qqData.adding?`<button class="btn-primary full-width" onclick="VW_TILES._qqScreen('prefs')">Next → Tile Preferences (${rooms.length} room${rooms.length>1?'s':''})</button>`:''}
+  `, `Quick Quote — Step 2: Rooms (${rooms.length} added)`);
+}
+
+function _qqPick(type) {
+  const def = _QQ_ROOMS.find(t=>t.type===type)||{icon:'🏠',def:'floor',mode:'lw',skirting:false};
+  _qqData.adding = { type, surface:def.def, mode:def.mode, skirting:def.skirting, skirtingIn:3,
+    l:'', w:'', sqft:'', wl:'', wh:'7', hasDoor:true, dw:'2.5', dh:'6.5', fl:'', fw:'' };
+  _qqShowRooms();
+}
+
+function _qqAddForm() {
+  const r = _qqData.adding;
+  const def = _QQ_ROOMS.find(t=>t.type===r.type)||{icon:'🏠'};
+  const isFloor = r.surface==='floor'||r.surface==='both';
+  const isWall  = r.surface==='wall'||r.surface==='both';
+  const noDoor  = r.type==='Kitchen';
+
+  const surfBtn = (s,lbl) => `<button onclick="VW_TILES._qqSet('surface','${s}')" style="flex:1;padding:7px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:${r.surface===s?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.surface===s?'var(--gold-muted)':'var(--bg3)'};color:${r.surface===s?'var(--gold)':'var(--text2)'}">${lbl}</button>`;
+  const modeBtn = (m,lbl) => `<button onclick="VW_TILES._qqSet('mode','${m}')" style="flex:1;padding:6px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;border:${r.mode===m?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.mode===m?'var(--gold-muted)':'var(--bg3)'};color:${r.mode===m?'var(--gold)':'var(--text2)'}">${lbl}</button>`;
+  const skBtn  = (v,lbl) => `<button onclick="VW_TILES._qqSet('skirtingIn',${v})" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.skirtingIn==v?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.skirtingIn==v?'var(--gold-muted)':'var(--bg3)'};color:${r.skirtingIn==v?'var(--gold)':'var(--text)'}">${lbl}</button>`;
+
+  const liveFloor = r.mode==='lw'&&parseFloat(r.l)&&parseFloat(r.w) ? `<div style="font-size:12px;font-weight:700;color:var(--gold);margin:4px 0">${(parseFloat(r.l)*parseFloat(r.w)).toFixed(1)} sqft floor</div>` : '';
+  const liveWall  = parseFloat(r.wl)&&parseFloat(r.wh) ? `<div style="font-size:12px;font-weight:700;color:var(--gold);margin:4px 0">${Math.max(0,parseFloat(r.wl)*parseFloat(r.wh)-(r.hasDoor&&!noDoor?parseFloat(r.dw||0)*parseFloat(r.dh||0):0)).toFixed(1)} sqft wall</div>` : '';
+
+  return `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700">${def.icon} ${r.type}</div>
+      <button onclick="VW_TILES._qqCancelAdd()" style="background:none;border:none;color:var(--text3);cursor:pointer">✕</button>
+    </div>
+
+    <!-- Surface -->
+    <div style="display:flex;gap:6px;margin-bottom:12px">
+      ${surfBtn('floor','🔲 Floor only')}${surfBtn('both','Floor + Wall')}${surfBtn('wall','🧱 Wall only')}
+    </div>
+
+    ${isFloor?`
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Floor Measurement</div>
+    <div style="display:flex;gap:6px;margin-bottom:8px">${modeBtn('lw','L × W (ft)')}${modeBtn('sqft','Direct sqft')}</div>
+    ${r.mode==='lw'?`
+      <div class="form-row">
+        <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="qq-l" value="${r.l}" placeholder="e.g. 20" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('l',this.value)"></div>
+        <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="qq-w" value="${r.w}" placeholder="e.g. 15" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('w',this.value)"></div>
+      </div>${liveFloor}
+      <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+        <span style="font-size:11px;color:var(--text3)">Skirting:</span>
+        ${skBtn(3,'3"')}${skBtn(4,'4"')}${skBtn(0,'No')}
+      </div>` :
+    `<div class="form-group"><label>Floor Area (sqft)</label><input type="number" id="qq-sqft" value="${r.sqft}" placeholder="e.g. 250" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('sqft',this.value)"></div>`}
+    `:''}
+
+    ${isWall?`
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:${isFloor?'12px':0} 0 6px">Wall Measurement</div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:2"><label>Total Wall Length (ft) <span style="font-weight:400;color:var(--text3)">all 4 sides added</span></label>
+        <input type="number" id="qq-wl" value="${r.wl}" placeholder="e.g. 28" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('wl',this.value)"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Height (ft)</label>
+        <input type="number" id="qq-wh" value="${r.wh}" placeholder="7" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('wh',this.value)"></div>
+    </div>${liveWall}
+    ${!noDoor?`
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3)">Door deduction:</span>
+      <button onclick="VW_TILES._qqSetV('hasDoor',${!r.hasDoor})" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.hasDoor?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.hasDoor?'var(--gold-muted)':'var(--bg3)'}">
+        ${r.hasDoor?'✓ Yes':'No door'}</button>
+      ${r.hasDoor?`<input type="number" value="${r.dw}" placeholder="W" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dw',this.value)">
+        <span style="font-size:10px;color:var(--text3)">×</span>
+        <input type="number" value="${r.dh}" placeholder="H" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dh',this.value)"><span style="font-size:10px;color:var(--text3)">ft</span>`:''}
+    </div>`:''}`:''}
+
+    <button class="btn-primary full-width" style="margin-top:14px" onclick="VW_TILES._qqSave()">✓ Add Room</button>
+  </div>`;
+}
+
+function _qqSet(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val==='true'?true:val==='false'?false:val; _qqShowRooms(); }
+function _qqSetV(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val; }
+function _qqCancelAdd() { _qqData.adding=null; _qqShowRooms(); }
+function _qqRm(i) { _qqData.rooms.splice(i,1); _qqShowRooms(); }
+
+function _qqSqft(r) {
+  let t=0;
+  if (r.surface==='floor'||r.surface==='both') {
+    if (r.mode==='sqft') t+=parseFloat(r.sqft)||0;
+    else { const l=parseFloat(r.l)||0,w=parseFloat(r.w)||0; t+=l*w; if(r.skirtingIn>0) t+=2*(l+w)*(r.skirtingIn/12); }
+  }
+  if (r.surface==='wall'||r.surface==='both') {
+    const wl=parseFloat(r.wl)||0,wh=parseFloat(r.wh)||0;
+    const dw=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dw)||0:0;
+    const dh=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dh)||0:0;
+    t+=Math.max(0,wl*wh-dw*dh);
+  }
+  return t;
+}
+
+function _qqSave() {
+  const r = _qqData.adding;
+  if (!r) return;
+  // Sync latest typed values from DOM
+  ['l','w','sqft','wl','wh','dw','dh'].forEach(f=>{ const el=document.getElementById('qq-'+f); if(el) r[f]=el.value; });
+  if (_qqSqft(r)<=0) { showToast('Enter measurements first','warn'); return; }
+  if ((r.surface==='floor'||r.surface==='both') && r.mode==='lw' && (!parseFloat(r.l)||!parseFloat(r.w))) { showToast('Enter floor length and width','warn'); return; }
+  if ((r.surface==='wall'||r.surface==='both') && !parseFloat(r.wl)) { showToast('Enter total wall length','warn'); return; }
+  _qqData.rooms.push({..._qqData.adding});
+  _qqData.adding = null;
+  _qqShowRooms();
+}
+
+// ── SCREEN: Preferences ───────────────────────────────────────────
+function _qqShowPrefs() {
+  const p = _qqData.prefs;
+  const ch = (grp, val, lbl) => {
+    const on = p[grp]===val;
+    return `<button onclick="VW_TILES._qqPref('${grp}','${val}')" style="padding:6px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;border:${on?'2px solid var(--gold)':'1px solid var(--border)'};background:${on?'var(--gold-muted)':'var(--bg2)'};color:${on?'var(--gold)':'var(--text2)'}">${lbl}</button>`;
+  };
+  _qqSheet(`
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px">All optional. AI matches from what's in stock.</div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Brand</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${['','Kajaria','Simpolo','TISAN','Johnson','Nitco','Somany','RAK'].map((b,i)=>ch('brand',b,b||'Any brand')).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Finish</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${['','Glossy','Matt','Polished','Sugar','Rustic','Lappato','Satin'].map(f=>ch('finish',f,f||'Any')).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Colour</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${['','White','Ivory-Cream','Beige','Light Grey','Grey','Dark Grey','Charcoal-Black','Brown','Wood Look','Marble Look','Stone Look','Terracotta','Blue','Green'].map(c=>ch('color',c,c||'Any')).join('')}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Budget (₹/sqft)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px">
+      ${ch('budget','','Any')}${ch('budget','u60','Under ₹60')}${ch('budget','60_80','₹60–80')}${ch('budget','80_100','₹80–100')}${ch('budget','100p','₹100+')}
+    </div>
+    <button class="btn-primary full-width" onclick="VW_TILES._qqScreen('match')">🔍 Find Matching Tiles</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES._qqScreen('rooms')">← Back to Rooms</button>
+  `, `Quick Quote — Step 3: Tile Preferences`);
+}
+function _qqPref(g,v){ _qqData.prefs[g]=v; _qqShowPrefs(); }
+
+// ── SCREEN: Tile Match ────────────────────────────────────────────
+async function _qqMatchTiles() {
+  _qqSheet(`<div style="text-align:center;padding:40px">
+    <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;margin:0 auto 14px;animation:spin 0.8s linear infinite"></div>
+    <div style="font-size:14px;font-weight:700">Searching your inventory…</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">Matching tiles to preferences</div>
+  </div>`, 'Finding Tiles');
+  try {
+    const p = _qqData.prefs;
+    const hasFloor = _qqData.rooms.some(r=>r.surface==='floor'||r.surface==='both');
+    const hasWall  = _qqData.rooms.some(r=>r.surface==='wall'||r.surface==='both');
+
+    let q = VW_DB.client.from('products')
+      .select('id,name,brand,category,tile_size_mm,tile_finish,colour_family,price,price_per_sqft,coverage_per_box,tiles_per_box,stock,surface_type,image_url')
+      .eq('category','Tiles').eq('is_active',true).gt('stock',0);
+    if (p.brand) q = q.ilike('brand','%'+p.brand+'%');
+    if (p.finish) q = q.ilike('tile_finish','%'+p.finish+'%');
+    if (p.color)  q = q.ilike('colour_family','%'+p.color+'%');
+    const { data: tiles } = await q.limit(50);
+    const all = tiles||[];
+
+    // Budget filter
+    const inBudget = t => {
+      const v=parseFloat(t.price_per_sqft)||0; if(!p.budget||!v) return true;
+      if(p.budget==='u60') return v<60;
+      if(p.budget==='60_80') return v>=60&&v<=80;
+      if(p.budget==='80_100') return v>80&&v<=100;
+      if(p.budget==='100p') return v>100;
+      return true;
+    };
+    const pool = all.filter(inBudget).length ? all.filter(inBudget) : all;
+
+    // Score tiles per surface
+    const floorSizes=['800×800','600×1200','600×600','400×400','300×300'];
+    const wallSizes=['300×600','300×450','250×375','300×300','200×300'];
+    const score = (t, surf) => {
+      let s=0, st=t.surface_type||'both', sz=t.tile_size_mm||'';
+      if(surf==='floor'&&(st==='floor'||st==='both')) s+=8;
+      if(surf==='wall'&&(st==='wall'||st==='both')) s+=8;
+      const szArr=surf==='floor'?floorSizes:wallSizes;
+      const si=szArr.indexOf(sz); if(si>=0) s+=szArr.length-si;
+      if(p.brand&&(t.brand||'').toLowerCase().includes(p.brand.toLowerCase())) s+=4;
+      if(p.finish&&(t.tile_finish||'').toLowerCase().includes(p.finish.toLowerCase())) s+=3;
+      if(p.color&&(t.colour_family||'').toLowerCase().includes(p.color.toLowerCase())) s+=3;
+      if((t.stock||0)>=10) s+=1;
+      return s;
+    };
+    const top3=(surf)=>[...pool].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,3);
+    _qqData.matches = { floor: hasFloor?top3('floor'):[], wall: hasWall?top3('wall'):[] };
+    _qqData.confirmed = {};
+
+    if (!_qqData.matches.floor.length && !_qqData.matches.wall.length) {
+      _qqSheet(`<div style="text-align:center;padding:30px">
+        <div style="font-size:32px;margin-bottom:12px">😕</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:8px">No matching tiles in stock</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Try removing some filters — or add tiles to inventory first.</div>
+        <button class="btn-secondary full-width" onclick="VW_TILES._qqScreen('prefs')">← Change Preferences</button>
+      </div>`, 'No Matches');
+      return;
+    }
+    _qqShowMatch();
+  } catch(e) {
+    _qqSheet(`<div style="text-align:center;padding:30px"><div style="color:var(--red);font-size:13px">Error: ${_qqEsc(e.message)}</div>
+      <button class="btn-secondary full-width" style="margin-top:12px" onclick="VW_TILES._qqScreen('prefs')">← Back</button></div>`,'Error');
+  }
+}
+
+function _qqShowMatch() {
+  const c = _qqData.confirmed;
+  const card = (t, surf) => {
+    const key=surf+'_'+t.id, sel=!!c[key];
+    const pps=parseFloat(t.price_per_sqft)||0;
+    return `<div onclick="VW_TILES._qqToggle('${key}')" style="display:flex;gap:10px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:8px;border:${sel?'2px solid var(--gold)':'1px solid var(--border)'};background:${sel?'var(--gold-muted)':'var(--bg2)'}">
+      ${t.image_url?`<img src="${_qqEsc(t.image_url)}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0" onerror="this.style.display='none'">`:`<div style="width:52px;height:52px;border-radius:8px;background:var(--bg3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px">${surf==='wall'?'🧱':'🔲'}</div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700">${_qqEsc(t.name)}</div>
+        <div style="font-size:10px;color:var(--text3)">${_qqEsc(t.tile_size_mm||'')}mm · ${_qqEsc(t.tile_finish||'')} · ${_qqEsc(t.colour_family||'')}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${pps>0?`₹${pps}/sqft · `:''}${t.stock} boxes in stock</div>
+      </div>
+      <div style="align-self:center;font-size:22px;flex-shrink:0">${sel?'✅':'⬜'}</div>
+    </div>`;
+  };
+  const fl=_qqData.matches.floor, wl=_qqData.matches.wall;
+  const flSel=Object.keys(c).some(k=>k.startsWith('floor_'));
+  const wlSel=Object.keys(c).some(k=>k.startsWith('wall_'));
+  const canGo=(!fl.length||flSel)&&(!wl.length||wlSel);
+  _qqSheet(`
+    ${fl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">🔲 Floor Tiles — pick one</div>${fl.map(t=>card(t,'floor')).join('')}`:''}
+    ${wl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:${fl.length?'14px':0} 0 8px">🧱 Wall Tiles — pick one</div>${wl.map(t=>card(t,'wall')).join('')}`:''}
+    <button class="btn-secondary full-width" style="margin-top:4px;margin-bottom:8px" onclick="VW_TILES._qqScreen('prefs')">← Change Preferences</button>
+    <button class="btn-primary full-width" ${canGo?'':'disabled'} onclick="VW_TILES._qqApply()"
+      style="${!canGo?'opacity:0.5;cursor:not-allowed':''}">
+      ${canGo?'✓ Apply & View Summary':'Select one tile per surface'}
+    </button>
+  `, 'Quick Quote — Step 4: Pick Tiles');
+}
+
+function _qqToggle(key) {
+  const surf=key.split('_')[0];
+  Object.keys(_qqData.confirmed).filter(k=>k.startsWith(surf+'_')).forEach(k=>delete _qqData.confirmed[k]);
+  if (!_qqData.confirmed[key]) _qqData.confirmed[key]=true;
+  _qqShowMatch();
+}
+
+// ── Apply → Wizard Summary ────────────────────────────────────────
+async function _qqApply() {
+  const d = _qqData;
+  const WASTE = 10;
+
+  // Get confirmed tile product IDs
+  const confirmedIds = {};
+  const allTileIds = [];
+  Object.keys(d.confirmed).forEach(key=>{
+    const [surf,tid]=[key.split('_')[0], parseInt(key.split('_')[1])];
+    if(d.confirmed[key]&&tid){ confirmedIds[surf]=tid; allTileIds.push(tid); }
+  });
+  let tileProds = [];
+  if (allTileIds.length) {
+    const {data}=await VW_DB.client.from('products').select('*').in('id',[...new Set(allTileIds)]);
+    tileProds = data||[];
+  }
+
+  // Build wizard rooms from quick-quote rooms
+  const rooms = d.rooms.map((r,i) => {
+    const rid = 'qq'+i+'_'+Date.now();
+    const areas = [];
+    if (r.surface==='floor'||r.surface==='both') {
+      let base=0, l=parseFloat(r.l)||0, w=parseFloat(r.w)||0;
+      if (r.mode==='sqft') base=parseFloat(r.sqft)||0;
+      else base=l*w;
+      const sk = r.skirtingIn>0&&r.mode==='lw' ? 2*(l+w) : 0;
+      const skSqft = sk*(r.skirtingIn/12);
+      if (base>0) areas.push({ label:r.mode==='sqft'?`${base.toFixed(1)} sqft`:`${l}ft × ${w}ft`,
+        sqft:(base+skSqft)*(1+WASTE/100), base, l, w,
+        skirting:sk, skirtingHeightIn:r.skirtingIn||0, wastage:WASTE, subType:'floor' });
+    }
+    if (r.surface==='wall'||r.surface==='both') {
+      const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||0;
+      const dw=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dw)||0:0;
+      const dh=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dh)||0:0;
+      const base=Math.max(0,wl*wh-dw*dh);
+      if (base>0) areas.push({ label:`Wall ${wl}×${wh}ft`, sqft:base*(1+WASTE/100), base,
+        h:wh, l:wl, dw, dh, mode:'full', wastage:WASTE, subType:'wall', w1l:0,w2w:0,w3l:0,w4w:0 });
+    }
+    return { id:rid, type:r.type, label:r.type, areas };
+  });
+
+  // Build tile selections and quoted prices per slot
+  const tileSelections={}, quotedPrices={}, spacerSelections={};
+  const setSlot = (slotId, surf) => {
+    const tid = confirmedIds[surf]; if (!tid) return;
+    const t = tileProds.find(x=>x.id===tid); if (!t) return;
+    const sz = t.tile_size_mm||'600×600';
+    const [mmL,mmW]=sz.split('×').map(Number);
+    const sqftPerTile=(mmL/25.4)*(mmW/25.4)/144;
+    const tpb=t.tiles_per_box||(sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
+    tileSelections[slotId]={ size:{mm:sz,id:'qq',label:`${sz}mm`,ft:sqftPerTile,tilesPerBox:tpb},
+      tile_name:t.name, brand:t.brand||'', finish:t.tile_finish||'', colour:t.colour_family||'', productId:t.id };
+    if (parseFloat(t.price_per_sqft)) quotedPrices[slotId]={pricePerSqft:parseFloat(t.price_per_sqft)};
+    spacerSelections[slotId]={use:true,mm:3};
+  };
+
+  rooms.forEach(room => {
+    const qr = d.rooms[rooms.indexOf(room)];
+    if (qr.surface==='floor') setSlot(room.id+'_floor','floor');
+    else if (qr.surface==='wall') setSlot(room.id+'_wall','wall');
+    else { setSlot(room.id+'_floor','floor'); setSlot(room.id+'_wall','wall'); }
+  });
+
+  // Hand off to wizard at Summary
+  window._tqResumeData = {
+    customer:d.customer, contractor:null, rooms,
+    currentFlat:'', tileSelections, quotedPrices,
+    spacerSelections, spacerType:'plus', spacerResult:null,
+    adhesiveSelections:{}, groutSelections:{},
+    beading:[], accessories:[], floorTraps:[],
+    soffit:{enabled:false}, delivery:{type:'self',distanceKm:0,floors:[],beyondFt:false},
+    laborRequired:null, addons:{}, wallDesigns:{}, extraProducts:[],
+    design:{}, selectedSize:null, selectedProduct:null,
+    spacer:{}, adhesive:{}, grout:{},
+    _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
+    step:8, _draftId:null, _approvalStatus:null, breakagePct:10,
+  };
+  closeSheet();
+  showToast('Quick quote ready — review Summary','success');
+  navigateTo('tiles');
+}
+
 window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack, linkContractor, linkContractorById, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
@@ -28725,6 +29155,8 @@ window.VW_TILES = {
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
+  openQuickQuote, _qqScreen, _qqFromCustomer, _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm,
+  _qqPref, _qqMatchTiles, _qqShowMatch, _qqToggle, _qqApply,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
