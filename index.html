@@ -24484,12 +24484,24 @@ function _renderMeasureForm(type, areaIdx, prefill) {
         <div class="form-group" style="margin:0;flex:1"><label>Door H</label><input type="number" id="${pfx}-dh" value="${bdh}" placeholder="7" min="0" step="0.5"></div>`}
       </div>
     </div>
-    <div style="font-size:12px;font-weight:600;color:var(--text);margin-top:10px;margin-bottom:8px">Floor <span style="font-weight:400;color:var(--text3)">(optional — skip if measured elsewhere)</span></div>
-    <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" value="${bfl}" placeholder="10" min="0.5" step="0.5"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" value="${bfw}" placeholder="6" min="0.5" step="0.5"></div>
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-top:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold)">🔲 Floor Measurement</div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="${pfx}-floor-chk" ${(bfl||bfw)?'checked':'checked'}
+            onchange="const fg=document.getElementById('${pfx}-floor-grp');fg.style.display=this.checked?'block':'none'">
+          <span style="font-size:11px;color:var(--text2)">Include floor tiles</span>
+        </label>
+      </div>
+      <div id="${pfx}-floor-grp" style="display:block">
+        <div class="form-row">
+          <div class="form-group" style="margin:0;flex:1"><label>Length (ft)</label><input type="number" id="${pfx}-fl" value="${bfl}" placeholder="10" min="0.5" step="0.5"></div>
+          <div class="form-group" style="margin:0;flex:1"><label>Width (ft)</label><input type="number" id="${pfx}-fw" value="${bfw}" placeholder="6" min="0.5" step="0.5"></div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Uncheck only if floor was measured separately as another room.</div>
     </div>
-    <div style="font-size:11px;color:var(--green);margin-top:8px">✓ Wastage auto-calculated from tile size &amp; cuts at the design step — no manual % needed.</div>`;}
+    <div style="font-size:11px;color:var(--green);margin-top:4px">✓ Wastage auto-calculated from tile size &amp; cuts at the design step — no manual % needed.</div>`;}
     if (def.measureType === 'staircase') return `
     <div class="form-row">
       <div class="form-group" style="margin:0;flex:1"><label>Step Width (ft)</label><input type="number" id="${pfx}-sw" placeholder="3.5" min="0.5" step="0.5"></div>
@@ -24551,8 +24563,10 @@ function tqSaveRoom(type, editIdx) {
   } else if (def.measureType === 'bathroom') {
     const wm = document.getElementById(`${pfx}-wallmode`)?.value || 'full';
     const h = parseFloat(document.getElementById(`${pfx}-h`)?.value)||0;
-    const fl = parseFloat(document.getElementById(`${pfx}-fl`)?.value)||0;
-    const fw = parseFloat(document.getElementById(`${pfx}-fw`)?.value)||0;
+    const flChk = document.getElementById(`${pfx}-floor-chk`);
+    const includeFloor = !flChk || flChk.checked; // default true if no checkbox found
+    const fl = includeFloor ? (parseFloat(document.getElementById(`${pfx}-fl`)?.value)||0) : 0;
+    const fw = includeFloor ? (parseFloat(document.getElementById(`${pfx}-fw`)?.value)||0) : 0;
     const floor = fl&&fw ? fl*fw*(1+waste) : 0;
     let wallBase = 0, wallMeta = null, wallLabel = '';
     if (wm === 'full') {
@@ -29888,22 +29902,31 @@ async function _qqMatchTiles() {
     };
     const pool = all.filter(inBudget).length ? all.filter(inBudget) : all;
 
-    // Score tiles per surface
+    // Score tiles per surface — penalise wrong surface type heavily
     const floorSizes=['800×800','600×1200','600×600','400×400','300×300'];
     const wallSizes=['300×600','300×450','250×375','300×300','200×300'];
     const score = (t, surf) => {
       let s=0, st=t.surface_type||'both', sz=t.tile_size_mm||'';
-      if(surf==='floor'&&(st==='floor'||st==='both')) s+=8;
-      if(surf==='wall'&&(st==='wall'||st==='both')) s+=8;
+      // Surface type match — penalise wrong surface
+      if(surf==='floor') { if(st==='floor'||st==='both') s+=10; else s-=8; }
+      if(surf==='wall')  { if(st==='wall'||st==='both')  s+=10; else s-=8; }
+      // Preferred sizes for each surface
       const szArr=surf==='floor'?floorSizes:wallSizes;
-      const si=szArr.indexOf(sz); if(si>=0) s+=szArr.length-si;
+      const si=szArr.indexOf(sz); if(si>=0) s+=szArr.length-si+3;
       if(p.brand&&(t.brand||'').toLowerCase().includes(p.brand.toLowerCase())) s+=4;
       if(p.finish&&(t.tile_finish||'').toLowerCase().includes(p.finish.toLowerCase())) s+=3;
       if(p.color&&(t.colour_family||'').toLowerCase().includes(p.color.toLowerCase())) s+=3;
+      if(p.size&&t.tile_size_mm===p.size) s+=6;
       if((t.stock||0)>=10) s+=1;
       return s;
     };
-    const top3=(surf)=>[...pool].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,3);
+    // Get top matches per surface — pool filtered by surface type for strict separation
+    const poolFloor = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='floor'||st==='both'; });
+    const poolWall  = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='wall'||st==='both'; });
+    const top3=(surf)=>{
+      const p2 = surf==='floor' ? (poolFloor.length ? poolFloor : pool) : (poolWall.length ? poolWall : pool);
+      return [...p2].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,3);
+    };
     _qqData.matches = { floor: hasFloor?top3('floor'):[], wall: hasWall?top3('wall'):[] };
     _qqData.confirmed = {};
 
