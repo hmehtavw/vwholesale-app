@@ -37847,6 +37847,24 @@ async function renderStandaloneQuotationPage() {
   if (!quotes?.length) quotes = await VW_DB.all(VW_DB.STORES.quotations);
   quotes = quotes || [];
 
+  // Merge tile quotations — they live in a separate table but belong in the same history view
+  try {
+    const { data: tqs } = await VW_DB.client
+      .from('tile_quotations')
+      .select('id,tq_no,customer_name,total_area_sqft,total_boxes,approval_status,status,created_by,created_at,grand_total')
+      .order('created_at', { ascending: false }).limit(100);
+    (tqs||[]).forEach(tq => quotes.push({
+      id: tq.id, quote_no: tq.tq_no, customer_name: tq.customer_name,
+      grand_total: tq.grand_total || null,
+      status: tq.approval_status || tq.status || 'draft',
+      approval_status: tq.approval_status,
+      created_at: tq.created_at, created_by_name: tq.created_by,
+      quote_type: 'tiles', _isTQ: true,
+      total_area_sqft: tq.total_area_sqft, total_boxes: tq.total_boxes,
+    }));
+    quotes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+  } catch(e) {}
+
   const total = quotes.length;
   const todayQ = quotes.filter(q=>new Date(q.created_at||q.createdAt).toDateString()===new Date().toDateString()).length;
   const converted = quotes.filter(q=>q.status==='converted').length;
@@ -37916,9 +37934,22 @@ function _renderStandaloneQuotesList(quotes) {
     const convertedBy = q.converted_by_name || q.convertedByName || '';
     const createdAt = new Date(q.created_at||q.createdAt);
 
+    // TQ-specific status labels and colours
+    const tqStatusLabel = { draft:'📝 Draft', pending_approval:'⏳ Pending', approved:'✅ Approved',
+      rejected:'❌ Rejected', advance_collected:'💰 Advance', converted:'🧾 Invoiced' };
+    const tqStatusColor = { draft:'var(--text3)', pending_approval:'var(--gold)',
+      approved:'var(--green)', rejected:'var(--red)', advance_collected:'#378ADD', converted:'var(--green)' };
+
+    const statusDisplay = q._isTQ
+      ? (tqStatusLabel[status] || status)
+      : status;
+    const statusColor = q._isTQ
+      ? (tqStatusColor[status] || 'var(--text3)')
+      : (statusColor[status] || 'var(--text3)');
+
     return `
-    <div onclick="openStandaloneQuote(${q.id},'${quoteType}')"
-      style="background:var(--bg2);border:1px solid ${isConverted?'rgba(34,197,94,0.3)':'var(--border)'};border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer">
+    <div onclick="openStandaloneQuote(${q.id},'${quoteType}',${q._isTQ?'true':'false'})"
+      style="background:var(--bg2);border:1px solid ${isConverted?'rgba(34,197,94,0.3)':status==='pending_approval'&&q._isTQ?'rgba(245,200,66,0.25)':'var(--border)'};border-radius:14px;padding:14px;margin-bottom:8px;cursor:pointer">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -37931,11 +37962,12 @@ function _renderStandaloneQuotesList(quotes) {
             By: ${createdBy}${q.created_by_role||q.createdByRole?` (${q.created_by_role||q.createdByRole})`:''} ·
             ${createdAt.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
           </div>
+          ${q._isTQ&&q.total_area_sqft?`<div style="font-size:11px;color:var(--text3);margin-top:2px">📐 ${parseFloat(q.total_area_sqft).toFixed(1)} sqft${q.total_boxes?` · ${q.total_boxes} boxes`:''}</div>`:''}
           ${isConverted&&convertedBy?`<div style="font-size:10px;color:var(--green);margin-top:2px">Converted by: ${convertedBy}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${q.grand_total||q.grandTotal?`<div style="font-size:14px;font-weight:700;color:var(--gold)">₹${(q.grand_total||q.grandTotal).toLocaleString('en-IN')}</div>`:''}
-          <div style="font-size:11px;color:${statusColor[status]||'var(--text3)'}">● ${status}</div>
+          <div style="font-size:11px;color:${statusColor}">● ${statusDisplay}</div>
         </div>
       </div>
     </div>`;
@@ -37981,6 +38013,26 @@ async function _applyStandaloneFilter(searchVal) {
   if (!quotes?.length) quotes = await VW_DB.all(VW_DB.STORES.quotations);
   quotes = quotes || [];
 
+  // Merge tile quotations (unless user explicitly filtered to General)
+  if (type !== 'general') {
+    try {
+      const { data: tqs } = await VW_DB.client
+        .from('tile_quotations')
+        .select('id,tq_no,customer_name,total_area_sqft,total_boxes,approval_status,status,created_by,created_at,grand_total')
+        .order('created_at', { ascending: false }).limit(100);
+      (tqs||[]).forEach(tq => quotes.push({
+        id: tq.id, quote_no: tq.tq_no, customer_name: tq.customer_name,
+        grand_total: tq.grand_total || null,
+        status: tq.approval_status || tq.status || 'draft',
+        approval_status: tq.approval_status,
+        created_at: tq.created_at, created_by_name: tq.created_by,
+        quote_type: 'tiles', _isTQ: true,
+        total_area_sqft: tq.total_area_sqft, total_boxes: tq.total_boxes,
+      }));
+      quotes.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+    } catch(e) {}
+  }
+
   // Period filter
   const now = new Date(); const todayStr = now.toDateString();
   const weekAgo = new Date(now-7*24*60*60*1000);
@@ -38007,10 +38059,15 @@ async function _applyStandaloneFilter(searchVal) {
   if (el) el.innerHTML = _renderStandaloneQuotesList(quotes);
 }
 
-async function openStandaloneQuote(id, type) {
+async function openStandaloneQuote(id, type, isTQ) {
   if (type === 'tiles') {
-    showToast('Opening tile quotation...','success');
-    await navigateTo('tiles');
+    if (isTQ && id && typeof VW_TILES?.openTileQuote === 'function') {
+      // Existing tile quote — open its detail sheet
+      await VW_TILES.openTileQuote(id);
+    } else {
+      // No id (new) — open the wizard
+      navigateTo('tiles');
+    }
     return;
   }
   if (type === 'granite') {
