@@ -25462,12 +25462,14 @@ async function _renderStep8() {
     // Prefer the Design step's own box count (cut-waste + door-subtraction + breakage already
     // applied) so the Summary matches exactly what staff saw; fall back to area-based only if
     // this slot's design was never built.
-    const dsBoxes = _tqState.design?.[slot.id]?.result?.totalBoxes;
+    const dsResult = _tqState.design?.[slot.id]?.result;
+    const dsBoxes = dsResult?.totalBoxes;
+    const designTiles = (dsResult?.tiles?.length > 0) ? dsResult.tiles : null;
     const boxes = (dsBoxes != null && dsBoxes > 0)
       ? dsBoxes
       : (sqftPerBox > 0 ? Math.ceil(roomSqft / sqftPerBox) : 0);
     const wtPerBox = cfgEntry?.weight_per_box || 20;
-    return { room:r, slot, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox };
+    return { room:r, slot, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox, designTiles };
   });;
 
   const boxesNeeded = roomBOMs.reduce((s,b)=>s+b.boxes, 0);
@@ -25643,22 +25645,50 @@ async function _renderStep8() {
       const sp = st.spacerSelections[b.slot?.id||b.room.id] || {};
       const adh = st.adhesiveSelections[b.slot?.id||b.room.id] || {};
       const [mmL,mmW] = (b.sz.mm||"600×600").split("×").map(Number);
-      const spPerTile = Math.max(mmL,mmW)>=600?6:4; // 6 for large tiles, 4 for standard
+      const spPerTile = Math.max(mmL,mmW)>=600?6:4;
       const tiles = b.sqftPerTile>0?Math.ceil(b.roomSqft/b.sqftPerTile):0;
       const spPkts = sp.use ? Math.ceil(tiles*spPerTile/100) : 0;
+      // Multi-tile pattern: show each design tile as its own line
+      const isMultiTile = b.designTiles && b.designTiles.length > 1;
+      const tileRows = isMultiTile
+        ? b.designTiles.map(t => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border2)">
+            <div>
+              <div style="font-size:12px;font-weight:700">${t.name}</div>
+              <div style="font-size:10px;color:var(--text3)">${t.pcs} pcs · ${(t.pcs*t.sqftPerTile).toFixed(1)} sqft</div>
+              ${t.brand?`<div style="font-size:10px;color:var(--text3)">${t.brand}${t.finish?' · '+t.finish:''}</div>`:''}
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:16px;font-weight:800;color:var(--gold)">${t.boxes}</div>
+              <div style="font-size:9px;color:var(--text3)">boxes</div>
+              ${t.lineTotal>0?`<div style="font-size:10px;color:var(--text2);margin-top:1px">₹${t.lineTotal.toLocaleString('en-IN')}</div>`:''}
+            </div>
+          </div>`).join('')
+        : `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <div>
+              <div style="font-size:13px;font-weight:700">${b.slot?.label||b.room.label||b.room.type}</div>
+              <div style="font-size:10px;color:var(--text3)">${b.sz.mm}mm · ${b.roomSqft.toFixed(1)} sqft · ${(b.sqftPerTile||0).toFixed(3)} sqft/tile · ${b.tilesPerBox} tiles/box</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:20px;font-weight:800;color:var(--gold)">${b.boxes}</div>
+              <div style="font-size:10px;color:var(--text3)">boxes</div>
+            </div>
+          </div>`;
       return `
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      ${isMultiTile ? `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div>
           <div style="font-size:13px;font-weight:700">${b.slot?.label||b.room.label||b.room.type}</div>
-          <div style="font-size:10px;color:var(--text3)">${b.sz.mm}mm · ${b.roomSqft.toFixed(1)} sqft · ${(b.sqftPerTile||0).toFixed(3)} sqft/tile · ${b.tilesPerBox} tiles/box</div>
+          <div style="font-size:10px;color:var(--text3)">${b.sz.mm}mm · ${b.roomSqft.toFixed(1)} sqft · <span style="color:var(--gold);font-weight:700">${b.designTiles.length} tile pattern</span></div>
         </div>
         <div style="text-align:right">
-          <div style="font-size:20px;font-weight:800;color:var(--gold)">${b.boxes}</div>
-          <div style="font-size:10px;color:var(--text3)">boxes</div>
+          <div style="font-size:16px;font-weight:700;color:var(--gold)">${b.boxes} total</div>
+          <div style="font-size:9px;color:var(--text3)">boxes</div>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${tileRows}` : tileRows}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
         ${spPkts>0?`<span style="font-size:10px;background:var(--bg3);border-radius:5px;padding:3px 8px;color:var(--text2)">📦 ${spPkts} spacer pkts (${sp.mm||3}mm)</span>`:""}
         ${adh.adhBags?`<span style="font-size:10px;background:var(--bg3);border-radius:5px;padding:3px 8px;color:var(--text2)">🧲 ${adh.adhBags} adhesive bags</span>`:""}
         ${adh.cemBags?`<span style="font-size:10px;background:var(--bg3);border-radius:5px;padding:3px 8px;color:var(--text2)">🏗 ${adh.cemBags} cement + ${adh.sandBags} sand bags</span>`:""}
@@ -27101,6 +27131,7 @@ async function _tqAutoSave() {
       customer_name: st.customer.name, customer_phone: st.customer.phone || '',
       customer_id: st.customer.id || null, site_address: st.customer.site || '',
       quoted_prices: st.quotedPrices || {}, wall_designs: st.wallDesigns || {},
+      design_tiles: Object.fromEntries(Object.entries(st.design||{}).map(([k,v])=>[k,v?.result?.tiles||[]])),
       rooms: st.rooms || [], tile_selections: st.tileSelections || {},
       spacer_selections: st.spacerSelections || {}, adhesive_selections: st.adhesiveSelections || {},
       grout_selections: st.groutSelections || {}, selected_size: st.selectedSize || null,
@@ -27508,7 +27539,7 @@ async function tqSubmitForApproval() {
       contractor_commission: contractorCommission,
       quoted_prices: st.quotedPrices || {},
       wall_designs: st.wallDesigns || {},
-      rooms: st.rooms,
+      design_tiles: Object.fromEntries(Object.entries(st.design||{}).map(([k,v])=>[k,v?.result?.tiles||[]])),
       tile_selections: st.tileSelections || {},
       spacer_selections: st.spacerSelections || {},
       adhesive_selections: st.adhesiveSelections || {},
