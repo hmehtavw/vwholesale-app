@@ -38943,7 +38943,7 @@ function _renderStandaloneQuotesList(quotes) {
     const statusDisplay = q._isTQ
       ? (tqStatusLabel[status] || status)
       : status;
-    const statusColor = q._isTQ
+    const dotColor = q._isTQ
       ? (tqStatusColor[status] || 'var(--text3)')
       : (statusColor[status] || 'var(--text3)');
 
@@ -38967,7 +38967,7 @@ function _renderStandaloneQuotesList(quotes) {
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${q.grand_total||q.grandTotal?`<div style="font-size:14px;font-weight:700;color:var(--gold)">₹${(q.grand_total||q.grandTotal).toLocaleString('en-IN')}</div>`:''}
-          <div style="font-size:11px;color:${statusColor}">● ${statusDisplay}</div>
+          <div style="font-size:11px;color:${dotColor}">● ${statusDisplay}</div>
         </div>
       </div>
     </div>`;
