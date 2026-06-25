@@ -24319,14 +24319,14 @@ function _renderStep3() {
   if (!_tqState.spacerSelections) _tqState.spacerSelections = {};
   slots3.forEach(slot => {
     if (!_tqState.spacerSelections[slot.id])
-      _tqState.spacerSelections[slot.id] = { use: true, mm: 2 };
+      _tqState.spacerSelections[slot.id] = { use: true, mm: 3 };
   });
 
   let totalTiles = 0, totalSpacers = 0;
   const rows = slots3.map(slot => {
     const r = slot.room;
     const sel = _tqState.tileSelections[slot.id] || {};
-    const sp = _tqState.spacerSelections[slot.id] || { use: true, mm: 2 };
+    const sp = _tqState.spacerSelections[slot.id] || { use: true, mm: 3 };
     const sz = sel.size;
     const roomSqft = slot.sqft;
     const [mmL, mmW] = sz ? sz.mm.split('×').map(Number) : [600,600];
@@ -24391,9 +24391,9 @@ function _renderStep3() {
         <span style="font-size:11px;color:var(--text3)">Joint width:</span>
         ${[2,3,4].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
           style="padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;
-            border:${(sp.mm||2)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
-            background:${(sp.mm||2)===mm?'var(--gold-muted)':'var(--bg3)'};
-            color:${(sp.mm||2)===mm?'var(--gold)':'var(--text)'}">${mm}mm${mm===2?' ✓':mm===4?' (rare)':''}</button>`).join('')}
+            border:${(sp.mm||3)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${(sp.mm||3)===mm?'var(--gold-muted)':'var(--bg3)'};
+            color:${(sp.mm||3)===mm?'var(--gold)':'var(--text)'}">${mm}mm${mm===3?' ✓':''}</button>`).join('')}
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px;font-size:11px">
         <span style="color:var(--text3)">${tilesNeeded} tiles × ${sptile} per tile = </span>
