@@ -24315,11 +24315,18 @@ function _renderStep3() {
   const clipPkt = _tqSpacerCfg.clip_pcs_per_packet || 50;
   const packetSize = spacerType === 'clip' ? clipPkt : plusPkt;
 
+  // Auto-initialise spacer selections for every slot on first entry — 2mm cross by default
+  if (!_tqState.spacerSelections) _tqState.spacerSelections = {};
+  slots3.forEach(slot => {
+    if (!_tqState.spacerSelections[slot.id])
+      _tqState.spacerSelections[slot.id] = { use: true, mm: 2 };
+  });
+
   let totalTiles = 0, totalSpacers = 0;
   const rows = slots3.map(slot => {
     const r = slot.room;
     const sel = _tqState.tileSelections[slot.id] || {};
-    const sp = _tqState.spacerSelections[slot.id] || { use: true, mm: 3 };
+    const sp = _tqState.spacerSelections[slot.id] || { use: true, mm: 2 };
     const sz = sel.size;
     const roomSqft = slot.sqft;
     const [mmL, mmW] = sz ? sz.mm.split('×').map(Number) : [600,600];
@@ -24350,13 +24357,13 @@ function _renderStep3() {
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">Spacer Selection</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:10px">
-      Quantity per tile is taken from Tile Settings; packets are suggested across the whole quotation.
+      Auto-filled: ✚ Cross, 2mm (standard). Mestri can change type or size per area.
     </p>
 
     <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">Spacer type</div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      ${typeBtn('plus','✚ Cross / Plus', plusPkt+' pcs per packet')}
-      ${typeBtn('clip','📎 Clip + Plug', clipPkt+' pcs each · clip & plug separate')}
+      ${typeBtn('plus','✚ Cross / Plus', plusPkt+' pcs per packet · standard')}
+      ${typeBtn('clip','📎 Clip + Plug', clipPkt+' pcs each · Mestri preference')}
     </div>
 
     ${rows.map(({room, slot, use, sp, roomSqft, sz, tilesNeeded, sptile, slotSpacers}) => `
@@ -24382,11 +24389,11 @@ function _renderStep3() {
       ${use && sz ? `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3)">Joint width:</span>
-        ${[2,3,4,5].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
+        ${[2,3,4].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
           style="padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;
-            border:${(sp.mm||3)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
-            background:${(sp.mm||3)===mm?'var(--gold-muted)':'var(--bg3)'};
-            color:${(sp.mm||3)===mm?'var(--gold)':'var(--text)'}">${mm}mm</button>`).join('')}
+            border:${(sp.mm||2)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${(sp.mm||2)===mm?'var(--gold-muted)':'var(--bg3)'};
+            color:${(sp.mm||2)===mm?'var(--gold)':'var(--text)'}">${mm}mm${mm===2?' ✓':mm===4?' (rare)':''}</button>`).join('')}
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:8px;font-size:11px">
         <span style="color:var(--text3)">${tilesNeeded} tiles × ${sptile} per tile = </span>
