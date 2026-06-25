@@ -12315,6 +12315,49 @@ async function renderMyTasks() {
   const active = myTasks.filter(t => ['accepted','in_progress','quoted','negotiating'].includes(t.status) || (t.stage && !['Won','Lost'].includes(t.stage) && t.status !== 'pending'));
   const done = myTasks.filter(t => t.stage === 'Won' || t.stage === 'Lost');
 
+  // Fetch tile quotations for approval section
+  const { data: allTQs } = await VW_DB.client
+    .from('tile_quotations')
+    .select('id,tq_no,customer_name,approval_status,status,created_by,created_at,total_area_sqft,total_boxes,grand_total,approval_log,site_address')
+    .in('approval_status', ['pending_approval','approved','rejected','advance_collected','converted'])
+    .order('created_at', { ascending: false })
+    .limit(100);
+  const tqs = allTQs || [];
+
+  const LEVEL_LABELS = { tl:'TL / Sr Exec', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+  const statusMeta = {
+    pending_approval: { label:'⏳ Pending', color:'var(--gold)', bg:'rgba(245,200,66,0.1)' },
+    approved:         { label:'✅ Approved', color:'var(--green)', bg:'rgba(34,197,94,0.1)' },
+    rejected:         { label:'❌ Rejected', color:'var(--red)', bg:'rgba(239,68,68,0.1)' },
+    advance_collected:{ label:'💰 Advance', color:'#378ADD', bg:'rgba(55,138,221,0.1)' },
+    converted:        { label:'🧾 Invoiced', color:'var(--green)', bg:'rgba(34,197,94,0.08)' },
+  };
+
+  function renderTQCard(q) {
+    const sm = statusMeta[q.approval_status] || statusMeta.pending_approval;
+    const log = q.approval_log || [];
+    const lastStep = log[log.length-1];
+    const waitingAt = lastStep?.status==='pending' ? (LEVEL_LABELS[lastStep.level]||lastStep.level) : null;
+    const sqft = parseFloat(q.total_area_sqft||0).toFixed(0);
+    const dt = new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    return `
+    <div onclick="VW_TILES.openTileQuote(${q.id})" style="background:var(--bg2);border:1px solid ${sm.color}33;border-left:3px solid ${sm.color};border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'Draft'} · ${dt} · by ${q.created_by||'—'}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:${sm.bg};color:${sm.color};white-space:nowrap">${sm.label}</span>
+      </div>
+      <div style="display:flex;gap:10px;font-size:11px;color:var(--text3)">
+        ${sqft>0?`<span>📐 ${sqft} sqft</span>`:''}
+        ${q.total_boxes?`<span>📦 ${q.total_boxes} boxes</span>`:''}
+        ${q.grand_total?`<span style="color:var(--gold);font-weight:700">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span>`:''}
+      </div>
+      ${waitingAt?`<div style="font-size:11px;color:var(--gold);margin-top:5px;font-weight:600">⏳ Awaiting: ${waitingAt}</div>`:''}
+    </div>`;
+  }
+
   return `
   <div class="module-header">
     <h2>My Tasks</h2>
@@ -12322,6 +12365,28 @@ async function renderMyTasks() {
       <div class="stat"><span class="stat-num" style="color:var(--gold)">${pending.length}</span><span class="stat-label">New</span></div>
       <div class="stat"><span class="stat-num">${active.length}</span><span class="stat-label">Active</span></div>
       <div class="stat"><span class="stat-num" style="color:var(--green)">${done.filter(t=>t.stage==='Won').length}</span><span class="stat-label">Won</span></div>
+    </div>
+  </div>
+
+  <!-- ── TILE QUOTATION APPROVALS ── -->
+  <div class="card" style="margin-bottom:12px;border-color:var(--gold-border)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 class="card-title" style="margin:0">📋 Tile Quote Approvals <span style="font-size:11px;font-weight:400;color:var(--text3)">(${tqs.filter(q=>q.approval_status==='pending_approval').length} pending)</span></h3>
+      <button onclick="navigateTo('tile_quotes')" style="font-size:11px;padding:4px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;color:var(--text2)">View All</button>
+    </div>
+    <!-- Filter chips -->
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="tq-filter-chips">
+      ${['all','pending_approval','approved','rejected','advance_collected','converted'].map((f,i)=>{
+        const labels = {all:'All',pending_approval:'⏳ Pending',approved:'✅ Approved',rejected:'❌ Rejected',advance_collected:'💰 Advance',converted:'🧾 Invoiced'};
+        return `<button onclick="filterTQTasks('${f}')" id="tqf-${f}"
+          style="padding:5px 12px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:${i===0?'2px solid var(--gold)':'1px solid var(--border)'};background:${i===0?'rgba(245,200,66,0.12)':'var(--bg2)'};color:${i===0?'var(--gold)':'var(--text2)'}">
+          ${labels[f]}${f==='pending_approval'?` (${tqs.filter(q=>q.approval_status===f).length})`:''}
+        </button>`;
+      }).join('')}
+    </div>
+    <!-- Quote list -->
+    <div id="tq-task-list">
+      ${tqs.length ? tqs.map(renderTQCard).join('') : '<p class="empty-msg">No quotations yet</p>'}
     </div>
   </div>
 
@@ -12459,6 +12524,72 @@ async function confirmDeleteTask(taskId) {
   navigateTo(currentPage === 'tasks' ? 'tasks' : currentPage);
 }
 window.confirmDeleteTask = confirmDeleteTask;
+
+// Live filter for TQ approval cards in Tasks page
+async function filterTQTasks(status) {
+  // Update chip styles
+  ['all','pending_approval','approved','rejected','advance_collected','converted'].forEach(f => {
+    const btn = document.getElementById('tqf-'+f);
+    if (!btn) return;
+    const active = f === status;
+    btn.style.border = active ? '2px solid var(--gold)' : '1px solid var(--border)';
+    btn.style.background = active ? 'rgba(245,200,66,0.12)' : 'var(--bg2)';
+    btn.style.color = active ? 'var(--gold)' : 'var(--text2)';
+  });
+
+  const el = document.getElementById('tq-task-list');
+  if (!el) return;
+  el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Loading…</div>';
+
+  const statuses = status === 'all'
+    ? ['pending_approval','approved','rejected','advance_collected','converted']
+    : [status];
+
+  const { data } = await VW_DB.client
+    .from('tile_quotations')
+    .select('id,tq_no,customer_name,approval_status,created_by,created_at,total_area_sqft,total_boxes,grand_total,approval_log')
+    .in('approval_status', statuses)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  const tqs = data || [];
+  if (!tqs.length) { el.innerHTML = '<p class="empty-msg">No quotes in this category</p>'; return; }
+
+  const LEVEL_LABELS = { tl:'TL / Sr Exec', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+  const statusMeta = {
+    pending_approval: { label:'⏳ Pending', color:'var(--gold)', bg:'rgba(245,200,66,0.1)' },
+    approved:         { label:'✅ Approved', color:'var(--green)', bg:'rgba(34,197,94,0.1)' },
+    rejected:         { label:'❌ Rejected', color:'var(--red)', bg:'rgba(239,68,68,0.1)' },
+    advance_collected:{ label:'💰 Advance', color:'#378ADD', bg:'rgba(55,138,221,0.1)' },
+    converted:        { label:'🧾 Invoiced', color:'var(--green)', bg:'rgba(34,197,94,0.08)' },
+  };
+
+  el.innerHTML = tqs.map(q => {
+    const sm = statusMeta[q.approval_status] || statusMeta.pending_approval;
+    const log = q.approval_log || [];
+    const lastStep = log[log.length-1];
+    const waitingAt = lastStep?.status==='pending' ? (LEVEL_LABELS[lastStep.level]||lastStep.level) : null;
+    const sqft = parseFloat(q.total_area_sqft||0).toFixed(0);
+    const dt = new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    return `
+    <div onclick="VW_TILES.openTileQuote(${q.id})" style="background:var(--bg2);border:1px solid ${sm.color}33;border-left:3px solid ${sm.color};border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'Draft'} · ${dt} · by ${q.created_by||'—'}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:${sm.bg};color:${sm.color};white-space:nowrap">${sm.label}</span>
+      </div>
+      <div style="display:flex;gap:10px;font-size:11px;color:var(--text3)">
+        ${sqft>0?`<span>📐 ${sqft} sqft</span>`:''}
+        ${q.total_boxes?`<span>📦 ${q.total_boxes} boxes</span>`:''}
+        ${q.grand_total?`<span style="color:var(--gold);font-weight:700">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span>`:''}
+      </div>
+      ${waitingAt?`<div style="font-size:11px;color:var(--gold);margin-top:5px;font-weight:600">⏳ Awaiting: ${waitingAt}</div>`:''}
+    </div>`;
+  }).join('');
+}
+window.filterTQTasks = filterTQTasks;
 
 window.VW_TASKS = { renderMyTasks, acceptTask, openTaskDetail, saveTaskDetail };
 window.acceptTask = acceptTask;
