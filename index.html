@@ -35233,6 +35233,9 @@ async function openNonInvDetail(id) {
     </div>
     <button class="btn-primary full-width" onclick="VW_NON_INV.addToActiveQuote('${t.id}');closeSheet()">
       + Add to Active Quotation
+    </button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_NON_INV.addCatalogTileToInventory('${t.id}')">
+      📦 Add to Inventory
     </button>`;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay')?.classList.add('open');
@@ -35307,6 +35310,84 @@ async function fetchTilesForQuotation(sizeMm, surfaceType) {
   };
 }
 
+// ─── ADD CATALOG TILE TO MAIN INVENTORY ──────────────────────────────────────
+// Takes an extracted catalog tile and creates a proper inventory product entry.
+// Staff can set the price and stock qty — the design/spec fields come from catalog.
+async function addCatalogTileToInventory(tileId) {
+  const { data: t } = await VW_DB.client.from('non_inventory_tiles').select('*').eq('id', tileId).single();
+  if (!t) { showToast('Tile not found', 'warn'); return; }
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="margin-bottom:14px">📦 Add to Inventory</h3>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px">
+      <div style="font-weight:700;font-size:13px">${t.brand||''} ${t.design_name||''}</div>
+      <div style="color:var(--text3);margin-top:3px">${t.size_mm||''} · ${t.finish||''} · ${t.colour_family||''}</div>
+      ${t.sku_code?`<div style="color:var(--text3)">SKU: ${t.sku_code}</div>`:''}
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="margin:0;flex:1"><label>Selling Price / sqft (₹) *</label><input type="number" id="cti-price" placeholder="e.g. 85" min="1" step="0.5"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Opening Stock (boxes)</label><input type="number" id="cti-stock" value="0" min="0" step="1"></div>
+    </div>
+    <div class="form-group"><label>Low Stock Alert (boxes)</label><input type="number" id="cti-threshold" value="5" min="0" step="1"></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button class="btn-primary" style="flex:2" onclick="VW_NON_INV._confirmAddToInventory(${tileId})">📦 Add to Inventory</button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay')?.classList.add('open');
+}
+
+async function _confirmAddToInventory(tileId) {
+  const price = parseFloat(document.getElementById('cti-price')?.value||0);
+  if (!price) { showToast('Enter selling price', 'warn'); return; }
+  const stock = parseInt(document.getElementById('cti-stock')?.value||0);
+  const threshold = parseInt(document.getElementById('cti-threshold')?.value||5);
+
+  const { data: t } = await VW_DB.client.from('non_inventory_tiles').select('*').eq('id', tileId).single();
+  if (!t) return;
+
+  // Derive sqft per box from size
+  const [mmL, mmW] = (t.size_mm||'600×600').split(/[×x]/).map(Number);
+  const sqftPerTile = mmL && mmW ? (mmL/25.4)*(mmW/25.4)/144 : 4;
+  const tilesPerBox = sqftPerTile < 1.5 ? 10 : sqftPerTile < 2.5 ? 6 : sqftPerTile < 5 ? 4 : 2;
+  const coveragePerBox = +(sqftPerTile * tilesPerBox).toFixed(2);
+  const boxPrice = +(price * coveragePerBox).toFixed(0);
+
+  const newProduct = {
+    name: `${t.brand||''} ${t.design_name||''}`.trim(),
+    category: 'Tiles',
+    brand: t.brand || '',
+    model: t.sku_code || t.series || '',
+    tile_size_mm: t.size_mm || '600×600',
+    tile_finish: t.finish || '',
+    colour_family: t.colour_family || '',
+    surface_type: t.surface_type || 'both',
+    price: boxPrice,
+    price_per_sqft: price,
+    coverage_per_box: coveragePerBox,
+    tiles_per_box: tilesPerBox,
+    stock: stock,
+    lowStockThreshold: threshold,
+    image_url: t.image_url || '',
+    is_active: true,
+    source: 'catalog_import',
+    catalog_tile_id: tileId,
+    createdAt: new Date().toISOString(),
+  };
+
+  const { data, error } = await VW_DB.client.from('products').insert(newProduct).select('id').single();
+  if (error) { showToast('Failed: ' + error.message, 'error'); return; }
+
+  // Mark the catalog tile as imported
+  await VW_DB.client.from('non_inventory_tiles').update({ status:'imported', inventory_product_id:data.id }).eq('id', tileId);
+
+  closeSheet();
+  showToast(`${newProduct.name} added to Inventory (ID ${data.id}) ✓`, 'success');
+  navigateTo('inventory');
+}
+
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 window.VW_NON_INV = {
   renderCatalogUploadPage,
@@ -35320,6 +35401,8 @@ window.VW_NON_INV = {
   processCatalogUpload,
   openNonInvDetail,
   addToActiveQuote,
+  addCatalogTileToInventory,
+  _confirmAddToInventory,
   approveDraft,
   rejectDraft,
   bulkApproveVisible,
