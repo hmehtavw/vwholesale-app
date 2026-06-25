@@ -25378,6 +25378,9 @@ async function _renderStep8() {
   const totalSqft = _tqTotalSqft();
   const quoteNo = `TQ/${getFinancialYearLabel()}/${String(Date.now()).slice(-4)}`;
 
+  // Pre-render the materials stock card (async) so it embeds in the template
+  const materialsCard = await _tqRenderMaterialsCard(st).catch(()=>'');
+
   // ── Aggregate per-room tile selections ──
   const rooms = st.rooms || [];
   const weightCfg0 = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
@@ -25873,6 +25876,9 @@ async function _renderStep8() {
       ].map(t=>`<li style="font-size:11px;color:var(--text2);margin-bottom:5px;line-height:1.5">${t}</li>`).join('')}
     </ol>
   </div>
+
+  <!-- MATERIALS STATUS -->
+  ${materialsCard}
 
   <!-- SUBMIT FOR APPROVAL — wizard is for executives to create and submit only -->
   <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
@@ -27677,14 +27683,141 @@ async function tqConfirmAdvance(quoteId) {
   // Place hold on stock
   if (q.selected_product?.id) await placeStockHold(quoteId, amount);
 
+  // Create sourcing intents for any materials not in stock — inventory team gets notified
+  const _decoded = {
+    spacerResult: q.spacer_result || {},
+    spacerType: q.spacer?.type || 'plus',
+    spacerSelections: q.spacer_selections || {},
+    adhesiveSelections: q.adhesive_selections || {},
+    groutSelections: q.grout_selections || {},
+    beading: q.beading || [],
+    extraProducts: q.extra_products || [],
+  };
+  const toProcure = await _tqCreateMaterialIntents(quoteId, { ...q, _decoded });
+
   await auditLog('advance_collected','tile_quotation',quoteId,q.customer_name,null,{amount,mode,receiptNo},'Advance collected');
 
   closeSheet();
 
   // Print receipt
   tqPrintAdvanceReceipt({ ...q, advance_amount:amount, advance_mode:mode, advance_receipt_no:receiptNo }, ref);
-  showToast(`₹${amount.toLocaleString('en-IN')} collected · ${receiptNo} · Stock held`, 'success');
+  showToast(`₹${amount.toLocaleString('en-IN')} collected · ${receiptNo} · Stock held${toProcure>0?' · '+toProcure+' items flagged for sourcing':''}`, 'success');
   navigateTo('tile_quotes');
+}
+
+// ───── MATERIAL STOCK CHECK + PURCHASE INTENT SYSTEM ─────────────────────
+// Checks inventory stock for any accessory item by name/keywords.
+// Returns: { status, stockQty, product } where status = in_stock | low_stock | out_of_stock | to_order
+async function _tqCheckMaterialStock(searchTerms, qtyNeeded) {
+  try {
+    const { data: products } = await VW_DB.client.from('products').select('id,name,stock,unit,price,category')
+      .or(searchTerms.map(t=>`name.ilike.%${t}%`).join(','))
+      .eq('is_active', true).limit(5);
+    if (!products?.length) return { status:'to_order', stockQty:0, product:null };
+    const p = products[0];
+    const stock = parseFloat(p.stock)||0;
+    if (stock <= 0) return { status:'out_of_stock', stockQty:0, product:p };
+    if (stock < qtyNeeded) return { status:'low_stock', stockQty:stock, product:p };
+    return { status:'in_stock', stockQty:stock, product:p };
+  } catch(e) { return { status:'to_order', stockQty:0, product:null }; }
+}
+
+// Build the full materials list from a tile quote's stored data
+function _tqGetMaterialsList(q) {
+  const items = [];
+  const state = q._decoded || {};
+  // Spacers
+  const spacerRes = state.spacerResult;
+  if (spacerRes?.totalPackets > 0) {
+    const typeLabel = (state.spacerType||'plus')==='clip' ? 'Clip+Plug Spacer' : 'Cross Spacer';
+    const mmLabel = Object.values(state.spacerSelections||{})[0]?.mm || 3;
+    items.push({ name:`${mmLabel}mm ${typeLabel}`, type:'spacer', qty:spacerRes.totalPackets, unit:'pkt',
+      search:[`${mmLabel}mm`,`spacer`] });
+  }
+  // Adhesive
+  Object.entries(state.adhesiveSelections||{}).forEach(([slotId, a]) => {
+    if (a?.type && a.type !== 'cement') {
+      const bags = a.bags || a.qty || 0;
+      if (bags > 0) items.push({ name:a.name||a.type||'Tile Adhesive', type:'adhesive', qty:bags, unit:'bag',
+        search:['adhesive','tile adhesive',a.name||''] });
+    }
+  });
+  // Grout
+  Object.entries(state.groutSelections||{}).forEach(([slotId, g]) => {
+    if (g?.qty > 0) items.push({ name:g.name||g.color||'Tile Grout', type:'grout', qty:g.qty, unit:'kg',
+      search:['grout',g.name||g.color||''] });
+  });
+  // Beading
+  (state.beading||[]).forEach(b => {
+    if (b.qty > 0) items.push({ name:b.type||'Beading', type:'beading', qty:b.qty, unit:'rft',
+      search:['beading',b.type||''] });
+  });
+  // Extra products from inventory search
+  (state.extraProducts||[]).forEach(ep => {
+    if (ep.qty > 0) items.push({ name:ep.name||'Item', type:'extra', qty:ep.qty, unit:ep.unit||'pc',
+      search:[ep.name||''], productId:ep.id });
+  });
+  return items;
+}
+
+// Called on advance confirmation — creates sourcing intents for out-of-stock / to-order items
+async function _tqCreateMaterialIntents(quoteId, q) {
+  try {
+    const items = _tqGetMaterialsList(q);
+    if (!items.length) return 0;
+    // Delete any existing intents for this quote (re-run on re-collect)
+    await VW_DB.client.from('tq_material_intents').delete().eq('tq_id', quoteId);
+    const profile = VW_AUTH.getCurrentProfile();
+    const intents = [];
+    for (const item of items) {
+      const { status, stockQty, product } = await _tqCheckMaterialStock(item.search.filter(Boolean), item.qty);
+      intents.push({
+        tq_id: quoteId, tq_no: q.tq_no, customer_name: q.customer_name,
+        item_name: item.name, item_type: item.type,
+        qty_needed: item.qty, unit: item.unit,
+        qty_in_stock: stockQty, stock_status: status,
+        product_id: product?.id || item.productId || null,
+        status: status === 'in_stock' ? 'in_stock' : 'pending',
+        created_by: profile?.name || '',
+      });
+    }
+    if (intents.length) await VW_DB.client.from('tq_material_intents').insert(intents);
+    return intents.filter(i=>i.status==='pending').length;
+  } catch(e) { console.warn('Material intents error:', e); return 0; }
+}
+
+// Render materials status card for Summary step
+async function _tqRenderMaterialsCard(st) {
+  const items = _tqGetMaterialsList(st);
+  if (!items.length) return '';
+  const statusIcon = { in_stock:'✅', low_stock:'⚠️', out_of_stock:'❌', to_order:'📋' };
+  const statusLabel = { in_stock:'In Stock', low_stock:'Low Stock', out_of_stock:'Out of Stock', to_order:'To Order' };
+  const statusColor = { in_stock:'var(--green)', low_stock:'var(--gold)', out_of_stock:'var(--red)', to_order:'#378ADD' };
+
+  const rows = await Promise.all(items.map(async item => {
+    const { status, stockQty, product } = await _tqCheckMaterialStock(item.search.filter(Boolean), item.qty);
+    return { ...item, status, stockQty, product };
+  }));
+
+  const needsOrdering = rows.filter(r=>r.status!=='in_stock');
+  const allGood = needsOrdering.length === 0;
+
+  return `<div class="card" style="margin-bottom:10px;border-color:${allGood?'rgba(34,197,94,0.3)':'rgba(96,165,250,0.3)'}">
+    <h3 class="card-title">📦 Materials Status</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">${allGood ? 'All materials in stock ✅' : `${needsOrdering.length} item${needsOrdering.length>1?'s':''} need sourcing — inventory will be notified when advance is collected`}</p>
+    ${rows.map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <div style="font-size:12px;font-weight:600">${r.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.qty} ${r.unit} needed${r.product?' · '+r.product.name:''}</div>
+      </div>
+      <div style="text-align:right">
+        <span style="font-size:11px;font-weight:700;color:${statusColor[r.status]}">${statusIcon[r.status]} ${statusLabel[r.status]}</span>
+        ${r.stockQty>0?`<div style="font-size:10px;color:var(--text3)">${r.stockQty} in stock</div>`:''}
+      </div>
+    </div>`).join('')}
+    ${!allGood?`<div style="font-size:10px;color:#378ADD;margin-top:8px;padding:6px;background:rgba(55,138,221,0.08);border-radius:6px">📋 Collecting advance will automatically flag ${needsOrdering.length} item${needsOrdering.length>1?'s':''} for sourcing in the inventory dashboard.</div>`:''}
+  </div>`;
 }
 
 function tqPrintAdvanceReceipt(q, txnRef) {
@@ -28501,6 +28634,7 @@ window.VW_TILES = {
   tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
+  _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
