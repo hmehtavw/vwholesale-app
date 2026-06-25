@@ -3109,6 +3109,20 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
 
   const updateData = { approval_log: log };
 
+  // Helper: compute grand_total from price × area + extras + delivery
+  const _computeGrandTotal = (ppSqft, ppBox, q) => {
+    const area = parseFloat(q.total_area_sqft) || 0;
+    let tileTotal = 0;
+    if (ppSqft > 0) {
+      tileTotal = Math.round(ppSqft * area);
+    } else if (ppBox > 0) {
+      tileTotal = Math.round(ppBox * (q.total_boxes || 0));
+    }
+    const extraTotal = (q.extra_products || []).reduce((s, p) => s + ((p.price || 0) * (p.qty || 1)), 0);
+    const deliveryTotal = (q.delivery?.transportCost || 0) + (q.delivery?.loadingCost || 0) + (q.delivery?.floorCost || 0);
+    return tileTotal + extraTotal + deliveryTotal;
+  };
+
   // Is this the final level? → Fully approved
   if (!NEXT_LEVEL[last.level] || last.level === 'management') {
     updateData.approval_status = 'approved';
@@ -3116,12 +3130,13 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
     updateData.approved_at = now;
     updateData.approved_by = profile?.name || '';
     updateData.approved_by_id = profile?.id || null;
-    if (pricePerSqft > 0) {
-      updateData.quoted_price_per_sqft = pricePerSqft;
+    if (pricePerSqft > 0 || pricePerBox > 0) {
+      updateData.quoted_price_per_sqft = pricePerSqft || null;
       updateData.quoted_price_per_box = pricePerBox || null;
       updateData.price_edit_note = priceNote || null;
       updateData.price_edited_by = profile?.name || '';
       updateData.price_edited_at = now;
+      updateData.grand_total = _computeGrandTotal(pricePerSqft, pricePerBox, q);
     }
     await VW_DB.client.from('tile_quotations').update(updateData).eq('id', tileQuoteId);
     showToast(`${q.tq_no} fully approved ✓${pricePerSqft>0?' · Price set':''}`, 'success');
@@ -3148,12 +3163,13 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
   const approvers = nextApprovers || [];
 
   // If price was edited at this level, carry forward to next
-  if (pricePerSqft > 0) {
-    updateData.quoted_price_per_sqft = pricePerSqft;
+  if (pricePerSqft > 0 || pricePerBox > 0) {
+    updateData.quoted_price_per_sqft = pricePerSqft || null;
     updateData.quoted_price_per_box = pricePerBox || null;
     updateData.price_edit_note = priceNote || null;
     updateData.price_edited_by = profile?.name || '';
     updateData.price_edited_at = now;
+    updateData.grand_total = _computeGrandTotal(pricePerSqft, pricePerBox, q);
   }
 
   log.push({
@@ -3982,12 +3998,28 @@ async function submitVisitorCheckin(type) {
 
   const routing = await VW_DB.getSetting('visitorRouting', {});
   const targetList = routing[type] || [];
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
+  let staff = await VW_DB.all(VW_DB.STORES.staff).catch(()=>[]);
+
+  // Fallback: if IDB staff is empty, fetch from Supabase profiles
+  if (!staff.length) {
+    const { data: sbStaff } = await VW_DB.client.from('profiles')
+      .select('id,name,role,phone').eq('status','approved')
+      .in('role',['executive','sr_executive','tl','floor_manager','store_manager','management','admin'])
+      .order('name').limit(20);
+    staff = (sbStaff||[]).map(s=>({ id:s.id, name:s.name, role:s.role, phone:s.phone }));
+  }
+
   // Backward-compat: older saved routing stored staff names (unordered);
   // newer stores numeric IDs in priority order. Preserve list order.
-  const targets = targetList
+  let targets = targetList
     .map(entry => typeof entry === 'number' ? staff.find(s => s.id === entry) : staff.find(s => s.name === entry))
     .filter(Boolean);
+
+  // Ultimate fallback: if routing config resolves to nobody, use first available executive
+  if (!targets.length && staff.length) {
+    const exec = staff.find(s=>['executive','sr_executive','tl'].includes(s.role)) || staff[0];
+    if (exec) targets = [exec];
+  }
 
   const visitId = await VW_DB.put(VW_DB.STORES.visits, {
     customerId: null, customerName: name, visitorType: type, organization: org, visitorPhone: phone, purpose,
@@ -4022,10 +4054,31 @@ async function loadRoutingPreview(type) {
   const targetList = routing[type] || [];
   const el = document.getElementById('v-routing-preview');
   if (!el) return;
-  if (!targetList.length) { el.textContent = 'Reception (no specific contact configured)'; return; }
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const names = staff.filter(s => targetList.includes(s.id) || targetList.includes(s.name)).map(s => s.name);
-  el.textContent = names.length ? names.join(', ') : 'Reception (no specific contact configured)';
+  if (!targetList.length) { el.textContent = 'Reception (no contact configured)'; return; }
+
+  // Try IDB staff first (has integer IDs matching the routing)
+  let staff = await VW_DB.all(VW_DB.STORES.staff).catch(()=>[]);
+  if (staff.length) {
+    const names = targetList
+      .map(entry => staff.find(s => s.id === entry || s.name === entry))
+      .filter(Boolean).map(s => s.name);
+    el.textContent = names.length ? names.join(' → ') : 'Reception (no match)';
+    return;
+  }
+
+  // IDB is empty — routing uses integer IDs. Fall back to Supabase profiles
+  // by position: get first available executives to show as "will notify"
+  const { data: sbStaff } = await VW_DB.client.from('profiles')
+    .select('id,name,role').eq('status','approved')
+    .in('role',['executive','sr_executive','tl','floor_manager','store_manager','management','admin'])
+    .order('name').limit(6);
+  const executives = sbStaff || [];
+  if (executives.length) {
+    // Show the first person who would be notified (can't match int IDs to UUIDs, so use first exec)
+    el.textContent = executives[0].name + (executives.length > 1 ? ` + ${executives.length - 1} backup` : '');
+  } else {
+    el.textContent = 'Reception (configure in Settings → Visitor Routing)';
+  }
 }
 
 async function getTodayVisits() {
@@ -4559,7 +4612,7 @@ async function renderSecurityKioskPage() {
 
   // Fetch staff for meeting-person dropdown (vendor case)
   const { data: staffList } = await VW_DB.client
-    .from('users').select('id,name,phone,role')
+    .from('profiles').select('id,name,phone,role')
     .in('role',['admin','store_manager','floor_manager','tl','sr_executive','executive','management','accounts'])
     .eq('is_active',true).order('name').limit(40);
   const staff = staffList || [];
@@ -29754,7 +29807,7 @@ function _qqShowPrefs() {
 
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Brand</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
-      ${['','Kajaria','Simpolo','TISAN','Johnson','Nitco','Somany','RAK'].map((b)=>ch('brand',b,b||'Any brand')).join('')}
+      ${['','Kajaria','Nexion','Simpolo','Somany','TISAN'].map((b)=>ch('brand',b,b||'Any brand')).join('')}
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">Finish</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
