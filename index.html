@@ -13015,7 +13015,6 @@ async function renderTileSettings() {
   // Load all tile config
   const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
   const floorCfg = await VW_DB.getSetting('floor_delivery_config', {
-    loading_within_10ft:5, loading_beyond_10ft:8,
     floor_rates_per_box:{'G':0,'1':6,'2':10,'3':14,'4':18,'5':22}
   });
   const groutCfg = await VW_DB.getSetting('tile_grout_config', {
@@ -13027,8 +13026,14 @@ async function renderTileSettings() {
     pcs_per_packet: 100, clip_pcs_per_packet: 50, spacers_per_tile: 4, min_size_mm: 300,
   });
   const wastageCfg = await VW_DB.getSetting('tile_wastage_config', { breakage_pct: 10 });
-  const transportConfig = await VW_DB.getSetting('transport_config', {
-    lightVehiclePerKm: 25, heavyVehiclePerKm: 45, minimumCharge: 300, freeAbove: 0,
+  const vehicleCfg = await VW_DB.getSetting('vehicle_config', {
+    free_km: 5,
+    vehicles: [
+      { id:'auto', icon:'🛺', label:'Auto / Three Wheeler', max_kg:300, per_km:20, min_charge:250, free_km:5 },
+      { id:'appe', icon:'🛺', label:'Appe / Compact 3-Wheeler', max_kg:600, per_km:35, min_charge:500, free_km:5 },
+      { id:'tata_ace', icon:'🚐', label:'Tata Ace / Mini Truck', max_kg:1200, per_km:40, min_charge:750, free_km:5 },
+      { id:'dost', icon:'🚛', label:'Dost / Medium Truck', max_kg:3500, per_km:50, min_charge:1250, free_km:5 },
+    ],
   });
 
   // All tile sizes from TILE_SIZES constant in tiles_granite.js
@@ -13155,21 +13160,13 @@ async function renderTileSettings() {
     </div>
   </div>
 
-  <!-- LOADING CHARGES TABLE — per size -->
+  <!-- FLOOR DELIVERY RATES -->
   <div class="card" style="margin-bottom:14px">
-    <h3 class="card-title">🏋️ Floor Delivery & Loading Rates</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Packing is always free. Loading charge is per box of tiles.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-      <div class="form-group" style="margin:0">
-        <label>Loading within 10ft ground (₹/box)</label>
-        <input type="number" id="ts-fl-base" value="${floorCfg?.loading_within_10ft||5}" min="0" step="0.5">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>Loading beyond 10ft / manual lift (₹/box)</label>
-        <input type="number" id="ts-fl-beyond" value="${floorCfg?.loading_beyond_10ft||8}" min="0" step="0.5">
-      </div>
+    <h3 class="card-title">🏢 Floor Delivery Rates</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:4px">Extra carrying charge per box when delivery is above ground floor. Loading & unloading rates are now set per tile size in the table above (₹/box Load column).</p>
+    <div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;padding:8px;margin-bottom:12px">
+      💡 Set ₹0 for Ground floor. These charges stack on top of the per-tile loading rate.
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">Floor Rate (₹/box above Ground floor)</div>
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:2px solid var(--border)">
@@ -13254,42 +13251,62 @@ async function renderTileSettings() {
     <button class="btn-primary" style="margin-top:10px" onclick="VW_SETTINGS.saveSpacerConfig()">💾 Save Spacer Config</button>
   </div>
 
-  <!-- TRANSPORT CONFIG — moved here from Store tab -->
+  <!-- TRANSPORT CONFIG — per vehicle rates -->
   <div class="card" style="margin-bottom:14px">
     <h3 class="card-title">🚛 Transport Rates</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">Per km pricing for tile deliveries. Set category-wise in next step.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div class="form-group" style="margin:0">
-        <label>🚐 Mini Truck / Tata Ace ₹/km</label>
-        <input type="number" id="ts-transport-light" value="${transportConfig?.lightVehiclePerKm||25}" min="0" placeholder="e.g. 25">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>🚛 Large Truck ₹/km</label>
-        <input type="number" id="ts-transport-heavy" value="${transportConfig?.heavyVehiclePerKm||45}" min="0" placeholder="e.g. 45">
+    <p style="font-size:12px;color:var(--text2);margin-bottom:4px">Vehicle is auto-selected by total shipment weight. Rates apply per km beyond the free km distance.</p>
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;padding:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:12px;color:var(--text2)">🎁 Free delivery within <strong>${vehicleCfg?.free_km ?? 5} km</strong> (first 5km included in min charge)</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--text3)">Free km:</span>
+        <input type="number" id="ts-free-km" value="${vehicleCfg?.free_km ?? 5}" min="0" max="20" step="1"
+          style="width:50px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px;font-size:13px;font-weight:700;color:var(--text);text-align:center">
       </div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      <div class="form-group" style="margin:0">
-        <label>Minimum charge ₹</label>
-        <input type="number" id="ts-transport-min" value="${transportConfig?.minimumCharge||300}" min="0" placeholder="300">
-      </div>
-      <div class="form-group" style="margin:0">
-        <label>Free above ₹ order value</label>
-        <input type="number" id="ts-transport-free" value="${transportConfig?.freeAbove||0}" min="0" placeholder="0 = never free">
-      </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:var(--bg2)">
+            <th style="text-align:left;padding:8px 6px;color:var(--text3);font-weight:600">Vehicle</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--text3);font-weight:600">Max Weight</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--gold);font-weight:700">Min Charge ₹</th>
+            <th style="text-align:center;padding:8px 4px;color:var(--gold);font-weight:700">₹/km (beyond free)</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(vehicleCfg?.vehicles || []).map((v, i) => `
+          <tr style="border-bottom:1px solid var(--border2)">
+            <td style="padding:8px 6px">
+              <span style="font-size:16px;margin-right:6px">${v.icon||'🚚'}</span>
+              <span style="font-weight:600">${v.label||v.id}</span>
+            </td>
+            <td style="text-align:center;padding:4px;color:var(--text3);font-size:11px">${v.max_kg >= 9999 ? '—' : v.max_kg+'kg'}</td>
+            <td style="text-align:center;padding:4px 2px">
+              <input type="number" id="ts-veh-min-${i}" value="${v.min_charge||0}" min="0" step="50"
+                style="width:70px;text-align:center;background:var(--bg2);border:1px solid var(--gold-border);border-radius:6px;padding:4px;font-size:13px;font-weight:700;color:var(--gold)">
+            </td>
+            <td style="text-align:center;padding:4px 2px">
+              <input type="number" id="ts-veh-km-${i}" value="${v.per_km||0}" min="0" step="1"
+                style="width:70px;text-align:center;background:var(--bg2);border:${v.per_km>0?'1px solid var(--gold-border)':'1px solid var(--border)'};border-radius:6px;padding:4px;font-size:13px;font-weight:700;color:${v.per_km>0?'var(--gold)':'var(--text2)'}">
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
     </div>
-    <button class="btn-primary" onclick="VW_SETTINGS.saveTileTransportConfig()">💾 Save Transport Rates</button>
+    <button class="btn-primary full-width" style="margin-top:12px" onclick="VW_SETTINGS.saveVehicleConfig()">💾 Save Transport Rates</button>
   </div>`;
 }
 
-async function saveTileTransportConfig() {
-  await VW_DB.setSetting('transport_config', {
-    lightVehiclePerKm: parseFloat(document.getElementById('ts-transport-light')?.value||25)||25,
-    heavyVehiclePerKm: parseFloat(document.getElementById('ts-transport-heavy')?.value||45)||45,
-    minimumCharge: parseFloat(document.getElementById('ts-transport-min')?.value||300)||300,
-    freeAbove: parseFloat(document.getElementById('ts-transport-free')?.value||0)||0,
-    storeLat: 16.5206153, storeLng: 80.5999189,
-  });
+async function saveVehicleConfig() {
+  const existing = await VW_DB.getSetting('vehicle_config', { vehicles:[], free_km:5 });
+  const freeKm = parseInt(document.getElementById('ts-free-km')?.value||5)||5;
+  const vehicles = (existing.vehicles||[]).map((v, i) => ({
+    ...v,
+    min_charge: parseFloat(document.getElementById(`ts-veh-min-${i}`)?.value ?? v.min_charge) || 0,
+    per_km: parseFloat(document.getElementById(`ts-veh-km-${i}`)?.value ?? v.per_km) || 0,
+    free_km: freeKm,
+  }));
+  await VW_DB.setSetting('vehicle_config', { ...existing, vehicles, free_km: freeKm });
   showToast('Transport rates saved ✓', 'success');
 }
 const ALL_TILE_SIZES_DEFAULT = [
@@ -13368,15 +13385,14 @@ async function addCustomSize() {
 }
 
 async function saveFloorConfig() {
-  const within = parseFloat(document.getElementById('ts-fl-base')?.value||0)||5;
-  const beyond = parseFloat(document.getElementById('ts-fl-beyond')?.value||0)||8;
   const floor_rates_per_box = {};
   ['G','1','2','3','4','5'].forEach(fl => {
     floor_rates_per_box[fl] = parseFloat(document.getElementById(`ts-floor-${fl}`)?.value||document.getElementById(`fl-floor-${fl}`)?.value||0)||0;
   });
+  // Preserve existing loading values so Summary fallback still works if ever needed
+  const existing = await VW_DB.getSetting('floor_delivery_config', {});
   await VW_DB.setSetting('floor_delivery_config', {
-    loading_within_10ft: within,
-    loading_beyond_10ft: beyond,
+    ...existing,
     floor_rates_per_box,
   });
   showToast('Floor delivery rates saved ✓', 'success');
@@ -13850,7 +13866,7 @@ window.VW_SETTINGS = {
   renderSettingsPage, switchSettingsTab,
   renderTileSettings, saveTileSettings, saveTileWeightTable, saveFloorConfig,
   saveGroutConfig, saveBreakageConfig, saveSpacerConfig, autoFillDefaultWeights,
-  deleteTileSize, addCustomSize, saveTileTransportConfig,
+  deleteTileSize, addCustomSize, saveVehicleConfig,
   saveAccountName, changePIN, approveResetPin,
   approveProfile, updateProfileRole,
   togglePersonPerm, resetToRoleDefaults,
