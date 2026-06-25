@@ -980,7 +980,6 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="grn" onclick="closeMoreMenu();navigateTo('grn')"><span>🧾</span><span>GRN</span></button>
         <button class="more-tile" data-page="returns" onclick="closeMoreMenu();navigateTo('returns')"><span>↩️</span><span>Returns</span></button>
         <button class="more-tile" data-page="tiles" onclick="closeMoreMenu();navigateTo('tiles')"><span>🟫</span><span>Tile Quote</span></button>
-        <button class="more-tile" data-page="tile_quotes" onclick="closeMoreMenu();VW_TILES.openQuickQuote()"><span>⚡</span><span>Quick Quote</span></button>
         <button class="more-tile" data-page="tile_quotes" onclick="closeMoreMenu();navigateTo('tile_quotes')"><span>📋</span><span>TQ List</span></button>
         <button class="more-tile" data-page="granite" onclick="closeMoreMenu();navigateTo('granite')"><span>🪨</span><span>Granite</span></button>
       </div>
@@ -23058,15 +23057,6 @@ async function _renderStep0() {
   const custFound = st.customer._found; // set by searchCustomerByPhone
 
   return `
-  <!-- QUICK QUOTE SHORTCUT -->
-  <div onclick="VW_TILES.openQuickQuote()" style="display:flex;justify-content:space-between;align-items:center;background:rgba(230,181,60,0.08);border:1px solid var(--gold-border);border-radius:12px;padding:10px 14px;margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
-    <div>
-      <div style="font-size:13px;font-weight:700;color:var(--gold)">⚡ Quick Quote</div>
-      <div style="font-size:11px;color:var(--text3);margin-top:1px">Tap rooms → preferences → done in 60 sec</div>
-    </div>
-    <div style="font-size:20px;color:var(--gold)">›</div>
-  </div>
-
   <!-- CUSTOMER DETAILS -->
   <div class="card" style="margin-bottom:10px">
     <h3 class="card-title">👤 Customer</h3>
@@ -38631,12 +38621,20 @@ function showQuotationPicker() {
     <p style="font-size:13px;color:var(--text2);margin-bottom:16px">What type of quotation do you want to create?</p>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <button onclick="closeSheet();navigateTo('tiles')"
-        style="background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:20px 12px;cursor:pointer;text-align:center">
-        <div style="font-size:36px;margin-bottom:8px">🔲</div>
-        <div style="font-size:14px;font-weight:700;color:var(--text)">Tiles</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">Room-by-room measurement, stock push, PDF</div>
-      </button>
+      <div style="background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:16px 12px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-size:32px;text-align:center">🔲</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);text-align:center">Tiles</div>
+        <button onclick="closeSheet();VW_TILES.openQuickQuote()"
+          style="background:rgba(230,181,60,0.12);border:1.5px solid var(--gold-border);border-radius:10px;padding:8px;cursor:pointer;text-align:center;width:100%">
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">⚡ Quick Quote</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">60 sec · tap rooms</div>
+        </button>
+        <button onclick="closeSheet();navigateTo('tiles')"
+          style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:8px;cursor:pointer;text-align:center;width:100%">
+          <div style="font-size:12px;font-weight:700;color:var(--text)">📋 Full Wizard</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">8 steps · all options</div>
+        </button>
+      </div>
       <button onclick="closeSheet();navigateTo('granite')"
         style="background:var(--bg2);border:2px solid var(--border);border-radius:16px;padding:20px 12px;cursor:pointer;text-align:center">
         <div style="font-size:36px;margin-bottom:8px">🪨</div>
