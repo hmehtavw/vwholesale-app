@@ -31848,6 +31848,7 @@ async function applyToRoom() {
       // SUCCESS — real image edit
       _visLastResult = data.resultImageBase64;
       renderImageResult(data.resultImageBase64, data.resultMimeType || 'image/jpeg', data.description);
+      if (typeof _logApiUsage === 'function') _logApiUsage('ai_visualizer_render', { success:true, meta:{ has_image:true } });
     } else {
       // Fallback to text description
       const descPayload = { mode: 'describe', roomType: 'room', imageBase64: _visRoomPhoto, products: _visSelectedProduct.type === 'product' ? [_visSelectedProduct] : [] };
@@ -31857,9 +31858,11 @@ async function applyToRoom() {
         body: JSON.stringify(descPayload)
       });
       const descData = await descRes.json();
+      if (typeof _logApiUsage === 'function') _logApiUsage('ai_visualizer_render', { success:false, meta:{ fallback:'describe', reason: data.message||'no image' } });
       renderTextResult(descData.description || 'Visualization complete.', data.message);
     }
   } catch(e) {
+    if (typeof _logApiUsage === 'function') _logApiUsage('ai_visualizer_render', { success:false, meta:{ error: e.message } });
     resultEl.innerHTML = `<div class="alert-card"><div class="alert-title">Could not apply — check connection</div><button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_VIS.applyToRoom()">Try Again</button></div>`;
   }
 }
