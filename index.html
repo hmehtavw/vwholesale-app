@@ -24698,9 +24698,11 @@ function _getTileSlots() {
 
 async function _renderStep2() {
   const rooms = _tqState.rooms;
-  if (!rooms.length) return `<div class="card"><p style="color:var(--text3)">Add rooms first</p></div>`;
+  if (!rooms || !rooms.length) return `<div class="card"><p style="color:var(--text3)">Add rooms first</p></div>`;
 
-  const cfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
+  let cfg;
+  try { cfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] }); }
+  catch(e) { cfg = { sizes:[] }; }
   const activeMms = (cfg.sizes||[]).filter(s=>s.active!==false).map(s=>s.mm);
   const visible = activeMms.length > 0 ? TILE_SIZES.filter(ts=>activeMms.includes(ts.mm)) : TILE_SIZES;
 
@@ -24791,7 +24793,7 @@ async function _renderStep2() {
             border:${sel?'2px solid var(--gold)':'1px solid var(--border)'}">
           <div style="font-size:13px;font-weight:700;color:${sel?'var(--gold)':'var(--text)'}">${ts.mm}mm</div>
           <div style="font-size:10px;color:var(--text3)">${ts.inch}</div>
-          <div style="font-size:10px;color:var(--text3)">${ts.type.join(', ')}</div>
+          <div style="font-size:10px;color:var(--text3)">${(ts.type||[]).join(', ')}</div>
           <div style="font-size:10px;margin-top:3px;font-weight:600;color:${_cnt?'var(--green)':'var(--text3)'}">${_cnt ? '✓ '+_cnt+' design'+(_cnt>1?'s':'')+' in stock' : '◦ Order-based'}</div>
         </button>`;
       }).join('')}
@@ -27855,7 +27857,11 @@ async function tqNext() {
       _tqAutoSave();
     } catch(err) {
       console.error('tqNext render error (step '+_tqState.step+'):', err);
-      el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--red)">Could not load this step — <button onclick="VW_TILES.tqBack()" style="color:var(--gold);background:none;border:none;cursor:pointer">go back</button></div>';
+      el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red)">
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px">Could not load this step</div>
+        <div style="font-size:11px;background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:10px;word-break:break-all;text-align:left;color:var(--text2)">${err?.message||String(err)}</div>
+        <button onclick="VW_TILES.tqBack()" style="color:var(--gold);background:none;border:1px solid var(--gold-border);border-radius:8px;padding:8px 16px;cursor:pointer">← Go back</button>
+      </div>`;
     }
   }
 }
