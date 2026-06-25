@@ -24843,7 +24843,10 @@ function tqSelectSizeForRoom(slotId, sizeId, roomId) {
   _tqState.tileSelections[slotId].sizeId = sizeId;
   _tqState.tileSelections[slotId].sizeMm = sz.mm;
   _tqState.tileSelections[slotId].sizeLabel = sz.label;
-  _tqState.tileSelections[slotId].size = sz;
+  // Merge tiles_per_box from tile_weight_config into the size object so
+  // _submitTileTotal and other callers always have the correct box count
+  const _cfgEntry = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===sz.mm);
+  _tqState.tileSelections[slotId].size = { ...sz, tilesPerBox: _cfgEntry?.tiles_per_box || sz.tilesPerBox };
   _tqState.tileSelections[slotId].slotId = slotId;
   _tqState.tileSelections[slotId].roomId = actualRoomId;
   // subType: detect from slotId suffix
@@ -30086,7 +30089,9 @@ async function _qqApply() {
       const sz = (_qqData.prefs.size) || t.tile_size_mm || '600×600';
       const [mmL,mmW]=sz.split('×').map(Number);
       const sqftPerTile=(mmL/25.4)*(mmW/25.4)/144;
-      const tpb=t.tiles_per_box||(sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
+      // Use tiles_per_box from tile_weight_config (correct) not products.tiles_per_box (usually null)
+      const cfgSz = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===sz);
+      const tpb = cfgSz?.tiles_per_box || t.tiles_per_box||(sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
       tileSelections[slotId]={ size:{mm:sz,id:'qq',label:`${sz}mm`,ft:sqftPerTile,tilesPerBox:tpb},
         tile_name:t.name, brand:t.brand||'', finish:t.tile_finish||'', colour:t.colour_family||'', productId:t.id };
       if (parseFloat(t.price_per_sqft)) quotedPrices[slotId]={pricePerSqft:parseFloat(t.price_per_sqft)};
