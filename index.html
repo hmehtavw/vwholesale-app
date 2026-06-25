@@ -27882,7 +27882,6 @@ async function _tqRequestEdit() {
     const log = { action:'re_edit_requested', reason: reason.trim(), by: profile?.name||'Staff', at: new Date().toISOString(), from_status: _tqState._approvalStatus };
     const { error } = await VW_DB.client.from('tile_quotations').update({
       approval_status: 'draft',
-      approval_log: VW_DB.client.rpc ? null : undefined, // will append below
       rejection_reason: reason.trim(),
       rejected_by: profile?.name||'Staff',
       rejected_at: new Date().toISOString(),
@@ -27916,6 +27915,7 @@ async function _tqAutoSave() {
       floor_traps: st.floorTraps || [], soffit: st.soffit || {}, delivery: st.delivery || {},
       total_area_sqft: _tqTotalSqft(), labor_required: st.laborRequired || false,
       extra_products: st.extraProducts || [],
+      breakage_pct: st.breakagePct ?? 10,
       draft_step: st.step || 0, updated_at: new Date().toISOString(),
     };
     const id = st._savedQuoteId || st._draftId;
@@ -29123,7 +29123,7 @@ async function tqPrintFromId(id) {
     return;
   }
   // Load into state for printing — mark as approved so guard passes
-  _tqState = { ...q, customer:{ name:q.customer_name, phone:q.customer_phone, site:q.site_address }, rooms:q.rooms||[], selectedSize:q.selected_size, selectedProduct:q.selected_product, step:8, _savedQuoteId:id, _approvalStatus:q.approval_status };
+  _tqState = { ...q, customer:{ name:q.customer_name, phone:q.customer_phone, site:q.site_address }, rooms:q.rooms||[], selectedSize:q.selected_size, selectedProduct:q.selected_product, step:8, _savedQuoteId:id, _approvalStatus:q.approval_status, breakagePct: q.breakage_pct ?? 10 };
   closeSheet();
   tqPrint();
 }
