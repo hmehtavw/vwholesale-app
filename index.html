@@ -25608,9 +25608,18 @@ async function _renderStep8() {
       </div>
     </div>
     <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--gold-border)">
-      <div style="font-size:14px;font-weight:700">${st.customer.name||'Customer'}</div>
-      ${st.customer.phone?`<div style="font-size:12px;color:var(--text3)">📞 ${st.customer.phone}</div>`:''}
-      ${st.customer.site?`<div style="font-size:12px;color:var(--text3)">📍 ${st.customer.site}</div>`:''}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:14px;font-weight:700">${st.customer.name||'Customer'}</div>
+          ${st.customer.phone?`<div style="font-size:12px;color:var(--text3)">📞 ${st.customer.phone}</div>`:''}
+          ${st.customer.site?`<div style="font-size:12px;color:var(--text3)">📍 ${st.customer.site}</div>`:''}
+          ${st.contractor?`<div style="font-size:12px;color:var(--gold);margin-top:3px">🏗 ${st.contractor.name||st.contractor}</div>`:`<div style="font-size:11px;color:var(--text3);margin-top:3px">No contractor</div>`}
+        </div>
+        <button onclick="VW_TILES._tqEditCustomerFromSummary()"
+          style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;background:var(--bg3);border:1px solid var(--border);color:var(--text2);cursor:pointer;flex-shrink:0;margin-left:10px">
+          ✎ Edit / Add Contractor
+        </button>
+      </div>
     </div>
   </div>
 
@@ -28784,29 +28793,103 @@ function _qqEsc(s){ return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':
 function _qqScreen(screen) {
   if (screen==='customer') {
     const d = _qqData.customer;
+    const foundHtml = d._found ? `
+      <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${_qqEsc(d.name)}</div>
+            <div style="font-size:11px;color:var(--text3)">${_qqEsc(d.phone)}${d.site?' · '+_qqEsc(d.site):''}</div>
+          </div>
+          <button onclick="VW_TILES._qqClearCustomer()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px">✕</button>
+        </div>
+      </div>` :
+      d._found===false ? `<div style="font-size:12px;color:var(--text3);padding:4px 0 8px">New customer — enter name below</div>` :
+      d.phone?.length ? `<div style="font-size:12px;color:var(--text3);padding:4px 0 8px">${10-(d.phone?.length||0)} more digits…</div>` : '';
+
+    const showNameField = !d._found; // show name input when not found or new
     _qqSheet(`
-      <div class="form-group"><label>Customer Name *</label>
-        <input type="text" id="qq-name" value="${_qqEsc(d.name)}" placeholder="e.g. Ravi Kumar" autocomplete="name">
+      <div class="form-group">
+        <label>Phone Number *</label>
+        <div style="display:flex;gap:6px">
+          <input type="tel" id="qq-phone" value="${_qqEsc(d.phone||'')}"
+            placeholder="10-digit mobile" maxlength="10" inputmode="numeric"
+            style="flex:1;font-size:15px;font-weight:700;letter-spacing:0.05em"
+            oninput="VW_TILES._qqPhoneInput(this.value)">
+          <button onclick="VW_TILES._qqSearchPhone()" style="padding:0 14px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;flex-shrink:0">🔍</button>
+        </div>
       </div>
-      <div class="form-group"><label>Phone</label>
-        <input type="tel" id="qq-phone" value="${_qqEsc(d.phone)}" placeholder="10-digit mobile" inputmode="numeric">
+      <div id="qq-cust-result">${foundHtml}</div>
+      ${showNameField ? `
+      <div class="form-group"><label>${d._found===false?'Customer Name *':'Name (if phone not found)'}</label>
+        <input type="text" id="qq-name" value="${_qqEsc(d.name||'')}" placeholder="e.g. Ravi Kumar" autocomplete="name">
       </div>
       <div class="form-group"><label>Site Address <span style="color:var(--text3);font-size:10px">(optional)</span></label>
-        <input type="text" id="qq-site" value="${_qqEsc(d.site)}" placeholder="e.g. Benz Circle, Plot 12">
+        <input type="text" id="qq-site" value="${_qqEsc(d.site||'')}" placeholder="e.g. Benz Circle, Plot 12">
+      </div>` : ''}
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:10px;margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px">🏗 Contractor</div>
+        <div style="font-size:12px;color:var(--text2)">Skipped in Quick Quote — can be added after via Edit in Full Wizard</div>
       </div>
       <button class="btn-primary full-width" onclick="VW_TILES._qqFromCustomer()">Next → Add Rooms</button>
     `, 'Quick Quote — Step 1: Customer');
-    setTimeout(()=>document.getElementById('qq-name')?.focus(),80);
+    setTimeout(()=>{ const p=document.getElementById('qq-phone'); if(!d._found&&p) p.focus(); },80);
   }
   else if (screen==='rooms') _qqShowRooms();
   else if (screen==='prefs') _qqShowPrefs();
   else if (screen==='match') _qqMatchTiles();
 }
 
+async function _qqPhoneInput(val) {
+  const digits = val.replace(/\D/g,'');
+  _qqData.customer.phone = digits;
+  _qqData.customer._found = null;
+  _qqData.customer.name = '';
+  _qqData.customer.id = null;
+  if (digits.length === 10) await _qqSearchPhone();
+  else {
+    const el=document.getElementById('qq-cust-result');
+    if(el) el.innerHTML=digits.length?`<div style="font-size:12px;color:var(--text3);padding:4px 0">${10-digits.length} more digits…</div>`:'';
+  }
+}
+
+async function _qqSearchPhone() {
+  const digits = (document.getElementById('qq-phone')?.value||_qqData.customer.phone||'').replace(/\D/g,'');
+  if (digits.length < 10) { showToast('Enter 10-digit number','warn'); return; }
+  const el = document.getElementById('qq-cust-result');
+  if (el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching…</div>';
+  try {
+    const { data } = await VW_DB.client.from('customers').select('id,name,phone,address').eq('phone',digits).limit(1);
+    const found = data?.[0];
+    if (found) {
+      _qqData.customer = { ...found, phone:digits, site:found.address||'', _found:true };
+    } else {
+      _qqData.customer = { ..._qqData.customer, phone:digits, _found:false };
+    }
+    // Re-render the customer screen to show result
+    _qqScreen('customer');
+  } catch(e) {
+    if (el) el.innerHTML = '<div style="font-size:12px;color:var(--red)">Search failed — enter name manually</div>';
+  }
+}
+
+function _qqClearCustomer() {
+  _qqData.customer = { name:'', phone:'', site:'', id:null, _found:null };
+  _qqScreen('customer');
+}
+
 function _qqFromCustomer() {
-  const name = document.getElementById('qq-name')?.value.trim();
-  if (!name) { showToast('Enter customer name','warn'); return; }
-  _qqData.customer = { name, phone:document.getElementById('qq-phone')?.value.trim()||'', site:document.getElementById('qq-site')?.value.trim()||'' };
+  const d = _qqData.customer;
+  // If found from DB — name is already set
+  if (!d._found) {
+    const name = document.getElementById('qq-name')?.value.trim();
+    const site = document.getElementById('qq-site')?.value.trim();
+    if (!name) { showToast('Enter customer name','warn'); return; }
+    _qqData.customer.name = name;
+    _qqData.customer.site = site || '';
+  }
+  const phone = document.getElementById('qq-phone')?.value.trim() || d.phone;
+  if (!phone) { showToast('Enter phone number','warn'); return; }
+  _qqData.customer.phone = phone;
   _qqScreen('rooms');
 }
 
@@ -29161,6 +29244,15 @@ async function _qqApply() {
   navigateTo('tiles');
 }
 
+// Jump from Summary back to Step 0 (Customer/Contractor) for editing
+async function _tqEditCustomerFromSummary() {
+  _tqState.step = 0;
+  const content = document.getElementById('tq-step-content');
+  if (content) content.innerHTML = await _renderStep0();
+  _updateStepHeader();
+  window.scrollTo(0,0);
+}
+
 window.VW_TILES = {
   // New tiles quotation
   renderTilesQuotationPage, tqNext, tqBack, linkContractor, linkContractorById, unlinkContractor, setContractorCommission, addAndLinkContractor, sendCustomerRegistrationLink, _onCustPhoneInput, searchCustomerByPhone, _clearCustomer, _saveNewCustomer, _updateStep0NextBtn, _debouncedContractorSearch, _showAddContractorForm, _sendContractorRegLink, selectGroutColour, _updateQuotedPrice, _updatePriceNote, _renderWallVisualizer, _redesignWall,
@@ -29178,8 +29270,10 @@ window.VW_TILES = {
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
-  openQuickQuote, _qqScreen, _qqFromCustomer, _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm,
+  openQuickQuote, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
+  _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm,
   _qqPref, _qqMatchTiles, _qqShowMatch, _qqToggle, _qqApply,
+  _tqEditCustomerFromSummary,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor
