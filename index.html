@@ -28181,6 +28181,32 @@ async function tqSubmitForApproval() {
       };
     })();
 
+    // Compute grand total for submission
+    const _submitTileTotal = (() => {
+      let t = 0;
+      _getTileSlots().forEach(slot => {
+        const qp = st.quotedPrices?.[slot.id];
+        if (!qp) return;
+        if (qp.pricePerSqft > 0) { t += Math.round(qp.pricePerSqft * slot.sqft); return; }
+        if (qp.pricePerBox > 0) {
+          const sel = st.tileSelections?.[slot.id];
+          if (!sel?.size?.mm) return;
+          const [mmL,mmW] = sel.size.mm.split('×').map(Number);
+          const sqftPerBox = (mmL/25.4)*(mmW/25.4)/144 * (sel.size.tilesPerBox||4);
+          const boxes = sqftPerBox > 0 ? Math.ceil(slot.sqft/sqftPerBox) : 0;
+          t += qp.pricePerBox * boxes;
+        }
+      });
+      return t;
+    })();
+    const _submitExtraTotal = (st.extraProducts||[]).reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
+    const _submitDeliveryTotal = (st.delivery?._transportCost||0)+(st.delivery?._loadingCost||0)+(st.delivery?._floorCost||0);
+    const _submitGrandTotal = _submitTileTotal + _submitExtraTotal + _submitDeliveryTotal;
+    // First slot price per sqft (for approval display)
+    const _firstSlot = _getTileSlots()[0];
+    const _firstQP = _firstSlot ? (st.quotedPrices?.[_firstSlot.id]) : null;
+    const _quotedPricePerSqft = _firstQP?.pricePerSqft || 0;
+
     const _tqPayload = {
       tq_no: tqNo,
       customer_name: st.customer.name,
@@ -28189,6 +28215,8 @@ async function tqSubmitForApproval() {
       site_address: st.customer.site,
       contractor_commission: contractorCommission,
       quoted_prices: st.quotedPrices || {},
+      quoted_price_per_sqft: _quotedPricePerSqft,
+      grand_total: _submitGrandTotal > 0 ? _submitGrandTotal : null,
       wall_designs: st.wallDesigns || {},
       design_tiles: Object.fromEntries(Object.entries(st.design||{}).map(([k,v])=>[k,v?.result?.tiles||[]])),
       tile_selections: st.tileSelections || {},
