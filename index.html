@@ -26700,6 +26700,16 @@ async function _renderStep8() {
 
   <!-- SUBMIT FOR APPROVAL — wizard is for executives to create and submit only -->
   <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
+    ${st._approvalStatus && st._approvalStatus !== 'draft' ? `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <span style="font-size:12px;padding:4px 10px;border-radius:20px;font-weight:700;background:${st._approvalStatus==='approved'?'rgba(34,197,94,0.15)':st._approvalStatus==='rejected'?'rgba(239,68,68,0.15)':'rgba(245,200,66,0.15)'};color:${st._approvalStatus==='approved'?'var(--green)':st._approvalStatus==='rejected'?'var(--red)':'var(--gold)'}">
+        ${st._approvalStatus==='approved'?'✅ Approved':st._approvalStatus==='rejected'?'❌ Rejected':'⏳ '+st._approvalStatus.replace(/_/g,' ')}
+      </span>
+    </div>
+    <button onclick="VW_TILES._tqRequestEdit()" style="width:100%;padding:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:10px;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      ✏️ Edit with Reason (re-enter approval flow)
+    </button>
+    ` : `
     <h3 class="card-title">📤 Submit for Approval</h3>
     <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
       Once submitted, approval chain starts automatically: <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong> — 30 sec at each level.
@@ -26707,14 +26717,19 @@ async function _renderStep8() {
     <div style="background:var(--bg2);border-radius:10px;padding:10px;font-size:12px;color:var(--text3)">
       After final approval → you can print &amp; share with customer · Cashier collects advance &amp; holds stock
     </div>
+    `}
   </div>
 
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqBack()">← Edit</button>
+    ${!st._approvalStatus || st._approvalStatus === 'draft' ? `
     <button class="btn-primary" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqSubmitForApproval()">📤 Submit for Approval</button>
+    ` : `
+    <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqSharePDF()">📄 Print / Share</button>
+    `}
   </div>
   <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">
-    Print &amp; Share unlocked only after management approves this quotation
+    ${!st._approvalStatus || st._approvalStatus === 'draft' ? 'Print &amp; Share unlocked only after management approves this quotation' : 'Use "Edit with Reason" to reopen and modify after approval'}
   </div>`;
 }
 
@@ -26942,9 +26957,10 @@ function _getWallGrid(slotId) {
   const slot = _getTileSlots().find(s=>s.id===slotId);
   const room = slot?.room;
   const wallArea = room?.areas?.find(a=>a.subType==='wall');
-  const wallH = wallArea?.h || 8;  // ft
-  const wallSqft = slot?.sqft || 0;
-  const wallLengthFt = wallH > 0 ? wallSqft / wallH : 0;
+  const wallH = wallArea?.h || wallArea?.w || 7;  // h = stored height; fallback 7ft not 8ft
+  // Use stored perimeter (wallArea.l) directly — computing from sqft/h gives wrong length
+  // because sqft has door deductions, making the visual wall shorter than reality
+  const wallLengthFt = wallArea?.l || (wallH > 0 ? (slot?.sqft||0) / wallH : 0);
 
   const tileWidthFt  = tileWidthMm / 304.8;
   const tileHeightFt = tileHeightMm / 304.8;
@@ -27651,7 +27667,14 @@ function _dsRenderInner() {
       <span>${totalBoxes} boxes</span><span style="color:var(--gold)">₹${totalAmount.toLocaleString('en-IN')}</span>
     </div>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border2);font-size:10px;color:var(--text3)">
-      🛡 +${_wastePct}% waste &amp; breakage buffer included · set in Tile Settings
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--text3)">🛡 Breakage buffer:</span>
+        <input type="number" value="${_wastePct}" min="0" max="20" step="1" inputmode="numeric"
+          style="width:42px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:2px 6px;font-size:12px;color:var(--text);text-align:center"
+          onchange="VW_TILES._dsSetBreakage(this.value)">
+        <span style="font-size:10px;color:var(--text3)">% &nbsp;·&nbsp; 0 = exact sqft, no buffer</span>
+        ${_wastePct>0?`<span style="font-size:10px;color:var(--gold)">+${_wastePct}% = ${((slot.sqft||0)*(1+_wastePct/100)).toFixed(1)} sqft with buffer</span>`:`<span style="font-size:10px;color:var(--green)">No buffer — exact sqft used</span>`}
+      </div>
     </div>
   </div>
   <button class="btn-primary full-width" style="background:var(--gold);color:#000" onclick="VW_TILES._dsContinue()">${last?'Confirm Design → Spacer':'Confirm → Next Room'}</button>
@@ -27692,6 +27715,7 @@ function _dsCopyCol1(){
 function _dsOrient(o){ const s=_dsCur(); if(!s)return; if(!_tqState.wallDesigns)_tqState.wallDesigns={}; if(!_tqState.wallDesigns[s.id])_tqState.wallDesigns[s.id]={}; _tqState.wallDesigns[s.id].orient=o; _dsState(s.id).cells=null; _dsRerender(); }
 function _dsBoxes(pi,n){ const s=_dsCur(); if(!s)return; _dsState(s.id).boxesOverride[pi]=n; _dsRerender(); }
 function _dsToggleBreakage(){ _tqState.breakageOff = !_tqState.breakageOff; _dsRerender(); }
+function _dsSetBreakage(v){ _tqState.breakagePct = Math.max(0, Math.min(20, parseFloat(v)||0)); _dsRerender(); }
 function _dsStorePrice(pi,v){
   const s=_dsCur(); if(!s)return;
   const st=_dsState(s.id);
@@ -27847,6 +27871,29 @@ async function tqBack() {
   }
 }
 
+// Edit with Reason — re-opens an approved/submitted quote back to draft with audit trail
+async function _tqRequestEdit() {
+  const id = _tqState._savedQuoteId || _tqState._draftId;
+  if (!id) { showToast('Quote not yet saved — edit freely','info'); _tqState._approvalStatus=null; _rerenderStep8(); return; }
+  const reason = prompt('Reason for editing this quotation (required):');
+  if (!reason || !reason.trim()) { showToast('Reason required to re-edit','warn'); return; }
+  try {
+    const profile = VW_AUTH.getCurrentProfile();
+    const log = { action:'re_edit_requested', reason: reason.trim(), by: profile?.name||'Staff', at: new Date().toISOString(), from_status: _tqState._approvalStatus };
+    const { error } = await VW_DB.client.from('tile_quotations').update({
+      approval_status: 'draft',
+      approval_log: VW_DB.client.rpc ? null : undefined, // will append below
+      rejection_reason: reason.trim(),
+      rejected_by: profile?.name||'Staff',
+      rejected_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (error) throw error;
+    _tqState._approvalStatus = 'draft';
+    showToast('Quote re-opened for editing. Re-submit when done.','success');
+    _rerenderStep8();
+  } catch(e) { showToast('Could not re-open: '+e.message,'error'); }
+}
+
 // Auto-save the in-progress tile quotation as a draft so nothing is ever lost and it can be
 // resumed from the Tile Quotes list. Fire-and-forget — never blocks navigation.
 async function _tqAutoSave() {
@@ -27873,7 +27920,7 @@ async function _tqAutoSave() {
     };
     const id = st._savedQuoteId || st._draftId;
     if (id) {
-      await VW_DB.client.from('tile_quotations').update(payload).eq('id', id).eq('status','draft');
+      await VW_DB.client.from('tile_quotations').update(payload).eq('id', id).eq('approval_status','draft');
     } else {
       const fy = getFinancialYearLabel();
       payload.tq_no = 'TQ/'+fy+'/D'+String(Date.now()).slice(-5);  // provisional draft number
@@ -30105,7 +30152,7 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval,
+  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
@@ -30119,7 +30166,7 @@ window.VW_TILES = {
   setDeliveryType, setLoadingType, addFloorLine, removeFloorLine, setFloorLine, calcDeliveryDistance, calcDeliveryDistanceFromAddress, _rerenderStep8,
   // Inventory
   renderTileInventoryAddForm, onTileSizeChange, calcCoverage, injectTileFields, tqReadFloorPlan, openTileVisualizer, tqAiVisualize, tqAiDescribe, _showAllSizesForSlot, _getTileSlots, _getWallGrid, _renderWallDesignPlanner, _selectPaint, _paintCell, _setWallOrient, _fillAll, _fillRow, _fillCol, _setDesignBoxes, _confirmWallDesign, _skipWallDesign,
-  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsToggleBreakage, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
+  _renderStepDesign, _renderStepAddons, _rerenderStepAddons, _dsTogglePalette, _dsSetActive, _dsPaint, _dsFillAll, _dsCopyCol1, _dsOrient, _dsBoxes, _dsToggleBreakage, _dsSetBreakage, _dsPrice, _dsPriceLive, _dsBoxPrice, _dsBoxPriceLive, _dsEditSizes, _dsContinue, _dsPrev,
   // Granite
   renderGraniteQuotationPage, addGranitePiece, updateGraniteItem,
   removeGranitePiece, generateGraniteQuote,
@@ -32592,8 +32639,9 @@ async function renderVisualizerPage() {
   const others = products.filter(p => !['Tiles','Granite'].includes(p.category) && !(p.category||'').toLowerCase().includes('paint'));
 
   return `
-  <div class="module-header">
-    <h2>🎨 Visualizer</h2>
+  <div class="module-header" style="display:flex;align-items:center;gap:10px">
+    ${(window._tqState?.rooms?.length||0) > 0 ? `<button onclick="navigateTo('tiles')" style="background:none;border:none;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;padding:0;flex-shrink:0">← Quotation</button>` : ''}
+    <h2 style="margin:0;flex:1">🎨 Visualizer</h2>
     <span style="font-size:11px;color:var(--text3);padding:3px 8px;background:var(--bg2);border-radius:20px">Beta</span>
   </div>
 
