@@ -3903,6 +3903,18 @@ async function submitCheckin() {
 
   showToast(`${name} checked in — ${reqItems.length} item(s) routed to team`, 'success');
 
+  // Also write to Supabase visits table so security kiosk and dashboard can see it
+  try {
+    await VW_DB.client.from('visits').insert({
+      visitor_name: name, visitor_phone: phone,
+      visitor_type: 'customer', checkin_type: 'customer',
+      status: 'active', security_checkin: false,
+      date: new Date().toISOString(), created_at: new Date().toISOString(),
+      purpose: reqItems.map(r=>r.description||r.department).join(', '),
+      persons_count: 1, self_checkin_complete: true,
+    });
+  } catch(e) { console.warn('Supabase visit sync:', e.message); }
+
   // Set activeVisit so Tile Quotation auto-fills this customer
   window.activeVisit = {
     visitId, customerId: customer.id, customerName: customer.name,
@@ -4017,11 +4029,47 @@ async function loadRoutingPreview(type) {
 }
 
 async function getTodayVisits() {
-  const visits = await VW_DB.all(VW_DB.STORES.visits);
-  const today = new Date().toDateString();
-  cachedTodayVisits = visits.filter(v => new Date(v.date).toDateString() === today).reverse();
+  // Fetch from BOTH Supabase (security kiosk entries) and IndexedDB (staff check-ins)
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+  const todayEnd   = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
 
-  const tasks = await VW_DB.all(VW_DB.STORES.tasks);
+  // Supabase visits (security kiosk + any synced)
+  let supaVisits = [];
+  try {
+    const { data } = await VW_DB.client.from('visits')
+      .select('id,visitor_name,customer_name,visitor_type,checkin_type,visitor_phone,status,date,created_at,persons_count,meeting_person,company_name,security_checkin,purpose,notes')
+      .gte('date', todayStart).lte('date', todayEnd)
+      .order('date', { ascending: false }).limit(100);
+    supaVisits = (data || []).map(v => ({
+      id: 'sb_'+v.id,
+      customerName: v.visitor_name || v.customer_name || 'Walk-in',
+      visitorType: v.checkin_type || v.visitor_type || 'customer',
+      visitorPhone: v.visitor_phone || '',
+      status: v.status || 'pending',
+      date: v.date || v.created_at,
+      organization: v.company_name || '',
+      purpose: v.purpose || v.notes || '',
+      meetingPerson: v.meeting_person || '',
+      personsCount: v.persons_count || 1,
+      _source: 'supabase',
+    }));
+  } catch(e) { console.warn('Supabase visit fetch:', e.message); }
+
+  // IndexedDB visits (staff check-in form)
+  let idbVisits = [];
+  try {
+    const all = await VW_DB.all(VW_DB.STORES.visits);
+    const todayStr = today.toDateString();
+    idbVisits = all.filter(v => new Date(v.date).toDateString() === todayStr)
+      .map(v => ({ ...v, _source:'idb' })).reverse();
+  } catch(e) { console.warn('IDB visit fetch:', e.message); }
+
+  // Merge, deduplicate by source+id
+  const merged = [...supaVisits, ...idbVisits];
+  cachedTodayVisits = merged.sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const tasks = await VW_DB.all(VW_DB.STORES.tasks).catch(()=>[]);
   cachedVisitDepts = {};
   tasks.forEach(t => { (cachedVisitDepts[t.visitId] = cachedVisitDepts[t.visitId] || []).push(t.department); });
 
@@ -4047,37 +4095,82 @@ async function applyActivityFilters() {
 async function renderTodayVisits(visits) {
   if (!visits.length) return '<p class="empty-msg">No activity yet today</p>';
   return visits.map(v => {
-    const isCustomer = v.visitorType === 'customer';
-    const meta = VISITOR_TYPES.find(t=>t.key===v.visitorType);
-    const icon = isCustomer ? '🧑‍🤝‍🧑' : (meta ? meta.icon : '❓');
-    const label = isCustomer ? 'Customer' : (meta ? meta.label : v.visitorType);
-    let statusText = v.status, statusColor = '#888';
-    if (isCustomer) {
-      if (v.status === 'pending') { statusText = 'Awaiting staff'; statusColor = '#EF9F27'; }
-      else if (v.status === 'active') { statusText = 'In progress'; statusColor = '#C8972B'; }
-      else if (v.status === 'completed') { statusText = 'Completed'; statusColor = '#22c55e'; }
-    } else {
-      if (v.meetingStatus === 'pending') { statusText = 'Awaiting response'; statusColor = '#EF9F27'; }
-      else if (v.meetingStatus === 'accepted') { statusText = 'Confirmed'; statusColor = '#22c55e'; }
-      else if (v.meetingStatus === 'declined') { statusText = 'Declined'; statusColor = '#ef4444'; }
-    }
-    const lastLog = (v.escalationLog||[]).slice(-1)[0];
-    const urgent = lastLog && ['floor_manager','store_manager','management'].includes(lastLog.level) && lastLog.status === 'pending';
+    // Type icon mapping (handles both old and new checkin_type values)
+    const typeIconMap = {
+      customer:'🧑‍🤝‍🧑', vendor:'🚚', supplier:'🚚', delivery:'🚚', product_return:'🔄',
+      payment:'💵', sample:'📦', other:'🏢', other_self:'🏢', other_notify:'🔔',
+      bank:'🏦', inspector:'🔍', contractor:'🏗', interview:'👤', official:'🏛', media:'📰',
+    };
+    const vtype = v.visitorType || v.checkin_type || 'other';
+    const isCustomer = vtype === 'customer';
+    const isSecurity = !!v._source || v.security_checkin;
+    const icon = typeIconMap[vtype] || '❓';
+    const meta = VISITOR_TYPES?.find(t=>t.key===vtype);
+    const label = isCustomer ? 'Customer' : (meta?.label || vtype.replace(/_/g,' '));
+
+    // Status label
+    const statusMap = { pending:'⏳ Waiting', active:'🟡 In Progress', completed:'✅ Done', closed:'✅ Done' };
+    let statusColor = v.status==='completed'||v.status==='closed' ? 'var(--green)' : v.status==='active' ? 'var(--gold)' : '#888';
+    const statusText = statusMap[v.status] || v.status;
+
+    // Extra info for kiosk entries
+    const extra = isSecurity ? [
+      v.personsCount > 1 ? `${v.personsCount} persons` : '',
+      v.meetingPerson ? `Meeting: ${v.meetingPerson}` : '',
+      v.organization || '',
+    ].filter(Boolean).join(' · ') : '';
+
+    // Use safe ID for onclick (Supabase entries have 'sb_' prefix)
+    const safeId = String(v.id).startsWith('sb_') ? `'${v.id}'` : v.id;
+    const time = new Date(v.date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+
     return `
-    <div class="visit-row" onclick="openVisitDetail(${v.id})">
-      <div class="visit-avatar" style="${urgent?'background:rgba(239,68,68,0.2);color:#ef4444':''}">${icon}</div>
+    <div class="visit-row" onclick="openVisitDetail(${safeId})" style="cursor:pointer">
+      <div class="visit-avatar">${icon}</div>
       <div class="visit-info">
-        <div class="visit-name">${v.customerName || 'Unknown'}</div>
-        <div class="visit-meta">${label} · ${new Date(v.date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+        <div class="visit-name">${v.customerName || 'Walk-in'}${v.personsCount>1?' +'+((v.personsCount||1)-1):''}</div>
+        <div class="visit-meta">${label} · ${time}${isSecurity?' · 🔒 Kiosk':''}${extra?' · '+extra:''}</div>
       </div>
-      <div class="visit-status" style="color:${statusColor}">${urgent?'⚠️ ':''}${statusText}</div>
+      <div class="visit-status" style="color:${statusColor};font-size:11px">${statusText}</div>
     </div>`;
   }).join('');
 }
 
 async function openVisitDetail(visitId) {
-  const visit = await VW_DB.getById(VW_DB.STORES.visits, visitId);
   const sheet = document.getElementById('bottom-sheet');
+
+  // Handle Supabase kiosk entries (id prefixed with 'sb_')
+  if (String(visitId).startsWith('sb_')) {
+    const numId = String(visitId).replace('sb_','');
+    const { data: sv } = await VW_DB.client.from('visits').select('*').eq('id', numId).single();
+    if (!sv) return;
+    const typeIconMap = { customer:'🧑‍🤝‍🧑', vendor:'🚚', other:'🏢', other_self:'🏢', other_notify:'🔔' };
+    const icon = typeIconMap[sv.checkin_type||sv.visitor_type] || '🏢';
+    sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <h3>${icon} ${sv.visitor_name||'Visitor'}</h3>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${new Date(sv.date||sv.created_at).toLocaleString('en-IN')} · Kiosk check-in</div>
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;font-size:12px">
+        ${sv.visitor_phone?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Phone</span><span>${sv.visitor_phone}</span></div>`:''}
+        ${sv.company_name?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Company</span><span>${sv.company_name}</span></div>`:''}
+        ${sv.persons_count>1?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Persons</span><span>${sv.persons_count}</span></div>`:''}
+        ${sv.meeting_person?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Meeting</span><span>${sv.meeting_person}</span></div>`:''}
+        ${sv.purpose||sv.notes?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Purpose</span><span style="text-align:right;max-width:60%">${sv.purpose||sv.notes}</span></div>`:''}
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Status</span><span style="color:var(--gold)">${sv.status}</span></div>
+      </div>
+      ${sv.meeting_person_phone?`<a href="https://wa.me/91${sv.meeting_person_phone.replace(/\D/g,'').replace(/^91/,'')}" target="_blank" style="display:block;margin-top:10px;padding:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);border-radius:10px;color:#25d366;font-weight:700;text-align:center;font-size:13px;text-decoration:none">📱 WhatsApp ${sv.meeting_person}</a>`:''}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button onclick="VW_CHECKIN.updateKioskVisitStatus(${numId},'active')" style="flex:1;padding:8px;border-radius:8px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:12px;cursor:pointer">🟡 Active</button>
+        <button onclick="VW_CHECKIN.updateKioskVisitStatus(${numId},'completed')" style="flex:1;padding:8px;border-radius:8px;background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);color:var(--green);font-size:12px;cursor:pointer">✅ Complete</button>
+        <button onclick="closeSheet()" style="padding:8px 14px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text3);font-size:12px;cursor:pointer">✕</button>
+      </div>`;
+    sheet.classList.add('open');
+    document.getElementById('sheet-overlay').classList.add('open');
+    return;
+  }
+
+  // IDB visit (existing logic)
+  const visit = await VW_DB.getById(VW_DB.STORES.visits, visitId);
 
   if (visit.visitorType === 'customer') {
     const customer = await VW_DB.getById(VW_DB.STORES.customers, visit.customerId);
@@ -4426,11 +4519,21 @@ async function declineVisitor(visitId) {
   navigateTo('checkin');
 }
 
+async function updateKioskVisitStatus(sbId, status) {
+  await VW_DB.client.from('visits').update({ status }).eq('id', sbId);
+  showToast('Status updated ✓', 'success');
+  closeSheet();
+  const todayVisits = await getTodayVisits();
+  const el = document.getElementById('today-visits-list');
+  if (el) el.innerHTML = await renderTodayVisits(todayVisits);
+}
+
 window.VW_CHECKIN = {
   renderCheckin, selectEntryType, addReqItem, removeReqItem, updateReqItem,
   submitCheckin, submitVisitorCheckin, loadRoutingPreview,
   openVisitDetail, acceptVisitUI, closeVisitUI, acceptVisitor, declineVisitor,
-  getTodayVisits, renderTodayVisits, getCategories, getDepartmentNames, setCategoriesCache, applyActivityFilters
+  getTodayVisits, renderTodayVisits, getCategories, getDepartmentNames, setCategoriesCache, applyActivityFilters,
+  updateKioskVisitStatus,
 };
 window.selectEntryType = selectEntryType;
 window.applyActivityFilters = applyActivityFilters;
