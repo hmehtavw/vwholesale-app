@@ -11,12 +11,16 @@
   body{ font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
         background:var(--bg); color:var(--ink); line-height:1.45; -webkit-font-smoothing:antialiased; }
   .wrap{ max-width:760px; margin:0 auto; padding:14px; }
-  .card{ background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; }
-  .top{ background:var(--navy); color:#fff; padding:18px 18px 16px; display:flex; align-items:center; gap:12px; }
+  .card{ background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); overflow:hidden; margin-bottom:12px; }
+  .top{ background:var(--navy); color:#fff; padding:18px 18px 14px; display:flex; align-items:center; gap:12px; }
   .logo{ width:46px; height:46px; border-radius:10px; background:var(--gold); color:var(--navy);
          font-weight:800; font-size:20px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
   .brand b{ font-size:17px; letter-spacing:.2px; }
   .brand div{ font-size:12px; opacity:.8; }
+  .lang-bar{ display:flex; gap:6px; padding:10px 18px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .lang-btn{ padding:3px 10px; border-radius:14px; border:1px solid var(--line); font-size:12px; cursor:pointer;
+             background:#fff; color:var(--muted); font-weight:600; transition:.15s; }
+  .lang-btn.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
   .meta{ padding:14px 18px; border-bottom:1px solid var(--line); display:flex; flex-wrap:wrap; gap:10px 26px; }
   .meta .lbl{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
   .meta .val{ font-size:14px; font-weight:600; }
@@ -43,13 +47,19 @@
         background:linear-gradient(to top, var(--bg) 70%, transparent); }
   .btn{ flex:1; padding:13px; border-radius:11px; border:none; font-size:14px; font-weight:700; cursor:pointer; }
   .btn.print{ background:var(--navy); color:#fff; }
-  .btn.call{ background:#25D366; color:#fff; text-decoration:none; text-align:center; line-height:1.4; }
+  .btn.call{ background:#25D366; color:#fff; text-decoration:none; text-align:center; line-height:1.4; display:block; }
   .state{ text-align:center; padding:60px 20px; color:var(--muted); }
   .spin{ width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--navy);
          border-radius:50%; margin:0 auto 14px; animation:s 0.8s linear infinite; }
   @keyframes s{ to{ transform:rotate(360deg); } }
+  .tile-room{ padding:12px 18px; border-bottom:1px solid var(--line); }
+  .tile-room-name{ font-size:13px; font-weight:700; margin-bottom:4px; }
+  .tile-room-detail{ font-size:12px; color:var(--muted); }
+  .tile-room-tile{ font-size:12px; color:var(--ink); margin-top:4px; }
+  .badge{ display:inline-block; background:rgba(230,181,60,.15); color:#a07a10;
+          border-radius:6px; padding:2px 7px; font-size:10px; font-weight:700; margin-top:4px; }
   @media print{
-    body{ background:#fff; } .bar{ display:none; } .card{ box-shadow:none; border-radius:0; }
+    body{ background:#fff; } .bar,.lang-bar{ display:none; } .card{ box-shadow:none; border-radius:0; }
     .top{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   }
 </style>
@@ -57,7 +67,7 @@
 <body>
 <div class="wrap">
   <div id="content">
-    <div class="state"><div class="spin"></div>Loading your quotation…</div>
+    <div class="state"><div class="spin"></div><span id="loading-text">Loading your quotation…</span></div>
   </div>
 </div>
 
@@ -67,102 +77,228 @@ const SUPABASE_ANON_KEY = 'sb_publishable_rowcFNrbdc8V0pJXJfUR_w_-bM5Ld3U';
 const STORE = 'V Wholesale';
 const STORE_PHONE = '8712697930';
 
+// ── Translations ──────────────────────────────────────────
+const TR = {
+  en: {
+    loading:'Loading your quotation…', not_found:'Quotation not found or no longer available. Please contact us for a fresh link.',
+    no_ref:'No quotation reference in the link.', error:'Could not load this quotation.',
+    quotation:'Quotation', date:'Date', customer:'Customer', contact:'Contact', site:'Site / Address',
+    items:'Items', description:'Description', qty:'Qty', rate:'Rate', amount:'Amount',
+    no_items:'No items listed.', grand_total:'Grand Total', subtotal:'Subtotal',
+    rooms:'Tile Rooms', room:'Room', area:'Area', tile:'Tile', boxes:'Boxes', size:'Size',
+    price_sqft:'Price / sqft', total_sqft:'Total sqft', total_boxes:'Total Boxes',
+    validity:'This quotation is valid for {n} days from the date above. Prices subject to stock availability.',
+    terms:'Terms & Conditions', call_us:'For changes or to place your order, contact us',
+    save_pdf:'⬇ Save / Print PDF', call_order:'📞 Call to Order', lang:'Language',
+    spacers:'Spacers', adhesive:'Adhesive', grout:'Grout', materials:'Materials',
+  },
+  te: {
+    loading:'మీ కొటేషన్ లోడ్ అవుతోంది…', not_found:'కొటేషన్ కనుగొనబడలేదు లేదా ఇకపై అందుబాటులో లేదు. కొత్త లింక్ కోసం మమ్మల్ని సంప్రదించండి.',
+    no_ref:'లింక్‌లో కొటేషన్ రిఫరెన్స్ లేదు.', error:'ఈ కొటేషన్ లోడ్ చేయడం సాధ్యపడలేదు.',
+    quotation:'కొటేషన్', date:'తేదీ', customer:'కస్టమర్', contact:'సంప్రదింపు', site:'సైట్ / చిరునామా',
+    items:'వస్తువులు', description:'వివరణ', qty:'పరిమాణం', rate:'రేటు', amount:'మొత్తం',
+    no_items:'వస్తువులు జాబితా చేయబడలేదు.', grand_total:'మొత్తం మొత్తం', subtotal:'ఉప మొత్తం',
+    rooms:'టైల్ గదులు', room:'గది', area:'వైశాల్యం', tile:'టైల్', boxes:'బాక్సులు', size:'సైజు',
+    price_sqft:'ధర / చ.అ.', total_sqft:'మొత్తం చ.అ.', total_boxes:'మొత్తం బాక్సులు',
+    validity:'ఈ కొటేషన్ పై తేదీ నుండి {n} రోజులు చెల్లుబాటు అవుతుంది. ధరలు స్టాక్ లభ్యత పై ఆధారపడి ఉంటాయి.',
+    terms:'నిబంధనలు & షరతులు', call_us:'మార్పులు లేదా ఆర్డర్ కు మమ్మల్ని సంప్రదించండి',
+    save_pdf:'⬇ సేవ్ / పిడిఎఫ్ ప్రింట్', call_order:'📞 ఆర్డర్ కు కాల్ చేయండి', lang:'భాష',
+    spacers:'స్పేసర్లు', adhesive:'అడెసివ్', grout:'గ్రౌట్', materials:'సామగ్రి',
+  },
+  hi: {
+    loading:'आपका कोटेशन लोड हो रहा है…', not_found:'कोटेशन नहीं मिला या अब उपलब्ध नहीं है। नए लिंक के लिए हमसे संपर्क करें।',
+    no_ref:'लिंक में कोटेशन संदर्भ नहीं है।', error:'यह कोटेशन लोड नहीं हो सका।',
+    quotation:'कोटेशन', date:'तारीख', customer:'ग्राहक', contact:'संपर्क', site:'साइट / पता',
+    items:'वस्तुएं', description:'विवरण', qty:'मात्रा', rate:'दर', amount:'राशि',
+    no_items:'कोई वस्तु सूचीबद्ध नहीं है।', grand_total:'कुल योग', subtotal:'उप-योग',
+    rooms:'टाइल कमरे', room:'कमरा', area:'क्षेत्रफल', tile:'टाइल', boxes:'बक्से', size:'आकार',
+    price_sqft:'मूल्य / वर्ग फुट', total_sqft:'कुल वर्ग फुट', total_boxes:'कुल बक्से',
+    validity:'यह कोटेशन उपरोक्त तिथि से {n} दिनों के लिए मान्य है। स्टॉक उपलब्धता के अनुसार मूल्य।',
+    terms:'नियम और शर्तें', call_us:'बदलाव या ऑर्डर के लिए हमसे संपर्क करें',
+    save_pdf:'⬇ सेव / PDF प्रिंट', call_order:'📞 ऑर्डर के लिए कॉल करें', lang:'भाषा',
+    spacers:'स्पेसर', adhesive:'अडेसिव', grout:'ग्राउट', materials:'सामग्री',
+  },
+  bn: {
+    loading:'আপনার কোটেশন লোড হচ্ছে…', not_found:'কোটেশন পাওয়া যায়নি বা আর পাওয়া যাচ্ছে না। নতুন লিঙ্কের জন্য আমাদের যোগাযোগ করুন।',
+    no_ref:'লিঙ্কে কোটেশন রেফারেন্স নেই।', error:'এই কোটেশন লোড করা যায়নি।',
+    quotation:'কোটেশন', date:'তারিখ', customer:'গ্রাহক', contact:'যোগাযোগ', site:'সাইট / ঠিকানা',
+    items:'পণ্যসমূহ', description:'বিবরণ', qty:'পরিমাণ', rate:'হার', amount:'পরিমাণ',
+    no_items:'কোনো পণ্য তালিকাভুক্ত নেই।', grand_total:'সর্বমোট', subtotal:'উপ-মোট',
+    rooms:'টাইল রুম', room:'কক্ষ', area:'আয়তন', tile:'টাইল', boxes:'বাক্স', size:'আকার',
+    price_sqft:'মূল্য / বর্গফুট', total_sqft:'মোট বর্গফুট', total_boxes:'মোট বাক্স',
+    validity:'এই কোটেশন উপরের তারিখ থেকে {n} দিন বৈধ। স্টক পাওয়ার উপর নির্ভর করে মূল্য।',
+    terms:'শর্তাবলী', call_us:'পরিবর্তন বা অর্ডারের জন্য আমাদের সাথে যোগাযোগ করুন',
+    save_pdf:'⬇ সেভ / PDF প্রিন্ট', call_order:'📞 অর্ডার করতে কল করুন', lang:'ভাষা',
+    spacers:'স্পেসার', adhesive:'আঠালো', grout:'গ্রাউট', materials:'সামগ্রী',
+  },
+  or: {
+    loading:'ଆପଣଙ୍କ କୋଟେସନ୍ ଲୋଡ ହେଉଛି…', not_found:'କୋଟେସନ୍ ମିଳିଲା ନାହିଁ ବା ଆଉ ଉପଲବ୍ଧ ନୁହେଁ। ନୂଆ ଲିଙ୍କ ପାଇଁ ଆମ ସହ ଯୋଗାଯୋଗ କରନ୍ତୁ।',
+    no_ref:'ଲିଙ୍କରେ କୋଟେସନ୍ ରେଫରେନ୍ସ ନାହିଁ।', error:'ଏହି କୋଟେସନ୍ ଲୋଡ ହୋଇପାରିଲା ନାହିଁ।',
+    quotation:'କୋଟେସନ୍', date:'ତାରିଖ', customer:'ଗ୍ରାହକ', contact:'ଯୋଗାଯୋଗ', site:'ସାଇଟ / ଠିକଣା',
+    items:'ସାମଗ୍ରୀ', description:'ବିବରଣ', qty:'ପରିମାଣ', rate:'ହାର', amount:'ରାଶି',
+    no_items:'କୌଣସି ସାମଗ୍ରୀ ତାଲିକାଭୁକ୍ତ ନୁହେଁ।', grand_total:'ମୋଟ ଯୋଗ', subtotal:'ଉପ-ଯୋଗ',
+    rooms:'ଟାଇଲ ରୁମ', room:'କୋଠରି', area:'କ୍ଷେତ୍ରଫଳ', tile:'ଟାଇଲ', boxes:'ବାକ୍ସ', size:'ଆକାର',
+    price_sqft:'ମୂଲ୍ୟ / ବର୍ଗଫୁଟ', total_sqft:'ମୋଟ ବର୍ଗଫୁଟ', total_boxes:'ମୋଟ ବାକ୍ସ',
+    validity:'ଏହି କୋଟେସନ୍ ଉପରୋକ୍ତ ତାରିଖ ଠାରୁ {n} ଦିନ ବୈଧ। ଷ୍ଟକ ଉପଲବ୍ଧତା ଅନୁଯାୟୀ ମୂଲ୍ୟ।',
+    terms:'ନିୟମ ଓ ସର୍ତ୍ତ', call_us:'ପରିବର୍ତ୍ତନ ବା ଅର୍ଡର ପାଇଁ ଆମ ସହ ଯୋଗାଯୋଗ କରନ୍ତୁ',
+    save_pdf:'⬇ ସେଭ / PDF ପ୍ରିଣ୍ଟ', call_order:'📞 ଅର୍ଡର ପାଇଁ ଫୋନ', lang:'ଭାଷା',
+    spacers:'ସ୍ପେସର', adhesive:'ଆଡ଼େସିଭ', grout:'ଗ୍ରାଉଟ', materials:'ସାମଗ୍ରୀ',
+  },
+};
+
+// ── Language detection ────────────────────────────────────
+const LANGS = [{code:'en',label:'English'},{code:'te',label:'తెలుగు'},{code:'hi',label:'हिंदी'},{code:'bn',label:'বাংলা'},{code:'or',label:'ଓଡ଼ିଆ'}];
+let _lang = (new URLSearchParams(location.search).get('lang')) ||
+  (['te','hi','bn','or'].find(l => (navigator.language||'').toLowerCase().startsWith(l))) || 'en';
+
+const t = k => (TR[_lang]||TR.en)[k] || TR.en[k] || k;
 const esc = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inr = n => '₹' + Math.round(Number(n)||0).toLocaleString('en-IN');
 
-function getRef(){
-  const p = new URLSearchParams(location.search);
-  return p.get('quote') || p.get('ref') || p.get('q') || '';
-}
-
-async function load(){
-  const ref = getRef();
-  const el = document.getElementById('content');
-  if(!ref){ el.innerHTML = msg('No quotation reference in the link.'); return; }
-  try{
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_quotation`, {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'apikey':SUPABASE_ANON_KEY, 'Authorization':'Bearer '+SUPABASE_ANON_KEY },
-      body: JSON.stringify({ ref: String(ref) })
-    });
-    const txt = await res.text();
-    let rows = null;
-    try{ rows = JSON.parse(txt); }catch(_){}
-    if(!res.ok){
-      el.innerHTML = msg(`Couldn't load this quotation (error ${res.status}).<br>
-        <span style="font-size:11px;opacity:.7">${esc((txt||'').slice(0,180))}</span><br>
-        <span style="font-size:11px;opacity:.7">Ref: ${esc(ref)}</span>`);
-      return;
-    }
-    const q = Array.isArray(rows) ? rows[0] : (rows && rows.id ? rows : null);
-    if(!q){ el.innerHTML = msg(`Quotation <b>${esc(ref)}</b> not found or no longer available.<br>Please contact us for a fresh link.`); return; }
-    render(q);
-  }catch(e){
-    el.innerHTML = msg('Could not load this quotation.<br><span style="font-size:11px;opacity:.7">'+esc(String((e&&e.message)||e))+'</span>');
-  }
-}
+// ── Helpers ───────────────────────────────────────────────
+function getRef(){ const p = new URLSearchParams(location.search); return p.get('quote')||p.get('ref')||p.get('q')||''; }
 
 function msg(html){
   return `<div class="card"><div class="state" style="color:#1a1a1a">${html}</div></div>
     <div class="foot">${STORE}, Vijayawada · <a href="tel:${STORE_PHONE}">${STORE_PHONE}</a></div>`;
 }
 
-function render(q){
-  const items = Array.isArray(q.items) ? q.items : [];
-  const date = q.date || (q.created_at ? String(q.created_at).slice(0,10) : '');
-  const validity = q.validity_days || 7;
-  const site = q.site_name || q.address || q.delivery_address || '';
+function langBar(active){
+  return `<div class="lang-bar">${LANGS.map(l=>`<button class="lang-btn${l.code===active?' active':''}" onclick="switchLang('${l.code}')">${l.label}</button>`).join('')}</div>`;
+}
 
+window.switchLang = function(code){
+  _lang = code;
+  const url = new URL(location.href);
+  url.searchParams.set('lang', code);
+  history.replaceState(null,'',url);
+  if(window._lastQ) render(window._lastQ);
+};
+
+// ── Load ──────────────────────────────────────────────────
+async function load(){
+  document.getElementById('loading-text').textContent = t('loading');
+  const ref = getRef();
+  const el = document.getElementById('content');
+  if(!ref){ el.innerHTML = msg(t('no_ref')); return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_public_quotation`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body: JSON.stringify({ref: String(ref)})
+    });
+    const txt = await res.text();
+    let data = null;
+    try{ data = JSON.parse(txt); }catch(_){}
+    if(!res.ok){ el.innerHTML = msg(`${t('error')}<br><small style="opacity:.6">${esc((txt||'').slice(0,180))}</small>`); return; }
+    const q = Array.isArray(data) ? data[0] : (data&&(data.id||data.tq_no) ? data : null);
+    if(!q){ el.innerHTML = msg(t('not_found')); return; }
+    window._lastQ = q;
+    render(q);
+  }catch(e){
+    document.getElementById('content').innerHTML = msg(`${t('error')}<br><small style="opacity:.6">${esc(String((e&&e.message)||e))}</small>`);
+  }
+}
+
+// ── Render ────────────────────────────────────────────────
+function render(q){
+  const isTQ = !!(q.tq_no || q.rooms);
+  document.getElementById('content').innerHTML = isTQ ? renderTQ(q) : renderGeneral(q);
+  document.getElementById('bar')?.removeAttribute('hidden');
+  document.querySelector('.btn.save-pdf').textContent = t('save_pdf');
+  document.querySelector('.btn.call').textContent = t('call_order');
+}
+
+function header(q, quoteNo, date){
+  return `<div class="top">
+    <div class="logo">VW</div>
+    <div class="brand"><b>${STORE}</b><div>Vijayawada · Home Building &amp; Improvement</div></div>
+  </div>
+  ${langBar(_lang)}
+  <div class="meta">
+    <div><div class="lbl">${t('quotation')}</div><div class="val">${esc(quoteNo)}</div></div>
+    ${date?`<div><div class="lbl">${t('date')}</div><div class="val">${esc(date)}</div></div>`:''}
+    <div><div class="lbl">${t('customer')}</div><div class="val">${esc(q.customer_name||'Customer')}</div></div>
+    ${q.customer_phone||q.phone?`<div><div class="lbl">${t('contact')}</div><div class="val">${esc(q.customer_phone||q.phone)}</div></div>`:''}
+    ${q.site_address||q.address?`<div style="flex-basis:100%"><div class="lbl">${t('site')}</div><div class="val">${esc(q.site_address||q.address)}</div></div>`:''}
+  </div>`;
+}
+
+// General quotation render
+function renderGeneral(q){
+  const items = Array.isArray(q.items) ? q.items : [];
+  const date = (q.date||q.created_at||'').slice(0,10);
+  const validity = q.validity_days || 7;
   let computed = 0;
   const rows = items.map(it => {
-    const desc = it.description || it.name || it.model || 'Item';
-    const sub = [it.brand, it.model].filter(Boolean).join(' · ');
-    const qty = it.qty!=null ? it.qty : (it.quantity!=null ? it.quantity : '');
-    const unit = it.unit || '';
-    const rate = it.netPrice!=null ? it.netPrice : (it.rate!=null ? it.rate : (it.price!=null ? it.price : ''));
-    const total = it.total!=null ? it.total : ((Number(rate)||0)*(Number(qty)||0));
+    const desc = it.description||it.name||it.model||'Item';
+    const sub = [it.brand,it.model].filter(Boolean).join(' · ');
+    const qty = it.qty!=null?it.qty:(it.quantity!=null?it.quantity:'');
+    const unit = it.unit||'';
+    const rate = it.netPrice!=null?it.netPrice:(it.rate!=null?it.rate:(it.price!=null?it.price:''));
+    const total = it.total!=null?it.total:((Number(rate)||0)*(Number(qty)||0));
     computed += Number(total)||0;
-    return `<tr>
-      <td class="desc"><b>${esc(desc)}</b>${sub?`<small>${esc(sub)}</small>`:''}</td>
+    return `<tr><td class="desc"><b>${esc(desc)}</b>${sub?`<small>${esc(sub)}</small>`:''}</td>
       <td class="num">${esc(qty)}${unit?' '+esc(unit):''}</td>
       <td class="num">${rate!==''?inr(rate):'—'}</td>
-      <td class="num"><b>${inr(total)}</b></td>
-    </tr>`;
+      <td class="num"><b>${inr(total)}</b></td></tr>`;
+  }).join('');
+  const grand = q.grand_total!=null?q.grand_total:computed;
+  return `<div class="card">
+    ${header(q, q.quote_no||q.id||'', date)}
+    <div class="sec-title">${t('items')}</div>
+    <table><thead><tr>
+      <th>${t('description')}</th><th class="num">${t('qty')}</th>
+      <th class="num">${t('rate')}</th><th class="num">${t('amount')}</th>
+    </tr></thead><tbody>${rows||`<tr><td colspan="4" style="color:#6b7280">${t('no_items')}</td></tr>`}</tbody></table>
+    <div class="totals"><div class="grand"><span>${t('grand_total')}</span><b>${inr(grand)}</b></div></div>
+    <div class="note">📋 ${t('validity').replace('{n}',validity)}</div>
+    ${q.terms?`<div class="terms"><b style="color:#1a1a1a">${t('terms')}</b>\n${esc(q.terms)}</div>`:''}
+  </div>
+  <div class="foot">${t('call_us')}<br><a href="tel:${STORE_PHONE}">${STORE} · ${STORE_PHONE}</a></div>`;
+}
+
+// Tile quotation render
+function renderTQ(q){
+  const date = (q.created_at||'').slice(0,10);
+  const rooms = Array.isArray(q.rooms) ? q.rooms : [];
+  const tileSelections = q.tile_selections || {};
+  const priceSqft = parseFloat(q.quoted_price_per_sqft||0);
+  const totalSqft = parseFloat(q.total_area_sqft||0);
+  const totalBoxes = parseInt(q.total_boxes||0);
+  const grand = q.grand_total || (priceSqft>0&&totalSqft>0 ? Math.round(priceSqft*totalSqft) : 0);
+
+  // Build room rows
+  const roomRows = rooms.map(r => {
+    const areas = Array.isArray(r.areas) ? r.areas : [];
+    const sqft = areas.reduce((s,a)=>s+(parseFloat(a.sqft)||0),0);
+    // Find tile selections for this room's slots
+    const floorSel = tileSelections[r.id+'_floor'] || tileSelections[r.id] || {};
+    const wallSel = tileSelections[r.id+'_wall'] || {};
+    const floorTile = floorSel.tile_name || floorSel.name || '';
+    const floorSize = floorSel.size?.mm || floorSel.size || '';
+    const wallTile = wallSel.tile_name || wallSel.name || '';
+    const wallSize = wallSel.size?.mm || wallSel.size || '';
+    return `<div class="tile-room">
+      <div class="tile-room-name">${esc(r.label||r.type||'Room')}</div>
+      <div class="tile-room-detail">${sqft.toFixed(1)} sqft</div>
+      ${floorTile?`<div class="tile-room-tile">🔲 ${esc(floorTile)}${floorSize?' · '+esc(floorSize)+'mm':''}</div>`:''}
+      ${wallTile?`<div class="tile-room-tile">🧱 ${esc(wallTile)}${wallSize?' · '+esc(wallSize)+'mm':''}</div>`:''}
+    </div>`;
   }).join('');
 
-  const grand = q.grand_total!=null ? q.grand_total : computed;
-
-  document.getElementById('content').innerHTML = `
-  <div class="card">
-    <div class="top">
-      <div class="logo">VW</div>
-      <div class="brand"><b>${STORE}</b><div>Vijayawada · Home Building & Improvement</div></div>
-    </div>
-    <div class="meta">
-      <div><div class="lbl">Quotation</div><div class="val">${esc(q.quote_no||q.id||'')}</div></div>
-      ${date?`<div><div class="lbl">Date</div><div class="val">${esc(date)}</div></div>`:''}
-      <div><div class="lbl">Customer</div><div class="val">${esc(q.customer_name||'Customer')}</div></div>
-      ${q.contact?`<div><div class="lbl">Contact</div><div class="val">${esc(q.contact)}</div></div>`:''}
-      ${site?`<div style="flex-basis:100%"><div class="lbl">Site</div><div class="val">${esc(site)}</div></div>`:''}
-    </div>
-
-    <div class="sec-title">Items</div>
-    <table>
-      <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="4" style="color:#6b7280">No items listed.</td></tr>`}</tbody>
-    </table>
-
+  return `<div class="card">
+    ${header(q, q.tq_no||q.id||'', date)}
+    ${rooms.length?`<div class="sec-title">${t('rooms')}</div>${roomRows}`:''}
     <div class="totals">
-      <div class="grand"><span>Grand Total</span><b>${inr(grand)}</b></div>
+      ${totalSqft>0?`<div class="row"><span>${t('total_sqft')}</span><span>${totalSqft.toFixed(1)} sqft</span></div>`:''}
+      ${totalBoxes>0?`<div class="row"><span>${t('total_boxes')}</span><span>${totalBoxes} ${t('boxes')}</span></div>`:''}
+      ${priceSqft>0?`<div class="row"><span>${t('price_sqft')}</span><span>${inr(priceSqft)}</span></div>`:''}
+      ${grand>0?`<div class="grand"><span>${t('grand_total')}</span><b>${inr(grand)}</b></div>`:''}
     </div>
-
-    <div class="note">📋 This quotation shows all items and pricing. Valid for ${esc(validity)} days from the date above. Prices are subject to stock availability.</div>
-    ${q.terms?`<div class="terms"><b style="color:#1a1a1a">Terms</b>\n${esc(q.terms)}</div>`:''}
+    <div class="note">📋 ${t('validity').replace('{n}',30)}</div>
   </div>
-  <div class="foot">For any changes or to place your order, call us<br><a href="tel:${STORE_PHONE}">${STORE} · ${STORE_PHONE}</a></div>
-  `;
-
-  document.getElementById('bar')?.removeAttribute('hidden');
+  <div class="foot">${t('call_us')}<br><a href="tel:${STORE_PHONE}">${STORE} · ${STORE_PHONE}</a></div>`;
 }
 
 load();
@@ -170,7 +306,7 @@ load();
 
 <div class="wrap" id="barwrap">
   <div class="bar" id="bar" hidden>
-    <button class="btn print" onclick="window.print()">⬇ Save / Print PDF</button>
+    <button class="btn print save-pdf" onclick="window.print()">⬇ Save / Print PDF</button>
     <a class="btn call" href="tel:8712697930">📞 Call to Order</a>
   </div>
 </div>
