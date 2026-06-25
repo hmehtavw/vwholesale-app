@@ -29136,8 +29136,16 @@ async function _qqMatchTiles() {
     if (p.brand) q = q.ilike('brand','%'+p.brand+'%');
     if (p.finish) q = q.ilike('tile_finish','%'+p.finish+'%');
     if (p.color)  q = q.ilike('colour_family','%'+p.color+'%');
-    const { data: tiles } = await q.limit(50);
-    const all = tiles||[];
+    const { data: tiles, error: tilesErr } = await q.limit(50);
+
+    // Fallback: if filters returned nothing (or query errored), fetch ALL active tiles
+    let all = tiles||[];
+    if (!all.length || tilesErr) {
+      const { data: fallback } = await VW_DB.client.from('products')
+        .select('id,name,brand,category,tile_size_mm,tile_finish,colour_family,price,price_per_sqft,coverage_per_box,tiles_per_box,stock,surface_type,image_url')
+        .eq('category','Tiles').eq('is_active',true).gt('stock',0).limit(50);
+      all = fallback || [];
+    }
 
     // Budget filter
     const inBudget = t => {
