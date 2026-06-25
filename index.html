@@ -920,12 +920,25 @@ td strong { color: var(--text); }
       </div>
       <div class="header-right">
         <div id="identity-badge"></div>
-        <button id="lang-toggle" onclick="VW_SETTINGS.showLanguagePicker()"
-          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Language">🌐</button>
-        <button onclick="navigateTo('eod')" 
-          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Daily Summary">📅</button>
-        <button onclick="navigateTo('settings')"
-          style="background:none;border:none;padding:4px 6px;font-size:16px;color:var(--text3);cursor:pointer" title="Settings">⚙️</button>
+        <!-- ⋯ More dropdown — language/eod/settings (role-filtered) -->
+        <div style="position:relative" id="hdr-more-wrap">
+          <button id="hdr-more-btn" onclick="toggleHeaderMore()"
+            style="background:none;border:none;padding:4px 8px;font-size:18px;color:var(--text3);cursor:pointer;letter-spacing:1px" title="More options">⋯</button>
+          <div id="hdr-more-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:160px;z-index:2000;box-shadow:0 4px 16px rgba(0,0,0,.3)">
+            <button id="hdr-lang-btn" onclick="toggleHeaderMore();VW_SETTINGS.showLanguagePicker()"
+              style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;color:var(--text);font-size:13px;text-align:left">
+              <span style="font-size:16px">🌐</span> Language
+            </button>
+            <button id="hdr-eod-btn" onclick="toggleHeaderMore();navigateTo('eod')"
+              style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;color:var(--text);font-size:13px;text-align:left">
+              <span style="font-size:16px">📅</span> Daily Summary
+            </button>
+            <button id="hdr-settings-btn" onclick="toggleHeaderMore();navigateTo('settings')"
+              style="display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;padding:9px 12px;border-radius:8px;cursor:pointer;color:var(--text);font-size:13px;text-align:left">
+              <span style="font-size:16px">⚙️</span> Settings
+            </button>
+          </div>
+        </div>
         <button onclick="if(confirm('Log out of V Wholesale?'))VW_AUTH.signOut().then(()=>location.reload())"
           title="Log Out"
           style="background:none;border:none;padding:4px 8px;cursor:pointer;color:var(--text3);display:flex;align-items:center" aria-label="Log out">
@@ -1596,21 +1609,23 @@ const ROLE_PAGES = {
 // "feedback" stay always-on for every approved role — they're core to
 // doing the job, not optional add-ons.
 const PERMISSION_PAGES = {
-  billing:   ['cart', 'quotations', 'tiles', 'granite', 'ledger'],
-  inventory: ['inventory'],
-  crm:       ['crm'],
-  hr:        ['hr'],
-  analytics: ['analytics'],
-  club:      ['club'],
-  settings:  ['settings'],
-  vendors:   ['vendors'],
-  marketing: ['marketing'],
-  dispatch:  ['dispatch'],
-  service:   ['service'],
+  billing:        ['cart', 'quotations', 'tiles', 'granite', 'ledger'],
+  inventory:      ['inventory'],
+  tile_inventory: ['tile_inventory'],
+  crm:            ['crm'],
+  hr:             ['hr'],
+  analytics:      ['analytics'],
+  club:           ['club'],
+  settings:       ['settings'],
+  vendors:        ['vendors'],
+  marketing:      ['marketing'],
+  dispatch:       ['dispatch'],
+  service:        ['service'],
 };
 const PERMISSION_LABELS = {
   billing: 'Billing, Quotations & Tiles/Granite',
   inventory: 'Inventory',
+  tile_inventory: 'Tile Stock (Dedicated)',
   crm: 'CRM & Sales',
   hr: 'HR & Team',
   analytics: 'Analytics & Reports',
@@ -34618,17 +34633,36 @@ async function renderTileInventoryPage() {
     <div class="metric-card"><div class="mc-label">Pending Photos</div><div class="mc-value">${tiles.filter(p=>!p.has_live_photo).length}</div></div>
   </div>
 
-  <!-- SEARCH + FILTER -->
+  <!-- SEARCH + FILTER — warehouse options loaded from DB -->
   <div style="display:flex;gap:8px;margin-bottom:10px">
     <input type="text" id="ti-search" placeholder="🔍 Brand, size, design..." oninput="VW_TILE_INV.filterTileInventory(this.value)" style="flex:1">
-    <select id="ti-warehouse" onchange="VW_TILE_INV.filterTileInventory()" style="width:120px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;color:var(--text)">
+    <select id="ti-warehouse" onchange="VW_TILE_INV.filterTileInventory()" style="width:130px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;color:var(--text)">
       <option value="">All Locations</option>
-      <option value="VJA_Store">Main Floor</option>
-      <option value="VJA_Display">Display</option>
-      <option value="VJA_BackArea">Back Area</option>
-      <option value="VJA_OpenRacks">Open Racks</option>
+      ${warehouses.map(w=>`<option value="${w.code}">${w.name}</option>`).join('')}
     </select>
   </div>
+
+  <!-- WAREHOUSE MANAGER — admin/store_manager only -->
+  ${(['admin','store_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? `
+  <div class="card" style="margin-bottom:12px;border-color:rgba(96,165,250,0.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 class="card-title" style="margin:0">🏭 Warehouse / Location Manager</h3>
+      <button onclick="VW_TILE_INV.showAddWarehouseForm()" class="btn-sm" style="background:var(--gold);color:#000">+ Add</button>
+    </div>
+    <div id="wh-list">
+    ${warehouses.map(w=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2)" id="wh-row-${w.id}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700">${w.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${w.code}</div>
+      </div>
+      <button onclick="VW_TILE_INV.editWarehouse(${w.id},'${w.name.replace(/'/g,"\\'")}','${w.code}')"
+        style="padding:3px 10px;border-radius:6px;font-size:11px;background:var(--bg3);border:1px solid var(--border);cursor:pointer;color:var(--text2)">✎</button>
+      <button onclick="VW_TILE_INV.deleteWarehouse(${w.id},'${w.name.replace(/'/g,"\\'")}')"
+        style="padding:3px 10px;border-radius:6px;font-size:11px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);cursor:pointer;color:var(--red)">✕</button>
+    </div>`).join('')}
+    </div>
+  </div>` : ''}
 
   <!-- TILE LIST -->
   <div id="tile-inv-list">
@@ -35501,6 +35535,58 @@ async function processExcelImport() {
   navigateTo('tile_inventory');
 }
 
+// ── WAREHOUSE MANAGEMENT ────────────────────────────────────────────────────
+
+async function showAddWarehouseForm(prefillId, prefillName, prefillCode) {
+  const sheet = document.getElementById('bottom-sheet');
+  const isEdit = !!prefillId;
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="margin:0 0 14px">${isEdit?'✎ Edit':'+ Add'} Warehouse / Location</h3>
+    <div class="form-group">
+      <label>Location Name *</label>
+      <input type="text" id="wh-name" value="${prefillName||''}" placeholder="e.g. VJA Store — Main Floor">
+    </div>
+    <div class="form-group">
+      <label>Code * <span style="font-size:10px;color:var(--text3)">(short, no spaces — used internally)</span></label>
+      <input type="text" id="wh-code" value="${prefillCode||''}" placeholder="e.g. VJA_MAIN" ${isEdit?'readonly style="opacity:0.6"':''}>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button class="btn-primary" style="flex:1;background:var(--gold);color:#000" onclick="VW_TILE_INV.saveWarehouse(${prefillId||'null'})">💾 Save</button>
+    </div>`;
+  document.getElementById('bottom-sheet').classList.add('open');
+  setTimeout(()=>document.getElementById('wh-name')?.focus(), 80);
+}
+
+async function saveWarehouse(id) {
+  const name = document.getElementById('wh-name')?.value.trim();
+  const code = document.getElementById('wh-code')?.value.trim().toUpperCase().replace(/\s+/g,'_');
+  if (!name || !code) return showToast('Name and code required','warn');
+  if (id) {
+    await VW_DB.client.from('warehouse_locations').update({ name }).eq('id', id);
+    showToast('Updated ✓','success');
+  } else {
+    const maxSort = 100; // will append at end
+    await VW_DB.client.from('warehouse_locations').insert({ name, code, sort_order: maxSort, is_active: true });
+    showToast('Added ✓','success');
+  }
+  closeSheet();
+  navigateTo('tile_inventory');
+}
+
+function editWarehouse(id, name, code) {
+  showAddWarehouseForm(id, name, code);
+}
+
+async function deleteWarehouse(id, name) {
+  if (!confirm(`Delete "${name}"? This cannot be undone. Stock already assigned to this location will be orphaned.`)) return;
+  await VW_DB.client.from('warehouse_locations').update({ is_active: false }).eq('id', id);
+  const row = document.getElementById(`wh-row-${id}`);
+  if (row) row.remove();
+  showToast(`"${name}" removed`,'success');
+}
+
 window.VW_TILE_INV = {
   renderTileInventoryPage, filterTileInventory,
   showAddTileForm, onBrandChange, loadRacks, loadShelves,
@@ -35509,6 +35595,7 @@ window.VW_TILE_INV = {
   adjustStock, loadRacksForAdj, previewAdjPhoto, saveStockAdjustment,
   openTileDetail, showQR, printQR, renderProductQRPage, addToWishlistFromQR,
   showExcelImport, downloadTileImportTemplate, previewExcelImport, processExcelImport,
+  showAddWarehouseForm, saveWarehouse, editWarehouse, deleteWarehouse,
 };
 
 
@@ -36672,6 +36759,8 @@ function applyRolePermissions() {
   if (!allowed.includes(currentPage)) {
     navigateTo('dashboard');
   }
+  // Sync header dropdown visibility to role
+  updateHeaderDropdownRoles();
   // Update dynamic badges on quick action buttons
   updateQuickActionBadges();
 }
@@ -37847,6 +37936,35 @@ function closeMoreMenu() {
   if (menu) menu.style.display = 'none';
 }
 window.closeMoreMenu = closeMoreMenu;
+
+// Header ⋯ dropdown — toggle open/close
+function toggleHeaderMore() {
+  const menu = document.getElementById('hdr-more-menu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) {
+    // Close when clicking outside
+    setTimeout(() => {
+      document.addEventListener('click', function closeHdr(e) {
+        if (!document.getElementById('hdr-more-wrap')?.contains(e.target)) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', closeHdr);
+        }
+      });
+    }, 10);
+  }
+}
+window.toggleHeaderMore = toggleHeaderMore;
+
+// Called from applyRolePermissions — show/hide items in header dropdown per role
+function updateHeaderDropdownRoles() {
+  const allowed = VW_AUTH?.getAllowedPages?.() || [];
+  const eodBtn = document.getElementById('hdr-eod-btn');
+  const settBtn = document.getElementById('hdr-settings-btn');
+  if (eodBtn) eodBtn.style.display = allowed.includes('eod') ? '' : 'none';
+  if (settBtn) settBtn.style.display = allowed.includes('settings') ? '' : 'none';
+}
 
 function toggleMoreMenu() {
   const menu = document.getElementById('more-menu');
