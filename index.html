@@ -26733,15 +26733,25 @@ async function _renderStep8Inner() {
   <div class="card" style="margin-bottom:10px;border-color:rgba(96,165,250,0.3)">
     ${st._approvalStatus && st._approvalStatus !== 'draft' ? `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <span style="font-size:12px;padding:4px 10px;border-radius:20px;font-weight:700;background:${st._approvalStatus==='approved'?'rgba(34,197,94,0.15)':st._approvalStatus==='rejected'?'rgba(239,68,68,0.15)':'rgba(245,200,66,0.15)'};color:${st._approvalStatus==='approved'?'var(--green)':st._approvalStatus==='rejected'?'var(--red)':'var(--gold)'}">
-        ${st._approvalStatus==='approved'?'✅ Approved':st._approvalStatus==='rejected'?'❌ Rejected':'⏳ '+st._approvalStatus.replace(/_/g,' ')}
+      <span style="font-size:14px;padding:6px 14px;border-radius:20px;font-weight:700;background:${st._approvalStatus==='approved'?'rgba(34,197,94,0.15)':st._approvalStatus==='rejected'?'rgba(239,68,68,0.15)':'rgba(245,200,66,0.15)'};color:${st._approvalStatus==='approved'?'var(--green)':st._approvalStatus==='rejected'?'var(--red)':'var(--gold)'}">
+        ${st._approvalStatus==='approved'?'✅ Approved':st._approvalStatus==='rejected'?'❌ Rejected':'⏳ Pending Approval'}
       </span>
     </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Quote is in the approval queue. You will be notified once approved.</div>
     <button onclick="VW_TILES._tqRequestEdit()" style="width:100%;padding:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:10px;color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
       ✏️ Edit with Reason (re-enter approval flow)
     </button>
     ` : `
     <h3 class="card-title">📤 Submit for Approval</h3>
+    ${!st.customer.name ? `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:6px">👤 Customer Name Required</div>
+      <input id="tq-submit-cust-name" type="text" placeholder="Customer name..." value="${st.customer?.name||''}"
+        oninput="_tqState.customer.name=this.value"
+        style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;box-sizing:border-box">
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">Enter before submitting for approval</div>
+    </div>
+    ` : ''}
     <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
       Once submitted, approval chain starts automatically: <strong>TL / Sr Exec → Floor Manager → Store Manager → Management</strong> — 30 sec at each level.
     </p>
@@ -26754,7 +26764,7 @@ async function _renderStep8Inner() {
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqBack()">← Edit</button>
     ${!st._approvalStatus || st._approvalStatus === 'draft' ? `
-    <button class="btn-primary" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqSubmitForApproval()">📤 Submit for Approval</button>
+    <button class="btn-primary" id="tq-submit-btn" style="flex:1;min-width:80px;background:var(--gold);color:#000" onclick="VW_TILES.tqSubmitForApproval()">📤 Submit for Approval</button>
     ` : `
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqSharePDF()">📄 Print / Share</button>
     `}
@@ -29846,8 +29856,10 @@ function _qqAddForm() {
     ${!noDoor?`
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--text3)">Door deduction:</span>
-      <button onclick="VW_TILES._qqSetV('hasDoor',${!r.hasDoor})" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.hasDoor?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.hasDoor?'var(--gold-muted)':'var(--bg3)'}">
-        ${r.hasDoor?'✓ Yes':'No door'}</button>
+      <button onclick="VW_TILES._qqSetV('hasDoor',true)"  style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.hasDoor?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.hasDoor?'var(--gold-muted)':'var(--bg3)'}">
+        ${r.hasDoor?'✓ Yes':'Yes'}</button>
+      <button onclick="VW_TILES._qqSetV('hasDoor',false)" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${!r.hasDoor?'2px solid var(--red,#ef4444)':'1px solid var(--border)'};background:${!r.hasDoor?'rgba(239,68,68,0.1)':'var(--bg3)'}">
+        ${!r.hasDoor?'✓ No door':'No door'}</button>
       ${r.hasDoor?`<input type="number" value="${r.dw}" placeholder="W" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dw',this.value)">
         <span style="font-size:10px;color:var(--text3)">×</span>
         <input type="number" value="${r.dh}" placeholder="H" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dh',this.value)"><span style="font-size:10px;color:var(--text3)">ft</span>`:''}
@@ -30064,8 +30076,7 @@ async function _qqMatchTiles() {
         base = poolWallFiltered.length ? poolWallFiltered : (poolWall.length ? poolWall : pool);
       }
       // Score uses 'floor' surface type for bathroomFloor too (same pool, prefer smaller sizes)
-      const scoreSurf = surf === 'bathroomFloor' ? 'floor' : surf;
-      return [...base].sort((a,b)=>score(b,scoreSurf)-score(a,scoreSurf)).slice(0,5);
+      return [...base].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,5);
     };
     const top3=(surf)=>topN(surf); // keep alias for compatibility
 
