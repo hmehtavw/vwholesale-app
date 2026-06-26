@@ -29631,7 +29631,7 @@ const _QQ_ROOMS = [
 window._qqData = null;
 
 async function openQuickQuote() {
-  window._qqData = { customer:{name:'',phone:'',site:'',_found:null}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:'',size:'',floorSize:'',wallSize:''}, matches:{floor:[],wall:[]}, confirmed:{}, adding:null };
+  window._qqData = { customer:{name:'',phone:'',site:'',_found:null}, rooms:[], prefs:{brand:'',finish:'',color:'',budget:'',size:'',floorSize:'',wallSize:'',bathroomFloorSize:''}, matches:{floor:[],bathroomFloor:[],wall:[]}, confirmed:{}, adding:null };
   // Pre-load tile size config so size chips show correctly in preferences screen
   if (!_tqSizeCfg?.sizes?.length) {
     try { _tqSizeCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] }); } catch(e) {}
@@ -29916,15 +29916,31 @@ function _qqShowPrefs() {
   const floorChips = activeSizes.filter(mm=>floorSizeMms.includes(mm)).map(mm=>ch('floorSize',mm,mm)).join('');
   const wallChips  = activeSizes.filter(mm=>wallSizeMms.includes(mm)).map(mm=>ch('wallSize',mm,mm)).join('');
 
-  // Detect if rooms have both floor AND wall to show dual size pickers
-  const hasFloorRooms = _qqData.rooms.some(r=>r.surface==='floor'||r.surface==='both');
+  // Detect room surface types
+  const hasPureFloor = _qqData.rooms.some(r=>r.surface==='floor');
+  const hasBothRooms = _qqData.rooms.some(r=>r.surface==='both'); // bathroom/kitchen
+  const hasFloorRooms = hasPureFloor || hasBothRooms;
   const hasWallRooms  = _qqData.rooms.some(r=>r.surface==='wall'||r.surface==='both');
   const hasBoth = hasFloorRooms && hasWallRooms;
+  const needsSeparateBathroomFloor = hasPureFloor && hasBothRooms; // e.g. Bathroom + Living Room
 
   _qqSheet(`
     <div style="font-size:12px;color:var(--text3);margin-bottom:14px">All optional. AI matches from what's in stock.</div>
 
-    ${hasBoth ? `
+    ${needsSeparateBathroomFloor ? `
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🏠 Living / Bedroom Floor Tile Size</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${ch('floorSize','','Any')}${floorChips}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🚿 Bathroom / Wet Area Floor Tile Size</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${ch('bathroomFloorSize','','Any')}${floorChips}
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🧱 Wall Tile Size</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">
+      ${ch('wallSize','','Any')}${wallChips}
+    </div>
+    ` : hasBoth ? `
     <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">Floor Tile Size</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
       ${ch('floorSize','','Any')}${floorChips}
@@ -30030,15 +30046,36 @@ async function _qqMatchTiles() {
     // Apply floor/wall size filter to respective pools if preferences set
     const poolFloorFiltered = p.floorSize ? poolFloor.filter(t=>t.tile_size_mm===p.floorSize) : poolFloor;
     const poolWallFiltered  = p.wallSize  ? poolWall.filter(t=>t.tile_size_mm===p.wallSize)   : poolWall;
+    // Bathroom floor uses its own size preference (smaller tiles typical in wet areas)
+    const poolBathroomFloorFiltered = p.bathroomFloorSize
+      ? poolFloor.filter(t=>t.tile_size_mm===p.bathroomFloorSize)
+      : poolFloor;
     // Get top matches per surface — show 5 options for more choice
     const topN=(surf)=>{
-      const base = surf==='floor'
-        ? ((poolFloorFiltered.length ? poolFloorFiltered : poolFloor.length ? poolFloor : pool))
-        : ((poolWallFiltered.length  ? poolWallFiltered  : poolWall.length  ? poolWall  : pool));
-      return [...base].sort((a,b)=>score(b,surf)-score(a,surf)).slice(0,5);
+      let base;
+      if (surf==='bathroomFloor') {
+        base = poolBathroomFloorFiltered.length ? poolBathroomFloorFiltered : (poolFloor.length ? poolFloor : pool);
+      } else if (surf==='floor') {
+        base = poolFloorFiltered.length ? poolFloorFiltered : (poolFloor.length ? poolFloor : pool);
+      } else {
+        base = poolWallFiltered.length ? poolWallFiltered : (poolWall.length ? poolWall : pool);
+      }
+      // Score uses 'floor' surface type for bathroomFloor too (same pool, prefer smaller sizes)
+      const scoreSurf = surf === 'bathroomFloor' ? 'floor' : surf;
+      return [...base].sort((a,b)=>score(b,scoreSurf)-score(a,scoreSurf)).slice(0,5);
     };
     const top3=(surf)=>topN(surf); // keep alias for compatibility
-    _qqData.matches = { floor: hasFloor?top3('floor'):[], wall: hasWall?top3('wall'):[] };
+
+    // Build matches — separate bathroom floor from living room floor when both exist
+    const hasPureFloor = _qqData.rooms.some(r=>r.surface==='floor');
+    const hasBothSurf  = _qqData.rooms.some(r=>r.surface==='both');
+    const needsBathroomFloor = hasPureFloor && hasBothSurf;
+
+    _qqData.matches = {
+      floor: hasFloor ? topN('floor') : [],
+      bathroomFloor: needsBathroomFloor ? topN('bathroomFloor') : [],
+      wall: hasWall ? topN('wall') : [],
+    };
     _qqData.confirmed = {};
 
     if (!_qqData.matches.floor.length && !_qqData.matches.wall.length) {
@@ -30072,13 +30109,15 @@ function _qqShowMatch() {
       <div style="align-self:center;font-size:22px;flex-shrink:0">${sel?'✅':'⬜'}</div>
     </div>`;
   };
-  const fl=_qqData.matches.floor, wl=_qqData.matches.wall;
+  const fl=_qqData.matches.floor||[], bf=_qqData.matches.bathroomFloor||[], wl=_qqData.matches.wall||[];
   const flSel=Object.keys(c).some(k=>k.startsWith('floor_'));
+  const bfSel=Object.keys(c).some(k=>k.startsWith('bathroomFloor_'));
   const wlSel=Object.keys(c).some(k=>k.startsWith('wall_'));
-  const canGo=(!fl.length||flSel)&&(!wl.length||wlSel);
+  const canGo=(!fl.length||flSel)&&(!bf.length||bfSel)&&(!wl.length||wlSel);
   _qqSheet(`
-    ${fl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">🔲 Floor Tiles — pick one</div>${fl.map(t=>card(t,'floor')).join('')}`:''}
-    ${wl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:${fl.length?'14px':0} 0 8px">🧱 Wall Tiles — pick one</div>${wl.map(t=>card(t,'wall')).join('')}`:''}
+    ${fl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">🏠 Living / Bedroom Floor — pick one</div>${fl.map(t=>card(t,'floor')).join('')}`:''}
+    ${bf.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:${fl.length?'14px':0} 0 8px">🚿 Bathroom / Wet Area Floor — pick one</div>${bf.map(t=>card(t,'bathroomFloor')).join('')}`:''}
+    ${wl.length?`<div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin:${(fl.length||bf.length)?'14px':0} 0 8px">🧱 Wall Tiles — pick one</div>${wl.map(t=>card(t,'wall')).join('')}`:''}
     <button class="btn-secondary full-width" style="margin-top:4px;margin-bottom:8px" onclick="VW_TILES._qqScreen('prefs')">← Change Preferences</button>
     <button class="btn-primary full-width" ${canGo?'':'disabled'} onclick="VW_TILES._qqApply()"
       style="${!canGo?'opacity:0.5;cursor:not-allowed':''}">
@@ -30088,7 +30127,10 @@ function _qqShowMatch() {
 }
 
 function _qqToggle(key) {
-  const surf=key.split('_')[0];
+  // key format: 'floor_123', 'wall_456', 'bathroomFloor_789'
+  // surf = everything before the LAST underscore (handles multi-word surface names)
+  const lastUs = key.lastIndexOf('_');
+  const surf = key.slice(0, lastUs);
   Object.keys(_qqData.confirmed).filter(k=>k.startsWith(surf+'_')).forEach(k=>delete _qqData.confirmed[k]);
   if (!_qqData.confirmed[key]) _qqData.confirmed[key]=true;
   _qqShowMatch();
@@ -30163,8 +30205,9 @@ async function _qqApply() {
       const qr = d.rooms[i]; // safe index-based access
       const hasBothAreas = room.areas.some(a=>a.subType==='wall') && room.areas.some(a=>a.subType==='floor'||!a.subType);
       if (hasBothAreas) {
-        // Both surfaces — wizard uses room.id+'_floor' and room.id+'_wall'
-        setSlot(room.id+'_floor', 'floor');
+        // Both surfaces — use bathroomFloor tile if separately selected, else fall back to floor
+        const flSurf = confirmedIds['bathroomFloor'] ? 'bathroomFloor' : 'floor';
+        setSlot(room.id+'_floor', flSurf);
         setSlot(room.id+'_wall',  'wall');
       } else {
         // Single surface — wizard uses room.id (no suffix)
