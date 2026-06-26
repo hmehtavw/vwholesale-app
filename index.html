@@ -26057,6 +26057,7 @@ async function _renderStep8() {
 }
 
 async function _renderStep8Inner() {
+  const st = _tqState;   // ← was accidentally removed when wrapper was added
   const totalSqft = _tqTotalSqft();
   const quoteNo = `TQ/${getFinancialYearLabel()}/${String(Date.now()).slice(-4)}`;
 
@@ -30020,7 +30021,8 @@ async function _qqMatchTiles() {
     const pool = all.filter(inBudget).length ? all.filter(inBudget) : all;
 
     // Score tiles per surface — penalise wrong surface type heavily
-    const floorSizes=['800×800','600×1200','600×600','400×400','300×300'];
+    const floorSizes=['600×1200','800×1600','600×600','400×400','300×300']; // large format first
+    const bathroomFloorSizes=['300×300','400×400','600×600','300×450'];    // small anti-skid first
     const wallSizes=['300×600','300×450','250×375','300×300','200×300'];
     // Surface pools (strictly separated by surface_type)
     const poolFloor = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='floor'||st==='both'; });
@@ -30028,18 +30030,19 @@ async function _qqMatchTiles() {
     const score = (t, surf) => {
       let s=0, st=t.surface_type||'both', sz=t.tile_size_mm||'';
       // Surface type match — penalise wrong surface
-      if(surf==='floor') { if(st==='floor'||st==='both') s+=10; else s-=8; }
+      if(surf==='floor'||surf==='bathroomFloor') { if(st==='floor'||st==='both') s+=10; else s-=8; }
       if(surf==='wall')  { if(st==='wall'||st==='both')  s+=10; else s-=8; }
-      // Preferred sizes for each surface
-      const szArr=surf==='floor'?floorSizes:wallSizes;
+      // Preferred sizes — bathroom prefers small anti-skid, living room prefers large
+      const szArr = surf==='bathroomFloor' ? bathroomFloorSizes : surf==='floor' ? floorSizes : wallSizes;
       const si=szArr.indexOf(sz); if(si>=0) s+=szArr.length-si+3;
       if(p.brand&&(t.brand||'').toLowerCase().includes(p.brand.toLowerCase())) s+=4;
       if(p.finish&&(t.tile_finish||'').toLowerCase().includes(p.finish.toLowerCase())) s+=3;
       if(p.color&&(t.colour_family||'').toLowerCase().includes(p.color.toLowerCase())) s+=3;
       // Surface-specific size preference (from separate floor/wall size pickers)
       if(surf==='floor'&&p.floorSize&&t.tile_size_mm===p.floorSize) s+=8;
+      if(surf==='bathroomFloor'&&p.bathroomFloorSize&&t.tile_size_mm===p.bathroomFloorSize) s+=8;
       if(surf==='wall' &&p.wallSize &&t.tile_size_mm===p.wallSize)  s+=8;
-      if(p.size&&t.tile_size_mm===p.size) s+=6; // single-size preference (non-bathroom)
+      if(p.size&&t.tile_size_mm===p.size) s+=6;
       if((t.stock||0)>=10) s+=1;
       return s;
     };
