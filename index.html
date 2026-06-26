@@ -24688,8 +24688,8 @@ function _getTileSlots() {
     const hasWall  = r.areas?.some(a => a.subType === 'wall');
     const hasFloor = r.areas?.some(a => a.subType === 'floor' || !a.subType);
     if ((r.def?.areaType === 'both') || (hasWall && hasFloor)) {
-      const wallSqft  = r.areas.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0);
-      const floorSqft = r.areas.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0);
+      const wallSqft  = (r.areas||[]).filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0);
+      const floorSqft = (r.areas||[]).filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0);
       if (wallSqft  > 0) slots.push({ id: r.id+'_wall',  room:r, subType:'wall',  sqft:wallSqft,  label:(r.label||r.type)+' — Wall',  icon:'🧱' });
       if (floorSqft > 0) slots.push({ id: r.id+'_floor', room:r, subType:'floor', sqft:floorSqft, label:(r.label||r.type)+' — Floor', icon:'🔲' });
     } else {
@@ -30001,6 +30001,9 @@ async function _qqMatchTiles() {
     // Score tiles per surface — penalise wrong surface type heavily
     const floorSizes=['800×800','600×1200','600×600','400×400','300×300'];
     const wallSizes=['300×600','300×450','250×375','300×300','200×300'];
+    // Surface pools (strictly separated by surface_type)
+    const poolFloor = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='floor'||st==='both'; });
+    const poolWall  = pool.filter(t=>{ const st=t.surface_type||'both'; return st==='wall'||st==='both'; });
     const score = (t, surf) => {
       let s=0, st=t.surface_type||'both', sz=t.tile_size_mm||'';
       // Surface type match — penalise wrong surface
