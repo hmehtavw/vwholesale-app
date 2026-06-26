@@ -23511,33 +23511,38 @@ let _tqSpacerCfg = { pcs_per_packet:100, clip_pcs_per_packet:50, spacers_per_til
 let _tqResumeData = null;
 async function renderTilesQuotationPage() {
   const _isResume = !!_tqResumeData;
-  if (_tqResumeData) { _tqState = _tqResumeData; _tqResumeData = null; }
-  else {
-  _tqState = {
-    step: 0,
-    customer: { name:'', phone:'', site:'', id:null },
-    contractor: null,
-    rooms: [],
-    currentFlat: '',
-    tileSelections: {},
-    spacerSelections: {},
-    spacerType: 'plus',
-    adhesiveSelections: {},
-    beading: [],
-    groutSelections: {},
-    quotedPrices: {},
-    accessories: [],
-    floorTraps: [],
-    soffit: {enabled:false},
-    delivery: {type:'self', distanceKm:0, floors:[], beyondFt:false, siteAddress:''},
-    laborRequired: null,
-    addons: {},
-    wallDesigns: {},
-    _inWallDesign: false,
-    _designSlot: null,
-    currentRoomIdx: 0,
-  };
+  if (_tqResumeData) {
+    _tqState = _tqResumeData; _tqResumeData = null;
+  } else if (!_tqState?.rooms?.length && !_tqState?.customer?.name) {
+    // Only reset to step 0 when there is genuinely nothing in progress.
+    // Do NOT reset when we're re-rendering an active QQ / in-progress quote —
+    // that would wipe the customer and rooms that were just set.
+    _tqState = {
+      step: 0,
+      customer: { name:'', phone:'', site:'', id:null },
+      contractor: null,
+      rooms: [],
+      currentFlat: '',
+      tileSelections: {},
+      spacerSelections: {},
+      spacerType: 'plus',
+      adhesiveSelections: {},
+      beading: [],
+      groutSelections: {},
+      quotedPrices: {},
+      accessories: [],
+      floorTraps: [],
+      soffit: {enabled:false},
+      delivery: {type:'self', distanceKm:0, floors:[], beyondFt:false, siteAddress:''},
+      laborRequired: null,
+      addons: {},
+      wallDesigns: {},
+      _inWallDesign: false,
+      _designSlot: null,
+      currentRoomIdx: 0,
+    };
   }
+  // else: active quote in progress — keep _tqState as-is for re-render
 
   // Preload tile-size + spacer configs so the synchronous spacer step can read them
   try {
