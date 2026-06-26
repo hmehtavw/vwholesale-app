@@ -30217,7 +30217,10 @@ async function _qqApply() {
     });
 
     // Hand off to wizard at Summary
-    window._tqResumeData = {
+    // IMPORTANT: Must assign to _tqResumeData (the let variable at line 23511),
+    // NOT window._tqResumeData — let variables at top-level are NOT window properties,
+    // so window._tqResumeData is a different variable that renderTilesQuotationPage never reads.
+    _tqResumeData = {
       customer:d.customer, contractor:null, rooms,
       currentFlat:'', tileSelections, quotedPrices,
       spacerSelections, spacerType:'plus', spacerResult:null,
@@ -30230,8 +30233,6 @@ async function _qqApply() {
       _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
       step:8, _draftId:null, _approvalStatus:null, breakagePct:10,
     };
-    // CRITICAL: bust the tiles page cache so the QQ summary shows immediately,
-    // not the stale "Customer" step that was cached from last time tiles page opened
     delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
     closeSheet();
     showToast('Quick quote ready — review Summary','success');
