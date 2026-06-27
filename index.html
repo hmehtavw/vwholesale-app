@@ -26092,8 +26092,10 @@ async function _renderStep8Inner() {
     const dsResult = _tqState.design?.[slot.id]?.result;
     const dsBoxes = dsResult?.totalBoxes;
     const designTiles = (dsResult?.tiles?.length > 0) ? dsResult.tiles : null;
-    const boxes = (dsBoxes != null && dsBoxes > 0)
-      ? dsBoxes
+    // Prefer: (1) QQ-computed per-code boxes stored on submit, (2) Design step boxes, (3) area-based
+    const qqBoxes = sel._qqBoxes;
+    const boxes = (qqBoxes > 0) ? qqBoxes
+      : (dsBoxes != null && dsBoxes > 0) ? dsBoxes
       : (sqftPerBox > 0 ? Math.ceil(roomSqft / sqftPerBox) : 0);
     const wtPerBox = cfgEntry?.weight_per_box || 20;
     return { room:r, slot, roomSqft, sz, boxes, sqftPerTile, tilesPerBox, sqftPerBox, weightKg: boxes*wtPerBox, designTiles };
@@ -28324,24 +28326,25 @@ async function tqSubmitForApproval() {
       totalWeightSub += boxes * (cfg?.weight_per_box || 20);
     });
 
-    // Compute commission
+    // Compute commission — sum per-slot value (not firstSlot price × total boxes)
     const contractorCommission = (() => {
       if (!st.contractor) return null;
       const slots = _getTileSlots();
-      let totalBoxes = 0;
+      let totalValue = 0;
       slots.forEach(s => {
         const sel = st.tileSelections[s.id];
         if (!sel?.size) return;
+        const qp = st.quotedPrices[s.id];
+        if (!qp) return;
         const [mmL,mmW] = sel.size.mm.split('×').map(Number);
         const spf = (mmL/25.4)*(mmW/25.4)/144;
-        const qp = st.quotedPrices[s.id];
-        const tpb = 4; // fallback
+        const cfgC = (weightCfgSub.sizes||[]).find(cs=>cs.mm===sel.size.mm);
+        const tpb = cfgC?.tiles_per_box || sel.size.tilesPerBox || 6; // config first, not hardcoded 4
         const spb = spf * tpb;
-        totalBoxes += spb > 0 ? Math.ceil(s.sqft/spb) : 0;
+        const slotBoxes = (sel._qqBoxes > 0) ? sel._qqBoxes : (spb > 0 ? Math.ceil(s.sqft/spb) : 0);
+        if (qp.pricePerBox > 0) totalValue += qp.pricePerBox * slotBoxes;
+        else if (qp.pricePerSqft > 0) totalValue += qp.pricePerSqft * s.sqft;
       });
-      const firstSlot = slots[0];
-      const pricePerBox = firstSlot ? (st.quotedPrices[firstSlot.id]?.pricePerBox || 0) : 0;
-      const totalValue = pricePerBox * totalBoxes;
       const pct = st.contractor.commissionPct || 2;
       return {
         contractor_name: st.contractor.name,
@@ -29794,7 +29797,10 @@ function _qqShowRooms() {
     <div style="background:var(--bg2);border-radius:12px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div style="font-size:14px;font-weight:700">${def.icon} ${r.type} <span style="font-size:11px;font-weight:400;color:var(--text3)">${sq.toFixed(0)} sqft</span></div>
-        <button onclick="VW_TILES._qqRm(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px">✕</button>
+        <div style="display:flex;gap:4px">
+          <button onclick="VW_TILES._qqEditRoom(${i})" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--text2);cursor:pointer;font-size:11px;padding:2px 8px">✎ Edit</button>
+          <button onclick="VW_TILES._qqRm(${i})" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px">✕</button>
+        </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${needsFloor ? `<button onclick="VW_TILES._qqDesignTile(${i},'floor')"
@@ -29922,6 +29928,12 @@ function _qqSet(field, val) {
 function _qqSetV(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val; }
 function _qqCancelAdd() { _qqData.adding=null; _qqShowRooms(); }
 function _qqRm(i) { _qqData.rooms.splice(i,1); _qqShowRooms(); }
+function _qqEditRoom(i) {
+  // Load existing room into the add form for editing
+  _qqData.adding = { ..._qqData.rooms[i] };
+  _qqData.editingIdx = i;  // _qqSave will update at this index instead of pushing
+  _qqShowRooms();
+}
 
 function _qqSqft(r) {
   let t=0;
@@ -29951,7 +29963,13 @@ function _qqSave() {
   if (_qqSqft(r)<=0) { showToast('Enter measurements first','warn'); return; }
   if ((r.surface==='floor'||r.surface==='both') && r.mode==='lw' && (!parseFloat(r.l)||!parseFloat(r.w))) { showToast('Enter floor length and width','warn'); return; }
   if ((r.surface==='wall'||r.surface==='both') && !parseFloat(r.wl)) { showToast('Enter total wall length','warn'); return; }
-  _qqData.rooms.push({..._qqData.adding});
+  if (_qqData.editingIdx !== undefined && _qqData.editingIdx !== null) {
+    // Update existing room instead of pushing duplicate
+    _qqData.rooms[_qqData.editingIdx] = { ..._qqData.adding };
+    _qqData.editingIdx = null;
+  } else {
+    _qqData.rooms.push({ ..._qqData.adding });
+  }
   _qqData.adding = null;
   _qqShowRooms();
 }
@@ -30601,7 +30619,10 @@ async function _qqBuildQuote() {
             const tpbFl = cfgSzFl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_floor' : rid;
             const customBoxPrice_fl = window[`qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`];
-            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:tpbFl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
+            // Compute accurate per-code boxes (same as QQ Output) for TQ Summary
+            const fcForBoxes = _qqCalcFloor(r, r.floorDesign);
+            const qqFlBoxes = fcForBoxes?.totalBoxes || 0;
+            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:tpbFl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign, _qqBoxes:qqFlBoxes };
             if (customBoxPrice_fl !== undefined && customBoxPrice_fl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_fl };
             else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
           }
@@ -30609,7 +30630,7 @@ async function _qqBuildQuote() {
       }
       if ((r.surface==='wall'||r.surface==='both') && r.wallDesign?.pattern?.length) {
         const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||7;
-        const dw=r.hasDoor?parseFloat(r.dw)||0:0, dh=r.hasDoor?parseFloat(r.dh)||0:0;
+        const dw=r.hasDoor===true?parseFloat(r.dw)||0:0, dh=r.hasDoor===true?parseFloat(r.dh)||0:0;
         const base=Math.max(0, wl*wh - dw*dh);
         if (base>0) {
           areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${r.hasDoor?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
@@ -30621,7 +30642,10 @@ async function _qqBuildQuote() {
             const tpbWl = cfgSzWl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_wall' : rid;
             const customBoxPrice_wl = window[`qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`];
-            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:tpbWl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
+            // Compute accurate wall boxes (same as QQ Output) for TQ Summary
+            const wlForBoxes = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
+            const qqWlBoxes = wlForBoxes?.totalBoxes || 0;
+            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:tpbWl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign, _qqBoxes:qqWlBoxes };
             if (customBoxPrice_wl !== undefined && customBoxPrice_wl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_wl };
             else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
           }
@@ -30693,7 +30717,7 @@ window.VW_TILES = {
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
   openQuickQuote, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
-  _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm,
+  _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm, _qqEditRoom,
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
   _qqAssignSearch, _qqAssignTile, _qqAssignNext, _qqAssignBack,
