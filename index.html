@@ -29909,7 +29909,16 @@ function _qqAddForm() {
   </div>`;
 }
 
-function _qqSet(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val==='true'?true:val==='false'?false:val; _qqShowRooms(); }
+function _qqSet(field, val) {
+  if (!_qqData.adding) return;
+  if (field === 'hasDoor') {
+    // Force strict boolean — never store string 'false' which is truthy!
+    _qqData.adding.hasDoor = (val === true || val === 'true');
+  } else {
+    _qqData.adding[field] = val==='true'?true:val==='false'?false:val;
+  }
+  _qqShowRooms();
+}
 function _qqSetV(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val; }
 function _qqCancelAdd() { _qqData.adding=null; _qqShowRooms(); }
 function _qqRm(i) { _qqData.rooms.splice(i,1); _qqShowRooms(); }
@@ -30410,9 +30419,11 @@ function _qqShowOutput() {
     if ((room.surface==='wall'||room.surface==='both') && room.wallDesign) {
       const wLen = parseFloat(room.wl)||0;
       const wH   = parseFloat(room.wh)||7;
-      const dw   = room.hasDoor ? parseFloat(room.dw)||0 : 0;
-      const dh   = room.hasDoor ? parseFloat(room.dh)||0 : 0;
-      const wc   = _qqCalcWall(wLen, wH, room.hasDoor, dw, dh, room.wallDesign);
+      // Strict boolean check — prevents string 'false' being truthy
+      const hasDoorStrict = room.hasDoor === true;
+      const dw   = hasDoorStrict ? parseFloat(room.dw)||0 : 0;
+      const dh   = hasDoorStrict ? parseFloat(room.dh)||0 : 0;
+      const wc   = _qqCalcWall(wLen, wH, hasDoorStrict, dw, dh, room.wallDesign);
       if (wc) {
         const allCodes = Object.keys(wc.results);
         html += `<div style="margin-bottom:10px">
@@ -35744,6 +35755,10 @@ async function renderTileInventoryPage() {
     .order('brand').order('name')
     .limit(200);
   const tiles = products || [];
+
+  // Fetch warehouse locations for filter dropdown + manager panel
+  const { data: warehouses } = await VW_DB.client
+    .from('warehouse_locations').select('*').eq('is_active',true).order('sort_order');
 
   // Compute available stock per product
   const { data: holds } = await VW_DB.client.from('stock_holds').select('product_id,boxes_held').eq('status','active');
