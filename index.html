@@ -30416,22 +30416,22 @@ async function _qqBuildQuote() {
     const tileSelections = {}, quotedPrices = {};
 
     d.rooms.forEach((r, ri) => {
-      const rid = `qq${ri}_${Date.now()}`;
+      const rid = 'qq'+ri+'_'+Date.now();
       const areas = [];
-
+      // hasBoth: room has BOTH floor AND wall designs completed
+      const hasBoth = (r.surface==='both') && r.floorDesign?.pattern?.length && r.wallDesign?.pattern?.length;
+      // Slot IDs must match _getTileSlots(): rid+'_floor'/'_wall' only for hasBoth, else just rid
       // Floor
       if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
         const sqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : parseFloat(r.sqft)||0;
         if (sqft > 0) {
           areas.push({ subType:'floor', sqft, base:sqft, l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
-          // Use first tile in floor pattern as the representative tile
-          const mainCode = r.floorDesign.pattern[0];
-          const mainTile = r.floorDesign.tileMap[mainCode];
+          const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
-            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            tileSelections[rid+'_floor'] = { size:{mm:r.floorDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign: r.floorDesign };
-            if (mainTile.price_per_sqft) quotedPrices[rid+'_floor'] = { pricePerSqft:mainTile.price_per_sqft };
+            const slotId = hasBoth ? rid+'_floor' : rid;
+            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:(mmH/25.4)*(mmW/25.4)/144}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
+            if (mainTile.price_per_sqft) quotedPrices[slotId] = { pricePerSqft:mainTile.price_per_sqft };
           }
         }
       }
@@ -30442,13 +30442,12 @@ async function _qqBuildQuote() {
         const base=Math.max(0, wl*wh - dw*dh);
         if (base>0) {
           areas.push({ subType:'wall', sqft:base, base, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
-          const mainCode = r.wallDesign.pattern[0];
-          const mainTile = r.wallDesign.tileMap[mainCode];
+          const mainTile = r.wallDesign.tileMap[r.wallDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
-            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            tileSelections[rid+'_wall'] = { size:{mm:r.wallDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign: r.wallDesign };
-            if (mainTile.price_per_sqft) quotedPrices[rid+'_wall'] = { pricePerSqft:mainTile.price_per_sqft };
+            const slotId = hasBoth ? rid+'_wall' : rid;
+            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:(mmH/25.4)*(mmW/25.4)/144}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
+            if (mainTile.price_per_sqft) quotedPrices[slotId] = { pricePerSqft:mainTile.price_per_sqft };
           }
         }
       }
