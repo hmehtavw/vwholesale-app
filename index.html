@@ -29648,6 +29648,8 @@ const _QQ_ROOMS = [
 window._qqData = null;
 
 async function openQuickQuote() {
+  // Clean up any stale price keys from previous QQ sessions
+  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
   window._qqData = {
     customer: { name:'', phone:'', site:'', _found:null },
     rooms: [],    // each room stores floorDesign + wallDesign after measurement
@@ -29911,7 +29913,7 @@ function _qqAddForm() {
         <input type="number" value="${r.dh}" placeholder="H" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dh',this.value)"><span style="font-size:10px;color:var(--text3)">ft</span>`:''}
     </div>`:''}`:''}
 
-    <button class="btn-primary full-width" style="margin-top:14px" onclick="VW_TILES._qqSave()">✓ Add Room</button>
+    <button class="btn-primary full-width" style="margin-top:14px" onclick="VW_TILES._qqSave()">${_qqData.editingIdx !== undefined && _qqData.editingIdx !== null ? '✓ Update Room' : '✓ Add Room'}</button>
   </div>`;
 }
 
@@ -29926,7 +29928,7 @@ function _qqSet(field, val) {
   _qqShowRooms();
 }
 function _qqSetV(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val; }
-function _qqCancelAdd() { _qqData.adding=null; _qqShowRooms(); }
+function _qqCancelAdd() { _qqData.adding=null; _qqData.editingIdx=null; _qqShowRooms(); }
 function _qqRm(i) { _qqData.rooms.splice(i,1); _qqShowRooms(); }
 function _qqEditRoom(i) {
   // Load existing room into the add form for editing
@@ -30676,11 +30678,9 @@ async function _qqBuildQuote() {
     </div>`, 'Quick Quote');
 
     await tqSubmitForApproval();
-
-    // Navigate to TQ page to show approval status
-    delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
+    // tqSubmitForApproval renders the success screen directly to #app-content —
+    // just close the QQ sheet and let it show. Don't navigate away from success screen.
     closeSheet();
-    navigateTo('tiles');
   } catch(e) {
     console.error('QQ Submit error:', e);
     showToast('Submit failed: '+(e?.message||String(e)),'error');
