@@ -30272,9 +30272,8 @@ function _qqCalcFloor(room, design) {
   if (!design?.size) return null;
   const [mmH, mmW] = design.size.split('×').map(Number);
   const sqftPerTile = (mmH/25.4) * (mmW/25.4) / 144;
-  const floorSqft = room.mode === 'lw'
-    ? (parseFloat(room.l)||0) * (parseFloat(room.w)||0)
-    : parseFloat(room.sqft)||0;
+  // Use _qqSqft which includes skirting — this is the authoritative total floor area
+  const floorSqft = _qqSqft(room);
   if (!floorSqft) return null;
 
   const pattern = design.pattern;
@@ -30538,20 +30537,23 @@ async function _qqBuildQuote() {
       // Slot IDs must match _getTileSlots(): rid+'_floor'/'_wall' only for hasBoth, else just rid
       // Floor tile
       if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
-        const sqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : parseFloat(r.sqft)||0;
+        // Use _qqSqft so TQ Summary matches QQ Output (includes skirting)
+        const sqft = _qqSqft(r);
         if (sqft > 0) {
-          areas.push({ subType:'floor', sqft, base:sqft, label:`Floor ${parseFloat(r.l)||0}×${parseFloat(r.w)||0}ft`, l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
+          const rawSqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : sqft;
+          const skirtNote = (sqft - rawSqft) > 0.1 ? ` + skirting` : '';
+          areas.push({ subType:'floor', sqft, base:sqft, label:`Floor ${parseFloat(r.l)||0}×${parseFloat(r.w)||0}ft${skirtNote}`, l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
           const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
             const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            const sqftPerBox = sqftPer * (mainTile.tiles_per_box||6);
+            // Use tile_weight_config tiles_per_box (authoritative) not products.tiles_per_box
+            const cfgSzFl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
+            const tpbFl = cfgSzFl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_floor' : rid;
-            // Use custom box price from Output screen; fallback to inventory pricePerSqft
             const flPriceKey = `qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`;
             const customBoxPrice_fl = window[flPriceKey];
-            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
-            // Store as pricePerBox directly — no sqft conversion (avoids rounding errors in Summary)
+            tileSelections[slotId] = { size:{mm:r.floorDesign.size, tilesPerBox:tpbFl, ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
             if (customBoxPrice_fl !== undefined && customBoxPrice_fl > 0) {
               quotedPrices[slotId] = { pricePerBox: customBoxPrice_fl };
             } else if (mainTile.price_per_sqft > 0) {
@@ -30566,17 +30568,18 @@ async function _qqBuildQuote() {
         const dw=r.hasDoor?parseFloat(r.dw)||0:0, dh=r.hasDoor?parseFloat(r.dh)||0:0;
         const base=Math.max(0, wl*wh - dw*dh);
         if (base>0) {
-          areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${room.hasDoor?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
+          areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${r.hasDoor?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
           const mainTile = r.wallDesign.tileMap[r.wallDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
             const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            const sqftPerBox = sqftPer * (mainTile.tiles_per_box||6);
+            // Use tile_weight_config tiles_per_box (authoritative)
+            const cfgSzWl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
+            const tpbWl = cfgSzWl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_wall' : rid;
-            // Use custom box price from Output screen; fallback to inventory pricePerSqft
             const wlPriceKey = `qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`;
             const customBoxPrice_wl = window[wlPriceKey];
-            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
+            tileSelections[slotId] = { size:{mm:r.wallDesign.size, tilesPerBox:tpbWl, ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
             if (customBoxPrice_wl !== undefined && customBoxPrice_wl > 0) {
               quotedPrices[slotId] = { pricePerBox: customBoxPrice_wl };
             } else if (mainTile.price_per_sqft > 0) {
