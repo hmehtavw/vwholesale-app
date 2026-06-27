@@ -28395,6 +28395,7 @@ async function tqSubmitForApproval() {
       grand_total: _submitGrandTotal > 0 ? _submitGrandTotal : null,
       wall_designs: st.wallDesigns || {},
       design_tiles: Object.fromEntries(Object.entries(st.design||{}).map(([k,v])=>[k,v?.result?.tiles||[]])),
+      rooms: st.rooms || [],
       tile_selections: st.tileSelections || {},
       spacer_selections: st.spacerSelections || {},
       adhesive_selections: st.adhesiveSelections || {},
@@ -28419,6 +28420,7 @@ async function tqSubmitForApproval() {
       total_weight_kg: totalWeightSub,
       labor_required: st.laborRequired || false,
       extra_products: st.extraProducts || [],
+      breakage_pct: st.breakagePct ?? 10,
       approval_status: 'pending_approval',
       approval_submitted_at: new Date().toISOString(),
       approval_submitted_by: profile?.name || '',
@@ -29154,6 +29156,7 @@ async function tqResumeDraft(id) {
     spacer: q.spacer||{}, adhesive: q.adhesive||{}, grout: q.grout||{},
     _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
     step: Math.min(8, Math.max(1, q.draft_step||1)),
+    breakagePct: q.breakage_pct ?? 10,
     _savedQuoteId: id, _draftId: (q.status==='draft' ? id : null), _approvalStatus: q.approval_status,
   };
   if (typeof closeSheet === 'function') closeSheet();
