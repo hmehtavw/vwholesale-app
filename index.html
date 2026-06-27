@@ -30324,13 +30324,16 @@ function _qqShowOutput() {
       const fc = _qqCalcFloor(room, room.floorDesign);
       if (fc) {
         const codeList = Object.entries(fc.results);
-        const allCodes = Object.keys(fc.results);
+        // Skirting display
+        const rawSqft = room.mode==='lw' ? (parseFloat(room.l)||0)*(parseFloat(room.w)||0) : parseFloat(room.sqft)||0;
+        const skirtSqft = Math.max(0, fc.floorSqft - rawSqft);
+        const skirtNote = skirtSqft > 0.1 ? ` · incl. skirting ${skirtSqft.toFixed(1)} sqft` : '';
         html += `<div style="margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">🔲 Floor · ${room.floorDesign.size}</div>`;
+          <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:4px">🔲 Floor · ${room.floorDesign.size}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${rawSqft.toFixed(1)} sqft${skirtNote} = <strong>${fc.floorSqft.toFixed(1)} sqft total</strong></div>`;
 
         codeList.forEach(([code, r], ci) => {
           const col = colors[ci % colors.length];
-          // Price calculation — supports both ₹/box and ₹/sqft modes
           const cfgSz_fl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===fc.design.size);
           const tpb_fl = cfgSz_fl?.tiles_per_box || r.tile.tiles_per_box || 6;
           const [mmH_f, mmW_f] = (fc.design.size).split('×').map(Number);
@@ -30338,9 +30341,8 @@ function _qqShowOutput() {
           const defaultBoxPrice_f = Math.round((r.tile.price_per_sqft||0) * sqftPerBox_fl);
           const boxKey  = `qqprice_fl_${ri}_${code}`;
           const sqftKey = `qqprice_fl_sqft_${ri}_${code}`;
-          // Determine current prices
-          let boxPrice_f = window[boxKey] ?? defaultBoxPrice_f;
-          let sqftPrice_f = window[sqftKey] ?? (r.tile.price_per_sqft||0);
+          const boxPrice_f  = window[boxKey]  ?? defaultBoxPrice_f;
+          const sqftPrice_f = window[sqftKey] ?? (r.tile.price_per_sqft||0);
           const amount_f = r.boxes * boxPrice_f;
           grandBoxes += r.boxes; grandAmount += amount_f;
           html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;background:var(--bg2);margin-bottom:4px;border-left:3px solid ${col}">
@@ -30353,14 +30355,14 @@ function _qqShowOutput() {
               <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · ${r.sqft.toFixed(1)} sqft · ${r.boxes} boxes</div>
               <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
                 <span style="font-size:11px;color:var(--text3)">₹/box:</span>
-                <input type="number" value="${boxPrice_f}" min="0" step="10" inputmode="decimal"
+                <input id="qq-box-fl-${ri}-${code}" type="number" value="${boxPrice_f}" min="0" step="10" inputmode="decimal"
                   style="width:65px;padding:3px 6px;border:1px solid var(--gold-border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg3);color:var(--gold);text-align:center"
-                  onchange="window['${boxKey}']=parseFloat(this.value)||0;window['${sqftKey}']=parseFloat(this.value)/${sqftPerBox_fl.toFixed(4)};VW_TILES._qqScreen('output')">
+                  oninput="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,this.value)">
                 <span style="font-size:11px;color:var(--text3)">or ₹/sqft:</span>
-                <input type="number" value="${sqftPrice_f}" min="0" step="1" inputmode="decimal"
+                <input id="qq-sqft-fl-${ri}-${code}" type="number" value="${sqftPrice_f}" min="0" step="1" inputmode="decimal"
                   style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg3);color:var(--text);text-align:center"
-                  onchange="window['${sqftKey}']=parseFloat(this.value)||0;window['${boxKey}']=Math.round(parseFloat(this.value)*${sqftPerBox_fl.toFixed(4)});VW_TILES._qqScreen('output')">
-                <span style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_f).toLocaleString('en-IN')}</span>
+                  oninput="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',false,this.value)">
+                <span id="qq-amt-fl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_f).toLocaleString('en-IN')}</span>
               </div>
             </div>
             <div style="text-align:right;flex-shrink:0">
@@ -30369,8 +30371,9 @@ function _qqShowOutput() {
             </div>
           </div>`;
         });
+        const flCustomTotal = codeList.reduce((s,[code,r])=>s+r.boxes*(window[`qqprice_fl_${ri}_${code}`]??Math.round((r.tile.price_per_sqft||0)*((fc.design.size.split('×').map(Number).reduce((a,b)=>a*(b/25.4),1)/144)*((_tqSizeCfg?.sizes||[]).find(s=>s.mm===fc.design.size)?.tiles_per_box||r.tile.tiles_per_box||6)))),0);
         html += `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 6px;color:var(--text3)">
-          <span>Floor total</span><span>${fc.totalBoxes} boxes${fc.totalAmount?` · ₹${Math.round(fc.totalAmount).toLocaleString('en-IN')}`:''}</span>
+          <span>Floor total</span><span>${fc.totalBoxes} boxes · <span id="qq-fl-total-${ri}">₹${Math.round(flCustomTotal).toLocaleString('en-IN')}</span></span>
         </div></div>`;
       }
     }
@@ -30411,14 +30414,14 @@ function _qqShowOutput() {
               <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · Rows ${r.rowNums.join(',')} (${r.codeRows}R) · ${r.netTiles} tiles · stock:${r.tile.stock}</div>
               <div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">
                 <span style="font-size:11px;color:var(--text3)">₹/box:</span>
-                <input type="number" value="${boxPrice_w}" min="0" step="10" inputmode="decimal"
+                <input id="qq-box-wl-${ri}-${code}" type="number" value="${boxPrice_w}" min="0" step="10" inputmode="decimal"
                   style="width:65px;padding:3px 6px;border:1px solid var(--gold-border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg3);color:var(--gold);text-align:center"
-                  onchange="window['${wBoxKey}']=parseFloat(this.value)||0;window['${wSqftKey}']=parseFloat(this.value)/${sqftPerBox_wl.toFixed(4)};VW_TILES._qqScreen('output')">
+                  oninput="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,this.value)">
                 <span style="font-size:11px;color:var(--text3)">or ₹/sqft:</span>
-                <input type="number" value="${sqftPrice_w}" min="0" step="1" inputmode="decimal"
+                <input id="qq-sqft-wl-${ri}-${code}" type="number" value="${sqftPrice_w}" min="0" step="1" inputmode="decimal"
                   style="width:55px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg3);color:var(--text);text-align:center"
-                  onchange="window['${wSqftKey}']=parseFloat(this.value)||0;window['${wBoxKey}']=Math.round(parseFloat(this.value)*${sqftPerBox_wl.toFixed(4)});VW_TILES._qqScreen('output')">
-                <span style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_w).toLocaleString('en-IN')}</span>
+                  oninput="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',false,this.value)">
+                <span id="qq-amt-wl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_w).toLocaleString('en-IN')}</span>
               </div>
             </div>
             <div style="text-align:right;flex-shrink:0">
@@ -30435,7 +30438,7 @@ function _qqShowOutput() {
           return s+r2.boxes*(window[pk]??def);
         },0);
         html += `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 6px;color:var(--text3)">
-          <span>Wall total</span><span>${wc.totalBoxes} boxes · ₹${Math.round(wallTotalAmt).toLocaleString('en-IN')}</span>
+          <span>Wall total</span><span>${wc.totalBoxes} boxes · <span id="qq-wl-total-${ri}">₹${Math.round(wallTotalAmt).toLocaleString('en-IN')}</span></span>
         </div></div>`;
       }
     }
@@ -30449,9 +30452,15 @@ function _qqShowOutput() {
         <span style="font-size:16px;font-weight:800">Grand Total</span>
         <span style="font-size:20px;font-weight:900;color:var(--gold)">${grandBoxes} boxes</span>
       </div>
-      ${grandAmount?`<div style="font-size:14px;color:var(--text2);margin-bottom:10px">₹${Math.round(grandAmount).toLocaleString('en-IN')} estimated</div>`:''}
+      ${grandAmount?`<div style="font-size:14px;color:var(--text2);margin-bottom:10px" id="qq-grand-est">₹${Math.round(grandAmount).toLocaleString('en-IN')} estimated</div>`:''}
     </div>
-    <div style="display:flex;gap:8px;margin-top:10px">
+    ${!_qqData?.customer?.name ? `<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:6px">⚠️ Customer name required to submit</div>
+      <input id="qq-submit-name" type="text" placeholder="Enter customer name..."
+        style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(239,68,68,0.4);background:var(--bg3);color:var(--text);font-size:13px;box-sizing:border-box"
+        oninput="_qqData.customer.name=this.value">
+    </div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:4px">
       <button onclick="VW_TILES._qqScreen('rooms')" class="btn-secondary" style="flex:1">← Edit Rooms</button>
       <button onclick="VW_TILES._qqBuildQuote()" class="btn-primary" style="flex:1;background:var(--gold);color:#000">📤 Submit for Approval</button>
     </div>`;
@@ -30459,12 +30468,62 @@ function _qqShowOutput() {
   _qqSheet(html, 'Quick Quote — Output');
 }
 
+// ── Price update WITHOUT full re-render (fixes scroll reset) ──────
+function _qqUpdatePrice(type, ri, code, sqftPerBox, boxKey, sqftKey, isBox, val) {
+  const v = parseFloat(val)||0;
+  let boxP, sqftP;
+  if (isBox) { boxP = v; sqftP = sqftPerBox>0 ? +(v/sqftPerBox).toFixed(2) : 0; }
+  else { sqftP = v; boxP = Math.round(v * sqftPerBox); }
+  window[boxKey] = boxP;
+  window[sqftKey] = sqftP;
+  // Update the linked input (the other field)
+  const otherEl = document.getElementById(`qq-${isBox?'sqft':'box'}-${type}-${ri}-${code}`);
+  if (otherEl) otherEl.value = isBox ? sqftP : boxP;
+  // Recompute all totals in place
+  _qqRecomputeTotals();
+}
+
+function _qqRecomputeTotals() {
+  let grand = 0;
+  (_qqData?.rooms||[]).forEach((room, ri) => {
+    if (room.floorDesign?.pattern) {
+      let flTotal = 0;
+      [...new Set(room.floorDesign.pattern)].forEach(code => {
+        const amtEl = document.getElementById(`qq-amt-fl-${ri}-${code}`);
+        const boxes = parseInt(amtEl?.dataset.boxes||0);
+        const boxP  = window[`qqprice_fl_${ri}_${code}`] ?? 0;
+        flTotal += boxes * boxP;
+        if (amtEl) amtEl.textContent = '= ₹' + Math.round(boxes*boxP).toLocaleString('en-IN');
+      });
+      const flTel = document.getElementById(`qq-fl-total-${ri}`);
+      if (flTel) flTel.textContent = `₹${Math.round(flTotal).toLocaleString('en-IN')}`;
+      grand += flTotal;
+    }
+    if (room.wallDesign?.pattern) {
+      let wlTotal = 0;
+      [...new Set(room.wallDesign.pattern)].forEach(code => {
+        const amtEl = document.getElementById(`qq-amt-wl-${ri}-${code}`);
+        const boxes = parseInt(amtEl?.dataset.boxes||0);
+        const boxP  = window[`qqprice_wl_${ri}_${code}`] ?? 0;
+        wlTotal += boxes * boxP;
+        if (amtEl) amtEl.textContent = '= ₹' + Math.round(boxes*boxP).toLocaleString('en-IN');
+      });
+      const wlTel = document.getElementById(`qq-wl-total-${ri}`);
+      if (wlTel) wlTel.textContent = `₹${Math.round(wlTotal).toLocaleString('en-IN')}`;
+      grand += wlTotal;
+    }
+  });
+  const grandEl = document.getElementById('qq-grand-est');
+  if (grandEl) grandEl.textContent = '₹' + Math.round(grand).toLocaleString('en-IN') + ' estimated';
+}
+
 async function _qqBuildQuote() {
   const d = _qqData;
-  if (!d.customer.name) {
-    const name = prompt('Customer name (required for approval):');
-    if (!name?.trim()) { showToast('Customer name required','warn'); return; }
-    d.customer.name = name.trim();
+  if (!d?.rooms?.length) { showToast('No rooms added','warn'); return; }
+  // Customer name check — show inline error rather than prompt (prompt is blocked in PWA/iOS)
+  if (!d.customer?.name?.trim()) {
+    showToast('Please enter customer name — go back to Step 1','warn');
+    return;
   }
   try {
     // Build tileSelections + rooms for TQ wizard
@@ -30582,7 +30641,7 @@ window.VW_TILES = {
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
   _qqAssignSearch, _qqAssignTile, _qqAssignNext, _qqAssignBack,
-  _qqShowOutput, _qqBuildQuote,
+  _qqShowOutput, _qqBuildQuote, _qqUpdatePrice, _qqRecomputeTotals,
   _tqEditCustomerFromSummary,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
