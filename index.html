@@ -24720,16 +24720,19 @@ async function _renderStep2() {
   // All other rooms → one slot: roomId
   const slots = [];
   rooms.forEach(r => {
+    let wallSqft = 0, floorSqft = 0; // declare at outer scope so always defined
     const hasWall = r.areas?.some(a => a.subType === 'wall');
     const hasFloor = r.areas?.some(a => a.subType === 'floor' || !a.subType);
     if (r.def?.areaType === 'both' || (hasWall && hasFloor)) {
-      const wallSqft  = r.areas?.filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0)||0;
-      const floorSqft = r.areas?.filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0)||0;
-      // Only the surfaces actually measured — walls-only rooms don't ask for floor tile, and vice-versa.
+      wallSqft  = (r.areas||[]).filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0);
+      floorSqft = (r.areas||[]).filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0);
       if (wallSqft  > 0) slots.push({ id: r.id + '_wall',  room: r, label: `${r.label||r.type} — Wall`,  icon:'🧱', subType:'wall',  sqft: wallSqft });
       if (floorSqft > 0) slots.push({ id: r.id + '_floor', room: r, label: `${r.label||r.type} — Floor`, icon:'🔲', subType:'floor', sqft: floorSqft });
     } else {
-      slots.push({ id: r.id, room: r, label: r.label||r.type, icon: ROOM_DEFS[r.type]?.icon||'🏠', subType: hasWall ? 'wall' : 'floor', sqft: r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0 });
+      wallSqft = (r.areas||[]).filter(a=>a.subType==='wall').reduce((s,a)=>s+(a.sqft||0),0);
+      floorSqft = (r.areas||[]).filter(a=>a.subType==='floor'||!a.subType).reduce((s,a)=>s+(a.sqft||0),0);
+      const totalSqft = wallSqft + floorSqft || (r.areas||[]).reduce((s,a)=>s+(a.sqft||0),0);
+      slots.push({ id: r.id, room: r, label: r.label||r.type, icon: ROOM_DEFS[r.type]?.icon||'🏠', subType: hasWall ? 'wall' : 'floor', sqft: totalSqft });
     }
   });
 
@@ -30453,7 +30456,7 @@ async function _qqBuildQuote() {
       // hasBoth: room has BOTH floor AND wall designs completed
       const hasBoth = (r.surface==='both') && r.floorDesign?.pattern?.length && r.wallDesign?.pattern?.length;
       // Slot IDs must match _getTileSlots(): rid+'_floor'/'_wall' only for hasBoth, else just rid
-      // Floor
+      // Floor tile
       if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
         const sqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : parseFloat(r.sqft)||0;
         if (sqft > 0) {
@@ -30461,13 +30464,21 @@ async function _qqBuildQuote() {
           const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
+            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
+            const sqftPerBox = sqftPer * (mainTile.tiles_per_box||6);
             const slotId = hasBoth ? rid+'_floor' : rid;
-            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:(mmH/25.4)*(mmW/25.4)/144}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
-            if (mainTile.price_per_sqft) quotedPrices[slotId] = { pricePerSqft:mainTile.price_per_sqft };
+            // Use custom box price from Output screen if staff entered one
+            const flPriceKey = `qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`;
+            const customBoxPrice = window[flPriceKey];
+            const pricePerSqft = customBoxPrice !== undefined
+              ? (sqftPerBox > 0 ? customBoxPrice / sqftPerBox : mainTile.price_per_sqft||0)
+              : (mainTile.price_per_sqft||0);
+            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
+            if (pricePerSqft) quotedPrices[slotId] = { pricePerSqft };
           }
         }
       }
-      // Wall
+      // Wall tile
       if ((r.surface==='wall'||r.surface==='both') && r.wallDesign?.pattern?.length) {
         const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||7;
         const dw=r.hasDoor?parseFloat(r.dw)||0:0, dh=r.hasDoor?parseFloat(r.dh)||0:0;
@@ -30477,9 +30488,17 @@ async function _qqBuildQuote() {
           const mainTile = r.wallDesign.tileMap[r.wallDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
+            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
+            const sqftPerBox = sqftPer * (mainTile.tiles_per_box||6);
             const slotId = hasBoth ? rid+'_wall' : rid;
-            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:(mmH/25.4)*(mmW/25.4)/144}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
-            if (mainTile.price_per_sqft) quotedPrices[slotId] = { pricePerSqft:mainTile.price_per_sqft };
+            // Use custom box price from Output screen if staff entered one
+            const wlPriceKey = `qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`;
+            const customBoxPrice = window[wlPriceKey];
+            const pricePerSqft = customBoxPrice !== undefined
+              ? (sqftPerBox > 0 ? customBoxPrice / sqftPerBox : mainTile.price_per_sqft||0)
+              : (mainTile.price_per_sqft||0);
+            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:mainTile.tiles_per_box||6,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
+            if (pricePerSqft) quotedPrices[slotId] = { pricePerSqft };
           }
         }
       }
