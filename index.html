@@ -30306,10 +30306,30 @@ function _qqCalcFloor(room, design) {
 
 function _qqShowOutput() {
   const rooms = _qqData.rooms;
+  const cust = _qqData.customer || {};
   const colors = ['#F5C842','#60A5FA','#34D399','#F87171','#A78BFA','#FB923C','#38BDF8','#4ADE80','#FBBF24','#2DD4BF'];
 
   let html = '';
   let grandBoxes = 0, grandAmount = 0;
+
+  // Customer name banner — always visible at top
+  html += `<div style="background:var(--bg2);border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:16px">👤</span>
+    ${cust.name ? `
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:800">${cust.name}</div>
+        ${cust.phone?`<div style="font-size:11px;color:var(--text3)">${cust.phone}</div>`:''}
+      </div>
+    ` : `
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--red);font-weight:700;margin-bottom:4px">⚠️ Customer name required</div>
+        <input id="qq-cust-name" type="text" placeholder="Enter customer name..."
+          style="width:100%;padding:6px 8px;border-radius:8px;border:1px solid rgba(239,68,68,0.5);background:var(--bg3);color:var(--text);font-size:13px;font-weight:700;box-sizing:border-box"
+          oninput="_qqData.customer.name=this.value" autofocus>
+      </div>
+    `}
+    <button onclick="VW_TILES._qqScreen('customer')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text3);font-size:11px;cursor:pointer">Edit</button>
+  </div>`;
 
   rooms.forEach((room, ri) => {
     const def = _QQ_ROOMS.find(t=>t.type===room.type)||{icon:'🏠'};
@@ -30518,26 +30538,33 @@ function _qqRecomputeTotals() {
 
 async function _qqBuildQuote() {
   const d = _qqData;
-  if (!d?.rooms?.length) { showToast('No rooms added','warn'); return; }
-  // Customer name check — show inline error rather than prompt (prompt is blocked in PWA/iOS)
+  // Sync name from inline input if typed
+  const nameEl = document.getElementById('qq-cust-name');
+  if (nameEl?.value?.trim()) d.customer.name = nameEl.value.trim();
+
+  if (!d?.rooms?.length) { showToast('No rooms added — go back to Rooms','warn'); return; }
   if (!d.customer?.name?.trim()) {
-    showToast('Please enter customer name — go back to Step 1','warn');
+    showToast('Enter customer name at the top of this screen','warn');
+    const el = document.getElementById('qq-cust-name');
+    if (el) { el.focus(); el.style.borderColor='var(--red,#ef4444)'; }
     return;
   }
+  const hasDesigns = d.rooms.some(r =>
+    (r.floorDesign?.pattern?.length && Object.keys(r.floorDesign.tileMap||{}).length>0) ||
+    (r.wallDesign?.pattern?.length  && Object.keys(r.wallDesign.tileMap||{}).length>0)
+  );
+  if (!hasDesigns) { showToast('Assign tiles to at least one surface before submitting','warn'); return; }
+
   try {
-    // Build tileSelections + rooms for TQ wizard
     const rooms = [];
     const tileSelections = {}, quotedPrices = {};
 
     d.rooms.forEach((r, ri) => {
       const rid = 'qq'+ri+'_'+Date.now();
       const areas = [];
-      // hasBoth: room has BOTH floor AND wall designs completed
       const hasBoth = (r.surface==='both') && r.floorDesign?.pattern?.length && r.wallDesign?.pattern?.length;
-      // Slot IDs must match _getTileSlots(): rid+'_floor'/'_wall' only for hasBoth, else just rid
-      // Floor tile
+
       if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
-        // Use _qqSqft so TQ Summary matches QQ Output (includes skirting)
         const sqft = _qqSqft(r);
         if (sqft > 0) {
           const rawSqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : sqft;
@@ -30547,22 +30574,16 @@ async function _qqBuildQuote() {
           if (mainTile) {
             const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
             const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            // Use tile_weight_config tiles_per_box (authoritative) not products.tiles_per_box
             const cfgSzFl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
             const tpbFl = cfgSzFl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_floor' : rid;
-            const flPriceKey = `qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`;
-            const customBoxPrice_fl = window[flPriceKey];
-            tileSelections[slotId] = { size:{mm:r.floorDesign.size, tilesPerBox:tpbFl, ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
-            if (customBoxPrice_fl !== undefined && customBoxPrice_fl > 0) {
-              quotedPrices[slotId] = { pricePerBox: customBoxPrice_fl };
-            } else if (mainTile.price_per_sqft > 0) {
-              quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
-            }
+            const customBoxPrice_fl = window[`qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`];
+            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:tpbFl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign };
+            if (customBoxPrice_fl !== undefined && customBoxPrice_fl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_fl };
+            else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
           }
         }
       }
-      // Wall tile
       if ((r.surface==='wall'||r.surface==='both') && r.wallDesign?.pattern?.length) {
         const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||7;
         const dw=r.hasDoor?parseFloat(r.dw)||0:0, dh=r.hasDoor?parseFloat(r.dh)||0:0;
@@ -30573,25 +30594,23 @@ async function _qqBuildQuote() {
           if (mainTile) {
             const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
             const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            // Use tile_weight_config tiles_per_box (authoritative)
             const cfgSzWl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
             const tpbWl = cfgSzWl?.tiles_per_box || mainTile.tiles_per_box || 6;
             const slotId = hasBoth ? rid+'_wall' : rid;
-            const wlPriceKey = `qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`;
-            const customBoxPrice_wl = window[wlPriceKey];
-            tileSelections[slotId] = { size:{mm:r.wallDesign.size, tilesPerBox:tpbWl, ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
-            if (customBoxPrice_wl !== undefined && customBoxPrice_wl > 0) {
-              quotedPrices[slotId] = { pricePerBox: customBoxPrice_wl };
-            } else if (mainTile.price_per_sqft > 0) {
-              quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
-            }
+            const customBoxPrice_wl = window[`qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`];
+            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:tpbWl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign };
+            if (customBoxPrice_wl !== undefined && customBoxPrice_wl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_wl };
+            else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
           }
         }
       }
       if (areas.length) rooms.push({ id:rid, type:r.type, label:r.type, areas });
     });
 
-    _tqResumeData = {
+    if (!rooms.length) { showToast('No valid tile designs — please assign tiles to surfaces','warn'); return; }
+
+    // Set _tqState directly and submit — no second click in TQ Summary needed
+    _tqState = {
       customer:d.customer, contractor:null, rooms,
       currentFlat:'', tileSelections, quotedPrices,
       spacerSelections:{}, spacerType:'plus', spacerResult:null,
@@ -30602,14 +30621,25 @@ async function _qqBuildQuote() {
       spacer:{}, adhesive:{}, grout:{}, _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
       step:8, _draftId:null, _approvalStatus:null, breakagePct:0,
     };
+
+    _qqSheet(`<div style="text-align:center;padding:40px 20px">
+      <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;margin:0 auto 14px;animation:spin 0.8s linear infinite"></div>
+      <div style="font-size:15px;font-weight:700">Submitting for approval…</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:6px">${d.customer.name} · ${rooms.length} room${rooms.length>1?'s':''}</div>
+    </div>`, 'Quick Quote');
+
+    await tqSubmitForApproval();
+
+    // Navigate to TQ page to show approval status
     delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
     closeSheet();
-    showToast('Quote ready — review & submit','success');
     navigateTo('tiles');
   } catch(e) {
-    showToast('Error: '+e.message,'error');
+    console.error('QQ Submit error:', e);
+    showToast('Submit failed: '+(e?.message||String(e)),'error');
   }
 }
+
 
 
 
