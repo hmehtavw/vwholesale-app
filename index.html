@@ -29893,9 +29893,9 @@ function _qqAddForm() {
     ${!noDoor?`
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <span style="font-size:11px;color:var(--text3)">Door deduction:</span>
-      <button onclick="VW_TILES._qqSetV('hasDoor',true)"  style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.hasDoor?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.hasDoor?'var(--gold-muted)':'var(--bg3)'}">
+      <button onclick="VW_TILES._qqSet('hasDoor','true')"  style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${r.hasDoor?'2px solid var(--gold)':'1px solid var(--border)'};background:${r.hasDoor?'var(--gold-muted)':'var(--bg3)'}">
         ${r.hasDoor?'✓ Yes':'Yes'}</button>
-      <button onclick="VW_TILES._qqSetV('hasDoor',false)" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${!r.hasDoor?'2px solid var(--red,#ef4444)':'1px solid var(--border)'};background:${!r.hasDoor?'rgba(239,68,68,0.1)':'var(--bg3)'}">
+      <button onclick="VW_TILES._qqSet('hasDoor','false')" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:${!r.hasDoor?'2px solid var(--red,#ef4444)':'1px solid var(--border)'};background:${!r.hasDoor?'rgba(239,68,68,0.1)':'var(--bg3)'}">
         ${!r.hasDoor?'✓ No door':'No door'}</button>
       ${r.hasDoor?`<input type="number" value="${r.dw}" placeholder="W" style="width:42px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg3);color:var(--text)" inputmode="decimal" step="0.5" oninput="VW_TILES._qqSetV('dw',this.value)">
         <span style="font-size:10px;color:var(--text3)">×</span>
@@ -30035,9 +30035,9 @@ function _qqShowDesignPattern() {
       ` : `<div>📐 Floor: ${room.l||'?'}×${room.w||'?'}ft | Single or multi-tile pattern</div>`}
     </div>
     <div style="font-size:13px;font-weight:700;margin-bottom:6px">Enter Pattern (shortcodes separated by :)</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-      Example for ${rows||7} rows: <strong>L:L:D:D:HL:D:L</strong><br>
-      Use any code: L=Light, D=Dark, HL=Highlight, M=Main, etc.
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+      Use <strong>short codes 1–3 chars</strong>: L, D, HL, M, A, B, HL1, HL2…<br>
+      Example for ${rows||7} rows: <strong>L:L:D:D:HL:D:L</strong>
     </div>
     <input type="text" id="qq-pattern-input" value="${patternStr}"
       placeholder="${d.surface==='wall'?Array(rows||7).fill('?').join(':'):'A'}"
@@ -30138,7 +30138,7 @@ async function _qqShowTileAssign() {
       Code ${d.currentCodeIdx+1}/${d.pendingCodes.length} · ${room.type} · ${design.size}
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:${codeColor}22;border:2px solid ${codeColor};color:${codeColor};font-size:18px;font-weight:900;flex-shrink:0">${code}</span>
+      <span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:${codeColor}22;border:2px solid ${codeColor};color:${codeColor};font-size:${code.length>3?'10':'16'}px;font-weight:900;flex-shrink:0;overflow:hidden;padding:2px">${code.length>5?code.slice(0,4)+'…':code}</span>
       <div>
         <div style="font-size:15px;font-weight:700">Assign tile for <span style="color:${codeColor}">"${code}"</span></div>
         <div style="font-size:11px;color:var(--text3)">${codeRows} row${codeRows>1?'s':''} × ~${cols} cols ≈ ${estimatedTiles} tiles needed</div>
@@ -30323,20 +30323,30 @@ function _qqShowOutput() {
 
         codeList.forEach(([code, r], ci) => {
           const col = colors[ci % colors.length];
-          grandBoxes += r.boxes; grandAmount += r.amount;
+          // Allow staff to override price — default from inventory
+          const priceKey = `qqprice_fl_${ri}_${code}`;
+          const overridePrice = window[priceKey] ?? r.tile.price_per_sqft ?? 0;
+          const amount = r.sqft * overridePrice;
+          grandBoxes += r.boxes; grandAmount += amount;
           html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;background:var(--bg2);margin-bottom:4px;border-left:3px solid ${col}">
             <div>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:${col}22;border:1.5px solid ${col};color:${col};font-size:9px;font-weight:800">${code}</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:${col}22;border:1.5px solid ${col};color:${col};font-size:9px;font-weight:800">${code.length>3?code.slice(0,3):code}</span>
                 <span style="font-size:12px;font-weight:700">${r.tile.name}</span>
                 ${!r.stockOk?`<span style="font-size:10px;color:var(--red);font-weight:700">⚠️ low stock</span>`:''}
               </div>
-              <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · ${r.sqft.toFixed(1)} sqft · ₹${r.tile.price_per_sqft}/sqft</div>
+              <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · ${r.sqft.toFixed(1)} sqft</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+                <span style="font-size:11px;color:var(--text3)">₹/sqft:</span>
+                <input type="number" value="${overridePrice}" min="0" step="1" inputmode="decimal"
+                  style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg3);color:var(--text);text-align:center"
+                  onchange="window['${priceKey}']=parseFloat(this.value)||0;VW_TILES._qqScreen('output')">
+                <span style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount).toLocaleString('en-IN')}</span>
+              </div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
               <div style="font-size:11px;color:var(--text3)">${r.netTiles} tiles</div>
-              ${r.amount?`<div style="font-size:11px;color:var(--gold)">₹${Math.round(r.amount).toLocaleString('en-IN')}</div>`:''}
             </div>
           </div>`;
         });
@@ -30361,20 +30371,29 @@ function _qqShowOutput() {
 
         Object.entries(wc.results).forEach(([code, r], ci) => {
           const col = colors[ci % colors.length];
-          grandBoxes += r.boxes; grandAmount += r.amount;
+          const priceKey = `qqprice_wl_${ri}_${code}`;
+          const overridePrice = window[priceKey] ?? r.tile.price_per_sqft ?? 0;
+          const amount = r.sqft * overridePrice;
+          grandBoxes += r.boxes; grandAmount += amount;
           html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-radius:8px;background:var(--bg2);margin-bottom:4px;border-left:3px solid ${col}">
             <div>
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:${col}22;border:1.5px solid ${col};color:${col};font-size:9px;font-weight:800">${code}</span>
+                <span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:5px;background:${col}22;border:1.5px solid ${col};color:${col};font-size:9px;font-weight:800">${code.length>3?code.slice(0,3):code}</span>
                 <span style="font-size:12px;font-weight:700">${r.tile.name}</span>
                 ${!r.stockOk?`<span style="font-size:10px;color:var(--red);font-weight:700">⚠️ low</span>`:''}
               </div>
-              <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · Rows ${r.rowNums.join(',')} (${r.codeRows} rows) · ${r.netTiles} tiles</div>
-              <div style="font-size:11px;color:var(--text3)">₹${r.tile.price_per_sqft}/sqft · ${r.sqft.toFixed(1)} sqft · stock: ${r.tile.stock} boxes</div>
+              <div style="font-size:11px;color:var(--text3)">${r.tile.brand} · Rows ${r.rowNums.join(',')} (${r.codeRows}R) · ${r.netTiles} tiles · stock:${r.tile.stock}</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:4px">
+                <span style="font-size:11px;color:var(--text3)">₹/sqft:</span>
+                <input type="number" value="${overridePrice}" min="0" step="1" inputmode="decimal"
+                  style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg3);color:var(--text);text-align:center"
+                  onchange="window['${priceKey}']=parseFloat(this.value)||0;VW_TILES._qqScreen('output')">
+                <span style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount).toLocaleString('en-IN')}</span>
+              </div>
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
-              ${r.amount?`<div style="font-size:11px;color:var(--gold)">₹${Math.round(r.amount).toLocaleString('en-IN')}</div>`:''}
+              <div style="font-size:11px;color:var(--text3)">${r.sqft.toFixed(1)} sqft</div>
             </div>
           </div>`;
         });
