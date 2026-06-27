@@ -30272,8 +30272,17 @@ function _qqCalcFloor(room, design) {
   if (!design?.size) return null;
   const [mmH, mmW] = design.size.split('×').map(Number);
   const sqftPerTile = (mmH/25.4) * (mmW/25.4) / 144;
-  // Use _qqSqft which includes skirting — this is the authoritative total floor area
-  const floorSqft = _qqSqft(room);
+
+  // FLOOR-ONLY sqft — never add wall area even for 'both' surface rooms
+  let floorSqft;
+  if (room.mode === 'sqft') {
+    floorSqft = parseFloat(room.sqft) || 0;
+  } else {
+    const l = parseFloat(room.l) || 0;
+    const w = parseFloat(room.w) || 0;
+    floorSqft = l * w;
+    if (room.skirtingIn > 0) floorSqft += 2 * (l + w) * (room.skirtingIn / 12);
+  }
   if (!floorSqft) return null;
 
   const pattern = design.pattern;
@@ -30343,8 +30352,8 @@ function _qqShowOutput() {
       const fc = _qqCalcFloor(room, room.floorDesign);
       if (fc) {
         const codeList = Object.entries(fc.results);
-        // Skirting display
-        const rawSqft = room.mode==='lw' ? (parseFloat(room.l)||0)*(parseFloat(room.w)||0) : parseFloat(room.sqft)||0;
+        // Skirting display — floor-only area breakdown
+        const rawSqft = (room.mode==='sqft') ? (parseFloat(room.sqft)||0) : (parseFloat(room.l)||0)*(parseFloat(room.w)||0);
         const skirtSqft = Math.max(0, fc.floorSqft - rawSqft);
         const skirtNote = skirtSqft > 0.1 ? ` · incl. skirting ${skirtSqft.toFixed(1)} sqft` : '';
         html += `<div style="margin-bottom:10px">
@@ -30565,9 +30574,12 @@ async function _qqBuildQuote() {
       const hasBoth = (r.surface==='both') && r.floorDesign?.pattern?.length && r.wallDesign?.pattern?.length;
 
       if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
-        const sqft = _qqSqft(r);
+        // FLOOR-ONLY sqft — same logic as _qqCalcFloor, never add wall area
+        let sqft;
+        if (r.mode==='sqft') { sqft = parseFloat(r.sqft)||0; }
+        else { const l=parseFloat(r.l)||0,w=parseFloat(r.w)||0; sqft=l*w; if(r.skirtingIn>0) sqft+=2*(l+w)*(r.skirtingIn/12); }
         if (sqft > 0) {
-          const rawSqft = r.mode==='lw' ? (parseFloat(r.l)||0)*(parseFloat(r.w)||0) : sqft;
+          const rawSqft = (parseFloat(r.l)||0)*(parseFloat(r.w)||0);
           const skirtNote = (sqft - rawSqft) > 0.1 ? ` + skirting` : '';
           areas.push({ subType:'floor', sqft, base:sqft, label:`Floor ${parseFloat(r.l)||0}×${parseFloat(r.w)||0}ft${skirtNote}`, l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
           const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
