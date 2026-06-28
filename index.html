@@ -29305,7 +29305,9 @@ async function tqConfirmEditQuote(id) {
 async function openTileQuote(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
-  // A draft opens straight back into the wizard to keep editing where it was left off.
+  // Quick Quote estimates always open in QQ flow, never the TQ wizard
+  if (q.source === 'quick_quote') { return qqEditExisting(id); }
+  // Full TQ drafts open back in the wizard at the step they left off
   if (q.status === 'draft' || q.approval_status === 'draft') { return tqResumeDraft(id); }
   const profile = VW_AUTH.getCurrentProfile();
   const myRole = profile?.role || '';
@@ -31280,13 +31282,16 @@ async function _qqBuildPayload() {
           const cfg = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
           const tpb = cfg?.tiles_per_box || mainTile.tiles_per_box || 6;
           const spb = spf*tpb;
-          r.floorDesign.pattern.forEach((code, ci) => {
+          // Use UNIQUE codes only — iterating pattern directly causes box explosion
+          // (e.g. L:L:L:HL1:D:D creates 5 slots instead of 3 unique-code slots)
+          const fc = _qqCalcFloor(r, r.floorDesign);
+          if (!fc) return;
+          [...new Set(r.floorDesign.pattern)].forEach(code => {
             const tile = r.floorDesign.tileMap[code];
             if (!tile) return;
-            const fc = _qqCalcFloor(r, r.floorDesign);
-            const result = fc?.results?.[code];
+            const result = fc.results?.[code];
             if (!result) return;
-            const slotId = rid + '_floor' + (ci > 0 ? '_' + ci : '');
+            const slotId = rid + '_floor_' + code.toLowerCase().replace(/[^a-z0-9]/g,'');
             const boxKey = 'qqprice_fl_' + ri + '_' + code;
             const boxP = window[boxKey] || 0;
             tileSelections[slotId] = { tile_name:tile.name, brand:tile.brand||'', productId:tile.id, size:{mm:r.floorDesign.size, tilesPerBox:tpb}, _qqBoxes:result.boxes };
@@ -31303,22 +31308,24 @@ async function _qqBuildPayload() {
       const base = Math.max(0, wl*wh - dw*dh);
       if (base > 0) {
         areas.push({ subType:'wall', sqft:base, base, label:'Wall', l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
-        r.wallDesign.pattern.forEach((code, ci) => {
+        // Use UNIQUE codes only — iterating full pattern causes box explosion
+        // e.g. L:L:L:HL1:D:D:D would create 6 slots instead of 3 unique-code slots
+        const wc = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
+        const [mmHw,mmWw] = r.wallDesign.size.split('\u00d7').map(Number);
+        const spfw=(mmHw/25.4)*(mmWw/25.4)/144;
+        const cfgw=(_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
+        if (wc) [...new Set(r.wallDesign.pattern)].forEach(code => {
           const tile = r.wallDesign.tileMap[code];
           if (!tile) return;
-          const wc = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
-          const result = wc?.results?.[code];
+          const result = wc.results?.[code];
           if (!result) return;
-          const slotId = rid + '_wall' + (ci > 0 ? '_' + ci : '');
+          const tpbw=cfgw?.tiles_per_box||tile.tiles_per_box||6;
+          const spbw=spfw*tpbw;
+          const slotId = rid + '_wall_' + code.toLowerCase().replace(/[^a-z0-9]/g,'');
           const wBoxKey = 'qqprice_wl_' + ri + '_' + code;
           const wBoxP = window[wBoxKey] || 0;
-          const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
-          const spf=(mmH/25.4)*(mmW/25.4)/144;
-          const cfg=(_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
-          const tpb=cfg?.tiles_per_box||tile.tiles_per_box||6;
-          const spb=spf*tpb;
-          tileSelections[slotId] = { tile_name:tile.name, brand:tile.brand||'', productId:tile.id, size:{mm:r.wallDesign.size, tilesPerBox:tpb}, _qqBoxes:result.boxes };
-          if (wBoxP > 0) quotedPrices[slotId] = { pricePerBox:wBoxP, pricePerSqft:spb>0?+(wBoxP/spb).toFixed(1):0 };
+          tileSelections[slotId] = { tile_name:tile.name, brand:tile.brand||'', productId:tile.id, size:{mm:r.wallDesign.size, tilesPerBox:tpbw}, _qqBoxes:result.boxes };
+          if (wBoxP > 0) quotedPrices[slotId] = { pricePerBox:wBoxP, pricePerSqft:spbw>0?+(wBoxP/spbw).toFixed(1):0 };
           totalBoxes += result.boxes;
         });
         totalSqft += base;
