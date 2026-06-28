@@ -30735,8 +30735,8 @@ function _qqShowOutput() {
 
   let html = '';
   let grandBoxes = 0, grandAmount = 0;
-  // Track prices entered for each tile in THIS session — used to show same-tile hints below
-  const _sessionHints = {}; // tile.id → { label, pricePerBox }
+  // Track which price KEY each tile was last priced with (not the value — value is read live)
+  const _sessionHintKeys = {}; // tile.id → { label, boxKey, sqftPerBox, type, ri, code, sqftKey }
 
   // Customer name banner — always visible at top
   html += `<div style="background:var(--bg2);border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
@@ -30810,13 +30810,13 @@ function _qqShowOutput() {
                 <span id="qq-amt-fl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_f).toLocaleString('en-IN')}</span>
               </div>
               ${(()=>{
-                const sh = _sessionHints[r.tile.id];
-                if (sh) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${sh.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.15);border:1.5px solid var(--gold-border);color:var(--gold);font-size:10px;font-weight:700;cursor:pointer;text-align:left">💡 Same tile — ₹${sh.pricePerBox}/box entered in ${sh.label} above — tap to use</button>`;
+                const sh = _sessionHintKeys[r.tile.id];
+                if (sh) return `<div id="qq-hint-fl-${ri}-${code}" data-hint-src="${sh.boxKey}" data-apply-type="fl" data-apply-ri="${ri}" data-apply-code="${code}" data-apply-spb="${sqftPerBox_fl.toFixed(4)}" data-apply-bk="${boxKey}" data-apply-sk="${sqftKey}" data-hint-label="${sh.label}" style="margin-top:4px;display:none;width:100%;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;text-align:left;box-sizing:border-box" onclick="VW_TILES._qqApplyHint(this)">💡 Same tile — ₹<span class="hint-price"></span>/box in ${sh.label} — <span class="hint-action">tap to use</span></div>`;
                 const ph = window._qqPriceHistory?.[r.tile.id];
                 if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
                 return '';
               })()}
-              ${(_sessionHints[r.tile.id] = { label: room.type+' Floor', pricePerBox: boxPrice_f || defaultBoxPrice_f }, '')}
+              ${(_sessionHintKeys[r.tile.id] = { label: room.type+' Floor', boxKey, sqftKey, sqftPerBox: sqftPerBox_fl }, '')}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
@@ -30879,13 +30879,13 @@ function _qqShowOutput() {
                 <span id="qq-amt-wl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_w).toLocaleString('en-IN')}</span>
               </div>
               ${(()=>{
-                const sh = _sessionHints[r.tile.id];
-                if (sh) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${sh.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.15);border:1.5px solid var(--gold-border);color:var(--gold);font-size:10px;font-weight:700;cursor:pointer;text-align:left">💡 Same tile — ₹${sh.pricePerBox}/box entered in ${sh.label} above — tap to use</button>`;
+                const sh = _sessionHintKeys[r.tile.id];
+                if (sh) return `<div id="qq-hint-wl-${ri}-${code}" data-hint-src="${sh.boxKey}" data-apply-type="wl" data-apply-ri="${ri}" data-apply-code="${code}" data-apply-spb="${sqftPerBox_wl.toFixed(4)}" data-apply-bk="${wBoxKey}" data-apply-sk="${wSqftKey}" data-hint-label="${sh.label}" style="margin-top:4px;display:none;width:100%;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;text-align:left;box-sizing:border-box" onclick="VW_TILES._qqApplyHint(this)">💡 Same tile — ₹<span class="hint-price"></span>/box in ${sh.label} — <span class="hint-action">tap to use</span></div>`;
                 const ph = window._qqPriceHistory?.[r.tile.id];
                 if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
                 return '';
               })()}
-              ${(_sessionHints[r.tile.id] = { label: room.type+' Wall', pricePerBox: boxPrice_w || defaultBoxPrice_wl }, '')}
+              ${(_sessionHintKeys[r.tile.id] = { label: room.type+' Wall', boxKey: wBoxKey, sqftKey: wSqftKey, sqftPerBox: sqftPerBox_wl }, '')}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
@@ -30993,6 +30993,8 @@ function _qqShowOutput() {
     </button>`;
 
   _qqSheet(html, 'Quick Quote — Output');
+  // Update same-tile hints with current prices after DOM renders
+  setTimeout(_qqUpdateHints, 0);
 }
 
 // ── Price update WITHOUT full re-render (fixes scroll reset) ──────
@@ -31042,6 +31044,57 @@ function _qqRecomputeTotals() {
   });
   const grandEl = document.getElementById('qq-grand-est');
   if (grandEl) grandEl.textContent = '₹' + Math.round(grand).toLocaleString('en-IN') + ' estimated';
+  // Update same-tile hint displays with current prices
+  _qqUpdateHints();
+}
+
+// ── Update all same-tile hint buttons live (reads current prices, not render-time values) ─
+function _qqUpdateHints() {
+  document.querySelectorAll('[data-hint-src]').forEach(el => {
+    const srcKey = el.dataset.hintSrc;
+    const srcPrice = window[srcKey] || 0;
+    if (srcPrice <= 0) { el.style.display = 'none'; return; }
+
+    const applyKey = el.dataset.applyBk;
+    const curPrice = window[applyKey] || 0;
+    const priceEl  = el.querySelector('.hint-price');
+    const actionEl = el.querySelector('.hint-action');
+    if (priceEl) priceEl.textContent = srcPrice;
+
+    if (curPrice > 0 && curPrice === srcPrice) {
+      // ✅ Prices match — show confirmation in green
+      el.style.display = 'block';
+      el.style.background = 'rgba(34,197,94,0.08)';
+      el.style.border = '1px solid var(--green)';
+      el.style.color = 'var(--green)';
+      el.style.cursor = 'default';
+      el.textContent = '✅ ₹' + srcPrice + '/box — price matching';
+      el.onclick = null;
+    } else {
+      // 💡 Hint — show tap to use
+      el.style.display = 'block';
+      el.style.background = 'rgba(245,200,66,0.15)';
+      el.style.border = '1.5px solid var(--gold-border)';
+      el.style.color = 'var(--gold)';
+      el.style.cursor = 'pointer';
+      el.innerHTML = '💡 Same tile — ₹<span class="hint-price">' + srcPrice + '</span>/box in ' +
+        (el.dataset.hintLabel || '') + ' — <span class="hint-action">tap to use</span>';
+    }
+  });
+}
+
+// ── Apply a same-tile hint by reading its source price ─────────────────────────
+function _qqApplyHint(el) {
+  const srcKey  = el.dataset.hintSrc;
+  const srcPrice = window[srcKey] || 0;
+  if (!srcPrice) return;
+  const type = el.dataset.applyType;
+  const ri   = parseInt(el.dataset.applyRi);
+  const code = el.dataset.applyCode;
+  const spb  = parseFloat(el.dataset.applySpb || 1);
+  const bk   = el.dataset.applyBk;
+  const sk   = el.dataset.applySk;
+  _qqUpdatePrice(type, ri, code, spb, bk, sk, true, srcPrice);
 }
 
 // ── Silent auto-save (no toast) — called after customer confirm + each room add ─
@@ -31330,7 +31383,7 @@ window.VW_TILES = {
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
   _qqAssignSearch, _qqAssignFilter, _qqAssignTile, _qqAssignNext, _qqAssignBack,
   _qqAutoSave,
-  _qqShowOutput, _qqUpdatePrice, _qqRecomputeTotals,
+  _qqShowOutput, _qqUpdatePrice, _qqRecomputeTotals, _qqUpdateHints, _qqApplyHint,
   _tqEditCustomerFromSummary,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
