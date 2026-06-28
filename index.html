@@ -3077,7 +3077,7 @@ async function checkTileQuoteEscalations() {
 }
 
 // Called by the existing escalation sweep — add to checkEscalations
-async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, priceNote) {
+async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, priceNote, editedQuotedPrices) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
   if (!q) return;
   const log = q.approval_log || [];
@@ -3108,6 +3108,12 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
   }
 
   const updateData = { approval_log: log };
+  // Save per-tile edited prices if provided
+  if (editedQuotedPrices && Object.keys(editedQuotedPrices).length) {
+    updateData.quoted_prices = editedQuotedPrices;
+    last.priceEdited = true;
+    last.priceNote = priceNote || last.priceNote;
+  }
 
   // Helper: compute grand_total from price × area + extras + delivery
   const _computeGrandTotal = (ppSqft, ppBox, q) => {
@@ -28539,13 +28545,74 @@ async function tqSubmitForApproval() {
 async function tqSaveQuote() { return tqSubmitForApproval(); }
 
 // ───── APPROVER: tqApprove / tqReject — delegate to escalation engine ────────
+// Helper: build per-tile price BOM for approval screen
+function _tqBuildApprovalBOM(q) {
+  const slots = Object.entries(q.tile_selections||{});
+  if (!slots.length) return '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No tile details — enter price below.</div>';
+  return slots.map(([slotId, sel], idx) => {
+    if (!sel?.size?.mm) return '';
+    const qp = (q.quoted_prices||{})[slotId] || {};
+    const [mmH,mmW] = sel.size.mm.split('×').map(Number);
+    const spb = (mmH/25.4)*(mmW/25.4)/144 * (sel.size.tilesPerBox||6);
+    const initBox  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
+    const initSqft = qp.pricePerSqft>0 ? qp.pricePerSqft : (initBox>0&&spb>0) ? +(initBox/spb).toFixed(1) : 0;
+    const qqBoxes  = sel._qqBoxes || 0;
+    const surfLabel = slotId.endsWith('_floor') ? '🔲 Floor' : slotId.endsWith('_wall') ? '🧱 Wall' : '🔲';
+    return '<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
+        '<div>' +
+          '<div style="font-size:13px;font-weight:700">' + (sel.tile_name||'—') + '</div>' +
+          '<div style="font-size:11px;color:var(--text3)">' + (sel.brand||'') + ' · ' + sel.size.mm + ' · ' + surfLabel + '</div>' +
+        '</div>' +
+        (qqBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + qqBoxes + ' boxes</div>' : '') +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        '<div>' +
+          '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">₹ / BOX</label>' +
+          '<input type="number" id="tq-box-' + idx + '" value="' + (initBox||'') + '" step="10" min="0"' +
+            ' data-spb="' + spb.toFixed(4) + '" data-idx="' + idx + '" data-slot="' + slotId + '"' +
+            ' style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:15px;font-weight:800;text-align:center;box-sizing:border-box"' +
+            ' oninput="(function(el){const s=parseFloat(el.dataset.spb)||1;const i=el.dataset.idx;const sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\'})(this)">' +
+        '</div>' +
+        '<div>' +
+          '<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">₹ / SQFT</label>' +
+          '<input type="number" id="tq-sqft-' + idx + '" value="' + (initSqft||'') + '" step="0.5" min="0"' +
+            ' data-spb="' + spb.toFixed(4) + '" data-idx="' + idx + '"' +
+            ' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;box-sizing:border-box"' +
+            ' oninput="(function(el){const s=parseFloat(el.dataset.spb)||1;const i=el.dataset.idx;const bx=document.getElementById(\'tq-box-\'+i);if(bx)bx.value=Math.round((parseFloat(el.value)||0)*s)||\'\';})(this)">' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
 async function tqApprove() {
   const quoteId = _tqState._reviewingQuoteId;
   if (!quoteId) { showToast('No quotation selected', 'warn'); return; }
-  const sqft = parseFloat(document.getElementById('tq-quoted-sqft')?.value||0)||0;
-  const box = parseFloat(document.getElementById('tq-quoted-box')?.value||0)||0;
+
+  // Read per-tile prices from BOM inputs
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('tile_selections,quoted_prices').eq('id',quoteId).single();
+  const slots = Object.entries(q?.tile_selections||{});
+  const editedPrices = { ...(q?.quoted_prices||{}) };
+
+  let firstBoxPrice = 0, firstSqftPrice = 0;
+  slots.forEach(([slotId, sel], idx) => {
+    if (!sel?.size?.mm) return;
+    const boxVal  = parseFloat(document.getElementById(`tq-box-${idx}`)?.value||0)||0;
+    const sqftVal = parseFloat(document.getElementById(`tq-sqft-${idx}`)?.value||0)||0;
+    if (boxVal > 0 || sqftVal > 0) {
+      editedPrices[slotId] = { pricePerBox: boxVal||undefined, pricePerSqft: sqftVal||undefined };
+      if (!firstBoxPrice  && boxVal)  firstBoxPrice  = boxVal;
+      if (!firstSqftPrice && sqftVal) firstSqftPrice = sqftVal;
+    }
+  });
+
+  // Fallback to old single inputs if no slot inputs found
+  const sqft = firstSqftPrice || parseFloat(document.getElementById('tq-quoted-sqft-0')?.value||0)||0;
+  const box  = firstBoxPrice  || parseFloat(document.getElementById('tq-quoted-box-0')?.value||0)||0;
   const note = document.getElementById('tq-price-note')?.value||'';
-  await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note);
+
+  await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note, editedPrices);
   closeSheet();
   navigateTo('tile_quotes');
 }
@@ -29125,26 +29192,10 @@ async function openTileQuote(id) {
     ${canIAction ? `
     <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
-      <div class="form-row" style="margin-bottom:8px">
-        <div class="form-group" style="margin:0;flex:1">
-          <label style="font-size:11px">₹/sqft (edit if needed)</label>
-          <input type="number" id="tq-quoted-sqft" placeholder="${pricePerSqft||'Enter price'}" value="${pricePerSqft||''}" step="0.5" style="font-size:14px;font-weight:600"
-            oninput="(function(v){
-              const spf=parseFloat(v)||0;
-              const cov=parseFloat(${q.selected_product?.coverage_per_box||q.selected_size?.coverage||16});
-              const boxPx=spf>0&&cov>0?Math.round(spf*cov):0;
-              const boxEl=document.getElementById('tq-quoted-box');
-              if(boxEl&&boxPx>0)boxEl.value=boxPx;
-            })(this.value)">
-        </div>
-        <div class="form-group" style="margin:0;flex:1">
-          <label style="font-size:11px">₹/box</label>
-          <input type="number" id="tq-quoted-box" placeholder="${pricePerBox||'Optional'}" value="${pricePerBox||''}" step="1">
-        </div>
-      </div>
+      ${_tqBuildApprovalBOM(q)}
       <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:11px">Price note / reason</label>
-        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer" value="${q.price_edit_note||''}">
+        <label style="font-size:11px">Price note / reason (optional)</label>
+        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer · Premium tile" value="${q.price_edit_note||''}">
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
@@ -30558,6 +30609,67 @@ function _qqShowOutput() {
     html += '</div>';
   });
 
+  // ── Merged Tile Summary (same tile across rooms consolidated into 1 row) ──
+  const _mergedTiles = {};
+  _qqData.rooms.forEach((room, ri) => {
+    if ((room.surface==='floor'||room.surface==='both') && room.floorDesign) {
+      const fc = _qqCalcFloor(room, room.floorDesign);
+      if (fc) Object.entries(fc.results).forEach(([code, r]) => {
+        const key = `${r.tile.id}_${room.floorDesign.size}`;
+        if (!_mergedTiles[key]) _mergedTiles[key] = { tile:r.tile, size:room.floorDesign.size, boxes:0, sqft:0, priceBoxKey:null, sqftPerBox:0 };
+        _mergedTiles[key].boxes += r.boxes;
+        _mergedTiles[key].sqft  += r.sqft;
+        if (!_mergedTiles[key].priceBoxKey) {
+          const cfgM = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===room.floorDesign.size);
+          const tpbM = cfgM?.tiles_per_box || r.tile.tiles_per_box || 6;
+          const [mH,mW] = room.floorDesign.size.split('×').map(Number);
+          _mergedTiles[key].sqftPerBox = (mH/25.4)*(mW/25.4)/144*tpbM;
+          _mergedTiles[key].priceBoxKey = `qqprice_fl_${ri}_${code}`;
+        }
+      });
+    }
+    if ((room.surface==='wall'||room.surface==='both') && room.wallDesign) {
+      const wLen2=parseFloat(room.wl)||0, wH2=parseFloat(room.wh)||7;
+      const dw2=room.hasDoor===true?parseFloat(room.dw)||0:0, dh2=room.hasDoor===true?parseFloat(room.dh)||0:0;
+      const wc = _qqCalcWall(wLen2, wH2, room.hasDoor===true, dw2, dh2, room.wallDesign);
+      if (wc) Object.entries(wc.results).forEach(([code, r]) => {
+        const key = `${r.tile.id}_${room.wallDesign.size}`;
+        if (!_mergedTiles[key]) _mergedTiles[key] = { tile:r.tile, size:room.wallDesign.size, boxes:0, sqft:0, priceBoxKey:null, sqftPerBox:0 };
+        _mergedTiles[key].boxes += r.boxes;
+        _mergedTiles[key].sqft  += r.sqft;
+        if (!_mergedTiles[key].priceBoxKey) {
+          const cfgM = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===room.wallDesign.size);
+          const tpbM = cfgM?.tiles_per_box || r.tile.tiles_per_box || 6;
+          const [mH,mW] = room.wallDesign.size.split('×').map(Number);
+          _mergedTiles[key].sqftPerBox = (mH/25.4)*(mW/25.4)/144*tpbM;
+          _mergedTiles[key].priceBoxKey = `qqprice_wl_${ri}_${code}`;
+        }
+      });
+    }
+  });
+
+  const mergedEntries = Object.values(_mergedTiles);
+  if (mergedEntries.length > 0) {
+    html += `<div style="margin-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">📋 Consolidated Material List</div>`;
+    mergedEntries.forEach(m => {
+      const boxP  = window[m.priceBoxKey] ?? 0;
+      const sqftP = m.sqftPerBox > 0 ? +(boxP / m.sqftPerBox).toFixed(1) : 0;
+      const amt   = m.boxes * boxP;
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:4px;border-left:3px solid var(--gold)">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700">${m.tile.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${m.tile.brand} · ${m.size} · ${m.sqft.toFixed(1)} sqft</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:15px;font-weight:900;color:var(--gold)">${m.boxes} boxes</div>
+          ${amt>0?`<div style="font-size:11px;color:var(--text3)">₹${Math.round(amt).toLocaleString('en-IN')}</div>`:''}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
   // Grand total + submit
   html += `
     <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-top:4px;border:1px solid var(--gold-border)">
@@ -30766,7 +30878,7 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit, _tqConfirmEdit,
+  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit, _tqConfirmEdit, _tqBuildApprovalBOM,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
