@@ -27944,48 +27944,18 @@ async function tqBack() {
   }
 }
 
-// Edit with Reason — re-opens an approved/submitted quote back to draft with audit trail
+// Edit with Reason — re-opens from TQ Summary page. Delegates to tqEditQuote.
 async function _tqRequestEdit() {
   const id = _tqState._savedQuoteId || _tqState._draftId;
-  if (!id) { showToast('Quote not yet saved — edit freely','info'); _tqState._approvalStatus=null; _rerenderStep8(); return; }
-  // Use bottom sheet instead of prompt() — prompt() is blocked on iOS PWA
-  const sh = document.getElementById('bottom-sheet');
-  sh.innerHTML = `
-    <div class="sheet-handle"></div>
-    <h3 style="margin:0 0 8px;font-size:15px">✏️ Re-open for Editing</h3>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Provide a reason — this will be logged in the audit trail.</p>
-    <div class="form-group">
-      <label>Reason for editing *</label>
-      <textarea id="tq-edit-reason" rows="3" placeholder="e.g. Customer changed tile size · Measurement correction"
-        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
-      <button style="flex:2;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-weight:700;cursor:pointer"
-        onclick="VW_TILES._tqConfirmEdit(${id})">✏️ Re-open Quote</button>
-    </div>`;
-  sh.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
-  setTimeout(() => document.getElementById('tq-edit-reason')?.focus(), 100);
-}
-
-async function _tqConfirmEdit(id) {
-  const reason = document.getElementById('tq-edit-reason')?.value.trim();
-  if (!reason) { showToast('Reason required to re-edit','warn'); return; }
-  try {
-    const profile = VW_AUTH.getCurrentProfile();
-    const { error } = await VW_DB.client.from('tile_quotations').update({
-      approval_status: 'draft',
-      rejection_reason: reason,
-      rejected_by: profile?.name||'Staff',
-      rejected_at: new Date().toISOString(),
-    }).eq('id', id);
-    if (error) throw error;
-    _tqState._approvalStatus = 'draft';
-    closeSheet();
-    showToast('Quote re-opened for editing. Re-submit when done.','success');
+  if (!id) {
+    // Quote not yet saved — just clear approval status and let them edit freely
+    _tqState._approvalStatus = null;
     _rerenderStep8();
-  } catch(e) { showToast('Could not re-open: '+e.message,'error'); }
+    showToast('Quote not yet saved — edit freely', 'info');
+    return;
+  }
+  // Delegate to the unified edit flow
+  await tqEditQuote(id);
 }
 
 // Auto-save the in-progress tile quotation as a draft so nothing is ever lost and it can be
@@ -29035,6 +29005,13 @@ async function renderTileQuotesList() {
       ${q.advance_amount > 0 ? `<div style="font-size:12px;font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} advance</div>` : ''}
     </div>
     ${q.rejection_reason ? `<div style="font-size:11px;color:var(--red);margin-top:4px;padding:4px 8px;background:rgba(239,68,68,0.06);border-radius:6px">Rejected: ${q.rejection_reason}</div>` : ''}
+    ${q.advance_amount > 0 ? '' : `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
+      <button onclick="VW_TILES.tqEditQuote(${q.id})"
+        style="padding:5px 12px;border-radius:7px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:11px;font-weight:700;cursor:pointer">
+        ✏️ Edit
+      </button>
+    </div>`}
   </div>`;
 
   return `
@@ -29099,6 +29076,135 @@ async function renderTileQuotesList() {
 }
 
 // ───── OPEN INDIVIDUAL QUOTE (different view per role) ───────
+// ── Edit a tile quotation (any state except advance collected) ─────────────────
+// Entry point: shows reason sheet. Hard stop: advance_amount > 0.
+async function tqEditQuote(id) {
+  if (!id) return;
+  const { data: q } = await VW_DB.client.from('tile_quotations')
+    .select('tq_no,customer_name,approval_status,advance_amount,approval_log')
+    .eq('id', id).single();
+  if (!q) { showToast('Quote not found', 'warn'); return; }
+
+  // HARD STOP — advance collected = permanently locked
+  if (q.advance_amount > 0) {
+    showToast('Cannot edit — advance of ₹' + parseInt(q.advance_amount).toLocaleString('en-IN') + ' already collected', 'warn');
+    return;
+  }
+
+  const isPending = q.approval_status === 'pending_approval';
+  const isApproved = q.approval_status === 'approved';
+  const sheet = document.getElementById('bottom-sheet');
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <span style="font-size:20px">✏️</span>
+      <div>
+        <div style="font-size:15px;font-weight:800">Edit Quote</div>
+        <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${q.customer_name}</div>
+      </div>
+    </div>
+
+    ${isPending ? `
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+      ⚠️ This quote is <strong>pending approval</strong>. Editing will <strong>auto-reject</strong> the current approval step and restart the full chain from TL after you re-submit.
+    </div>` : isApproved ? `
+    <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px">
+      ⚠️ This quote is <strong>approved</strong>. Editing will move it back to draft and require a fresh approval from TL after re-submit.
+    </div>` : `
+    <div style="background:rgba(245,200,66,0.07);border:1px solid var(--gold-border);border-radius:8px;padding:8px;margin-bottom:12px;font-size:12px;color:var(--text3)">
+      Quote will reload into the wizard. Make changes and re-submit for approval.
+    </div>`}
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Reason for editing <span style="color:var(--red)">*</span></label>
+      <textarea id="tq-edit-reason-main" rows="3"
+        placeholder="e.g. Customer changed tile selection · Measurement correction · Price revision"
+        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px;box-sizing:border-box;resize:none"></textarea>
+    </div>
+
+    <div style="display:flex;gap:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button style="flex:2;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-weight:700;font-size:14px;cursor:pointer"
+        onclick="VW_TILES.tqConfirmEditQuote(${id})">
+        ✏️ Edit Quote
+      </button>
+    </div>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('tq-edit-reason-main')?.focus(), 150);
+}
+
+// Confirm edit — auto-rejects pending, resets to draft, opens wizard
+async function tqConfirmEditQuote(id) {
+  const reason = document.getElementById('tq-edit-reason-main')?.value.trim();
+  if (!reason) {
+    showToast('Reason is required', 'warn');
+    document.getElementById('tq-edit-reason-main')?.focus();
+    return;
+  }
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const byName  = profile?.name || 'Staff';
+  const now     = new Date().toISOString();
+  const dateStr = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+  // Fetch current approval_log
+  const { data: q } = await VW_DB.client.from('tile_quotations')
+    .select('approval_log,approval_status').eq('id', id).single();
+  if (!q) { showToast('Quote not found', 'warn'); return; }
+
+  // Auto-reject any pending steps in the approval log
+  const log = (q.approval_log || []).map(step => {
+    if (step.status === 'pending') {
+      return {
+        ...step,
+        status: 'auto_rejected',
+        autoRejectedAt: now,
+        autoRejectedBy: byName,
+        autoRejectedById: profile?.id || null,
+        autoRejectedReason: `Re-edited by ${byName} on ${dateStr} — Reason: ${reason}`,
+      };
+    }
+    return step;
+  });
+
+  // Add an edit record to the log for full audit trail
+  log.push({
+    level: 'edit',
+    status: 'edited',
+    editedAt: now,
+    editedBy: byName,
+    editedById: profile?.id || null,
+    reason,
+    previousStatus: q.approval_status,
+  });
+
+  // Reset quote to draft
+  const { error } = await VW_DB.client.from('tile_quotations').update({
+    approval_status: 'draft',
+    status: 'draft',
+    approval_log: log,
+    approval_submitted_at: null,
+    approval_submitted_by: null,
+    approval_submitted_by_id: null,
+    draft_step: 8,
+    updated_at: now,
+  }).eq('id', id);
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  await auditLog('tq_edit_requested', 'tile_quotation', id, q.approval_status, 'draft', { reason }, `Re-edit by ${byName}`);
+
+  closeSheet();
+  showToast('Quote re-opened for editing', 'success');
+
+  // Load into TQ wizard so staff can make changes
+  delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
+  tqResumeDraft(id);
+}
+
 async function openTileQuote(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
@@ -29231,6 +29337,14 @@ async function openTileQuote(id) {
     <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
     <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
       🔒 Print & Share enabled after final approval
+    </div>`}
+
+    ${!q.advance_amount ? `
+    <button onclick="VW_TILES.tqEditQuote(${id})" style="width:100%;padding:11px;border-radius:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      ✏️ Edit Quote
+    </button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Editing locked — advance collected
     </div>`}
     <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
 
@@ -30940,7 +31054,8 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit, _tqConfirmEdit, _tqBuildApprovalBOM,
+  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
+  tqEditQuote, tqConfirmEditQuote, _tqBuildApprovalBOM,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
