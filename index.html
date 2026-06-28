@@ -30367,12 +30367,12 @@ function _qqShowDesignSize() {
     {mm:'800×1600', lbl:'800×1600',  note:'Floor · 2.6ft × 5.2ft'},
     {mm:'1200×1200',lbl:'1200×1200', note:'Floor Slab · 4ft sq'},
     {mm:'1200×1800',lbl:'1200×1800', note:'Floor / Wall Slab · 4ft × 6ft'},
-    {mm:'2400×800', lbl:'2400×800',  note:'Floor Slab'},
-    {mm:'3000×800', lbl:'3000×800',  note:'Floor Slab'},
+    {mm:'2400×800', lbl:'2400×800',  note:'Floor / Wall Slab · 8ft × 2.6ft'},
+    {mm:'3000×800', lbl:'3000×800',  note:'Floor / Wall Slab · 10ft × 2.6ft'},
   ];
   const sizes = isFloor
     ? allSizes.filter(s => !['300×450','300×600'].includes(s.mm))
-    : allSizes.filter(s => !['800×800','800×1600','1200×1200','2400×800','3000×800'].includes(s.mm));
+    : allSizes.filter(s => !['800×800','800×1600','1200×1200'].includes(s.mm));
 
   _qqSheet(`
     <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${room.type} · ${isFloor?'🔲 Floor':'🧱 Wall'}</div>
