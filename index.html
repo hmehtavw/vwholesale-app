@@ -29752,9 +29752,41 @@ const _QQ_ROOMS = [
 
 window._qqData = null;
 
+// Load price history from recent approved/pending quotes
+// Builds: window._qqPriceHistory[productId] = { pricePerBox, tqNo, date }
+async function _qqLoadPriceHistory() {
+  const { data } = await VW_DB.client
+    .from('tile_quotations')
+    .select('tq_no, tile_selections, quoted_prices, created_at')
+    .in('approval_status', ['approved', 'pending_approval'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  const history = {};
+  (data||[]).forEach(q => {
+    const tqNo = q.tq_no;
+    const dateStr = new Date(q.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+    Object.entries(q.tile_selections||{}).forEach(([slotId, sel]) => {
+      const pid = sel?.productId;
+      if (!pid) return;
+      const qp = (q.quoted_prices||{})[slotId];
+      const priceBox = qp?.pricePerBox || 0;
+      if (!priceBox) return;
+      // Keep most recent approved price per product
+      if (!history[pid]) {
+        history[pid] = { pricePerBox: priceBox, tqNo, date: dateStr };
+      }
+    });
+  });
+  window._qqPriceHistory = history;
+}
+
 async function openQuickQuote() {
   // Clean up any stale price keys from previous QQ sessions
   Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
+  // Load price history in background — ready by the time user reaches Output screen
+  window._qqPriceHistory = {};
+  _qqLoadPriceHistory().catch(() => {});
   window._qqData = {
     customer: { name:'', phone:'', site:'', _found:null },
     rooms: [],    // each room stores floorDesign + wallDesign after measurement
@@ -30538,6 +30570,7 @@ function _qqShowOutput() {
                   oninput="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',false,this.value)">
                 <span id="qq-amt-fl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_f).toLocaleString('en-IN')}</span>
               </div>
+              ${(()=>{ const h=window._qqPriceHistory?.[r.tile.id]; return h ? `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${h.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.08);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Last quoted ₹${h.pricePerBox}/box on ${h.tqNo} (${h.date}) — tap to use</button>` : ''; })()}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
@@ -30599,6 +30632,7 @@ function _qqShowOutput() {
                   oninput="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',false,this.value)">
                 <span id="qq-amt-wl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_w).toLocaleString('en-IN')}</span>
               </div>
+              ${(()=>{ const h=window._qqPriceHistory?.[r.tile.id]; return h ? `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${h.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.08);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Last quoted ₹${h.pricePerBox}/box on ${h.tqNo} (${h.date}) — tap to use</button>` : ''; })()}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
@@ -30894,7 +30928,7 @@ window.VW_TILES = {
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
-  openQuickQuote, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
+  openQuickQuote, _qqLoadPriceHistory, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
   _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm, _qqEditRoom,
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
