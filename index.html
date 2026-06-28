@@ -16826,7 +16826,8 @@ async function processReturn(invoiceId) {
     const item = inv.items[idx];
     const qty = parseFloat(document.getElementById(`return-qty-${idx}`)?.value) || item.qty;
     const reason = document.getElementById(`return-reason-${idx}`)?.value || '';
-    return { name: item.name, qty, unit: item.unit, price: item.price, reason };
+    // Preserve productId from original invoice item for accurate stock restore
+    return { name: item.name, qty, unit: item.unit, price: item.price, reason, productId: item.productId || null };
   });
 
   const totalRefund = returnItems.reduce((s,i) => s + i.price * i.qty, 0);
@@ -16841,9 +16842,15 @@ async function processReturn(invoiceId) {
     createdAt: new Date().toISOString()
   });
 
-  // Restock returned items
+  // Restock returned items — use productId from invoice item (reliable), fall back to name match
   for (const ri of returnItems) {
-    const prod = (await VW_DB.all(VW_DB.STORES.products)).find(p => p.name === ri.name);
+    let prod = null;
+    if (ri.productId) {
+      prod = await VW_DB.getById(VW_DB.STORES.products, ri.productId);
+    }
+    if (!prod) {
+      prod = (await VW_DB.all(VW_DB.STORES.products)).find(p => p.name === ri.name);
+    }
     if (prod) { prod.stock = (prod.stock||0) + ri.qty; await VW_DB.put(VW_DB.STORES.products, prod); }
   }
 
