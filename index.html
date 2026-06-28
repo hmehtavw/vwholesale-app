@@ -28399,6 +28399,7 @@ async function tqSubmitForApproval() {
     const _quotedPricePerSqft = _firstQP?.pricePerSqft || 0;
 
     const _tqPayload = {
+      source: 'full_tq',
       tq_no: tqNo,
       customer_name: st.customer.name,
       customer_phone: st.customer.phone,
@@ -28938,14 +28939,18 @@ async function renderTileQuotesList() {
 
   // Fetch quotes
   let query = VW_DB.client.from('tile_quotations')
-    .select('id,tq_no,customer_name,customer_phone,total_area_sqft,approval_status,status,created_by,created_at,advance_amount,quoted_price_per_sqft,selected_size,advance_receipt_no,rejection_reason,approval_log')
-    .order('created_at', {ascending:false}).limit(50);
+    .select('id,tq_no,customer_name,customer_phone,total_area_sqft,approval_status,status,created_by,created_at,advance_amount,quoted_price_per_sqft,selected_size,advance_receipt_no,rejection_reason,approval_log,source,grand_total')
+    .order('created_at', {ascending:false}).limit(60);
 
   // Executives see only their own quotes
   if (isExec) query = query.eq('created_by', profile?.name||'');
 
   const { data: quotes } = await query;
-  const allQuotes = quotes || [];
+  const allRaw = quotes || [];
+
+  // Split Quick Quotes from Full TQ quotes
+  const qqEstimates = allRaw.filter(q => q.source === 'quick_quote');
+  const allQuotes   = allRaw.filter(q => q.source !== 'quick_quote');
 
   const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
 
@@ -29023,6 +29028,37 @@ async function renderTileQuotesList() {
     </div>
   </div>
 
+  <!-- QUICK ESTIMATES — internal rough calculations, not for approval -->
+  ${qqEstimates.length ? `
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">⚡ Quick Estimates (${qqEstimates.length}) — Internal Only</div>
+    ${qqEstimates.map(q => `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:6px;border:1px dashed var(--gold-border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'—'} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft${q.grand_total?` · ₹${parseInt(q.grand_total).toLocaleString('en-IN')} est.`:''}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
+        </div>
+        <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,200,66,0.1);color:var(--gold);font-weight:700;border:1px solid var(--gold-border)">ESTIMATE</span>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="VW_TILES.qqEditExisting(${q.id})"
+          style="flex:1;padding:6px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">
+          ✏️ Edit
+        </button>
+        <button onclick="VW_TILES.qqConvertExisting(${q.id})"
+          style="flex:2;padding:6px;border-radius:7px;background:var(--gold);border:none;color:#000;font-size:11px;font-weight:700;cursor:pointer">
+          📋 Convert to Full TQ
+        </button>
+        <button onclick="VW_TILES.qqDeleteEstimate(${q.id})"
+          style="padding:6px 10px;border-radius:7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:11px;cursor:pointer">
+          🗑
+        </button>
+      </div>
+    </div>`).join('')}
+  </div>` : ''}
+
   <!-- MY ACTION REQUIRED — quotes at my level right now -->
   ${myPending.length ? `
   <div style="background:rgba(245,200,66,0.08);border:2px solid var(--gold-border);border-radius:12px;padding:12px;margin-bottom:12px">
@@ -29076,14 +29112,75 @@ async function renderTileQuotesList() {
 }
 
 // ───── OPEN INDIVIDUAL QUOTE (different view per role) ───────
-// ── Edit a tile quotation (any state except advance collected) ─────────────────
-// Entry point: shows reason sheet. Hard stop: advance_amount > 0.
+// ── Edit an existing saved Quick Quote — reopen in QQ flow ────────────────────
+async function qqEditExisting(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
+  if (!q) { showToast('Estimate not found', 'warn'); return; }
+
+  // Restore _qqData from saved record
+  window._qqData = {
+    _qqId: id,
+    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
+    rooms: q.rooms || [],
+    adding: null,
+    designing: null,
+    editingIdx: null,
+  };
+
+  // Restore price keys from quoted_prices
+  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
+  // Price keys are re-entered by staff — they'll see the saved prices in the output screen
+
+  // Load price history in background
+  _qqLoadPriceHistory().catch(() => {});
+
+  // Open QQ sheet at the output screen (rooms are already set)
+  _qqScreen('output');
+}
+
+// ── Convert an existing saved QQ to Full TQ from the list ─────────────────────
+async function qqConvertExisting(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
+  if (!q) { showToast('Estimate not found', 'warn'); return; }
+  // Load into _qqData then call convert
+  window._qqData = {
+    _qqId: id,
+    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
+    rooms: q.rooms || [],
+    adding: null, designing: null, editingIdx: null,
+  };
+  // Restore price keys from quoted_prices so _qqBuildPayload picks them up
+  Object.entries(q.quoted_prices||{}).forEach(([slotId, qp]) => {
+    // Map slot back to ri/code price keys — best effort; staff can adjust in wizard
+    if (qp.pricePerBox) window['qqprice_' + slotId] = qp.pricePerBox;
+  });
+  await _qqConvertToFullTQ();
+}
+
+// ── Delete a Quick Quote estimate ─────────────────────────────────────────────
+async function qqDeleteEstimate(id) {
+  if (!confirm('Delete this estimate? This cannot be undone.')) return;
+  const { error } = await VW_DB.client.from('tile_quotations').delete().eq('id', id);
+  if (error) { showToast('Delete failed: ' + error.message, 'error'); return; }
+  showToast('Estimate deleted', 'success');
+  const container = document.getElementById('app-content');
+  if (container) container.innerHTML = await renderTileQuotesList();
+}
+
+// ── tqEditQuote — routes to QQ flow for QQ estimates, TQ flow for full quotes ─
 async function tqEditQuote(id) {
   if (!id) return;
   const { data: q } = await VW_DB.client.from('tile_quotations')
-    .select('tq_no,customer_name,approval_status,advance_amount,approval_log')
+    .select('tq_no,customer_name,approval_status,advance_amount,approval_log,source')
     .eq('id', id).single();
   if (!q) { showToast('Quote not found', 'warn'); return; }
+
+  // Quick Quote estimates → edit directly in QQ flow, no approval concerns
+  if (q.source === 'quick_quote') {
+    closeSheet();
+    await qqEditExisting(id);
+    return;
+  }
 
   // HARD STOP — advance collected = permanently locked
   if (q.advance_amount > 0) {
@@ -30863,8 +30960,11 @@ function _qqShowOutput() {
     </div>` : ''}
     <div style="display:flex;gap:8px;margin-top:4px">
       <button onclick="VW_TILES._qqScreen('rooms')" class="btn-secondary" style="flex:1">← Edit Rooms</button>
-      <button onclick="VW_TILES._qqBuildQuote()" class="btn-primary" style="flex:1;background:var(--gold);color:#000">📤 Submit for Approval</button>
-    </div>`;
+      <button onclick="VW_TILES._qqSaveEstimate()" class="btn-secondary" style="flex:1">💾 Save Estimate</button>
+    </div>
+    <button onclick="VW_TILES._qqConvertToFullTQ()" style="width:100%;margin-top:8px;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+      📋 Convert to Full Quotation
+    </button>`;
 
   _qqSheet(html, 'Quick Quote — Output');
 }
@@ -30918,117 +31018,199 @@ function _qqRecomputeTotals() {
   if (grandEl) grandEl.textContent = '₹' + Math.round(grand).toLocaleString('en-IN') + ' estimated';
 }
 
-async function _qqBuildQuote() {
-  const d = _qqData;
-  // Sync name from inline input if typed
-  const nameEl = document.getElementById('qq-cust-name');
-  if (nameEl?.value?.trim()) d.customer.name = nameEl.value.trim();
-
-  if (!d?.rooms?.length) { showToast('No rooms added — go back to Rooms','warn'); return; }
-  if (!d.customer?.name?.trim()) {
-    showToast('Enter customer name at the top of this screen','warn');
-    const el = document.getElementById('qq-cust-name');
-    if (el) { el.focus(); el.style.borderColor='var(--red,#ef4444)'; }
-    return;
-  }
-  const hasDesigns = d.rooms.some(r =>
-    (r.floorDesign?.pattern?.length && Object.keys(r.floorDesign.tileMap||{}).length>0) ||
-    (r.wallDesign?.pattern?.length  && Object.keys(r.wallDesign.tileMap||{}).length>0)
-  );
-  if (!hasDesigns) { showToast('Assign tiles to at least one surface before submitting','warn'); return; }
+// ── Save Quick Quote to DB as rough estimate (no approval) ────────────────────
+async function _qqSaveEstimate() {
+  const payload = await _qqBuildPayload();
+  if (!payload) return;
+  const fy = getFinancialYearLabel();
+  const profile = VW_AUTH.getCurrentProfile();
 
   try {
-    const rooms = [];
-    const tileSelections = {}, quotedPrices = {};
-
-    d.rooms.forEach((r, ri) => {
-      const rid = 'qq'+ri+'_'+Date.now();
-      const areas = [];
-      const hasBoth = (r.surface==='both') && r.floorDesign?.pattern?.length && r.wallDesign?.pattern?.length;
-
-      if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
-        // FLOOR-ONLY sqft — same logic as _qqCalcFloor, never add wall area
-        let sqft;
-        if (r.mode==='sqft') { sqft = parseFloat(r.sqft)||0; }
-        else { const l=parseFloat(r.l)||0,w=parseFloat(r.w)||0; sqft=l*w; if(r.skirtingIn>0) sqft+=2*(l+w)*(r.skirtingIn/12); }
-        if (sqft > 0) {
-          const rawSqft = (parseFloat(r.l)||0)*(parseFloat(r.w)||0);
-          const skirtNote = (sqft - rawSqft) > 0.1 ? ` + skirting` : '';
-          areas.push({ subType:'floor', sqft, base:sqft, label:`Floor ${parseFloat(r.l)||0}×${parseFloat(r.w)||0}ft${skirtNote}`, l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
-          const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
-          if (mainTile) {
-            const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
-            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            const cfgSzFl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
-            const tpbFl = cfgSzFl?.tiles_per_box || mainTile.tiles_per_box || 6;
-            const slotId = hasBoth ? rid+'_floor' : rid;
-            const customBoxPrice_fl = window[`qqprice_fl_${ri}_${r.floorDesign.pattern[0]}`];
-            // Compute accurate per-code boxes (same as QQ Output) for TQ Summary
-            const fcForBoxes = _qqCalcFloor(r, r.floorDesign);
-            const qqFlBoxes = fcForBoxes?.totalBoxes || 0;
-            tileSelections[slotId] = { size:{mm:r.floorDesign.size,tilesPerBox:tpbFl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.floorDesign, _qqBoxes:qqFlBoxes };
-            if (customBoxPrice_fl !== undefined && customBoxPrice_fl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_fl };
-            else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
-          }
-        }
-      }
-      if ((r.surface==='wall'||r.surface==='both') && r.wallDesign?.pattern?.length) {
-        const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||7;
-        const dw=r.hasDoor===true?parseFloat(r.dw)||0:0, dh=r.hasDoor===true?parseFloat(r.dh)||0:0;
-        const base=Math.max(0, wl*wh - dw*dh);
-        if (base>0) {
-          areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${r.hasDoor===true?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
-          const mainTile = r.wallDesign.tileMap[r.wallDesign.pattern[0]];
-          if (mainTile) {
-            const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
-            const sqftPer = (mmH/25.4)*(mmW/25.4)/144;
-            const cfgSzWl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
-            const tpbWl = cfgSzWl?.tiles_per_box || mainTile.tiles_per_box || 6;
-            const slotId = hasBoth ? rid+'_wall' : rid;
-            const customBoxPrice_wl = window[`qqprice_wl_${ri}_${r.wallDesign.pattern[0]}`];
-            // Compute accurate wall boxes (same as QQ Output) for TQ Summary
-            const wlForBoxes = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
-            const qqWlBoxes = wlForBoxes?.totalBoxes || 0;
-            tileSelections[slotId] = { size:{mm:r.wallDesign.size,tilesPerBox:tpbWl,ft:sqftPer}, tile_name:mainTile.name, brand:mainTile.brand, productId:mainTile.id, _qqDesign:r.wallDesign, _qqBoxes:qqWlBoxes };
-            if (customBoxPrice_wl !== undefined && customBoxPrice_wl > 0) quotedPrices[slotId] = { pricePerBox: customBoxPrice_wl };
-            else if (mainTile.price_per_sqft > 0) quotedPrices[slotId] = { pricePerSqft: mainTile.price_per_sqft };
-          }
-        }
-      }
-      if (areas.length) rooms.push({ id:rid, type:r.type, label:r.type, areas });
-    });
-
-    if (!rooms.length) { showToast('No valid tile designs — please assign tiles to surfaces','warn'); return; }
-
-    // Set _tqState directly and submit — no second click in TQ Summary needed
-    _tqState = {
-      customer:d.customer, contractor:null, rooms,
-      currentFlat:'', tileSelections, quotedPrices,
-      spacerSelections:{}, spacerType:'plus', spacerResult:null,
-      adhesiveSelections:{}, groutSelections:{}, beading:[], accessories:[], floorTraps:[],
-      soffit:{enabled:false}, delivery:{type:'self',distanceKm:0,floors:[],beyondFt:false},
-      laborRequired:null, addons:{}, wallDesigns:{}, extraProducts:[],
-      design:{}, selectedSize:null, selectedProduct:null,
-      spacer:{}, adhesive:{}, grout:{}, _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
-      step:8, _draftId:null, _approvalStatus:null, breakagePct:0,
-    };
-
-    _qqSheet(`<div style="text-align:center;padding:40px 20px">
-      <div style="width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--gold);border-radius:50%;margin:0 auto 14px;animation:spin 0.8s linear infinite"></div>
-      <div style="font-size:15px;font-weight:700">Submitting for approval…</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:6px">${d.customer.name} · ${rooms.length} room${rooms.length>1?'s':''}</div>
-    </div>`, 'Quick Quote');
-
-    await tqSubmitForApproval();
-    // tqSubmitForApproval renders the success screen directly to #app-content —
-    // just close the QQ sheet and let it show. Don't navigate away from success screen.
-    closeSheet();
-  } catch(e) {
-    console.error('QQ Submit error:', e);
-    showToast('Submit failed: '+(e?.message||String(e)),'error');
+    if (_qqData._qqId) {
+      // Update existing QQ record
+      await VW_DB.client.from('tile_quotations').update({
+        ...payload, updated_at: new Date().toISOString()
+      }).eq('id', _qqData._qqId);
+      showToast('Estimate updated', 'success');
+    } else {
+      // Insert new QQ record
+      const tqNo = 'QQ/' + fy + '/D' + String(Date.now()).slice(-5);
+      const { data, error } = await VW_DB.client.from('tile_quotations').insert({
+        ...payload,
+        tq_no: tqNo,
+        source: 'quick_quote',
+        status: 'draft',
+        approval_status: 'draft',
+        created_by: profile?.name || '',
+        created_by_id: profile?.id || null,
+        created_at: new Date().toISOString(),
+      }).select('id').single();
+      if (error) throw error;
+      _qqData._qqId = data.id;
+      showToast('Estimate saved as ' + tqNo, 'success');
+    }
+  } catch (e) {
+    showToast('Save failed: ' + e.message, 'error');
   }
 }
 
+// ── Convert Quick Quote → Full Tile Quotation (with full TQ wizard) ───────────
+async function _qqConvertToFullTQ() {
+  const d = _qqData;
+  if (!d?.rooms?.length) { showToast('No rooms — go back and add rooms', 'warn'); return; }
+  if (!d.customer?.name?.trim()) { showToast('Enter customer name first', 'warn'); return; }
+
+  // Save the QQ first if not yet saved
+  if (!d._qqId) {
+    await _qqSaveEstimate();
+    if (!d._qqId) return; // save failed
+  }
+
+  const qqId = d._qqId;
+  const fy = getFinancialYearLabel();
+  const profile = VW_AUTH.getCurrentProfile();
+
+  const payload = await _qqBuildPayload();
+  if (!payload) return;
+
+  try {
+    // Generate a proper sequential TQ number
+    const tqNo = 'TQ/' + fy + '/' + String(Math.floor(Math.random()*90000)+10000);
+
+    // Create the Full TQ record
+    const { data: newTQ, error } = await VW_DB.client.from('tile_quotations').insert({
+      ...payload,
+      tq_no: tqNo,
+      source: 'full_tq',
+      converted_from_qq_id: qqId,
+      status: 'draft',
+      approval_status: 'draft',
+      draft_step: 8,
+      created_by: profile?.name || '',
+      created_by_id: profile?.id || null,
+      created_at: new Date().toISOString(),
+    }).select('id').single();
+    if (error) throw error;
+
+    // Delete the QQ record now that it's been converted
+    await VW_DB.client.from('tile_quotations').delete().eq('id', qqId);
+    _qqData._qqId = null;
+
+    // Load the new Full TQ into the TQ wizard
+    closeSheet();
+    delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
+    // Set a flag so step 8 shows the completion checklist
+    _tqState = { ..._tqState, _fromQQConvert: true };
+    showToast('Converted to Full Quotation ' + tqNo, 'success');
+    tqResumeDraft(newTQ.id);
+  } catch (e) {
+    showToast('Conversion failed: ' + e.message, 'error');
+  }
+}
+
+// ── Build the common data payload from _qqData (shared by save + convert) ─────
+async function _qqBuildPayload() {
+  const d = _qqData;
+  const nameEl = document.getElementById('qq-cust-name');
+  if (nameEl?.value?.trim()) d.customer.name = nameEl.value.trim();
+
+  if (!d?.rooms?.length) { showToast('No rooms added', 'warn'); return null; }
+  if (!d.customer?.name?.trim()) {
+    showToast('Enter customer name first', 'warn');
+    document.getElementById('qq-cust-name')?.focus();
+    return null;
+  }
+
+  const rooms = [];
+  const tileSelections = {}, quotedPrices = {};
+  let totalSqft = 0, totalBoxes = 0;
+
+  d.rooms.forEach((r, ri) => {
+    const rid = 'qq' + ri + '_' + Date.now();
+    const areas = [];
+    if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
+      let sqft;
+      if (r.mode==='sqft') { sqft = parseFloat(r.sqft)||0; }
+      else { const l=parseFloat(r.l)||0,w=parseFloat(r.w)||0; sqft=l*w; if(r.skirtingIn>0) sqft+=2*(l+w)*(r.skirtingIn/12); }
+      if (sqft > 0) {
+        areas.push({ subType:'floor', sqft, base:sqft, label:'Floor', l:parseFloat(r.l)||0, w:parseFloat(r.w)||0, wastage:0 });
+        const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
+        if (mainTile) {
+          const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
+          const spf = (mmH/25.4)*(mmW/25.4)/144;
+          const cfg = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
+          const tpb = cfg?.tiles_per_box || mainTile.tiles_per_box || 6;
+          const spb = spf*tpb;
+          r.floorDesign.pattern.forEach((code, ci) => {
+            const tile = r.floorDesign.tileMap[code];
+            if (!tile) return;
+            const fc = _qqCalcFloor(r, r.floorDesign);
+            const result = fc?.results?.[code];
+            if (!result) return;
+            const slotId = rid + '_floor' + (ci > 0 ? '_' + ci : '');
+            const boxKey = 'qqprice_fl_' + ri + '_' + code;
+            const boxP = window[boxKey] || 0;
+            tileSelections[slotId] = { tile_name:tile.name, brand:tile.brand||'', productId:tile.id, size:{mm:r.floorDesign.size, tilesPerBox:tpb}, _qqBoxes:result.boxes };
+            if (boxP > 0) quotedPrices[slotId] = { pricePerBox:boxP, pricePerSqft:spb>0?+(boxP/spb).toFixed(1):0 };
+            totalBoxes += result.boxes;
+          });
+          totalSqft += sqft;
+        }
+      }
+    }
+    if ((r.surface==='wall'||r.surface==='both') && r.wallDesign?.pattern?.length) {
+      const wl=parseFloat(r.wl)||0, wh=parseFloat(r.wh)||7;
+      const dw=r.hasDoor===true?parseFloat(r.dw)||0:0, dh=r.hasDoor===true?parseFloat(r.dh)||0:0;
+      const base = Math.max(0, wl*wh - dw*dh);
+      if (base > 0) {
+        areas.push({ subType:'wall', sqft:base, base, label:'Wall', l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
+        r.wallDesign.pattern.forEach((code, ci) => {
+          const tile = r.wallDesign.tileMap[code];
+          if (!tile) return;
+          const wc = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
+          const result = wc?.results?.[code];
+          if (!result) return;
+          const slotId = rid + '_wall' + (ci > 0 ? '_' + ci : '');
+          const wBoxKey = 'qqprice_wl_' + ri + '_' + code;
+          const wBoxP = window[wBoxKey] || 0;
+          const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
+          const spf=(mmH/25.4)*(mmW/25.4)/144;
+          const cfg=(_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
+          const tpb=cfg?.tiles_per_box||tile.tiles_per_box||6;
+          const spb=spf*tpb;
+          tileSelections[slotId] = { tile_name:tile.name, brand:tile.brand||'', productId:tile.id, size:{mm:r.wallDesign.size, tilesPerBox:tpb}, _qqBoxes:result.boxes };
+          if (wBoxP > 0) quotedPrices[slotId] = { pricePerBox:wBoxP, pricePerSqft:spb>0?+(wBoxP/spb).toFixed(1):0 };
+          totalBoxes += result.boxes;
+        });
+        totalSqft += base;
+      }
+    }
+    rooms.push({ id:rid, type:r.type, surface:r.surface, areas, l:r.l, w:r.w, wl:r.wl, wh:r.wh, hasDoor:r.hasDoor===true, dw:r.dw, dh:r.dh, skirtingIn:r.skirtingIn, mode:r.mode, sqft:r.sqft, floorDesign:r.floorDesign, wallDesign:r.wallDesign });
+  });
+
+  // Grand total estimate
+  let grandTotal = 0;
+  Object.entries(quotedPrices).forEach(([slotId, qp]) => {
+    const sel = tileSelections[slotId];
+    if (sel?._qqBoxes && qp.pricePerBox) grandTotal += sel._qqBoxes * qp.pricePerBox;
+  });
+
+  return {
+    customer_name: d.customer.name,
+    customer_phone: d.customer.phone || '',
+    customer_id: d.customer.id || null,
+    site_address: d.customer.site || '',
+    rooms,
+    tile_selections: tileSelections,
+    quoted_prices: quotedPrices,
+    total_area_sqft: totalSqft,
+    total_boxes: totalBoxes,
+    grand_total: grandTotal > 0 ? Math.round(grandTotal) : null,
+    breakage_pct: 10,
+    draft_step: 8,
+    updated_at: new Date().toISOString(),
+  };
+}
 
 
 
@@ -31059,7 +31241,8 @@ window.VW_TILES = {
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
-  openQuickQuote, _qqLoadPriceHistory, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
+  openQuickQuote, _qqLoadPriceHistory, _qqSaveEstimate, _qqConvertToFullTQ, _qqBuildPayload,
+  qqEditExisting, qqConvertExisting, qqDeleteEstimate, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
   _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm, _qqEditRoom,
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
