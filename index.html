@@ -30114,7 +30114,7 @@ function _qqClearCustomer() {
   _qqScreen('customer');
 }
 
-function _qqFromCustomer() {
+async function _qqFromCustomer() {
   const d = _qqData.customer;
   // If found from DB — name is already set
   if (!d._found) {
@@ -30128,6 +30128,8 @@ function _qqFromCustomer() {
   if (!phone) { showToast('Enter phone number','warn'); return; }
   _qqData.customer.phone = phone;
   _qqScreen('rooms');
+  // Auto-save as QQ draft as soon as customer is set — assigns QQ number immediately
+  _qqAutoSave().catch(()=>{});
 }
 
 // ── SCREEN: Rooms ─────────────────────────────────────────────────
@@ -30155,7 +30157,7 @@ function _qqShowRooms() {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         ${needsFloor ? `<button onclick="VW_TILES._qqDesignTile(${i},'floor')"
           style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${hasFloorDesign?'1px solid var(--green)':'1px solid var(--gold-border)'};background:${hasFloorDesign?'rgba(34,197,94,0.1)':'rgba(245,200,66,0.08)'};color:${hasFloorDesign?'var(--green)':'var(--gold)'}">
-          ${hasFloorDesign?'✓ Floor: '+r.floorDesign.size:'+ Design Floor Tile'}
+          ${hasFloorDesign?'✓ Floor: '+r.floorDesign.size+' '+r.floorDesign.patternStr:'+ Design Floor Tile'}
         </button>` : ''}
         ${needsWall ? `<button onclick="VW_TILES._qqDesignTile(${i},'wall')"
           style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:${hasWallDesign?'1px solid var(--green)':'1px solid var(--gold-border)'};background:${hasWallDesign?'rgba(34,197,94,0.1)':'rgba(245,200,66,0.08)'};color:${hasWallDesign?'var(--green)':'var(--gold)'}">
@@ -30500,13 +30502,15 @@ async function _qqShowTileAssign() {
   if (!code) { _qqShowRooms(); return; }
   const existing = design.tileMap[code];
 
-  // Calculate approx boxes needed for this code
-  const [mmH, mmW] = design.size.split('×').map(Number);
+  const [mmH, mmW] = design.size.split('\u00d7').map(Number);
   const tileW_ft = mmW / 304.8;
-  const wallLen = parseFloat(room.wl || (room.l&&room.w ? 2*(parseFloat(room.l)+parseFloat(room.w)) : 0)) || parseFloat(room.l||0)*parseFloat(room.w||0);
   const cols = Math.ceil((d.surface==='wall' ? parseFloat(room.wl||0) : parseFloat(room.l||0)) / tileW_ft) || 1;
   const codeRows = design.pattern.filter(c=>c===code).length;
   const estimatedTiles = codeRows * cols;
+
+  const colors = ['#F5C842','#60A5FA','#34D399','#F87171','#A78BFA','#FB923C','#38BDF8','#4ADE80'];
+  const allCodes = [...new Set(design.pattern)];
+  const codeColor = colors[allCodes.indexOf(code) % colors.length] || '#F5C842';
 
   // Fetch inventory tiles for this size
   let tiles = [];
@@ -30518,61 +30522,81 @@ async function _qqShowTileAssign() {
     tiles = data || [];
   } catch(e) {}
 
-  const sq = d.assignSearch || '';
-  const filtered = sq ? tiles.filter(t => t.name.toLowerCase().includes(sq.toLowerCase()) || (t.brand||'').toLowerCase().includes(sq.toLowerCase())) : tiles;
+  // Store for in-place search filter — no re-render needed
+  window._qqAssignMeta = { tiles, code, codeColor, estimatedTiles, existing };
 
-  const colors = ['#F5C842','#60A5FA','#34D399','#F87171','#A78BFA','#FB923C','#38BDF8','#4ADE80'];
-  const allCodes = [...new Set(design.pattern)];
-  const codeColor = colors[allCodes.indexOf(code) % colors.length] || '#F5C842';
+  const _buildList = (list) => {
+    if (!list.length) return '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">No tiles match</div>';
+    return list.map(t => {
+      const tpb = t.tiles_per_box || 6;
+      const boxesNeeded = Math.ceil(estimatedTiles / tpb);
+      const stockOk = t.stock >= boxesNeeded;
+      const sel = existing?.id === t.id;
+      return '<div onclick="VW_TILES._qqAssignTile(' + "'"+code+"'"+','+t.id+',' + "'"+_qqEsc(t.name)+"','"+_qqEsc(t.brand||'')+"','"+t.tile_size_mm+"',"+t.price_per_sqft+','+t.stock+','+tpb+')"' +
+        ' style="padding:10px;border-radius:10px;margin-bottom:6px;cursor:pointer;border:'+(sel?'2px solid '+codeColor:'1px solid var(--border)')+';background:'+(sel?codeColor+'15':'var(--bg2)')+'">'+
+        '<div style="display:flex;justify-content:space-between;align-items:start;gap:8px">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+t.name+'</div>'+
+            '<div style="font-size:11px;color:var(--text3)">'+(t.brand||'')+' \u00b7 '+(t.tile_finish||'')+' \u00b7 '+(t.colour_family||'')+'</div>'+
+            '<div style="font-size:11px;color:var(--text3)">\u20b9'+t.price_per_sqft+'/sqft \u00b7 '+tpb+' tiles/box</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:12px;color:'+(stockOk?'var(--green)':'var(--red)')+';font-weight:700">'+t.stock+' boxes</div>'+
+            '<div style="font-size:10px;color:var(--text3)">need ~'+boxesNeeded+'</div>'+
+            (sel?'<div style="color:'+codeColor+';font-size:18px">\u2713</div>':'')+
+          '</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  };
+  window._qqAssignBuildList = _buildList;
+
+  const sq = d.assignSearch || '';
+  const initial = sq ? tiles.filter(t => t.name.toLowerCase().includes(sq.toLowerCase()) || (t.brand||'').toLowerCase().includes(sq.toLowerCase())) : tiles;
 
   _qqSheet(`
     <div style="font-size:11px;color:var(--text3);margin-bottom:6px">
-      Code ${d.currentCodeIdx+1}/${d.pendingCodes.length} · ${room.type} · ${design.size}
+      Code ${d.currentCodeIdx+1}/${d.pendingCodes.length} \u00b7 ${room.type} \u00b7 ${design.size}
     </div>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:${codeColor}22;border:2px solid ${codeColor};color:${codeColor};font-size:${code.length>3?'10':'16'}px;font-weight:900;flex-shrink:0;overflow:hidden;padding:2px">${code.length>5?code.slice(0,4)+'…':code}</span>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:${codeColor}22;border:2px solid ${codeColor};color:${codeColor};font-size:${code.length>3?'10':'16'}px;font-weight:900;flex-shrink:0;overflow:hidden;padding:2px">${code.length>5?code.slice(0,4)+'\u2026':code}</span>
       <div>
         <div style="font-size:15px;font-weight:700">Assign tile for <span style="color:${codeColor}">"${code}"</span></div>
-        <div style="font-size:11px;color:var(--text3)">${codeRows} row${codeRows>1?'s':''} × ~${cols} cols ≈ ${estimatedTiles} tiles needed</div>
+        <div style="font-size:11px;color:var(--text3)">${d.surface==='floor'?'Floor pattern':'Wall rows'}: ${design.patternStr} \u00b7 ~${estimatedTiles} tiles needed</div>
       </div>
     </div>
-
     <input type="search" placeholder="Search tile name or brand..." value="${_qqEsc(sq)}"
+      id="qq-assign-search"
       style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:13px;box-sizing:border-box;margin-bottom:8px"
-      oninput="VW_TILES._qqAssignSearch(this.value)">
-
-    ${tiles.length === 0 ? `<div style="text-align:center;padding:20px;color:var(--text3)">No ${design.size}mm tiles in inventory</div>` : ''}
-    <div style="max-height:260px;overflow-y:auto">
-      ${filtered.map(t => {
-        const tpb = t.tiles_per_box || 6;
-        const boxesNeeded = Math.ceil(estimatedTiles / tpb);
-        const stockOk = t.stock >= boxesNeeded;
-        const sel = existing?.id === t.id;
-        return `
-        <div onclick="VW_TILES._qqAssignTile('${code}',${t.id},'${_qqEsc(t.name)}','${_qqEsc(t.brand||'')}','${t.tile_size_mm}',${t.price_per_sqft||0},${t.stock||0},${tpb})"
-          style="padding:10px;border-radius:10px;margin-bottom:6px;cursor:pointer;border:${sel?'2px solid '+codeColor:'1px solid var(--border)'};background:${sel?codeColor+'15':'var(--bg2)'}">
-          <div style="display:flex;justify-content:space-between;align-items:start;gap:8px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name}</div>
-              <div style="font-size:11px;color:var(--text3)">${t.brand||''} · ${t.tile_finish||''} · ${t.colour_family||''}</div>
-              <div style="font-size:11px;color:var(--text3)">₹${t.price_per_sqft}/sqft · ${tpb} tiles/box</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-size:12px;color:${stockOk?'var(--green)':'var(--red)'};font-weight:700">${t.stock} boxes</div>
-              <div style="font-size:10px;color:var(--text3)">need ~${boxesNeeded}</div>
-              ${sel?'<div style="color:'+codeColor+';font-size:18px">✓</div>':''}
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
+      oninput="VW_TILES._qqAssignFilter(this.value)" autocomplete="off" autocorrect="off" spellcheck="false">
+    ${tiles.length === 0 ? '<div style="text-align:center;padding:20px;color:var(--text3)">No '+design.size+' tiles in inventory</div>' : ''}
+    <div id="qq-assign-results" style="max-height:260px;overflow-y:auto">${_buildList(initial)}</div>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button onclick="VW_TILES._qqAssignBack()" class="btn-secondary" style="flex:1">← Pattern</button>
-      ${existing ? `<button onclick="VW_TILES._qqAssignNext()" class="btn-primary" style="flex:1;background:var(--gold);color:#000">
-        ${d.currentCodeIdx < d.pendingCodes.length-1 ? 'Next Code →' : '✓ Done — View Rooms'}
-      </button>` : `<span style="flex:1;text-align:center;font-size:12px;color:var(--text3);padding:10px 0">Tap a tile above to assign</span>`}
-    </div>
-  `, `Assign Tile — Code "${code}"`);
+      <button onclick="VW_TILES._qqAssignBack()" class="btn-secondary" style="flex:1">\u2190 Pattern</button>
+      <button onclick="VW_TILES._qqAssignNext()"
+        style="flex:2;padding:12px;border-radius:10px;background:${codeColor};border:none;color:#000;font-weight:700;cursor:pointer">
+        ${d.currentCodeIdx < d.pendingCodes.length-1 ? 'Next Code \u2192' : '\u2713 Done \u2014 View Rooms'}
+      </button>
+    </div>`, 'Assign Tile — Code '+(d.currentCodeIdx+1)+'/'+d.pendingCodes.length);
+
+  // Autofocus search if returning to assign screen with existing search
+  if (sq) setTimeout(() => { const el = document.getElementById('qq-assign-search'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }}, 80);
+}
+
+
+// _qqAssignFilter — updates ONLY the results list, never re-renders the sheet
+// This fixes the single-character search bug caused by full sheet re-render on each keystroke
+function _qqAssignFilter(val) {
+  if (_qqData.designing) _qqData.designing.assignSearch = val;
+  const meta = window._qqAssignMeta;
+  if (!meta) return;
+  const results = document.getElementById('qq-assign-results');
+  if (!results) return;
+  const q = val.toLowerCase();
+  const filtered = q ? meta.tiles.filter(t =>
+    t.name.toLowerCase().includes(q) || (t.brand||'').toLowerCase().includes(q)
+  ) : meta.tiles;
+  results.innerHTML = window._qqAssignBuildList ? window._qqAssignBuildList(filtered) : '';
 }
 
 function _qqAssignSearch(val) {
@@ -30586,6 +30610,8 @@ function _qqAssignTile(code, id, name, brand, size, price, stock, tpb) {
   const design = d.surface === 'floor' ? room.floorDesign : room.wallDesign;
   design.tileMap[code] = { id, name, brand, size, price_per_sqft: price, stock, tiles_per_box: tpb };
   _qqScreen('design_assign');
+  // Auto-save progress silently
+  _qqAutoSave().catch(()=>{});
 }
 
 function _qqAssignNext() {
@@ -31018,7 +31044,63 @@ function _qqRecomputeTotals() {
   if (grandEl) grandEl.textContent = '₹' + Math.round(grand).toLocaleString('en-IN') + ' estimated';
 }
 
-// ── Save Quick Quote to DB as rough estimate (no approval) ────────────────────
+// ── Silent auto-save (no toast) — called after customer confirm + each room add ─
+let _qqAutoSaveTimer = null;
+async function _qqAutoSave() {
+  // Debounce — wait 1.5s after last call to avoid rapid DB writes
+  if (_qqAutoSaveTimer) clearTimeout(_qqAutoSaveTimer);
+  await new Promise(res => { _qqAutoSaveTimer = setTimeout(res, 1500); });
+  if (!_qqData?.customer?.name?.trim()) return; // need customer name at minimum
+  const fy = getFinancialYearLabel();
+  const profile = VW_AUTH.getCurrentProfile();
+
+  // Build minimal payload — rooms may be empty at this point (customer-only save)
+  const roomsToSave = _qqData.rooms || [];
+  const payload = {
+    customer_name: _qqData.customer.name,
+    customer_phone: _qqData.customer.phone || '',
+    customer_id: _qqData.customer.id || null,
+    site_address: _qqData.customer.site || '',
+    rooms: roomsToSave,
+    tile_selections: {},
+    quoted_prices: {},
+    total_area_sqft: 0,
+    total_boxes: 0,
+    breakage_pct: 10,
+    draft_step: 8,
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    if (_qqData._qqId) {
+      await VW_DB.client.from('tile_quotations').update(payload).eq('id', _qqData._qqId);
+    } else {
+      const tqNo = 'QQ/' + fy + '/D' + String(Date.now()).slice(-5);
+      const { data, error } = await VW_DB.client.from('tile_quotations').insert({
+        ...payload,
+        tq_no: tqNo,
+        source: 'quick_quote',
+        status: 'draft',
+        approval_status: 'draft',
+        created_by: profile?.name || '',
+        created_by_id: profile?.id || null,
+        created_at: new Date().toISOString(),
+      }).select('id').single();
+      if (!error && data?.id) {
+        _qqData._qqId = data.id;
+        // Show QQ number briefly in the sheet title area
+        const titleEl = document.querySelector('#bottom-sheet .sheet-title');
+        if (titleEl && tqNo) titleEl.textContent = titleEl.textContent + ' · ' + tqNo;
+      }
+    }
+  } catch(e) { /* silent */ }
+}
+
+// Alias — silent auto-save triggered from room add/edit
+async function _qqSaveAndAutoSave() {
+  _qqSave();
+  _qqAutoSave().catch(()=>{});
+}
 async function _qqSaveEstimate() {
   const payload = await _qqBuildPayload();
   if (!payload) return;
@@ -31246,7 +31328,8 @@ window.VW_TILES = {
   _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm, _qqEditRoom,
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
   _qqDesignTile, _qqPickDesignSize, _qqPatternLive, _qqConfirmPattern,
-  _qqAssignSearch, _qqAssignTile, _qqAssignNext, _qqAssignBack,
+  _qqAssignSearch, _qqAssignFilter, _qqAssignTile, _qqAssignNext, _qqAssignBack,
+  _qqAutoSave,
   _qqShowOutput, _qqUpdatePrice, _qqRecomputeTotals,
   _tqEditCustomerFromSummary,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
