@@ -30498,6 +30498,8 @@ function _qqShowOutput() {
 
   let html = '';
   let grandBoxes = 0, grandAmount = 0;
+  // Track prices entered for each tile in THIS session — used to show same-tile hints below
+  const _sessionHints = {}; // tile.id → { label, pricePerBox }
 
   // Customer name banner — always visible at top
   html += `<div style="background:var(--bg2);border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
@@ -30570,7 +30572,14 @@ function _qqShowOutput() {
                   oninput="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',false,this.value)">
                 <span id="qq-amt-fl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_f).toLocaleString('en-IN')}</span>
               </div>
-              ${(()=>{ const h=window._qqPriceHistory?.[r.tile.id]; return h ? `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${h.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.08);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Last quoted ₹${h.pricePerBox}/box on ${h.tqNo} (${h.date}) — tap to use</button>` : ''; })()}
+              ${(()=>{
+                const sh = _sessionHints[r.tile.id];
+                if (sh) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${sh.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.15);border:1.5px solid var(--gold-border);color:var(--gold);font-size:10px;font-weight:700;cursor:pointer;text-align:left">💡 Same tile — ₹${sh.pricePerBox}/box entered in ${sh.label} above — tap to use</button>`;
+                const ph = window._qqPriceHistory?.[r.tile.id];
+                if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
+                return '';
+              })()}
+              ${(_sessionHints[r.tile.id] = { label: room.type+' Floor', pricePerBox: boxPrice_f || defaultBoxPrice_f }, '')}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
@@ -30632,7 +30641,14 @@ function _qqShowOutput() {
                   oninput="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',false,this.value)">
                 <span id="qq-amt-wl-${ri}-${code}" data-boxes="${r.boxes}" style="font-size:11px;color:var(--gold);font-weight:700">= ₹${Math.round(amount_w).toLocaleString('en-IN')}</span>
               </div>
-              ${(()=>{ const h=window._qqPriceHistory?.[r.tile.id]; return h ? `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${h.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.08);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Last quoted ₹${h.pricePerBox}/box on ${h.tqNo} (${h.date}) — tap to use</button>` : ''; })()}
+              ${(()=>{
+                const sh = _sessionHints[r.tile.id];
+                if (sh) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${sh.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.15);border:1.5px solid var(--gold-border);color:var(--gold);font-size:10px;font-weight:700;cursor:pointer;text-align:left">💡 Same tile — ₹${sh.pricePerBox}/box entered in ${sh.label} above — tap to use</button>`;
+                const ph = window._qqPriceHistory?.[r.tile.id];
+                if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
+                return '';
+              })()}
+              ${(_sessionHints[r.tile.id] = { label: room.type+' Wall', pricePerBox: boxPrice_w || defaultBoxPrice_wl }, '')}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:15px;font-weight:800">${r.boxes} <span style="font-size:11px;font-weight:400">boxes</span></div>
