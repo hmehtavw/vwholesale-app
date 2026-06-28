@@ -5637,6 +5637,10 @@ async function generateInvoiceInner() {
   activeCart.quotationAdvance = 0;
   activeCart.saleType = 'cash';
   _splitRows = [];
+  // Reset applied discounts so they don't leak to the next customer
+  _appliedLedgerBalance = 0;
+  _appliedPromoDiscount = 0;
+  _appliedPromoCode = '';
   clearCart();
 
   if (needsApproval) {
