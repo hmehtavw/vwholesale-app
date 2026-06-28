@@ -30357,20 +30357,22 @@ function _qqShowDesignSize() {
   const isFloor = d.surface === 'floor';
   // Tile sizes appropriate for surface
   const allSizes = [
-    {mm:'300×300',lbl:'300×300',note:'Floor / Wall / Bathroom'},
-    {mm:'300×450',lbl:'300×450',note:'Wall · 1ft×1.5ft'},
-    {mm:'400×400',lbl:'400×400',note:'Floor · ~1.3ft sq'},
-    {mm:'600×600',lbl:'600×600',note:'Floor · 2ft sq'},
-    {mm:'600×1200',lbl:'600×1200',note:'Floor · 2×4ft'},
-    {mm:'800×1600',lbl:'800×1600',note:'Floor · 2.6×5.2ft'},
-    {mm:'300×600',lbl:'300×600',note:'Wall · 1×2ft'},
-    {mm:'1200×1800',lbl:'1200×1800',note:'Wall Slab · 4×6ft'},
-    {mm:'2400×800',lbl:'2400×800',note:'Floor Slab'},
-    {mm:'3000×800',lbl:'3000×800',note:'Floor Slab'},
+    {mm:'300×300',  lbl:'300×300',   note:'Floor / Wall / Bathroom'},
+    {mm:'300×450',  lbl:'300×450',   note:'Wall · 1ft × 1.5ft'},
+    {mm:'300×600',  lbl:'300×600',   note:'Wall · 1ft × 2ft'},
+    {mm:'400×400',  lbl:'400×400',   note:'Floor · ~1.3ft sq'},
+    {mm:'600×600',  lbl:'600×600',   note:'Floor / Wall · 2ft sq'},
+    {mm:'600×1200', lbl:'600×1200',  note:'Floor / Wall · 2ft × 4ft'},
+    {mm:'800×800',  lbl:'800×800',   note:'Floor · 2.6ft sq'},
+    {mm:'800×1600', lbl:'800×1600',  note:'Floor · 2.6ft × 5.2ft'},
+    {mm:'1200×1200',lbl:'1200×1200', note:'Floor Slab · 4ft sq'},
+    {mm:'1200×1800',lbl:'1200×1800', note:'Floor / Wall Slab · 4ft × 6ft'},
+    {mm:'2400×800', lbl:'2400×800',  note:'Floor Slab'},
+    {mm:'3000×800', lbl:'3000×800',  note:'Floor Slab'},
   ];
   const sizes = isFloor
-    ? allSizes.filter(s=>!['300×450','300×600','1200×1800'].includes(s.mm))
-    : allSizes.filter(s=>!['600×1200','800×1600','2400×800','3000×800'].includes(s.mm));
+    ? allSizes.filter(s => !['300×450','300×600'].includes(s.mm))
+    : allSizes.filter(s => !['800×800','800×1600','1200×1200','2400×800','3000×800'].includes(s.mm));
 
   _qqSheet(`
     <div style="font-size:12px;color:var(--text3);margin-bottom:4px">${room.type} · ${isFloor?'🔲 Floor':'🧱 Wall'}</div>
