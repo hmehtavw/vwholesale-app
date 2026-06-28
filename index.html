@@ -11328,7 +11328,7 @@ async function renderPayrollView() {
     ${active.map(s => {
       const myAtt = attendance.filter(a => a.staffId === s.id && new Date(a.date) >= monthStart);
       const presentDays = myAtt.reduce((sum,a) => sum+(a.finalWorking||0), 0);
-      const lop = daysInMonth - presentDays;
+      const lop = Math.max(0, daysInMonth - presentDays); // clamp — no negative LOP
       const monthly = Math.round((s.grossSalary||0)/12);
       const perDay = monthly / daysInMonth;
       const gross = Math.round(perDay * presentDays);
@@ -20043,6 +20043,8 @@ async function showAddPettyCash(type) {
 }
 
 async function savePettyCash(type) {
+  if (window._pcSaving) return; window._pcSaving = true;
+  try {
   const amount = parseFloat(document.getElementById('pc-amount')?.value)||0;
   if (!amount || amount <= 0) { showToast('Enter a valid amount', 'warn'); return; }
   const profile = VW_AUTH.getCurrentProfile();
@@ -20058,6 +20060,7 @@ async function savePettyCash(type) {
   closeSheet();
   const container = document.getElementById('accounts-tab-content');
   if (container) container.innerHTML = await renderPettyCash();
+  } finally { window._pcSaving = false; }
 }
 
 // ===== PAYMENT VOUCHERS =====
@@ -20142,6 +20145,8 @@ async function showAddVoucher() {
 }
 
 async function saveVoucher(voucherNo) {
+  if (window._voucherSaving) return; window._voucherSaving = true;
+  try {
   const payTo = document.getElementById('pv-payto')?.value.trim();
   const amount = parseFloat(document.getElementById('pv-amount')?.value)||0;
   const purpose = document.getElementById('pv-purpose')?.value.trim();
@@ -20162,6 +20167,7 @@ async function saveVoucher(voucherNo) {
   closeSheet();
   const container = document.getElementById('accounts-tab-content');
   if (container) container.innerHTML = await renderVouchers();
+  } finally { window._voucherSaving = false; }
 }
 
 async function approveVoucher(id) {
@@ -27936,19 +27942,41 @@ async function tqBack() {
 async function _tqRequestEdit() {
   const id = _tqState._savedQuoteId || _tqState._draftId;
   if (!id) { showToast('Quote not yet saved — edit freely','info'); _tqState._approvalStatus=null; _rerenderStep8(); return; }
-  const reason = prompt('Reason for editing this quotation (required):');
-  if (!reason || !reason.trim()) { showToast('Reason required to re-edit','warn'); return; }
+  // Use bottom sheet instead of prompt() — prompt() is blocked on iOS PWA
+  const sh = document.getElementById('bottom-sheet');
+  sh.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="margin:0 0 8px;font-size:15px">✏️ Re-open for Editing</h3>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Provide a reason — this will be logged in the audit trail.</p>
+    <div class="form-group">
+      <label>Reason for editing *</label>
+      <textarea id="tq-edit-reason" rows="3" placeholder="e.g. Customer changed tile size · Measurement correction"
+        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button style="flex:2;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-weight:700;cursor:pointer"
+        onclick="VW_TILES._tqConfirmEdit(${id})">✏️ Re-open Quote</button>
+    </div>`;
+  sh.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('tq-edit-reason')?.focus(), 100);
+}
+
+async function _tqConfirmEdit(id) {
+  const reason = document.getElementById('tq-edit-reason')?.value.trim();
+  if (!reason) { showToast('Reason required to re-edit','warn'); return; }
   try {
     const profile = VW_AUTH.getCurrentProfile();
-    const log = { action:'re_edit_requested', reason: reason.trim(), by: profile?.name||'Staff', at: new Date().toISOString(), from_status: _tqState._approvalStatus };
     const { error } = await VW_DB.client.from('tile_quotations').update({
       approval_status: 'draft',
-      rejection_reason: reason.trim(),
+      rejection_reason: reason,
       rejected_by: profile?.name||'Staff',
       rejected_at: new Date().toISOString(),
     }).eq('id', id);
     if (error) throw error;
     _tqState._approvalStatus = 'draft';
+    closeSheet();
     showToast('Quote re-opened for editing. Re-submit when done.','success');
     _rerenderStep8();
   } catch(e) { showToast('Could not re-open: '+e.message,'error'); }
@@ -29943,7 +29971,13 @@ function _qqSet(field, val) {
 }
 function _qqSetV(field, val) { if (!_qqData.adding) return; _qqData.adding[field]=val; }
 function _qqCancelAdd() { _qqData.adding=null; _qqData.editingIdx=null; _qqShowRooms(); }
-function _qqRm(i) { _qqData.rooms.splice(i,1); _qqShowRooms(); }
+function _qqRm(i) {
+  _qqData.rooms.splice(i, 1);
+  // Clear all price keys — indices have shifted, old keys are now stale
+  Object.keys(window).filter(k => k.startsWith('qqprice_'))
+    .forEach(k => { try { delete window[k]; } catch(e){} });
+  _qqShowRooms();
+}
 function _qqEditRoom(i) {
   // Load existing room into the add form for editing
   _qqData.adding = { ..._qqData.rooms[i] };
@@ -29959,8 +29993,8 @@ function _qqSqft(r) {
   }
   if (r.surface==='wall'||r.surface==='both') {
     const wl=parseFloat(r.wl)||0,wh=parseFloat(r.wh)||0;
-    const dw=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dw)||0:0;
-    const dh=r.hasDoor&&r.type!=='Kitchen'?parseFloat(r.dh)||0:0;
+    const dw=r.hasDoor===true&&r.type!=='Kitchen'?parseFloat(r.dw)||0:0;
+    const dh=r.hasDoor===true&&r.type!=='Kitchen'?parseFloat(r.dh)||0:0;
     t+=Math.max(0,wl*wh-dw*dh);
   }
   return t;
@@ -29976,9 +30010,15 @@ function _qqSave() {
     r.wl = String(Math.round(2 * (parseFloat(r.l) + parseFloat(r.w)) * 10) / 10);
     showToast(`Wall length auto-set to ${r.wl}ft (perimeter). Adjust if needed.`, 'info');
   }
-  if (_qqSqft(r)<=0) { showToast('Enter measurements first','warn'); return; }
-  if ((r.surface==='floor'||r.surface==='both') && r.mode==='lw' && (!parseFloat(r.l)||!parseFloat(r.w))) { showToast('Enter floor length and width','warn'); return; }
-  if ((r.surface==='wall'||r.surface==='both') && !parseFloat(r.wl)) { showToast('Enter total wall length','warn'); return; }
+  // Validate measurements explicitly per surface (not via combined _qqSqft which adds wall+floor)
+  if (r.surface === 'floor' || r.surface === 'both') {
+    if (r.mode === 'lw' && (!parseFloat(r.l) || !parseFloat(r.w))) { showToast('Enter floor length and width','warn'); return; }
+    if (r.mode === 'sqft' && !parseFloat(r.sqft)) { showToast('Enter floor area (sqft)','warn'); return; }
+  }
+  if (r.surface === 'wall' || r.surface === 'both') {
+    if (!parseFloat(r.wl)) { showToast('Enter total wall length','warn'); return; }
+    if (!parseFloat(r.wh)) { showToast('Enter wall height','warn'); return; }
+  }
   if (_qqData.editingIdx !== undefined && _qqData.editingIdx !== null) {
     // Update existing room instead of pushing duplicate
     _qqData.rooms[_qqData.editingIdx] = { ..._qqData.adding };
@@ -30649,7 +30689,7 @@ async function _qqBuildQuote() {
         const dw=r.hasDoor===true?parseFloat(r.dw)||0:0, dh=r.hasDoor===true?parseFloat(r.dh)||0:0;
         const base=Math.max(0, wl*wh - dw*dh);
         if (base>0) {
-          areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${r.hasDoor?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
+          areas.push({ subType:'wall', sqft:base, base, label:`Wall ${wl}×${wh}ft${r.hasDoor===true?' (door deducted)':''}`, l:wl, h:wh, dw, dh, mode:'full', wastage:0 });
           const mainTile = r.wallDesign.tileMap[r.wallDesign.pattern[0]];
           if (mainTile) {
             const [mmH,mmW] = r.wallDesign.size.split('×').map(Number);
@@ -30726,7 +30766,7 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
+  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit, _tqConfirmEdit,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
@@ -34895,6 +34935,8 @@ async function _renderPortalRewards(c, lang) {
 }
 
 async function redeemReward(rewardId, token) {
+  if (window._redeemInFlight) return; window._redeemInFlight = true;
+  try {
   const { data: c } = await VW_DB.client.from('contractors').select('*').eq('portal_token',token).single();
   const { data: reward } = await VW_DB.client.from('rewards_catalog').select('*').eq('id',rewardId).single();
   if (!c||!reward) return;
@@ -34913,6 +34955,7 @@ async function redeemReward(rewardId, token) {
     description:`Redeemed: ${reward.name}`, balance_after:newPts,
   });
   showToast(`${reward.name} redeemed ✓ — V Wholesale team will arrange delivery`, 'success');
+  } finally { window._redeemInFlight = false; }
 }
 
 // ===== PORTAL AWARDS TAB =====
@@ -38255,8 +38298,9 @@ window.shareDailyReportWhatsApp = shareDailyReportWhatsApp;
 
 async function renderDashboard() {
   const profile = VW_AUTH.getCurrentProfile();
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const today = new Date().toISOString().split('T')[0];
   const todayStr = new Date().toDateString();
+  try {
 
   // ⚡ PERFORMANCE: Load only what's needed, with limits
   // Use Supabase direct for date-filtered queries instead of loading ALL records
@@ -38880,6 +38924,15 @@ async function renderDashboard() {
     <div id="recent-activity">${await renderRecentActivity(visits, customers)}</div>
   </div>
   `;
+  } catch(e) {
+    console.error('Dashboard load error:', e);
+    return `<div style="padding:20px;text-align:center">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">Dashboard could not load</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${e?.message||'Check connection and try again'}</div>
+      <button onclick="navigateTo('dashboard')" style="padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-weight:700;cursor:pointer">↻ Retry</button>
+    </div>`;
+  }
 }
 
 async function renderRecentActivity(visits, customers) {
