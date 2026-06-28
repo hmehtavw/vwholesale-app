@@ -31155,18 +31155,20 @@ async function _qqSaveAndAutoSave() {
   _qqAutoSave().catch(()=>{});
 }
 async function _qqSaveEstimate() {
-  const payload = await _qqBuildPayload();
-  if (!payload) return;
-  const fy = getFinancialYearLabel();
-  const profile = VW_AUTH.getCurrentProfile();
-
   try {
+    const payload = await _qqBuildPayload();
+    if (!payload) return; // _qqBuildPayload shows toast internally on validation fail
+
+    const fy = getFinancialYearLabel();
+    const profile = VW_AUTH.getCurrentProfile();
+
     if (_qqData._qqId) {
       // Update existing QQ record
-      await VW_DB.client.from('tile_quotations').update({
+      const { error } = await VW_DB.client.from('tile_quotations').update({
         ...payload, updated_at: new Date().toISOString()
       }).eq('id', _qqData._qqId);
-      showToast('Estimate updated', 'success');
+      if (error) throw error;
+      showToast('Estimate updated ✓', 'success');
     } else {
       // Insert new QQ record
       const tqNo = 'QQ/' + fy + '/D' + String(Date.now()).slice(-5);
@@ -31182,10 +31184,11 @@ async function _qqSaveEstimate() {
       }).select('id').single();
       if (error) throw error;
       _qqData._qqId = data.id;
-      showToast('Estimate saved as ' + tqNo, 'success');
+      showToast('Estimate saved · ' + tqNo, 'success');
     }
-  } catch (e) {
-    showToast('Save failed: ' + e.message, 'error');
+  } catch(e) {
+    console.error('_qqSaveEstimate error:', e);
+    showToast('Save failed: ' + (e?.message || String(e)), 'error');
   }
 }
 
@@ -31245,6 +31248,7 @@ async function _qqConvertToFullTQ() {
 
 // ── Build the common data payload from _qqData (shared by save + convert) ─────
 async function _qqBuildPayload() {
+  try {
   const d = _qqData;
   const nameEl = document.getElementById('qq-cust-name');
   if (nameEl?.value?.trim()) d.customer.name = nameEl.value.trim();
@@ -31345,6 +31349,11 @@ async function _qqBuildPayload() {
     draft_step: 8,
     updated_at: new Date().toISOString(),
   };
+  } catch(e) {
+    console.error('_qqBuildPayload error:', e);
+    showToast('Could not build payload: ' + (e?.message || String(e)), 'error');
+    return null;
+  }
 }
 
 
