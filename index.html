@@ -29142,9 +29142,10 @@ async function qqEditExisting(id) {
       const type = surface === 'wall' ? 'wl' : 'fl';
       [...new Set(design.pattern)].forEach(code => {
         const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Find matching slot: ends with _{surface}_{codeLower}
+        // Precise match: starts with qq{ri}_ AND ends with _{surface}_{codeLower}
+        // Works for both stable IDs (qq0_wall_d) and old timestamp IDs (qq0_1782..._wall_d)
         const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
-          sid.includes('_' + surface + '_' + codeLower)
+          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
         );
         if (!slotEntry) return;
         const qp = (q.quoted_prices || {})[slotEntry[0]];
@@ -29166,18 +29167,36 @@ async function qqEditExisting(id) {
 async function qqConvertExisting(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
   if (!q) { showToast('Estimate not found', 'warn'); return; }
-  // Load into _qqData then call convert
   window._qqData = {
     _qqId: id,
+    _tqNo: q.tq_no,
     customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
     rooms: q.rooms || [],
     adding: null, designing: null, editingIdx: null,
   };
-  // Restore price keys from quoted_prices so _qqBuildPayload picks them up
-  Object.entries(q.quoted_prices||{}).forEach(([slotId, qp]) => {
-    // Map slot back to ri/code price keys — best effort; staff can adjust in wizard
-    if (qp.pricePerBox) window['qqprice_' + slotId] = qp.pricePerBox;
+
+  // Clear stale price keys then restore from saved quoted_prices
+  // Uses same precise matching as qqEditExisting to get correct window key format
+  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
+  (q.rooms || []).forEach((room, ri) => {
+    ['wall', 'floor'].forEach(surface => {
+      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
+      if (!design?.pattern?.length) return;
+      const type = surface === 'wall' ? 'wl' : 'fl';
+      [...new Set(design.pattern)].forEach(code => {
+        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
+          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
+        );
+        if (!slotEntry) return;
+        const qp = (q.quoted_prices || {})[slotEntry[0]];
+        if (qp?.pricePerBox > 0) {
+          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+        }
+      });
+    });
   });
+
   await _qqConvertToFullTQ();
 }
 
@@ -30210,7 +30229,7 @@ function _qqShowRooms() {
 
   _qqSheet(`
     ${rooms.length?`<div style="margin-bottom:4px">${roomChips}</div>`:''}
-    ${!_qqData.adding ? addForm : addForm}
+    ${addForm}
     ${allRoomsDone ? `
     <button class="btn-primary full-width" style="margin-top:8px;background:var(--gold);color:#000" onclick="VW_TILES._qqScreen('output')">
       📊 View Calculation & Quote
@@ -30362,6 +30381,8 @@ function _qqSave() {
   }
   _qqData.adding = null;
   _qqShowRooms();
+  // Auto-save room data so it's persisted even if user exits before Save Estimate
+  _qqAutoSave().catch(() => {});
 }
 
 // ── SCREEN: Tile Design (replaces Preferences/Match/Apply) ─────────
@@ -30470,7 +30491,7 @@ function _qqShowDesignPattern() {
       <button onclick="VW_TILES._qqScreen('design_size')" class="btn-secondary" style="flex:1">← Size</button>
       <button id="qq-pat-next" onclick="VW_TILES._qqConfirmPattern()"
         class="btn-primary" style="flex:1;background:var(--gold);color:#000;${valid?'':'opacity:.45;cursor:not-allowed'}" ${valid?'':'disabled'}>
-        Next → Assign Tiles
+        ${valid ? 'Next → Assign Tiles' : (d.surface==='wall'&&codes.length>0 ? 'Need '+rows+' codes, entered '+codes.length : 'Next → Assign Tiles')}
       </button>
     </div>
   `, `Pattern — ${d.surface==='floor'?'Floor':'Wall'}`);
@@ -31131,22 +31152,42 @@ async function _qqAutoSave() {
   // Debounce — wait 1.5s after last call to avoid rapid DB writes
   if (_qqAutoSaveTimer) clearTimeout(_qqAutoSaveTimer);
   await new Promise(res => { _qqAutoSaveTimer = setTimeout(res, 1500); });
-  if (!_qqData?.customer?.name?.trim()) return; // need customer name at minimum
+  if (!_qqData?.customer?.name?.trim()) return;
   const fy = getFinancialYearLabel();
   const profile = VW_AUTH.getCurrentProfile();
 
-  // Build minimal payload — rooms may be empty at this point (customer-only save)
-  const roomsToSave = _qqData.rooms || [];
+  // Rebuild tile_selections and quoted_prices from current state
+  // (saves real tile data — not empty objects that wipe price data on auto-save)
+  const tileSelectionsAS = {};
+  const quotedPricesAS = {};
+  let totalSqftAS = 0, totalBoxesAS = 0;
+  (_qqData.rooms || []).forEach((r, ri) => {
+    ['floor', 'wall'].forEach(surface => {
+      const design = surface === 'floor' ? r.floorDesign : r.wallDesign;
+      if (!design?.pattern?.length || !design.tileMap) return;
+      const type = surface === 'floor' ? 'fl' : 'wl';
+      [...new Set(design.pattern)].forEach(code => {
+        const tile = design.tileMap[code];
+        if (!tile) return;
+        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const slotId = 'qq' + ri + '_' + surface + '_' + codeLower;
+        tileSelectionsAS[slotId] = { tile_name: tile.name, brand: tile.brand||'', productId: tile.id, size: { mm: design.size, tilesPerBox: tile.tiles_per_box || 6 } };
+        const boxP = window['qqprice_' + type + '_' + ri + '_' + code] || 0;
+        if (boxP > 0) quotedPricesAS[slotId] = { pricePerBox: boxP, pricePerSqft: 0 };
+      });
+    });
+  });
+
   const payload = {
     customer_name: _qqData.customer.name,
     customer_phone: _qqData.customer.phone || '',
     customer_id: _qqData.customer.id || null,
     site_address: _qqData.customer.site || '',
-    rooms: roomsToSave,
-    tile_selections: {},
-    quoted_prices: {},
-    total_area_sqft: 0,
-    total_boxes: 0,
+    rooms: _qqData.rooms || [],
+    tile_selections: tileSelectionsAS,
+    quoted_prices: quotedPricesAS,
+    total_area_sqft: totalSqftAS,
+    total_boxes: totalBoxesAS,
     breakage_pct: 10,
     draft_step: 8,
     updated_at: new Date().toISOString(),
@@ -31169,12 +31210,12 @@ async function _qqAutoSave() {
       }).select('id').single();
       if (!error && data?.id) {
         _qqData._qqId = data.id;
-        // Show QQ number briefly in the sheet title area
+        _qqData._tqNo = tqNo;
         const titleEl = document.querySelector('#bottom-sheet .sheet-title');
         if (titleEl && tqNo) titleEl.textContent = titleEl.textContent + ' · ' + tqNo;
       }
     }
-  } catch(e) { /* silent */ }
+  } catch(e) { /* silent — auto-save failure is non-critical */ }
 }
 
 // Alias — silent auto-save triggered from room add/edit
@@ -31300,7 +31341,7 @@ async function _qqBuildPayload() {
   let totalSqft = 0, totalBoxes = 0;
 
   d.rooms.forEach((r, ri) => {
-    const rid = 'qq' + ri + '_' + Date.now();
+    const rid = 'qq' + ri; // stable across saves — no timestamp drift
     const areas = [];
     if ((r.surface==='floor'||r.surface==='both') && r.floorDesign?.pattern?.length) {
       let sqft;
