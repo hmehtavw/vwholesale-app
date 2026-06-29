@@ -5401,8 +5401,15 @@ function getFinancialYearLabel(date = new Date()) {
 
 async function getNextInvoiceNumber() {
   const fy = getFinancialYearLabel();
-  const nextSeq = await VW_DB.incrementInvoiceSequence(fy);
-  return `VW/${fy}/${String(nextSeq).padStart(5, '0')}`;
+  try {
+    const { data, error } = await VW_DB.client.rpc('get_next_invoice_seq', { p_fy: fy });
+    if (error) throw error;
+    return `VW-${fy}-${String(data).padStart(3, '0')}`;
+  } catch(e) {
+    // Fallback: use old method if RPC not available
+    const nextSeq = await VW_DB.incrementInvoiceSequence(fy);
+    return `VW-${fy}-${String(nextSeq).padStart(3, '0')}`;
+  }
 }
 window.getFinancialYearLabel = getFinancialYearLabel;
 window.getNextInvoiceNumber = getNextInvoiceNumber;
@@ -28345,10 +28352,9 @@ async function tqSubmitForApproval() {
   const fy = getFinancialYearLabel();
 
   try {
-    const { data: seqRow } = await VW_DB.client.from('settings').select('value').eq('key','tq_seq_'+fy).maybeSingle();
-    const next = ((seqRow?.value)||0)+1;
-    const tqNo = `TQ/${fy}/${String(next).padStart(4,'0')}`;
-    await VW_DB.client.from('settings').upsert({ key:'tq_seq_'+fy, value:next });
+    const { data: seqNum, error: seqErr } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'tq' });
+    if (seqErr) throw new Error('Could not get TQ number: ' + seqErr.message);
+    const tqNo = `TQ/${fy}/${String(seqNum).padStart(4,'0')}`;
 
     // Compute totals for insert
     const allRooms = st.rooms || [];
@@ -31298,7 +31304,8 @@ async function _qqAutoSave() {
     if (_qqData._qqId) {
       await VW_DB.client.from('tile_quotations').update(payload).eq('id', _qqData._qqId);
     } else {
-      const tqNo = 'QQ/' + fy + '/D' + String(Date.now()).slice(-5);
+      const { data: qqSeq, error: qqSeqErr } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'qq' });
+      const tqNo = `QQ/${fy}/${String(qqSeq||1).padStart(4,'0')}`;
       const { data, error } = await VW_DB.client.from('tile_quotations').insert({
         ...payload,
         tq_no: tqNo,
@@ -31340,7 +31347,8 @@ async function _qqSaveEstimate() {
       if (error) throw error;
       savedTqNo = _qqData._tqNo || '';
     } else {
-      const tqNo = 'QQ/' + fy + '/D' + String(Date.now()).slice(-5);
+      const { data: qqSeqS } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'qq' });
+      const tqNo = `QQ/${fy}/${String(qqSeqS||1).padStart(4,'0')}`;
       const { data, error } = await VW_DB.client.from('tile_quotations').insert({
         ...payload,
         tq_no: tqNo,
@@ -31390,7 +31398,8 @@ async function _qqConvertToFullTQ() {
 
   try {
     // Generate a proper sequential TQ number
-    const tqNo = 'TQ/' + fy + '/' + String(Math.floor(Math.random()*90000)+10000);
+    const { data: tqSeqC } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'tq' });
+    const tqNo = `TQ/${fy}/${String(tqSeqC||1).padStart(4,'0')}`;
 
     // Create the Full TQ record
     const { data: newTQ, error } = await VW_DB.client.from('tile_quotations').insert({
@@ -32118,7 +32127,7 @@ const TEST_SUITES = {
         const {data} = await VW_DB.client.from('invoices')
           .select('invoice_no').not('invoice_no','is',null).limit(20);
         if (!data?.length) return '⚠️ No invoices yet';
-        const bad = data.filter(i => i.invoice_no && !i.invoice_no.startsWith('VW/'));
+        const bad = data.filter(i => i.invoice_no && !i.invoice_no.startsWith('VW/') && !i.invoice_no.startsWith('VW-'));
         if (bad.length) throw new Error(`Wrong format: ${bad[0].invoice_no}`);
         return `${data.length} invoices ✓`;
       }},
