@@ -29123,21 +29123,42 @@ async function qqEditExisting(id) {
   // Restore _qqData from saved record
   window._qqData = {
     _qqId: id,
+    _tqNo: q.tq_no,
     customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
     rooms: q.rooms || [],
-    adding: null,
-    designing: null,
-    editingIdx: null,
+    adding: null, designing: null, editingIdx: null,
   };
 
-  // Restore price keys from quoted_prices
+  // Clear any stale price keys from previous session
   Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
-  // Price keys are re-entered by staff — they'll see the saved prices in the output screen
+
+  // Restore saved prices from quoted_prices back into window price keys
+  // Slot format: qq{ri}_{timestamp}_{surface}_{codeLowered}
+  // Window key:  qqprice_{wl|fl}_{ri}_{ORIGINAL_CODE}
+  (q.rooms || []).forEach((room, ri) => {
+    ['wall', 'floor'].forEach(surface => {
+      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
+      if (!design || !design.pattern || !design.pattern.length) return;
+      const type = surface === 'wall' ? 'wl' : 'fl';
+      [...new Set(design.pattern)].forEach(code => {
+        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Find matching slot: ends with _{surface}_{codeLower}
+        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
+          sid.includes('_' + surface + '_' + codeLower)
+        );
+        if (!slotEntry) return;
+        const qp = (q.quoted_prices || {})[slotEntry[0]];
+        if (qp && qp.pricePerBox > 0) {
+          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+        }
+      });
+    });
+  });
 
   // Load price history in background
   _qqLoadPriceHistory().catch(() => {});
 
-  // Open QQ sheet at the output screen (rooms are already set)
+  // Open QQ output with restored prices
   _qqScreen('output');
 }
 
