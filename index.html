@@ -30249,20 +30249,25 @@ async function _qqEnsureCustomer() {
 
 async function _qqFromCustomer() {
   const d = _qqData.customer;
-  // If found from DB — name is already set
+  // Phone must be entered first
+  const phone = (document.getElementById('qq-phone')?.value || '').replace(/\D/g,'');
+  if (!phone || phone.length < 10) {
+    showToast('Enter a 10-digit phone number first', 'warn');
+    document.getElementById('qq-phone')?.focus();
+    return;
+  }
+  // If not found from DB — need name
   if (!d._found) {
     const name = document.getElementById('qq-name')?.value.trim();
     const site = document.getElementById('qq-site')?.value.trim();
-    if (!name) { showToast('Enter customer name','warn'); return; }
+    if (!name) { showToast('Enter customer name', 'warn'); return; }
     _qqData.customer.name = name;
     _qqData.customer.site = site || '';
   }
-  const phone = document.getElementById('qq-phone')?.value.trim() || d.phone;
-  if (!phone) { showToast('Enter phone number','warn'); return; }
   _qqData.customer.phone = phone;
   _qqScreen('rooms');
-  // Ensure customer exists in customers table (creates if new) + auto-save
-  _qqEnsureCustomer().catch(() => {});
+  // Await customer creation so they're findable immediately on next QQ
+  await _qqEnsureCustomer().catch(() => {});
   _qqAutoSave().catch(() => {});
 }
 
@@ -31150,9 +31155,11 @@ function _qqUpdatePrice(type, ri, code, sqftPerBox, boxKey, sqftKey, isBox, val)
   else { sqftP = v; boxP = Math.round(v * sqftPerBox); }
   window[boxKey] = boxP;
   window[sqftKey] = sqftP;
-  // Update the linked input (the other field)
-  const otherEl = document.getElementById(`qq-${isBox?'sqft':'box'}-${type}-${ri}-${code}`);
-  if (otherEl) otherEl.value = isBox ? sqftP : boxP;
+  // Update BOTH input fields (both box and sqft inputs need to reflect the change)
+  const boxEl  = document.getElementById(`qq-box-${type}-${ri}-${code}`);
+  const sqftEl = document.getElementById(`qq-sqft-${type}-${ri}-${code}`);
+  if (boxEl)  boxEl.value  = boxP;
+  if (sqftEl) sqftEl.value = sqftP;
   // Recompute all totals in place
   _qqRecomputeTotals();
 }
@@ -31397,9 +31404,14 @@ async function _qqConvertToFullTQ() {
   if (!payload) return;
 
   try {
-    // Generate a proper sequential TQ number
-    const { data: tqSeqC } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'tq' });
-    const tqNo = `TQ/${fy}/${String(tqSeqC||1).padStart(4,'0')}`;
+    // Get next sequential TQ number
+    let tqNo;
+    const { data: tqSeqC, error: seqErr } = await VW_DB.client.rpc('get_next_seq', { p_fy: fy, p_type: 'tq' });
+    if (seqErr || !tqSeqC) {
+      showToast('Could not get TQ number: ' + (seqErr?.message||'RPC failed'), 'error');
+      return;
+    }
+    tqNo = `TQ/${fy}/${String(tqSeqC).padStart(4,'0')}`;
 
     // Create the Full TQ record
     const { data: newTQ, error } = await VW_DB.client.from('tile_quotations').insert({
@@ -31409,23 +31421,24 @@ async function _qqConvertToFullTQ() {
       converted_from_qq_id: qqId,
       status: 'draft',
       approval_status: 'draft',
-      draft_step: 8,
+      draft_step: 1,
       created_by: profile?.name || '',
       created_by_id: profile?.id || null,
       created_at: new Date().toISOString(),
     }).select('id').single();
     if (error) throw error;
 
-    // Delete the QQ record now that it's been converted
-    await VW_DB.client.from('tile_quotations').delete().eq('id', qqId);
-    _qqData._qqId = null;
+    // Delete the QQ record
+    const { error: delErr } = await VW_DB.client.from('tile_quotations').delete().eq('id', qqId);
+    if (!delErr) {
+      _qqData._qqId = null;
+      delete _pageCache['tile_quotes']; delete _pageCacheTTL['tile_quotes'];
+    }
 
-    // Load the new Full TQ into the TQ wizard
+    // Open TQ wizard — rooms carry over, tiles need re-selection in TQ wizard
     closeSheet();
-    delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
-    // Set a flag so step 8 shows the completion checklist
+    showToast(`${tqNo} created — rooms carried over, re-select tiles & prices in wizard`, 'success');
     _tqState = { ..._tqState, _fromQQConvert: true };
-    showToast('Converted to Full Quotation ' + tqNo, 'success');
     tqResumeDraft(newTQ.id);
   } catch (e) {
     showToast('Conversion failed: ' + e.message, 'error');
@@ -39455,8 +39468,11 @@ async function renderDashboard() {
     quotesCard = `
     <div class="card">
       <div class="card-header-row">
-        <h3 class="card-title">Quotations</h3>
-        <button class="btn-sm" onclick="goToQuotations()">View All</button>
+        <h3 class="card-title">Tile Quotations</h3>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" style="background:rgba(245,200,66,0.15);border:1px solid var(--gold-border);color:var(--gold)" onclick="VW_TILES.openQuickQuote()">⚡ Quick</button>
+          <button class="btn-sm" onclick="navigateTo('tile_quotes')">View All</button>
+        </div>
       </div>
       <div class="stat-row">
         <div class="stat"><span class="stat-num">${qCounts.draft||0}</span><span class="stat-label">Draft</span></div>
