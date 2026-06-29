@@ -30140,14 +30140,34 @@ async function _qqSearchPhone() {
   const el = document.getElementById('qq-cust-result');
   if (el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching…</div>';
   try {
-    const { data } = await VW_DB.client.from('customers').select('id,name,phone,address').eq('phone',digits).limit(1);
-    const found = data?.[0];
+    // 1. Search customers table first
+    const { data: custData } = await VW_DB.client.from('customers').select('id,name,phone,address').eq('phone',digits).limit(1);
+    const found = custData?.[0];
     if (found) {
       _qqData.customer = { ...found, phone:digits, site:found.address||'', _found:true };
+      _qqScreen('customer');
+      return;
+    }
+
+    // 2. Fallback: search previous tile_quotations for this phone number
+    const { data: tqData } = await VW_DB.client.from('tile_quotations')
+      .select('customer_name,customer_phone,site_address,customer_id')
+      .eq('customer_phone', digits)
+      .not('customer_name', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    const prevTQ = tqData?.[0];
+    if (prevTQ?.customer_name) {
+      _qqData.customer = {
+        name: prevTQ.customer_name,
+        phone: digits,
+        site: prevTQ.site_address || '',
+        id: prevTQ.customer_id || null,
+        _found: true,
+      };
     } else {
       _qqData.customer = { ..._qqData.customer, phone:digits, _found:false };
     }
-    // Re-render the customer screen to show result
     _qqScreen('customer');
   } catch(e) {
     if (el) el.innerHTML = '<div style="font-size:12px;color:var(--red)">Search failed — enter name manually</div>';
