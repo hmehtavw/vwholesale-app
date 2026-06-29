@@ -28948,9 +28948,9 @@ async function renderTileQuotesList() {
   const { data: quotes } = await query;
   const allRaw = quotes || [];
 
-  // Split Quick Quotes from Full TQ quotes
+  // Split Quick Quotes from Full TQ quotes — double-filter for safety
   const qqEstimates = allRaw.filter(q => q.source === 'quick_quote');
-  const allQuotes   = allRaw.filter(q => q.source !== 'quick_quote');
+  const allQuotes   = allRaw.filter(q => q.source !== 'quick_quote' && q.source !== null || (!q.source && !q.tq_no?.startsWith('QQ/')));
 
   const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
 
@@ -29035,24 +29035,27 @@ async function renderTileQuotesList() {
     ${qqEstimates.map(q => `
     <div style="background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:6px;border:1px dashed var(--gold-border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
+        <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
-          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'—'} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft${q.grand_total?` · ₹${parseInt(q.grand_total).toLocaleString('en-IN')} est.`:''}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'—'} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft · ${q.total_boxes||0} boxes</div>
           <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
         </div>
-        <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,200,66,0.1);color:var(--gold);font-weight:700;border:1px solid var(--gold-border)">ESTIMATE</span>
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
+          ${q.grand_total ? `<div style="font-size:14px;font-weight:900;color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</div>` : ''}
+          <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,200,66,0.12);color:var(--gold);font-weight:700;border:1px solid var(--gold-border)">ESTIMATE</span>
+        </div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button onclick="VW_TILES.qqEditExisting(${q.id})"
-          style="flex:1;padding:6px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">
+          style="flex:1;padding:7px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">
           ✏️ Edit
         </button>
         <button onclick="VW_TILES.qqConvertExisting(${q.id})"
-          style="flex:2;padding:6px;border-radius:7px;background:var(--gold);border:none;color:#000;font-size:11px;font-weight:700;cursor:pointer">
+          style="flex:2;padding:7px;border-radius:7px;background:var(--gold);border:none;color:#000;font-size:11px;font-weight:700;cursor:pointer">
           📋 Convert to Full TQ
         </button>
         <button onclick="VW_TILES.qqDeleteEstimate(${q.id})"
-          style="padding:6px 10px;border-radius:7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:11px;cursor:pointer">
+          style="padding:7px 10px;border-radius:7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:11px;cursor:pointer">
           🗑
         </button>
       </div>
@@ -31191,11 +31194,11 @@ async function _qqSaveEstimate() {
       savedTqNo = tqNo;
     }
 
-    // Close sheet, show confirmation, go to dashboard
+    // Close sheet, navigate to dashboard, then show toast on the fresh page
     closeSheet();
-    showToast('✓ Estimate saved · ' + savedTqNo, 'success');
     delete _pageCache['dashboard']; delete _pageCacheTTL['dashboard'];
-    navigateTo('dashboard');
+    await navigateTo('dashboard');
+    showToast('✓ Estimate saved · ' + savedTqNo, 'success');
 
   } catch(e) {
     console.error('_qqSaveEstimate error:', e);
