@@ -30165,6 +30165,8 @@ async function _qqSearchPhone() {
         id: prevTQ.customer_id || null,
         _found: true,
       };
+      // Ensure this customer gets a proper record in customers table
+      _qqEnsureCustomer().catch(() => {});
     } else {
       _qqData.customer = { ..._qqData.customer, phone:digits, _found:false };
     }
@@ -30177,6 +30179,34 @@ async function _qqSearchPhone() {
 function _qqClearCustomer() {
   _qqData.customer = { name:'', phone:'', site:'', id:null, _found:null };
   _qqScreen('customer');
+}
+
+// ── Ensure QQ customer exists in customers table and has an ID ────────────────
+// Called after customer confirm — creates customer if not already in CRM
+async function _qqEnsureCustomer() {
+  const c = _qqData.customer;
+  if (!c.phone || !c.name) return;
+  if (c.id) return; // already linked to a customer record
+  try {
+    // Double-check customers table (search may have missed due to timing)
+    const { data: existing } = await VW_DB.client.from('customers')
+      .select('id,name,phone,address').eq('phone', c.phone).limit(1).maybeSingle();
+    if (existing?.id) {
+      _qqData.customer.id = existing.id;
+      return;
+    }
+    // Create new customer record
+    const { data: newCust, error } = await VW_DB.client.from('customers').insert({
+      name: c.name,
+      phone: c.phone,
+      address: c.site || '',
+      source: 'quick_quote',
+      type: 'retail',
+    }).select('id').single();
+    if (!error && newCust?.id) {
+      _qqData.customer.id = newCust.id;
+    }
+  } catch(e) { /* silent — customer linking is non-critical */ }
 }
 
 async function _qqFromCustomer() {
@@ -30193,8 +30223,9 @@ async function _qqFromCustomer() {
   if (!phone) { showToast('Enter phone number','warn'); return; }
   _qqData.customer.phone = phone;
   _qqScreen('rooms');
-  // Auto-save as QQ draft as soon as customer is set — assigns QQ number immediately
-  _qqAutoSave().catch(()=>{});
+  // Ensure customer exists in customers table (creates if new) + auto-save
+  _qqEnsureCustomer().catch(() => {});
+  _qqAutoSave().catch(() => {});
 }
 
 // ── SCREEN: Rooms ─────────────────────────────────────────────────
@@ -31492,7 +31523,7 @@ window.VW_TILES = {
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
-  openQuickQuote, _qqLoadPriceHistory, _qqSaveEstimate, _qqConvertToFullTQ, _qqBuildPayload,
+  openQuickQuote, _qqLoadPriceHistory, _qqEnsureCustomer, _qqSaveEstimate, _qqConvertToFullTQ, _qqBuildPayload,
   qqEditExisting, qqConvertExisting, qqDeleteEstimate, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
   _qqSet, _qqSetV, _qqPick, _qqSave, _qqCancelAdd, _qqRm, _qqEditRoom,
   _qqPref: ()=>{}, _qqMatchTiles: ()=>{}, _qqShowMatch: ()=>{}, _qqToggle: ()=>{}, _qqApply: ()=>{}, // legacy stubs
