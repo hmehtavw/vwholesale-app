@@ -31384,6 +31384,63 @@ async function _qqSaveEstimate() {
   }
 }
 
+// ── Map QQ room data → TQ wizard tileSelections + quotedPrices format ─────────
+// Called during convert so the TQ wizard opens with sizes, tiles, and prices pre-filled
+function _qqToTQSelections(rooms) {
+  const tileSelections = {};
+  const quotedPrices   = {};
+
+  rooms.forEach((room, ri) => {
+    const rid    = 'qq' + ri;
+    const surf   = room.surface; // 'floor', 'wall', 'both'
+    const isBoth = surf === 'both';
+
+    // ── FLOOR ──
+    if ((surf === 'floor' || isBoth) && room.floorDesign?.size) {
+      const fd     = room.floorDesign;
+      const slotId = isBoth ? rid + '_floor' : rid;
+      const codes  = [...new Set(fd.pattern || [])];
+      const firstCode = codes[0];
+      const firstTile = firstCode ? fd.tileMap?.[firstCode] : null;
+
+      tileSelections[slotId] = {
+        sizeMm: fd.size, sizeLabel: fd.size, slotId, roomId: rid, subType: 'floor',
+        size: { mm: fd.size, tilesPerBox: firstTile?.tiles_per_box || 4 },
+        ...(firstTile ? { selectedTileId: firstTile.id, name: firstTile.name,
+          brand: firstTile.brand, pricePerSqft: firstTile.price_per_sqft || 0 } : {}),
+      };
+      const bk  = `qqprice_fl_${ri}_${firstCode}`;
+      const sk  = `qqprice_fl_sqft_${ri}_${firstCode}`;
+      const boxP = window[bk] || 0;
+      const sqfP = window[sk] || firstTile?.price_per_sqft || 0;
+      if (boxP > 0 || sqfP > 0) quotedPrices[slotId] = { pricePerBox: boxP, pricePerSqft: sqfP };
+    }
+
+    // ── WALL ──
+    if ((surf === 'wall' || isBoth) && room.wallDesign?.size) {
+      const wd     = room.wallDesign;
+      const slotId = isBoth ? rid + '_wall' : rid;
+      const codes  = [...new Set(wd.pattern || [])];
+      const firstCode = codes[0];
+      const firstTile = firstCode ? wd.tileMap?.[firstCode] : null;
+
+      tileSelections[slotId] = {
+        sizeMm: wd.size, sizeLabel: wd.size, slotId, roomId: rid, subType: 'wall',
+        size: { mm: wd.size, tilesPerBox: firstTile?.tiles_per_box || 6 },
+        ...(firstTile ? { selectedTileId: firstTile.id, name: firstTile.name,
+          brand: firstTile.brand, pricePerSqft: firstTile.price_per_sqft || 0 } : {}),
+      };
+      const bk  = `qqprice_wl_${ri}_${firstCode}`;
+      const sk  = `qqprice_wl_sqft_${ri}_${firstCode}`;
+      const boxP = window[bk] || 0;
+      const sqfP = window[sk] || firstTile?.price_per_sqft || 0;
+      if (boxP > 0 || sqfP > 0) quotedPrices[slotId] = { pricePerBox: boxP, pricePerSqft: sqfP };
+    }
+  });
+
+  return { tileSelections, quotedPrices };
+}
+
 // ── Convert Quick Quote → Full Tile Quotation (with full TQ wizard) ───────────
 async function _qqConvertToFullTQ() {
   const d = _qqData;
@@ -31413,15 +31470,28 @@ async function _qqConvertToFullTQ() {
     }
     tqNo = `TQ/${fy}/${String(tqSeqC).padStart(4,'0')}`;
 
-    // Create the Full TQ record
+    // Map QQ room data → TQ wizard slot format so tiles, sizes & prices carry forward
+    const tqSels = _qqToTQSelections(_qqData.rooms);
+
+    // Create the Full TQ record with TQ-compatible tile data
     const { data: newTQ, error } = await VW_DB.client.from('tile_quotations').insert({
-      ...payload,
+      customer_name: _qqData.customer.name,
+      customer_phone: _qqData.customer.phone || '',
+      customer_id: _qqData.customer.id || null,
+      site_address: _qqData.customer.site || '',
+      rooms: payload.rooms,                   // QQ rooms with floorDesign/wallDesign intact
+      tile_selections: tqSels.tileSelections, // TQ-format: slot IDs the wizard expects
+      quoted_prices: tqSels.quotedPrices,     // TQ-format: price per room surface
+      total_area_sqft: payload.total_area_sqft,
+      total_boxes: payload.total_boxes,
+      grand_total: payload.grand_total,
+      breakage_pct: 10,
       tq_no: tqNo,
       source: 'full_tq',
       converted_from_qq_id: qqId,
       status: 'draft',
       approval_status: 'draft',
-      draft_step: 1,
+      draft_step: 2, // open at Step 2 — tile sizes already pre-selected from QQ
       created_by: profile?.name || '',
       created_by_id: profile?.id || null,
       created_at: new Date().toISOString(),
@@ -31437,7 +31507,7 @@ async function _qqConvertToFullTQ() {
 
     // Open TQ wizard — rooms carry over, tiles need re-selection in TQ wizard
     closeSheet();
-    showToast(`${tqNo} created — rooms carried over, re-select tiles & prices in wizard`, 'success');
+    showToast(`Converted → ${tqNo} · Rooms, tiles & prices carried forward`, 'success');
     _tqState = { ..._tqState, _fromQQConvert: true };
     tqResumeDraft(newTQ.id);
   } catch (e) {
