@@ -29180,6 +29180,8 @@ async function qqEditExisting(id) {
         const qp = (q.quoted_prices || {})[slotEntry[0]];
         if (qp && qp.pricePerBox > 0) {
           window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+          // Also restore sqft price so the ₹/sqft input shows the saved value, not inventory default
+          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
         }
       });
     });
@@ -29221,6 +29223,7 @@ async function qqConvertExisting(id) {
         const qp = (q.quoted_prices || {})[slotEntry[0]];
         if (qp?.pricePerBox > 0) {
           window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
         }
       });
     });
@@ -31258,8 +31261,9 @@ async function _qqAutoSave() {
         const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
         const slotId = 'qq' + ri + '_' + surface + '_' + codeLower;
         tileSelectionsAS[slotId] = { tile_name: tile.name, brand: tile.brand||'', productId: tile.id, size: { mm: design.size, tilesPerBox: tile.tiles_per_box || 6 } };
-        const boxP = window['qqprice_' + type + '_' + ri + '_' + code] || 0;
-        if (boxP > 0) quotedPricesAS[slotId] = { pricePerBox: boxP, pricePerSqft: 0 };
+        const boxP  = window['qqprice_' + type + '_' + ri + '_' + code] || 0;
+        const sqftP = window['qqprice_' + type + '_sqft_' + ri + '_' + code] || 0;
+        if (boxP > 0) quotedPricesAS[slotId] = { pricePerBox: boxP, pricePerSqft: sqftP };
       });
     });
   });
