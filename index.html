@@ -31093,14 +31093,15 @@ function _qqShowOutput() {
       const boxP  = window[m.priceBoxKey] ?? 0;
       const sqftP = m.sqftPerBox > 0 ? +(boxP / m.sqftPerBox).toFixed(1) : 0;
       const amt   = m.boxes * boxP;
-      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:4px;border-left:3px solid var(--gold)">
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg2);border-radius:8px;margin-bottom:4px;border-left:3px solid var(--gold)"
+        data-cml-bk="${m.priceBoxKey}" data-cml-boxes="${m.boxes}">
         <div style="flex:1">
           <div style="font-size:12px;font-weight:700">${m.tile.name}</div>
           <div style="font-size:11px;color:var(--text3)">${m.tile.brand} · ${m.size} · ${m.sqft.toFixed(1)} sqft</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:15px;font-weight:900;color:var(--gold)">${m.boxes} boxes</div>
-          ${amt>0?`<div style="font-size:11px;color:var(--text3)">₹${Math.round(amt).toLocaleString('en-IN')}</div>`:''}
+          <div class="cml-amt" style="font-size:11px;color:var(--text3)">${amt>0?`₹${Math.round(amt).toLocaleString('en-IN')}`:''}</div>
         </div>
       </div>`;
     });
@@ -31182,6 +31183,16 @@ function _qqRecomputeTotals() {
   });
   const grandEl = document.getElementById('qq-grand-est');
   if (grandEl) grandEl.textContent = '₹' + Math.round(grand).toLocaleString('en-IN') + ' estimated';
+
+  // Sync consolidated material list amounts with the live price keys
+  document.querySelectorAll('[data-cml-bk]').forEach(row => {
+    const boxP   = window[row.dataset.cmlBk] || 0;
+    const boxes  = parseInt(row.dataset.cmlBoxes) || 0;
+    const amtEl  = row.querySelector('.cml-amt');
+    if (amtEl) amtEl.textContent = (boxP > 0 && boxes > 0)
+      ? '₹' + Math.round(boxes * boxP).toLocaleString('en-IN') : '';
+  });
+
   // Update same-tile hint displays with current prices
   _qqUpdateHints();
 }
