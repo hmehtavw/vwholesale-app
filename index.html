@@ -23820,25 +23820,16 @@ async function searchCustomerByPhone(phone) {
   if (el) el.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:6px 0">🔍 Searching...</div>';
 
   try {
-    // Search in customers table (CRM). NOTE: schema has `address`, not `area`,
-    // and has no `total_quotes` column — selecting those made the query fail silently.
-    const { data: custRows, error: custErr } = await VW_DB.client
+    // 1. Search customers table (CRM)
+    const { data: custRows } = await VW_DB.client
       .from('customers')
       .select('id, name, phone, address, last_visit')
       .eq('phone', phone)
       .limit(1);
 
-    if (custErr) console.error('Customer search query error:', custErr);
-
     const found = custRows?.[0];
-
     if (found) {
-      _tqState.customer = {
-        ...found,
-        site: found.address || '',
-        _found: true,
-        totalQuotes: 0,
-      };
+      _tqState.customer = { ...found, site: found.address || '', _found: true, totalQuotes: 0 };
       if (el) el.innerHTML = `
         <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -23855,36 +23846,74 @@ async function searchCustomerByPhone(phone) {
           📲 Send quote tracker link
         </button>`;
       _updateStep0NextBtn();
-    } else {
-      _tqState.customer._found = false;
+      return;
+    }
+
+    // 2. Fallback: search tile_quotations for any previous quote with this phone
+    const { data: tqRows } = await VW_DB.client
+      .from('tile_quotations')
+      .select('customer_name, customer_phone, site_address, customer_id')
+      .eq('customer_phone', phone)
+      .not('customer_name', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const prevTQ = tqRows?.[0];
+    if (prevTQ?.customer_name) {
+      // Found in quote history — auto-create in customers table so they're in CRM
+      let custId = prevTQ.customer_id;
+      if (!custId) {
+        const { data: newCust } = await VW_DB.client.from('customers').insert({
+          name: prevTQ.customer_name, phone, address: prevTQ.site_address || '', source: 'quote_history', type: 'retail'
+        }).select('id').single();
+        custId = newCust?.id || null;
+        // Link all their past quotes to this new customer id
+        if (custId) {
+          await VW_DB.client.from('tile_quotations').update({ customer_id: custId }).eq('customer_phone', phone).is('customer_id', null);
+        }
+      }
+      _tqState.customer = { id: custId, name: prevTQ.customer_name, phone, site: prevTQ.site_address || '', _found: true, totalQuotes: 0 };
       if (el) el.innerHTML = `
-        <div style="background:var(--bg2);border-radius:10px;padding:10px">
-          <div style="font-size:11px;color:var(--gold);font-weight:600;margin-bottom:8px">✦ New customer — ${phone}</div>
-          <div class="form-group" style="margin-bottom:8px">
-            <label>Full Name *</label>
-            <input type="text" id="tq-cust-name" value="${_tqState.customer.name||''}"
-              placeholder="Customer name" oninput="_tqState.customer.name=this.value;VW_TILES._updateStep0NextBtn()"
-              style="font-size:14px" autofocus>
+        <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--green)">✓ ${prevTQ.customer_name}</div>
+              <div style="font-size:11px;color:var(--text3)">${phone} · Found in quote history</div>
+            </div>
+            <button onclick="VW_TILES._clearCustomer()"
+              style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;padding:0">✕</button>
           </div>
-          <div class="form-group" style="margin-bottom:10px">
-            <label>Site / Area</label>
-            <input type="text" id="tq-cust-site" value="${_tqState.customer.site||''}"
-              placeholder="e.g. Bhavanipuram" oninput="_tqState.customer.site=this.value">
-          </div>
-          <button onclick="VW_TILES._saveNewCustomer()"
-            style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">
-            ✅ Save & Continue
-          </button>
         </div>`;
       _updateStep0NextBtn();
+      return;
     }
-  } catch(e) {
-    console.error('Customer search error:', e);
-    if (el) el.innerHTML = `<div style="color:var(--red);font-size:12px">Search failed — enter details manually</div>`;
+
+    // 3. Genuinely new customer — show name entry form
     _tqState.customer._found = false;
+    if (el) el.innerHTML = `
+      <div style="background:var(--bg2);border-radius:10px;padding:10px">
+        <div style="font-size:11px;color:var(--gold);font-weight:600;margin-bottom:8px">✦ New customer — ${phone}</div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Full Name *</label>
+          <input type="text" id="tq-cust-name" value="${_tqState.customer.name||''}"
+            placeholder="Customer name" oninput="_tqState.customer.name=this.value;VW_TILES._updateStep0NextBtn()"
+            style="font-size:14px" autofocus>
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label>Site Address <span style="color:var(--text3);font-weight:400">(optional)</span></label>
+          <input type="text" id="tq-cust-site" value="${_tqState.customer.site||''}"
+            placeholder="e.g. Benz Circle Plot 12"
+            oninput="_tqState.customer.site=this.value">
+        </div>
+      </div>`;
     _updateStep0NextBtn();
+
+  } catch(e) {
+    console.error('searchCustomerByPhone error:', e);
+    if (el) el.innerHTML = '<div style="font-size:12px;color:var(--red)">Search failed — enter name manually</div>';
   }
 }
+
 
 function _clearCustomer() {
   _tqState.customer = { name:'', phone:'', site:'', id:null, _found:null };
