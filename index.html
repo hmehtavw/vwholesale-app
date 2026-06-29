@@ -30835,6 +30835,9 @@ function _qqShowOutput() {
           const defaultBoxPrice_f = Math.round((r.tile.price_per_sqft||0) * sqftPerBox_fl);
           const boxKey  = `qqprice_fl_${ri}_${code}`;
           const sqftKey = `qqprice_fl_sqft_${ri}_${code}`;
+          // Set default price into window key if not already set — ensures Save Estimate always has a price
+          if (window[boxKey] === undefined && defaultBoxPrice_f > 0) window[boxKey] = defaultBoxPrice_f;
+          if (window[sqftKey] === undefined && (r.tile.price_per_sqft||0) > 0) window[sqftKey] = r.tile.price_per_sqft;
           const boxPrice_f  = window[boxKey]  ?? defaultBoxPrice_f;
           const sqftPrice_f = window[sqftKey] ?? (r.tile.price_per_sqft||0);
           const amount_f = r.boxes * boxPrice_f;
@@ -30904,6 +30907,9 @@ function _qqShowOutput() {
           const defaultBoxPrice_wl = Math.round((r.tile.price_per_sqft||0) * sqftPerBox_wl);
           const wBoxKey  = `qqprice_wl_${ri}_${code}`;
           const wSqftKey = `qqprice_wl_sqft_${ri}_${code}`;
+          // Set default price into window key if not already set
+          if (window[wBoxKey] === undefined && defaultBoxPrice_wl > 0) window[wBoxKey] = defaultBoxPrice_wl;
+          if (window[wSqftKey] === undefined && (r.tile.price_per_sqft||0) > 0) window[wSqftKey] = r.tile.price_per_sqft;
           const boxPrice_w  = window[wBoxKey]  ?? defaultBoxPrice_wl;
           const sqftPrice_w = window[wSqftKey] ?? (r.tile.price_per_sqft||0);
           const amount_w = r.boxes * boxPrice_w;
