@@ -27073,6 +27073,10 @@ function _getWallGrid(slotId) {
   const cols = Math.max(1, Math.ceil(wallLengthFt / tileWidthFt));
   const rows = Math.max(1, Math.ceil(wallH / tileHeightFt));
 
+  // Wall area in sqft — prefer the slot's stored sqft (already accounts for door
+  // deductions etc.), fall back to length × height if slot is unavailable.
+  const wallSqft = slot?.sqft || (wallLengthFt * wallH) || 0;
+
   // Cap at 25 cols × 20 rows for mobile
   const displayCols = Math.min(cols, 25);
   const displayRows = Math.min(rows, 20);
@@ -27957,6 +27961,7 @@ async function tqNext() {
       _tqAutoSave();
     } catch(err) {
       console.error('tqNext render error (step '+_tqState.step+'):', err);
+      _updateStepHeader(); // keep header in sync with the step that actually failed
       el.innerHTML = `<div style="padding:20px;text-align:center;color:var(--red)">
         <div style="font-size:13px;font-weight:700;margin-bottom:6px">Could not load this step</div>
         <div style="font-size:11px;background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:10px;word-break:break-all;text-align:left;color:var(--text2)">${err?.message||String(err)}</div>
