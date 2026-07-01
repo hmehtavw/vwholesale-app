@@ -24307,7 +24307,7 @@ function _renderRoomCard(r, i) {
   <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
       <div>
-        <div style="font-size:13px;font-weight:700">${def.icon} ${r.label}</div>
+        <div style="font-size:13px;font-weight:700">${def.icon} ${r.label||r.type||'Room'}</div>
         <div style="font-size:11px;color:var(--text3)">${r.type} · ${r.areas.length} area(s)</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -31244,6 +31244,8 @@ function _qqUpdateHints() {
       el.style.border = '1.5px solid var(--gold-border)';
       el.style.color = 'var(--gold)';
       el.style.cursor = 'pointer';
+      // Always restore onclick — may have been null'd during a prior price-match state
+      el.onclick = function() { VW_TILES._qqApplyHint(this); };
       el.innerHTML = '💡 Same tile — ₹<span class="hint-price">' + srcPrice + '</span>/box in ' +
         (el.dataset.hintLabel || '') + ' — <span class="hint-action">tap to use</span>';
     }
@@ -31603,7 +31605,7 @@ async function _qqBuildPayload() {
         totalSqft += base;
       }
     }
-    rooms.push({ id:rid, type:r.type, surface:r.surface, areas, l:r.l, w:r.w, wl:r.wl, wh:r.wh, hasDoor:r.hasDoor===true, dw:r.dw, dh:r.dh, skirtingIn:r.skirtingIn, mode:r.mode, sqft:r.sqft, floorDesign:r.floorDesign, wallDesign:r.wallDesign });
+    rooms.push({ id:rid, type:r.type, label:r.label||r.type, surface:r.surface, areas, l:r.l, w:r.w, wl:r.wl, wh:r.wh, hasDoor:r.hasDoor===true, dw:r.dw, dh:r.dh, skirtingIn:r.skirtingIn, mode:r.mode, sqft:r.sqft, floorDesign:r.floorDesign, wallDesign:r.wallDesign });
   });
 
   // Grand total estimate
