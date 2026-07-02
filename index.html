@@ -5876,18 +5876,6 @@ function printDeliveryCopy(invoice, customerId, kind, copyLabel) {
 window.printDeliveryCopy = printDeliveryCopy;
 window.printInvoice = printInvoice;
 
-async function renderRecentInvoices() {
-  const invoices = await VW_DB.all(VW_DB.STORES.invoices);
-  const recent = invoices.slice(-10).reverse();
-  if (!recent.length) return '<p class="empty-msg">No invoices yet</p>';
-  window._recentInvoicesCache = recent;
-  return recent.map((inv,i) => `
-    <div class="invoice-row" onclick="openInvoiceActions(${i})">
-      <div><div class="inv-no">${inv.invoiceNo}</div><div class="inv-date">${new Date(inv.date).toLocaleDateString('en-IN')}</div></div>
-      <div class="inv-total">₹${inv.total.toLocaleString('en-IN')}</div>
-    </div>
-  `).join('');
-}
 
 function openInvoiceActions(idx) {
   const inv = (window._recentInvoicesCache||[])[idx];
@@ -10562,49 +10550,8 @@ async function renderAttendanceList(staff, todayAtt) {
   }).join('');
 }
 
-async function _legacy_markAtt(staffId, status) {
-  const today = new Date().toDateString();
-  const all = await VW_DB.all(VW_DB.STORES.attendance);
-  const existing = all.find(a => a.staffId === staffId && new Date(a.date).toDateString() === today);
-  if (existing) { existing.status = status; existing.updatedAt = new Date().toISOString(); await VW_DB.put(VW_DB.STORES.attendance, existing); }
-  else { await VW_DB.put(VW_DB.STORES.attendance, { staffId, status, date: new Date().toISOString(), createdAt: new Date().toISOString() }); }
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const attendance = await VW_DB.all(VW_DB.STORES.attendance);
-  const todayAtt = attendance.filter(a => new Date(a.date).toDateString() === today);
-  document.getElementById('attendance-list').innerHTML = await renderAttendanceList(staff, todayAtt);
-  const presentToday = todayAtt.filter(a => a.status === 'present').length;
-  showToast(`Marked`, 'success');
-}
 
-async function _legacy_markAllPresent() {
-  const staff = await VW_DB.all(VW_DB.STORES.staff);
-  const today = new Date().toDateString();
-  const all = await VW_DB.all(VW_DB.STORES.attendance);
-  for (const s of staff) {
-    const existing = all.find(a => a.staffId === s.id && new Date(a.date).toDateString() === today);
-    if (!existing || existing.status === 'not-marked') {
-      if (existing) { existing.status = 'present'; await VW_DB.put(VW_DB.STORES.attendance, existing); }
-      else { await VW_DB.put(VW_DB.STORES.attendance, { staffId: s.id, status: 'present', date: new Date().toISOString(), createdAt: new Date().toISOString() }); }
-    }
-  }
-  const att = await VW_DB.all(VW_DB.STORES.attendance);
-  const todayAtt = att.filter(a => new Date(a.date).toDateString() === today);
-  document.getElementById('attendance-list').innerHTML = await renderAttendanceList(staff, todayAtt);
-  showToast('All staff marked present', 'success');
-}
 
-function _legacy_renderStaffList(staff) {
-  if (!staff.length) return '<p class="empty-msg">No staff added yet</p>';
-  return staff.map(s => `
-    <div class="cust-row" onclick="openStaff(${s.id})">
-      <div class="staff-avatar">${(s.name||'?')[0]}</div>
-      <div class="cust-info">
-        <div class="cust-name">${s.name}</div>
-        <div class="cust-meta">${s.department} · ${s.role} · ${s.phone}</div>
-      </div>
-      <button class="btn-wa-sm" onclick="event.stopPropagation();window.open('https://wa.me/91${s.phone}','_blank')">💬</button>
-    </div>`).join('');
-}
 
 async function renderAttSummary(staff, attendance) {
   if (!staff.length) return '<p class="empty-msg">No data yet</p>';
@@ -10651,13 +10598,6 @@ async function renderPendingLeaves(leaves, staff) {
     </div>`).join('');
 }
 
-async function _legacy_approveLeave(id, status) {
-  const leave = await VW_DB.getById(VW_DB.STORES.leaves, id);
-  leave.status = status; leave.updatedAt = new Date().toISOString();
-  await VW_DB.put(VW_DB.STORES.leaves, leave);
-  showToast(`Leave ${status}`, status === 'approved' ? 'success' : 'warn');
-  navigateTo('hr');
-}
 
 async function renderAllLeaves(leaves, staff) {
   if (!leaves.length) return '<p class="empty-msg">No leave requests yet</p>';
@@ -10673,84 +10613,8 @@ async function renderAllLeaves(leaves, staff) {
     </div>`).join('');
 }
 
-function _legacy_showApplyLeave() {
-  VW_DB.all(VW_DB.STORES.staff).then(staff => {
-    const sheet = document.getElementById('bottom-sheet');
-    sheet.innerHTML = `
-      <div class="sheet-handle"></div>
-      <h3>Apply for Leave</h3>
-      <div class="form-group"><label>Staff Member *</label>
-        <select id="lv-staff">${staff.map(s=>`<option value="${s.id}">${s.name} · ${s.department}</option>`).join('')}</select></div>
-      <div class="form-group"><label>Leave Type *</label>
-        <select id="lv-type"><option>Sick Leave</option><option>Casual Leave</option><option>Paid Leave</option><option>Emergency</option><option>Personal</option></select></div>
-      <div class="form-group"><label>From Date *</label><input type="date" id="lv-from" value="${new Date().toISOString().split('T')[0]}"></div>
-      <div class="form-group"><label>To Date *</label><input type="date" id="lv-to" value="${new Date().toISOString().split('T')[0]}"></div>
-      <div class="form-group"><label>Reason *</label><input type="text" id="lv-reason" placeholder="Brief reason"></div>
-      <button class="btn-primary full-width" onclick="submitLeave()">Submit Request</button>
-    `;
-    sheet.classList.add('open');
-    document.getElementById('sheet-overlay').classList.add('open');
-  });
-}
 
-async function _legacy_submitLeave() {
-  const from = new Date(document.getElementById('lv-from').value);
-  const to = new Date(document.getElementById('lv-to').value);
-  const reason = document.getElementById('lv-reason').value.trim();
-  if (to < from) return showToast('To date must be after from date', 'warn');
-  if (!reason) return showToast('Please enter a reason', 'warn');
-  const days = Math.ceil((to - from) / 86400000) + 1;
-  await VW_DB.put(VW_DB.STORES.leaves, {
-    staffId: parseInt(document.getElementById('lv-staff').value),
-    type: document.getElementById('lv-type').value,
-    from: document.getElementById('lv-from').value,
-    to: document.getElementById('lv-to').value,
-    days, reason,
-    status: 'pending', createdAt: new Date().toISOString()
-  });
-  showToast('Leave request submitted', 'success');
-  closeSheet();
-  navigateTo('hr');
-}
 
-function _legacy_showAddStaff() {
-  const depts = ['Tiles','Sanitary','Plywood','Electricals','Paints','Plumbing','Appliances','HR','Purchase','Inventory','Management','Accounts'];
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <h3>Add Team Member</h3>
-    <div class="form-group"><label>Name *</label><input type="text" id="ns-name" placeholder="Full name"></div>
-    <div class="form-group"><label>Phone *</label><input type="tel" id="ns-phone" placeholder="10-digit mobile" maxlength="10"></div>
-    <div class="form-group"><label>Role *</label><input type="text" id="ns-role" placeholder="e.g. Sales Executive"></div>
-    <div class="form-group"><label>Department *</label>
-      <select id="ns-dept">${depts.map(d=>`<option>${d}</option>`).join('')}</select></div>
-    <div class="form-group"><label>Seniority Level (within their department/category)</label>
-      <select id="ns-seniority">
-        <option value="1">1 — Staff</option>
-        <option value="2">2 — Senior / Lead</option>
-        <option value="3">3 — Head / Manager</option>
-      </select>
-      <p style="font-size:11px;color:var(--text3);margin-top:4px">Used for things like approving product photos within their own category, and answering Training questions as a category expert.</p>
-    </div>
-    <div class="form-group"><label>Team (controls task/visitor routing) *</label>
-      <select id="ns-team">
-        <option value="specialist">Specialist (gets department tasks)</option>
-        <option value="TL">Team Lead / TL (escalation level 2)</option>
-        <option value="floor_manager">Floor Manager (escalation level 3)</option>
-        <option value="store_manager">Store Manager (escalation level 4)</option>
-        <option value="management">Management (escalation level 5 / urgent)</option>
-        <option value="hr">HR (gets interview visitors)</option>
-        <option value="purchase">Purchase (gets pickup/delivery visitors)</option>
-        <option value="inventory">Inventory (gets delivery visitors)</option>
-        <option value="other">Other</option>
-      </select></div>
-    <div class="form-group"><label>Salary (₹/month)</label><input type="number" id="ns-salary" placeholder="e.g. 25000"></div>
-    <div class="form-group"><label>Join Date</label><input type="date" id="ns-join" value="${new Date().toISOString().split('T')[0]}"></div>
-    <button class="btn-primary full-width" onclick="saveNewStaff()">Add Member</button>
-  `;
-  sheet.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
-}
 
 async function saveNewStaff() {
   const name = document.getElementById('ns-name').value.trim();
@@ -13681,11 +13545,6 @@ const ALL_TILE_SIZES_DEFAULT = [
   '2400×800','3000×800','1200×2400','800×2400',
 ];
 
-async function _getTileSizes() {
-  const stored = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
-  if (stored?.sizes?.length) return stored.sizes;
-  return ALL_TILE_SIZES_DEFAULT.map(mm => ({ mm }));
-}
 
 async function saveTileWeightTable() {
   const tbody = document.getElementById('ts-size-tbody');
@@ -13831,20 +13690,6 @@ async function saveTileSettings() {
   await saveSpacerConfig();
 }
 
-async function renderEscalationSettings() {
-  const contacts = await VW_DB.getSetting('escalation_contacts', []);
-  return `
-  <div id="escalation-contacts-list">
-    ${(contacts||[]).map((c,i)=>`
-    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
-      <input type="text" value="${c.name||''}" placeholder="Name" style="flex:1" oninput="VW_SETTINGS.updateEscalation(${i},'name',this.value)">
-      <input type="tel" value="${c.phone||''}" placeholder="Phone" style="flex:1" oninput="VW_SETTINGS.updateEscalation(${i},'phone',this.value)">
-      <button onclick="VW_SETTINGS.removeEscalation(${i})" style="background:none;border:none;color:var(--red);cursor:pointer">✕</button>
-    </div>`).join('')}
-  </div>
-  <button class="btn-sm" onclick="VW_SETTINGS.addEscalation()">+ Add Contact</button>
-  <button class="btn-primary" style="margin-top:10px;width:100%" onclick="VW_SETTINGS.saveEscalation()">Save Escalation Contacts</button>`;
-}
 
 let _packingRules = [];
 let _categories = [];
@@ -14494,9 +14339,6 @@ function avgResponseMinutes(entries) {
   return (times.reduce((a,b)=>a+b,0) / times.length).toFixed(1);
 }
 
-function countEscalated(items, levelField) {
-  return items.filter(it => (it.escalationLog||[]).length > 1).length;
-}
 
 // ===================== TODAY'S OPERATIONS REPORT =====================
 async function buildOpsReport(daysBack = 0) {
@@ -16689,16 +16531,6 @@ async function selectOrderSource(channel, customerId, callbackStr) {
 window.selectOrderSource = selectOrderSource;
 
 // ===== 2. SPLIT PAYMENT =====
-function renderSplitPaymentSection(total) {
-  return `
-  <div class="card" style="margin-top:12px">
-    <h4 style="font-size:13px;margin-bottom:8px">Split Payment</h4>
-    <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Customer is paying with multiple methods — add each one.</p>
-    <div id="split-payment-rows"></div>
-    <button class="btn-sm" onclick="VW_FEATURES.addSplitRow()" style="margin-top:6px">+ Add Payment Method</button>
-    <div style="font-size:12px;color:var(--text3);margin-top:6px" id="split-total-check">Total: ₹0 / ₹${total.toLocaleString('en-IN')}</div>
-  </div>`;
-}
 
 let splitRows = [];
 function addSplitRow() {
@@ -27350,9 +27182,6 @@ function _setDesignBoxes(designId, slotId, boxes) {
 }
 
 // Legacy row/col helpers (kept for compat)
-function _cycleRowDesign(rowIdx) { /* replaced by _paintCell */ }
-function _setRowDesign(rowIdx, d) { /* replaced by _paintCell */ }
-function _applyPattern(p) { /* replaced by _fillRow/_fillCol */ }
 
 function _confirmWallDesign(slotId) {
   if (!_tqState.wallDesigns[slotId]) _tqState.wallDesigns[slotId] = {};
@@ -31341,10 +31170,6 @@ async function _qqAutoSave() {
 }
 
 // Alias — silent auto-save triggered from room add/edit
-async function _qqSaveAndAutoSave() {
-  _qqSave();
-  _qqAutoSave().catch(()=>{});
-}
 async function _qqSaveEstimate() {
   try {
     const payload = await _qqBuildPayload();
@@ -36641,15 +36466,6 @@ async function rejectContractor(contractorId) {
 
 
 // ── ADMIN UTILS ──
-async function renderContractorPortalPage_WithPending() {
-  // Inject pending approvals at top of contractor admin page
-  const baseHtml = await renderContractorPortalPage();
-  const pendingHtml = await renderPendingContractors();
-  return baseHtml.replace(
-    '<!-- GST/TDS NOTICE -->',
-    `<div class="card" style="margin-bottom:10px;border-color:rgba(245,200,66,0.4)">${pendingHtml}</div>\n  <!-- GST/TDS NOTICE -->`
-  );
-}
 
 function shareSignupLink() {
   const link = `${window.location.origin}/vwholesale-app/?signup=contractor`;
