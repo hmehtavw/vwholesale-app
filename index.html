@@ -8608,7 +8608,7 @@ async function checkQuotationEscalations() {
           const nextStaff = allStaff.filter(s => s.designation === nextDesig && s.active !== false && s.phone);
           for (const staff of nextStaff) {
             const msg = `*V Wholesale — Quotation Needs Approval*\n\nQuote: ${q.quoteNo}\nCustomer: ${q.customerName||'—'}\nValue: ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}\nEscalated to: ${ESCALATION_LABELS[nextLevel]}\nReason: ${log[log.length-1].reason}`;
-            console.log(`Would notify ${staff.name} (${staff.phone}): ${msg.slice(0,50)}...`);
+            window.open?.(`https://wa.me/91${staff.phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
           }
         } else if (nextLevel === 'management') {
           const mgmtPhone = cfg.managementPhone;
