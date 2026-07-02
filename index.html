@@ -24796,6 +24796,12 @@ function tqNextRoom() {
 // Legacy compat
 
 // ───── STEP 3: SPACER (per room) ────────────────────────────
+// Shared helper — converts tile dimensions (mm) to square feet per tile.
+// Single source of truth; replaces 21 inline copies of (mm/25.4)*(mm/25.4)/144.
+function tileSqftPerTile(mmH, mmW) {
+  return (mmH / 25.4) * (mmW / 25.4) / 144;
+}
+
 // Spacers-per-tile for a given size: per-size value from Tile Settings, else the
 // global default, else a size-based fallback. Single source of truth for the calc.
 function _spacersPerTileFor(sz) {
@@ -24828,7 +24834,7 @@ function _renderStep3() {
     const sz = sel.size;
     const roomSqft = slot.sqft;
     const [mmL, mmW] = sz ? sz.mm.split('×').map(Number) : [600,600];
-    const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+    const sqftPerTile = tileSqftPerTile(mmL, mmW);
     const sptile = _spacersPerTileFor(sz);
     const tilesNeeded = sqftPerTile > 0 ? Math.ceil(roomSqft / sqftPerTile) : 0;
     const use = !!sp.use && !!sz;
@@ -25369,14 +25375,14 @@ async function _renderStep6() {
     const tilesPerBox = cfgEntry?.tiles_per_box || 4;
     const sqftPerBox = sz ? (() => {
       const [mmL,mmW] = sz.mm.split('×').map(Number);
-      return (mmL/25.4)*(mmW/25.4)/144 * tilesPerBox;
+      return tileSqftPerTile(mmL, mmW) * tilesPerBox;
     })() : 0;
     const quotedSqft = sqftPerBox > 0 ? Math.round(quotedBox/sqftPerBox*100)/100 : 0;
     const totalBoxes = _getTileSlots().reduce((s,sl)=>{
       const b = _tqState.tileSelections[sl.id];
       if(!b?.size) return s;
       const [mmL,mmW] = b.size.mm.split('×').map(Number);
-      const spf = (mmL/25.4)*(mmW/25.4)/144;
+      const spf = tileSqftPerTile(mmL, mmW);
       const tpb = cfgEntry?.tiles_per_box || 4;
       const spb = spf * tpb;
       return s + (spb > 0 ? Math.ceil(sl.sqft/spb) : 0);
@@ -25973,7 +25979,7 @@ async function _renderStep8Inner() {
     if (!sz || !roomSqft) return { room:r, slot, roomSqft, boxes:0, sz:null, weightKg:0 };
 
     const [mmL, mmW] = sz.mm.split('×').map(Number);
-    const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+    const sqftPerTile = tileSqftPerTile(mmL, mmW);
     const cfgEntry = (weightCfg0.sizes||[]).find(s=>s.mm===sz.mm);
     const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
     const sqftPerBox = sqftPerTile * tilesPerBox;
@@ -26032,7 +26038,7 @@ async function _renderStep8Inner() {
       const sel = st.tileSelections[slot.id];
       if (!sp?.use || !sel?.size) return;
       const [mmL, mmW] = (sel.size.mm||'600×600').split('×').map(Number);
-      const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+      const sqftPerTile = tileSqftPerTile(mmL, mmW);
       const tilesNeeded = sqftPerTile > 0 ? Math.ceil(slot.sqft/sqftPerTile) : 0;
       totalSpacers += tilesNeeded * _spacersPerTileFor(sel.size);
     });
@@ -26924,7 +26930,7 @@ function _getWallGrid(slotId) {
     }
   }
 
-  const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+  const sqftPerTile = tileSqftPerTile(mmL, mmW);
   const cfgEntry = (_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm);
   const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
   const sqftPerBox = sqftPerTile * tilesPerBox;
@@ -27227,7 +27233,7 @@ function _updateQuotedPrice(val, mode) {
       const [mmL,mmW] = sz.mm.split('×').map(Number);
       const cfgEntry = (_tqState._weightCfg?.sizes||[]).find(s=>s.mm===sz.mm);
       const tpb = cfgEntry?.tiles_per_box || 4;
-      const spb = (mmL/25.4)*(mmW/25.4)/144 * tpb;
+      const spb = tileSqftPerTile(mmL, mmW) * tpb;
       el.value = spb > 0 ? Math.round(qp.pricePerBox/spb*100)/100 : '';
     }
   }
@@ -28200,7 +28206,7 @@ async function tqSubmitForApproval() {
       const sel = st.tileSelections?.[slot.id];
       if (!sel?.size) return;
       const [mmL,mmW] = sel.size.mm.split('×').map(Number);
-      const sqftPerTile = (mmL/25.4)*(mmW/25.4)/144;
+      const sqftPerTile = tileSqftPerTile(mmL, mmW);
       const cfg = (weightCfgSub.sizes||[]).find(s=>s.mm===sel.size.mm);
       const tpb = cfg?.tiles_per_box || (sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
       const dsBoxes = _tqState.design?.[slot.id]?.result?.totalBoxes;
@@ -28221,7 +28227,7 @@ async function tqSubmitForApproval() {
         const qp = st.quotedPrices[s.id];
         if (!qp) return;
         const [mmL,mmW] = sel.size.mm.split('×').map(Number);
-        const spf = (mmL/25.4)*(mmW/25.4)/144;
+        const spf = tileSqftPerTile(mmL, mmW);
         const cfgC = (weightCfgSub.sizes||[]).find(cs=>cs.mm===sel.size.mm);
         const tpb = cfgC?.tiles_per_box || sel.size.tilesPerBox || 6; // config first, not hardcoded 4
         const spb = spf * tpb;
@@ -28252,7 +28258,7 @@ async function tqSubmitForApproval() {
           const sel = st.tileSelections?.[slot.id];
           if (!sel?.size?.mm) return;
           const [mmL,mmW] = sel.size.mm.split('×').map(Number);
-          const sqftPerBox = (mmL/25.4)*(mmW/25.4)/144 * (sel.size.tilesPerBox||4);
+          const sqftPerBox = tileSqftPerTile(mmL, mmW) * (sel.size.tilesPerBox||4);
           const boxes = sqftPerBox > 0 ? Math.ceil(slot.sqft/sqftPerBox) : 0;
           t += qp.pricePerBox * boxes;
         }
@@ -28398,7 +28404,7 @@ function _tqBuildApprovalBOM(q) {
     var key = sel.tile_name + '|' + sel.size.mm;
     var mmParts = sel.size.mm.split('\u00d7').map(Number);
     var mmH = mmParts[0], mmW = mmParts[1];
-    var spb = (mmH/25.4)*(mmW/25.4)/144 * (sel.size.tilesPerBox||6);
+    var spb = tileSqftPerTile(mmH, mmW) * (sel.size.tilesPerBox||6);
     var qp  = ((q.quoted_prices||{})[slotId]) || {};
     var boxP  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
     var sqftP = qp.pricePerSqft>0 ? qp.pricePerSqft : (boxP>0&&spb>0) ? parseFloat((boxP/spb).toFixed(1)) : 0;
@@ -30645,7 +30651,7 @@ function _qqCalcWall(wallLen_ft, wallH_ft, hasDoor, dw, dh, design) {
     const netTiles = counts.grossTiles - counts.doorTiles;
     const tpb = cfgSzW?.tiles_per_box || tile.tiles_per_box || 6; // config first
     const boxes = Math.ceil(netTiles / tpb);
-    const sqftPerTile = (mmH/25.4) * (mmW/25.4) / 144;
+    const sqftPerTile = tileSqftPerTile(mmH, mmW);
     const sqft = netTiles * sqftPerTile;
     const amount = sqft * (tile.price_per_sqft || 0);
     const stockOk = tile.stock >= boxes;
@@ -30663,7 +30669,7 @@ function _qqCalcWall(wallLen_ft, wallH_ft, hasDoor, dw, dh, design) {
 function _qqCalcFloor(room, design) {
   if (!design?.size) return null;
   const [mmH, mmW] = design.size.split('×').map(Number);
-  const sqftPerTile = (mmH/25.4) * (mmW/25.4) / 144;
+  const sqftPerTile = tileSqftPerTile(mmH, mmW);
 
   // FLOOR-ONLY sqft — never add wall area even for 'both' surface rooms
   let floorSqft;
@@ -30759,7 +30765,7 @@ function _qqShowOutput() {
           const cfgSz_fl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===fc.design.size);
           const tpb_fl = cfgSz_fl?.tiles_per_box || r.tile.tiles_per_box || 6;
           const [mmH_f, mmW_f] = (fc.design.size).split('×').map(Number);
-          const sqftPerBox_fl = (mmH_f/25.4)*(mmW_f/25.4)/144 * tpb_fl;
+          const sqftPerBox_fl = tileSqftPerTile(mmH_f, mmW_f) * tpb_fl;
           const defaultBoxPrice_f = Math.round((r.tile.price_per_sqft||0) * sqftPerBox_fl);
           const boxKey  = `qqprice_fl_${ri}_${code}`;
           const sqftKey = `qqprice_fl_sqft_${ri}_${code}`;
@@ -30831,7 +30837,7 @@ function _qqShowOutput() {
           const cfgSzWl = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===wc.design.size);
           const tpbWl = cfgSzWl?.tiles_per_box || r.tile.tiles_per_box || 6;
           const [mmH_w, mmW_w] = (wc.design.size).split('×').map(Number);
-          const sqftPerBox_wl = (mmH_w/25.4)*(mmW_w/25.4)/144 * tpbWl;
+          const sqftPerBox_wl = tileSqftPerTile(mmH_w, mmW_w) * tpbWl;
           const defaultBoxPrice_wl = Math.round((r.tile.price_per_sqft||0) * sqftPerBox_wl);
           const wBoxKey  = `qqprice_wl_${ri}_${code}`;
           const wSqftKey = `qqprice_wl_sqft_${ri}_${code}`;
@@ -30880,7 +30886,7 @@ function _qqShowOutput() {
         const wallTotalAmt = Object.values(wc.results).reduce((s,r2)=>{
           const pk=`qqprice_wl_${ri}_${r2.code}`;
           const [mH,mW]=(r2.tile.size||wc.design.size).split('×').map(Number);
-          const def=Math.round((r2.tile.price_per_sqft||0)*(mH/25.4)*(mW/25.4)/144*(r2.tile.tiles_per_box||6));
+          const def=Math.round((r2.tile.price_per_sqft||0)*tileSqftPerTile(mH,mW)*(r2.tile.tiles_per_box||6));
           return s+r2.boxes*(window[pk]??def);
         },0);
         html += `<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 6px;color:var(--text3)">
@@ -30905,7 +30911,7 @@ function _qqShowOutput() {
           const cfgM = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===room.floorDesign.size);
           const tpbM = cfgM?.tiles_per_box || r.tile.tiles_per_box || 6;
           const [mH,mW] = room.floorDesign.size.split('×').map(Number);
-          _mergedTiles[key].sqftPerBox = (mH/25.4)*(mW/25.4)/144*tpbM;
+          _mergedTiles[key].sqftPerBox = tileSqftPerTile(mH,mW)*tpbM;
           _mergedTiles[key].priceBoxKey = `qqprice_fl_${ri}_${code}`;
         }
       });
@@ -30923,7 +30929,7 @@ function _qqShowOutput() {
           const cfgM = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===room.wallDesign.size);
           const tpbM = cfgM?.tiles_per_box || r.tile.tiles_per_box || 6;
           const [mH,mW] = room.wallDesign.size.split('×').map(Number);
-          _mergedTiles[key].sqftPerBox = (mH/25.4)*(mW/25.4)/144*tpbM;
+          _mergedTiles[key].sqftPerBox = tileSqftPerTile(mH,mW)*tpbM;
           _mergedTiles[key].priceBoxKey = `qqprice_wl_${ri}_${code}`;
         }
       });
@@ -31377,7 +31383,7 @@ async function _qqBuildPayload() {
         const mainTile = r.floorDesign.tileMap[r.floorDesign.pattern[0]];
         if (mainTile) {
           const [mmH,mmW] = r.floorDesign.size.split('×').map(Number);
-          const spf = (mmH/25.4)*(mmW/25.4)/144;
+          const spf = tileSqftPerTile(mmH, mmW);
           const cfg = (_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.floorDesign.size);
           const tpb = cfg?.tiles_per_box || mainTile.tiles_per_box || 6;
           const spb = spf*tpb;
@@ -31411,7 +31417,7 @@ async function _qqBuildPayload() {
         // e.g. L:L:L:HL1:D:D:D would create 6 slots instead of 3 unique-code slots
         const wc = _qqCalcWall(wl, wh, r.hasDoor===true, dw, dh, r.wallDesign);
         const [mmHw,mmWw] = r.wallDesign.size.split('\u00d7').map(Number);
-        const spfw=(mmHw/25.4)*(mmWw/25.4)/144;
+        const spfw=tileSqftPerTile(mmHw, mmWw);
         const cfgw=(_tqSizeCfg?.sizes||[]).find(s=>s.mm===r.wallDesign.size);
         if (wc) [...new Set(r.wallDesign.pattern)].forEach(code => {
           const tile = r.wallDesign.tileMap[code];
@@ -38232,7 +38238,7 @@ async function _confirmAddToInventory(tileId) {
 
   // Derive sqft per box from size
   const [mmL, mmW] = (t.size_mm||'600×600').split(/[×x]/).map(Number);
-  const sqftPerTile = mmL && mmW ? (mmL/25.4)*(mmW/25.4)/144 : 4;
+  const sqftPerTile = mmL && mmW ? tileSqftPerTile(mmL, mmW) : 4;
   const tilesPerBox = sqftPerTile < 1.5 ? 10 : sqftPerTile < 2.5 ? 6 : sqftPerTile < 5 ? 4 : 2;
   const coveragePerBox = +(sqftPerTile * tilesPerBox).toFixed(2);
   const boxPrice = +(price * coveragePerBox).toFixed(0);
