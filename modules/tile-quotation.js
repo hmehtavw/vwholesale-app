@@ -1523,7 +1523,7 @@ function _renderStep3() {
       ${use && sz ? `
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
         <span style="font-size:11px;color:var(--text3)">Joint width:</span>
-        ${[2,3,4].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
+        ${[2,3,4,5].map(mm=>`<button onclick="VW_TILES.tqSetSpacerMmForRoom('${slot?.id||room.id}',${mm})"
           style="padding:3px 8px;border-radius:5px;font-size:11px;cursor:pointer;
             border:${(sp.mm||3)===mm?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${(sp.mm||3)===mm?'var(--gold-muted)':'var(--bg3)'};
@@ -1542,15 +1542,36 @@ function _renderStep3() {
         <span>${packetSize}/packet</span>
       </div>
       ${spacerType==='clip' ? `
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px;font-weight:700">Total — Clip + Plug</span>
-        <span style="font-size:16px;font-weight:800;color:var(--gold)">${totalPackets} clip + ${totalPackets} plug</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700">Clip + Plug / Bush</span>
+        <span style="font-size:14px;font-weight:800;color:var(--gold)">${totalPackets} pkt each</span>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:2px">Clips and plugs bought separately (${clipPkt} pcs per packet each).</div>` : `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">📎 Clips (${clipPkt}/pkt)</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button onclick="VW_TILES.tqAdjClipPkts(-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">−</button>
+            <span style="font-size:16px;font-weight:800;color:var(--gold);min-width:24px;text-align:center" id="tq-clip-pkts">${_tqState._clipPkts ?? totalPackets}</span>
+            <button onclick="VW_TILES.tqAdjClipPkts(1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">+</button>
+          </div>
+          <div style="font-size:10px;color:var(--gold);margin-top:3px;font-weight:700">₹170/pkt · ₹${((_tqState._clipPkts??totalPackets)*170).toLocaleString('en-IN')}</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">🔩 Clip Bush (${clipPkt}/pkt)</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button onclick="VW_TILES.tqAdjBushPkts(-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">−</button>
+            <span style="font-size:16px;font-weight:800;color:var(--gold);min-width:24px;text-align:center" id="tq-bush-pkts">${_tqState._bushPkts ?? totalPackets}</span>
+            <button onclick="VW_TILES.tqAdjBushPkts(1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">+</button>
+          </div>
+          <div style="font-size:10px;color:var(--gold);margin-top:3px;font-weight:700">₹170/pkt · ₹${((_tqState._bushPkts??totalPackets)*170).toLocaleString('en-IN')}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">Both clips and bush are required. Adjust packets if mestri estimates differently.</div>` : `
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px;font-weight:700">Total Spacers</span>
+        <span style="font-size:13px;font-weight:700">Total Spacers · ₹90/pkt</span>
         <span style="font-size:18px;font-weight:800;color:var(--gold)">${totalPackets} packets</span>
-      </div>`}
+      </div>
+      <div style="font-size:11px;color:var(--gold);font-weight:700;margin-top:2px">₹${(totalPackets*90).toLocaleString('en-IN')}</div>`}
       <div style="font-size:10px;color:var(--text3);margin-top:4px">Rounded once across the whole quotation — no half-packet wasted between rooms.</div>
     </div>` : ''}
   </div>
@@ -1560,6 +1581,19 @@ function _renderStep3() {
 
 function tqSetSpacerType(type) {
   _tqState.spacerType = type;
+  if (type !== 'clip') { delete _tqState._clipPkts; delete _tqState._bushPkts; }
+  const el = document.getElementById('tq-step-content');
+  if (el) el.innerHTML = _renderStep3();
+}
+function tqAdjClipPkts(delta) {
+  const current = _tqState._clipPkts ?? (_tqState.spacerResult?.totalPackets || 0);
+  _tqState._clipPkts = Math.max(0, current + delta);
+  const el = document.getElementById('tq-step-content');
+  if (el) el.innerHTML = _renderStep3();
+}
+function tqAdjBushPkts(delta) {
+  const current = _tqState._bushPkts ?? (_tqState.spacerResult?.totalPackets || 0);
+  _tqState._bushPkts = Math.max(0, current + delta);
   const el = document.getElementById('tq-step-content');
   if (el) el.innerHTML = _renderStep3();
 }
@@ -2716,40 +2750,41 @@ async function _renderStep8Inner() {
     : (st.grout?.type !== 'none');
   const adt = ADHESIVE_TYPES?.[sz?.adhesive||'cement_mix'];
 
-  // ── Accessory prices — use approval-set prices first, then inventory fallback ──
-  // Prices flow: TL sets during approval → saved to accessory_prices on quote → used here
-  // If not yet approved, fall back to inventory MRP lookup
-  const _savedAccPrices = st._savedAccPrices || {}; // populated from quote record after submit
+  // ── Accessory prices — fixed prices for spacers, inventory for adhesive/grout ──
+  // Spacer prices are fixed: Cross/Plus ₹90/pkt, Clip ₹170/pkt, Bush ₹170/pkt
+  const _isClip = (st.spacerType || 'plus') === 'clip';
+  const _clipPkts = st._clipPkts ?? (st.spacerResult?.totalPackets || 0);
+  const _bushPkts = st._bushPkts ?? (st.spacerResult?.totalPackets || 0);
+  const _savedAccPrices = st._savedAccPrices || {};
   const _accPrices = {
-    spacerPerPkt: _savedAccPrices.spacerPerPkt || 0,
+    spacerPerPkt: _isClip ? 170 : 90,  // fixed: cross=₹90, clip=₹170, bush=₹170
     adhPerBag:    _savedAccPrices.adhPerBag    || 0,
     groutPerKg:   _savedAccPrices.groutPerKg   || 0,
-    source: _savedAccPrices.spacerPerPkt ? 'approved' : 'inventory',
+    source: 'fixed+inventory',
   };
-  // Determine dominant grout type for inventory lookup
   const _groutTypes = st.groutSelections
     ? Object.values(st.groutSelections).map(g=>g?.type).filter(t=>t&&t!=='none')
     : [st.grout?.type||'cement'];
   const _epoxDominant = _groutTypes.filter(t=>t==='epoxy').length >= _groutTypes.filter(t=>t==='cement').length;
   try {
-    const [spacerRes, adhRes, groutRes] = await Promise.all([
-      _accPrices.spacerPerPkt ? null : VW_DB.client.from('products').select('price,mrp').or('name.ilike.%spacer%').eq('is_active',true).limit(1),
-      _accPrices.adhPerBag    ? null : VW_DB.client.from('products').select('price,mrp').or('name.ilike.%adhesive%,name.ilike.%tile fix%,name.ilike.%tile adhesive%').eq('is_active',true).limit(1),
-      _accPrices.groutPerKg   ? null : VW_DB.client.from('products').select('price,mrp').or(_epoxDominant?'name.ilike.%epoxy%,name.ilike.%epoxy grout%':'name.ilike.%grout%').eq('is_active',true).limit(1),
+    const [adhRes, groutRes] = await Promise.all([
+      _accPrices.adhPerBag  ? null : VW_DB.client.from('products').select('price,mrp').or('name.ilike.%adhesive%,name.ilike.%tile fix%,name.ilike.%tile adhesive%').eq('is_active',true).limit(1),
+      _accPrices.groutPerKg ? null : VW_DB.client.from('products').select('price,mrp').or(_epoxDominant?'name.ilike.%epoxy%,name.ilike.%epoxy grout%':'name.ilike.%grout%').eq('is_active',true).limit(1),
     ]);
-    if (spacerRes?.data?.[0]) _accPrices.spacerPerPkt = spacerRes.data[0].price || spacerRes.data[0].mrp || 0;
-    if (adhRes?.data?.[0])    _accPrices.adhPerBag    = adhRes.data[0].price    || adhRes.data[0].mrp    || 0;
-    if (groutRes?.data?.[0])  _accPrices.groutPerKg   = groutRes.data[0].price  || groutRes.data[0].mrp  || 0;
+    if (adhRes?.data?.[0])   _accPrices.adhPerBag  = adhRes.data[0].price  || adhRes.data[0].mrp  || 0;
+    if (groutRes?.data?.[0]) _accPrices.groutPerKg = groutRes.data[0].price || groutRes.data[0].mrp || 0;
   } catch(_) {}
 
-  // Compute accessory costs — show TBD flag if quantity exists but price not yet set
-  const spacerCost = spacerQty > 0 ? (_accPrices.spacerPerPkt > 0 ? spacerQty * _accPrices.spacerPerPkt : -1) : 0;
+  // Spacer cost — clip type gets clip + bush separately
+  const spacerCostRaw = _isClip
+    ? (_clipPkts * 170) + (_bushPkts * 170)
+    : (spacerQty > 0 ? spacerQty * 90 : 0);
+  const spacerCost = spacerCostRaw > 0 ? spacerCostRaw : (spacerQty > 0 ? -1 : 0);
   const adhCost    = totalAdhBags > 0 ? (_accPrices.adhPerBag > 0  ? totalAdhBags * _accPrices.adhPerBag   : -1) : 0;
   const groutCost  = (groutKg > 0 && anyGrout) ? (_accPrices.groutPerKg > 0 ? Math.ceil(groutKg) * _accPrices.groutPerKg : -1) : 0;
-  // -1 = "quantity selected but price not yet set" (TBD)
   const accTotalKnown = [spacerCost, adhCost, groutCost].filter(c => c > 0).reduce((s,c) => s+c, 0);
   const accHasTBD     = [spacerCost, adhCost, groutCost].some(c => c === -1);
-  const accTotal      = accTotalKnown; // only confirmed costs in grand total
+  const accTotal      = accTotalKnown;
 
   // ── Weight + Vehicle + Floor Delivery ──
   const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
@@ -3281,7 +3316,11 @@ async function _renderStep8Inner() {
 
     ${(accTotal > 0 || accHasTBD) ? `
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🧰 Installation Materials</div>
-    ${spacerCost > 0  ? row('📦 Tile Spacers',    `${spacerQty} pkt${spacerQty>1?'s':''} × ₹${_accPrices.spacerPerPkt}/pkt`, spacerCost, false) : ''}
+    ${spacerCost > 0 ? (
+      _isClip
+        ? row('📎 Clips + 🔩 Bush', `${_clipPkts} clip pkts × ₹170 + ${_bushPkts} bush pkts × ₹170`, spacerCost, false)
+        : row('📦 Tile Spacers', `${spacerQty} pkt${spacerQty>1?'s':''} × ₹90/pkt`, spacerCost, false)
+    ) : ''}
     ${spacerCost === -1 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>📦 Tile Spacers</span><span style="color:var(--text3);font-size:11px">${spacerQty} pkts · price TBD</span></div>` : ''}
     ${adhCost > 0     ? row('🧲 Tile Adhesive',   `${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`, adhCost, false) : ''}
     ${adhCost === -1  ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>🧲 Tile Adhesive</span><span style="color:var(--text3);font-size:11px">${totalAdhBags} bags · price TBD</span></div>` : ''}

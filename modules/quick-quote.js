@@ -1598,6 +1598,7 @@ window.VW_TILES = {
   tqAddRoom, tqSelectRoomType, tqPickRoomType, _autoSkirting, _skirtingManualClear, _setSkirtHeight, tqSaveRoom, tqEditRoom, tqAddArea, tqSaveExtraArea, tqRemoveRoom, _tqWallMode,
   tqSelectSizeForRoom, tqNextRoom, tqSetSpacerForRoom, tqSetSpacerMmForRoom, tqSetSpacerType, setAdhMethodForRoom, tqSetBeadPcs,
   setGroutTypeForSlot, setGroutColorForSlot,
+  tqAdjClipPkts, tqAdjBushPkts,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading, tqSkipAdhesive, tqCheckAddonStock, tqSearchInventory, tqAddInventoryProduct, tqSetExtraQty, tqRemoveExtra,
   tqSelectProduct,
