@@ -254,6 +254,8 @@ async function openProduct(id) {
       <button class="btn-secondary" onclick="showRestock(${id})">📦 Restock</button>
       <button class="btn-secondary" onclick="VW_VENDOR.createPOForProduct(${id})">🛒 Raise PO</button>
       <button class="btn-secondary" onclick="VW_EXTRAS.renderStockHistory(${id})">📊 History</button>
+      ${['admin','management','category_manager','purchase_manager'].includes(profile?.role) ? `
+      <button class="btn-secondary" style="background:rgba(245,200,66,0.12);border-color:var(--gold-border);color:var(--gold)" onclick="openProductPricingTab(${id})">💰 Pricing</button>` : ''}
     </div>
     <div style="margin-top:14px;background:var(--bg2);border-radius:10px;padding:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
@@ -1077,7 +1079,7 @@ async function markMaterialSourced(intentId) {
   navigateTo('inventory'); // refresh the page
 }
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory, showSecondLocation, markMaterialSourced };
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory, showSecondLocation, markMaterialSourced, openProductPricingTab, saveProductPricing };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
@@ -3034,8 +3036,206 @@ window.VW_NON_INV = {
   _confirmAddToInventory,
   approveDraft,
   rejectDraft,
-  bulkApproveVisible,
-  fetchTilesForQuotation,
 };
+
+async function openProductPricingTab(id) {
+  const { data: p } = await VW_DB.client.from('products').select('*').eq('id', id).single();
+  if (!p) { showToast('Product not found', 'warn'); return; }
+
+  const role = profile?.role;
+  const canSeeCost  = ['admin','management','category_manager','purchase_manager'].includes(role);
+  const canEditTiers = ['admin','management','category_manager'].includes(role);
+
+  // Compute landed cost from stored build-up
+  function calcLanded(basic, transport, transportType, insurance, insuranceType, other, otherType) {
+    const t = transportType==='percent' ? (basic||0)*(transport||0)/100 : (transport||0);
+    const i = insuranceType==='percent' ? (basic||0)*(insurance||0)/100 : (insurance||0);
+    const o = otherType==='percent'     ? (basic||0)*(other||0)/100     : (other||0);
+    return (basic||0) + t + i + o;
+  }
+
+  const landed = p.landed_cost || calcLanded(p.cost_basic, p.cost_transport, p.cost_transport_type, p.cost_insurance, p.cost_insurance_type, p.cost_other, p.cost_other_type);
+
+  document.getElementById('bottom-sheet').innerHTML = `
+  <div class="sheet-handle"></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <button onclick="openProduct(${id})" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)">←</button>
+    <h3 style="margin:0;flex:1">💰 Pricing — ${p.name}</h3>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:14px">${p.category} · ${p.brand||''} · ${p.unit||'unit'}</div>
+
+  ${canSeeCost ? `
+  <!-- COST BUILD-UP -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text2)">📦 Cost Build-Up (Purchase Team)</div>
+
+    <div style="margin-bottom:8px">
+      <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Basic Price (₹ from supplier)</label>
+      <input type="number" id="pt-basic" value="${p.cost_basic||''}" placeholder="e.g. 850" step="0.01"
+        style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box"
+        oninput="updateLandedPreview()">
+    </div>
+
+    ${[
+      ['Transport', 'transport'],
+      ['Insurance', 'insurance'],
+      ['Other Charges', 'other'],
+    ].map(([label, key]) => `
+    <div style="display:grid;grid-template-columns:1fr auto 80px;gap:6px;align-items:center;margin-bottom:8px">
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">${label}</label>
+        <input type="number" id="pt-${key}" value="${p['cost_'+key]||''}" placeholder="0" step="0.01"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box"
+          oninput="updateLandedPreview()">
+      </div>
+      <div style="padding-top:16px;font-size:11px;color:var(--text3)">as</div>
+      <div>
+        <label style="font-size:10px;color:transparent;display:block;margin-bottom:3px">.</label>
+        <select id="pt-${key}-type" onchange="updateLandedPreview()"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);font-size:12px">
+          <option value="fixed" ${(p['cost_'+key+'_type']||'fixed')==='fixed'?'selected':''}>₹ Fixed</option>
+          <option value="percent" ${p['cost_'+key+'_type']==='percent'?'selected':''}>% of Basic</option>
+        </select>
+      </div>
+    </div>`).join('')}
+
+    <div id="pt-landed-preview" style="background:var(--bg3);border-radius:8px;padding:8px;margin-top:4px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12px;font-weight:700;color:var(--text2)">Landed Cost</span>
+      <span id="pt-landed-val" style="font-size:15px;font-weight:800;color:var(--gold)">₹${landed>0?landed.toLocaleString('en-IN'):'—'}</span>
+    </div>
+  </div>` : ''}
+
+  <!-- SELLING PRICES -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text2)">🏷️ Selling Prices</div>
+
+    ${[
+      ['MRP', 'mrp', 'Market Retail Price — printed on product', false],
+      ['VWP (V Wholesale Price)', 'vwp', 'What exec shows customer — default selling price', canEditTiers],
+      ['Tier 1', 'tier1_price', 'TL can approve this discount', canEditTiers],
+      ['Tier 2', 'tier2_price', 'Floor Manager can approve', canEditTiers],
+      ['Tier 3', 'tier3_price', 'Store Manager can approve', canEditTiers],
+      ['Tier 4', 'tier4_price', 'Management only — maximum discount', canEditTiers],
+    ].map(([label, field, hint, editable]) => {
+      const val = p[field] || '';
+      const mrp = p.mrp || 0;
+      const vwp = p.vwp || 0;
+      const priceVal = p[field] || 0;
+      const margin = landed > 0 && priceVal > 0 ? ((priceVal - landed)/landed*100).toFixed(1) : null;
+      const discVsMrp = mrp > 0 && priceVal > 0 && field !== 'mrp' ? ((mrp - priceVal)/mrp*100).toFixed(1) : null;
+      return `
+      <div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+          <label style="font-size:11px;font-weight:700;color:${field==='vwp'?'var(--gold)':'var(--text2)'}">${label}</label>
+          <div style="font-size:10px;color:var(--text3)">${margin?`${margin}% margin`:''}${discVsMrp?` · ${discVsMrp}% off MRP`:''}</div>
+        </div>
+        <input type="number" id="pt-${field}" value="${val}" placeholder="₹" step="0.01" ${!editable && !['admin','management'].includes(role)?'disabled':''}
+          style="width:100%;padding:8px;border:${field==='vwp'?'1.5px solid var(--gold-border)':'1px solid var(--border)'};border-radius:7px;background:var(--bg3);color:${field==='vwp'?'var(--gold)':'var(--text)'};font-size:${field==='vwp'?14:13}px;font-weight:${field==='vwp'?700:400};box-sizing:border-box;${!editable && !['admin','management'].includes(role)?'opacity:0.5':''};"
+          oninput="updateMarginPreview('${field}','${landed||0}','${mrp||0}')">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${hint}</div>
+      </div>`;
+    }).join('')}
+
+    <div id="pt-margin-warning" style="display:none;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px;margin-top:8px;font-size:11px;color:var(--red)">
+      ⚠️ VWP margin is below 15% — Management approval required before this price goes live.
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px">
+    <button onclick="saveProductPricing(${id})" style="flex:2;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:800;cursor:pointer">
+      💾 Save Pricing
+    </button>
+    <button onclick="openProduct(${id})" style="flex:1;padding:13px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;cursor:pointer">
+      Cancel
+    </button>
+  </div>`;
+
+  // Inject live calc scripts
+  const s = document.createElement('script');
+  s.textContent = `
+    function updateLandedPreview() {
+      const basic = parseFloat(document.getElementById('pt-basic')?.value)||0;
+      function getCharge(id) {
+        const v = parseFloat(document.getElementById('pt-'+id)?.value)||0;
+        const t = document.getElementById('pt-'+id+'-type')?.value;
+        return t==='percent' ? basic*v/100 : v;
+      }
+      const landed = basic + getCharge('transport') + getCharge('insurance') + getCharge('other');
+      const el = document.getElementById('pt-landed-val');
+      if (el) el.textContent = landed>0 ? '₹'+Math.round(landed).toLocaleString('en-IN') : '—';
+      // Update VWP margin
+      const vwp = parseFloat(document.getElementById('pt-vwp')?.value)||0;
+      if (vwp>0 && landed>0) {
+        const margin = ((vwp-landed)/landed*100);
+        const warn = document.getElementById('pt-margin-warning');
+        if (warn) warn.style.display = margin<15 ? 'block' : 'none';
+      }
+    }
+    function updateMarginPreview(field, landed, mrp) {
+      landed = parseFloat(landed)||0;
+      mrp = parseFloat(mrp)||0;
+      const val = parseFloat(document.getElementById('pt-'+field)?.value)||0;
+      if (field==='vwp' && landed>0 && val>0) {
+        const margin = ((val-landed)/landed*100);
+        const warn = document.getElementById('pt-margin-warning');
+        if (warn) warn.style.display = margin<15 ? 'block' : 'none';
+      }
+    }
+    updateLandedPreview();
+  `;
+  document.body.appendChild(s);
+}
+
+async function saveProductPricing(id) {
+  const getVal = (eid) => { const el = document.getElementById(eid); return el && !el.disabled ? (parseFloat(el.value)||null) : undefined; };
+  const getStr = (eid) => { const el = document.getElementById(eid); return el ? el.value : undefined; };
+
+  const basic     = getVal('pt-basic');
+  const transport = getVal('pt-transport');
+  const tType     = getStr('pt-transport-type');
+  const insurance = getVal('pt-insurance');
+  const iType     = getStr('pt-insurance-type');
+  const other     = getVal('pt-other');
+  const oType     = getStr('pt-other-type');
+
+  // Compute landed cost
+  const t = tType==='percent' ? (basic||0)*(transport||0)/100 : (transport||0);
+  const ins = iType==='percent' ? (basic||0)*(insurance||0)/100 : (insurance||0);
+  const o = oType==='percent' ? (basic||0)*(other||0)/100 : (other||0);
+  const landed = basic!=null ? (basic||0)+t+ins+o : null;
+
+  const update = {};
+  if (basic!=null)     { update.cost_basic=basic; update.cost_transport=transport; update.cost_transport_type=tType; update.cost_insurance=insurance; update.cost_insurance_type=iType; update.cost_other=other; update.cost_other_type=oType; }
+  if (landed!=null && landed>0) update.landed_cost = landed;
+
+  ['mrp','vwp','tier1_price','tier2_price','tier3_price','tier4_price'].forEach(f => {
+    const v = getVal('pt-'+f);
+    if (v !== undefined) update[f] = v;
+  });
+
+  // VWP becomes the main price for all non-pricing-tab usage
+  if (update.vwp) update.price = update.vwp;
+
+  const { error } = await VW_DB.client.from('products').update(update).eq('id', id);
+  if (error) { showToast('Error saving pricing: '+error.message, 'error'); return; }
+
+  // Check if pricing_needs_approval was set by trigger
+  const { data: updated } = await VW_DB.client.from('products').select('pricing_needs_approval,margin_vwp').eq('id',id).single();
+  if (updated?.pricing_needs_approval) {
+    showToast('⚠️ Margin below 15% — Management approval required', 'warn');
+    // Notify management via in-app notification
+    await createPersistedNotification({
+      category: 'pricing_approval',
+      title: `💰 Pricing Approval Needed`,
+      body: `${profile?.name||'Category Manager'} set VWP margin to ${updated.margin_vwp}% on product #${id} — below 15% threshold`,
+      relatedTable: 'products',
+      relatedId: id,
+      actions: [{ label: '👁 Review Pricing', action: 'open_product_pricing' }],
+    }).catch(()=>{});
+  } else {
+    showToast('Pricing saved ✅', 'success');
+  }
+  openProduct(id);
+}
 
 
