@@ -3,7 +3,11 @@ name: Deploy V Wholesale Customer OS
 on:
   push:
     branches: [main]
-    paths: ['index.html']
+    paths:
+      - 'index.html'
+      - 'modules/**'
+      - 'sw.js'
+      - 'manifest.json'
   workflow_dispatch:
 
 jobs:
