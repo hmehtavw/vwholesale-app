@@ -1995,7 +1995,7 @@ async function checkTileQuoteEscalations() {
 }
 
 // Called by the existing escalation sweep — add to checkEscalations
-async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, priceNote, editedQuotedPrices) {
+async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, priceNote, editedQuotedPrices, accessoryPrices) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
   if (!q) return;
   const log = q.approval_log || [];
@@ -2031,6 +2031,10 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
     updateData.quoted_prices = editedQuotedPrices;
     last.priceEdited = true;
     last.priceNote = priceNote || last.priceNote;
+  }
+  if (accessoryPrices && Object.keys(accessoryPrices).length) {
+    updateData.accessory_prices = accessoryPrices;
+    last.accessoryPricesEdited = true;
   }
 
   // Helper: compute grand_total from price × area + extras + delivery

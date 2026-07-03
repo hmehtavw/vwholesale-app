@@ -1449,8 +1449,11 @@ function _renderStep3() {
   // Auto-initialise spacer selections for every slot on first entry — 2mm cross by default
   if (!_tqState.spacerSelections) _tqState.spacerSelections = {};
   slots3.forEach(slot => {
-    if (!_tqState.spacerSelections[slot.id])
-      _tqState.spacerSelections[slot.id] = { use: true, mm: 3 };
+    if (!_tqState.spacerSelections[slot.id]) {
+      const sel = _tqState.tileSelections[slot.id] || {};
+      const maxMm = sel.size?.mm ? Math.max(...sel.size.mm.split('×').map(Number)) : 600;
+      _tqState.spacerSelections[slot.id] = { use: maxMm >= 300, mm: 3 };
+    }
   });
 
   let totalTiles = 0, totalSpacers = 0;
@@ -1601,25 +1604,25 @@ function _renderStep4() {
     const existingMethod = _tqState.adhesiveSelections?.[slot.id]?.method;
     // Wall: always adhesive. Floor + large tile: adhesive. Floor + small: mortar option
     const method = existingMethod || (isWall ? 'adhesive' : isLarge ? 'adhesive' : 'adhesive');
+    const isNone = method === 'none';
     const adhType = isLarge ? 'C2 Premium (T2)' : 'C1 Standard (T1)';
-    const floorCoverage = isLarge ? 40 : 44;   // sqft per 20kg bag for floor
-    const wallCoverage = isLarge ? 30 : 40;    // sqft per 20kg bag for wall (more adhesive needed)
+    const floorCoverage = isLarge ? 40 : 44;
+    const wallCoverage = isLarge ? 30 : 40;
 
-    // Calculate bags — the chosen method drives the whole area (wall or floor, any size)
+    // Calculate bags — skip if none
     const coverage = isWall ? wallCoverage : floorCoverage;
     let adhBags = 0, cemBags = 0, sandBags = 0;
-    if (method === 'mortar') {
-      // Cement + sand for this area (≈4 cement + 11 sand bags per 100 sqft)
-      cemBags = Math.ceil(roomSqft * 4 / 100);
-      sandBags = Math.ceil(roomSqft * 11 / 100);
-    } else if (method === 'mix') {
-      // Mestri practice: adhesive base with cement mixed in (~1:5 cement:adhesive).
-      // Cement extends the adhesive, so adhesive needed drops and cement is added.
-      const full = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
-      cemBags = Math.ceil(full / 6);            // 1 part in 6 is cement
-      adhBags = Math.max(0, full - cemBags);    // remaining is adhesive (reduced)
-    } else {
-      adhBags = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
+    if (!isNone) {
+      if (method === 'mortar') {
+        cemBags = Math.ceil(roomSqft * 4 / 100);
+        sandBags = Math.ceil(roomSqft * 11 / 100);
+      } else if (method === 'mix') {
+        const full = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
+        cemBags = Math.ceil(full / 6);
+        adhBags = Math.max(0, full - cemBags);
+      } else {
+        adhBags = roomSqft > 0 ? Math.ceil(roomSqft / coverage) : 0;
+      }
     }
 
     // Auto-populate adhesiveSelections so BOM is always accurate
@@ -1658,27 +1661,34 @@ function _renderStep4() {
       </div>
 
       ${roomSqft > 0 ? `
-      <div style="display:flex;gap:6px;margin-bottom:8px">
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','adhesive')"
-          style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
+          style="flex:1;min-width:70px;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='adhesive'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='adhesive'?'var(--gold-muted)':'var(--bg3)'}">
-          <div style="font-weight:600;color:${method==='adhesive'?'var(--gold)':'var(--text)'}">Ready-mix Adhesive</div>
-          <div style="font-size:9px;color:var(--text3)">${adhType} · ${isWall?wallCoverage:floorCoverage} sqft/bag</div>
+          <div style="font-weight:600;color:${method==='adhesive'?'var(--gold)':'var(--text)'}">Ready-mix</div>
+          <div style="font-size:9px;color:var(--text3)">${adhType}</div>
         </button>
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mix')"
-          style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
+          style="flex:1;min-width:70px;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='mix'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='mix'?'var(--gold-muted)':'var(--bg3)'}">
-          <div style="font-weight:600;color:${method==='mix'?'var(--gold)':'var(--text)'}">Adhesive + Cement</div>
-          <div style="font-size:9px;color:var(--text3)">Mestri mix · 1:5 · cement extends adhesive</div>
+          <div style="font-weight:600;color:${method==='mix'?'var(--gold)':'var(--text)'}">Adh + Cement</div>
+          <div style="font-size:9px;color:var(--text3)">Mestri mix</div>
         </button>
         <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','mortar')"
-          style="flex:1;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
+          style="flex:1;min-width:70px;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
             border:${method==='mortar'?'2px solid var(--gold)':'1px solid var(--border)'};
             background:${method==='mortar'?'var(--gold-muted)':'var(--bg3)'}">
-          <div style="font-weight:600;color:${method==='mortar'?'var(--gold)':'var(--text)'}">Cement Mortar</div>
-          <div style="font-size:9px;color:var(--text3)">Traditional · cement + sand</div>
+          <div style="font-weight:600;color:${method==='mortar'?'var(--gold)':'var(--text)'}">Mortar</div>
+          <div style="font-size:9px;color:var(--text3)">Cement + sand</div>
+        </button>
+        <button onclick="VW_TILES.setAdhMethodForRoom('${slot?.id||room.id}','none')"
+          style="flex:1;min-width:70px;padding:6px;border-radius:7px;font-size:11px;cursor:pointer;
+            border:${method==='none'?'2px solid var(--red)':'1px solid var(--border)'};
+            background:${method==='none'?'rgba(239,68,68,0.08)':'var(--bg3)'}">
+          <div style="font-weight:600;color:${method==='none'?'var(--red)':'var(--text3)'}">⊘ None</div>
+          <div style="font-size:9px;color:var(--text3)">Not required</div>
         </button>
       </div>` : ''}
 
@@ -1687,6 +1697,7 @@ function _renderStep4() {
       </div>` : ''}
 
       <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${isNone ? `<div style="width:100%;text-align:center;padding:8px;font-size:11px;color:var(--text3);background:var(--bg3);border-radius:7px">⊘ No adhesive for this area</div>` : ''}
         ${adhBags > 0 ? `<div style="flex:1;background:var(--bg3);border-radius:7px;padding:7px;min-width:80px;text-align:center">
           <div style="font-size:10px;color:var(--text3)">Adhesive (20kg)</div>
           <div style="font-size:18px;font-weight:800;color:var(--gold)">${adhBags}</div>
@@ -2107,172 +2118,162 @@ function _autoSuggestGroutColour(product) {
 
 // ───── STEP 7: GROUT / EPOXY ────────────────────────────────
 function _renderStep7() {
-  const grout = _tqState.grout || {};
-  // Use first wall slot for primary size reference
   const slots = _getTileSlots();
-  const primarySlot = slots.find(s=>s.subType==='wall') || slots[0];
-  const primarySel = primarySlot ? _tqState.tileSelections[primarySlot.id] : null;
-  const sz = primarySel?.size || _tqState.selectedSize;
-  const spacerMm = primarySlot ? (_tqState.spacerSelections?.[primarySlot.id]?.mm || 3) : 3;
-  const suggestEpoxy = sz && parseInt((sz.mm||'600×600').split('×')[0]) >= 400;
-  const totalSqft = _tqTotalSqft();
 
-  const GROUT_COLOURS = [
-    { id:'white',      name:'White',       hex:'#f8f8f8', desc:'Best for light/white tiles' },
-    { id:'ivory',      name:'Ivory',       hex:'#f5edd5', desc:'Warm beige/marble tiles' },
-    { id:'light_grey', name:'Light Grey',  hex:'#c8c8c8', desc:'Grey/stone tiles' },
-    { id:'grey',       name:'Grey',        hex:'#888888', desc:'Neutral — works everywhere' },
-    { id:'dark_grey',  name:'Dark Grey',   hex:'#444444', desc:'Dark tiles, bold contrast' },
-    { id:'charcoal',   name:'Charcoal',    hex:'#2a2a2a', desc:'Dark/black tiles' },
-    { id:'mocha',      name:'Mocha',       hex:'#8b7355', desc:'Wood-look / terracotta tiles' },
-    { id:'beige',      name:'Beige',       hex:'#d4bc94', desc:'Sand / earthy tone tiles' },
-  ];
-  const suggestions = _tqState._groutSuggestions || ['white','light_grey'];
-  const selectedColour = grout.colorId || suggestions[0];
-
-  // ── CORRECT GROUT FORMULA (Saint-Gobain method) ──
-  // kg = ((L+W)/(L×W)) × T × J × Area_m2 × 1.6 × (1+wastage)
-  // L,W in metres, T=tile thickness mm, J=joint width mm, Area in m2
-  // Cement grout wastage factor: ~5%, Epoxy: ~5%
-  function calcGroutKg(isEpoxy) {
-    if (!sz) return Math.ceil(totalSqft / 80); // fallback
-    const parts = (sz.mm||'600×600').split('×').map(Number);
-    const L_mm = parts[0] || 600;
-    const W_mm = parts[1] || 600;
-    const T_mm = sz.thickness || sz.thicknessMm || 9; // tile thickness mm
-    const J_mm = spacerMm || 3; // joint width mm
-
-    // Correct Saint-Gobain formula — ALL dimensions in mm, area in mm²
-    // kg = [(L+W)/(L×W)] × T × J × Area_mm² × density (kg/mm³)
-    // Cement grout density ≈ 1.6 g/cm³ = 1.6e-6 kg/mm³
-    // Epoxy grout density ≈ 1.8 g/cm³ = 1.8e-6 kg/mm³
-    const density = isEpoxy ? 1.8e-6 : 1.6e-6;
-    const Area_mm2 = (totalSqft / 10.764) * 1e6; // sqft → m² → mm²
-    const raw = ((L_mm + W_mm) / (L_mm * W_mm)) * T_mm * J_mm * Area_mm2 * density;
-    const withWaste = raw * 1.10; // +10% wastage buffer
-    return Math.max(0.5, Math.round(withWaste * 10) / 10);
-  }
-
-  const cementKg = calcGroutKg(false);
-  const epoxyKg = calcGroutKg(true);
-  const displayKg = grout.type === 'epoxy' ? epoxyKg : cementKg;
-
-  // Coverage reference (approximate, for display)
-  const cementCoverage = Math.round(totalSqft / cementKg);
-  const epoxyCoverage = Math.round(totalSqft / epoxyKg);
+  // Initialise per-slot grout state if not present
+  if (!_tqState.groutSelections) _tqState.groutSelections = {};
+  slots.forEach(slot => {
+    if (!_tqState.groutSelections[slot.id]) {
+      const sz = _tqState.tileSelections[slot.id]?.size;
+      const maxMm = sz?.mm ? Math.max(...sz.mm.split('×').map(Number)) : 600;
+      // Suggest epoxy for wet areas (wall tiles or large format ≥ 400mm)
+      const suggestEpoxy = slot.subType === 'wall' || maxMm >= 400;
+      _tqState.groutSelections[slot.id] = {
+        type: suggestEpoxy ? 'epoxy' : 'cement',
+        color: 'grey',
+        colorHex: '#9CA3AF',
+      };
+    }
+  });
 
   const COLORS = [
-    {id:'white', label:'White', hex:'#F5F5F0', note:'Classic. Shows dirt more.'},
-    {id:'ivory', label:'Ivory', hex:'#F0EBD8', note:'Warm. Hides light dirt.'},
-    {id:'beige', label:'Beige/Sand', hex:'#D4C5A0', note:'Earthy tiles.'},
-    {id:'grey', label:'Grey', hex:'#9CA3AF', note:'Most popular. Hides dirt.'},
-    {id:'dark_grey', label:'Dark Grey', hex:'#4B5563', note:'Premium look.'},
-    {id:'black', label:'Black', hex:'#1F2937', note:'Bold, dramatic.'},
-    {id:'brown', label:'Brown', hex:'#78543A', note:'Natural, earthy.'},
-    {id:'red', label:'Red Oxide', hex:'#9B3C2A', note:'Traditional Indian.'},
+    {id:'white',     label:'White',     hex:'#F5F5F0'},
+    {id:'ivory',     label:'Ivory',     hex:'#F0EBD8'},
+    {id:'beige',     label:'Beige',     hex:'#D4C5A0'},
+    {id:'grey',      label:'Grey',      hex:'#9CA3AF'},
+    {id:'dark_grey', label:'Dark Grey', hex:'#4B5563'},
+    {id:'black',     label:'Black',     hex:'#1F2937'},
+    {id:'brown',     label:'Brown',     hex:'#78543A'},
+    {id:'red',       label:'Red Oxide', hex:'#9B3C2A'},
   ];
 
+  // Compute per-slot grout kg using Saint-Gobain method
+  function calcSlotGroutKg(slot, isEpoxy) {
+    const sel = _tqState.tileSelections[slot.id] || {};
+    const sz = sel.size;
+    const spacerMm = _tqState.spacerSelections?.[slot.id]?.mm || 3;
+    const roomSqft = slot.sqft || 0;
+    if (!sz || roomSqft <= 0) return 0;
+    const [L_mm, W_mm] = sz.mm.split('×').map(Number);
+    const T_mm = sz.thickness || sz.thicknessMm || 9;
+    const density = isEpoxy ? 1.8e-6 : 1.6e-6;
+    const Area_mm2 = (roomSqft / 10.764) * 1e6;
+    const raw = ((L_mm + W_mm) / (L_mm * W_mm)) * T_mm * spacerMm * Area_mm2 * density;
+    return Math.max(0.5, Math.round(raw * 1.10 * 10) / 10);
+  }
+
+  // Build totals for summary at bottom
+  let totalCementKg = 0, totalEpoxyKg = 0, anySelected = false;
+  slots.forEach(slot => {
+    const g = _tqState.groutSelections[slot.id] || {};
+    if (g.type === 'cement') { totalCementKg += calcSlotGroutKg(slot, false); anySelected = true; }
+    else if (g.type === 'epoxy') { totalEpoxyKg += calcSlotGroutKg(slot, true); anySelected = true; }
+  });
+
+  const slotCards = slots.map(slot => {
+    const g = _tqState.groutSelections[slot.id] || {};
+    const sel = _tqState.tileSelections[slot.id] || {};
+    const sz = sel.size;
+    const room = slot.room;
+    const label = slot.label || room?.label || room?.type || 'Room';
+    const maxMm = sz?.mm ? Math.max(...sz.mm.split('×').map(Number)) : 600;
+    const suggestEpoxy = slot.subType === 'wall' || maxMm >= 400;
+    const cementKg = calcSlotGroutKg(slot, false);
+    const epoxyKg  = calcSlotGroutKg(slot, true);
+    const displayKg = g.type === 'epoxy' ? epoxyKg : g.type === 'cement' ? cementKg : 0;
+
+    return `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${label}</div>
+          <div style="font-size:10px;color:var(--text3)">${sz?.mm||'—'}mm · ${(slot.sqft||0).toFixed(1)} sqft · ${slot.subType==='wall'?'Wall':'Floor'}</div>
+        </div>
+        ${suggestEpoxy ? `<span style="font-size:9px;background:rgba(245,200,66,0.15);color:var(--gold);border-radius:5px;padding:2px 7px;font-weight:600">💡 Epoxy recommended</span>` : ''}
+      </div>
+
+      <!-- Type selection -->
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button onclick="VW_TILES.setGroutTypeForSlot('${slot.id}','cement')"
+          style="flex:1;padding:8px;border-radius:8px;cursor:pointer;
+            border:${g.type==='cement'?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${g.type==='cement'?'var(--gold-muted)':'var(--bg3)'}">
+          <div style="font-size:11px;font-weight:700;color:${g.type==='cement'?'var(--gold)':'var(--text)'}">Cement Grout</div>
+          <div style="font-size:9px;color:var(--text3)">Standard · easy repair</div>
+        </button>
+        <button onclick="VW_TILES.setGroutTypeForSlot('${slot.id}','epoxy')"
+          style="flex:1;padding:8px;border-radius:8px;cursor:pointer;
+            border:${g.type==='epoxy'?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${g.type==='epoxy'?'var(--gold-muted)':'var(--bg3)'}">
+          <div style="font-size:11px;font-weight:700;color:${g.type==='epoxy'?'var(--gold)':'var(--text)'}">⭐ Epoxy Grout</div>
+          <div style="font-size:9px;color:var(--text3)">Waterproof · anti-fungal</div>
+        </button>
+        <button onclick="VW_TILES.setGroutTypeForSlot('${slot.id}','none')"
+          style="flex:1;padding:8px;border-radius:8px;cursor:pointer;
+            border:${g.type==='none'?'2px solid var(--text3)':'1px solid var(--border)'};
+            background:${g.type==='none'?'var(--bg3)':'var(--bg3)'}">
+          <div style="font-size:11px;font-weight:700;color:${g.type==='none'?'var(--text2)':'var(--text3)'}">⊘ None</div>
+          <div style="font-size:9px;color:var(--text3)">Not required</div>
+        </button>
+      </div>
+
+      ${g.type !== 'none' ? `
+      <!-- Colour picker -->
+      <div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:5px">Colour</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
+        ${COLORS.map(c => `
+        <button onclick="VW_TILES.setGroutColorForSlot('${slot.id}','${c.id}','${c.hex}')"
+          style="padding:6px 2px;border-radius:8px;border:${g.color===c.id?'2px solid var(--gold)':'1px solid var(--border)'};background:var(--bg2);cursor:pointer">
+          <div style="width:100%;height:18px;border-radius:4px;background:${c.hex};border:1px solid rgba(0,0,0,0.1);margin-bottom:3px"></div>
+          <div style="font-size:9px;color:${g.color===c.id?'var(--gold)':'var(--text3)'};font-weight:${g.color===c.id?700:400}">${c.label}</div>
+        </button>`).join('')}
+      </div>
+      <!-- Quantity -->
+      <div style="background:var(--bg3);border-radius:7px;padding:7px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:10px;color:var(--text3)">${g.type==='epoxy'?'⭐ Epoxy':'🪨 Cement'} Grout needed</div>
+        <div style="font-size:15px;font-weight:800;color:var(--gold)">${displayKg} kg</div>
+      </div>` : `
+      <div style="background:var(--bg3);border-radius:7px;padding:8px;text-align:center;font-size:11px;color:var(--text3)">
+        ⊘ Grout not included for this area
+      </div>`}
+    </div>`;
+  }).join('');
+
   return `
-  <!-- Grout Colour Picker — auto-suggested based on tile -->
   <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">🎨 Grout / Epoxy Colour</h3>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">✨ Suggested for your tile:</div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      ${suggestions.slice(0,2).map(id => {
-        const col = GROUT_COLOURS.find(c=>c.id===id);
-        if (!col) return '';
-        const isSel = selectedColour === id;
-        const border = isSel ? '2px solid var(--gold)' : '1px solid var(--border)';
-        const bg = isSel ? 'var(--gold-muted)' : 'var(--bg2)';
-        const textColor = isSel ? 'var(--gold)' : 'var(--text)';
-        const checkmark = isSel ? '<div style="font-size:9px;color:var(--gold)">✓ Selected</div>' : '';
-        return '<div onclick="VW_TILES.selectGroutColour(' + "'" + id + "'" + ')" style="flex:1;padding:10px;border-radius:10px;cursor:pointer;text-align:center;border:' + border + ';background:' + bg + '">'
-          + '<div style="width:32px;height:32px;border-radius:50%;background:' + col.hex + ';border:2px solid rgba(0,0,0,0.15);margin:0 auto 5px"></div>'
-          + '<div style="font-size:11px;font-weight:700;color:' + textColor + '">' + col.name + '</div>'
-          + '<div style="font-size:9px;color:var(--text3)">' + col.desc + '</div>'
-          + checkmark + '</div>';
-      }).join('')}
-    </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:6px">All colours:</div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
-      ${GROUT_COLOURS.map(col => {
-        const isSel = selectedColour === col.id;
-        const border = isSel ? '2px solid var(--gold)' : '1px solid var(--border)';
-        const bg = isSel ? 'var(--gold-muted)' : 'var(--bg2)';
-        const fw = isSel ? 700 : 400;
-        const tc = isSel ? 'var(--gold)' : 'var(--text)';
-        return '<div onclick="VW_TILES.selectGroutColour(' + "'" + col.id + "'" + ')" style="display:flex;align-items:center;gap:5px;padding:5px 9px;border-radius:7px;cursor:pointer;border:' + border + ';background:' + bg + '">'
-          + '<div style="width:14px;height:14px;border-radius:50%;background:' + col.hex + ';border:1px solid rgba(0,0,0,0.2)"></div>'
-          + '<span style="font-size:11px;font-weight:' + fw + ';color:' + tc + '">' + col.name + '</span></div>';
-      }).join('')}
-    </div>
-  </div></div>
-
-  <div class="card" style="margin-bottom:10px">
-    <h3 class="card-title">Grout & Epoxy Selection</h3>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button onclick="VW_TILES.tqSetGroutType('cement')"
-        style="flex:1;padding:14px;border-radius:12px;border:${grout.type==='cement'?'2px solid var(--gold)':'1px solid var(--border)'};background:${grout.type==='cement'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer">
-        <div style="font-size:13px;font-weight:700;color:${grout.type==='cement'?'var(--gold)':'var(--text)'}">Cement Grout</div>
-        <div style="font-size:11px;color:var(--text3)">Standard · ₹80–120/kg · Easy repair</div>
-      </button>
-      <button onclick="VW_TILES.tqSetGroutType('epoxy')"
-        style="flex:1;padding:14px;border-radius:12px;border:${grout.type==='epoxy'?'2px solid var(--gold)':'1px solid var(--border)'};background:${grout.type==='epoxy'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer">
-        <div style="font-size:13px;font-weight:700;color:${grout.type==='epoxy'?'var(--gold)':'var(--text)'}">⭐ Epoxy Grout</div>
-        <div style="font-size:11px;color:var(--text3)">Waterproof · Anti-fungal · Luxury finish</div>
-      </button>
-    </div>
-    <button onclick="VW_TILES.tqSetGroutType('none')"
-      style="width:100%;padding:10px;border-radius:10px;border:${grout.type==='none'?'2px solid var(--text3)':'1px solid var(--border)'};background:${grout.type==='none'?'var(--bg3)':'var(--bg2)'};cursor:pointer;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:${grout.type==='none'?'var(--text2)':'var(--text3)'}">⊘ Skip / Not Required</div>
-      <div style="font-size:10px;color:var(--text3)">Customer will arrange separately · Not included in quotation</div>
-    </button>
-
-    ${suggestEpoxy && grout.type !== 'epoxy' ? `
-    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600;color:var(--gold)">💡 Recommended: Epoxy for tiles ≥ 400mm</div>
-      <div style="font-size:11px;color:var(--text2);margin-top:2px">Waterproof, anti-stain, and longer lasting.</div>
+    <h3 class="card-title">🎨 Grout — Per Area</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">
+      Select grout type and colour for each area. Wall tiles &amp; large format: Epoxy recommended.
+    </p>
+    ${slotCards}
+    ${anySelected ? `
+    <div style="background:var(--gold-muted);border:1px solid var(--gold-border);border-radius:10px;padding:10px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">Total Grout Required</div>
+      ${totalCementKg>0?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🪨 Cement Grout</span><span style="font-weight:800;color:var(--gold)">${Math.ceil(totalCementKg*10)/10} kg</span></div>`:''}
+      ${totalEpoxyKg>0?`<div style="display:flex;justify-content:space-between;font-size:12px"><span>⭐ Epoxy Grout</span><span style="font-weight:800;color:var(--gold)">${Math.ceil(totalEpoxyKg*10)/10} kg</span></div>`:''}
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 10% wastage. Confirm with installer before purchase.</div>
     </div>` : ''}
-
-    ${grout.type === 'none' ? `
-    <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;color:var(--text3);font-size:12px;margin-bottom:10px">
-      ⊘ Grout not included in this quotation — customer will arrange separately
-    </div>` : `
-    <div style="font-size:12px;font-weight:600;margin-bottom:8px">Select Grout Color</div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">
-      ${COLORS.map(c => `
-      <button onclick="VW_TILES.tqSetGroutColor('${c.id}','${c.hex}')"
-        style="padding:8px 4px;border-radius:10px;border:${grout.color===c.id?'2px solid var(--gold)':'1px solid var(--border)'};background:var(--bg2);cursor:pointer">
-        <div style="width:100%;height:24px;border-radius:6px;background:${c.hex};border:1px solid rgba(0,0,0,0.15);margin-bottom:4px"></div>
-        <div style="font-size:10px;color:${grout.color===c.id?'var(--gold)':'var(--text2)'};font-weight:${grout.color===c.id?700:400}">${c.label}</div>
-      </button>`).join('')}
-    </div>
-    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:6px">Grout Calculation (Saint-Gobain method)</div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
-        Tile: ${sz?.label||'—'} · Thickness: ${sz?.thickness||8}mm · Joint: ${spacerMm}mm · Area: ${totalSqft.toFixed(0)} sqft
-      </div>
-      <div style="display:flex;gap:10px">
-        <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3)">Cement Grout</div>
-          <div style="font-size:16px;font-weight:800;color:${grout.type!=='epoxy'?'var(--gold)':'var(--text)'}">${cementKg} kg</div>
-          <div style="font-size:10px;color:var(--text3)">≈${cementCoverage} sqft/kg</div>
-        </div>
-        <div style="flex:1;background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:var(--text3)">Epoxy Grout</div>
-          <div style="font-size:16px;font-weight:800;color:${grout.type==='epoxy'?'var(--gold)':'var(--text)'}">${epoxyKg} kg</div>
-          <div style="font-size:10px;color:var(--text3)">≈${epoxyCoverage} sqft/kg</div>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 5% wastage. Confirm quantity with installer.</div>
-    </div>`}
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Add-ons</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
+function tqSetGroutType(t) { _tqState.grout = _tqState.grout||{}; _tqState.grout.type=t; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
+function tqSetGroutColor(c,hex) { _tqState.grout = _tqState.grout||{}; _tqState.grout.color=c; _tqState.grout.colorHex=hex; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
 
-function tqSetGroutType(t) { _tqState.grout.type=t; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
-function tqSetGroutColor(c,hex) { _tqState.grout.color=c; _tqState.grout.colorHex=hex; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
+// Per-slot grout setters (new per-room grout step)
+function setGroutTypeForSlot(slotId, type) {
+  if (!_tqState.groutSelections) _tqState.groutSelections = {};
+  if (!_tqState.groutSelections[slotId]) _tqState.groutSelections[slotId] = {};
+  _tqState.groutSelections[slotId].type = type;
+  document.getElementById('tq-step-content').innerHTML = _renderStep7();
+}
+function setGroutColorForSlot(slotId, colorId, hex) {
+  if (!_tqState.groutSelections) _tqState.groutSelections = {};
+  if (!_tqState.groutSelections[slotId]) _tqState.groutSelections[slotId] = {};
+  _tqState.groutSelections[slotId].color = colorId;
+  _tqState.groutSelections[slotId].colorHex = hex;
+  document.getElementById('tq-step-content').innerHTML = _renderStep7();
+}
 
 // ───── STEP 8: SUMMARY + T&C ────────────────────────────────
 // ════════════ STEP: ADD-ONS & MATERIALS (own step before Summary) ════════════
@@ -2691,20 +2692,28 @@ async function _renderStep8Inner() {
     totalSandBags += adh.sandBags || 0;
   });
 
-  // ── Grout — per room ──
+  // ── Grout — per slot (using groutSelections for per-room type) ──
   let totalGroutCementKg = 0, totalGroutEpoxyKg = 0;
-  rooms.forEach(r => {
-    const sel = st.tileSelections[r.id];
-    const gr = st.groutSelections?.[r.id] || st.grout;
-    if (!sel?.size) return;
-    const [mmL,mmW] = (sel.size.mm||'600×600').split('×').map(Number);
-    const T = 9, J = (st.spacerSelections?.[r.id]?.mm || 3);
-    const roomSqft = r.areas?.reduce((s,a)=>s+(a.sqft||0),0)||0;
+  _getTileSlots().forEach(slot => {
+    const g = (st.groutSelections||{})[slot.id] || st.grout || {};
+    if (g.type === 'none') return;
+    const sel = st.tileSelections?.[slot.id] || {};
+    const sz2 = sel.size;
+    if (!sz2?.mm) return;
+    const [mmL, mmW] = sz2.mm.split('×').map(Number);
+    const T = sz2.thickness || sz2.thicknessMm || 9;
+    const J = (st.spacerSelections?.[slot.id]?.mm || 3);
+    const roomSqft = slot.sqft || 0;
+    if (roomSqft <= 0) return;
     const Area_mm2 = (roomSqft / 10.764) * 1e6;
-    totalGroutCementKg += Math.max(0.5, Math.round(((mmL+mmW)/(mmL*mmW))*T*J*Area_mm2*1.6e-6*1.10*10)/10);
-    totalGroutEpoxyKg  += Math.max(0.5, Math.round(((mmL+mmW)/(mmL*mmW))*T*J*Area_mm2*1.8e-6*1.10*10)/10);
+    const base = ((mmL+mmW)/(mmL*mmW))*T*J*Area_mm2*1.10;
+    if (g.type === 'epoxy') totalGroutEpoxyKg  += Math.max(0.5, Math.round(base*1.8e-6*10)/10);
+    else                    totalGroutCementKg  += Math.max(0.5, Math.round(base*1.6e-6*10)/10);
   });
-  const groutKg = Math.max(0.5, Math.round((st.grout?.type==='epoxy' ? totalGroutEpoxyKg : totalGroutCementKg)*10)/10);
+  const groutKg = Math.round((totalGroutCementKg + totalGroutEpoxyKg)*10)/10;
+  const anyGrout = st.groutSelections
+    ? Object.values(st.groutSelections).some(g => g.type !== 'none')
+    : (st.grout?.type !== 'none');
   const adt = ADHESIVE_TYPES?.[sz?.adhesive||'cement_mix'];
 
   // ── Accessory prices from inventory (best-effort, non-blocking) ──
@@ -2723,7 +2732,7 @@ async function _renderStep8Inner() {
   // Compute accessory subtotal (only counts items that have a price in inventory)
   const spacerCost = (spacerQty > 0 && _accPrices.spacerPerPkt > 0) ? spacerQty * _accPrices.spacerPerPkt : 0;
   const adhCost    = (totalAdhBags > 0 && _accPrices.adhPerBag > 0)  ? totalAdhBags * _accPrices.adhPerBag    : 0;
-  const groutCost  = (groutKg > 0 && st.grout?.type !== 'none' && _accPrices.groutPerKg > 0) ? Math.ceil(groutKg) * _accPrices.groutPerKg : 0;
+  const groutCost  = (groutKg > 0 && anyGrout && _accPrices.groutPerKg > 0) ? Math.ceil(groutKg) * _accPrices.groutPerKg : 0;
   const accTotal   = spacerCost + adhCost + groutCost;
 
   // ── Weight + Vehicle + Floor Delivery ──
@@ -2946,7 +2955,7 @@ async function _renderStep8Inner() {
         ${spacerQty>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Spacers</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${_tqState.spacerType==='clip'?`${spacerQty}+${spacerQty}`:`${spacerQty} packets`}</div>${_tqState.spacerType==='clip'?`<div style="font-size:9px;color:var(--text3)">clip + plug</div>`:''}</div>`:""}
         ${totalAdhBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Adhesive</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${totalAdhBags} bags</div></div>`:""}
         ${totalCemBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Cement+Sand</div><div style="font-size:13px;font-weight:800;color:var(--gold)">${totalCemBags}+${totalSandBags} bags</div></div>`:""}
-        ${(groutKg>0 && st.grout?.type !== 'none')?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout/Epoxy</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div></div>`:""}
+        ${anyGrout && groutKg>0 ? `<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div>${totalCementKg>0&&totalEpoxyKg>0?`<div style="font-size:9px;color:var(--text3)">${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy</div>`:''}</div>`:""}
       </div>
     </div>
     ${hasPricing ? `
@@ -3258,7 +3267,11 @@ async function _renderStep8Inner() {
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🧰 Installation Materials</div>
     ${spacerCost>0?row('📦 Tile Spacers',`${spacerQty} pkt${spacerQty>1?'s':''} × ₹${_accPrices.spacerPerPkt}/pkt`,spacerCost,false):''}
     ${adhCost>0?row('🧲 Tile Adhesive',`${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`,adhCost,false):''}
-    ${groutCost>0?row(`${st.grout?.type==='epoxy'?'⭐ Epoxy':'🪨 Cement'} Grout`,`${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`,groutCost,false):''}
+    ${groutCost>0?(
+      totalCementKg>0&&totalEpoxyKg>0
+        ? row('Grout (cement + epoxy)',`${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy`,groutCost,false)
+        : row(totalEpoxyKg>0?'⭐ Epoxy Grout':'🪨 Cement Grout',`${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`,groutCost,false)
+    ):''}
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Materials Subtotal</span><span style="color:var(--gold)">₹${accTotal.toLocaleString('en-IN')}</span>
     </div>`:``}
@@ -5129,7 +5142,40 @@ function _tqBuildApprovalBOM(q) {
           ' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;box-sizing:border-box"' +
           ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,bx=document.getElementById(\'tq-box-\'+i);if(bx)bx.value=Math.round((parseFloat(el.value)||0)*s)||\'\';})(this)"></div>' +
       '</div></div>';
-  }).join('');
+  }).join('') + _buildAccessoryPriceInputs(q);
+}
+
+// Accessory price inputs for approval BOM — spacer, adhesive, grout per unit
+function _buildAccessoryPriceInputs(q) {
+  const st = q._decoded || {};
+  const gs = q.grout_selections || st.groutSelections || {};
+  const as = q.adhesive_selections || st.adhesiveSelections || {};
+  const ss = q.spacer_selections || st.spacerSelections || {};
+
+  const hasSpacers  = Object.values(ss).some(s => s?.use);
+  const hasAdhesive = Object.values(as).some(s => s?.method && s.method !== 'none' && s.method !== 'mortar' && (s.adhBags||0) > 0);
+  const hasGrout    = Object.values(gs).some(g => g?.type && g.type !== 'none');
+  const hasMortar   = Object.values(as).some(s => s?.method === 'mortar');
+
+  if (!hasSpacers && !hasAdhesive && !hasGrout && !hasMortar) return '';
+
+  const saved = q.accessory_prices || {};
+
+  const accInput = (id, label, unit, initVal) =>
+    `<div style="margin-bottom:8px">` +
+    `<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">${label} (₹/${unit})</label>` +
+    `<input type="number" id="tq-acc-${id}" value="${initVal||''}" step="1" min="0" placeholder="Enter price"` +
+    ` style="width:100%;padding:8px;border:1px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:14px;text-align:center;box-sizing:border-box">` +
+    `</div>`;
+
+  return `<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid #6B7280">` +
+    `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🧰 Installation Material Prices</div>` +
+    (hasSpacers  ? accInput('spacer',  '📦 Spacers',       'pkt', saved.spacerPerPkt) : '') +
+    (hasAdhesive ? accInput('adhesive','🧲 Tile Adhesive', 'bag', saved.adhPerBag)    : '') +
+    (hasMortar   ? accInput('cement',  '🏗 Cement',        'bag', saved.cementPerBag) : '') +
+    (hasGrout    ? accInput('grout',   '🪨 Grout',         'kg',  saved.groutPerKg)   : '') +
+    `<div style="font-size:10px;color:var(--text3);margin-top:4px">These are added to the final total shown to customer.</div>` +
+    `</div>`;
 }
 
 
@@ -5166,7 +5212,18 @@ async function tqApprove() {
   const box  = firstBoxPrice  || parseFloat(document.getElementById('tq-quoted-box-0')?.value||0)||0;
   const note = document.getElementById('tq-price-note')?.value||'';
 
-  await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note, editedPrices);
+  // Read accessory prices if entered
+  const accessoryPrices = {};
+  const spacerEl   = document.getElementById('tq-acc-spacer');
+  const adhesiveEl = document.getElementById('tq-acc-adhesive');
+  const cementEl   = document.getElementById('tq-acc-cement');
+  const groutEl    = document.getElementById('tq-acc-grout');
+  if (spacerEl?.value)   accessoryPrices.spacerPerPkt  = parseFloat(spacerEl.value)||0;
+  if (adhesiveEl?.value) accessoryPrices.adhPerBag     = parseFloat(adhesiveEl.value)||0;
+  if (cementEl?.value)   accessoryPrices.cementPerBag  = parseFloat(cementEl.value)||0;
+  if (groutEl?.value)    accessoryPrices.groutPerKg    = parseFloat(groutEl.value)||0;
+
+  await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note, editedPrices, accessoryPrices);
   closeSheet();
   navigateTo('tile_quotes');
 }
