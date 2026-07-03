@@ -2707,6 +2707,25 @@ async function _renderStep8Inner() {
   const groutKg = Math.max(0.5, Math.round((st.grout?.type==='epoxy' ? totalGroutEpoxyKg : totalGroutCementKg)*10)/10);
   const adt = ADHESIVE_TYPES?.[sz?.adhesive||'cement_mix'];
 
+  // ── Accessory prices from inventory (best-effort, non-blocking) ──
+  const _accPrices = { spacerPerPkt: 0, adhPerBag: 0, groutPerKg: 0 };
+  try {
+    const [spacerRes, adhRes, groutRes] = await Promise.all([
+      VW_DB.client.from('products').select('price,mrp').or('name.ilike.%spacer%').eq('is_active',true).limit(1),
+      VW_DB.client.from('products').select('price,mrp').or('name.ilike.%adhesive%,name.ilike.%tile fix%').eq('is_active',true).limit(1),
+      VW_DB.client.from('products').select('price,mrp').or(`name.ilike.%${st.grout?.type==='epoxy'?'epoxy':'cement'} grout%,name.ilike.%grout%`).eq('is_active',true).limit(1),
+    ]);
+    if (spacerRes.data?.[0]) _accPrices.spacerPerPkt = spacerRes.data[0].price || spacerRes.data[0].mrp || 0;
+    if (adhRes.data?.[0])    _accPrices.adhPerBag    = adhRes.data[0].price    || adhRes.data[0].mrp    || 0;
+    if (groutRes.data?.[0])  _accPrices.groutPerKg   = groutRes.data[0].price  || groutRes.data[0].mrp  || 0;
+  } catch(_) {}
+
+  // Compute accessory subtotal (only counts items that have a price in inventory)
+  const spacerCost = (spacerQty > 0 && _accPrices.spacerPerPkt > 0) ? spacerQty * _accPrices.spacerPerPkt : 0;
+  const adhCost    = (totalAdhBags > 0 && _accPrices.adhPerBag > 0)  ? totalAdhBags * _accPrices.adhPerBag    : 0;
+  const groutCost  = (groutKg > 0 && st.grout?.type !== 'none' && _accPrices.groutPerKg > 0) ? Math.ceil(groutKg) * _accPrices.groutPerKg : 0;
+  const accTotal   = spacerCost + adhCost + groutCost;
+
   // ── Weight + Vehicle + Floor Delivery ──
   const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
   const floorCfg = await VW_DB.getSetting('floor_delivery_config', { loading_within_10ft:5, loading_beyond_10ft:8, floor_rates_per_box:{'G':0,'1':6,'2':10,'3':14,'4':18,'5':22} });
@@ -3192,7 +3211,7 @@ async function _renderStep8Inner() {
     const effectiveLoading = st.delivery.type==='delivery' ? loadingCost : (boxesNeeded*loadingRatePerBox);
     const effectiveFloor = floorCost;
     const extraTotal = (st.extraProducts||[]).reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
-    const grandTotal = tileTotal + extraTotal + effectiveTransport + effectiveLoading + effectiveFloor;
+    const grandTotal = tileTotal + extraTotal + accTotal + effectiveTransport + effectiveLoading + effectiveFloor;
     if (!grandTotal) return '';
 
     // Per-room tile lines
@@ -3233,7 +3252,16 @@ async function _renderStep8Inner() {
     ${(st.extraProducts||[]).map(p=>row(p.name,`${p.qty||1} ${p.unit||'pcs'} × ₹${(p.price||0).toLocaleString('en-IN')}`,Math.round((p.price||0)*(p.qty||1)),false)).join('')}
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Add-ons Subtotal</span><span style="color:var(--gold)">₹${extraTotal.toLocaleString('en-IN')}</span>
-    </div>`:''}
+    </div>`:``}
+
+    ${accTotal>0?`
+    <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🧰 Installation Materials</div>
+    ${spacerCost>0?row('📦 Tile Spacers',`${spacerQty} pkt${spacerQty>1?'s':''} × ₹${_accPrices.spacerPerPkt}/pkt`,spacerCost,false):''}
+    ${adhCost>0?row('🧲 Tile Adhesive',`${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`,adhCost,false):''}
+    ${groutCost>0?row(`${st.grout?.type==='epoxy'?'⭐ Epoxy':'🪨 Cement'} Grout`,`${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`,groutCost,false):''}
+    <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
+      <span style="color:var(--text2)">Materials Subtotal</span><span style="color:var(--gold)">₹${accTotal.toLocaleString('en-IN')}</span>
+    </div>`:``}
 
     ${(effectiveTransport+effectiveLoading+effectiveFloor)>0?`
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚛 Transport & Delivery</div>
@@ -5002,22 +5030,6 @@ async function tqSubmitForApproval() {
 
     // Start the escalation chain: TL/SrExec → FloorMgr → StoreMgr → Management (30s each)
     await VW_ESCALATION.startTileQuoteApproval(data.id);
-
-    // WhatsApp notification to TL / Sr Executive immediately on submit
-    try {
-      const { data: tlProfiles } = await VW_DB.client
-        .from('profiles')
-        .select('name,phone')
-        .in('role', ['tl', 'sr_executive', 'floor_manager'])
-        .eq('status', 'approved');
-      if (tlProfiles?.length) {
-        const grandTotalFmt = (_submitGrandTotal > 0 ? `₹${Math.round(_submitGrandTotal).toLocaleString('en-IN')}` : 'Price TBD');
-        const waMsg = `*V Wholesale — TQ Approval Needed* 📋\n\nQuote: ${tqNo}\nCustomer: ${st.customer.name}${st.customer.phone ? ' · ' + st.customer.phone : ''}\nArea: ${_tqTotalSqft().toFixed(0)} sqft\nValue: ${grandTotalFmt}\nBy: ${profile?.name || 'Executive'}\n\nPlease approve at ${window.location.origin}`;
-        for (const p of tlProfiles) {
-          if (p.phone) window.open(`https://wa.me/91${p.phone.replace(/\D/g,'')}?text=${encodeURIComponent(waMsg)}`, '_blank');
-        }
-      }
-    } catch(_) {} // non-blocking
 
     if (st.laborRequired) await postLaborFromQuotation(data.id, tqNo);
 

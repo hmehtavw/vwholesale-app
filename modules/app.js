@@ -1465,6 +1465,12 @@ async function handleNotificationAction(notifId, action) {
     setTimeout(() => VW_INVENTORY.showAddPO(n.relatedId), 100);
     return;
   }
+  if (action === 'open_tq' && n.relatedTable === 'tile_quotations') {
+    closeSheet();
+    await navigateTo('tile_quotes');
+    setTimeout(() => VW_TILES.openTileQuote(n.relatedId), 300);
+    return;
+  }
   if (action === 'view_quotation' && n.relatedTable === 'quotations') {
     closeSheet();
     navigateTo('cart');

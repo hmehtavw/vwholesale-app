@@ -1884,6 +1884,17 @@ async function startTileQuoteApproval(tileQuoteId) {
       read: false,
       created_at: now,
     }).catch(() => {}); // non-blocking
+
+    // In-app bell notification (IndexedDB) — shows on TL's device immediately
+    await createPersistedNotification({
+      category: 'tq_approval',
+      title: `📋 TQ Approval Needed — ${q.tq_no}`,
+      body: `${q.customer_name} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft · by ${q.created_by||'Executive'}`,
+      recipientId: p.id,
+      relatedTable: 'tile_quotations',
+      relatedId: tileQuoteId,
+      actions: [{ label: '👁 Open Quote', action: 'open_tq' }],
+    }).catch(() => {});
   }
 
   showToast && showToast(`${q.tq_no} sent for TL / Sr Executive approval`, 'success');
@@ -1962,6 +1973,17 @@ async function checkTileQuoteEscalations() {
           related_id: q.id,
           read: false,
           created_at: notifiedAt,
+        }).catch(() => {});
+
+        // In-app bell notification
+        await createPersistedNotification({
+          category: 'tq_approval',
+          title: `⚠️ Escalated — ${q.tq_no} needs your approval`,
+          body: `${q.customer_name} · No response from ${LEVEL_LABELS[last.level]}`,
+          recipientId: p.id,
+          relatedTable: 'tile_quotations',
+          relatedId: q.id,
+          actions: [{ label: '👁 Open Quote', action: 'open_tq' }],
         }).catch(() => {});
       }
     }
@@ -2053,6 +2075,17 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
         related_table: 'tile_quotations', related_id: tileQuoteId,
         read: false, created_at: now,
       }).catch(() => {});
+
+      // In-app bell — executive gets instant notification
+      await createPersistedNotification({
+        category: 'tq_approved',
+        title: `✅ ${q.tq_no} Fully Approved!`,
+        body: `${q.customer_name}${pricePerSqft>0?` · ₹${pricePerSqft}/sqft`:''} — Cashier can now collect advance`,
+        recipientId: q.created_by_id,
+        relatedTable: 'tile_quotations',
+        relatedId: tileQuoteId,
+        actions: [{ label: '👁 View Quote', action: 'open_tq' }],
+      }).catch(() => {});
     }
     return;
   }
@@ -2096,6 +2129,17 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
       body: `Approved by ${profile?.name||''} (${LEVEL_LABELS[last.level]}) · Now needs your approval · ${q.customer_name}`,
       related_table: 'tile_quotations', related_id: tileQuoteId,
       read: false, created_at: now,
+    }).catch(() => {});
+
+    // In-app bell — next approver gets instant notification
+    await createPersistedNotification({
+      category: 'tq_approval',
+      title: `📋 ${q.tq_no} needs your approval`,
+      body: `Passed by ${profile?.name||''} · ${q.customer_name} · Tap to open & approve`,
+      recipientId: p.id,
+      relatedTable: 'tile_quotations',
+      relatedId: tileQuoteId,
+      actions: [{ label: '👁 Open & Approve', action: 'open_tq' }],
     }).catch(() => {});
   }
   showToast(`Approved ✓ — escalated to ${levelLabel} for final sign-off`, 'success');
