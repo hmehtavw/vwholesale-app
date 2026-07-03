@@ -2716,24 +2716,40 @@ async function _renderStep8Inner() {
     : (st.grout?.type !== 'none');
   const adt = ADHESIVE_TYPES?.[sz?.adhesive||'cement_mix'];
 
-  // ── Accessory prices from inventory (best-effort, non-blocking) ──
-  const _accPrices = { spacerPerPkt: 0, adhPerBag: 0, groutPerKg: 0 };
+  // ── Accessory prices — use approval-set prices first, then inventory fallback ──
+  // Prices flow: TL sets during approval → saved to accessory_prices on quote → used here
+  // If not yet approved, fall back to inventory MRP lookup
+  const _savedAccPrices = st._savedAccPrices || {}; // populated from quote record after submit
+  const _accPrices = {
+    spacerPerPkt: _savedAccPrices.spacerPerPkt || 0,
+    adhPerBag:    _savedAccPrices.adhPerBag    || 0,
+    groutPerKg:   _savedAccPrices.groutPerKg   || 0,
+    source: _savedAccPrices.spacerPerPkt ? 'approved' : 'inventory',
+  };
+  // Determine dominant grout type for inventory lookup
+  const _groutTypes = st.groutSelections
+    ? Object.values(st.groutSelections).map(g=>g?.type).filter(t=>t&&t!=='none')
+    : [st.grout?.type||'cement'];
+  const _epoxDominant = _groutTypes.filter(t=>t==='epoxy').length >= _groutTypes.filter(t=>t==='cement').length;
   try {
     const [spacerRes, adhRes, groutRes] = await Promise.all([
-      VW_DB.client.from('products').select('price,mrp').or('name.ilike.%spacer%').eq('is_active',true).limit(1),
-      VW_DB.client.from('products').select('price,mrp').or('name.ilike.%adhesive%,name.ilike.%tile fix%').eq('is_active',true).limit(1),
-      VW_DB.client.from('products').select('price,mrp').or(`name.ilike.%${st.grout?.type==='epoxy'?'epoxy':'cement'} grout%,name.ilike.%grout%`).eq('is_active',true).limit(1),
+      _accPrices.spacerPerPkt ? null : VW_DB.client.from('products').select('price,mrp').or('name.ilike.%spacer%').eq('is_active',true).limit(1),
+      _accPrices.adhPerBag    ? null : VW_DB.client.from('products').select('price,mrp').or('name.ilike.%adhesive%,name.ilike.%tile fix%,name.ilike.%tile adhesive%').eq('is_active',true).limit(1),
+      _accPrices.groutPerKg   ? null : VW_DB.client.from('products').select('price,mrp').or(_epoxDominant?'name.ilike.%epoxy%,name.ilike.%epoxy grout%':'name.ilike.%grout%').eq('is_active',true).limit(1),
     ]);
-    if (spacerRes.data?.[0]) _accPrices.spacerPerPkt = spacerRes.data[0].price || spacerRes.data[0].mrp || 0;
-    if (adhRes.data?.[0])    _accPrices.adhPerBag    = adhRes.data[0].price    || adhRes.data[0].mrp    || 0;
-    if (groutRes.data?.[0])  _accPrices.groutPerKg   = groutRes.data[0].price  || groutRes.data[0].mrp  || 0;
+    if (spacerRes?.data?.[0]) _accPrices.spacerPerPkt = spacerRes.data[0].price || spacerRes.data[0].mrp || 0;
+    if (adhRes?.data?.[0])    _accPrices.adhPerBag    = adhRes.data[0].price    || adhRes.data[0].mrp    || 0;
+    if (groutRes?.data?.[0])  _accPrices.groutPerKg   = groutRes.data[0].price  || groutRes.data[0].mrp  || 0;
   } catch(_) {}
 
-  // Compute accessory subtotal (only counts items that have a price in inventory)
-  const spacerCost = (spacerQty > 0 && _accPrices.spacerPerPkt > 0) ? spacerQty * _accPrices.spacerPerPkt : 0;
-  const adhCost    = (totalAdhBags > 0 && _accPrices.adhPerBag > 0)  ? totalAdhBags * _accPrices.adhPerBag    : 0;
-  const groutCost  = (groutKg > 0 && anyGrout && _accPrices.groutPerKg > 0) ? Math.ceil(groutKg) * _accPrices.groutPerKg : 0;
-  const accTotal   = spacerCost + adhCost + groutCost;
+  // Compute accessory costs — show TBD flag if quantity exists but price not yet set
+  const spacerCost = spacerQty > 0 ? (_accPrices.spacerPerPkt > 0 ? spacerQty * _accPrices.spacerPerPkt : -1) : 0;
+  const adhCost    = totalAdhBags > 0 ? (_accPrices.adhPerBag > 0  ? totalAdhBags * _accPrices.adhPerBag   : -1) : 0;
+  const groutCost  = (groutKg > 0 && anyGrout) ? (_accPrices.groutPerKg > 0 ? Math.ceil(groutKg) * _accPrices.groutPerKg : -1) : 0;
+  // -1 = "quantity selected but price not yet set" (TBD)
+  const accTotalKnown = [spacerCost, adhCost, groutCost].filter(c => c > 0).reduce((s,c) => s+c, 0);
+  const accHasTBD     = [spacerCost, adhCost, groutCost].some(c => c === -1);
+  const accTotal      = accTotalKnown; // only confirmed costs in grand total
 
   // ── Weight + Vehicle + Floor Delivery ──
   const weightCfg = await VW_DB.getSetting('tile_weight_config', { sizes:[] });
@@ -3263,18 +3279,25 @@ async function _renderStep8Inner() {
       <span style="color:var(--text2)">Add-ons Subtotal</span><span style="color:var(--gold)">₹${extraTotal.toLocaleString('en-IN')}</span>
     </div>`:``}
 
-    ${accTotal>0?`
+    ${(accTotal > 0 || accHasTBD) ? `
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🧰 Installation Materials</div>
-    ${spacerCost>0?row('📦 Tile Spacers',`${spacerQty} pkt${spacerQty>1?'s':''} × ₹${_accPrices.spacerPerPkt}/pkt`,spacerCost,false):''}
-    ${adhCost>0?row('🧲 Tile Adhesive',`${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`,adhCost,false):''}
-    ${groutCost>0?(
-      totalCementKg>0&&totalEpoxyKg>0
-        ? row('Grout (cement + epoxy)',`${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy`,groutCost,false)
-        : row(totalEpoxyKg>0?'⭐ Epoxy Grout':'🪨 Cement Grout',`${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`,groutCost,false)
-    ):''}
+    ${spacerCost > 0  ? row('📦 Tile Spacers',    `${spacerQty} pkt${spacerQty>1?'s':''} × ₹${_accPrices.spacerPerPkt}/pkt`, spacerCost, false) : ''}
+    ${spacerCost === -1 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>📦 Tile Spacers</span><span style="color:var(--text3);font-size:11px">${spacerQty} pkts · price TBD</span></div>` : ''}
+    ${adhCost > 0     ? row('🧲 Tile Adhesive',   `${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`, adhCost, false) : ''}
+    ${adhCost === -1  ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>🧲 Tile Adhesive</span><span style="color:var(--text3);font-size:11px">${totalAdhBags} bags · price TBD</span></div>` : ''}
+    ${groutCost > 0 ? (
+      totalCementKg > 0 && totalEpoxyKg > 0
+        ? row('Grout (cement + epoxy)', `${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy`, groutCost, false)
+        : row(totalEpoxyKg > 0 ? '⭐ Epoxy Grout' : '🪨 Cement Grout', `${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`, groutCost, false)
+    ) : ''}
+    ${groutCost === -1 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>${totalEpoxyKg>0?'⭐ Epoxy Grout':'🪨 Cement Grout'}</span><span style="color:var(--text3);font-size:11px">${Math.ceil(groutKg)} kg · price TBD</span></div>` : ''}
+    ${accTotal > 0 ? `
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Materials Subtotal</span><span style="color:var(--gold)">₹${accTotal.toLocaleString('en-IN')}</span>
-    </div>`:``}
+    </div>` : ''}
+    ${accHasTBD ? `<div style="font-size:10px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:6px;padding:6px 8px;margin-bottom:8px">
+      ⚠️ Some material prices not yet set — TL will set during approval. Final total may be higher.
+    </div>` : ''}` : ''}
 
     ${(effectiveTransport+effectiveLoading+effectiveFloor)>0?`
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚛 Transport & Delivery</div>
@@ -3288,7 +3311,7 @@ async function _renderStep8Inner() {
     <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:rgba(245,200,66,0.1);border:2px solid var(--gold-border);border-radius:10px;margin-top:4px">
       <div>
         <div style="font-size:14px;font-weight:800;color:var(--gold)">GRAND TOTAL</div>
-        <div style="font-size:10px;color:var(--text3)">GST inclusive · All charges</div>
+        <div style="font-size:10px;color:var(--text3)">GST inclusive · All charges${accHasTBD?' · excl. material prices':''}</div>
       </div>
       <div style="font-size:22px;font-weight:800;color:var(--gold)">₹${grandTotal.toLocaleString('en-IN')}</div>
     </div>
@@ -6147,6 +6170,7 @@ async function tqResumeDraft(id) {
     step: Math.min(8, Math.max(1, q.draft_step||1)),
     breakagePct: q.breakage_pct ?? 10,
     _savedQuoteId: id, _draftId: (q.status==='draft' ? id : null), _approvalStatus: q.approval_status,
+    _savedAccPrices: q.accessory_prices || {},
   };
   if (typeof closeSheet === 'function') closeSheet();
   navigateTo('tiles');
