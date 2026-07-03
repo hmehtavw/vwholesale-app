@@ -3341,7 +3341,7 @@ async function _renderStep8Inner() {
     ${(effectiveTransport+effectiveLoading+effectiveFloor)>0?`
     <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🚛 Transport & Delivery</div>
     ${effectiveTransport>0?row(autoVehicle?.icon+' '+(autoVehicle?.label||'Transport'),distKm<=freeKm?`Within ${freeKm}km — min charge`:`${distKm}km · ₹${minCharge} + ₹${perKm}/km beyond ${freeKm}km${transportOverride!=null?' (manual override)':''}`,effectiveTransport,false):''}
-    ${effectiveLoading>0?row('🏗 Loading + Unloading',`${boxesNeeded} boxes × ₹${loadingRatePerBox}/box (load+unload${st.delivery?.beyondFt?'+beyond':''}${st.delivery?.floors?.length?' +floor carry':''})`,effectiveLoading,false):''}
+    ${effectiveLoading>0?row(st.delivery?.type==='delivery'?'🏗 Loading + Unloading':'🏗 Loading at Store',`${boxesNeeded} boxes × ₹${loadingRatePerBox}/box${st.delivery?.type==='delivery'?' (load+unload'+(st.delivery?.beyondFt?'+beyond':'')+(st.delivery?.floors?.length?' +floor carry':'')+')':', store loading only'}`,effectiveLoading,false):''}
     ${effectiveFloor>0?row('🏢 Floor Delivery',`${(st.delivery.floors||[]).map(f=>`${f.boxes||0} boxes to ${f.floor==='G'?'Ground':f.floor+'st/nd/rd floor'}`).join(' + ')}`,effectiveFloor,false):''}
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Delivery Subtotal</span><span style="color:var(--gold)">₹${(effectiveTransport+effectiveLoading+effectiveFloor).toLocaleString('en-IN')}</span>
@@ -5167,20 +5167,35 @@ function _tqBuildApprovalBOM(q) {
   const slots = Object.entries(q.tile_selections||{});
   if (!slots.length) return '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No tile details — enter price below.</div>';
 
+  // Pre-compute sqft per slot from rooms area data (Full TQ has this; QQ has _qqBoxes)
+  const slotSqft = {};
+  (q.rooms||[]).forEach(function(r) {
+    (r.areas||[]).forEach(function(a) {
+      var sid = a.slotId || (r.id + '_' + (a.subType||'floor'));
+      slotSqft[sid] = (slotSqft[sid]||0) + (a.sqft||0);
+    });
+    if (!slotSqft[r.id]) slotSqft[r.id] = (r.areas||[]).reduce(function(s,a){return s+(a.sqft||0);},0);
+  });
+
   // Merge same tile_name + size.mm across all slots into one row
   const groups = {};
   slots.forEach(function(entry) {
     var slotId = entry[0], sel = entry[1];
     if (!sel || !sel.size || !sel.size.mm || !sel.tile_name) return;
     var key = sel.tile_name + '|' + sel.size.mm;
-    var mmParts = sel.size.mm.split('\u00d7').map(Number);
+    var mmParts = sel.size.mm.split('×').map(Number);
     var mmH = mmParts[0], mmW = mmParts[1];
-    var spb = tileSqftPerTile(mmH, mmW) * (sel.size.tilesPerBox||6);
+    var tilesPerBox = sel.size.tilesPerBox || (mmH>=600&&mmW>=1200?2:mmH>=600?4:6);
+    var spb = tileSqftPerTile(mmH, mmW) * tilesPerBox;
     var qp  = ((q.quoted_prices||{})[slotId]) || {};
     var boxP  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
     var sqftP = qp.pricePerSqft>0 ? qp.pricePerSqft : (boxP>0&&spb>0) ? parseFloat((boxP/spb).toFixed(1)) : 0;
-    if (!groups[key]) groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, slotIds:[], initBox:boxP, initSqft:sqftP };
-    groups[key].totalBoxes += (sel._qqBoxes || 0);
+    // Box count: QQ stores _qqBoxes; Full TQ calculates from room area data
+    var areaSqft = slotSqft[slotId] || slotSqft[slotId.replace(/_floor$|_wall$/,'')] || sel._sqft || 0;
+    var boxes = sel._qqBoxes > 0 ? sel._qqBoxes : (spb > 0 && areaSqft > 0 ? Math.ceil(areaSqft / spb) : 0);
+    if (!groups[key]) groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, totalSqft:0, slotIds:[], initBox:boxP, initSqft:sqftP };
+    groups[key].totalBoxes += boxes;
+    groups[key].totalSqft  += areaSqft;
     groups[key].slotIds.push(slotId);
     if (boxP > groups[key].initBox) { groups[key].initBox = boxP; groups[key].initSqft = sqftP; }
   });
@@ -5189,15 +5204,16 @@ function _tqBuildApprovalBOM(q) {
     return '<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
         '<div><div style="font-size:13px;font-weight:700">' + g.tile_name + '</div>' +
-        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' \u00b7 ' + g.size_mm + '</div></div>' +
-        (g.totalBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + g.totalBoxes + ' boxes</div>' : '') +
+        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' · ' + g.size_mm + (g.totalSqft>0?' · '+g.totalSqft.toFixed(1)+' sqft':'') + '</div></div>' +
+        (g.totalBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + g.totalBoxes + ' boxes</div>' : '<div style="font-size:11px;color:var(--text3)">boxes TBD</div>') +
       '</div>' +
+      (g.initBox===0 ? '<div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px dashed var(--gold-border);border-radius:6px;padding:5px 8px;margin-bottom:8px">💡 No price set yet — enter ₹/box or ₹/sqft below to set price</div>' : '') +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / BOX</label>' +
-        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0"' +
+        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">₹ / BOX</label>' +
+        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0" placeholder="Enter ₹/box"' +
           ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '" data-slots="' + g.slotIds.join(',') + '"' +
           ' style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:15px;font-weight:800;text-align:center;box-sizing:border-box"' +
-          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\'})(this)"></div>' +
+          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\';})(this)"></div>' +
         '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / SQFT</label>' +
         '<input type="number" id="tq-sqft-' + idx + '" value="' + (g.initSqft||'') + '" step="0.5" min="0"' +
           ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '"' +
