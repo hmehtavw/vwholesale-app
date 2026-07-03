@@ -2212,8 +2212,8 @@ function _renderStep7() {
     <h3 class="card-title">Grout & Epoxy Selection</h3>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button onclick="VW_TILES.tqSetGroutType('cement')"
-        style="flex:1;padding:14px;border-radius:12px;border:${grout.type!=='epoxy'?'2px solid var(--gold)':'1px solid var(--border)'};background:${grout.type!=='epoxy'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer">
-        <div style="font-size:13px;font-weight:700;color:${grout.type!=='epoxy'?'var(--gold)':'var(--text)'}">Cement Grout</div>
+        style="flex:1;padding:14px;border-radius:12px;border:${grout.type==='cement'?'2px solid var(--gold)':'1px solid var(--border)'};background:${grout.type==='cement'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer">
+        <div style="font-size:13px;font-weight:700;color:${grout.type==='cement'?'var(--gold)':'var(--text)'}">Cement Grout</div>
         <div style="font-size:11px;color:var(--text3)">Standard · ₹80–120/kg · Easy repair</div>
       </button>
       <button onclick="VW_TILES.tqSetGroutType('epoxy')"
@@ -2222,6 +2222,11 @@ function _renderStep7() {
         <div style="font-size:11px;color:var(--text3)">Waterproof · Anti-fungal · Luxury finish</div>
       </button>
     </div>
+    <button onclick="VW_TILES.tqSetGroutType('none')"
+      style="width:100%;padding:10px;border-radius:10px;border:${grout.type==='none'?'2px solid var(--text3)':'1px solid var(--border)'};background:${grout.type==='none'?'var(--bg3)':'var(--bg2)'};cursor:pointer;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:${grout.type==='none'?'var(--text2)':'var(--text3)'}">⊘ Skip / Not Required</div>
+      <div style="font-size:10px;color:var(--text3)">Customer will arrange separately · Not included in quotation</div>
+    </button>
 
     ${suggestEpoxy && grout.type !== 'epoxy' ? `
     <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
@@ -2229,6 +2234,10 @@ function _renderStep7() {
       <div style="font-size:11px;color:var(--text2);margin-top:2px">Waterproof, anti-stain, and longer lasting.</div>
     </div>` : ''}
 
+    ${grout.type === 'none' ? `
+    <div style="background:var(--bg2);border-radius:10px;padding:14px;text-align:center;color:var(--text3);font-size:12px;margin-bottom:10px">
+      ⊘ Grout not included in this quotation — customer will arrange separately
+    </div>` : `
     <div style="font-size:12px;font-weight:600;margin-bottom:8px">Select Grout Color</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">
       ${COLORS.map(c => `
@@ -2238,7 +2247,6 @@ function _renderStep7() {
         <div style="font-size:10px;color:${grout.color===c.id?'var(--gold)':'var(--text2)'};font-weight:${grout.color===c.id?700:400}">${c.label}</div>
       </button>`).join('')}
     </div>
-
     <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;margin-bottom:6px">Grout Calculation (Saint-Gobain method)</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
@@ -2257,7 +2265,7 @@ function _renderStep7() {
         </div>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">Includes 5% wastage. Confirm quantity with installer.</div>
-    </div>
+    </div>`}
   </div>
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Add-ons</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
@@ -2919,7 +2927,7 @@ async function _renderStep8Inner() {
         ${spacerQty>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Spacers</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${_tqState.spacerType==='clip'?`${spacerQty}+${spacerQty}`:`${spacerQty} packets`}</div>${_tqState.spacerType==='clip'?`<div style="font-size:9px;color:var(--text3)">clip + plug</div>`:''}</div>`:""}
         ${totalAdhBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Adhesive</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${totalAdhBags} bags</div></div>`:""}
         ${totalCemBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Cement+Sand</div><div style="font-size:13px;font-weight:800;color:var(--gold)">${totalCemBags}+${totalSandBags} bags</div></div>`:""}
-        ${groutKg>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout/Epoxy</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div></div>`:""}
+        ${(groutKg>0 && st.grout?.type !== 'none')?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout/Epoxy</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div></div>`:""}
       </div>
     </div>
     ${hasPricing ? `
@@ -2950,6 +2958,31 @@ async function _renderStep8Inner() {
       <span>Products Subtotal</span><span style="color:var(--gold)">₹${extraTotal.toLocaleString('en-IN')}</span>
     </div>
   </div>` : ''}
+  ${(() => {
+    const addons = st.addons || {};
+    const addonDefs = [
+      { id:'cleaner', icon:'🧴', label:'Tile Cleaner', unit:'bottle', note:'Post-installation cleaning' },
+      { id:'sponge',  icon:'🧽', label:'Grouting Sponge', unit:'pcs', note:'For grout application' },
+      { id:'cloth',   icon:'🧻', label:'Waste Cloth Packet', unit:'packet', note:'Wiping & finishing' },
+    ];
+    const selected = addonDefs.filter(a => addons[a.id]);
+    if (!selected.length) return '';
+    return `
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🧰 Installation Accessories</h3>
+    ${selected.map(a=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600">${a.icon} ${a.label}</div>
+        <div style="font-size:11px;color:var(--text3)">${a.note} · Price set at billing</div>
+      </div>
+      <span style="font-size:12px;font-weight:600;color:var(--text3);background:var(--bg2);padding:3px 8px;border-radius:6px">Included</span>
+    </div>`).join('')}
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;padding:6px 8px;background:var(--bg2);border-radius:6px">
+      💡 Prices for accessories confirmed by cashier at point of sale
+    </div>
+  </div>`;
+  })()}
   <!-- AI ROOM VISUALIZER TEASER -->
   <div class="card" style="margin-bottom:10px;background:linear-gradient(135deg,rgba(96,165,250,0.08),rgba(139,92,246,0.06));border-color:rgba(96,165,250,0.3)">
     <div style="display:flex;align-items:center;gap:10px">
@@ -4885,8 +4918,15 @@ async function tqSubmitForApproval() {
           const sel = st.tileSelections?.[slot.id];
           if (!sel?.size?.mm) return;
           const [mmL,mmW] = sel.size.mm.split('×').map(Number);
-          const sqftPerBox = tileSqftPerTile(mmL, mmW) * (sel.size.tilesPerBox||4);
-          const boxes = sqftPerBox > 0 ? Math.ceil(slot.sqft/sqftPerBox) : 0;
+          const sqftPerTile = tileSqftPerTile(mmL, mmW);
+          // Use same box count logic as summary tileTotal: prefer design → QQ → weightCfg
+          const cfgEntry = (weightCfgSub.sizes||[]).find(s=>s.mm===sel.size.mm);
+          const tilesPerBox = cfgEntry?.tiles_per_box || (sqftPerTile<0.5?25:sqftPerTile<1.5?10:sqftPerTile<2.5?6:sqftPerTile<5?4:2);
+          const dsBoxes = st.design?.[slot.id]?.result?.totalBoxes;
+          const qqBoxes = sel._qqBoxes;
+          const boxes = (qqBoxes > 0) ? qqBoxes
+            : (dsBoxes != null && dsBoxes > 0) ? dsBoxes
+            : (sqftPerTile * tilesPerBox > 0 ? Math.ceil(slot.sqft / (sqftPerTile * tilesPerBox)) : 0);
           t += qp.pricePerBox * boxes;
         }
       });
@@ -4963,6 +5003,22 @@ async function tqSubmitForApproval() {
     // Start the escalation chain: TL/SrExec → FloorMgr → StoreMgr → Management (30s each)
     await VW_ESCALATION.startTileQuoteApproval(data.id);
 
+    // WhatsApp notification to TL / Sr Executive immediately on submit
+    try {
+      const { data: tlProfiles } = await VW_DB.client
+        .from('profiles')
+        .select('name,phone')
+        .in('role', ['tl', 'sr_executive', 'floor_manager'])
+        .eq('status', 'approved');
+      if (tlProfiles?.length) {
+        const grandTotalFmt = (_submitGrandTotal > 0 ? `₹${Math.round(_submitGrandTotal).toLocaleString('en-IN')}` : 'Price TBD');
+        const waMsg = `*V Wholesale — TQ Approval Needed* 📋\n\nQuote: ${tqNo}\nCustomer: ${st.customer.name}${st.customer.phone ? ' · ' + st.customer.phone : ''}\nArea: ${_tqTotalSqft().toFixed(0)} sqft\nValue: ${grandTotalFmt}\nBy: ${profile?.name || 'Executive'}\n\nPlease approve at ${window.location.origin}`;
+        for (const p of tlProfiles) {
+          if (p.phone) window.open(`https://wa.me/91${p.phone.replace(/\D/g,'')}?text=${encodeURIComponent(waMsg)}`, '_blank');
+        }
+      }
+    } catch(_) {} // non-blocking
+
     if (st.laborRequired) await postLaborFromQuotation(data.id, tqNo);
 
     await auditLog('tile_quotation_submitted', 'tile_quotation', data.id, st.customer.name, null,
@@ -4974,6 +5030,7 @@ async function tqSubmitForApproval() {
     _tqState = { step:1, customer:{name:'',phone:'',site:'',id:null}, rooms:[], currentFlat:'', tileSelections:{}, spacerSelections:{}, adhesiveSelections:{}, beading:[], groutSelections:{}, floorTraps:[], soffit:{enabled:false}, delivery:{type:'self',floors:[],beyondFt:false,distanceKm:0}, addons:{}, laborRequired:null };
     // Prevent realtime liveRefresh from overwriting the success screen
     if (typeof window !== 'undefined') window.currentPage = 'tile_quote_submitted';
+    if (typeof currentPage !== 'undefined') currentPage = 'tile_quote_submitted';
     const appDiv = document.getElementById('app-content');
     if (appDiv) appDiv.innerHTML = `
       <div style="padding:24px;text-align:center;max-width:400px;margin:0 auto">
