@@ -3006,7 +3006,7 @@ async function _renderStep8Inner() {
         ${spacerQty>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Spacers</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${_tqState.spacerType==='clip'?`${spacerQty}+${spacerQty}`:`${spacerQty} packets`}</div>${_tqState.spacerType==='clip'?`<div style="font-size:9px;color:var(--text3)">clip + plug</div>`:''}</div>`:""}
         ${totalAdhBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Adhesive</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${totalAdhBags} bags</div></div>`:""}
         ${totalCemBags>0?`<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Cement+Sand</div><div style="font-size:13px;font-weight:800;color:var(--gold)">${totalCemBags}+${totalSandBags} bags</div></div>`:""}
-        ${anyGrout && groutKg>0 ? `<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div>${totalCementKg>0&&totalEpoxyKg>0?`<div style="font-size:9px;color:var(--text3)">${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy</div>`:''}</div>`:""}
+        ${anyGrout && groutKg>0 ? `<div style="text-align:center;background:var(--bg2);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--text3)">Grout</div><div style="font-size:15px;font-weight:800;color:var(--gold)">${groutKg} kg</div>${totalGroutCementKg>0&&totalGroutEpoxyKg>0?`<div style="font-size:9px;color:var(--text3)">${totalGroutCementKg}kg cement · ${totalGroutEpoxyKg}kg epoxy</div>`:''}</div>`:""}
       </div>
     </div>
     ${hasPricing ? `
@@ -3325,11 +3325,11 @@ async function _renderStep8Inner() {
     ${adhCost > 0     ? row('🧲 Tile Adhesive',   `${totalAdhBags} bag${totalAdhBags>1?'s':''} × ₹${_accPrices.adhPerBag}/bag`, adhCost, false) : ''}
     ${adhCost === -1  ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>🧲 Tile Adhesive</span><span style="color:var(--text3);font-size:11px">${totalAdhBags} bags · price TBD</span></div>` : ''}
     ${groutCost > 0 ? (
-      totalCementKg > 0 && totalEpoxyKg > 0
-        ? row('Grout (cement + epoxy)', `${totalCementKg}kg cement · ${totalEpoxyKg}kg epoxy`, groutCost, false)
-        : row(totalEpoxyKg > 0 ? '⭐ Epoxy Grout' : '🪨 Cement Grout', `${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`, groutCost, false)
+      totalGroutCementKg > 0 && totalGroutEpoxyKg > 0
+        ? row('Grout (cement + epoxy)', `${totalGroutCementKg}kg cement · ${totalGroutEpoxyKg}kg epoxy`, groutCost, false)
+        : row(totalGroutEpoxyKg > 0 ? '⭐ Epoxy Grout' : '🪨 Cement Grout', `${Math.ceil(groutKg)} kg × ₹${_accPrices.groutPerKg}/kg`, groutCost, false)
     ) : ''}
-    ${groutCost === -1 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>${totalEpoxyKg>0?'⭐ Epoxy Grout':'🪨 Cement Grout'}</span><span style="color:var(--text3);font-size:11px">${Math.ceil(groutKg)} kg · price TBD</span></div>` : ''}
+    ${groutCost === -1 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>${totalGroutEpoxyKg>0?'⭐ Epoxy Grout':'🪨 Cement Grout'}</span><span style="color:var(--text3);font-size:11px">${Math.ceil(groutKg)} kg · price TBD</span></div>` : ''}
     ${accTotal > 0 ? `
     <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12px;font-weight:700;margin-bottom:8px">
       <span style="color:var(--text2)">Materials Subtotal</span><span style="color:var(--gold)">₹${accTotal.toLocaleString('en-IN')}</span>
