@@ -4663,13 +4663,47 @@ async function tqBack() {
 async function _tqRequestEdit() {
   const id = _tqState._savedQuoteId || _tqState._draftId;
   if (!id) {
-    // Quote not yet saved — just clear approval status and let them edit freely
     _tqState._approvalStatus = null;
     _rerenderStep8();
     showToast('Quote not yet saved — edit freely', 'info');
     return;
   }
-  // Delegate to the unified edit flow
+
+  // If previously approved/submitted — ask for reason and save a revision snapshot
+  if (_tqState._approvalStatus && _tqState._approvalStatus !== 'draft') {
+    const reason = prompt('Reason for editing this quotation? (This will be recorded in revision history)');
+    if (reason === null) return; // cancelled
+    const prof = VW_AUTH.getCurrentProfile();
+
+    // Save current state as a revision snapshot BEFORE editing
+    const { data: current } = await VW_DB.client.from('tile_quotations')
+      .select('*').eq('id', id).single().catch(()=>({ data: null }));
+
+    if (current) {
+      const { data: lastRev } = await VW_DB.client
+        .from('tq_revisions').select('version').eq('tq_id', id)
+        .order('version', { ascending: false }).limit(1).single()
+        .catch(()=>({ data: null }));
+
+      const nextVersion = (lastRev?.version || current.version || 1);
+      await VW_DB.client.from('tq_revisions').insert({
+        tq_id: id,
+        tq_no: current.tq_no,
+        version: nextVersion,
+        snapshot: current,
+        changed_by: prof?.id || null,
+        changed_by_name: prof?.name || '',
+        change_reason: reason,
+      }).catch(()=>{});
+
+      // Bump version on the live quote
+      await VW_DB.client.from('tile_quotations')
+        .update({ version: nextVersion + 1, approval_status: 'draft' })
+        .eq('id', id).catch(()=>{});
+    }
+    showToast(`Revision v${(current?.version||1)} saved — editing now`, 'info');
+  }
+
   await tqEditQuote(id);
 }
 
@@ -5069,6 +5103,179 @@ ${grandTotal>0?`
 </body>
 </html>`;
 }
+
+async function openTileQuote(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  // Quick Quote estimates always open in QQ flow, never the TQ wizard
+  if (q.source === 'quick_quote') { return qqEditExisting(id); }
+  // Full TQ drafts open back in the wizard at the step they left off
+  if (q.status === 'draft' || q.approval_status === 'draft') { return tqResumeDraft(id); }
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+
+  // Determine if I can action the current pending step
+  const log = q.approval_log || [];
+  const lastStep = log[log.length - 1];
+  const myAllowedRoles = lastStep ? ((window.TQ_LEVEL_ROLES||{})[lastStep.level] || [lastStep.level]) : [];
+  const canIAction = q.approval_status === 'pending_approval' && lastStep?.status === 'pending' &&
+    (myRole === 'admin' || myAllowedRoles.includes(myRole));
+  const isCashier = ['admin','accounts'].includes(myRole);
+
+  // Pre-compute approval BOM HTML (async — needs tier price fetch)
+  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, lastStep?.level || myRole) : '';
+
+  const sheet = document.getElementById('bottom-sheet');
+  const totalSqft = parseFloat(q.total_area_sqft||0);
+  const pricePerSqft = q.quoted_price_per_sqft || 0;
+  const pricePerBox = q.quoted_price_per_box || 0;
+  const estTotal = pricePerSqft > 0 ? Math.round(totalSqft * pricePerSqft) : 0;
+
+  // Store quote ID for approve/reject/print functions
+  _tqState._reviewingQuoteId = id;
+  _tqState._savedQuoteId = id;
+  _tqState._approvalStatus = q.approval_status;
+
+  // Build escalation chain timeline
+  const chainTimeline = log.length ? `
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Approval Chain</div>
+    ${log.map((step, idx) => {
+      const isLast = idx === log.length - 1;
+      const stepLabel = LEVEL_LABELS_TQ[step.level] || step.level;
+      const statusIcon = step.status === 'approved' ? '✅' : step.status === 'rejected' ? '❌' : step.status === 'timeout' ? '⏭' : isLast ? '⏳' : '○';
+      const statusColor = step.status === 'approved' ? 'var(--green)' : step.status === 'rejected' ? 'var(--red)' : step.status === 'timeout' ? 'var(--text3)' : isLast ? 'var(--gold)' : 'var(--text3)';
+      const approverNames = step.approverNames?.length ? step.approverNames.join(', ') : step.roles?.join('/') || '';
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;${idx < log.length-1 ? 'border-bottom:1px solid var(--border2)' : ''}">
+        <span style="font-size:14px;flex-shrink:0">${statusIcon}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:${statusColor}">${stepLabel}</div>
+          <div style="font-size:10px;color:var(--text3)">${approverNames}${step.approvedBy ? ' · Approved by '+step.approvedBy : ''}${step.rejectedBy ? ' · Rejected by '+step.rejectedBy : ''}${step.editedPricePerSqft ? ` · Price: ₹${step.editedPricePerSqft}/sqft` : ''}</div>
+          ${step.rejectReason ? `<div style="font-size:10px;color:var(--red)">${step.rejectReason}</div>` : ''}
+        </div>
+        <div style="font-size:10px;color:var(--text3)">${new Date(step.notifiedAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <h3 style="margin:0">${q.customer_name}</h3>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${q.tq_no} · ${new Date(q.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--bg2)">
+        ${q.approval_status?.replace('_',' ')||'draft'}
+      </span>
+    </div>
+
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Site</span><span>${q.site_address||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Total Area</span><span style="font-weight:700">${totalSqft.toFixed(1)} sqft</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Tile Size</span><span>${q.selected_size?.label||'—'}</span></div>
+      ${pricePerSqft>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Price</span><span style="font-weight:700;color:var(--gold)">₹${pricePerSqft}/sqft${pricePerBox?` · ₹${pricePerBox}/box`:''}</span></div>`:''}
+      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text3)">Tile Subtotal</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
+      ${q.price_edit_note?`<div style="font-size:11px;color:var(--gold);padding:4px 0">Note: ${q.price_edit_note}</div>`:''}
+      ${(() => {
+        const extras = q.extra_products || [];
+        if (!extras.length) return '';
+        const extTotal = extras.reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🛒 Add-ons</div>
+          ${extras.map(p=>`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px"><span style="color:var(--text2)">${p.name} ×${p.qty||1}</span><span>₹${Math.round((p.price||0)*(p.qty||1)).toLocaleString('en-IN')}</span></div>`).join('')}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Add-ons</span><span style="color:var(--gold)">₹${extTotal.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${(() => {
+        const del = q.delivery || {};
+        const sT = del.transportCost||del.transport_cost||0;
+        const sL = del.loadingCost||del.loading_cost||0;
+        const sF = del.floorCost||del.floor_cost||0;
+        const dT = sT+sL+sF;
+        if (!dT) return '';
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🚛 Delivery</div>
+          ${sT?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Transport</span><span>₹${sT.toLocaleString('en-IN')}</span></div>`:''}
+          ${sL?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Loading + Unloading</span><span>₹${sL.toLocaleString('en-IN')}</span></div>`:''}
+          ${sF?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Floor Delivery</span><span>₹${sF.toLocaleString('en-IN')}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Delivery</span><span style="color:var(--gold)">₹${dT.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${q.grand_total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:800;background:rgba(245,200,66,0.08);margin:-2px -6px;padding:8px 6px;border-radius:7px;margin-top:4px"><span style="color:var(--gold)">GRAND TOTAL</span><span style="color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span></div>`:''}
+      ${q.rejection_reason?`<div style="color:var(--red);padding:4px 0">Rejected: ${q.rejection_reason}</div>`:''}
+      ${q.advance_amount>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Advance</span><span style="font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} · ${q.advance_receipt_no}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Submitted by</span><span>${q.created_by||'—'}</span></div>
+      ${q.version>1?`<div style="display:flex;justify-content:space-between;padding:3px 0;margin-top:4px"><span style="color:var(--text3)">Version</span><span style="font-weight:700;color:var(--gold)">v${q.version} (revised)</span></div>`:''}
+    </div>
+
+    ${await (async ()=>{
+      if (!q.id) return '';
+      const { data: revs } = await VW_DB.client.from('tq_revisions')
+        .select('version,changed_by_name,change_reason,created_at')
+        .eq('tq_id', q.id).order('version', { ascending: false }).limit(10)
+        .catch(()=>({ data: [] }));
+      if (!revs?.length) return '';
+      return '<div style="margin-bottom:12px">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">📋 Revision History</div>' +
+        revs.map(r=>'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border2);font-size:11px">' +
+          '<div><span style="font-weight:700;color:var(--gold)">v'+r.version+'</span>' +
+          '<span style="color:var(--text3);margin-left:6px">'+(r.changed_by_name||'—')+'</span>' +
+          (r.change_reason?'<div style="font-size:10px;color:var(--text3);margin-top:1px">&quot;'+r.change_reason+'&quot;</div>':'') +
+          '</div><div style="color:var(--text3);font-size:10px">'+new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>' +
+          '</div>').join('') +
+        '</div>';
+    })()}
+
+    ${chainTimeline}
+
+    ${canIAction ? `
+    <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
+      ${approvalBomHtml}
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px">Price note / reason (optional)</label>
+        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer · Premium tile" value="${q.price_edit_note||''}">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
+          ✅ Approve${lastStep.level !== 'management' ? ' & Pass Up' : ' — Final'}
+        </button>
+        <button onclick="VW_TILES.tqReject()" style="flex:1;padding:13px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+          ❌ Reject
+        </button>
+      </div>
+    </div>` : ''}
+
+    ${(isCashier || myRole === 'admin') && q.approval_status === 'approved' && !q.advance_amount ? `
+    <button class="btn-primary full-width" style="background:var(--gold);color:#000;font-size:14px;padding:14px;margin-bottom:8px" onclick="closeSheet();VW_TILES.tqCollectAdvance(${id})">
+      💰 Collect Advance & Hold Stock
+    </button>` : ''}
+
+    ${q.advance_amount > 0 ? `
+    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>` : ''}
+
+    ${q.approval_status === 'approved' ? `
+    <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Print & Share enabled after final approval
+    </div>`}
+
+    ${!q.advance_amount ? `
+    <button onclick="VW_TILES.tqEditQuote(${id})" style="width:100%;padding:11px;border-radius:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      ✏️ Edit Quote
+    </button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Editing locked — advance collected
+    </div>`}
+    <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+// Resume an auto-saved draft tile quotation at the step where it was left off.
 
 async function tqPrintFromId(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
