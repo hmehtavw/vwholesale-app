@@ -1663,7 +1663,7 @@ function _renderStep4() {
     if (!_tqState.adhesiveSelections) _tqState.adhesiveSelections = {};
     _tqState.adhesiveSelections[slot.id] = { method, adhBags, cemBags, sandBags };
 
-    return { room: r, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags };
+    return { room: r, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, isNone, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags };
   });
 
   // Aggregate totals from slots
@@ -1684,7 +1684,7 @@ function _renderStep4() {
       Pick adhesive or cement mortar for each area. Default is ready-mix adhesive; switch any area to traditional cement + sand.
     </p>
 
-    ${roomAdh.map(({room, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags}) => `
+    ${roomAdh.map(({room, slot, sz, sizeMm, isLarge, isWall, isFloor, roomSqft, wallSqft, floorSqft, method, isNone, adhType, floorCoverage, wallCoverage, adhBags, cemBags, sandBags}) => `
     <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
