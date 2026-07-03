@@ -5177,11 +5177,23 @@ async function tqSaveQuote() { return tqSubmitForApproval(); }
 
 // ───── APPROVER: tqApprove / tqReject — delegate to escalation engine ────────
 // Helper: build per-tile price BOM for approval screen
-function _tqBuildApprovalBOM(q) {
+async function _tqBuildApprovalBOM(q, approverLevel) {
   const slots = Object.entries(q.tile_selections||{});
   if (!slots.length) return '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No tile details — enter price below.</div>';
 
-  // Pre-compute sqft per slot from rooms area data (Full TQ has this; QQ has _qqBoxes)
+  // Which tiers can this approver offer?
+  const tierRights = {
+    tl:            ['tier1'],
+    sr_executive:  ['tier1'],
+    floor_manager: ['tier1','tier2'],
+    store_manager: ['tier1','tier2','tier3'],
+    management:    ['tier1','tier2','tier3','tier4'],
+    admin:         ['tier1','tier2','tier3','tier4'],
+  };
+  const myTiers = tierRights[approverLevel] || [];
+  const canManualOverride = ['management','admin'].includes(approverLevel);
+
+  // Pre-compute sqft per slot from rooms area data
   const slotSqft = {};
   (q.rooms||[]).forEach(function(r) {
     (r.areas||[]).forEach(function(a) {
@@ -5193,38 +5205,98 @@ function _tqBuildApprovalBOM(q) {
 
   // Merge same tile_name + size.mm across all slots into one row
   const groups = {};
+  const productIds = [];
   slots.forEach(function(entry) {
     var slotId = entry[0], sel = entry[1];
     if (!sel || !sel.size || !sel.size.mm || !sel.tile_name) return;
     var key = sel.tile_name + '|' + sel.size.mm;
-    var mmParts = sel.size.mm.split('×').map(Number);
+    var mmParts = sel.size.mm.split('\u00d7').map(Number);
     var mmH = mmParts[0], mmW = mmParts[1];
     var tilesPerBox = sel.size.tilesPerBox || (mmH>=600&&mmW>=1200?2:mmH>=600?4:6);
     var spb = tileSqftPerTile(mmH, mmW) * tilesPerBox;
     var qp  = ((q.quoted_prices||{})[slotId]) || {};
     var boxP  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
     var sqftP = qp.pricePerSqft>0 ? qp.pricePerSqft : (boxP>0&&spb>0) ? parseFloat((boxP/spb).toFixed(1)) : 0;
-    // Box count: QQ stores _qqBoxes; Full TQ calculates from room area data
     var areaSqft = slotSqft[slotId] || slotSqft[slotId.replace(/_floor$|_wall$/,'')] || sel._sqft || 0;
     var boxes = sel._qqBoxes > 0 ? sel._qqBoxes : (spb > 0 && areaSqft > 0 ? Math.ceil(areaSqft / spb) : 0);
-    if (!groups[key]) groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, totalSqft:0, slotIds:[], initBox:boxP, initSqft:sqftP };
+    if (!groups[key]) {
+      groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, totalSqft:0, slotIds:[], initBox:boxP, initSqft:sqftP, productId: sel.product_id||sel.productId||null };
+      if (sel.product_id||sel.productId) productIds.push(sel.product_id||sel.productId);
+    }
     groups[key].totalBoxes += boxes;
     groups[key].totalSqft  += areaSqft;
     groups[key].slotIds.push(slotId);
     if (boxP > groups[key].initBox) { groups[key].initBox = boxP; groups[key].initSqft = sqftP; }
   });
 
+  // Fetch tier prices for all tile products (if any have product IDs)
+  const tierPrices = {};
+  if (productIds.length && myTiers.length) {
+    try {
+      const { data: prods } = await VW_DB.client
+        .from('products')
+        .select('id,mrp,price,vwp,tier1_price,tier2_price,tier3_price,tier4_price')
+        .in('id', productIds);
+      (prods||[]).forEach(p => { tierPrices[p.id] = p; });
+    } catch(_) {}
+  }
+
+  const TIER_LABELS = { tier1:'Tier 1', tier2:'Tier 2', tier3:'Tier 3', tier4:'Tier 4' };
+
   return Object.values(groups).map(function(g, idx) {
+    const tp = g.productId ? tierPrices[g.productId] : null;
+    const mrp = tp?.mrp || 0;
+    const vwp = tp?.vwp || tp?.price || 0;
+
+    // Build tier buttons
+    const tierButtons = myTiers.length && tp ? myTiers.map(function(tier) {
+      const tierPrice = tp[tier+'_price'];
+      if (!tierPrice) return '';
+      const sqftPrice = g.spb > 0 ? (tierPrice/g.spb).toFixed(1) : '';
+      const discVsMrp = mrp > 0 ? Math.round((mrp-tierPrice)/mrp*100) : 0;
+      const discVsVwp = vwp > 0 ? Math.round((vwp-tierPrice)/vwp*100) : 0;
+      return '<button onclick="(function(){' +
+        'var b=document.getElementById(\'tq-box-'+idx+'\');' +
+        'var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
+        'if(b)b.value='+tierPrice+';if(s)s.value=\''+sqftPrice+'\';' +
+        'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
+        'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
+        '}).call(this)" class="tier-btn"' +
+        ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--gold)">' + TIER_LABELS[tier] + '</div>' +
+        '<div style="font-size:12px;font-weight:800">₹'+Number(tierPrice).toLocaleString('en-IN')+'</div>' +
+        '<div style="font-size:9px;color:var(--text3)">' + (discVsMrp>0?discVsMrp+'% off MRP':'') + (discVsVwp>0?' · '+discVsVwp+'% off VWP':'') + '</div>' +
+        '</button>';
+    }).filter(Boolean).join('') : '';
+
+    const vwpBtn = (tp && vwp > 0) ? '<button onclick="(function(){' +
+      'var b=document.getElementById(\'tq-box-'+idx+'\');var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
+      'var spb='+g.spb.toFixed(4)+';if(b)b.value='+Math.round(vwp*g.spb)+';if(s)s.value=\''+vwp.toFixed(1)+'\';' +
+      'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
+      'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
+      '}).call(this)" class="tier-btn"' +
+      ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text2)">VWP</div>' +
+      '<div style="font-size:12px;font-weight:800">₹'+Number(vwp).toLocaleString('en-IN')+'</div>' +
+      '<div style="font-size:9px;color:var(--text3)">' + (mrp>0?Math.round((mrp-vwp)/mrp*100)+'% off MRP':'Standard') + '</div>' +
+      '</button>' : '';
+
+    const mrpLine = mrp > 0 ? '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">MRP: ₹'+Number(mrp).toLocaleString('en-IN')+'/sqft' + (vwp>0?' · VWP: ₹'+Number(vwp).toLocaleString('en-IN')+'/sqft':'') + '</div>' : '';
+
     return '<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
         '<div><div style="font-size:13px;font-weight:700">' + g.tile_name + '</div>' +
-        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' · ' + g.size_mm + (g.totalSqft>0?' · '+g.totalSqft.toFixed(1)+' sqft':'') + '</div></div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' \u00b7 ' + g.size_mm + (g.totalSqft>0?' \u00b7 '+g.totalSqft.toFixed(1)+' sqft':'') + '</div></div>' +
         (g.totalBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + g.totalBoxes + ' boxes</div>' : '<div style="font-size:11px;color:var(--text3)">boxes TBD</div>') +
       '</div>' +
-      (g.initBox===0 ? '<div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px dashed var(--gold-border);border-radius:6px;padding:5px 8px;margin-bottom:8px">💡 No price set yet — enter ₹/box or ₹/sqft below to set price</div>' : '') +
+      mrpLine +
+      (g.initBox===0 ? '<div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px dashed var(--gold-border);border-radius:6px;padding:5px 8px;margin-bottom:8px">💡 Set price below — tap a tier or enter manually</div>' : '') +
+      // Tier quick-select buttons
+      ((vwpBtn || tierButtons) ? '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">' + vwpBtn + tierButtons + '</div>' : '') +
+      // Manual price inputs
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">₹ / BOX</label>' +
-        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0" placeholder="Enter ₹/box"' +
+        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / BOX</label>' +
+        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0" placeholder="Enter \u20b9/box"' +
           ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '" data-slots="' + g.slotIds.join(',') + '"' +
           ' style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:15px;font-weight:800;text-align:center;box-sizing:border-box"' +
           ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\';})(this)"></div>' +
@@ -5233,7 +5305,9 @@ function _tqBuildApprovalBOM(q) {
           ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '"' +
           ' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;box-sizing:border-box"' +
           ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,bx=document.getElementById(\'tq-box-\'+i);if(bx)bx.value=Math.round((parseFloat(el.value)||0)*s)||\'\';})(this)"></div>' +
-      '</div></div>';
+      '</div>' +
+      (canManualOverride ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">✏️ Management: can enter any price above</div>' : '') +
+    '</div>';
   }).join('') + _buildAccessoryPriceInputs(q);
 }
 
@@ -6087,6 +6161,9 @@ async function openTileQuote(id) {
     (myRole === 'admin' || myAllowedRoles.includes(myRole));
   const isCashier = ['admin','accounts'].includes(myRole);
 
+  // Pre-compute approval BOM HTML (async — needs tier price fetch)
+  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, lastStep?.level || myRole) : '';
+
   const sheet = document.getElementById('bottom-sheet');
   const totalSqft = parseFloat(q.total_area_sqft||0);
   const pricePerSqft = q.quoted_price_per_sqft || 0;
@@ -6175,7 +6252,7 @@ async function openTileQuote(id) {
     ${canIAction ? `
     <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
-      ${_tqBuildApprovalBOM(q)}
+      ${approvalBomHtml}
       <div class="form-group" style="margin-bottom:10px">
         <label style="font-size:11px">Price note / reason (optional)</label>
         <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer · Premium tile" value="${q.price_edit_note||''}">
