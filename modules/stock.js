@@ -1086,7 +1086,7 @@ async function markMaterialSourced(intentId) {
   navigateTo('inventory'); // refresh the page
 }
 
-window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory, showSecondLocation, markMaterialSourced, openProductPricingTab, saveProductPricing };
+window.VW_INVENTORY = { renderInventory, searchInventory, invFilterCat, openProduct, updateProduct, showAddProduct, saveNewProduct, showRestock, confirmRestock, showAddPO, showSubmitProductPhoto, scanProductForInventory, loadInvRacks, loadInvShelves, addManualRack, addProductLocation, plLoadRacks, plLoadShelves, savePL, onAddProductCatChange, addInlineCategory, addInlineSubcategory, showSecondLocation, markMaterialSourced, openProductPricingTab, saveProductPricing, approveProductPricing, rejectProductPricing };
 
 // ===== PHOTO SUBMISSION & APPROVAL (works for existing Inventory products
 // AND brand-new pending products not yet approved — same mechanism either
@@ -3155,7 +3155,20 @@ async function openProductPricingTab(id) {
     <button onclick="openProduct(${id})" style="flex:1;padding:13px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;cursor:pointer">
       Cancel
     </button>
-  </div>`;
+  </div>
+  ${p.pricing_needs_approval && ['admin','management'].includes(profile?.role) ? `
+  <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-top:10px">
+    <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:4px">⚠️ Awaiting Management Approval</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">VWP margin is ${p.margin_vwp?.toFixed(1)||'?'}% — below 15% threshold. As Management, you can approve this pricing or reject it.</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="approveProductPricing(${id})" style="flex:1;padding:10px;border-radius:8px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:12px;font-weight:700;cursor:pointer">
+        ✅ Approve Pricing
+      </button>
+      <button onclick="rejectProductPricing(${id})" style="flex:1;padding:10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:12px;font-weight:700;cursor:pointer">
+        ❌ Reject
+      </button>
+    </div>
+  </div>` : ''}`;
 
   // Inject live calc scripts
   const s = document.createElement('script');
@@ -3193,7 +3206,48 @@ async function openProductPricingTab(id) {
   document.body.appendChild(s);
 }
 
-async function saveProductPricing(id) {
+async function approveProductPricing(id) {
+  const prof = VW_AUTH.getCurrentProfile();
+  const { error } = await VW_DB.client.from('products').update({
+    pricing_needs_approval: false,
+    pricing_approved_by: prof?.id || null,
+    pricing_approved_at: new Date().toISOString(),
+    pricing_note: `Approved by ${prof?.name||'Management'} on ${new Date().toLocaleDateString('en-IN')}`,
+  }).eq('id', id);
+  if (error) { showToast('Error: '+error.message, 'error'); return; }
+  showToast('Pricing approved ✅ — VWP is now live', 'success');
+  openProduct(id);
+}
+
+async function rejectProductPricing(id) {
+  const reason = prompt('Reason for rejecting this pricing?');
+  if (!reason) return;
+  const prof = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('products').update({
+    pricing_needs_approval: false,
+    pricing_note: `Rejected by ${prof?.name||'Management'}: ${reason}`,
+    // Reset VWP to null so it can't be shown until re-set with valid margin
+    vwp: null,
+  }).eq('id', id);
+  showToast('Pricing rejected — Category Manager will be notified', 'warn');
+  // Notify Category Manager
+  try {
+    const { data: cms } = await VW_DB.client.from('profiles')
+      .select('id').in('role',['category_manager','admin']).eq('status','approved');
+    for (const cm of cms||[]) {
+      await createPersistedNotification({
+        category: 'pricing_rejected',
+        title: `❌ Pricing Rejected for Product #${id}`,
+        body: `${prof?.name||'Management'}: "${reason}" — Please revise VWP to achieve >15% margin`,
+        recipientId: cm.id,
+        relatedTable: 'products',
+        relatedId: id,
+        actions: [{ label: '✏️ Revise Pricing', action: 'open_product_pricing' }],
+      }).catch(()=>{});
+    }
+  } catch(_) {}
+  openProduct(id);
+}
   const getVal = (eid) => { const el = document.getElementById(eid); return el && !el.disabled ? (parseFloat(el.value)||null) : undefined; };
   const getStr = (eid) => { const el = document.getElementById(eid); return el ? el.value : undefined; };
 
