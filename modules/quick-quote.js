@@ -217,9 +217,10 @@ async function _qqFromCustomer() {
     _qqData.customer.site = site || '';
   }
   _qqData.customer.phone = phone;
-  _qqScreen('rooms');
-  // Await customer creation so they're findable immediately on next QQ
+  // Ensure customer is saved to Supabase BEFORE moving to rooms
+  // so they're immediately findable if a second QQ starts right after
   await _qqEnsureCustomer().catch(() => {});
+  _qqScreen('rooms');
   _qqAutoSave().catch(() => {});
 }
 
