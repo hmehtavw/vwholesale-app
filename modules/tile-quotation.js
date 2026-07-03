@@ -670,6 +670,31 @@ function _renderStep1() {
       <div id="tq-floorplan-status" style="margin-top:8px;font-size:11px;color:var(--text3)"></div>
     </div>
 
+    <!-- DIRECT SQFT ENTRY — quick option for contractors who know total area -->
+    <div style="background:rgba(34,197,94,0.05);border:1px dashed rgba(34,197,94,0.3);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:4px">⚡ Know the total sqft? Enter directly</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px">Skip room-by-room. Enter total area and label. Good for contractor bulk orders or when measurements are confirmed separately.</div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Total Sqft</label>
+          <input type="number" id="tq-direct-sqft" placeholder="e.g. 450" min="1" step="0.5"
+            style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:700;color:var(--green);box-sizing:border-box">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Label</label>
+          <input type="text" id="tq-direct-label" placeholder="e.g. Full Home Floor" value="Total Area"
+            style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:13px;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;color:transparent;display:block;margin-bottom:3px">.</label>
+          <button onclick="VW_TILES.tqAddDirectSqft()"
+            style="padding:9px 14px;background:var(--green);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">
+            + Add
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- MULTI-FLAT / PROJECT MODE -->
     <div style="background:rgba(245,200,66,0.05);border:1px dashed var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">🏢 Flat / Unit <span style="color:var(--text3);font-weight:400">(optional — for multi-flat projects)</span></div>
@@ -2291,6 +2316,43 @@ function _renderStep7() {
   <button class="btn-primary full-width" onclick="VW_TILES.tqNext()">Next → Add-ons</button>
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back</button>`;
 }
+// Direct sqft entry — creates a single flat area room bypassing room-by-room measurement
+function tqAddDirectSqft() {
+  const sqft = parseFloat(document.getElementById('tq-direct-sqft')?.value);
+  const label = (document.getElementById('tq-direct-label')?.value || 'Total Area').trim();
+  if (!sqft || sqft <= 0) { showToast('Enter a valid sqft value', 'warn'); return; }
+
+  const roomId = 'room_direct_' + Date.now();
+  const areaId = 'area_direct_' + Date.now();
+  const newRoom = {
+    id: roomId,
+    type: label,
+    label: label,
+    surface: 'floor',
+    areas: [{
+      id: areaId,
+      sqft: sqft,
+      subType: 'floor',
+      label: label,
+      directEntry: true,  // flag so summary shows differently
+    }],
+    _directSqft: sqft,
+  };
+  if (!_tqState.rooms) _tqState.rooms = [];
+  _tqState.rooms.push(newRoom);
+
+  // Clear inputs
+  const sqftEl = document.getElementById('tq-direct-sqft');
+  const labelEl = document.getElementById('tq-direct-label');
+  if (sqftEl) sqftEl.value = '';
+  if (labelEl) labelEl.value = 'Total Area';
+
+  // Re-render rooms list
+  const listEl = document.getElementById('tq-rooms-list');
+  if (listEl) listEl.innerHTML = _renderRoomsGrouped();
+  showToast(`${label} — ${sqft} sqft added`, 'success');
+}
+
 function tqSetGroutType(t) { _tqState.grout = _tqState.grout||{}; _tqState.grout.type=t; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
 function tqSetGroutColor(c,hex) { _tqState.grout = _tqState.grout||{}; _tqState.grout.color=c; _tqState.grout.colorHex=hex; document.getElementById('tq-step-content').innerHTML=_renderStep7(); }
 
