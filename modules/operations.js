@@ -3385,11 +3385,24 @@ async function showReceivePO(poId) {
           </button>
         </div>
       </div>
-      <div>
-        <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Actual Rate Paid (₹)</label>
-        <input type="number" id="recv-rate-${i}" value="${item.expectedRate||''}" placeholder="₹ per unit"
-          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+        <div>
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Actual Rate (₹)</label>
+          <input type="number" id="recv-rate-${i}" value="${item.expectedRate||''}" placeholder="₹ per unit"
+            style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:10px;color:${item.productId?'var(--gold)':'var(--text3)'};font-weight:700;display:block;margin-bottom:3px">Lot / Batch No.</label>
+          <input type="text" id="recv-lot-${i}" placeholder="e.g. L2024-07" value="${item.lot_no||''}"
+            style="width:100%;padding:8px;border:1px solid ${item.productId?'var(--gold-border)':'var(--border)'};border-radius:7px;background:var(--bg3);box-sizing:border-box;font-size:12px">
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Shade No.</label>
+          <input type="text" id="recv-shade-${i}" placeholder="e.g. S-03" value="${item.shade_no||''}"
+            style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box;font-size:12px">
+        </div>
       </div>
+      ${item.productId ? `<div style="font-size:10px;color:var(--gold);padding:4px 0">⚠️ Tiles: always record Lot & Shade No. — customers must buy same batch for shade consistency</div>` : ''}
     </div>`).join('')}
 
     <div class="form-group"><label>Supplier Bill / Invoice No.</label><input type="text" id="recv-bill-no" placeholder="e.g. INV/2025/001"></div>
@@ -3455,6 +3468,8 @@ async function confirmReceivePO(poId) {
       qty_received: qtyReceived,
       actual_rate: rateActual,
       shortage_action: isShort ? shortageAction : null,
+      lot_no: document.getElementById(`recv-lot-${i}`)?.value?.trim() || null,
+      shade_no: document.getElementById(`recv-shade-${i}`)?.value?.trim() || null,
     };
     grnItems.push(grnItem);
 
@@ -3465,12 +3480,15 @@ async function confirmReceivePO(poId) {
         product.stock = (product.stock||0) + qtyReceived;
         product.lastRestockDate = new Date().toISOString();
         product.lastRestockRate = rateActual;
+        // Update current lot/shade on product
+        if (grnItem.lot_no) product.current_lot_no = grnItem.lot_no;
+        if (grnItem.shade_no) product.current_shade_no = grnItem.shade_no;
         await VW_DB.put(VW_DB.STORES.products, product);
-        // Sync stock to Supabase
-        await VW_DB.client.from('products').update({
-          stock: product.stock,
-          last_restock_date: product.lastRestockDate,
-        }).eq('id', item.productId).catch(()=>{});
+        // Sync stock + lot to Supabase
+        const stockUpdate = { stock: product.stock, last_restock_date: product.lastRestockDate };
+        if (grnItem.lot_no) stockUpdate.current_lot_no = grnItem.lot_no;
+        if (grnItem.shade_no) stockUpdate.current_shade_no = grnItem.shade_no;
+        await VW_DB.client.from('products').update(stockUpdate).eq('id', item.productId).catch(()=>{});
       }
       totalActual += qtyReceived * rateActual;
     }
@@ -3484,7 +3502,7 @@ async function confirmReceivePO(poId) {
   // Create GRN in Supabase
   const billNo = document.getElementById('recv-bill-no')?.value||'';
   const notes  = document.getElementById('recv-notes')?.value||'';
-  await VW_DB.client.from('grn').insert({
+  const { data: grnRecord } = await VW_DB.client.from('grn').insert({
     po_id: po.supabaseId || null,
     vendor_id: po.vendorId,
     vendor_name: po.vendorName,
@@ -3495,7 +3513,28 @@ async function confirmReceivePO(poId) {
     status: grnStatus,
     shortage_note: notes,
     total_received_value: Math.round(totalActual),
-  }).catch(()=>{});
+    has_shade_variation: grnItems.some(i => i.shade_no),
+  }).select('id').single().catch(()=>({ data: null }));
+
+  // Create product_lots records for items with lot/shade info
+  const lotInserts = grnItems
+    .filter(i => i.productId && i.qty_received > 0 && i.shortage_action !== 'reject' && (i.lot_no || i.shade_no))
+    .map(i => ({
+      product_id: i.productId,
+      lot_no: i.lot_no || ('LOT-' + new Date().toISOString().split('T')[0]),
+      shade_no: i.shade_no || null,
+      qty_received: i.qty_received,
+      qty_remaining: i.qty_received,
+      grn_id: grnRecord?.id || null,
+      po_id: po.supabaseId || null,
+      vendor_id: po.vendorId,
+      vendor_name: po.vendorName,
+      received_by_name: prof?.name||'',
+      is_current: true,
+    }));
+  if (lotInserts.length) {
+    await VW_DB.client.from('product_lots').insert(lotInserts).catch(()=>{});
+  }
 
   // Update PO status
   po.status = grnStatus === 'complete' ? 'received' : 'partially_received';

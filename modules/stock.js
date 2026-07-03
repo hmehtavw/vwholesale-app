@@ -214,9 +214,16 @@ async function openProduct(id) {
     <p style="font-size:13px;color:var(--text3);margin:4px 0 16px">${p.category} · ${p.barcode || 'No barcode'}</p>
     <div class="sheet-stats">
       <div class="sheet-stat"><span>${p.stock}</span><small>${p.unit}</small></div>
-      <div class="sheet-stat"><span>₹${p.price.toLocaleString('en-IN')}</span><small>Price</small></div>
-      <div class="sheet-stat"><span>₹${(p.price*p.stock).toLocaleString('en-IN')}</span><small>Value</small></div>
+      <div class="sheet-stat"><span>₹${(p.vwp||p.price||0).toLocaleString('en-IN')}</span><small>VWP</small></div>
+      <div class="sheet-stat"><span>₹${((p.vwp||p.price||0)*p.stock).toLocaleString('en-IN')}</span><small>Value</small></div>
     </div>
+    ${(p.current_lot_no || p.current_shade_no) ? `
+    <div style="background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;padding:8px;margin-bottom:10px;font-size:11px">
+      <div style="font-weight:700;color:var(--gold);margin-bottom:3px">📦 Current Stock Info</div>
+      ${p.current_lot_no ? `<div>Lot: <strong>${p.current_lot_no}</strong></div>` : ''}
+      ${p.current_shade_no ? `<div>Shade: <strong>${p.current_shade_no}</strong></div>` : ''}
+      <div style="color:var(--text3);margin-top:3px;font-size:10px">⚠️ Customers must buy from same lot for shade consistency</div>
+    </div>` : ''}
     <div class="form-group"><label>Update Stock</label>
       <div class="input-row" style="gap:8px;align-items:center">
         <select id="adj-type" style="width:auto;flex:0 0 auto"><option value="set">Set to</option><option value="add">＋ Add</option><option value="sub">－ Subtract</option></select>
