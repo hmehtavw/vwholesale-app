@@ -2536,6 +2536,7 @@ async function _renderStepAddons() {
   </div>`;
 }
 function _rerenderStepAddons(){ _renderStepAddons().then(html=>{const el=document.getElementById('tq-step-content'); if(el)el.innerHTML=html;}); }
+function setAddonTab(key) { _tqState._addonTab = key; _rerenderStepAddons(); }
 
 // ───── Inventory → Quotation: search & add arbitrary products ─────
 let _tqInvResults = [];
@@ -2590,14 +2591,31 @@ function tqSearchInventory(q) {
   }, 300);
 }
 function tqAddInventoryProduct(id) {
-  const p = _tqInvResults.find(x=>x.id===id); if (!p) return;
+  // Product may be in _tqInvResults (search) or in the rendered category tab
+  // We fetch from Supabase directly to ensure we have VWP
   if (!_tqState.extraProducts) _tqState.extraProducts = [];
-  if (_tqState.extraProducts.some(x=>x.id===id)) { showToast(p.name+' already added','info'); return; }
-  _tqState.extraProducts.push({ id:p.id, name:p.name, price:Number(p.price||p.mrp||0), unit:p.unit||'unit', stock:(p.stock==null?null:Number(p.stock)), qty:1 });
-  const added = document.getElementById('tq-inv-added'); if (added) added.innerHTML = _renderExtraProductsList();
-  const search = document.getElementById('tq-inv-search'); if (search) search.value='';
-  const box = document.getElementById('tq-inv-results'); if (box) box.innerHTML='';
-  showToast(p.name+' added to quote','success');
+  if (_tqState.extraProducts.some(x=>x.id===id)) { showToast('Already added','info'); return; }
+
+  // Try local results first
+  const local = _tqInvResults.find(x=>x.id===id);
+  if (local) {
+    const vwp = Number(local.vwp || local.price || local.mrp || 0);
+    _tqState.extraProducts.push({ id:local.id, name:local.name, mrp:Number(local.mrp||0), price:vwp, unit:local.unit||'unit', stock:(local.stock==null?null:Number(local.stock)), qty:1 });
+    _rerenderStepAddons();
+    showToast(local.name+' added','success');
+    return;
+  }
+
+  // Fetch from Supabase (category tab product)
+  VW_DB.client.from('products').select('id,name,brand,mrp,price,vwp,unit,stock').eq('id',id).single()
+    .then(({ data: p }) => {
+      if (!p) { showToast('Product not found','warn'); return; }
+      if (_tqState.extraProducts.some(x=>x.id===p.id)) { showToast('Already added','info'); return; }
+      const vwp = Number(p.vwp || p.price || p.mrp || 0);
+      _tqState.extraProducts.push({ id:p.id, name:p.name, mrp:Number(p.mrp||0), price:vwp, unit:p.unit||'unit', stock:(p.stock==null?null:Number(p.stock)), qty:1 });
+      _rerenderStepAddons();
+      showToast(p.name+' added','success');
+    });
 }
 function tqSetExtraQty(id, qty) {
   const p = (_tqState.extraProducts||[]).find(x=>x.id===id); if (!p) return;
@@ -3441,102 +3459,98 @@ async function _renderStep8Inner() {
 
 // ───── NAV HELPERS ──────────────────────────────────────────
 async function _renderAddonSuggestions(totalSqft, boxesNeeded) {
-  // Determine if rooms are floor or wall (mix likely)
-  const rooms = _tqState.rooms || [];
-  const floorSqft = rooms.reduce((s,r) => s + (r.areas||[]).filter(a=>a.subType!=='wall').reduce((ss,a)=>ss+(a.sqft||0),0), 0) || totalSqft;
-  const wallSqft = rooms.reduce((s,r) => s + (r.areas||[]).filter(a=>a.subType==='wall').reduce((ss,a)=>ss+(a.sqft||0),0), 0);
+  // Category tabs mapping to product categories in inventory
+  const TABS = [
+    { key:'grout',          label:'🪨 Grout',         categories:['Grout'] },
+    { key:'adhesive',       label:'🧲 Adhesive',       categories:['Adhesive'] },
+    { key:'spacer',         label:'📦 Spacers',        categories:['Spacer'] },
+    { key:'profiles',       label:'📐 Profiles',       categories:['Profiles'] },
+    { key:'waterproofing',  label:'💧 Waterproofing',  categories:['Waterproofing'] },
+    { key:'cleaning',       label:'🧴 Cleaning',       categories:['Accessories'] },
+    { key:'other',          label:'🔍 Other',          categories:null }, // open search
+  ];
 
-  // ── Only show cement/sand for rooms using mortar method ──
-  // Check adhesiveSelections for mortar rooms
-  const mortarRooms = rooms.filter(r => (_tqState.adhesiveSelections?.[r.id]?.method||'adhesive') === 'mortar');
-  const mortarSqft = mortarRooms.reduce((s,r)=>s+r.areas?.reduce((ss,a)=>ss+(a.sqft||0),0),0);
-  const cementBags = mortarSqft > 0 ? Math.ceil(mortarSqft * 4 / 100) : 0;
-  const sandBags = mortarSqft > 0 ? Math.ceil(mortarSqft * 11 / 100) : 0;
+  const activeTab = _tqState._addonTab || 'grout';
 
-  // ── ADHESIVE — read from adhesiveSelections (already calculated in Step 4) ──
-  let totalAdhesiveBags = 0;
-  const sz = null; // Use per-room sizes from tileSelections
-  rooms.forEach(r => {
-    const adh = _tqState.adhesiveSelections?.[r.id];
-    if (adh) totalAdhesiveBags += adh.adhBags || 0;
-  });
-  // Fallback if adhesiveSelections not yet populated
-  if (totalAdhesiveBags === 0) {
-    const firstSz = Object.values(_tqState.tileSelections||{})[0]?.size;
-    const sizeMm = firstSz ? parseInt((firstSz.mm||'600×600').split('×')[0]) : 600;
-    const isLargeTile = sizeMm >= 600;
-    totalAdhesiveBags = Math.ceil(totalSqft / (isLargeTile ? 40 : 44));
+  // Fetch products for active tab
+  let tabProducts = [];
+  const activeTabDef = TABS.find(t => t.key === activeTab);
+  if (activeTabDef?.categories) {
+    const { data } = await VW_DB.client
+      .from('products')
+      .select('id,name,brand,category,subcategory,mrp,price,vwp,unit,stock')
+      .in('category', activeTabDef.categories)
+      .eq('is_active', true)
+      .order('subcategory,name')
+      .limit(30);
+    tabProducts = data || [];
   }
-  const adhesiveGradeNote = Object.values(_tqState.tileSelections||{}).some(s=>parseInt(s?.size?.mm)>=600)
-    ? 'C2 grade recommended for large tiles (≥600mm)'
-    : 'C1 standard grade for standard tiles';
-  const floorAdhesiveBags = totalAdhesiveBags;
-  const wallAdhesiveBags = 0; // already included in totalAdhesiveBags from Step 4
 
-  // Try to get pricing from inventory/products
-  let cementPrice = '', sandPrice = '', adhesivePrice = '', cleanerPrice = '';
-  try {
-    const { data: cp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%cement%').limit(3);
-    if (cp?.length) cementPrice = `₹${cp[0].price||cp[0].mrp}/bag`;
-    const { data: sp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%TISAN%').limit(3);
-    if (sp?.length) sandPrice = `₹${sp[0].price||sp[0].mrp}/bag`;
-    const { data: ap } = await VW_DB.client.from('products').select('name,mrp,price').or('name.ilike.%adhesive%,name.ilike.%tile fix%').limit(3);
-    if (ap?.length) adhesivePrice = `₹${ap[0].price||ap[0].mrp}/bag`;
-    const { data: clp } = await VW_DB.client.from('products').select('name,mrp,price').ilike('name','%tile cleaner%').limit(1);
-    if (clp?.length) cleanerPrice = `₹${clp[0].price||clp[0].mrp}`;
-  } catch(e) {}
+  const addedIds = new Set(((_tqState.extraProducts)||[]).map(p=>p.id));
 
-  // Adhesive coverage (sqft per 20kg bag). Large tiles (≥600mm) need a thicker bed → less coverage.
-  // (These were referenced below but never defined in this scope — caused the Add-ons step to throw.)
-  const _addonFirstSz = Object.values(_tqState.tileSelections||{})[0]?.size;
-  const _addonSizeMm  = _addonFirstSz ? parseInt((_addonFirstSz.mm||'600×600').split('×')[0]) : 600;
-  const _addonIsLarge = _addonSizeMm >= 600;
-  const floorAdhesiveCoverage = _addonIsLarge ? 40 : 44;
-  const wallAdhesiveCoverage  = _addonIsLarge ? 32 : 35;
-
-  const addons = [
-    // Cement & sand are now chosen on the Adhesive step (Cement Mortar / Adhesive+Cement) — not duplicated here
-    // Adhesive (wall always, floor optional)
-    { id:'adhesive_floor', icon:'🧲', label:`Tile Adhesive (Floor)`, qty:`${floorAdhesiveBags} bags (20kg)`,
-      note:`${adhesiveGradeNote} · ${floorAdhesiveCoverage} sqft/bag`, price: adhesivePrice||'Check stock', section:'adhesive' },
-    ...(wallSqft > 0 ? [{ id:'adhesive_wall', icon:'🧲', label:`Tile Adhesive (Wall)`, qty:`${wallAdhesiveBags} bags (20kg)`,
-      note:`C2 recommended for walls — stronger grip · ${wallAdhesiveCoverage} sqft/bag`, price: adhesivePrice||'Check stock', section:'adhesive' }] : []),
-    // Accessories
-    { id:'cleaner', icon:'🧴', label:'Tile Cleaner', qty:'1–2 bottles',
-      note:'Post-installation cleaning — removes grout haze, cement residue', price: cleanerPrice||'Check stock', section:'acc' },
-    { id:'sponge', icon:'🧽', label:'Grouting Sponge', qty:'2–3 pcs',
-      note:'For grout application and wiping', price:'Check stock', section:'acc' },
-    { id:'cloth', icon:'🧻', label:'Waste Cloth Packet', qty:'1 packet',
-      note:'For tile wiping and surface cleaning during installation', price:'Check stock', section:'acc' },
-  ];
-
-  const selected = _tqState.addons || {};
-
-  const sections = [
-    { key:'mortar', label:'🏗 Mortar Bed Method (Floor)', sub:'Traditional cement + sand bed — skip if using adhesive method' },
-    // Tile Adhesive is selected & costed in the dedicated Adhesive step — not repeated here (avoids double-counting).
-    { key:'acc', label:'🧴 Cleaning & Accessories', sub:'Post-installation supplies' },
-  ];
-
-  return sections.map(sec => {
-    const secAddons = addons.filter(a => a.section === sec.key);
-    if (!secAddons.length) return '';
+  const productCard = (p) => {
+    const vwp   = p.vwp || p.price || 0;
+    const mrp   = p.mrp || 0;
+    const disc  = mrp > vwp && vwp > 0 ? Math.round((mrp-vwp)/mrp*100) : 0;
+    const added = addedIds.has(p.id);
     return `
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px">${sec.label}</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${sec.sub}</div>
-      ${secAddons.map(a => `
-      <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;background:var(--bg2);border-radius:10px;border:1px solid ${selected[a.id]?'var(--gold-border)':'var(--border)'};margin-bottom:6px">
-        <input type="checkbox" id="addon-${a.id}" ${selected[a.id]?'checked':''} onchange="VW_TILES.toggleAddon('${a.id}',this.checked)" style="width:18px;height:18px;flex-shrink:0">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${a.icon} ${a.label} <span style="color:var(--text3);font-weight:400">— ${a.qty}</span></div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${a.note}</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:10px;border-radius:10px;margin-bottom:6px;
+      border:${added?'2px solid var(--green)':'1px solid var(--border)'};
+      background:${added?'rgba(34,197,94,0.05)':'var(--bg2)'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:${added?'var(--green)':'var(--text)'}">${p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${p.brand||''} · ${p.subcategory||p.category}</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:3px">
+          ${vwp > 0 ? `<span style="font-size:12px;font-weight:800;color:var(--gold)">₹${vwp.toLocaleString('en-IN')}/${p.unit||'pc'}</span>` : ''}
+          ${mrp > 0 && mrp !== vwp ? `<span style="font-size:10px;color:var(--text3);text-decoration:line-through">MRP ₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+          ${disc > 0 ? `<span style="font-size:10px;color:var(--green);font-weight:700">${disc}% off</span>` : ''}
+          <span style="font-size:10px;color:${p.stock>0?'var(--text3)':'var(--red)'}">${p.stock>0?p.stock+' in stock':'Out of stock'}</span>
         </div>
-        <div style="font-size:11px;font-weight:600;flex-shrink:0;text-align:right">${a.price==='Check stock' ? `<button onclick="event.stopPropagation();VW_TILES.tqCheckAddonStock('${(a.label||'').replace(/['\\]/g,'')}',this)" style="background:none;border:1px solid var(--gold-border);color:var(--gold);border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer">Check stock</button>` : `<span style="color:var(--gold)">${a.price}</span>`}</div>
-      </div>`).join('')}
+      </div>
+      <button onclick="VW_TILES.tqAddInventoryProduct(${p.id})"
+        style="padding:8px 14px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;flex-shrink:0;
+          background:${added?'rgba(34,197,94,0.15)':'var(--gold)'};color:${added?'var(--green)':'#000'}">
+        ${added?'✓ Added':'+ Add'}
+      </button>
     </div>`;
-  }).join('') + `<div style="font-size:10px;color:var(--text3);padding:8px;background:rgba(245,200,66,0.06);border-radius:8px;border:1px solid var(--gold-border)">💡 Floor: Use either mortar bed OR tile adhesive — not both. Walls always use adhesive. Confirm quantities with your tile layer.</div>`;
+  };
+
+  const tabButtons = TABS.map(t => `
+    <button onclick="VW_TILES.setAddonTab('${t.key}')"
+      style="flex:0 0 auto;padding:6px 12px;border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;
+        border:${activeTab===t.key?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${activeTab===t.key?'var(--gold-muted)':'var(--bg2)'};
+        color:${activeTab===t.key?'var(--gold)':'var(--text3)'}">
+      ${t.label}
+    </button>`).join('');
+
+  const productList = activeTab === 'other'
+    ? `<input id="tq-addon-search" type="text" placeholder="🔍 Search any product…"
+        oninput="VW_TILES.tqSearchInventory(this.value)"
+        style="width:100%;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:13px;margin-bottom:8px;box-sizing:border-box">
+      <div id="tq-inv-results"></div>`
+    : tabProducts.length
+      ? tabProducts.map(productCard).join('')
+      : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No products found in this category</div>`;
+
+  return `
+  <!-- CATEGORY TABS -->
+  <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;-webkit-overflow-scrolling:touch">
+    ${tabButtons}
+  </div>
+
+  <!-- PRODUCTS -->
+  <div id="tq-addon-products">
+    ${productList}
+  </div>
+
+  <!-- ADDED ITEMS -->
+  <div id="tq-inv-added">${_renderExtraProductsList()}</div>
+  <div style="font-size:10px;color:var(--text3);padding:8px;background:rgba(245,200,66,0.06);border-radius:8px;border:1px solid var(--gold-border);margin-top:8px">
+    💡 Prices shown are VWP (V Wholesale Price). Final price confirmed during approval.
+  </div>`;
 }
+
 
 // ─── FLOOR TRAP FUNCTIONS ────────────────────────────────────
 function tqToggleTrap(t) {

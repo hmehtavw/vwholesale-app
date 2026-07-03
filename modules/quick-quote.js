@@ -1601,6 +1601,7 @@ window.VW_TILES = {
   tqAdjClipPkts, tqAdjBushPkts,
   tqSelectSize, tqSetSpacer, tqSetSpacerMm,
   tqToggleBead, tqSetBeadRm, tqSkipBeading, tqSkipAdhesive, tqCheckAddonStock, tqSearchInventory, tqAddInventoryProduct, tqSetExtraQty, tqRemoveExtra,
+  setAddonTab,
   tqSelectProduct,
   tqSetGroutType, tqSetGroutColor,
   // Floor trap + soffit
