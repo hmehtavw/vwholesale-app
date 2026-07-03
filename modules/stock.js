@@ -3248,6 +3248,8 @@ async function rejectProductPricing(id) {
   } catch(_) {}
   openProduct(id);
 }
+
+async function saveProductPricing(id) {
   const getVal = (eid) => { const el = document.getElementById(eid); return el && !el.disabled ? (parseFloat(el.value)||null) : undefined; };
   const getStr = (eid) => { const el = document.getElementById(eid); return el ? el.value : undefined; };
 
