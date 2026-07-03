@@ -3015,8 +3015,10 @@ async function showCreatePO(vendorId, preselectProductId = null) {
 
     <div id="po-total-display" style="font-size:14px;font-weight:700;color:var(--gold);padding:8px 0"></div>
 
-    <button class="btn-primary full-width" onclick="VW_VENDOR.savePO('draft')">💾 Save as Draft</button>
-    <button class="btn-wa full-width" style="margin-top:8px" onclick="VW_VENDOR.savePO('sent')">💬 Save & Send to Vendor via WhatsApp</button>
+    <button class="btn-primary full-width" onclick="VW_VENDOR.savePO('pending_approval')" style="background:var(--gold);color:#000">
+      📤 Submit for Management Approval
+    </button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_VENDOR.savePO('draft')">💾 Save as Draft</button>
     <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
   `;
   sheet.classList.add('open');
@@ -3102,26 +3104,62 @@ async function savePO(status) {
   const seq = await VW_DB.incrementPOSequence(fy);
   const poNo = `PO/${fy}/${String(seq).padStart(5,'0')}`;
   const totalValue = window._poDraft.items.reduce((s,i) => s + (i.qty||0)*(i.expectedRate||0), 0);
-  const profile = VW_AUTH.getCurrentProfile();
+  const prof = VW_AUTH.getCurrentProfile();
+
   const record = {
     poNo, vendorId: window._poDraft.vendorId, vendorName: window._poDraft.vendorName,
     items: window._poDraft.items,
     totalValue: Math.round(totalValue),
     deliveryDate: document.getElementById('po-delivery-date')?.value||'',
     notes: document.getElementById('po-notes')?.value||'',
-    status,
-    createdByName: profile?.name||'',
+    status: 'pending_approval',  // always goes to management first
+    approval_status: 'pending_approval',
+    createdByName: prof?.name||'',
+    raised_by: prof?.id||null,
     createdAt: new Date().toISOString()
   };
+
+  // Save to IndexedDB
   const newId = await VW_DB.put(VW_DB.STORES.purchaseOrders, record);
   record.id = newId;
 
-  if (status === 'sent') {
-    // Send PO to vendor via WhatsApp
-    await sendPOWhatsApp(record);
-  }
+  // Save to Supabase so Management can see it on any device
+  const { data: sbPO } = await VW_DB.client.from('purchase_orders').insert({
+    po_no: poNo,
+    vendor_id: window._poDraft.vendorId,
+    vendor_name: window._poDraft.vendorName,
+    items: window._poDraft.items,
+    total_value: Math.round(totalValue),
+    delivery_date: document.getElementById('po-delivery-date')?.value||null,
+    notes: document.getElementById('po-notes')?.value||'',
+    approval_status: 'pending_approval',
+    raised_by: prof?.id||null,
+    created_by_name: prof?.name||'',
+    date: new Date().toISOString().split('T')[0],
+    status: 'pending_approval',
+  }).select('id').single().catch(() => ({ data: null }));
 
-  showToast(`PO ${poNo} ${status === 'sent' ? 'created & sent to vendor' : 'saved as draft'}`, 'success');
+  record.supabaseId = sbPO?.id;
+  await VW_DB.put(VW_DB.STORES.purchaseOrders, record);
+
+  // Notify Management via in-app bell
+  try {
+    const { data: mgmt } = await VW_DB.client.from('profiles')
+      .select('id,name').in('role',['management','admin']).eq('status','approved');
+    for (const m of mgmt||[]) {
+      await createPersistedNotification({
+        category: 'po_approval',
+        title: `🛒 PO Approval Needed — ${poNo}`,
+        body: `${prof?.name||'Purchase Manager'} raised PO for ${record.vendorName} · ₹${Math.round(totalValue).toLocaleString('en-IN')}`,
+        recipientId: m.id,
+        relatedTable: 'purchase_orders',
+        relatedId: sbPO?.id,
+        actions: [{ label: '👁 Review PO', action: 'open_po_approval' }],
+      }).catch(()=>{});
+    }
+  } catch(_) {}
+
+  showToast(`${poNo} submitted for Management approval`, 'success');
   closeSheet();
   navigateTo('vendors');
 }
@@ -3177,11 +3215,30 @@ async function openPO(id) {
         </div>`).join('')}
     </div>
     ${po.notes ? `<p style="font-size:12px;color:var(--text3);font-style:italic;margin-bottom:12px">${po.notes}</p>` : ''}
-    ${po.status !== 'received' ? `
+    ${po.status !== 'received' && po.status !== 'cancelled' ? `
     <div style="display:flex;gap:8px;margin-bottom:8px">
-      ${v?.phone ? `<button class="btn-wa" style="flex:1" onclick="VW_VENDOR.sendPOWhatsApp(${JSON.stringify(po).replace(/"/g,'&quot;')})">💬 Re-send to Vendor</button>` : ''}
-      ${isAdmin ? `<button class="btn-primary" style="flex:1" onclick="VW_VENDOR.showReceivePO(${po.id})">📦 Mark Received</button>` : ''}
-    </div>` : `
+      ${v?.phone && (po.approval_status === 'approved' || po.status === 'approved') ? `
+        <button class="btn-wa" style="flex:1" onclick="VW_VENDOR.sendPOWhatsApp(${JSON.stringify(po).replace(/"/g,'&quot;')})">💬 Send to Vendor</button>` : ''}
+      ${isAdmin && (po.approval_status === 'approved' || po.status === 'approved') ? `
+        <button class="btn-primary" style="flex:1" onclick="VW_VENDOR.showReceivePO(${po.id})">📦 Mark Received / GRN</button>` : ''}
+    </div>
+    ${isAdmin && (po.status === 'pending_approval' || po.approval_status === 'pending_approval') ? `
+    <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">⚡ Management Action Required</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Review items and approve to send to vendor, or reject with a reason.</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px">Approval Note (optional)</label>
+        <input type="text" id="po-approval-note-${po.id}" placeholder="e.g. Approved — check rate with vendor first">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_VENDOR.approvePO(${po.id})" style="flex:2;padding:12px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
+          ✅ Approve & Send to Vendor
+        </button>
+        <button onclick="VW_VENDOR.rejectPO(${po.id})" style="flex:1;padding:12px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+          ❌ Reject
+        </button>
+      </div>
+    </div>` : ''}` : `
     <div style="font-size:12px;color:#22c55e">✓ Received ${po.receivedAt ? new Date(po.receivedAt).toLocaleDateString('en-IN') : ''} by ${po.receivedByName||'—'}</div>
     ${po.receivedNotes ? `<div style="font-size:12px;color:var(--text3)">${po.receivedNotes}</div>` : ''}`}
     ${isAdmin && po.status === 'received' ? `
@@ -3196,69 +3253,275 @@ async function openPO(id) {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
+async function approvePO(poId) {
+  const po = await VW_DB.getById(VW_DB.STORES.purchaseOrders, poId);
+  if (!po) return;
+  const prof = VW_AUTH.getCurrentProfile();
+  const note = document.getElementById(`po-approval-note-${poId}`)?.value||'';
+
+  po.status = 'approved';
+  po.approval_status = 'approved';
+  po.approvedBy = prof?.name||'';
+  po.approvedAt = new Date().toISOString();
+  po.approvalNote = note;
+  await VW_DB.put(VW_DB.STORES.purchaseOrders, po);
+
+  // Sync to Supabase
+  if (po.supabaseId) {
+    await VW_DB.client.from('purchase_orders').update({
+      approval_status: 'approved',
+      approved_by: prof?.id,
+      approved_at: new Date().toISOString(),
+      notes: note ? (po.notes ? po.notes+' | Approval: '+note : note) : po.notes,
+    }).eq('id', po.supabaseId).catch(()=>{});
+  }
+
+  // Send WhatsApp to vendor
+  await sendPOWhatsApp(po);
+
+  // Notify Purchase Manager
+  try {
+    const { data: pm } = await VW_DB.client.from('profiles')
+      .select('id,name').in('role',['purchase_manager','admin']).eq('status','approved');
+    for (const p of pm||[]) {
+      await createPersistedNotification({
+        category: 'po_approved',
+        title: `✅ ${po.poNo} Approved`,
+        body: `Approved by ${prof?.name||'Management'} · WhatsApp sent to ${po.vendorName}`,
+        recipientId: p.id,
+        relatedTable: 'purchase_orders',
+        relatedId: po.supabaseId,
+        actions: [{ label: '👁 View PO', action: 'open_po_approval' }],
+      }).catch(()=>{});
+    }
+  } catch(_) {}
+
+  showToast(`${po.poNo} approved — WhatsApp sent to vendor`, 'success');
+  closeSheet();
+  navigateTo('vendors');
+}
+
+async function rejectPO(poId) {
+  const po = await VW_DB.getById(VW_DB.STORES.purchaseOrders, poId);
+  if (!po) return;
+  const prof = VW_AUTH.getCurrentProfile();
+  const note = document.getElementById(`po-approval-note-${poId}`)?.value||'';
+  if (!note) { showToast('Please add a reason before rejecting', 'warn'); return; }
+
+  po.status = 'rejected';
+  po.approval_status = 'rejected';
+  po.rejectionReason = note;
+  po.rejectedBy = prof?.name||'';
+  po.rejectedAt = new Date().toISOString();
+  await VW_DB.put(VW_DB.STORES.purchaseOrders, po);
+
+  if (po.supabaseId) {
+    await VW_DB.client.from('purchase_orders').update({
+      approval_status: 'rejected',
+      notes: 'Rejected: ' + note,
+    }).eq('id', po.supabaseId).catch(()=>{});
+  }
+
+  // Notify Purchase Manager
+  try {
+    const { data: pm } = await VW_DB.client.from('profiles')
+      .select('id').in('role',['purchase_manager','admin']).eq('status','approved');
+    for (const p of pm||[]) {
+      await createPersistedNotification({
+        category: 'po_rejected',
+        title: `❌ ${po.poNo} Rejected`,
+        body: `Reason: ${note}`,
+        recipientId: p.id,
+        relatedTable: 'purchase_orders',
+        relatedId: po.supabaseId,
+      }).catch(()=>{});
+    }
+  } catch(_) {}
+
+  showToast(`${po.poNo} rejected`, 'warn');
+  closeSheet();
+  navigateTo('vendors');
+}
+
 async function showReceivePO(poId) {
   const po = await VW_DB.getById(VW_DB.STORES.purchaseOrders, poId);
   if (!po) return;
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <h3>Receive Stock — ${po.poNo}</h3>
-    <p class="sheet-meta">Confirm quantities received. Actual qty will update product stock immediately.</p>
+    <h3>📦 GRN — ${po.poNo}</h3>
+    <p class="sheet-meta">${po.vendorName} · Ordered ${(po.items||[]).reduce((s,i)=>s+(i.qty||0),0)} items total</p>
+    <div style="font-size:11px;color:var(--text3);background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:12px">
+      Enter actual quantity received for each item. If short — choose to accept partial or reject.
+    </div>
+
     ${(po.items||[]).map((item, i) => `
-    <div style="padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:8px">
+    <div style="padding:10px;background:var(--bg2);border-radius:10px;margin-bottom:10px">
       <div style="font-weight:600;font-size:13px;margin-bottom:6px">${item.name}</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <label style="font-size:12px;color:var(--text3);white-space:nowrap">Ordered: ${item.qty} ${item.unit}</label>
-        <input type="number" id="recv-qty-${i}" value="${item.qty}" min="0"
-          style="flex:1" placeholder="Actual qty received">
-        <label style="font-size:12px;color:var(--text3)">${item.unit}</label>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Ordered</label>
+          <div style="padding:8px;background:var(--bg3);border-radius:7px;font-size:14px;font-weight:700;text-align:center">${item.qty} ${item.unit}</div>
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Actually Received</label>
+          <input type="number" id="recv-qty-${i}" value="${item.qty}" min="0"
+            style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg3);color:var(--gold);font-size:14px;font-weight:700;text-align:center;box-sizing:border-box"
+            oninput="checkShortage(${i},${item.qty})">
+        </div>
       </div>
-      <div style="margin-top:6px">
-        <input type="number" id="recv-rate-${i}" value="${item.expectedRate||''}"
-          style="width:100%;box-sizing:border-box" placeholder="Actual rate paid (₹)">
+      <div id="shortage-action-${i}" style="display:none;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--red);font-weight:600;margin-bottom:6px">⚠️ Short delivery detected</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="setShortageAction(${i},'accept_partial')"
+            id="sa-accept-${i}"
+            style="flex:1;padding:7px;border-radius:7px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3)">
+            ✅ Accept Partial
+          </button>
+          <button onclick="setShortageAction(${i},'reject')"
+            id="sa-reject-${i}"
+            style="flex:1;padding:7px;border-radius:7px;font-size:11px;cursor:pointer;border:1px solid var(--border);background:var(--bg3)">
+            ❌ Reject Delivery
+          </button>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Actual Rate Paid (₹)</label>
+        <input type="number" id="recv-rate-${i}" value="${item.expectedRate||''}" placeholder="₹ per unit"
+          style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg3);box-sizing:border-box">
       </div>
     </div>`).join('')}
-    <div class="form-group"><label>Supplier Bill Number</label><input type="text" id="recv-bill-no" placeholder="e.g. INV/2024/001"></div>
-    <div class="form-group"><label>Notes</label><input type="text" id="recv-notes" placeholder="e.g. 2 tiles damaged, short delivery"></div>
-    <button class="btn-primary full-width" onclick="VW_VENDOR.confirmReceivePO(${poId})">✓ Confirm Receipt & Update Stock</button>
-    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_VENDOR.openPO(${poId})">Cancel</button>
+
+    <div class="form-group"><label>Supplier Bill / Invoice No.</label><input type="text" id="recv-bill-no" placeholder="e.g. INV/2025/001"></div>
+    <div class="form-group"><label>Notes</label><input type="text" id="recv-notes" placeholder="e.g. 2 items damaged, pending balance delivery"></div>
+    <button class="btn-primary full-width" onclick="VW_VENDOR.confirmReceivePO(${poId})">✓ Confirm GRN & Update Stock</button>
+    <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_VENDOR.openPO(${poId})">← Back</button>
   `;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  // Inject shortage detection script
+  const s = document.createElement('script');
+  s.textContent = `
+    window._shortageActions = {};
+    function checkShortage(idx, ordered) {
+      const received = parseFloat(document.getElementById('recv-qty-'+idx)?.value)||0;
+      const div = document.getElementById('shortage-action-'+idx);
+      if (div) div.style.display = received < ordered ? 'block' : 'none';
+      if (received >= ordered) delete window._shortageActions[idx];
+    }
+    function setShortageAction(idx, action) {
+      window._shortageActions[idx] = action;
+      const accept = document.getElementById('sa-accept-'+idx);
+      const reject = document.getElementById('sa-reject-'+idx);
+      if (accept) accept.style.background = action==='accept_partial' ? 'rgba(34,197,94,0.15)' : 'var(--bg3)';
+      if (reject) reject.style.background = action==='reject' ? 'rgba(239,68,68,0.1)' : 'var(--bg3)';
+    }
+  `;
+  document.body.appendChild(s);
 }
 
 async function confirmReceivePO(poId) {
   const po = await VW_DB.getById(VW_DB.STORES.purchaseOrders, poId);
   if (!po) return;
-  const profile = VW_AUTH.getCurrentProfile();
+  const prof = VW_AUTH.getCurrentProfile();
   let totalActual = 0;
+  let hasShortage = false;
+  let hasRejected = false;
 
-  // Update stock for each item received
+  const grnItems = [];
+
   for (let i = 0; i < po.items.length; i++) {
     const item = po.items[i];
     const qtyReceived = parseFloat(document.getElementById(`recv-qty-${i}`)?.value) || 0;
-    const rateActual = parseFloat(document.getElementById(`recv-rate-${i}`)?.value) || item.expectedRate || 0;
-    item.qtyReceived = qtyReceived;
-    item.actualRate = rateActual;
-    totalActual += qtyReceived * rateActual;
-    if (item.productId && qtyReceived > 0) {
+    const rateActual  = parseFloat(document.getElementById(`recv-rate-${i}`)?.value) || item.expectedRate || 0;
+    const shortageAction = window._shortageActions?.[i] || null;
+
+    const isShort = qtyReceived < item.qty;
+    if (isShort) {
+      hasShortage = true;
+      if (shortageAction === 'reject') { hasRejected = true; }
+      else if (!shortageAction) {
+        showToast(`Please select Accept Partial or Reject for ${item.name}`, 'warn');
+        return;
+      }
+    }
+
+    const grnItem = {
+      productId: item.productId,
+      name: item.name,
+      unit: item.unit,
+      qty_ordered: item.qty,
+      qty_received: qtyReceived,
+      actual_rate: rateActual,
+      shortage_action: isShort ? shortageAction : null,
+    };
+    grnItems.push(grnItem);
+
+    // Update stock only for accepted items
+    if (item.productId && qtyReceived > 0 && shortageAction !== 'reject') {
       const product = await VW_DB.getById(VW_DB.STORES.products, item.productId);
       if (product) {
         product.stock = (product.stock||0) + qtyReceived;
         product.lastRestockDate = new Date().toISOString();
         product.lastRestockRate = rateActual;
         await VW_DB.put(VW_DB.STORES.products, product);
+        // Sync stock to Supabase
+        await VW_DB.client.from('products').update({
+          stock: product.stock,
+          last_restock_date: product.lastRestockDate,
+        }).eq('id', item.productId).catch(()=>{});
       }
+      totalActual += qtyReceived * rateActual;
     }
+    item.qtyReceived = qtyReceived;
+    item.actualRate = rateActual;
   }
 
-  po.status = 'received';
+  // Determine GRN status
+  const grnStatus = hasRejected ? 'partial_rejected' : hasShortage ? 'partial' : 'complete';
+
+  // Create GRN in Supabase
+  const billNo = document.getElementById('recv-bill-no')?.value||'';
+  const notes  = document.getElementById('recv-notes')?.value||'';
+  await VW_DB.client.from('grn').insert({
+    po_id: po.supabaseId || null,
+    vendor_id: po.vendorId,
+    vendor_name: po.vendorName,
+    received_by: prof?.id||null,
+    received_by_name: prof?.name||'',
+    received_at: new Date().toISOString(),
+    items: grnItems,
+    status: grnStatus,
+    shortage_note: notes,
+    total_received_value: Math.round(totalActual),
+  }).catch(()=>{});
+
+  // Update PO status
+  po.status = grnStatus === 'complete' ? 'received' : 'partially_received';
   po.receivedAt = new Date().toISOString();
-  po.receivedByName = profile?.name||'';
-  po.supplierBillNo = document.getElementById('recv-bill-no')?.value||'';
-  po.receivedNotes = document.getElementById('recv-notes')?.value||'';
+  po.receivedByName = prof?.name||'';
+  po.supplierBillNo = billNo;
+  po.receivedNotes = notes;
   po.actualValue = Math.round(totalActual);
   await VW_DB.put(VW_DB.STORES.purchaseOrders, po);
 
-  showToast('Stock updated — PO marked received', 'success');
+  if (po.supabaseId) {
+    await VW_DB.client.from('purchase_orders').update({
+      status: po.status,
+      received_at: po.receivedAt,
+      received_by_name: po.receivedByName,
+      supplier_bill_no: billNo,
+      received_notes: notes,
+      actual_value: po.actualValue,
+    }).eq('id', po.supabaseId).catch(()=>{});
+  }
+
+  const msg = grnStatus === 'complete'
+    ? `GRN complete — stock updated for all ${grnItems.length} items`
+    : `GRN saved — partial receipt. ${hasRejected ? 'Some items rejected.' : 'Short delivery noted.'}`;
+
+  showToast(msg, 'success');
   closeSheet();
   navigateTo('vendors');
 }
@@ -3284,7 +3547,7 @@ function renderPOList(pos, vendorMap) {
       <div class="task-card" onclick="VW_VENDOR.openPO(${po.id})">
         <div class="task-card-header">
           <span class="task-dept">${po.poNo}</span>
-          <span class="badge" style="background:${po.status==='sent'?'#378ADD':'var(--gold)'}">${po.status==='sent'?'Sent to Vendor':'Draft'}</span>
+          <span class="badge" style="background:${po.status==='approved'?'#22c55e':po.status==='pending_approval'?'var(--gold)':po.status==='rejected'?'var(--red)':po.status==='sent'?'#378ADD':'var(--text3)'}}">${po.status==='approved'?'✅ Approved':po.status==='pending_approval'?'⏳ Awaiting Approval':po.status==='rejected'?'❌ Rejected':po.status==='sent'?'Sent':'Draft'}</span>
         </div>
         <div style="font-size:12px;color:var(--text3)">${po.vendorName} · ${po.items?.length||0} items · ₹${(po.totalValue||0).toLocaleString('en-IN')}</div>
         ${po.deliveryDate ? `<div style="font-size:11px;color:${new Date(po.deliveryDate)<new Date()?'var(--red)':'var(--text3)'}">Expected: ${new Date(po.deliveryDate).toLocaleDateString('en-IN')}</div>` : ''}
@@ -3474,6 +3737,7 @@ async function copyRFQText() {
 window.VW_VENDOR = {
   renderVendorsPage, openVendor, showAddVendor, saveVendor,
   showCreatePO, addPOItem, renderPOItemsList, updatePOTotal, savePO, createPOForProduct,
+  approvePO, rejectPO,
   sendPOWhatsApp, openPO, showReceivePO, confirmReceivePO,
   rateVendorDelivery, switchVendorTab, quickPOFromLowStock, saveQuickPO,
   renderRFQTab, sendRFQToAll, copyRFQText

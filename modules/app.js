@@ -1465,6 +1465,22 @@ async function handleNotificationAction(notifId, action) {
     setTimeout(() => VW_INVENTORY.showAddPO(n.relatedId), 100);
     return;
   }
+  if (action === 'open_po_approval') {
+    closeSheet();
+    await navigateTo('vendors');
+    // Open the PO from Supabase id stored in notification
+    if (n.relatedId) {
+      const pos = await VW_DB.all(VW_DB.STORES.purchaseOrders);
+      const po = pos.find(p => p.supabaseId === n.relatedId || p.id === n.relatedId);
+      if (po) setTimeout(() => VW_VENDOR.openPO(po.id), 400);
+    }
+    return;
+  }
+  if (action === 'open_product_pricing') {
+    closeSheet();
+    if (n.relatedId) setTimeout(() => VW_INVENTORY.openProductPricingTab(n.relatedId), 300);
+    return;
+  }
   if (action === 'open_tq' && n.relatedTable === 'tile_quotations') {
     closeSheet();
     await navigateTo('tile_quotes');
