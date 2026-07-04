@@ -1609,7 +1609,7 @@ window.VW_TILES = {
   // Floor trap + soffit
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
-  tqSharePDF, tqPrint, tqConvertToInvoice, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
+  tqSharePDF, tqPrint, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
   tqEditQuote, tqConfirmEditQuote, _tqBuildApprovalBOM,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
