@@ -8508,3 +8508,494 @@ window.VW_SHOP = {
   proceedToCheckout, openTileQuotation, requestTileSample,
   submitSampleRequest, selectDeliveryAddress,
 };
+
+// ═══════════════════════════════════════════════════════════════
+// CHECKOUT FLOW
+// ═══════════════════════════════════════════════════════════════
+
+const DELIVERY_SLOTS = [
+  { id:'slot1', label:'Within 90 minutes', time:'ASAP', surcharge:0, icon:'⚡' },
+  { id:'slot2', label:'Today 2pm–5pm',     time:'14:00', surcharge:0, icon:'🌤' },
+  { id:'slot3', label:'Today 5pm–8pm',     time:'17:00', surcharge:0, icon:'🌆' },
+  { id:'slot4', label:'Tomorrow 10am–1pm', time:'10:00', surcharge:0, icon:'📅' },
+  { id:'slot5', label:'Tomorrow 2pm–5pm',  time:'14:00', surcharge:0, icon:'📅' },
+];
+
+const VJ_PINCODES = ['520001','520002','520003','520004','520007','520008','520010',
+  '520011','520012','520013','520015','521108','521109','521110','521111','521456'];
+
+let _checkoutState = {
+  step: 'address',    // address | slot | payment | confirm
+  address: null,
+  slot: null,
+  payMethod: 'wallet',
+  deliveryType: 'delivery', // delivery | pickup
+  products: [],
+  subtotal: 0,
+  deliveryCharge: 0,
+  total: 0,
+};
+
+async function renderCheckoutPage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const productIds = Object.keys(_shopCart).map(Number);
+
+  if (!productIds.length) {
+    return `<div class="module-header"><h2>Checkout</h2></div>
+    <div style="text-align:center;padding:40px">
+      <div style="font-size:40px">🛒</div>
+      <div style="font-size:14px;font-weight:700;margin:8px 0">Your cart is empty</div>
+      <button onclick="navigateTo('shop')" style="padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Browse Products</button>
+    </div>`;
+  }
+
+  // Load products
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,price,vwp,mrp,unit,stock,images').in('id', productIds);
+  const prodMap = {};
+  (products||[]).forEach(p => prodMap[p.id] = p);
+
+  _checkoutState.products = productIds.map(id => ({
+    product_id: id,
+    name: prodMap[id]?.name || '',
+    brand: prodMap[id]?.brand || '',
+    qty: _shopCart[id],
+    price: prodMap[id]?.vwp || prodMap[id]?.price || 0,
+    unit: prodMap[id]?.unit || 'pc',
+  }));
+  _checkoutState.subtotal = _checkoutState.products.reduce((s,p) => s + p.price * p.qty, 0);
+
+  // Load saved addresses
+  const { data: addresses } = await VW_DB.client.from('customer_addresses')
+    .select('*').eq('profile_id', prof?.id || '').order('is_default', { ascending: false });
+
+  return `
+  <div class="module-header">
+    <button onclick="navigateTo('shop')" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)">←</button>
+    <h2>Checkout</h2>
+  </div>
+
+  <!-- ORDER SUMMARY -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">🛒 Order Summary</div>
+    ${_checkoutState.products.map(p => `
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text2)">${p.name} × ${p.qty} ${p.unit}</span>
+      <span style="font-weight:700">₹${(p.price*p.qty).toLocaleString('en-IN')}</span>
+    </div>`).join('')}
+    <div style="border-top:1px solid var(--border2);margin-top:8px;padding-top:8px;display:flex;justify-content:space-between;font-size:13px;font-weight:800">
+      <span>Subtotal</span><span style="color:var(--gold)">₹${_checkoutState.subtotal.toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <!-- DELIVERY TYPE -->
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <button id="dt-delivery" onclick="VW_SHOP.setDeliveryType('delivery')"
+      style="flex:1;padding:12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;
+        border:${_checkoutState.deliveryType==='delivery'?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${_checkoutState.deliveryType==='delivery'?'var(--gold-muted)':'var(--bg2)'}">
+      🚚 Home Delivery<br><span style="font-size:10px;font-weight:400;color:var(--text3)">90 min within Vijayawada</span>
+    </button>
+    <button id="dt-pickup" onclick="VW_SHOP.setDeliveryType('pickup')"
+      style="flex:1;padding:12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:700;
+        border:${_checkoutState.deliveryType==='pickup'?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${_checkoutState.deliveryType==='pickup'?'var(--gold-muted)':'var(--bg2)'}">
+      🏪 Store Pickup<br><span style="font-size:10px;font-weight:400;color:var(--text3)">Free · Ready in 30 min</span>
+    </button>
+  </div>
+
+  ${_checkoutState.deliveryType === 'delivery' ? `
+  <!-- DELIVERY ADDRESS -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">📍 Delivery Address</div>
+    ${(addresses||[]).map(a => `
+    <div onclick="VW_SHOP.selectAddress(${a.id})"
+      style="padding:10px 12px;border-radius:10px;margin-bottom:8px;cursor:pointer;
+        border:${_checkoutState.address?.id===a.id?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${_checkoutState.address?.id===a.id?'var(--gold-muted)':'var(--bg2)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;font-weight:700">${a.label} ${a.is_default?'⭐':''}</span>
+        ${_checkoutState.address?.id===a.id?'<span style="color:var(--gold);font-size:12px">✓ Selected</span>':''}
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-top:2px">${a.address_line1}${a.area?', '+a.area:''}</div>
+      <div style="font-size:11px;color:var(--text3)">${a.city} - ${a.pincode||''}</div>
+    </div>`).join('')}
+    <button onclick="VW_SHOP.addNewAddress()"
+      style="width:100%;padding:10px;border-radius:10px;border:1px dashed var(--border);background:none;color:var(--text3);font-size:12px;cursor:pointer">
+      + Add New Address
+    </button>
+    ${_checkoutState.address ? `
+    <div style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:8px;padding:8px;margin-top:8px;font-size:11px;color:var(--green)">
+      ✅ Delivering to: ${_checkoutState.address.address_line1}, ${_checkoutState.address.city}
+    </div>` : ''}
+  </div>` : `
+  <!-- PICKUP INFO -->
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px">🏪 Pickup from Store</div>
+    <div style="font-size:11px;color:var(--text3)">1-1-153, NH 65, Bhavanipuram, Vijayawada</div>
+    <div style="font-size:11px;color:var(--green);margin-top:4px;font-weight:600">Ready in 30–45 minutes after order</div>
+  </div>`}
+
+  <!-- DELIVERY SLOT -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">⏰ ${_checkoutState.deliveryType==='delivery'?'Delivery':'Pickup'} Slot</div>
+    ${DELIVERY_SLOTS.map(slot => `
+    <div onclick="VW_SHOP.selectSlot('${slot.id}')"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;
+        border:${_checkoutState.slot?.id===slot.id?'2px solid var(--gold)':'1px solid var(--border)'};
+        background:${_checkoutState.slot?.id===slot.id?'var(--gold-muted)':'var(--bg2)'}">
+      <span style="font-size:20px">${slot.icon}</span>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:${_checkoutState.slot?.id===slot.id?'var(--gold)':'var(--text)'}">${slot.label}</div>
+      </div>
+      ${_checkoutState.slot?.id===slot.id?'<span style="color:var(--gold);font-weight:700">✓</span>':''}
+    </div>`).join('')}
+  </div>
+
+  <!-- PAYMENT METHOD -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">💳 Payment</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      ${[
+        { key:'wallet', icon:'👛', label:'VW Wallet' },
+        { key:'cod',    icon:'💵', label:'Cash on Delivery' },
+        { key:'online', icon:'📱', label:'UPI / Card' },
+      ].map(m => `
+      <button onclick="VW_SHOP.selectPayment('${m.key}')"
+        style="padding:10px 6px;border-radius:10px;cursor:pointer;text-align:center;
+          border:${_checkoutState.payMethod===m.key?'2px solid var(--gold)':'1px solid var(--border)'};
+          background:${_checkoutState.payMethod===m.key?'var(--gold-muted)':'var(--bg2)'}">
+        <div style="font-size:20px;margin-bottom:4px">${m.icon}</div>
+        <div style="font-size:10px;font-weight:700;color:${_checkoutState.payMethod===m.key?'var(--gold)':'var(--text)'}">${m.label}</div>
+      </button>`).join('')}
+    </div>
+  </div>
+
+  <!-- TOTAL + PLACE ORDER -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text3)">Subtotal</span><span>₹${_checkoutState.subtotal.toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text3)">Delivery</span>
+      <span style="color:var(--green)">${_checkoutState.deliveryType==='pickup'?'Free':'₹0 (within Vijayawada)'}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;padding:8px 0 0;border-top:1px solid var(--border2);margin-top:6px">
+      <span>Total</span><span style="color:var(--gold)">₹${_checkoutState.subtotal.toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <button onclick="VW_SHOP.placeOrder()"
+    style="width:100%;padding:15px;border-radius:12px;background:var(--gold);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer">
+    ✅ Place Order · ₹${_checkoutState.subtotal.toLocaleString('en-IN')}
+  </button>
+  <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px">
+    GST inclusive · All prices shown are final · Delivery within Vijayawada only
+  </div>`;
+}
+
+function setDeliveryType(type) {
+  _checkoutState.deliveryType = type;
+  navigateTo('checkout');
+}
+
+function selectAddress(id) {
+  VW_DB.client.from('customer_addresses').select('*').eq('id', id).single()
+    .then(({ data }) => {
+      _checkoutState.address = data;
+      navigateTo('checkout');
+    });
+}
+
+function selectSlot(slotId) {
+  _checkoutState.slot = DELIVERY_SLOTS.find(s => s.id === slotId);
+  navigateTo('checkout');
+}
+
+function selectPayment(method) {
+  _checkoutState.payMethod = method;
+  navigateTo('checkout');
+}
+
+function addNewAddress() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>📍 Add Delivery Address</h3>
+  <div class="form-group">
+    <label>Label</label>
+    <div style="display:flex;gap:8px">
+      ${['Home','Work','Site','Other'].map(l => `
+      <button id="lbl-${l}" onclick="selectAddrLabel('${l}')"
+        style="flex:1;padding:7px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;
+          border:${l==='Home'?'2px solid var(--gold)':'1px solid var(--border)'};
+          background:${l==='Home'?'var(--gold-muted)':'var(--bg2)'}">
+        ${l}
+      </button>`).join('')}
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Full Address *</label>
+    <input type="text" id="addr-line1" placeholder="House/Flat no, Street name">
+  </div>
+  <div class="form-group">
+    <label>Area / Locality</label>
+    <input type="text" id="addr-area" placeholder="e.g. Bhavanipuram, Kanuru">
+  </div>
+  <div class="form-group">
+    <label>Pincode *</label>
+    <input type="text" id="addr-pin" placeholder="6-digit pincode" maxlength="6" inputmode="numeric"
+      oninput="checkPincode(this.value)">
+    <div id="pincode-msg" style="font-size:11px;margin-top:4px"></div>
+  </div>
+  <div class="form-group">
+    <label>Phone for delivery</label>
+    <input type="tel" id="addr-phone" placeholder="10-digit mobile" maxlength="10">
+  </div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:14px;cursor:pointer">
+    <input type="checkbox" id="addr-default"> Set as default address
+  </label>
+  <button onclick="VW_SHOP.saveAddress()" style="width:100%;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    Save Address
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._addrLabel = 'Home';
+    window.selectAddrLabel = function(l) {
+      window._addrLabel = l;
+      ['Home','Work','Site','Other'].forEach(x => {
+        const b = document.getElementById('lbl-'+x);
+        if(b){b.style.borderColor=x===l?'var(--gold)':'var(--border)';b.style.background=x===l?'var(--gold-muted)':'var(--bg2)';}
+      });
+    };
+    window.checkPincode = function(pin) {
+      const msg = document.getElementById('pincode-msg');
+      if (!msg) return;
+      const valid = ['520001','520002','520003','520004','520007','520008','520010','520011','520012','520013','520015','521108','521109','521110','521111','521456'];
+      if (pin.length === 6) {
+        msg.textContent = valid.includes(pin) ? '✅ Delivery available in your area' : '⚠️ Delivery not available for this pincode yet';
+        msg.style.color = valid.includes(pin) ? 'var(--green)' : 'var(--red)';
+      }
+    };
+  `;
+  document.body.appendChild(s);
+}
+
+async function saveAddress() {
+  const line1 = document.getElementById('addr-line1')?.value?.trim();
+  const area  = document.getElementById('addr-area')?.value?.trim();
+  const pin   = document.getElementById('addr-pin')?.value?.trim();
+  const phone = document.getElementById('addr-phone')?.value?.trim();
+  const isDefault = document.getElementById('addr-default')?.checked;
+
+  if (!line1 || !pin) { showToast('Fill address and pincode', 'warn'); return; }
+  if (!VJ_PINCODES.includes(pin)) { showToast('Delivery not available for this pincode', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  if (isDefault) {
+    await VW_DB.client.from('customer_addresses')
+      .update({ is_default: false }).eq('profile_id', prof?.id || '').catch(() => {});
+  }
+
+  const { data: addr } = await VW_DB.client.from('customer_addresses').insert({
+    profile_id: prof?.id || null,
+    label: window._addrLabel || 'Home',
+    address_line1: line1,
+    area: area || null,
+    city: 'Vijayawada',
+    pincode: pin,
+    phone: phone || null,
+    is_default: isDefault,
+  }).select('*').single();
+
+  _checkoutState.address = addr;
+  closeSheet();
+  showToast('Address saved ✅', 'success');
+  navigateTo('checkout');
+}
+
+async function placeOrder() {
+  const { deliveryType, address, slot, payMethod, products, subtotal } = _checkoutState;
+
+  if (deliveryType === 'delivery' && !address) {
+    showToast('Please select a delivery address', 'warn'); return;
+  }
+  if (!slot) { showToast('Please select a delivery slot', 'warn'); return; }
+  if (!products.length) { showToast('Cart is empty', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const btn = document.querySelector('[onclick="VW_SHOP.placeOrder()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Placing order...'; }
+
+  try {
+    // For wallet payment — check balance first
+    if (payMethod === 'wallet') {
+      const { data: wallet } = await VW_DB.client.from('customer_wallets')
+        .select('balance').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
+      const bal = parseFloat(wallet?.balance || 0);
+      if (bal < subtotal) {
+        showToast(`Insufficient wallet balance. Available: ₹${bal.toLocaleString('en-IN')} · Required: ₹${subtotal.toLocaleString('en-IN')}`, 'warn');
+        if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${subtotal.toLocaleString('en-IN')}`; }
+        return;
+      }
+    }
+
+    // Create order
+    const { data: order, error } = await VW_DB.client.from('orders').insert({
+      profile_id: prof?.id || null,
+      customer_name: prof?.name || '',
+      customer_phone: prof?.phone || '',
+      delivery_address: deliveryType === 'delivery' ? address : { label: 'Store Pickup', address_line1: '1-1-153, NH 65, Bhavanipuram, Vijayawada' },
+      items: products,
+      subtotal: subtotal,
+      delivery_charge: 0,
+      total: subtotal,
+      payment_method: payMethod,
+      payment_status: payMethod === 'cod' ? 'pending' : 'pending',
+      delivery_type: deliveryType,
+      delivery_slot: slot?.label,
+      status: 'placed',
+    }).select('id,order_no').single();
+
+    if (error) throw new Error(error.message);
+
+    // Deduct from wallet if wallet payment
+    if (payMethod === 'wallet') {
+      const { data: wallet } = await VW_DB.client.from('customer_wallets')
+        .select('id,balance,total_spent').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
+      if (wallet) {
+        const newBal = parseFloat(wallet.balance) - subtotal;
+        await VW_DB.client.from('customer_wallets').update({
+          balance: newBal,
+          total_spent: parseFloat(wallet.total_spent || 0) + subtotal,
+          last_activity_at: new Date().toISOString(),
+        }).eq('id', wallet.id);
+        await VW_DB.client.from('wallet_transactions').insert({
+          wallet_id: wallet.id,
+          type: 'purchase',
+          amount: subtotal,
+          balance_after: newBal,
+          description: `Order ${order.order_no}`,
+          reference_type: 'order',
+          reference_id: order.id,
+          payment_method: 'wallet',
+        });
+      }
+    }
+
+    // Clear cart
+    _shopCart = {};
+    await VW_DB.client.from('carts').upsert({
+      profile_id: prof?.id, items: [], updated_at: new Date().toISOString()
+    }, { onConflict: 'profile_id' }).catch(() => {});
+
+    // Notify store
+    await createPersistedNotification({
+      category: 'new_order',
+      title: `🛒 New Order — ${order.order_no}`,
+      body: `${prof?.name||''} · ₹${subtotal.toLocaleString('en-IN')} · ${deliveryType==='pickup'?'Pickup':'Delivery to '+address?.area}`,
+      actions: [{ label: '👁 View Order', action: 'open_order' }],
+    }).catch(() => {});
+
+    // Show success
+    showOrderConfirmation(order.order_no, subtotal, deliveryType, slot);
+
+  } catch(e) {
+    showToast('Order failed: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${subtotal.toLocaleString('en-IN')}`; }
+  }
+}
+
+function showOrderConfirmation(orderNo, total, deliveryType, slot) {
+  const main = document.getElementById('main-content');
+  if (!main) return;
+  main.innerHTML = `
+  <div style="text-align:center;padding:40px 20px">
+    <div style="font-size:60px;margin-bottom:16px">🎉</div>
+    <h2 style="margin-bottom:8px">Order Placed!</h2>
+    <div style="font-size:16px;font-weight:900;color:var(--gold);margin-bottom:6px">${orderNo}</div>
+    <div style="font-size:14px;color:var(--text2);margin-bottom:4px">₹${total.toLocaleString('en-IN')}</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:24px">
+      ${deliveryType==='pickup'?'Ready for pickup in 30–45 minutes':'Expected: '+slot?.label}
+    </div>
+    <div style="background:var(--bg2);border-radius:12px;padding:16px;margin-bottom:20px;text-align:left">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">What happens next:</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.8">
+        ✅ Order confirmed<br>
+        📦 Items being picked & packed<br>
+        ${deliveryType==='pickup'?'🏪 Come collect from store':'🚚 Out for delivery soon'}<br>
+        📞 Our team will call if needed
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button onclick="navigateTo('my_orders')" style="padding:12px 20px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+        📋 Track Order
+      </button>
+      <button onclick="navigateTo('shop')" style="padding:12px 20px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;cursor:pointer">
+        🛒 Shop More
+      </button>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:var(--text3)">
+      Questions? Call us: <a href="tel:8712697930" style="color:var(--gold)">8712697930</a>
+    </div>
+  </div>`;
+}
+
+async function renderMyOrdersPage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const { data: orders } = await VW_DB.client.from('orders')
+    .select('id,order_no,items,total,status,delivery_type,delivery_slot,placed_at,delivery_address')
+    .eq('profile_id', prof?.id || '')
+    .order('placed_at', { ascending: false })
+    .limit(20);
+
+  const statusConfig = {
+    placed:             { label:'⏳ Order Placed',         color:'var(--gold)' },
+    confirmed:          { label:'✅ Confirmed',             color:'var(--green)' },
+    picking:            { label:'📦 Picking & Packing',    color:'#60A5FA' },
+    out_for_delivery:   { label:'🚚 Out for Delivery',     color:'#8B5CF6' },
+    delivered:          { label:'✓ Delivered',             color:'var(--green)' },
+    cancelled:          { label:'Cancelled',               color:'var(--red)' },
+  };
+
+  return `
+  <div class="module-header"><h2>📋 My Orders</h2></div>
+  ${!(orders?.length) ? `
+  <div style="text-align:center;padding:40px">
+    <div style="font-size:40px">📦</div>
+    <div style="font-size:14px;font-weight:700;margin:8px 0">No orders yet</div>
+    <button onclick="navigateTo('shop')" style="padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Start Shopping</button>
+  </div>` :
+  orders.map(o => {
+    const sc = statusConfig[o.status] || { label: o.status, color:'var(--text3)' };
+    const itemCount = (o.items||[]).reduce((s,i) => s+(i.qty||1), 0);
+    return `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:800">${o.order_no}</div>
+          <div style="font-size:11px;color:var(--text3)">${new Date(o.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,200,66,0.1);color:${sc.color}">${sc.label}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${itemCount} item${itemCount>1?'s':''} · ₹${parseFloat(o.total||0).toLocaleString('en-IN')}</div>
+      <div style="font-size:11px;color:var(--text3)">${o.delivery_type==='pickup'?'🏪 Store Pickup':'🚚 '+( o.delivery_address?.area||o.delivery_address?.address_line1||'Home delivery')} · ${o.delivery_slot||''}</div>
+    </div>`;
+  }).join('')}`;
+}
+
+// Expose new checkout functions on VW_SHOP
+window.VW_SHOP.renderCheckoutPage = renderCheckoutPage;
+window.VW_SHOP.setDeliveryType = setDeliveryType;
+window.VW_SHOP.selectAddress = selectAddress;
+window.VW_SHOP.selectSlot = selectSlot;
+window.VW_SHOP.selectPayment = selectPayment;
+window.VW_SHOP.addNewAddress = addNewAddress;
+window.VW_SHOP.saveAddress = saveAddress;
+window.VW_SHOP.placeOrder = placeOrder;
+window.VW_SHOP.renderMyOrdersPage = renderMyOrdersPage;

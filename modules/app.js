@@ -200,6 +200,8 @@ async function navigateToFresh(page, params, cacheKey) {
     // Load products after render
     setTimeout(() => VW_SHOP.loadShopProducts(null, ''), 100);
   }
+  else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'my_orders') html = await VW_SHOP.renderMyOrdersPage();
   else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
   else if (page === 'wallet') {
     const prof = VW_AUTH.getCurrentProfile();
