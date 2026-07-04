@@ -53,7 +53,7 @@ function applyRolePermissions() {
       <button class="nav-btn" data-page="shop" onclick="navigateTo('shop');VW_SHOP.filterCategory(null)"><span class="nav-icon">🛒</span><span>Shop</span></button>
       <button class="nav-btn" data-page="my_orders" onclick="navigateTo('my_orders')"><span class="nav-icon">📦</span><span>Orders</span></button>
       <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
-      <button class="nav-btn" data-page="tile_quotes" onclick="navigateTo('tile_quotes')"><span class="nav-icon">📐</span><span>Quotes</span></button>`;
+      <button class="nav-btn" data-page="customer_profile" onclick="navigateTo('customer_profile')"><span class="nav-icon">👤</span><span>Profile</span></button>`;
     return;
   }
 
@@ -61,6 +61,7 @@ function applyRolePermissions() {
   if (role === 'contractor') {
     if (nav) nav.innerHTML = `
       <button class="nav-btn" data-page="labor_requests" onclick="navigateTo('labor_requests')"><span class="nav-icon">🏗</span><span>Jobs</span></button>
+      <button class="nav-btn" data-page="contractor_shop" onclick="navigateTo('contractor_shop')"><span class="nav-icon">🛍</span><span>Products</span></button>
       <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
       <button class="nav-btn" data-page="contractor_profile" onclick="navigateTo('contractor_profile')"><span class="nav-icon">👷</span><span>Profile</span></button>`;
     return;
@@ -224,6 +225,8 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'customer_profile') html = await VW_SHOP.renderCustomerProfilePage();
+  else if (page === 'contractor_shop') html = await VW_SHOP.renderContractorShopPage();
   else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
   else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
   else if (page === 'tile_visualizer') html = typeof renderRoomVisualizerPage === 'function' ? await renderRoomVisualizerPage() : '<div class="module-header"><h2>Room Visualizer</h2></div><p class="empty-msg">Loading...</p>';

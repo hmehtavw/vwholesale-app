@@ -8227,7 +8227,7 @@ async function loadShopProducts(category, search) {
   container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Loading...</div>';
 
   let query = VW_DB.client.from('products')
-    .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images')
+    .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images,photos')
     .eq('is_active', true)
     .order('stock', { ascending: false })
     .limit(40);
@@ -8259,7 +8259,7 @@ function shopProductCard(p) {
   const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
   const qty   = _shopCart[p.id] || 0;
   const outOfStock = !p.stock || p.stock <= 0;
-  const img   = p.images?.[0] || null;
+  const img   = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
 
   return `
   <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative">
@@ -9459,3 +9459,280 @@ async function renderOrderTrackingPage(orderId) {
 }
 
 window.VW_SHOP.renderOrderTrackingPage = renderOrderTrackingPage;
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRACTOR MARKUP & SHARE FLOW
+// ═══════════════════════════════════════════════════════════════
+
+async function renderContractorShopPage() {
+  // Contractors see net price (below VWP) — configurable in settings
+  const cfg = await VW_DB.getSetting('contractor_config', {
+    net_price_discount_pct: 10, // contractor sees VWP - 10% = net price
+    markup_limit_pct: 40,        // max markup contractor can add
+  });
+
+  return `
+  <div class="module-header">
+    <h2>🏗 Products to Share</h2>
+    <div style="font-size:11px;color:var(--text3)">Your net price = VWP − ${cfg.net_price_discount_pct}%</div>
+  </div>
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11px">
+    <div style="font-weight:700;color:var(--gold);margin-bottom:3px">How contractor pricing works:</div>
+    <div style="color:var(--text2)">1. You see net price (your cost from V Wholesale)</div>
+    <div style="color:var(--text2)">2. Add your margin — share with customer</div>
+    <div style="color:var(--text2)">3. Customer orders → V Wholesale delivers → you earn margin</div>
+    <div style="color:var(--text2);margin-top:3px">TDS 1% + applicable taxes deducted before payout</div>
+  </div>
+
+  <!-- Category tabs reuse shop categories -->
+  <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch">
+    ${SHOP_CATEGORIES.map(c => `
+    <button onclick="VW_SHOP.filterCategory('${c.key}');renderContractorProductGrid('${c.key}',${cfg.net_price_discount_pct})"
+      style="flex:0 0 auto;padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:11px;font-weight:700">
+      ${c.icon} ${c.label}
+    </button>`).join('')}
+  </div>
+
+  <div id="contractor-product-grid" style="margin-top:12px">
+    <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">Select a category above</div>
+  </div>`;
+}
+
+async function renderContractorProductGrid(category, discountPct) {
+  const container = document.getElementById('contractor-product-grid');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Loading...</div>';
+
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,category,price,vwp,mrp,unit,stock,images,photos')
+    .eq('category', category)
+    .eq('is_active', true)
+    .gt('stock', 0)
+    .limit(30);
+
+  if (!products?.length) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No products in this category</div>';
+    return;
+  }
+
+  container.innerHTML = `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    ${products.map(p => {
+      const vwp = p.vwp || p.price || 0;
+      const netPrice = Math.round(vwp * (1 - (discountPct || 10) / 100));
+      const img = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+      return `
+      <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+        <div style="height:90px;background:var(--bg3);display:flex;align-items:center;justify-content:center">
+          ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:28px">${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>`}
+        </div>
+        <div style="padding:8px">
+          <div style="font-size:11px;font-weight:700;margin-bottom:4px;line-height:1.3">${p.name}</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px">${p.brand||''}</div>
+          <div style="background:var(--bg3);border-radius:6px;padding:5px 6px;margin-bottom:6px">
+            <div style="font-size:9px;color:var(--text3)">Your net price</div>
+            <div style="font-size:13px;font-weight:900;color:var(--green)">₹${netPrice.toLocaleString('en-IN')}</div>
+            <div style="font-size:9px;color:var(--text3)">Customer MRP: ₹${(p.mrp||vwp).toLocaleString('en-IN')}</div>
+          </div>
+          <button onclick="VW_SHOP.openMarkupSheet(${p.id},'${p.name.replace(/'/g,"\\'")}',${netPrice},${p.mrp||vwp})"
+            style="width:100%;padding:7px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:11px;font-weight:800;cursor:pointer">
+            Share with Customer →
+          </button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function openMarkupSheet(productId, productName, netPrice, mrp) {
+  const sheet = document.getElementById('bottom-sheet');
+  const suggestedMarkup = Math.round((mrp - netPrice) * 0.5); // suggest 50% of available margin
+  const suggestedPrice = netPrice + suggestedMarkup;
+
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>📤 Share with Customer</h3>
+  <div style="font-size:13px;font-weight:700;margin-bottom:12px">${productName}</div>
+
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text3)">Your net price</span>
+      <span style="font-weight:700;color:var(--green)">₹${netPrice.toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text3)">Market MRP</span>
+      <span>₹${mrp.toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--text3)">Max available margin</span>
+      <span style="color:var(--gold);font-weight:700">₹${(mrp - netPrice).toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Your selling price to customer (₹)</label>
+    <input type="number" id="markup-price" value="${suggestedPrice}" min="${netPrice}" max="${mrp}"
+      oninput="updateMarkupPreview(${netPrice})"
+      style="font-size:18px;font-weight:800;color:var(--gold)">
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:4px">
+      <span style="color:var(--text3)">Min: ₹${netPrice.toLocaleString('en-IN')}</span>
+      <span style="color:var(--text3)">Max: ₹${mrp.toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <div id="markup-preview" style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:10px;padding:10px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:13px">
+      <span style="color:var(--text3)">Your margin</span>
+      <span id="markup-margin" style="font-weight:800;color:var(--green)">₹${suggestedMarkup.toLocaleString('en-IN')}</span>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">After TDS 1% deduction</div>
+  </div>
+
+  <div class="form-group">
+    <label>Customer Name (optional)</label>
+    <input type="text" id="markup-cust-name" placeholder="For personalised message">
+  </div>
+
+  <button onclick="VW_SHOP.shareProductWithCustomer(${productId},'${productName.replace(/'/g,"\\'")}',${netPrice})"
+    style="width:100%;padding:14px;border-radius:10px;background:rgba(37,211,102,1);border:none;color:#fff;font-size:14px;font-weight:800;cursor:pointer">
+    💬 Share via WhatsApp
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window.updateMarkupPreview = function(netPrice) {
+      const price = parseFloat(document.getElementById('markup-price')?.value) || netPrice;
+      const margin = Math.max(0, price - netPrice);
+      const afterTds = Math.round(margin * 0.99);
+      const el = document.getElementById('markup-margin');
+      if (el) el.textContent = '₹' + afterTds.toLocaleString('en-IN') + ' (after TDS)';
+    };
+  `;
+  document.body.appendChild(s);
+}
+
+async function shareProductWithCustomer(productId, productName, netPrice) {
+  const custPrice = parseFloat(document.getElementById('markup-price')?.value) || netPrice;
+  const custName  = document.getElementById('markup-cust-name')?.value?.trim() || '';
+  const prof = VW_AUTH.getCurrentProfile();
+
+  // Build WhatsApp message
+  const msg = encodeURIComponent(
+    `${custName ? 'Hi ' + custName + ',' : 'Hi,'}\n\n` +
+    `I'd like to share this product from V Wholesale:\n\n` +
+    `📦 *${productName}*\n` +
+    `💰 Special Price for you: *₹${custPrice.toLocaleString('en-IN')}*\n\n` +
+    `🏪 Available at V Wholesale, Vijayawada\n` +
+    `📞 Order via WhatsApp: 8712697930\n` +
+    `🚚 Same-day delivery available\n\n` +
+    `Shared by: ${prof?.name || 'V Wholesale Contractor'}`
+  );
+
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+  closeSheet();
+  showToast('WhatsApp opened — share with your customer', 'success');
+}
+
+// Expose
+window.VW_SHOP.renderContractorShopPage = renderContractorShopPage;
+window.VW_SHOP.openMarkupSheet = openMarkupSheet;
+window.VW_SHOP.shareProductWithCustomer = shareProductWithCustomer;
+window.renderContractorProductGrid = renderContractorProductGrid;
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER PROFILE PAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function renderCustomerProfilePage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  if (!prof) return '<div class="empty-msg">Not logged in</div>';
+
+  // Fetch loyalty points from customers table
+  const { data: cust } = await VW_DB.client.from('customers')
+    .select('id,name,phone,email,loyalty_points,cc_enrolled_at,cc_tier')
+    .eq('phone', prof.phone).single().catch(() => ({ data: null }));
+
+  const points = cust?.loyalty_points || 0;
+  const cfg = await VW_DB.getSetting('loyalty_config', { pointValue:1, earnRate:1 });
+  const pointsValue = Math.floor(points * (cfg.pointValue || 1));
+
+  // Fetch order count
+  const { count: orderCount } = await VW_DB.client.from('orders')
+    .select('id', { count:'exact', head:true })
+    .eq('profile_id', prof.id)
+    .eq('status','delivered');
+
+  return `
+  <div class="module-header"><h2>👤 My Profile</h2></div>
+
+  <!-- PROFILE CARD -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:20px;margin-bottom:14px;color:#fff">
+    <div style="font-size:22px;font-weight:900;margin-bottom:4px">${prof.name || '—'}</div>
+    <div style="font-size:13px;opacity:0.7;margin-bottom:12px">📞 ${prof.phone || '—'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#f5c842">${points.toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;opacity:0.7">Loyalty Points</div>
+        <div style="font-size:11px;color:#f5c842;margin-top:2px">= ₹${pointsValue.toLocaleString('en-IN')} value</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#f5c842">${orderCount || 0}</div>
+        <div style="font-size:10px;opacity:0.7">Orders Delivered</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EDIT PROFILE -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">Edit Profile</h3>
+    <div class="form-group">
+      <label>Full Name</label>
+      <input type="text" id="cp-name" value="${prof.name||''}" placeholder="Your name">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="cp-email" value="${prof.email||''}" placeholder="your@email.com">
+    </div>
+    <button onclick="VW_SHOP.saveCustomerProfile()" style="width:100%;padding:10px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+      Save Changes
+    </button>
+  </div>
+
+  <!-- QUICK LINKS -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    ${[
+      { icon:'📦', label:'My Orders', page:'my_orders' },
+      { icon:'👛', label:'My Wallet', page:'wallet' },
+      { icon:'📍', label:'My Addresses', page:'my_addresses' },
+      { icon:'📐', label:'My Quotes', page:'tile_quotes' },
+    ].map(item => `
+    <button onclick="navigateTo('${item.page}')"
+      style="padding:12px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);cursor:pointer;text-align:center">
+      <div style="font-size:22px;margin-bottom:4px">${item.icon}</div>
+      <div style="font-size:11px;font-weight:700">${item.label}</div>
+    </button>`).join('')}
+  </div>
+
+  <!-- SIGN OUT -->
+  <button onclick="VW_AUTH.signOut().then(()=>location.reload())"
+    style="width:100%;padding:10px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:var(--red);font-size:13px;cursor:pointer">
+    Sign Out
+  </button>`;
+}
+
+async function saveCustomerProfile() {
+  const name  = document.getElementById('cp-name')?.value?.trim();
+  const email = document.getElementById('cp-email')?.value?.trim();
+  const prof  = VW_AUTH.getCurrentProfile();
+  if (!name) { showToast('Name is required', 'warn'); return; }
+
+  await VW_DB.client.from('profiles').update({ name, email: email || null }).eq('id', prof.id);
+  showToast('Profile updated ✅', 'success');
+}
+
+window.VW_SHOP.renderCustomerProfilePage = renderCustomerProfilePage;
+window.VW_SHOP.saveCustomerProfile = saveCustomerProfile;
