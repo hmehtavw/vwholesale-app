@@ -195,7 +195,12 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
-    else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
+    else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
+  else if (page === 'wallet') {
+    const prof = VW_AUTH.getCurrentProfile();
+    const custId = prof?.customer_id || prof?.id;
+    html = await VW_WALLET.renderCustomerWallet(custId);
+  }
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
@@ -1463,6 +1468,28 @@ async function handleNotificationAction(notifId, action) {
     closeSheet();
     navigateTo('inventory');
     setTimeout(() => VW_INVENTORY.showAddPO(n.relatedId), 100);
+    return;
+  }
+  if (action === 'open_labor_request') {
+    closeSheet();
+    await navigateTo('labor_requests');
+    if (n.relatedId) setTimeout(() => VW_LABOR.openLaborRequest(n.relatedId), 400);
+    return;
+  }
+  if (action === 'open_labor_job') {
+    closeSheet();
+    await navigateTo('labor_requests');
+    return;
+  }
+  if (action === 'open_labor_bid') {
+    closeSheet();
+    await navigateTo('labor_requests');
+    if (n.relatedId) setTimeout(() => VW_LABOR.openLaborRequest(n.relatedId), 400);
+    return;
+  }
+  if (action === 'open_wallet') {
+    closeSheet();
+    await navigateTo('wallet');
     return;
   }
   if (action === 'open_po_approval') {

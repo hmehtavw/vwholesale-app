@@ -3514,6 +3514,10 @@ async function _renderStep8Inner() {
     <button class="btn-secondary" style="flex:1;min-width:80px" onclick="VW_TILES.tqSharePDF()">📄 Print / Share</button>
     `}
   </div>
+  <button style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60A5FA;font-size:12px;font-weight:700;cursor:pointer"
+    onclick="typeof VW_LABOR!=='undefined' && VW_LABOR.renderCreateLaborRequest(${JSON.stringify(st._savedQuoteId||null)})">
+    🏗 Also need tile laying? Request Labor
+  </button>
   <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">
     ${!st._approvalStatus || st._approvalStatus === 'draft' ? 'Print &amp; Share unlocked only after management approves this quotation' : 'Use "Edit with Reason" to reopen and modify after approval'}
   </div>`;

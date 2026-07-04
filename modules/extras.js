@@ -6403,3 +6403,808 @@ window.VW_FEATURES.searchWishlists = searchWishlists;
 
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER WALLET MODULE
+// ═══════════════════════════════════════════════════════════════
+
+async function getOrCreateWallet(customerId, customerName, customerPhone) {
+  // Fetch existing wallet
+  let { data: wallet } = await VW_DB.client
+    .from('customer_wallets')
+    .select('*')
+    .eq('customer_id', customerId)
+    .single()
+    .catch(() => ({ data: null }));
+
+  if (!wallet) {
+    const { data: newWallet } = await VW_DB.client
+      .from('customer_wallets')
+      .insert({ customer_id: customerId, customer_name: customerName, customer_phone: customerPhone })
+      .select('*').single();
+    wallet = newWallet;
+  }
+  return wallet;
+}
+
+async function renderCustomerWallet(customerId) {
+  const wallet = await getOrCreateWallet(customerId, '', '');
+  if (!wallet) return '<div class="empty-msg">Wallet not available</div>';
+
+  // Fetch last 10 transactions
+  const { data: txns } = await VW_DB.client
+    .from('wallet_transactions')
+    .select('*')
+    .eq('wallet_id', wallet.id)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  // Fetch active labor job if any
+  const { data: activeJob } = await VW_DB.client
+    .from('labor_jobs')
+    .select('job_no,total_sqft,total_sqft_completed,agreed_rate_type,agreed_price_large,status,expected_end_date')
+    .eq('customer_id', customerId)
+    .in('status', ['not_started','in_progress','paused'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .then(r => ({ data: r.data?.[0] || null }))
+    .catch(() => ({ data: null }));
+
+  const bal = parseFloat(wallet.balance || 0);
+  const kycBadge = wallet.kyc_status === 'approved'
+    ? '<span style="font-size:10px;background:rgba(34,197,94,0.15);color:var(--green);border-radius:5px;padding:2px 7px;font-weight:700">✓ KYC Verified</span>'
+    : wallet.kyc_status === 'pending'
+    ? '<span style="font-size:10px;background:rgba(245,200,66,0.15);color:var(--gold);border-radius:5px;padding:2px 7px;font-weight:700">⏳ KYC Pending</span>'
+    : bal >= 10000
+    ? '<span style="font-size:10px;background:rgba(239,68,68,0.1);color:var(--red);border-radius:5px;padding:2px 7px;font-weight:700">⚠️ KYC Required for >₹10,000</span>'
+    : '';
+
+  // Active job summary
+  const jobSummary = activeJob ? (() => {
+    const remaining = (activeJob.total_sqft || 0) - (activeJob.total_sqft_completed || 0);
+    const ratePerSqft = activeJob.agreed_price_large || 0;
+    const estRemaining = Math.round(remaining * ratePerSqft);
+    const daysLeft = activeJob.expected_end_date
+      ? Math.max(0, Math.ceil((new Date(activeJob.expected_end_date) - new Date()) / 86400000))
+      : null;
+    return `
+    <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">🏗 Active Labor Job — ${activeJob.job_no}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+        <div><div style="font-size:18px;font-weight:800">${activeJob.total_sqft_completed || 0}</div><div style="font-size:10px;color:var(--text3)">sqft done</div></div>
+        <div><div style="font-size:18px;font-weight:800">${remaining.toFixed(0)}</div><div style="font-size:10px;color:var(--text3)">sqft left</div></div>
+        <div><div style="font-size:18px;font-weight:800">${daysLeft !== null ? daysLeft+'d' : '—'}</div><div style="font-size:10px;color:var(--text3)">days left</div></div>
+      </div>
+      ${estRemaining > 0 ? `
+      <div style="margin-top:8px;padding:8px;background:var(--bg3);border-radius:8px;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:11px;color:var(--text3)">Est. remaining payment</div>
+        <div style="font-size:14px;font-weight:800;color:var(--gold)">₹${estRemaining.toLocaleString('en-IN')}</div>
+      </div>
+      ${bal < estRemaining ? `<div style="font-size:11px;color:var(--red);margin-top:6px;font-weight:600">⚠️ Wallet balance low — top up to avoid work pause</div>` : ''}` : ''}
+    </div>`;
+  })() : '';
+
+  const txnRows = (txns || []).map(t => {
+    const isCredit = ['topup','refund'].includes(t.type);
+    const icon = t.type === 'topup' ? '↑' : t.type === 'refund' ? '↩' : '↓';
+    const color = isCredit ? 'var(--green)' : 'var(--red)';
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border2)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:28px;height:28px;border-radius:50%;background:${isCredit ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.08)'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${color}">${icon}</div>
+        <div>
+          <div style="font-size:12px;font-weight:600">${t.description || t.type}</div>
+          <div style="font-size:10px;color:var(--text3)">${new Date(t.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:800;color:${color}">${isCredit ? '+' : '-'}₹${Math.abs(t.amount).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--text3)">Bal: ₹${parseFloat(t.balance_after||0).toLocaleString('en-IN')}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="module-header"><h2>👛 My Wallet</h2></div>
+
+  <!-- BALANCE CARD -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:20px;margin-bottom:14px;color:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div style="font-size:12px;opacity:0.7">V Wholesale Wallet</div>
+      ${kycBadge}
+    </div>
+    <div style="font-size:36px;font-weight:900;color:#f5c842;margin:8px 0">₹${bal.toLocaleString('en-IN')}</div>
+    <div style="font-size:11px;opacity:0.6">Available Balance</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="showWalletTopup(${wallet.id})" style="flex:1;padding:10px;border-radius:10px;background:#f5c842;color:#000;border:none;font-size:13px;font-weight:800;cursor:pointer">+ Top Up</button>
+      <button onclick="showWalletRefund(${wallet.id})" style="flex:1;padding:10px;border-radius:10px;background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.2);font-size:13px;cursor:pointer">↩ Refund</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:18px;font-weight:800;color:var(--green)">₹${parseFloat(wallet.total_topped_up||0).toLocaleString('en-IN')}</div>
+      <div style="font-size:10px;color:var(--text3)">Total Topped Up</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:18px;font-weight:800;color:var(--gold)">₹${parseFloat(wallet.total_spent||0).toLocaleString('en-IN')}</div>
+      <div style="font-size:10px;color:var(--text3)">Total Spent</div>
+    </div>
+  </div>
+
+  ${jobSummary}
+
+  <!-- TRANSACTIONS -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">Recent Transactions</div>
+    ${txnRows || '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No transactions yet</div>'}
+    ${(txns||[]).length >= 10 ? `<button onclick="loadMoreWalletTxns(${wallet.id})" style="width:100%;padding:8px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--text3);font-size:12px;cursor:pointer">Load more →</button>` : ''}
+  </div>
+
+  ${wallet.kyc_status === 'none' && bal >= 8000 ? `
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:12px;padding:12px;margin-top:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:4px">Complete KYC to unlock ₹1,00,000 limit</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Upload Aadhaar + PAN card. Takes 1 working day to verify.</div>
+    <button onclick="showKYCUpload(${wallet.id})" style="padding:8px 16px;background:var(--gold);border:none;border-radius:8px;color:#000;font-size:12px;font-weight:700;cursor:pointer">Upload KYC Documents</button>
+  </div>` : ''}`;
+}
+
+async function showWalletTopup(walletId) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>↑ Top Up Wallet</h3>
+  <p style="font-size:12px;color:var(--text3)">Add money to your V Wholesale Wallet. Use for labor payments, tile purchases, and more.</p>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    ${[500,1000,2000,5000,10000,20000].map(amt=>`
+    <button onclick="document.getElementById('topup-amount').value=${amt};updateTopupPreview()"
+      style="padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:13px;font-weight:700">
+      ₹${amt.toLocaleString('en-IN')}
+    </button>`).join('')}
+  </div>
+
+  <div class="form-group">
+    <label>Enter Amount (₹)</label>
+    <input type="number" id="topup-amount" placeholder="Minimum ₹500" min="500" step="100"
+      oninput="updateTopupPreview()" style="font-size:18px;font-weight:700;color:var(--gold)">
+  </div>
+
+  <div class="form-group">
+    <label>Payment Method</label>
+    <div style="display:flex;gap:8px">
+      <button id="pay-upi" onclick="selectPayMethod('upi')"
+        style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--gold);background:var(--gold-muted);cursor:pointer;font-size:12px;font-weight:700;color:var(--gold)">
+        📱 UPI
+      </button>
+      <button id="pay-cash" onclick="selectPayMethod('cash')"
+        style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:12px;color:var(--text3)">
+        💵 Cash at Store
+      </button>
+    </div>
+  </div>
+
+  <div id="topup-preview" style="display:none;background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:13px">
+      <span>Amount to add</span><span id="topup-preview-amt" style="font-weight:700;color:var(--gold)">—</span>
+    </div>
+  </div>
+
+  <button onclick="confirmWalletTopup(${walletId})"
+    style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    ✓ Confirm Top Up
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._topupPayMethod = 'upi';
+    function selectPayMethod(m) {
+      window._topupPayMethod = m;
+      document.getElementById('pay-upi').style.borderColor = m==='upi'?'var(--gold)':'var(--border)';
+      document.getElementById('pay-upi').style.background = m==='upi'?'var(--gold-muted)':'var(--bg2)';
+      document.getElementById('pay-upi').style.color = m==='upi'?'var(--gold)':'var(--text3)';
+      document.getElementById('pay-cash').style.borderColor = m==='cash'?'var(--gold)':'var(--border)';
+      document.getElementById('pay-cash').style.background = m==='cash'?'var(--gold-muted)':'var(--bg2)';
+      document.getElementById('pay-cash').style.color = m==='cash'?'var(--gold)':'var(--text3)';
+    }
+    function updateTopupPreview() {
+      const amt = parseFloat(document.getElementById('topup-amount')?.value)||0;
+      const preview = document.getElementById('topup-preview');
+      const previewAmt = document.getElementById('topup-preview-amt');
+      if (amt >= 500) {
+        preview.style.display = 'block';
+        previewAmt.textContent = '₹'+amt.toLocaleString('en-IN');
+      } else {
+        preview.style.display = 'none';
+      }
+    }
+  `;
+  document.body.appendChild(s);
+}
+
+async function confirmWalletTopup(walletId) {
+  const amount = parseFloat(document.getElementById('topup-amount')?.value) || 0;
+  if (amount < 500) { showToast('Minimum top-up is ₹500', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const payMethod = window._topupPayMethod || 'cash';
+
+  // Fetch current wallet
+  const { data: wallet } = await VW_DB.client.from('customer_wallets').select('balance,total_topped_up').eq('id', walletId).single();
+  if (!wallet) { showToast('Wallet not found', 'error'); return; }
+
+  const newBalance = parseFloat(wallet.balance || 0) + amount;
+
+  // Create transaction
+  const { error } = await VW_DB.client.from('wallet_transactions').insert({
+    wallet_id: walletId,
+    customer_id: wallet.customer_id,
+    type: 'topup',
+    amount: amount,
+    balance_after: newBalance,
+    description: `Wallet top-up via ${payMethod === 'upi' ? 'UPI' : 'Cash at Store'}`,
+    payment_method: payMethod,
+    processed_by: prof?.id,
+    processed_by_name: prof?.name || '',
+  });
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  // Update wallet balance
+  await VW_DB.client.from('customer_wallets').update({
+    balance: newBalance,
+    total_topped_up: parseFloat(wallet.total_topped_up || 0) + amount,
+    last_activity_at: new Date().toISOString(),
+  }).eq('id', walletId);
+
+  showToast(`₹${amount.toLocaleString('en-IN')} added to wallet ✅`, 'success');
+  closeSheet();
+}
+
+async function showWalletRefund(walletId) {
+  const { data: wallet } = await VW_DB.client.from('customer_wallets').select('*').eq('id', walletId).single();
+  if (!wallet) return;
+  const bal = parseFloat(wallet.balance || 0);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>↩ Request Refund</h3>
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--text3)">Available Balance</div>
+    <div style="font-size:24px;font-weight:900;color:var(--gold)">₹${bal.toLocaleString('en-IN')}</div>
+  </div>
+  ${bal < 100 ? `<div style="font-size:12px;color:var(--red);padding:8px">Minimum refund amount is ₹100</div>` : `
+  <div class="form-group">
+    <label>Refund Amount (₹)</label>
+    <input type="number" id="refund-amount" value="${bal}" max="${bal}" min="100" placeholder="₹"
+      style="font-size:18px;font-weight:700;color:var(--gold)">
+  </div>
+  <div class="form-group">
+    <label>Bank Account Number</label>
+    <input type="text" id="refund-account" placeholder="Enter bank account number">
+  </div>
+  <div class="form-group">
+    <label>IFSC Code</label>
+    <input type="text" id="refund-ifsc" placeholder="e.g. SBIN0001234">
+  </div>
+  <div class="form-group">
+    <label>Account Holder Name</label>
+    <input type="text" id="refund-name" placeholder="As per bank records">
+  </div>
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px;color:var(--text3)">
+    ⏱ Refunds processed within 3-5 working days · Free of charge
+  </div>
+  <button onclick="VW_WALLET.submitRefundRequest(${walletId})"
+    style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    Submit Refund Request
+  </button>`}
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function submitRefundRequest(walletId) {
+  const amount = parseFloat(document.getElementById('refund-amount')?.value) || 0;
+  const account = document.getElementById('refund-account')?.value?.trim();
+  const ifsc = document.getElementById('refund-ifsc')?.value?.trim();
+  const name = document.getElementById('refund-name')?.value?.trim();
+
+  if (amount < 100) { showToast('Minimum refund is ₹100', 'warn'); return; }
+  if (!account || !ifsc || !name) { showToast('Enter complete bank details', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+
+  // Notify management
+  await createPersistedNotification({
+    category: 'wallet_refund',
+    title: `↩ Wallet Refund Request — ₹${amount.toLocaleString('en-IN')}`,
+    body: `${name} · Account: ${account} · IFSC: ${ifsc}`,
+    relatedTable: 'customer_wallets',
+    relatedId: walletId,
+    actions: [{ label: '👁 Process Refund', action: 'open_wallet' }],
+  }).catch(() => {});
+
+  showToast('Refund request submitted — processed within 3-5 working days', 'success');
+  closeSheet();
+}
+
+// Expose wallet functions globally
+window.VW_WALLET = {
+  getOrCreateWallet,
+  renderCustomerWallet,
+  showWalletTopup,
+  confirmWalletTopup,
+  showWalletRefund,
+  submitRefundRequest,
+};
+window.showWalletTopup = showWalletTopup;
+window.showWalletRefund = showWalletRefund;
+
+// ═══════════════════════════════════════════════════════════════
+// LABOR REQUEST MODULE
+// ═══════════════════════════════════════════════════════════════
+
+async function renderCreateLaborRequest(tqId) {
+  // Pre-fill from TQ if provided
+  let tq = null;
+  if (tqId) {
+    const { data } = await VW_DB.client.from('tile_quotations')
+      .select('*').eq('id', tqId).single().catch(() => ({ data: null }));
+    tq = data;
+  }
+
+  const prof = VW_AUTH.getCurrentProfile();
+
+  document.getElementById('bottom-sheet').innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>🏗 Request Tile Laying Labor</h3>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
+    ${tq ? `Linked to ${tq.tq_no} · ${parseFloat(tq.total_area_sqft||0).toFixed(0)} sqft` : 'Fill in job details to find the best contractor for your project.'}
+  </p>
+
+  <!-- CUSTOMER DETAILS (pre-filled if from TQ) -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">👤 Customer & Site</h3>
+    <div class="form-group">
+      <label>Customer Name *</label>
+      <input type="text" id="lr-cust-name" value="${tq?.customer_name||''}" placeholder="Full name">
+    </div>
+    <div class="form-group">
+      <label>Phone *</label>
+      <input type="tel" id="lr-cust-phone" value="${tq?.customer_phone||''}" placeholder="10-digit mobile" maxlength="10">
+    </div>
+    <div class="form-group">
+      <label>Site Address *</label>
+      <input type="text" id="lr-site-addr" value="${tq?.site_address||''}" placeholder="Full site address">
+    </div>
+  </div>
+
+  <!-- WORK DETAILS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📐 Work Details</h3>
+    <div class="form-group">
+      <label>Total Area (sqft) *</label>
+      <input type="number" id="lr-sqft" value="${tq?.total_area_sqft||''}" placeholder="e.g. 450" min="1">
+    </div>
+    <div class="form-group">
+      <label>Work Type</label>
+      <div style="display:flex;gap:8px">
+        ${['floor','wall','both'].map(w=>`
+        <button id="lr-wt-${w}" onclick="selectWorkType('${w}')"
+          style="flex:1;padding:8px;border-radius:8px;font-size:12px;cursor:pointer;
+            border:${w==='both'?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${w==='both'?'var(--gold-muted)':'var(--bg2)'}">
+          ${w==='floor'?'🏠 Floor':w==='wall'?'🧱 Wall':'🏠+🧱 Both'}
+        </button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Preferred Start Date</label>
+      <input type="date" id="lr-start-date" min="${new Date().toISOString().split('T')[0]}">
+    </div>
+  </div>
+
+  <!-- SITE CONDITIONS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🏗 Site Conditions</h3>
+
+    <div class="form-group">
+      <label>Material Status</label>
+      <select id="lr-material">
+        <option value="ready">✅ Ready at site</option>
+        <option value="at_vw_store">📦 At V Wholesale store (needs delivery first)</option>
+        <option value="partial">⚠️ Partial — some ready, some pending</option>
+        <option value="not_ready">❌ Not purchased yet</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Floor Level</label>
+      <select id="lr-floor">
+        <option value="0">Ground Floor</option>
+        <option value="1">1st Floor</option>
+        <option value="2">2nd Floor</option>
+        <option value="3">3rd Floor</option>
+        <option value="4">4th Floor or higher</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Existing Flooring</label>
+      <select id="lr-flooring">
+        <option value="bare_cement">Bare Cement (new construction)</option>
+        <option value="old_tiles">Old Tiles (removal needed)</option>
+        <option value="marble">Marble / Granite (removal needed)</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Site Access</label>
+      <select id="lr-access">
+        <option value="easy">Easy — wide staircase / lift available</option>
+        <option value="narrow">Narrow staircase — manual carry</option>
+        <option value="no_lift">No lift — manual carry to upper floor</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- PHOTOS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📷 Room Photos (Required)</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:8px">Upload at least 1 photo per room. Contractors use these to plan their work and give accurate bids.</p>
+    <input type="file" id="lr-photos" multiple accept="image/*" onchange="previewLRPhotos(this)"
+      style="width:100%;padding:8px;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;font-size:12px">
+    <div id="lr-photo-previews" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+  </div>
+
+  <!-- NOTES -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">📝 Additional Notes</h3>
+    <textarea id="lr-notes" placeholder="Any special requirements, access instructions, or notes for the contractor..." rows="3"
+      style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+
+  <button onclick="VW_LABOR.submitLaborRequest(${tqId||'null'})"
+    style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    📤 Submit Request
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  document.getElementById('bottom-sheet').classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._lrWorkType = 'both';
+    function selectWorkType(w) {
+      window._lrWorkType = w;
+      ['floor','wall','both'].forEach(t => {
+        const btn = document.getElementById('lr-wt-'+t);
+        if (btn) {
+          btn.style.border = t===w?'2px solid var(--gold)':'1px solid var(--border)';
+          btn.style.background = t===w?'var(--gold-muted)':'var(--bg2)';
+        }
+      });
+    }
+    function previewLRPhotos(input) {
+      const preview = document.getElementById('lr-photo-previews');
+      if (!preview) return;
+      preview.innerHTML = '';
+      Array.from(input.files).forEach(file => {
+        const url = URL.createObjectURL(file);
+        preview.innerHTML += '<img src="'+url+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">';
+      });
+    }
+  `;
+  document.body.appendChild(s);
+}
+
+async function submitLaborRequest(tqId) {
+  const name  = document.getElementById('lr-cust-name')?.value?.trim();
+  const phone = document.getElementById('lr-cust-phone')?.value?.trim();
+  const addr  = document.getElementById('lr-site-addr')?.value?.trim();
+  const sqft  = parseFloat(document.getElementById('lr-sqft')?.value) || 0;
+
+  if (!name || !phone || !addr || !sqft) {
+    showToast('Fill in all required fields', 'warn'); return;
+  }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const { error, data } = await VW_DB.client.from('labor_requests').insert({
+    customer_name: name,
+    customer_phone: phone,
+    site_address: addr,
+    tq_id: tqId || null,
+    total_sqft: sqft,
+    work_type: window._lrWorkType || 'both',
+    material_status: document.getElementById('lr-material')?.value || 'ready',
+    material_location: 'at_site',
+    floor_level: parseInt(document.getElementById('lr-floor')?.value || 0),
+    old_flooring: document.getElementById('lr-flooring')?.value || 'bare_cement',
+    site_access: document.getElementById('lr-access')?.value || 'easy',
+    preferred_start_date: document.getElementById('lr-start-date')?.value || null,
+    notes: document.getElementById('lr-notes')?.value || '',
+    status: 'pending_approval',
+    created_by: prof?.id,
+    created_by_name: prof?.name || '',
+    created_via: 'executive',
+  }).select('id,request_no').single();
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  // Notify management
+  const { data: mgmt } = await VW_DB.client.from('profiles')
+    .select('id').in('role', ['management','admin']).eq('status','approved');
+  for (const m of mgmt || []) {
+    await createPersistedNotification({
+      category: 'labor_approval',
+      title: `🏗 Labor Request — ${data.request_no}`,
+      body: `${name} · ${sqft} sqft · ${addr}`,
+      recipientId: m.id,
+      relatedTable: 'labor_requests',
+      relatedId: data.id,
+      actions: [{ label: '👁 Review Request', action: 'open_labor_request' }],
+    }).catch(() => {});
+  }
+
+  showToast(`${data.request_no} submitted for Management review`, 'success');
+  closeSheet();
+}
+
+async function renderLaborRequestList() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const isAdmin = ['admin','management'].includes(prof?.role);
+
+  let query = VW_DB.client.from('labor_requests')
+    .select('id,request_no,customer_name,site_address,total_sqft,work_type,status,created_at,created_by_name')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  if (!isAdmin) query = query.eq('created_by', prof?.id);
+
+  const { data: requests } = await query;
+
+  const statusConfig = {
+    draft: { label:'Draft', color:'var(--text3)' },
+    pending_approval: { label:'⏳ Awaiting Approval', color:'var(--gold)' },
+    published: { label:'📢 Bidding Open', color:'#60A5FA' },
+    accepted: { label:'✅ Contractor Assigned', color:'var(--green)' },
+    in_progress: { label:'🔨 In Progress', color:'var(--gold)' },
+    completed: { label:'✓ Complete', color:'var(--green)' },
+    cancelled: { label:'Cancelled', color:'var(--red)' },
+  };
+
+  return `
+  <div class="module-header">
+    <h2>🏗 Labor Requests</h2>
+    <button class="btn-sm" onclick="VW_LABOR.renderCreateLaborRequest(null)" style="background:var(--gold);color:#000">+ New Request</button>
+  </div>
+  ${!(requests?.length) ? '<p class="empty-msg">No labor requests yet</p>' :
+  requests.map(r => {
+    const sc = statusConfig[r.status] || { label: r.status, color: 'var(--text3)' };
+    return `
+    <div class="task-card" onclick="VW_LABOR.openLaborRequest(${r.id})" style="cursor:pointer">
+      <div class="task-card-header">
+        <span class="task-dept">${r.request_no}</span>
+        <span class="badge" style="background:${sc.color};color:#000">${sc.label}</span>
+      </div>
+      <div style="font-size:13px;font-weight:600">${r.customer_name}</div>
+      <div style="font-size:11px;color:var(--text3)">${r.site_address} · ${r.total_sqft} sqft · ${r.work_type}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">By ${r.created_by_name} · ${new Date(r.created_at).toLocaleDateString('en-IN')}</div>
+    </div>`;
+  }).join('')}`;
+}
+
+async function openLaborRequest(id) {
+  const { data: r } = await VW_DB.client.from('labor_requests').select('*').eq('id', id).single();
+  if (!r) return;
+  const prof = VW_AUTH.getCurrentProfile();
+  const isAdmin = ['admin','management'].includes(prof?.role);
+
+  const { data: bids } = await VW_DB.client.from('contractor_bids')
+    .select('*').eq('request_id', id).order('submitted_at', { ascending: false });
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+    <div>
+      <h3 style="margin:0">${r.request_no}</h3>
+      <div style="font-size:12px;color:var(--text3)">${r.customer_name} · ${r.total_sqft} sqft</div>
+    </div>
+    <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--bg2)">${r.status?.replace('_',' ')}</span>
+  </div>
+
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px">
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Site</span><span>${r.site_address}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Area</span><span>${r.total_sqft} sqft · ${r.work_type}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Material</span><span>${r.material_status?.replace('_',' ')}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Floor</span><span>${r.floor_level === 0 ? 'Ground' : r.floor_level+'st/nd/rd floor'}</span></div>
+    <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Access</span><span>${r.site_access?.replace('_',' ')}</span></div>
+    ${r.notes ? `<div style="padding:6px 0;border-top:1px solid var(--border2);margin-top:4px;color:var(--text3)">${r.notes}</div>` : ''}
+  </div>
+
+  <!-- MANAGEMENT APPROVAL -->
+  ${isAdmin && r.status === 'pending_approval' ? `
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">⚡ Set Commission & Publish</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Commission Type</label>
+        <select id="lr-comm-type" style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px">
+          <option value="percent">% of total</option>
+          <option value="per_sqft">₹ per sqft</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Commission Value</label>
+        <input type="number" id="lr-comm-val" placeholder="e.g. 25 or 5" step="0.5"
+          style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;box-sizing:border-box">
+      </div>
+    </div>
+    <div>
+      <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Site Deposit % (min 10%, max 20%)</label>
+      <input type="number" id="lr-deposit-pct" value="${r.site_deposit_pct||20}" min="10" max="20" step="1"
+        style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;box-sizing:border-box">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="VW_LABOR.publishLaborRequest(${id})" style="flex:1;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+        📢 Approve & Publish to Contractors
+      </button>
+      <button onclick="VW_LABOR.rejectLaborRequest(${id})" style="flex:1;padding:12px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+        ❌ Reject
+      </button>
+    </div>
+  </div>` : ''}
+
+  <!-- BIDS -->
+  ${bids?.length ? `
+  <div style="margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">📝 Bids Received (${bids.length})</div>
+    ${bids.map(b => `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px;border:${b.status==='accepted'?'2px solid var(--green)':'1px solid var(--border)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:700">${b.contractor_name}</span>
+        <span style="font-size:12px;font-weight:800;color:var(--gold)">${b.price_type==='lumpsum'?'₹'+b.lumpsum_amount+' lumpsum':'₹'+b.price_per_sqft_large+'/sqft'}</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">${b.estimated_days} days · Start ${b.earliest_start_date||'TBD'}</div>
+      ${b.old_tile_removal?`<div style="font-size:11px;color:var(--text3)">Demolition: ₹${b.old_tile_removal_charge||0}</div>`:''}
+      ${b.notes?`<div style="font-size:11px;color:var(--text2);margin-top:3px">${b.notes}</div>`:''}
+      ${r.status==='bidding' && b.status==='submitted' ? `
+      <button onclick="VW_LABOR.acceptBid(${r.id},${b.id})" style="width:100%;margin-top:8px;padding:8px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+        ✅ Accept This Bid
+      </button>` : ''}
+    </div>`).join('')}
+  </div>` : r.status === 'published' ? '<p class="empty-msg" style="text-align:center">No bids yet — notified contractors will submit soon</p>' : ''}
+
+  <button onclick="closeSheet()" style="width:100%;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Close</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function publishLaborRequest(id) {
+  const commType = document.getElementById('lr-comm-type')?.value || 'percent';
+  const commVal  = parseFloat(document.getElementById('lr-comm-val')?.value) || 0;
+  const depositPct = parseFloat(document.getElementById('lr-deposit-pct')?.value) || 20;
+
+  if (!commVal) { showToast('Enter commission value', 'warn'); return; }
+  if (depositPct < 10 || depositPct > 20) { showToast('Deposit must be 10–20%', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const { data: r } = await VW_DB.client.from('labor_requests')
+    .update({
+      status: 'published',
+      commission_type: commType,
+      commission_value: commVal,
+      site_deposit_pct: depositPct,
+      management_approved_by: prof?.id,
+      management_approved_at: new Date().toISOString(),
+      published_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('request_no,total_sqft,customer_name,site_address')
+    .single();
+
+  // Find matching contractors and notify
+  await notifyMatchingContractors(id, r);
+  showToast('Published — matching contractors notified', 'success');
+  closeSheet();
+}
+
+async function notifyMatchingContractors(requestId, r) {
+  // Fetch active contractors with their scores
+  const { data: contractors } = await VW_DB.client
+    .from('contractor_profiles')
+    .select('id,profile_id,name,contractor_score,service_radius_km')
+    .eq('is_active', true)
+    .eq('kyc_status', 'approved')
+    .gte('contractor_score', 40)
+    .order('contractor_score', { ascending: false });
+
+  for (const c of contractors || []) {
+    await createPersistedNotification({
+      category: 'labor_bid_invite',
+      title: `🏗 New Job Available — ${r.request_no}`,
+      body: `${r.total_sqft} sqft · ${r.customer_name} · ${r.site_address}`,
+      recipientId: c.profile_id,
+      relatedTable: 'labor_requests',
+      relatedId: requestId,
+      actions: [{ label: '📝 View & Bid', action: 'open_labor_bid' }],
+    }).catch(() => {});
+  }
+}
+
+async function acceptBid(requestId, bidId) {
+  const { data: bid } = await VW_DB.client.from('contractor_bids').select('*').eq('id', bidId).single();
+  const { data: req } = await VW_DB.client.from('labor_requests').select('*').eq('id', requestId).single();
+  if (!bid || !req) return;
+
+  // Create labor job
+  const { data: job } = await VW_DB.client.from('labor_jobs').insert({
+    request_id: requestId,
+    bid_id: bidId,
+    contractor_profile_id: bid.contractor_profile_id,
+    contractor_name: bid.contractor_name,
+    customer_name: req.customer_name,
+    customer_phone: req.customer_phone,
+    site_address: req.site_address,
+    total_sqft: req.total_sqft,
+    agreed_rate_type: bid.price_type,
+    agreed_price_small: bid.price_per_sqft_small,
+    agreed_price_medium: bid.price_per_sqft_medium,
+    agreed_price_large: bid.price_per_sqft_large,
+    agreed_lumpsum: bid.lumpsum_amount,
+    estimated_days: bid.estimated_days,
+    start_date: bid.earliest_start_date,
+    expected_end_date: bid.earliest_start_date
+      ? new Date(new Date(bid.earliest_start_date).getTime() + (bid.estimated_days||7)*86400000).toISOString().split('T')[0]
+      : null,
+    status: 'not_started',
+  }).select('id,job_no').single();
+
+  // Update request + bid status
+  await VW_DB.client.from('labor_requests').update({ status: 'accepted' }).eq('id', requestId);
+  await VW_DB.client.from('contractor_bids').update({ status: 'accepted' }).eq('id', bidId);
+  await VW_DB.client.from('contractor_bids').update({ status: 'rejected' }).eq('request_id', requestId).neq('id', bidId);
+
+  // Notify contractor — now share customer address + phone
+  await createPersistedNotification({
+    category: 'bid_accepted',
+    title: `✅ Your bid was accepted — ${job.job_no}`,
+    body: `${req.customer_name} · ${req.customer_phone} · ${req.site_address}`,
+    recipientId: bid.contractor_profile_id,
+    relatedTable: 'labor_jobs',
+    relatedId: job.id,
+    actions: [{ label: '👁 View Job', action: 'open_labor_job' }],
+  }).catch(() => {});
+
+  showToast(`Bid accepted — ${job.job_no} created`, 'success');
+  closeSheet();
+}
+
+async function rejectLaborRequest(id) {
+  const reason = prompt('Reason for rejection?');
+  if (!reason) return;
+  await VW_DB.client.from('labor_requests').update({ status: 'cancelled' }).eq('id', id);
+  showToast('Request rejected', 'warn');
+  closeSheet();
+}
+
+// Expose
+window.VW_LABOR = {
+  renderCreateLaborRequest,
+  submitLaborRequest,
+  renderLaborRequestList,
+  openLaborRequest,
+  publishLaborRequest,
+  acceptBid,
+  rejectLaborRequest,
+};
