@@ -1363,11 +1363,30 @@ window.toggleHeaderMore = toggleHeaderMore;
 
 // Called from applyRolePermissions — show/hide items in header dropdown per role
 function updateHeaderDropdownRoles() {
+  const role = VW_AUTH?.getRole?.();
   const allowed = VW_AUTH?.getAllowedPages?.() || [];
+
+  // Hide staff header elements for customer/contractor
+  const staffHeaderItems = ['hdr-eod-btn','hdr-settings-btn'];
+  const isPublic = role === 'customer' || role === 'contractor';
+
+  staffHeaderItems.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isPublic ? 'none' : (allowed.includes(id.replace('hdr-','').replace('-btn','')) ? '' : 'none');
+  });
+
+  // Update logo click for customers
+  const logo = document.querySelector('.header-logo-block');
+  if (logo) {
+    if (role === 'customer') logo.setAttribute('onclick', "navigateTo('shop')");
+    else if (role === 'contractor') logo.setAttribute('onclick', "navigateTo('labor_requests')");
+    else logo.setAttribute('onclick', "navigateTo('dashboard')");
+  }
+
   const eodBtn = document.getElementById('hdr-eod-btn');
   const settBtn = document.getElementById('hdr-settings-btn');
-  if (eodBtn) eodBtn.style.display = allowed.includes('eod') ? '' : 'none';
-  if (settBtn) settBtn.style.display = allowed.includes('settings') ? '' : 'none';
+  if (eodBtn) eodBtn.style.display = (!isPublic && allowed.includes('eod')) ? '' : 'none';
+  if (settBtn) settBtn.style.display = (!isPublic && allowed.includes('settings')) ? '' : 'none';
 }
 
 function toggleMoreMenu() {
@@ -1773,7 +1792,15 @@ async function init() {
 
   try { await VW_NOTIFY.requestNotifPermission(); } catch(e) {}
 
-  await navigateTo('dashboard');
+  // Route to correct home based on role
+  const _initRole = VW_AUTH.getRole?.();
+  if (_initRole === 'customer') {
+    await navigateTo('shop');
+  } else if (_initRole === 'contractor') {
+    await navigateTo('labor_requests');
+  } else {
+    await navigateTo('dashboard');
+  }
   try { _initI18nObserver(); if (_currentLang !== 'en') setTimeout(() => translatePageChrome(document.body), 100); } catch(e) {}
   try { await refreshNotifBadge(); } catch(e) { console.warn('Notif badge refresh error', e); }
 
