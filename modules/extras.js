@@ -9016,8 +9016,19 @@ async function renderMyOrdersPage() {
         </div>
         <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,200,66,0.1);color:${sc.color}">${sc.label}</span>
       </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:800">${o.order_no}</div>
+          <div style="font-size:11px;color:var(--text3)">${new Date(o.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,200,66,0.1);color:${sc.color}">${sc.label}</span>
+      </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${itemCount} item${itemCount>1?'s':''} · ₹${parseFloat(o.total||0).toLocaleString('en-IN')}</div>
-      <div style="font-size:11px;color:var(--text3)">${o.delivery_type==='pickup'?'🏪 Store Pickup':'🚚 '+( o.delivery_address?.area||o.delivery_address?.address_line1||'Home delivery')} · ${o.delivery_slot||''}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${o.delivery_type==='pickup'?'🏪 Store Pickup':'🚚 '+( o.delivery_address?.area||o.delivery_address?.address_line1||'Home delivery')} · ${o.delivery_slot||''}</div>
+      <button onclick="navigateTo('track_order',{id:${o.id}})"
+        style="width:100%;padding:8px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:12px;font-weight:600;cursor:pointer">
+        📍 Track Order
+      </button>
     </div>`;
   }).join('')}`;
 }
@@ -9251,3 +9262,200 @@ window.VW_SHOP.renderOrdersDashboard = renderOrdersDashboard;
 window.VW_SHOP.updateOrderStatus = updateOrderStatus;
 window.VW_SHOP.callCustomer = callCustomer;
 window.VW_SHOP.cancelOrder = cancelOrder;
+
+// ═══════════════════════════════════════════════════════════════
+// MY ADDRESSES PAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function renderMyAddressesPage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const { data: addresses } = await VW_DB.client
+    .from('customer_addresses')
+    .select('*')
+    .eq('profile_id', prof?.id || '')
+    .order('is_default', { ascending: false });
+
+  return `
+  <div class="module-header">
+    <h2>📍 My Addresses</h2>
+    <button onclick="VW_SHOP.addNewAddress()" style="background:var(--gold);border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:#000">+ Add</button>
+  </div>
+
+  ${!(addresses?.length) ? `
+  <div style="text-align:center;padding:40px">
+    <div style="font-size:40px">📍</div>
+    <div style="font-size:14px;font-weight:700;margin:8px 0">No addresses saved</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Add your delivery address to checkout faster</div>
+    <button onclick="VW_SHOP.addNewAddress()" style="padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">+ Add Address</button>
+  </div>` :
+  addresses.map(a => `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border:${a.is_default?'2px solid var(--gold)':'1px solid var(--border)'}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;font-weight:700">${a.label}</span>
+        ${a.is_default ? '<span style="font-size:10px;background:var(--gold-muted);color:var(--gold);padding:2px 7px;border-radius:10px;font-weight:700">Default</span>' : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        ${!a.is_default ? `<button onclick="VW_SHOP.setDefaultAddress(${a.id})" style="background:none;border:none;font-size:11px;color:var(--text3);cursor:pointer">Set default</button>` : ''}
+        <button onclick="VW_SHOP.deleteAddress(${a.id})" style="background:none;border:none;font-size:11px;color:var(--red);cursor:pointer">Delete</button>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text2)">${a.address_line1}</div>
+    ${a.area ? `<div style="font-size:12px;color:var(--text3)">${a.area}</div>` : ''}
+    <div style="font-size:12px;color:var(--text3)">${a.city} - ${a.pincode||''}</div>
+    ${a.phone ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">📞 ${a.phone}</div>` : ''}
+  </div>`).join('')}`;
+}
+
+async function setDefaultAddress(id) {
+  const prof = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('customer_addresses')
+    .update({ is_default: false }).eq('profile_id', prof?.id || '');
+  await VW_DB.client.from('customer_addresses')
+    .update({ is_default: true }).eq('id', id);
+  showToast('Default address updated', 'success');
+  navigateTo('my_addresses');
+}
+
+async function deleteAddress(id) {
+  if (!confirm('Delete this address?')) return;
+  await VW_DB.client.from('customer_addresses').delete().eq('id', id);
+  showToast('Address deleted', 'info');
+  navigateTo('my_addresses');
+}
+
+window.VW_SHOP.renderMyAddressesPage = renderMyAddressesPage;
+window.VW_SHOP.setDefaultAddress = setDefaultAddress;
+window.VW_SHOP.deleteAddress = deleteAddress;
+
+// ═══════════════════════════════════════════════════════════════
+// ORDER TRACKING — Customer view with visual progress
+// ═══════════════════════════════════════════════════════════════
+
+async function renderOrderTrackingPage(orderId) {
+  const prof = VW_AUTH.getCurrentProfile();
+
+  // Get order — allow viewing by profile_id or order_no
+  let query = VW_DB.client.from('orders').select('*');
+  if (orderId) {
+    query = isNaN(orderId)
+      ? query.eq('order_no', orderId)
+      : query.eq('id', orderId);
+  } else {
+    // Show most recent order
+    query = query.eq('profile_id', prof?.id || '').order('placed_at', { ascending: false }).limit(1);
+  }
+  const { data: orders } = await query.limit(1);
+  const o = Array.isArray(orders) ? orders[0] : orders;
+
+  if (!o) return `
+  <div class="module-header"><h2>Track Order</h2></div>
+  <div style="text-align:center;padding:40px;color:var(--text3)">
+    <div style="font-size:40px">📦</div>
+    <div style="margin-top:8px">Order not found</div>
+    <button onclick="navigateTo('my_orders')" style="margin-top:16px;padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">My Orders</button>
+  </div>`;
+
+  const steps = [
+    { status:'placed',           icon:'✅', label:'Order Placed',      time: o.placed_at },
+    { status:'confirmed',        icon:'📋', label:'Confirmed',         time: o.confirmed_at },
+    { status:'picking',          icon:'📦', label:'Picking & Packing', time: null },
+    { status:'out_for_delivery', icon:'🚚', label: o.delivery_type==='pickup'?'Ready for Pickup':'Out for Delivery', time: null },
+    { status:'delivered',        icon:'🎉', label: o.delivery_type==='pickup'?'Picked Up':'Delivered', time: o.delivered_at },
+  ];
+
+  const statusOrder = ['placed','confirmed','picking','out_for_delivery','delivered'];
+  const currentIdx = statusOrder.indexOf(o.status);
+  const isCancelled = o.status === 'cancelled';
+
+  const addr = o.delivery_address;
+  const itemCount = (o.items||[]).reduce((s,i)=>s+(i.qty||1),0);
+
+  return `
+  <div class="module-header">
+    <button onclick="navigateTo('my_orders')" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)">←</button>
+    <h2>Track Order</h2>
+  </div>
+
+  <!-- ORDER HEADER -->
+  <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:16px;font-weight:900">${o.order_no}</div>
+        <div style="font-size:12px;color:var(--text3)">${new Date(o.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:15px;font-weight:900;color:var(--gold)">₹${parseFloat(o.total||0).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:${o.payment_status==='paid'?'var(--green)':'var(--gold)'}">${o.payment_method?.toUpperCase()} · ${o.payment_status==='paid'?'Paid':'Pending'}</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">${itemCount} item${itemCount>1?'s':''}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:3px">
+      ${o.delivery_type==='pickup'?'🏪 Store Pickup · 1-1-153 NH65 Bhavanipuram':'🚚 '+( addr?.address_line1||'')+', '+(addr?.area||addr?.city||'')}
+    </div>
+    <div style="font-size:11px;color:var(--text3)">⏰ ${o.delivery_slot||'—'}</div>
+  </div>
+
+  ${isCancelled ? `
+  <!-- CANCELLED -->
+  <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">❌</div>
+    <div style="font-size:14px;font-weight:700;color:var(--red)">Order Cancelled</div>
+    ${o.cancellation_reason ? `<div style="font-size:12px;color:var(--text3);margin-top:4px">Reason: ${o.cancellation_reason}</div>` : ''}
+    ${o.payment_method==='wallet' ? '<div style="font-size:12px;color:var(--green);margin-top:6px;font-weight:600">✓ Amount refunded to VW Wallet</div>' : ''}
+  </div>` : `
+
+  <!-- PROGRESS TRACKER -->
+  <div style="background:var(--bg2);border-radius:12px;padding:16px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:16px">Order Progress</div>
+    ${steps.map((step, idx) => {
+      const done = idx <= currentIdx;
+      const active = idx === currentIdx;
+      const isLast = idx === steps.length - 1;
+      return `
+      <div style="display:flex;gap:12px;align-items:flex-start${isLast?'':';margin-bottom:0'}">
+        <!-- ICON + LINE -->
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+          <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;
+            background:${done?'var(--gold)':active?'var(--gold-muted)':'var(--bg3)'};
+            border:${active?'2px solid var(--gold)':done?'none':'1px solid var(--border)'};
+            ${active?'box-shadow:0 0 0 4px rgba(245,200,66,0.15)':''}">
+            ${done?step.icon:'<span style="font-size:12px;color:var(--text3)">'+(idx+1)+'</span>'}
+          </div>
+          ${!isLast ? `<div style="width:2px;height:24px;margin:4px 0;background:${idx<currentIdx?'var(--gold)':'var(--border)'}"></div>` : ''}
+        </div>
+        <!-- LABEL -->
+        <div style="padding-top:8px;padding-bottom:${isLast?'0':'20px'}">
+          <div style="font-size:13px;font-weight:${active?'800':done?'600':'400'};color:${active?'var(--gold)':done?'var(--text)':'var(--text3)'}">
+            ${step.label}
+          </div>
+          ${step.time ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(step.time).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>` : ''}
+          ${active && o.status !== 'delivered' ? '<div style="font-size:11px;color:var(--gold);margin-top:2px;font-weight:600">In progress...</div>' : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}
+
+  <!-- ITEMS -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">Items Ordered</div>
+    ${(o.items||[]).map(i => `
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border2)">
+      <span style="color:var(--text2)">${i.name} × ${i.qty} ${i.unit||'pc'}</span>
+      <span style="font-weight:700">₹${((i.price||0)*(i.qty||1)).toLocaleString('en-IN')}</span>
+    </div>`).join('')}
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:800;padding:8px 0 0">
+      <span>Total</span><span style="color:var(--gold)">₹${parseFloat(o.total||0).toLocaleString('en-IN')}</span>
+    </div>
+  </div>
+
+  <!-- HELP -->
+  <div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:8px">
+    Need help with your order?
+  </div>
+  <a href="tel:8712697930" style="display:block;text-align:center;padding:12px;border-radius:10px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:13px;font-weight:700;text-decoration:none">
+    📞 Call V Wholesale · 8712697930
+  </a>`;
+}
+
+window.VW_SHOP.renderOrderTrackingPage = renderOrderTrackingPage;

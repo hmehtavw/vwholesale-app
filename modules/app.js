@@ -202,6 +202,8 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'my_addresses') html = await VW_SHOP.renderMyAddressesPage();
+  else if (page === 'track_order') html = await VW_SHOP.renderOrderTrackingPage(params?.id);
   else if (page === 'my_orders') html = await VW_SHOP.renderMyOrdersPage();
   else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
   else if (page === 'wallet') {
@@ -1611,6 +1613,14 @@ function showToast(msg, type = 'info') {
 }
 
 async function init() {
+  // Handle Cashfree payment return
+  const _cfUrlParams = new URLSearchParams(window.location.search);
+  const cfOrder = _cfUrlParams.get('cf_order');
+  if (cfOrder) {
+    window.history.replaceState({}, '', window.location.pathname);
+    window._pendingCFOrder = cfOrder;
+  }
+
   try {
     await VW_DB.initDB();
     // Load loyalty config into global so billing can use it immediately
