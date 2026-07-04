@@ -72,3 +72,44 @@ self.addEventListener('fetch', event => {
 self.addEventListener('message', event => {
   if (event.data === 'skipWaiting') self.skipWaiting();
 });
+
+// ── WEB PUSH NOTIFICATIONS ──────────────────────────────────────
+self.addEventListener('push', event => {
+  let data = { title: 'V Wholesale', body: 'You have a new notification' };
+  try {
+    if (event.data) data = { ...data, ...event.data.json() };
+  } catch(e) {}
+
+  const options = {
+    body: data.body,
+    icon: '/vwholesale-app/icon-192.png',
+    badge: '/vwholesale-app/icon-192.png',
+    vibrate: [200, 100, 200],
+    tag: data.tag || 'vw-push',
+    requireInteraction: false,
+    data: { url: data.url || '/vwholesale-app/' },
+    actions: data.actions || [],
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Notification click — open the app at the right URL
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/vwholesale-app/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      // Focus existing tab if open
+      for (const client of clientList) {
+        if (client.url.includes('vwholesale-app') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Otherwise open new tab
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});

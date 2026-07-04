@@ -1406,7 +1406,46 @@ let notifPermission = 'default';
 async function requestNotifPermission() {
   if (!('Notification' in window)) return false;
   try { notifPermission = await Notification.requestPermission(); } catch(e) {}
-  return notifPermission === 'granted';
+  if (notifPermission !== 'granted') return false;
+
+  // Subscribe to web push
+  try {
+    if ('serviceWorker' in navigator && 'PushManager' in window) {
+      const reg = await navigator.serviceWorker.ready;
+      const VAPID_PUBLIC = 'BNJA-Ibm9NQCVLTB9eME6BK0V5_THPGXM59D-yzLFIRR9_LzRThbeQuRMs1rjkPJSnro9zQ1c5wBIuz-wz_cqdA';
+
+      // Check if already subscribed
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        // Convert VAPID key to Uint8Array
+        const keyBytes = Uint8Array.from(
+          atob(VAPID_PUBLIC.replace(/-/g,'+').replace(/_/g,'/')),
+          c => c.charCodeAt(0)
+        );
+        sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: keyBytes,
+        });
+      }
+
+      // Save subscription to Supabase
+      const prof = currentProfile;
+      if (prof?.id && sub) {
+        const subJson = sub.toJSON();
+        await VW_DB.client.from('push_subscriptions').upsert({
+          profile_id: prof.id,
+          endpoint: subJson.endpoint,
+          p256dh: subJson.keys?.p256dh || '',
+          auth: subJson.keys?.auth || '',
+          user_agent: navigator.userAgent.slice(0, 200),
+        }, { onConflict: 'endpoint' }).catch(() => {});
+      }
+    }
+  } catch(e) {
+    console.warn('Push subscription failed:', e);
+  }
+
+  return true;
 }
 
 async function notify(titleKey, msgFn, args = [], lang = 'en', tag = 'vw') {

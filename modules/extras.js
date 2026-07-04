@@ -9193,13 +9193,20 @@ async function updateOrderStatus(orderId, newStatus) {
   };
 
   if (o?.profile_id && msgs[newStatus]) {
+    // In-app notification
     await createPersistedNotification({
       category: 'order_update',
-      title: `V Wholesale · Order Update`,
+      title: 'V Wholesale · Order Update',
       body: msgs[newStatus],
       recipientId: o.profile_id,
       relatedTable: 'orders',
       relatedId: orderId,
+    }).catch(() => {});
+    // Web push — works when app is closed
+    fetch('https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/web-push', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'apikey': VW_DB.client.supabaseKey },
+      body: JSON.stringify({ profile_id: o.profile_id, title: 'V Wholesale · Order Update', body: msgs[newStatus] }),
     }).catch(() => {});
   }
 
