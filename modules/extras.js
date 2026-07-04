@@ -8927,6 +8927,15 @@ async function placeOrder() {
       profile_id: prof?.id, items: [], updated_at: new Date().toISOString()
     }, { onConflict: 'profile_id' }).catch(() => {});
 
+    // Award loyalty points (1 point per ₹100 spent by default)
+    const loyaltyCfg = await VW_DB.getSetting('loyalty_config', { earnRate: 1, pointValue: 1 });
+    const pointsEarned = Math.floor(subtotal / 100 * (loyaltyCfg.earnRate || 1));
+    if (pointsEarned > 0) {
+      await VW_DB.client.from('customers')
+        .update({ loyalty_points: VW_DB.client.rpc('increment_loyalty', { p_phone: prof?.phone || '', p_points: pointsEarned }) })
+        .eq('phone', prof?.phone || '').catch(() => {});
+    }
+
     // Notify store
     await createPersistedNotification({
       category: 'new_order',
@@ -9743,3 +9752,130 @@ async function saveCustomerProfile() {
 
 window.VW_SHOP.renderCustomerProfilePage = renderCustomerProfilePage;
 window.VW_SHOP.saveCustomerProfile = saveCustomerProfile;
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER RETURN REQUEST
+// ═══════════════════════════════════════════════════════════════
+
+async function renderCustomerReturnRequest() {
+  const prof = VW_AUTH.getCurrentProfile();
+
+  // Get delivered orders that can be returned (within 7 days)
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const { data: orders } = await VW_DB.client.from('orders')
+    .select('id,order_no,items,total,delivered_at')
+    .eq('profile_id', prof?.id || '')
+    .eq('status', 'delivered')
+    .gte('delivered_at', sevenDaysAgo)
+    .order('delivered_at', { ascending: false });
+
+  return `
+  <div class="module-header"><h2>↩ Return Request</h2></div>
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px">
+    <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Return Policy</div>
+    <div style="color:var(--text2);line-height:1.6">
+      ✅ Returns accepted within 7 days of delivery<br>
+      ✅ Unused, unopened products only<br>
+      ✅ Original packaging required<br>
+      ⚠️ Tiles (opened boxes) — not returnable<br>
+      ✅ Refund to VW Wallet within 2-3 working days
+    </div>
+  </div>
+
+  ${!(orders?.length) ? `
+  <div style="text-align:center;padding:30px;color:var(--text3)">
+    <div style="font-size:32px">📦</div>
+    <div style="font-size:13px;margin-top:8px">No eligible orders for return</div>
+    <div style="font-size:11px;margin-top:4px">Only delivered orders from last 7 days are eligible</div>
+  </div>` :
+  `<div style="font-size:12px;font-weight:700;margin-bottom:8px">Select order to return from:</div>
+  ${orders.map(o => `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;border:1px solid var(--border)"
+    onclick="VW_SHOP.openReturnForm(${o.id},'${o.order_no}')">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:700">${o.order_no}</div>
+        <div style="font-size:11px;color:var(--text3)">Delivered ${new Date(o.delivered_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">₹${parseFloat(o.total||0).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:var(--text3)">${(o.items||[]).length} item(s)</div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--gold);margin-top:4px;font-weight:600">Tap to start return →</div>
+  </div>`).join('')}`}`;
+}
+
+function openReturnForm(orderId, orderNo) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>↩ Return — ${orderNo}</h3>
+  <div class="form-group">
+    <label>Reason for Return *</label>
+    <select id="return-reason">
+      <option value="">Select reason</option>
+      <option value="damaged">Product damaged on delivery</option>
+      <option value="wrong_item">Wrong item delivered</option>
+      <option value="not_as_described">Not as described</option>
+      <option value="defective">Product defective</option>
+      <option value="changed_mind">Changed mind</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Describe the issue</label>
+    <textarea id="return-desc" rows="3" placeholder="Please describe what's wrong with the product..."
+      style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+  <div class="form-group">
+    <label>Photo of product (optional but helps)</label>
+    <input type="file" id="return-photo" accept="image/*"
+      style="width:100%;padding:6px;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;font-size:11px">
+  </div>
+  <div style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px;color:var(--green)">
+    ✅ Refund will be credited to your VW Wallet within 2-3 working days of pickup
+  </div>
+  <button onclick="VW_SHOP.submitReturnRequest(${orderId},'${orderNo}')"
+    style="width:100%;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    Submit Return Request
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function submitReturnRequest(orderId, orderNo) {
+  const reason = document.getElementById('return-reason')?.value;
+  const desc   = document.getElementById('return-desc')?.value?.trim();
+  if (!reason) { showToast('Select a reason', 'warn'); return; }
+  if (!desc) { showToast('Describe the issue', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+
+  await VW_DB.client.from('customer_returns').insert({
+    order_id: orderId,
+    profile_id: prof?.id || null,
+    customer_name: prof?.name || '',
+    customer_phone: prof?.phone || '',
+    return_reason: reason,
+    description: desc,
+    status: 'requested',
+    created_at: new Date().toISOString(),
+  }).catch(() => {});
+
+  // Notify management
+  await createPersistedNotification({
+    category: 'return_request',
+    title: `↩ Return Request — ${orderNo}`,
+    body: `${prof?.name||''} · ${reason.replace('_',' ')} · ${desc.slice(0,50)}`,
+    actions: [{ label: '👁 Review', action: 'open_returns' }],
+  }).catch(() => {});
+
+  showToast('Return request submitted ✅ — we will arrange pickup within 24 hours', 'success');
+  closeSheet();
+}
+
+window.VW_SHOP.renderCustomerReturnRequest = renderCustomerReturnRequest;
+window.VW_SHOP.openReturnForm = openReturnForm;
+window.VW_SHOP.submitReturnRequest = submitReturnRequest;
