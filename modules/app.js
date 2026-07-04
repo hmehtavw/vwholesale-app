@@ -42,8 +42,31 @@ async function navigateTo(page, params) {
 }
 
 function applyRolePermissions() {
+  const role = VW_AUTH.getRole();
   const allowed = VW_AUTH.getAllowedPages();
+  const nav = document.getElementById('bottom-nav');
 
+  // Customer gets a different bottom nav
+  if (role === 'customer') {
+    if (nav) nav.innerHTML = `
+      <button class="nav-btn" data-page="shop" onclick="navigateTo('shop')"><span class="nav-icon">🏠</span><span>Home</span></button>
+      <button class="nav-btn" data-page="shop" onclick="navigateTo('shop');VW_SHOP.filterCategory(null)"><span class="nav-icon">🛒</span><span>Shop</span></button>
+      <button class="nav-btn" data-page="my_orders" onclick="navigateTo('my_orders')"><span class="nav-icon">📦</span><span>Orders</span></button>
+      <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
+      <button class="nav-btn" data-page="tile_quotes" onclick="navigateTo('tile_quotes')"><span class="nav-icon">📐</span><span>Quotes</span></button>`;
+    return;
+  }
+
+  // Contractor gets a contractor nav
+  if (role === 'contractor') {
+    if (nav) nav.innerHTML = `
+      <button class="nav-btn" data-page="labor_requests" onclick="navigateTo('labor_requests')"><span class="nav-icon">🏗</span><span>Jobs</span></button>
+      <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
+      <button class="nav-btn" data-page="contractor_profile" onclick="navigateTo('contractor_profile')"><span class="nav-icon">👷</span><span>Profile</span></button>`;
+    return;
+  }
+
+  // Staff nav — existing logic
   document.querySelectorAll('.nav-btn[data-page]').forEach(btn => {
     const page = btn.dataset.page;
     if (page === 'more') return;
@@ -57,7 +80,6 @@ function applyRolePermissions() {
     btn.style.display = show ? '' : 'none';
     if (show) moreVisibleCount++;
   });
-  // Also handle old more-btn for backward compat
   document.querySelectorAll('.more-btn[data-page]').forEach(btn => {
     const page = btn.dataset.page;
     const show = allowed.includes(page);
@@ -202,6 +224,10 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
+  else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
+  else if (page === 'tile_visualizer') html = typeof renderRoomVisualizerPage === 'function' ? await renderRoomVisualizerPage() : '<div class="module-header"><h2>Room Visualizer</h2></div><p class="empty-msg">Loading...</p>';
+  else if (page === 'catalog') html = typeof VW_INVENTORY?.renderInventory === 'function' ? await VW_INVENTORY.renderInventory() : '<div class="module-header"><h2>Catalogue</h2></div>';
   else if (page === 'my_addresses') html = await VW_SHOP.renderMyAddressesPage();
   else if (page === 'track_order') html = await VW_SHOP.renderOrderTrackingPage(params?.id);
   else if (page === 'my_orders') html = await VW_SHOP.renderMyOrdersPage();
