@@ -200,6 +200,7 @@ async function navigateToFresh(page, params, cacheKey) {
     // Load products after render
     setTimeout(() => VW_SHOP.loadShopProducts(null, ''), 100);
   }
+  else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
   else if (page === 'my_orders') html = await VW_SHOP.renderMyOrdersPage();
   else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
@@ -1510,6 +1511,16 @@ async function handleNotificationAction(notifId, action) {
     closeSheet();
     navigateTo('inventory');
     setTimeout(() => VW_INVENTORY.showAddPO(n.relatedId), 100);
+    return;
+  }
+  if (action === 'open_order') {
+    closeSheet();
+    await navigateTo('orders');
+    return;
+  }
+  if (action === 'order_update') {
+    closeSheet();
+    await navigateTo('my_orders');
     return;
   }
   if (action === 'open_labor_request') {

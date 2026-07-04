@@ -8833,6 +8833,39 @@ async function placeOrder() {
   if (btn) { btn.disabled = true; btn.textContent = 'Placing order...'; }
 
   try {
+    // For online payment — create Cashfree order first
+    if (payMethod === 'online') {
+      const cfRes = await fetch(
+        'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/cashfree-order',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json',
+            'apikey': VW_DB.client.supabaseKey },
+          body: JSON.stringify({
+            order_id: `TEMP_${Date.now()}`,
+            order_amount: subtotal,
+            customer_name: prof?.name || '',
+            customer_phone: prof?.phone || '',
+          }),
+        }
+      );
+      const cfData = await cfRes.json();
+      if (cfData.error) throw new Error('Payment init failed: ' + cfData.error);
+      // Load Cashfree JS SDK dynamically
+      if (!window.Cashfree) {
+        const cfScript = document.createElement('script');
+        cfScript.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+        document.head.appendChild(cfScript);
+        await new Promise(res => { cfScript.onload = res; });
+      }
+      const cashfreeObj = window.Cashfree({ mode: 'sandbox' });
+      cashfreeObj.checkout({
+        paymentSessionId: cfData.payment_session_id,
+        returnUrl: window.location.href + '?cf_order=' + cfData.cf_order_id,
+      });
+      if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${subtotal.toLocaleString('en-IN')}`; }
+      return;
+    }
     // For wallet payment — check balance first
     if (payMethod === 'wallet') {
       const { data: wallet } = await VW_DB.client.from('customer_wallets')
@@ -8999,3 +9032,222 @@ window.VW_SHOP.addNewAddress = addNewAddress;
 window.VW_SHOP.saveAddress = saveAddress;
 window.VW_SHOP.placeOrder = placeOrder;
 window.VW_SHOP.renderMyOrdersPage = renderMyOrdersPage;
+
+// ═══════════════════════════════════════════════════════════════
+// ORDER MANAGEMENT — Staff Dashboard
+// ═══════════════════════════════════════════════════════════════
+
+const ORDER_STATUS_FLOW = {
+  placed:           { label:'⏳ Placed',           next:'confirmed',         color:'var(--gold)',    action:'Confirm Order' },
+  confirmed:        { label:'✅ Confirmed',          next:'picking',           color:'var(--green)',   action:'Start Picking' },
+  picking:          { label:'📦 Picking & Packing', next:'out_for_delivery',  color:'#60A5FA',       action:'Mark Ready / Out' },
+  out_for_delivery: { label:'🚚 Out for Delivery',  next:'delivered',         color:'#8B5CF6',       action:'Mark Delivered' },
+  delivered:        { label:'✓ Delivered',           next:null,               color:'var(--green)',   action:null },
+  cancelled:        { label:'✗ Cancelled',           next:null,               color:'var(--red)',     action:null },
+};
+
+async function renderOrdersDashboard() {
+  const { data: orders } = await VW_DB.client
+    .from('orders')
+    .select('id,order_no,customer_name,customer_phone,items,total,status,delivery_type,delivery_slot,placed_at,delivery_address,payment_method,payment_status')
+    .not('status','in','("delivered","cancelled")')
+    .order('placed_at', { ascending: true })
+    .limit(50);
+
+  const { data: recentDone } = await VW_DB.client
+    .from('orders')
+    .select('id,order_no,customer_name,total,status,delivered_at')
+    .in('status',['delivered','cancelled'])
+    .order('placed_at', { ascending: false })
+    .limit(10);
+
+  const statCounts = {};
+  (orders||[]).forEach(o => { statCounts[o.status] = (statCounts[o.status]||0)+1; });
+
+  return `
+  <div class="module-header">
+    <h2>🛒 Orders</h2>
+    <button onclick="navigateTo('orders')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">🔄 Refresh</button>
+  </div>
+
+  <!-- STAT PILLS -->
+  <div style="display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px">
+    ${Object.entries(ORDER_STATUS_FLOW).filter(([k])=>k!=='delivered'&&k!=='cancelled').map(([status,cfg]) => `
+    <div style="flex:0 0 auto;background:var(--bg2);border-radius:10px;padding:8px 14px;text-align:center;min-width:80px">
+      <div style="font-size:20px;font-weight:900;color:${cfg.color}">${statCounts[status]||0}</div>
+      <div style="font-size:10px;color:var(--text3);white-space:nowrap">${cfg.label.replace(/[⏳✅📦🚚✓✗]/g,'').trim()}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- ACTIVE ORDERS -->
+  ${!(orders?.length) ? `
+  <div style="text-align:center;padding:30px;color:var(--text3)">
+    <div style="font-size:32px">📭</div>
+    <div style="font-size:13px;margin-top:8px">No active orders right now</div>
+  </div>` :
+  orders.map(o => renderOrderCard(o)).join('')}
+
+  <!-- RECENT COMPLETED -->
+  ${recentDone?.length ? `
+  <div style="font-size:12px;font-weight:700;color:var(--text3);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.05em">Recent Completed</div>
+  ${recentDone.map(o => `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
+    <div>
+      <span style="font-weight:700">${o.order_no}</span>
+      <span style="color:var(--text3);margin-left:6px">${o.customer_name}</span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span style="color:var(--gold);font-weight:700">₹${parseFloat(o.total||0).toLocaleString('en-IN')}</span>
+      <span style="font-size:10px;color:${o.status==='delivered'?'var(--green)':'var(--red)'}">${o.status==='delivered'?'✓ Done':'✗ Cancelled'}</span>
+    </div>
+  </div>`).join('')}` : ''}`;
+}
+
+function renderOrderCard(o) {
+  const sc = ORDER_STATUS_FLOW[o.status] || { label:o.status, color:'var(--text3)', action:null };
+  const itemCount = (o.items||[]).reduce((s,i)=>s+(i.qty||1),0);
+  const addr = o.delivery_address;
+  const isPickup = o.delivery_type === 'pickup';
+
+  return `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border-left:4px solid ${sc.color}">
+    <!-- HEADER -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:14px;font-weight:900">${o.order_no}</div>
+        <div style="font-size:12px;font-weight:700;margin-top:1px">${o.customer_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${o.customer_phone}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:700;color:${sc.color};background:${sc.color}15;padding:3px 8px;border-radius:20px;margin-bottom:4px">${sc.label}</div>
+        <div style="font-size:14px;font-weight:900;color:var(--gold)">₹${parseFloat(o.total||0).toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+
+    <!-- ORDER DETAILS -->
+    <div style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span style="color:var(--text3)">${itemCount} item${itemCount>1?'s':''}</span>
+        <span style="font-weight:700;color:${o.payment_status==='paid'?'var(--green)':'var(--gold)'}">${o.payment_method?.toUpperCase()} · ${o.payment_status==='paid'?'✓ Paid':'Pending'}</span>
+      </div>
+      <div style="color:var(--text2)">
+        ${isPickup ? '🏪 Store Pickup' : `🚚 ${addr?.address_line1||''}, ${addr?.area||addr?.city||''}`}
+      </div>
+      <div style="color:var(--text3);margin-top:2px">⏰ ${o.delivery_slot||'—'}</div>
+    </div>
+
+    <!-- ITEMS -->
+    <div style="margin-bottom:8px">
+      ${(o.items||[]).slice(0,3).map(i =>
+        `<div style="font-size:11px;color:var(--text2);padding:2px 0">${i.name} × ${i.qty} ${i.unit||'pc'} — ₹${((i.price||0)*(i.qty||1)).toLocaleString('en-IN')}</div>`
+      ).join('')}
+      ${(o.items||[]).length > 3 ? `<div style="font-size:10px;color:var(--text3)">+${o.items.length-3} more items</div>` : ''}
+    </div>
+
+    <!-- ACTIONS -->
+    <div style="display:flex;gap:8px">
+      ${sc.action ? `
+      <button onclick="VW_SHOP.updateOrderStatus('${o.id}','${sc.next}')"
+        style="flex:2;padding:10px;border-radius:8px;background:${sc.color};border:none;color:${sc.color==='var(--gold)'?'#000':'#fff'};font-size:12px;font-weight:700;cursor:pointer">
+        ${sc.action}
+      </button>` : ''}
+      <button onclick="VW_SHOP.callCustomer('${o.customer_phone}')"
+        style="flex:1;padding:10px;border-radius:8px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:12px;font-weight:700;cursor:pointer">
+        📞 Call
+      </button>
+      <button onclick="VW_SHOP.cancelOrder('${o.id}')"
+        style="flex:0 0 auto;padding:10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:var(--red);font-size:12px;cursor:pointer">
+        ✗
+      </button>
+    </div>
+  </div>`;
+}
+
+async function updateOrderStatus(orderId, newStatus) {
+  const update = { status: newStatus };
+  if (newStatus === 'delivered') update.delivered_at = new Date().toISOString();
+  if (newStatus === 'confirmed') update.confirmed_at = new Date().toISOString();
+
+  await VW_DB.client.from('orders').update(update).eq('id', orderId);
+
+  // Notify customer
+  const { data: o } = await VW_DB.client.from('orders')
+    .select('order_no,profile_id,customer_name,delivery_slot').eq('id', orderId).single();
+
+  const msgs = {
+    confirmed:        `✅ Your order ${o?.order_no} is confirmed and being prepared!`,
+    picking:          `📦 ${o?.order_no} is being picked & packed. Ready soon!`,
+    out_for_delivery: `🚚 ${o?.order_no} is on the way! Expected: ${o?.delivery_slot||'shortly'}`,
+    delivered:        `✓ ${o?.order_no} delivered. Thank you for shopping at V Wholesale! 🙏`,
+  };
+
+  if (o?.profile_id && msgs[newStatus]) {
+    await createPersistedNotification({
+      category: 'order_update',
+      title: `V Wholesale · Order Update`,
+      body: msgs[newStatus],
+      recipientId: o.profile_id,
+      relatedTable: 'orders',
+      relatedId: orderId,
+    }).catch(() => {});
+  }
+
+  showToast(`Order marked as ${newStatus}`, 'success');
+  navigateTo('orders');
+}
+
+function callCustomer(phone) {
+  window.open(`tel:${phone}`, '_self');
+}
+
+async function cancelOrder(orderId) {
+  const reason = prompt('Reason for cancellation?');
+  if (!reason) return;
+
+  const { data: o } = await VW_DB.client.from('orders')
+    .select('total,payment_method,profile_id,order_no').eq('id', orderId).single();
+
+  await VW_DB.client.from('orders').update({
+    status: 'cancelled',
+    cancelled_at: new Date().toISOString(),
+    cancellation_reason: reason,
+  }).eq('id', orderId);
+
+  // Refund to wallet if paid by wallet
+  if (o?.payment_method === 'wallet' && o?.profile_id) {
+    const { data: wallet } = await VW_DB.client.from('customer_wallets')
+      .select('id,balance').eq('profile_id', o.profile_id).single().catch(() => ({ data: null }));
+    if (wallet) {
+      const newBal = parseFloat(wallet.balance) + parseFloat(o.total || 0);
+      await VW_DB.client.from('customer_wallets').update({ balance: newBal }).eq('id', wallet.id);
+      await VW_DB.client.from('wallet_transactions').insert({
+        wallet_id: wallet.id,
+        type: 'refund',
+        amount: o.total,
+        balance_after: newBal,
+        description: `Refund — Order ${o.order_no} cancelled`,
+        reference_type: 'order',
+        reference_id: orderId,
+      });
+    }
+  }
+
+  // Notify customer
+  if (o?.profile_id) {
+    await createPersistedNotification({
+      category: 'order_cancelled',
+      title: `Order Cancelled — ${o.order_no}`,
+      body: `Your order has been cancelled. ${o.payment_method==='wallet'?'Amount refunded to your VW Wallet.':''}`,
+      recipientId: o.profile_id,
+    }).catch(() => {});
+  }
+
+  showToast('Order cancelled' + (o?.payment_method==='wallet'?' · Refund processed':''), 'success');
+  navigateTo('orders');
+}
+
+// Expose
+window.VW_SHOP.renderOrdersDashboard = renderOrdersDashboard;
+window.VW_SHOP.updateOrderStatus = updateOrderStatus;
+window.VW_SHOP.callCustomer = callCustomer;
+window.VW_SHOP.cancelOrder = cancelOrder;
