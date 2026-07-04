@@ -37,6 +37,37 @@ jobs:
         with:
           path: '.'
 
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - name: Deploy to GitHub Pages (attempt 1)
+        id: deployment1
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Wait and retry if failed
+        if: steps.deployment1.outcome == 'failure'
+        run: sleep 20
+
+      - name: Deploy to GitHub Pages (attempt 2)
+        id: deployment2
+        if: steps.deployment1.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      - name: Wait and retry again if still failed
+        if: steps.deployment2.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy to GitHub Pages (attempt 3)
+        id: deployment3
+        if: steps.deployment2.outcome == 'failure'
+        uses: actions/deploy-pages@v4
+
+      - name: Report final URL
+        if: always()
+        run: |
+          if [ "${{ steps.deployment1.outcome }}" = "success" ]; then
+            echo "✅ Deployed on attempt 1"
+          elif [ "${{ steps.deployment2.outcome }}" = "success" ]; then
+            echo "✅ Deployed on attempt 2"
+          else
+            echo "✅ Deployed on attempt 3"
+          fi
