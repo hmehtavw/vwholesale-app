@@ -6021,12 +6021,6 @@ function tqPrintAdvanceReceipt(q, txnRef) {
     <div>For Vassure Wholesale Pvt Ltd<br>Authorised by</div>
   </div>
 
-  <script>
-  function shareReceiptWA() {
-    const msg = encodeURIComponent('V Wholesale Advance Receipt\\n\\nReceipt No: ${q.advance_receipt_no}\\nQuote: ${q.tq_no}\\nCustomer: ${q.customer_name}\\nAmount Paid: ₹${(q.advance_amount||0).toLocaleString()}\\nMode: ${(q.advance_mode||'cash').toUpperCase()}\\n\\nStock is held for 90 days.\\n\\nThank you for choosing V Wholesale, Vijayawada.\\n8712697930');
-    window.open('https://wa.me/91${q.customer_phone||''}?text=' + msg, '_blank');
-  }
-  <\/script>
   </body></html>`);
   win.document.close();
 }

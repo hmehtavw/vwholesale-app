@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""V Wholesale Pre-Push Checker — run before every git push"""
+import re, sys, os, subprocess
+
+MODULES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'modules')
+MODULES = ['core.js','checkin.js','billing.js','people.js','stock.js',
+           'operations.js','admin.js','extras.js','granite.js',
+           'tile-quotation.js','quick-quote.js','autotest.js','app.js']
+
+errors = []
+warnings = []
+
+def load(f):
+    with open(os.path.join(MODULES_DIR, f), encoding='utf-8') as fh:
+        return fh.read()
+
+print("=" * 55)
+print("VW Pre-Push Checker")
+print("=" * 55)
+
+# 1. Syntax check
+print("\n[1] Syntax...")
+for mod in MODULES:
+    r = subprocess.run(['node','--check', os.path.join(MODULES_DIR, mod)], capture_output=True, text=True)
+    if r.returncode != 0:
+        errors.append(f"SYNTAX {mod}: {r.stderr.strip()[:200]}")
+        print(f"  ❌ {mod}")
+    else:
+        print(f"  ✅ {mod}")
+
+# 2. Inline <script> tags
+print("\n[2] Inline <script> tags...")
+bad_scripts = []
+for mod in MODULES:
+    content = load(mod)
+    for i, line in enumerate(content.split('\n'), 1):
+        s = line.strip()
+        if '<script>' in s and 'createElement' not in line and 'textContent' not in line and 'src=' not in line and not s.startswith('//'):
+            bad_scripts.append(f"{mod}:{i}")
+            errors.append(f"INLINE SCRIPT TAG {mod}:{i} — breaks HTML parser")
+if bad_scripts:
+    print(f"  ❌ Found in: {bad_scripts}")
+else:
+    print(f"  ✅ None found")
+
+# 3. Build all defined functions
+all_fns = set()
+for mod in MODULES:
+    for m in re.finditer(r'\b(?:async\s+)?function\s+([a-zA-Z_]\w*)\s*\(', load(mod)):
+        all_fns.add(m.group(1))
+
+# 4. VW_TILES export check
+print("\n[3] VW_TILES export...")
+qq = load('quick-quote.js')
+em = re.search(r'window\.VW_TILES\s*=\s*\{(.*?)\};', qq, re.DOTALL)
+if em:
+    block = em.group(1)
+    # Get inline stubs like `foo: ()=>{}`
+    stubs = set(re.findall(r'(\w+)\s*:\s*(?:async\s*)?\(', block))
+    kw = {'true','false','null','undefined','async','function'}
+    candidates = [n for n in set(re.findall(r'\b([a-zA-Z_]\w{3,})\b', block))
+                  if n not in kw and n not in stubs
+                  and (n[0]=='_' or n[0].islower())
+                  and any(c.isupper() or c=='_' for c in n[1:])]
+    missing = [n for n in candidates if n not in all_fns]
+    if missing:
+        for n in missing:
+            errors.append(f"VW_TILES exports missing function: {n}")
+        print(f"  ❌ {len(missing)} missing: {missing[:8]}")
+    else:
+        print(f"  ✅ All {len(candidates)} exports valid")
+
+# Summary
+print("\n" + "=" * 55)
+if errors:
+    print(f"❌ FAILED — {len(errors)} error(s):")
+    for e in errors:
+        print(f"  🔴 {e}")
+    print("\n⛔ Fix before pushing")
+    sys.exit(1)
+else:
+    print(f"✅ ALL CHECKS PASSED — safe to push")
+    if warnings:
+        for w in warnings[:3]:
+            print(f"  🟡 {w}")
+    sys.exit(0)
