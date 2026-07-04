@@ -5108,178 +5108,560 @@ ${grandTotal>0?`
 </html>`;
 }
 
-async function openTileQuote(id) {
-  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
-  if (!q) return;
-  // Quick Quote estimates always open in QQ flow, never the TQ wizard
-  if (q.source === 'quick_quote') { return qqEditExisting(id); }
-  // Full TQ drafts open back in the wizard at the step they left off
-  if (q.status === 'draft' || q.approval_status === 'draft') { return tqResumeDraft(id); }
-  const profile = VW_AUTH.getCurrentProfile();
-  const myRole = profile?.role || '';
-  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+async function _tqBuildApprovalBOM(q, approverLevel) {
+  const slots = Object.entries(q.tile_selections||{});
+  if (!slots.length) return '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No tile details — enter price below.</div>';
 
-  // Determine if I can action the current pending step
-  const log = q.approval_log || [];
-  const lastStep = log[log.length - 1];
-  const myAllowedRoles = lastStep ? ((window.TQ_LEVEL_ROLES||{})[lastStep.level] || [lastStep.level]) : [];
-  const canIAction = q.approval_status === 'pending_approval' && lastStep?.status === 'pending' &&
-    (myRole === 'admin' || myAllowedRoles.includes(myRole));
-  const isCashier = ['admin','accounts'].includes(myRole);
+  // Which tiers can this approver offer?
+  const tierRights = {
+    tl:            ['tier1'],
+    sr_executive:  ['tier1'],
+    floor_manager: ['tier1','tier2'],
+    store_manager: ['tier1','tier2','tier3'],
+    management:    ['tier1','tier2','tier3','tier4'],
+    admin:         ['tier1','tier2','tier3','tier4'],
+  };
+  const myTiers = tierRights[approverLevel] || [];
+  const canManualOverride = ['management','admin'].includes(approverLevel);
 
-  // Pre-compute approval BOM HTML (async — needs tier price fetch)
-  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, lastStep?.level || myRole) : '';
+  // Pre-compute sqft per slot from rooms area data
+  const slotSqft = {};
+  (q.rooms||[]).forEach(function(r) {
+    (r.areas||[]).forEach(function(a) {
+      var sid = a.slotId || (r.id + '_' + (a.subType||'floor'));
+      slotSqft[sid] = (slotSqft[sid]||0) + (a.sqft||0);
+    });
+    if (!slotSqft[r.id]) slotSqft[r.id] = (r.areas||[]).reduce(function(s,a){return s+(a.sqft||0);},0);
+  });
 
-  const sheet = document.getElementById('bottom-sheet');
-  const totalSqft = parseFloat(q.total_area_sqft||0);
-  const pricePerSqft = q.quoted_price_per_sqft || 0;
-  const pricePerBox = q.quoted_price_per_box || 0;
-  const estTotal = pricePerSqft > 0 ? Math.round(totalSqft * pricePerSqft) : 0;
+  // Merge same tile_name + size.mm across all slots into one row
+  const groups = {};
+  const productIds = [];
+  slots.forEach(function(entry) {
+    var slotId = entry[0], sel = entry[1];
+    if (!sel || !sel.size || !sel.size.mm || !sel.tile_name) return;
+    var key = sel.tile_name + '|' + sel.size.mm;
+    var mmParts = sel.size.mm.split('\u00d7').map(Number);
+    var mmH = mmParts[0], mmW = mmParts[1];
+    var tilesPerBox = sel.size.tilesPerBox || (mmH>=600&&mmW>=1200?2:mmH>=600?4:6);
+    var spb = tileSqftPerTile(mmH, mmW) * tilesPerBox;
+    var qp  = ((q.quoted_prices||{})[slotId]) || {};
+    var boxP  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
+    var sqftP = qp.pricePerSqft>0 ? qp.pricePerSqft : (boxP>0&&spb>0) ? parseFloat((boxP/spb).toFixed(1)) : 0;
+    var areaSqft = slotSqft[slotId] || slotSqft[slotId.replace(/_floor$|_wall$/,'')] || sel._sqft || 0;
+    var boxes = sel._qqBoxes > 0 ? sel._qqBoxes : (spb > 0 && areaSqft > 0 ? Math.ceil(areaSqft / spb) : 0);
+    if (!groups[key]) {
+      groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, totalSqft:0, slotIds:[], initBox:boxP, initSqft:sqftP, productId: sel.product_id||sel.productId||null };
+      if (sel.product_id||sel.productId) productIds.push(sel.product_id||sel.productId);
+    }
+    groups[key].totalBoxes += boxes;
+    groups[key].totalSqft  += areaSqft;
+    groups[key].slotIds.push(slotId);
+    if (boxP > groups[key].initBox) { groups[key].initBox = boxP; groups[key].initSqft = sqftP; }
+  });
 
-  // Store quote ID for approve/reject/print functions
-  _tqState._reviewingQuoteId = id;
-  _tqState._savedQuoteId = id;
-  _tqState._approvalStatus = q.approval_status;
+  // Fetch tier prices for all tile products (if any have product IDs)
+  const tierPrices = {};
+  if (productIds.length && myTiers.length) {
+    try {
+      const { data: prods } = await VW_DB.client
+        .from('products')
+        .select('id,mrp,price,vwp,tier1_price,tier2_price,tier3_price,tier4_price')
+        .in('id', productIds);
+      (prods||[]).forEach(p => { tierPrices[p.id] = p; });
+    } catch(_) {}
+  }
 
-  // Build escalation chain timeline
-  const chainTimeline = log.length ? `
-  <div style="margin-bottom:12px">
-    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Approval Chain</div>
-    ${log.map((step, idx) => {
-      const isLast = idx === log.length - 1;
-      const stepLabel = LEVEL_LABELS_TQ[step.level] || step.level;
-      const statusIcon = step.status === 'approved' ? '✅' : step.status === 'rejected' ? '❌' : step.status === 'timeout' ? '⏭' : isLast ? '⏳' : '○';
-      const statusColor = step.status === 'approved' ? 'var(--green)' : step.status === 'rejected' ? 'var(--red)' : step.status === 'timeout' ? 'var(--text3)' : isLast ? 'var(--gold)' : 'var(--text3)';
-      const approverNames = step.approverNames?.length ? step.approverNames.join(', ') : step.roles?.join('/') || '';
-      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;${idx < log.length-1 ? 'border-bottom:1px solid var(--border2)' : ''}">
-        <span style="font-size:14px;flex-shrink:0">${statusIcon}</span>
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:600;color:${statusColor}">${stepLabel}</div>
-          <div style="font-size:10px;color:var(--text3)">${approverNames}${step.approvedBy ? ' · Approved by '+step.approvedBy : ''}${step.rejectedBy ? ' · Rejected by '+step.rejectedBy : ''}${step.editedPricePerSqft ? ` · Price: ₹${step.editedPricePerSqft}/sqft` : ''}</div>
-          ${step.rejectReason ? `<div style="font-size:10px;color:var(--red)">${step.rejectReason}</div>` : ''}
-        </div>
-        <div style="font-size:10px;color:var(--text3)">${new Date(step.notifiedAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
-      </div>`;
-    }).join('')}
-  </div>` : '';
+  const TIER_LABELS = { tier1:'Tier 1', tier2:'Tier 2', tier3:'Tier 3', tier4:'Tier 4' };
 
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-      <div>
-        <h3 style="margin:0">${q.customer_name}</h3>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px">${q.tq_no} · ${new Date(q.created_at).toLocaleDateString('en-IN')}</div>
-      </div>
-      <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--bg2)">
-        ${q.approval_status?.replace('_',' ')||'draft'}
-      </span>
-    </div>
+  return Object.values(groups).map(function(g, idx) {
+    const tp = g.productId ? tierPrices[g.productId] : null;
+    const mrp = tp?.mrp || 0;
+    const vwp = tp?.vwp || tp?.price || 0;
 
-    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px">
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Site</span><span>${q.site_address||'—'}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Total Area</span><span style="font-weight:700">${totalSqft.toFixed(1)} sqft</span></div>
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Tile Size</span><span>${q.selected_size?.label||'—'}</span></div>
-      ${pricePerSqft>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Price</span><span style="font-weight:700;color:var(--gold)">₹${pricePerSqft}/sqft${pricePerBox?` · ₹${pricePerBox}/box`:''}</span></div>`:''}
-      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text3)">Tile Subtotal</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
-      ${q.price_edit_note?`<div style="font-size:11px;color:var(--gold);padding:4px 0">Note: ${q.price_edit_note}</div>`:''}
-      ${(() => {
-        const extras = q.extra_products || [];
-        if (!extras.length) return '';
-        const extTotal = extras.reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
-        return `<div style="padding:6px 0">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🛒 Add-ons</div>
-          ${extras.map(p=>`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px"><span style="color:var(--text2)">${p.name} ×${p.qty||1}</span><span>₹${Math.round((p.price||0)*(p.qty||1)).toLocaleString('en-IN')}</span></div>`).join('')}
-          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Add-ons</span><span style="color:var(--gold)">₹${extTotal.toLocaleString('en-IN')}</span></div>
-        </div>`;
-      })()}
-      ${(() => {
-        const del = q.delivery || {};
-        const sT = del.transportCost||del.transport_cost||0;
-        const sL = del.loadingCost||del.loading_cost||0;
-        const sF = del.floorCost||del.floor_cost||0;
-        const dT = sT+sL+sF;
-        if (!dT) return '';
-        return `<div style="padding:6px 0">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🚛 Delivery</div>
-          ${sT?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Transport</span><span>₹${sT.toLocaleString('en-IN')}</span></div>`:''}
-          ${sL?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Loading + Unloading</span><span>₹${sL.toLocaleString('en-IN')}</span></div>`:''}
-          ${sF?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Floor Delivery</span><span>₹${sF.toLocaleString('en-IN')}</span></div>`:''}
-          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Delivery</span><span style="color:var(--gold)">₹${dT.toLocaleString('en-IN')}</span></div>
-        </div>`;
-      })()}
-      ${q.grand_total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:800;background:rgba(245,200,66,0.08);margin:-2px -6px;padding:8px 6px;border-radius:7px;margin-top:4px"><span style="color:var(--gold)">GRAND TOTAL</span><span style="color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span></div>`:''}
-      ${q.rejection_reason?`<div style="color:var(--red);padding:4px 0">Rejected: ${q.rejection_reason}</div>`:''}
-      ${q.advance_amount>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Advance</span><span style="font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} · ${q.advance_receipt_no}</span></div>`:''}
-      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Submitted by</span><span>${q.created_by||'—'}</span></div>
-      ${q.version>1?`<div style="display:flex;justify-content:space-between;padding:3px 0;margin-top:4px"><span style="color:var(--text3)">Version</span><span style="font-weight:700;color:var(--gold)">v${q.version} (revised)</span></div>`:''}
-    </div>
+    // Build tier buttons
+    const tierButtons = myTiers.length && tp ? myTiers.map(function(tier) {
+      const tierPrice = tp[tier+'_price'];
+      if (!tierPrice) return '';
+      const sqftPrice = g.spb > 0 ? (tierPrice/g.spb).toFixed(1) : '';
+      const discVsMrp = mrp > 0 ? Math.round((mrp-tierPrice)/mrp*100) : 0;
+      const discVsVwp = vwp > 0 ? Math.round((vwp-tierPrice)/vwp*100) : 0;
+      return '<button onclick="(function(){' +
+        'var b=document.getElementById(\'tq-box-'+idx+'\');' +
+        'var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
+        'if(b)b.value='+tierPrice+';if(s)s.value=\''+sqftPrice+'\';' +
+        'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
+        'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
+        '}).call(this)" class="tier-btn"' +
+        ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
+        '<div style="font-size:10px;font-weight:700;color:var(--gold)">' + TIER_LABELS[tier] + '</div>' +
+        '<div style="font-size:12px;font-weight:800">₹'+Number(tierPrice).toLocaleString('en-IN')+'</div>' +
+        '<div style="font-size:9px;color:var(--text3)">' + (discVsMrp>0?discVsMrp+'% off MRP':'') + (discVsVwp>0?' · '+discVsVwp+'% off VWP':'') + '</div>' +
+        '</button>';
+    }).filter(Boolean).join('') : '';
 
-    ${await (async ()=>{
-      if (!q.id) return '';
-      const { data: revs } = await VW_DB.client.from('tq_revisions')
-        .select('version,changed_by_name,change_reason,created_at')
-        .eq('tq_id', q.id).order('version', { ascending: false }).limit(10)
-        .catch(()=>({ data: [] }));
-      if (!revs?.length) return '';
-      return '<div style="margin-bottom:12px">' +
-        '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">📋 Revision History</div>' +
-        revs.map(r=>'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border2);font-size:11px">' +
-          '<div><span style="font-weight:700;color:var(--gold)">v'+r.version+'</span>' +
-          '<span style="color:var(--text3);margin-left:6px">'+(r.changed_by_name||'—')+'</span>' +
-          (r.change_reason?'<div style="font-size:10px;color:var(--text3);margin-top:1px">&quot;'+r.change_reason+'&quot;</div>':'') +
-          '</div><div style="color:var(--text3);font-size:10px">'+new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>' +
-          '</div>').join('') +
-        '</div>';
-    })()}
+    const vwpBtn = (tp && vwp > 0) ? '<button onclick="(function(){' +
+      'var b=document.getElementById(\'tq-box-'+idx+'\');var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
+      'var spb='+g.spb.toFixed(4)+';if(b)b.value='+Math.round(vwp*g.spb)+';if(s)s.value=\''+vwp.toFixed(1)+'\';' +
+      'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
+      'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
+      '}).call(this)" class="tier-btn"' +
+      ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
+      '<div style="font-size:10px;font-weight:700;color:var(--text2)">VWP</div>' +
+      '<div style="font-size:12px;font-weight:800">₹'+Number(vwp).toLocaleString('en-IN')+'</div>' +
+      '<div style="font-size:9px;color:var(--text3)">' + (mrp>0?Math.round((mrp-vwp)/mrp*100)+'% off MRP':'Standard') + '</div>' +
+      '</button>' : '';
 
-    ${chainTimeline}
+    const mrpLine = mrp > 0 ? '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">MRP: ₹'+Number(mrp).toLocaleString('en-IN')+'/sqft' + (vwp>0?' · VWP: ₹'+Number(vwp).toLocaleString('en-IN')+'/sqft':'') + '</div>' : '';
 
-    ${canIAction ? `
-    <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
-      ${approvalBomHtml}
-      <div class="form-group" style="margin-bottom:10px">
-        <label style="font-size:11px">Price note / reason (optional)</label>
-        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer · Premium tile" value="${q.price_edit_note||''}">
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
-          ✅ Approve${lastStep.level !== 'management' ? ' & Pass Up' : ' — Final'}
-        </button>
-        <button onclick="VW_TILES.tqReject()" style="flex:1;padding:13px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
-          ❌ Reject
-        </button>
-      </div>
-    </div>` : ''}
-
-    ${(isCashier || myRole === 'admin') && q.approval_status === 'approved' && !q.advance_amount ? `
-    <button class="btn-primary full-width" style="background:var(--gold);color:#000;font-size:14px;padding:14px;margin-bottom:8px" onclick="closeSheet();VW_TILES.tqCollectAdvance(${id})">
-      💰 Collect Advance & Hold Stock
-    </button>` : ''}
-
-    ${q.advance_amount > 0 ? `
-    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>` : ''}
-
-    ${q.approval_status === 'approved' ? `
-    <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
-      🔒 Print & Share enabled after final approval
-    </div>`}
-
-    ${!q.advance_amount ? `
-    <button onclick="VW_TILES.tqEditQuote(${id})" style="width:100%;padding:11px;border-radius:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
-      ✏️ Edit Quote
-    </button>` : `
-    <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
-      🔒 Editing locked — advance collected
-    </div>`}
-    <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
-
-  sheet.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
+    return '<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
+        '<div><div style="font-size:13px;font-weight:700">' + g.tile_name + '</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' \u00b7 ' + g.size_mm + (g.totalSqft>0?' \u00b7 '+g.totalSqft.toFixed(1)+' sqft':'') + '</div></div>' +
+        (g.totalBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + g.totalBoxes + ' boxes</div>' : '<div style="font-size:11px;color:var(--text3)">boxes TBD</div>') +
+      '</div>' +
+      mrpLine +
+      (g.initBox===0 ? '<div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px dashed var(--gold-border);border-radius:6px;padding:5px 8px;margin-bottom:8px">💡 Set price below — tap a tier or enter manually</div>' : '') +
+      // Tier quick-select buttons
+      ((vwpBtn || tierButtons) ? '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">' + vwpBtn + tierButtons + '</div>' : '') +
+      // Manual price inputs
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
+        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / BOX</label>' +
+        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0" placeholder="Enter \u20b9/box"' +
+          ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '" data-slots="' + g.slotIds.join(',') + '"' +
+          ' style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:15px;font-weight:800;text-align:center;box-sizing:border-box"' +
+          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\';})(this)"></div>' +
+        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / SQFT</label>' +
+        '<input type="number" id="tq-sqft-' + idx + '" value="' + (g.initSqft||'') + '" step="0.5" min="0"' +
+          ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '"' +
+          ' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;box-sizing:border-box"' +
+          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,bx=document.getElementById(\'tq-box-\'+i);if(bx)bx.value=Math.round((parseFloat(el.value)||0)*s)||\'\';})(this)"></div>' +
+      '</div>' +
+      (canManualOverride ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">✏️ Management: can enter any price above</div>' : '') +
+    '</div>';
+  }).join('') + _buildAccessoryPriceInputs(q);
 }
 
-// Resume an auto-saved draft tile quotation at the step where it was left off.
+function _buildAccessoryPriceInputs(q) {
+  const st = q._decoded || {};
+  const gs = q.grout_selections || st.groutSelections || {};
+  const as = q.adhesive_selections || st.adhesiveSelections || {};
+  const ss = q.spacer_selections || st.spacerSelections || {};
+
+  const hasSpacers  = Object.values(ss).some(s => s?.use);
+  const hasAdhesive = Object.values(as).some(s => s?.method && s.method !== 'none' && s.method !== 'mortar' && (s.adhBags||0) > 0);
+  const hasGrout    = Object.values(gs).some(g => g?.type && g.type !== 'none');
+  const hasMortar   = Object.values(as).some(s => s?.method === 'mortar');
+
+  if (!hasSpacers && !hasAdhesive && !hasGrout && !hasMortar) return '';
+
+  const saved = q.accessory_prices || {};
+
+  const accInput = (id, label, unit, initVal) =>
+    `<div style="margin-bottom:8px">` +
+    `<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">${label} (₹/${unit})</label>` +
+    `<input type="number" id="tq-acc-${id}" value="${initVal||''}" step="1" min="0" placeholder="Enter price"` +
+    ` style="width:100%;padding:8px;border:1px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:14px;text-align:center;box-sizing:border-box">` +
+    `</div>`;
+
+  return `<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid #6B7280">` +
+    `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🧰 Installation Material Prices</div>` +
+    (hasSpacers  ? accInput('spacer',  '📦 Spacers',       'pkt', saved.spacerPerPkt) : '') +
+    (hasAdhesive ? accInput('adhesive','🧲 Tile Adhesive', 'bag', saved.adhPerBag)    : '') +
+    (hasMortar   ? accInput('cement',  '🏗 Cement',        'bag', saved.cementPerBag) : '') +
+    (hasGrout    ? accInput('grout',   '🪨 Grout',         'kg',  saved.groutPerKg)   : '') +
+    `<div style="font-size:10px;color:var(--text3);margin-top:4px">These are added to the final total shown to customer.</div>` +
+    `</div>`;
+}
+
+async function _tqCheckMaterialStock(searchTerms, qtyNeeded) {
+  try {
+    const { data: products } = await VW_DB.client.from('products').select('id,name,stock,unit,price,category')
+      .or(searchTerms.map(t=>`name.ilike.%${t}%`).join(','))
+      .eq('is_active', true).limit(5);
+    if (!products?.length) return { status:'to_order', stockQty:0, product:null };
+    const p = products[0];
+    const stock = parseFloat(p.stock)||0;
+    if (stock <= 0) return { status:'out_of_stock', stockQty:0, product:p };
+    if (stock < qtyNeeded) return { status:'low_stock', stockQty:stock, product:p };
+    return { status:'in_stock', stockQty:stock, product:p };
+  } catch(e) { return { status:'to_order', stockQty:0, product:null }; }
+}
+
+async function _tqCreateMaterialIntents(quoteId, q) {
+  try {
+    const items = _tqGetMaterialsList(q);
+    if (!items.length) return 0;
+    // Delete any existing intents for this quote (re-run on re-collect)
+    await VW_DB.client.from('tq_material_intents').delete().eq('tq_id', quoteId);
+    const profile = VW_AUTH.getCurrentProfile();
+    const intents = [];
+    for (const item of items) {
+      const { status, stockQty, product } = await _tqCheckMaterialStock(item.search.filter(Boolean), item.qty);
+      intents.push({
+        tq_id: quoteId, tq_no: q.tq_no, customer_name: q.customer_name,
+        item_name: item.name, item_type: item.type,
+        qty_needed: item.qty, unit: item.unit,
+        qty_in_stock: stockQty, stock_status: status,
+        product_id: product?.id || item.productId || null,
+        status: status === 'in_stock' ? 'in_stock' : 'pending',
+        created_by: profile?.name || '',
+      });
+    }
+    if (intents.length) await VW_DB.client.from('tq_material_intents').insert(intents);
+    return intents.filter(i=>i.status==='pending').length;
+  } catch(e) { console.warn('Material intents error:', e); return 0; }
+}
+
+function _tqGetMaterialsList(q) {
+  const items = [];
+  const state = q._decoded || {};
+  // Spacers
+  const spacerRes = state.spacerResult;
+  if (spacerRes?.totalPackets > 0) {
+    const typeLabel = (state.spacerType||'plus')==='clip' ? 'Clip+Plug Spacer' : 'Cross Spacer';
+    const mmLabel = Object.values(state.spacerSelections||{})[0]?.mm || 3;
+    items.push({ name:`${mmLabel}mm ${typeLabel}`, type:'spacer', qty:spacerRes.totalPackets, unit:'pkt',
+      search:[`${mmLabel}mm`,`spacer`] });
+  }
+  // Adhesive
+  Object.entries(state.adhesiveSelections||{}).forEach(([slotId, a]) => {
+    if (a?.type && a.type !== 'cement') {
+      const bags = a.bags || a.qty || 0;
+      if (bags > 0) items.push({ name:a.name||a.type||'Tile Adhesive', type:'adhesive', qty:bags, unit:'bag',
+        search:['adhesive','tile adhesive',a.name||''] });
+    }
+  });
+  // Grout
+  Object.entries(state.groutSelections||{}).forEach(([slotId, g]) => {
+    if (g?.qty > 0) items.push({ name:g.name||g.color||'Tile Grout', type:'grout', qty:g.qty, unit:'kg',
+      search:['grout',g.name||g.color||''] });
+  });
+  // Beading
+  (state.beading||[]).forEach(b => {
+    if (b.qty > 0) items.push({ name:b.type||'Beading', type:'beading', qty:b.qty, unit:'rft',
+      search:['beading',b.type||''] });
+  });
+  // Extra products from inventory search
+  (state.extraProducts||[]).forEach(ep => {
+    if (ep.qty > 0) items.push({ name:ep.name||'Item', type:'extra', qty:ep.qty, unit:ep.unit||'pc',
+      search:[ep.name||''], productId:ep.id });
+  });
+  return items;
+}
+
+async function _tqRenderMaterialsCard(st) {
+  const items = _tqGetMaterialsList(st);
+  if (!items.length) return '';
+  const statusIcon = { in_stock:'✅', low_stock:'⚠️', out_of_stock:'❌', to_order:'📋' };
+  const statusLabel = { in_stock:'In Stock', low_stock:'Low Stock', out_of_stock:'Out of Stock', to_order:'To Order' };
+  const statusColor = { in_stock:'var(--green)', low_stock:'var(--gold)', out_of_stock:'var(--red)', to_order:'#378ADD' };
+
+  const rows = await Promise.all(items.map(async item => {
+    const { status, stockQty, product } = await _tqCheckMaterialStock(item.search.filter(Boolean), item.qty);
+    return { ...item, status, stockQty, product };
+  }));
+
+  const needsOrdering = rows.filter(r=>r.status!=='in_stock');
+  const allGood = needsOrdering.length === 0;
+
+  return `<div class="card" style="margin-bottom:10px;border-color:${allGood?'rgba(34,197,94,0.3)':'rgba(96,165,250,0.3)'}">
+    <h3 class="card-title">📦 Materials Status</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">${allGood ? 'All materials in stock ✅' : `${needsOrdering.length} item${needsOrdering.length>1?'s':''} need sourcing — inventory will be notified when advance is collected`}</p>
+    ${rows.map(r=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <div style="font-size:12px;font-weight:600">${r.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.qty} ${r.unit} needed${r.product?' · '+r.product.name:''}</div>
+      </div>
+      <div style="text-align:right">
+        <span style="font-size:11px;font-weight:700;color:${statusColor[r.status]}">${statusIcon[r.status]} ${statusLabel[r.status]}</span>
+        ${r.stockQty>0?`<div style="font-size:10px;color:var(--text3)">${r.stockQty} in stock</div>`:''}
+      </div>
+    </div>`).join('')}
+    ${!allGood?`<div style="font-size:10px;color:#378ADD;margin-top:8px;padding:6px;background:rgba(55,138,221,0.08);border-radius:6px">📋 Collecting advance will automatically flag ${needsOrdering.length} item${needsOrdering.length>1?'s':''} for sourcing in the inventory dashboard.</div>`:''}
+  </div>`;
+}
+
+async function qqConvertExisting(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
+  if (!q) { showToast('Estimate not found', 'warn'); return; }
+  window._qqData = {
+    _qqId: id,
+    _tqNo: q.tq_no,
+    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
+    rooms: q.rooms || [],
+    adding: null, designing: null, editingIdx: null,
+  };
+
+  // Clear stale price keys then restore from saved quoted_prices
+  // Uses same precise matching as qqEditExisting to get correct window key format
+  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
+  (q.rooms || []).forEach((room, ri) => {
+    ['wall', 'floor'].forEach(surface => {
+      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
+      if (!design?.pattern?.length) return;
+      const type = surface === 'wall' ? 'wl' : 'fl';
+      [...new Set(design.pattern)].forEach(code => {
+        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
+          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
+        );
+        if (!slotEntry) return;
+        const qp = (q.quoted_prices || {})[slotEntry[0]];
+        if (qp?.pricePerBox > 0) {
+          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
+        }
+      });
+    });
+  });
+
+  await _qqConvertToFullTQ();
+}
+
+async function qqDeleteEstimate(id) {
+  if (!confirm('Delete this estimate? This cannot be undone.')) return;
+  const { error } = await VW_DB.client.from('tile_quotations').delete().eq('id', id);
+  if (error) { showToast('Delete failed: ' + error.message, 'error'); return; }
+  showToast('Estimate deleted', 'success');
+  const container = document.getElementById('app-content');
+  if (container) container.innerHTML = await renderTileQuotesList();
+}
+
+async function qqEditExisting(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
+  if (!q) { showToast('Estimate not found', 'warn'); return; }
+
+  // Restore _qqData from saved record
+  window._qqData = {
+    _qqId: id,
+    _tqNo: q.tq_no,
+    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
+    rooms: q.rooms || [],
+    adding: null, designing: null, editingIdx: null,
+  };
+
+  // Clear any stale price keys from previous session
+  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
+
+  // Restore saved prices from quoted_prices back into window price keys
+  // Slot format: qq{ri}_{timestamp}_{surface}_{codeLowered}
+  // Window key:  qqprice_{wl|fl}_{ri}_{ORIGINAL_CODE}
+  (q.rooms || []).forEach((room, ri) => {
+    ['wall', 'floor'].forEach(surface => {
+      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
+      if (!design || !design.pattern || !design.pattern.length) return;
+      const type = surface === 'wall' ? 'wl' : 'fl';
+      [...new Set(design.pattern)].forEach(code => {
+        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Precise match: starts with qq{ri}_ AND ends with _{surface}_{codeLower}
+        // Works for both stable IDs (qq0_wall_d) and old timestamp IDs (qq0_1782..._wall_d)
+        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
+          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
+        );
+        if (!slotEntry) return;
+        const qp = (q.quoted_prices || {})[slotEntry[0]];
+        if (qp && qp.pricePerBox > 0) {
+          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
+          // Also restore sqft price so the ₹/sqft input shows the saved value, not inventory default
+          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
+        }
+      });
+    });
+  });
+
+  // Load price history in background
+  _qqLoadPriceHistory().catch(() => {});
+
+  // Open QQ output with restored prices
+  _qqScreen('output');
+}
+
+async function renderTileQuotesList() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+  // Who can action pending approvals at their level:
+  const isApprover = ['admin','management','store_manager','floor_manager','tl','sr_executive'].includes(myRole);
+  const isCashier = ['admin','accounts'].includes(myRole);
+  const isExec = ['executive','reception'].includes(myRole);
+
+  // Fetch quotes
+  let query = VW_DB.client.from('tile_quotations')
+    .select('id,tq_no,customer_name,customer_phone,total_area_sqft,approval_status,status,created_by,created_at,advance_amount,quoted_price_per_sqft,selected_size,advance_receipt_no,rejection_reason,approval_log,source,grand_total')
+    .order('created_at', {ascending:false}).limit(60);
+
+  // Executives see only their own quotes
+  if (isExec) query = query.eq('created_by', profile?.name||'');
+
+  const { data: quotes } = await query;
+  const allRaw = quotes || [];
+
+  // Split Quick Quotes from Full TQ quotes — double-filter for safety
+  const qqEstimates = allRaw.filter(q => q.source === 'quick_quote');
+  const allQuotes   = allRaw.filter(q => q.source !== 'quick_quote' && q.source !== null || (!q.source && !q.tq_no?.startsWith('QQ/')));
+
+  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
+
+  // Get current chain level label from approval_log
+  const currentLevel = (q) => {
+    const log = q.approval_log || [];
+    const last = log[log.length-1];
+    if (!last || q.approval_status !== 'pending_approval') return '';
+    return LEVEL_LABELS_TQ[last.level] || last.level;
+  };
+
+  // Can I action this quote right now?
+  const canIApprove = (q) => {
+    if (q.approval_status !== 'pending_approval') return false;
+    const log = q.approval_log || [];
+    const last = log[log.length-1];
+    if (!last || last.status !== 'pending') return false;
+    const allowedRoles = (window.TQ_LEVEL_ROLES || {})[last.level] || [last.level];
+    return myRole === 'admin' || allowedRoles.includes(myRole);
+  };
+
+  const statusBadge = (s, q) => {
+    const lvl = currentLevel(q);
+    const map = {
+      draft: ['Draft','#888'],
+      pending_approval: [`⏳ ${lvl||'Pending'}`,canIApprove(q)?'#EF9F27':'#888'],
+      approved: ['✅ Approved','#22c55e'],
+      rejected: ['❌ Rejected','#ef4444'],
+      advance_collected: ['💰 Advance Collected','#378ADD'],
+      converted: ['🧾 Invoiced','#7F77DD'],
+    };
+    const [label, color] = map[s] || [s,'#888'];
+    return `<span style="font-size:10px;font-weight:700;color:${color};background:${color}18;padding:2px 8px;border-radius:6px">${label}</span>`;
+  };
+
+  const pendingApproval = allQuotes.filter(q => q.approval_status === 'pending_approval');
+  const myPending = pendingApproval.filter(canIApprove); // Quotes I can action NOW
+  const otherPending = pendingApproval.filter(q => !canIApprove(q)); // Awaiting other levels
+  const approved = allQuotes.filter(q => q.approval_status === 'approved' && !q.advance_amount);
+  const withAdvance = allQuotes.filter(q => q.advance_amount > 0);
+  const rejected = allQuotes.filter(q => q.approval_status === 'rejected');
+  const myDrafts = allQuotes.filter(q => q.approval_status === 'draft');
+
+  const renderCard = (q, highlight) => `
+  <div onclick="VW_TILES.openTileQuote(${q.id})"
+    style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;
+      border:1px solid ${highlight?'var(--gold-border)':q.approval_status==='approved'?'rgba(34,197,94,0.2)':q.approval_status==='rejected'?'rgba(239,68,68,0.2)':'var(--border)'}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div>
+        <div style="font-size:13px;font-weight:700">${q.customer_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft${q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:''}</div>
+      </div>
+      ${statusBadge(q.approval_status, q)}
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:11px;color:var(--text3)">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
+      ${q.advance_amount > 0 ? `<div style="font-size:12px;font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} advance</div>` : ''}
+    </div>
+    ${q.rejection_reason ? `<div style="font-size:11px;color:var(--red);margin-top:4px;padding:4px 8px;background:rgba(239,68,68,0.06);border-radius:6px">Rejected: ${q.rejection_reason}</div>` : ''}
+    ${q.advance_amount > 0 ? '' : `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
+      <button onclick="VW_TILES.tqEditQuote(${q.id})"
+        style="padding:5px 12px;border-radius:7px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:11px;font-weight:700;cursor:pointer">
+        ✏️ Edit
+      </button>
+    </div>`}
+  </div>`;
+
+  return `
+  <div class="module-header">
+    <h2>🏠 Tile Quotations</h2>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" style="background:rgba(245,200,66,0.15);border:1px solid var(--gold-border);color:var(--gold)" onclick="VW_TILES.openQuickQuote()">⚡ Quick</button>
+      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('tiles')">+ New</button>
+    </div>
+  </div>
+
+  <!-- QUICK ESTIMATES — internal rough calculations, not for approval -->
+  ${qqEstimates.length ? `
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">⚡ Quick Estimates (${qqEstimates.length}) — Internal Only</div>
+    ${qqEstimates.map(q => `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px 12px;margin-bottom:6px;border:1px dashed var(--gold-border)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no||'—'} · ${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft · ${q.total_boxes||0} boxes</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
+          ${q.grand_total ? `<div style="font-size:14px;font-weight:900;color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</div>` : ''}
+          <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,200,66,0.12);color:var(--gold);font-weight:700;border:1px solid var(--gold-border)">ESTIMATE</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="VW_TILES.qqEditExisting(${q.id})"
+          style="flex:1;padding:7px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">
+          ✏️ Edit
+        </button>
+        <button onclick="VW_TILES.qqConvertExisting(${q.id})"
+          style="flex:2;padding:7px;border-radius:7px;background:var(--gold);border:none;color:#000;font-size:11px;font-weight:700;cursor:pointer">
+          📋 Convert to Full TQ
+        </button>
+        <button onclick="VW_TILES.qqDeleteEstimate(${q.id})"
+          style="padding:7px 10px;border-radius:7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:11px;cursor:pointer">
+          🗑
+        </button>
+      </div>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <!-- MY ACTION REQUIRED — quotes at my level right now -->
+  ${myPending.length ? `
+  <div style="background:rgba(245,200,66,0.08);border:2px solid var(--gold-border);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:4px">⏳ Needs Your Approval (${myPending.length})</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Auto-escalates to next level in 30 seconds if no action</div>
+    ${myPending.map(q => renderCard(q, true)).join('')}
+  </div>` : ''}
+
+  <!-- PENDING AT OTHER LEVELS -->
+  ${isApprover && otherPending.length ? `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--text3);margin-bottom:8px">⏳ Pending at Other Levels (${otherPending.length})</div>
+    ${otherPending.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  <!-- APPROVED — CASHIER ACTION NEEDED -->
+  ${(isCashier || myRole === 'admin') && approved.length ? `
+  <div style="background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:8px">✅ Approved — Collect Advance (${approved.length})</div>
+    ${approved.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${withAdvance.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">💰 Advance Collected (${withAdvance.length})</h3>
+    ${withAdvance.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${myDrafts.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">📝 My Drafts (${myDrafts.length})</h3>
+    ${myDrafts.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  ${rejected.length ? `
+  <div class="card" style="margin-bottom:12px">
+    <h3 class="card-title">❌ Rejected — Revise & Resubmit (${rejected.length})</h3>
+    ${rejected.map(q => renderCard(q, false)).join('')}
+  </div>` : ''}
+
+  <!-- CHAIN INFO for executives -->
+  ${isExec && !allQuotes.length ? `
+  <div class="card"><p class="empty-msg">No tile quotations yet — tap + New Quote to start</p></div>` : ''}
+
+  ${!allQuotes.length && !isExec ? `
+  <div class="card"><p class="empty-msg">No tile quotations in the system yet</p></div>` : ''}
+
+  <div style="margin-top:8px;padding:10px;background:var(--bg2);border-radius:10px;font-size:11px;color:var(--text3)">
+    📋 Approval chain: <strong>TL / Sr Executive → Floor Manager → Store Manager → Management</strong> · 30 sec auto-escalation at each level
+  </div>`;
+}
 
 async function tqApprove() {
   const quoteId = _tqState._reviewingQuoteId;
@@ -5327,39 +5709,6 @@ async function tqApprove() {
 
   await VW_ESCALATION.approveTileQuoteStep(quoteId, sqft, box, note, editedPrices, accessoryPrices);
   closeSheet();
-  navigateTo('tile_quotes');
-}
-
-async function tqReject() {
-  const quoteId = _tqState._reviewingQuoteId;
-  if (!quoteId) { showToast('No quotation selected', 'warn'); return; }
-  const { data: q } = await VW_DB.client.from('tile_quotations').select('tq_no,customer_name').eq('id',quoteId).single();
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <h3 style="color:var(--red)">❌ Reject Tile Quotation</h3>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">${q?.tq_no} · ${q?.customer_name}</p>
-    <div class="form-group">
-      <label>Reason *</label>
-      <textarea id="tq-reject-reason" rows="3" placeholder="e.g. Price too low — minimum ₹65/sqft · Tile not available · Needs re-measurement"
-        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px"></textarea>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
-      <button style="flex:2;padding:12px;border-radius:10px;background:var(--red);border:none;color:#fff;font-weight:700;cursor:pointer"
-        onclick="VW_TILES.tqConfirmReject(${quoteId})">❌ Reject & Notify Executive</button>
-    </div>`;
-  sheet.classList.add('open');
-  document.getElementById('sheet-overlay').classList.add('open');
-}
-
-async function tqConfirmReject(quoteId) {
-  const reason = document.getElementById('tq-reject-reason')?.value.trim();
-  if (!reason) { showToast('Enter a rejection reason', 'warn'); return; }
-  await VW_ESCALATION.rejectTileQuoteStep(quoteId, reason);
-  await auditLog('tile_quote_rejected','tile_quotation',quoteId,'','',{reason},'Rejected');
-  closeSheet();
-  showToast('Rejected — executive will be notified', 'info');
   navigateTo('tile_quotes');
 }
 
@@ -5474,77 +5823,82 @@ async function tqConfirmAdvance(quoteId) {
   navigateTo('tile_quotes');
 }
 
-function tqPrintAdvanceReceipt(q, txnRef) {
-  const win = window.open('', '_blank');
-  const now = new Date();
-  win.document.write(`<!DOCTYPE html><html><head><title>Advance Receipt ${q.advance_receipt_no}</title>
-  <style>
-    body{font-family:Arial,sans-serif;max-width:420px;margin:20px auto;padding:24px;color:#111;font-size:13px}
-    .brand{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px}
-    .brand-sub{font-size:11px;color:#666;text-align:center;margin-bottom:16px}
-    .receipt-title{text-align:center;font-size:16px;font-weight:700;border:2px solid #111;padding:8px;margin-bottom:14px;letter-spacing:1px}
-    .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:12px}
-    .row strong{color:#111}
-    .amount-box{background:#f9f5e8;border:2px solid #C8972B;border-radius:8px;padding:12px;text-align:center;margin:14px 0}
-    .amount{font-size:28px;font-weight:800;color:#C8972B}
-    .note{font-size:11px;color:#666;text-align:center;margin-top:16px;line-height:1.5}
-    .sign{display:flex;justify-content:space-between;margin-top:36px;font-size:11px}
-    .sign div{text-align:center;border-top:1px solid #999;padding-top:4px;width:140px}
-    .print-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#C8972B;color:#000;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
-    @media print{.print-btn{display:none}}
-    .wa-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#25D366;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
-    @media print{.wa-btn{display:none}}
-  </style></head><body>
-  <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
-  <button class="wa-btn" onclick="shareReceiptWA()">💬 Share via WhatsApp</button>
-  <div class="brand">Vassure Wholesale Pvt Ltd</div>
-  <div class="brand-sub">1-1-153, NH-65, Bhavanipuram, Vijayawada · 8712697930</div>
-  <div class="receipt-title">ADVANCE RECEIPT</div>
-
-  <div class="row"><span>Receipt No.</span><strong>${q.advance_receipt_no}</strong></div>
-  <div class="row"><span>Date</span><strong>${now.toLocaleDateString('en-IN',{dateStyle:'long'})}</strong></div>
-  <div class="row"><span>Time</span><strong>${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</strong></div>
-  <div class="row"><span>Quote No.</span><strong>${q.tq_no}</strong></div>
-  <div class="row"><span>Customer Name</span><strong>${q.customer_name}</strong></div>
-  <div class="row"><span>Phone</span><strong>${q.customer_phone||'—'}</strong></div>
-  <div class="row"><span>Site Address</span><strong>${q.site_address||'—'}</strong></div>
-  <div class="row"><span>Tile / Product</span><strong>${q.selected_product?.name||q.selected_product?.brand||'As per quotation'}</strong></div>
-  <div class="row"><span>Total Area</span><strong>${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft</strong></div>
-  ${q.quoted_price_per_sqft ? `<div class="row"><span>Agreed Rate</span><strong>₹${q.quoted_price_per_sqft}/sqft</strong></div>` : ''}
-
-  <div class="amount-box">
-    <div style="font-size:12px;margin-bottom:4px">Amount Received</div>
-    <div class="amount">₹${(q.advance_amount||0).toLocaleString('en-IN')}</div>
-    <div style="font-size:12px;margin-top:4px;color:#666">Mode: ${(q.advance_mode||'cash').toUpperCase()}${txnRef?' · Ref: '+txnRef:''}</div>
-  </div>
-
-  <div class="row"><span>Stock Hold Valid Until</span><strong>${new Date(Date.now()+90*24*60*60*1000).toLocaleDateString('en-IN')}</strong></div>
-
-  <div class="note">
-    This advance confirms your order and holds the selected tile stock for 90 days.<br>
-    Balance payment due before dispatch. This receipt is not a tax invoice.<br>
-    Returns subject to V Wholesale terms & conditions.
-  </div>
-
-  <div class="sign">
-    <div>Customer Signature</div>
-    <div>For Vassure Wholesale Pvt Ltd<br>Authorised by</div>
-  </div>
-
-  <script>
-  function shareReceiptWA() {
-    const msg = encodeURIComponent('V Wholesale Advance Receipt\\n\\nReceipt No: ${q.advance_receipt_no}\\nQuote: ${q.tq_no}\\nCustomer: ${q.customer_name}\\nAmount Paid: ₹${(q.advance_amount||0).toLocaleString()}\\nMode: ${(q.advance_mode||'cash').toUpperCase()}\\n\\nStock is held for 90 days.\\n\\nThank you for choosing V Wholesale, Vijayawada.\\n8712697930');
-    window.open('https://wa.me/91${q.customer_phone||''}?text=' + msg, '_blank');
+async function tqConfirmEditQuote(id) {
+  const reason = document.getElementById('tq-edit-reason-main')?.value.trim();
+  if (!reason) {
+    showToast('Reason is required', 'warn');
+    document.getElementById('tq-edit-reason-main')?.focus();
+    return;
   }
-  <\/script>
-  </body></html>`);
-  win.document.close();
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const byName  = profile?.name || 'Staff';
+  const now     = new Date().toISOString();
+  const dateStr = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+  // Fetch current approval_log
+  const { data: q } = await VW_DB.client.from('tile_quotations')
+    .select('approval_log,approval_status').eq('id', id).single();
+  if (!q) { showToast('Quote not found', 'warn'); return; }
+
+  // Auto-reject any pending steps in the approval log
+  const log = (q.approval_log || []).map(step => {
+    if (step.status === 'pending') {
+      return {
+        ...step,
+        status: 'auto_rejected',
+        autoRejectedAt: now,
+        autoRejectedBy: byName,
+        autoRejectedById: profile?.id || null,
+        autoRejectedReason: `Re-edited by ${byName} on ${dateStr} — Reason: ${reason}`,
+      };
+    }
+    return step;
+  });
+
+  // Add an edit record to the log for full audit trail
+  log.push({
+    level: 'edit',
+    status: 'edited',
+    editedAt: now,
+    editedBy: byName,
+    editedById: profile?.id || null,
+    reason,
+    previousStatus: q.approval_status,
+  });
+
+  // Reset quote to draft
+  const { error } = await VW_DB.client.from('tile_quotations').update({
+    approval_status: 'draft',
+    status: 'draft',
+    approval_log: log,
+    approval_submitted_at: null,
+    approval_submitted_by: null,
+    approval_submitted_by_id: null,
+    draft_step: 8,
+    updated_at: now,
+  }).eq('id', id);
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  await auditLog('tq_edit_requested', 'tile_quotation', id, q.approval_status, 'draft', { reason }, `Re-edit by ${byName}`);
+
+  closeSheet();
+  showToast('Quote re-opened for editing', 'success');
+
+  // Load into TQ wizard so staff can make changes
+  delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
+  tqResumeDraft(id);
 }
 
-async function tqReprintReceipt(id) {
-  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
-  if (!q) return;
-  tqPrintAdvanceReceipt(q, '');
+async function tqConfirmReject(quoteId) {
+  const reason = document.getElementById('tq-reject-reason')?.value.trim();
+  if (!reason) { showToast('Enter a rejection reason', 'warn'); return; }
+  await VW_ESCALATION.rejectTileQuoteStep(quoteId, reason);
+  await auditLog('tile_quote_rejected','tile_quotation',quoteId,'','',{reason},'Rejected');
+  closeSheet();
+  showToast('Rejected — executive will be notified', 'info');
+  navigateTo('tile_quotes');
 }
 
 async function tqEditQuote(id) {
@@ -5612,72 +5966,100 @@ async function tqEditQuote(id) {
   setTimeout(() => document.getElementById('tq-edit-reason-main')?.focus(), 150);
 }
 
-async function tqConfirmEditQuote(id) {
-  const reason = document.getElementById('tq-edit-reason-main')?.value.trim();
-  if (!reason) {
-    showToast('Reason is required', 'warn');
-    document.getElementById('tq-edit-reason-main')?.focus();
-    return;
+function tqPrintAdvanceReceipt(q, txnRef) {
+  const win = window.open('', '_blank');
+  const now = new Date();
+  win.document.write(`<!DOCTYPE html><html><head><title>Advance Receipt ${q.advance_receipt_no}</title>
+  <style>
+    body{font-family:Arial,sans-serif;max-width:420px;margin:20px auto;padding:24px;color:#111;font-size:13px}
+    .brand{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px}
+    .brand-sub{font-size:11px;color:#666;text-align:center;margin-bottom:16px}
+    .receipt-title{text-align:center;font-size:16px;font-weight:700;border:2px solid #111;padding:8px;margin-bottom:14px;letter-spacing:1px}
+    .row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #eee;font-size:12px}
+    .row strong{color:#111}
+    .amount-box{background:#f9f5e8;border:2px solid #C8972B;border-radius:8px;padding:12px;text-align:center;margin:14px 0}
+    .amount{font-size:28px;font-weight:800;color:#C8972B}
+    .note{font-size:11px;color:#666;text-align:center;margin-top:16px;line-height:1.5}
+    .sign{display:flex;justify-content:space-between;margin-top:36px;font-size:11px}
+    .sign div{text-align:center;border-top:1px solid #999;padding-top:4px;width:140px}
+    .print-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#C8972B;color:#000;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
+    @media print{.print-btn{display:none}}
+    .wa-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#25D366;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
+    @media print{.wa-btn{display:none}}
+  </style></head><body>
+  <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
+  <button class="wa-btn" onclick="shareReceiptWA()">💬 Share via WhatsApp</button>
+  <div class="brand">Vassure Wholesale Pvt Ltd</div>
+  <div class="brand-sub">1-1-153, NH-65, Bhavanipuram, Vijayawada · 8712697930</div>
+  <div class="receipt-title">ADVANCE RECEIPT</div>
+
+  <div class="row"><span>Receipt No.</span><strong>${q.advance_receipt_no}</strong></div>
+  <div class="row"><span>Date</span><strong>${now.toLocaleDateString('en-IN',{dateStyle:'long'})}</strong></div>
+  <div class="row"><span>Time</span><strong>${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</strong></div>
+  <div class="row"><span>Quote No.</span><strong>${q.tq_no}</strong></div>
+  <div class="row"><span>Customer Name</span><strong>${q.customer_name}</strong></div>
+  <div class="row"><span>Phone</span><strong>${q.customer_phone||'—'}</strong></div>
+  <div class="row"><span>Site Address</span><strong>${q.site_address||'—'}</strong></div>
+  <div class="row"><span>Tile / Product</span><strong>${q.selected_product?.name||q.selected_product?.brand||'As per quotation'}</strong></div>
+  <div class="row"><span>Total Area</span><strong>${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft</strong></div>
+  ${q.quoted_price_per_sqft ? `<div class="row"><span>Agreed Rate</span><strong>₹${q.quoted_price_per_sqft}/sqft</strong></div>` : ''}
+
+  <div class="amount-box">
+    <div style="font-size:12px;margin-bottom:4px">Amount Received</div>
+    <div class="amount">₹${(q.advance_amount||0).toLocaleString('en-IN')}</div>
+    <div style="font-size:12px;margin-top:4px;color:#666">Mode: ${(q.advance_mode||'cash').toUpperCase()}${txnRef?' · Ref: '+txnRef:''}</div>
+  </div>
+
+  <div class="row"><span>Stock Hold Valid Until</span><strong>${new Date(Date.now()+90*24*60*60*1000).toLocaleDateString('en-IN')}</strong></div>
+
+  <div class="note">
+    This advance confirms your order and holds the selected tile stock for 90 days.<br>
+    Balance payment due before dispatch. This receipt is not a tax invoice.<br>
+    Returns subject to V Wholesale terms & conditions.
+  </div>
+
+  <div class="sign">
+    <div>Customer Signature</div>
+    <div>For Vassure Wholesale Pvt Ltd<br>Authorised by</div>
+  </div>
+
+  <script>
+  function shareReceiptWA() {
+    const msg = encodeURIComponent('V Wholesale Advance Receipt\\n\\nReceipt No: ${q.advance_receipt_no}\\nQuote: ${q.tq_no}\\nCustomer: ${q.customer_name}\\nAmount Paid: ₹${(q.advance_amount||0).toLocaleString()}\\nMode: ${(q.advance_mode||'cash').toUpperCase()}\\n\\nStock is held for 90 days.\\n\\nThank you for choosing V Wholesale, Vijayawada.\\n8712697930');
+    window.open('https://wa.me/91${q.customer_phone||''}?text=' + msg, '_blank');
   }
+  <\/script>
+  </body></html>`);
+  win.document.close();
+}
 
-  const profile = VW_AUTH.getCurrentProfile();
-  const byName  = profile?.name || 'Staff';
-  const now     = new Date().toISOString();
-  const dateStr = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+async function tqReject() {
+  const quoteId = _tqState._reviewingQuoteId;
+  if (!quoteId) { showToast('No quotation selected', 'warn'); return; }
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('tq_no,customer_name').eq('id',quoteId).single();
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="color:var(--red)">❌ Reject Tile Quotation</h3>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:12px">${q?.tq_no} · ${q?.customer_name}</p>
+    <div class="form-group">
+      <label>Reason *</label>
+      <textarea id="tq-reject-reason" rows="3" placeholder="e.g. Price too low — minimum ₹65/sqft · Tile not available · Needs re-measurement"
+        style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg2);color:var(--text);font-size:13px"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn-secondary" style="flex:1" onclick="closeSheet()">Cancel</button>
+      <button style="flex:2;padding:12px;border-radius:10px;background:var(--red);border:none;color:#fff;font-weight:700;cursor:pointer"
+        onclick="VW_TILES.tqConfirmReject(${quoteId})">❌ Reject & Notify Executive</button>
+    </div>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
 
-  // Fetch current approval_log
-  const { data: q } = await VW_DB.client.from('tile_quotations')
-    .select('approval_log,approval_status').eq('id', id).single();
-  if (!q) { showToast('Quote not found', 'warn'); return; }
-
-  // Auto-reject any pending steps in the approval log
-  const log = (q.approval_log || []).map(step => {
-    if (step.status === 'pending') {
-      return {
-        ...step,
-        status: 'auto_rejected',
-        autoRejectedAt: now,
-        autoRejectedBy: byName,
-        autoRejectedById: profile?.id || null,
-        autoRejectedReason: `Re-edited by ${byName} on ${dateStr} — Reason: ${reason}`,
-      };
-    }
-    return step;
-  });
-
-  // Add an edit record to the log for full audit trail
-  log.push({
-    level: 'edit',
-    status: 'edited',
-    editedAt: now,
-    editedBy: byName,
-    editedById: profile?.id || null,
-    reason,
-    previousStatus: q.approval_status,
-  });
-
-  // Reset quote to draft
-  const { error } = await VW_DB.client.from('tile_quotations').update({
-    approval_status: 'draft',
-    status: 'draft',
-    approval_log: log,
-    approval_submitted_at: null,
-    approval_submitted_by: null,
-    approval_submitted_by_id: null,
-    draft_step: 8,
-    updated_at: now,
-  }).eq('id', id);
-
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
-
-  await auditLog('tq_edit_requested', 'tile_quotation', id, q.approval_status, 'draft', { reason }, `Re-edit by ${byName}`);
-
-  closeSheet();
-  showToast('Quote re-opened for editing', 'success');
-
-  // Load into TQ wizard so staff can make changes
-  delete _pageCache['tiles']; delete _pageCacheTTL['tiles'];
-  tqResumeDraft(id);
+async function tqReprintReceipt(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  tqPrintAdvanceReceipt(q, '');
 }
 
 async function tqSaveQuote() { return tqSubmitForApproval(); }
@@ -5898,266 +6280,178 @@ async function tqSubmitForApproval() {
   }
 }
 
-async function qqConvertExisting(id) {
-  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
-  if (!q) { showToast('Estimate not found', 'warn'); return; }
-  window._qqData = {
-    _qqId: id,
-    _tqNo: q.tq_no,
-    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
-    rooms: q.rooms || [],
-    adding: null, designing: null, editingIdx: null,
-  };
+async function openTileQuote(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) return;
+  // Quick Quote estimates always open in QQ flow, never the TQ wizard
+  if (q.source === 'quick_quote') { return qqEditExisting(id); }
+  // Full TQ drafts open back in the wizard at the step they left off
+  if (q.status === 'draft' || q.approval_status === 'draft') { return tqResumeDraft(id); }
+  const profile = VW_AUTH.getCurrentProfile();
+  const myRole = profile?.role || '';
+  const LEVEL_LABELS_TQ = { tl:'TL / Sr Executive', floor_manager:'Floor Manager', store_manager:'Store Manager', management:'Management' };
 
-  // Clear stale price keys then restore from saved quoted_prices
-  // Uses same precise matching as qqEditExisting to get correct window key format
-  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
-  (q.rooms || []).forEach((room, ri) => {
-    ['wall', 'floor'].forEach(surface => {
-      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
-      if (!design?.pattern?.length) return;
-      const type = surface === 'wall' ? 'wl' : 'fl';
-      [...new Set(design.pattern)].forEach(code => {
-        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
-        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
-          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
-        );
-        if (!slotEntry) return;
-        const qp = (q.quoted_prices || {})[slotEntry[0]];
-        if (qp?.pricePerBox > 0) {
-          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
-          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
-        }
-      });
-    });
-  });
+  // Determine if I can action the current pending step
+  const log = q.approval_log || [];
+  const lastStep = log[log.length - 1];
+  const myAllowedRoles = lastStep ? ((window.TQ_LEVEL_ROLES||{})[lastStep.level] || [lastStep.level]) : [];
+  const canIAction = q.approval_status === 'pending_approval' && lastStep?.status === 'pending' &&
+    (myRole === 'admin' || myAllowedRoles.includes(myRole));
+  const isCashier = ['admin','accounts'].includes(myRole);
 
-  await _qqConvertToFullTQ();
+  // Pre-compute approval BOM HTML (async — needs tier price fetch)
+  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, lastStep?.level || myRole) : '';
+
+  const sheet = document.getElementById('bottom-sheet');
+  const totalSqft = parseFloat(q.total_area_sqft||0);
+  const pricePerSqft = q.quoted_price_per_sqft || 0;
+  const pricePerBox = q.quoted_price_per_box || 0;
+  const estTotal = pricePerSqft > 0 ? Math.round(totalSqft * pricePerSqft) : 0;
+
+  // Store quote ID for approve/reject/print functions
+  _tqState._reviewingQuoteId = id;
+  _tqState._savedQuoteId = id;
+  _tqState._approvalStatus = q.approval_status;
+
+  // Build escalation chain timeline
+  const chainTimeline = log.length ? `
+  <div style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Approval Chain</div>
+    ${log.map((step, idx) => {
+      const isLast = idx === log.length - 1;
+      const stepLabel = LEVEL_LABELS_TQ[step.level] || step.level;
+      const statusIcon = step.status === 'approved' ? '✅' : step.status === 'rejected' ? '❌' : step.status === 'timeout' ? '⏭' : isLast ? '⏳' : '○';
+      const statusColor = step.status === 'approved' ? 'var(--green)' : step.status === 'rejected' ? 'var(--red)' : step.status === 'timeout' ? 'var(--text3)' : isLast ? 'var(--gold)' : 'var(--text3)';
+      const approverNames = step.approverNames?.length ? step.approverNames.join(', ') : step.roles?.join('/') || '';
+      return `<div style="display:flex;align-items:flex-start;gap:8px;padding:5px 0;${idx < log.length-1 ? 'border-bottom:1px solid var(--border2)' : ''}">
+        <span style="font-size:14px;flex-shrink:0">${statusIcon}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600;color:${statusColor}">${stepLabel}</div>
+          <div style="font-size:10px;color:var(--text3)">${approverNames}${step.approvedBy ? ' · Approved by '+step.approvedBy : ''}${step.rejectedBy ? ' · Rejected by '+step.rejectedBy : ''}${step.editedPricePerSqft ? ` · Price: ₹${step.editedPricePerSqft}/sqft` : ''}</div>
+          ${step.rejectReason ? `<div style="font-size:10px;color:var(--red)">${step.rejectReason}</div>` : ''}
+        </div>
+        <div style="font-size:10px;color:var(--text3)">${new Date(step.notifiedAt).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+      </div>`;
+    }).join('')}
+  </div>` : '';
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+      <div>
+        <h3 style="margin:0">${q.customer_name}</h3>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${q.tq_no} · ${new Date(q.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:var(--bg2)">
+        ${q.approval_status?.replace('_',' ')||'draft'}
+      </span>
+    </div>
+
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Site</span><span>${q.site_address||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Total Area</span><span style="font-weight:700">${totalSqft.toFixed(1)} sqft</span></div>
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Tile Size</span><span>${q.selected_size?.label||'—'}</span></div>
+      ${pricePerSqft>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Price</span><span style="font-weight:700;color:var(--gold)">₹${pricePerSqft}/sqft${pricePerBox?` · ₹${pricePerBox}/box`:''}</span></div>`:''}
+      ${estTotal>0?`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border2)"><span style="color:var(--text3)">Tile Subtotal</span><span style="font-weight:700;color:var(--gold)">₹${estTotal.toLocaleString('en-IN')}</span></div>`:''}
+      ${q.price_edit_note?`<div style="font-size:11px;color:var(--gold);padding:4px 0">Note: ${q.price_edit_note}</div>`:''}
+      ${(() => {
+        const extras = q.extra_products || [];
+        if (!extras.length) return '';
+        const extTotal = extras.reduce((s,p)=>s+((p.price||0)*(p.qty||1)),0);
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🛒 Add-ons</div>
+          ${extras.map(p=>`<div style="display:flex;justify-content:space-between;padding:2px 0;font-size:11px"><span style="color:var(--text2)">${p.name} ×${p.qty||1}</span><span>₹${Math.round((p.price||0)*(p.qty||1)).toLocaleString('en-IN')}</span></div>`).join('')}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Add-ons</span><span style="color:var(--gold)">₹${extTotal.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${(() => {
+        const del = q.delivery || {};
+        const sT = del.transportCost||del.transport_cost||0;
+        const sL = del.loadingCost||del.loading_cost||0;
+        const sF = del.floorCost||del.floor_cost||0;
+        const dT = sT+sL+sF;
+        if (!dT) return '';
+        return `<div style="padding:6px 0">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:3px">🚛 Delivery</div>
+          ${sT?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Transport</span><span>₹${sT.toLocaleString('en-IN')}</span></div>`:''}
+          ${sL?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Loading + Unloading</span><span>₹${sL.toLocaleString('en-IN')}</span></div>`:''}
+          ${sF?`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0"><span style="color:var(--text2)">Floor Delivery</span><span>₹${sF.toLocaleString('en-IN')}</span></div>`:''}
+          <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:700;margin-top:3px;border-bottom:1px solid var(--border2);padding-bottom:5px"><span style="color:var(--text3)">Delivery</span><span style="color:var(--gold)">₹${dT.toLocaleString('en-IN')}</span></div>
+        </div>`;
+      })()}
+      ${q.grand_total>0?`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:13px;font-weight:800;background:rgba(245,200,66,0.08);margin:-2px -6px;padding:8px 6px;border-radius:7px;margin-top:4px"><span style="color:var(--gold)">GRAND TOTAL</span><span style="color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span></div>`:''}
+      ${q.rejection_reason?`<div style="color:var(--red);padding:4px 0">Rejected: ${q.rejection_reason}</div>`:''}
+      ${q.advance_amount>0?`<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Advance</span><span style="font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} · ${q.advance_receipt_no}</span></div>`:''}
+      <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--text3)">Submitted by</span><span>${q.created_by||'—'}</span></div>
+      ${q.version>1?`<div style="display:flex;justify-content:space-between;padding:3px 0;margin-top:4px"><span style="color:var(--text3)">Version</span><span style="font-weight:700;color:var(--gold)">v${q.version} (revised)</span></div>`:''}
+    </div>
+
+    ${await (async ()=>{
+      if (!q.id) return '';
+      const { data: revs } = await VW_DB.client.from('tq_revisions')
+        .select('version,changed_by_name,change_reason,created_at')
+        .eq('tq_id', q.id).order('version', { ascending: false }).limit(10)
+        .catch(()=>({ data: [] }));
+      if (!revs?.length) return '';
+      return '<div style="margin-bottom:12px">' +
+        '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">📋 Revision History</div>' +
+        revs.map(r=>'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border2);font-size:11px">' +
+          '<div><span style="font-weight:700;color:var(--gold)">v'+r.version+'</span>' +
+          '<span style="color:var(--text3);margin-left:6px">'+(r.changed_by_name||'—')+'</span>' +
+          (r.change_reason?'<div style="font-size:10px;color:var(--text3);margin-top:1px">&quot;'+r.change_reason+'&quot;</div>':'') +
+          '</div><div style="color:var(--text3);font-size:10px">'+new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div>' +
+          '</div>').join('') +
+        '</div>';
+    })()}
+
+    ${chainTimeline}
+
+    ${canIAction ? `
+    <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
+      ${approvalBomHtml}
+      <div class="form-group" style="margin-bottom:10px">
+        <label style="font-size:11px">Price note / reason (optional)</label>
+        <input type="text" id="tq-price-note" placeholder="e.g. Special rate · Seasonal offer · Premium tile" value="${q.price_edit_note||''}">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
+          ✅ Approve${lastStep.level !== 'management' ? ' & Pass Up' : ' — Final'}
+        </button>
+        <button onclick="VW_TILES.tqReject()" style="flex:1;padding:13px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
+          ❌ Reject
+        </button>
+      </div>
+    </div>` : ''}
+
+    ${(isCashier || myRole === 'admin') && q.approval_status === 'approved' && !q.advance_amount ? `
+    <button class="btn-primary full-width" style="background:var(--gold);color:#000;font-size:14px;padding:14px;margin-bottom:8px" onclick="closeSheet();VW_TILES.tqCollectAdvance(${id})">
+      💰 Collect Advance & Hold Stock
+    </button>` : ''}
+
+    ${q.advance_amount > 0 ? `
+    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>` : ''}
+
+    ${q.approval_status === 'approved' ? `
+    <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Print & Share enabled after final approval
+    </div>`}
+
+    ${!q.advance_amount ? `
+    <button onclick="VW_TILES.tqEditQuote(${id})" style="width:100%;padding:11px;border-radius:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      ✏️ Edit Quote
+    </button>` : `
+    <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
+      🔒 Editing locked — advance collected
+    </div>`}
+    <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
 }
 
-async function qqDeleteEstimate(id) {
-  if (!confirm('Delete this estimate? This cannot be undone.')) return;
-  const { error } = await VW_DB.client.from('tile_quotations').delete().eq('id', id);
-  if (error) { showToast('Delete failed: ' + error.message, 'error'); return; }
-  showToast('Estimate deleted', 'success');
-  const container = document.getElementById('app-content');
-  if (container) container.innerHTML = await renderTileQuotesList();
-}
-
-async function qqEditExisting(id) {
-  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', id).single();
-  if (!q) { showToast('Estimate not found', 'warn'); return; }
-
-  // Restore _qqData from saved record
-  window._qqData = {
-    _qqId: id,
-    _tqNo: q.tq_no,
-    customer: { name: q.customer_name||'', phone: q.customer_phone||'', site: q.site_address||'', id: q.customer_id||null },
-    rooms: q.rooms || [],
-    adding: null, designing: null, editingIdx: null,
-  };
-
-  // Clear any stale price keys from previous session
-  Object.keys(window).filter(k => k.startsWith('qqprice_')).forEach(k => { try { delete window[k]; } catch(e){} });
-
-  // Restore saved prices from quoted_prices back into window price keys
-  // Slot format: qq{ri}_{timestamp}_{surface}_{codeLowered}
-  // Window key:  qqprice_{wl|fl}_{ri}_{ORIGINAL_CODE}
-  (q.rooms || []).forEach((room, ri) => {
-    ['wall', 'floor'].forEach(surface => {
-      const design = surface === 'wall' ? room.wallDesign : room.floorDesign;
-      if (!design || !design.pattern || !design.pattern.length) return;
-      const type = surface === 'wall' ? 'wl' : 'fl';
-      [...new Set(design.pattern)].forEach(code => {
-        const codeLower = code.toLowerCase().replace(/[^a-z0-9]/g, '');
-        // Precise match: starts with qq{ri}_ AND ends with _{surface}_{codeLower}
-        // Works for both stable IDs (qq0_wall_d) and old timestamp IDs (qq0_1782..._wall_d)
-        const slotEntry = Object.entries(q.tile_selections || {}).find(([sid]) =>
-          sid.startsWith('qq' + ri + '_') && sid.endsWith('_' + surface + '_' + codeLower)
-        );
-        if (!slotEntry) return;
-        const qp = (q.quoted_prices || {})[slotEntry[0]];
-        if (qp && qp.pricePerBox > 0) {
-          window['qqprice_' + type + '_' + ri + '_' + code] = qp.pricePerBox;
-          // Also restore sqft price so the ₹/sqft input shows the saved value, not inventory default
-          if (qp.pricePerSqft > 0) window['qqprice_' + type + '_sqft_' + ri + '_' + code] = qp.pricePerSqft;
-        }
-      });
-    });
-  });
-
-  // Load price history in background
-  _qqLoadPriceHistory().catch(() => {});
-
-  // Open QQ output with restored prices
-  _qqScreen('output');
-}
-
-async function _tqBuildApprovalBOM(q, approverLevel) {
-  const slots = Object.entries(q.tile_selections||{});
-  if (!slots.length) return '<div style="font-size:12px;color:var(--text3);margin-bottom:8px">No tile details — enter price below.</div>';
-
-  // Which tiers can this approver offer?
-  const tierRights = {
-    tl:            ['tier1'],
-    sr_executive:  ['tier1'],
-    floor_manager: ['tier1','tier2'],
-    store_manager: ['tier1','tier2','tier3'],
-    management:    ['tier1','tier2','tier3','tier4'],
-    admin:         ['tier1','tier2','tier3','tier4'],
-  };
-  const myTiers = tierRights[approverLevel] || [];
-  const canManualOverride = ['management','admin'].includes(approverLevel);
-
-  // Pre-compute sqft per slot from rooms area data
-  const slotSqft = {};
-  (q.rooms||[]).forEach(function(r) {
-    (r.areas||[]).forEach(function(a) {
-      var sid = a.slotId || (r.id + '_' + (a.subType||'floor'));
-      slotSqft[sid] = (slotSqft[sid]||0) + (a.sqft||0);
-    });
-    if (!slotSqft[r.id]) slotSqft[r.id] = (r.areas||[]).reduce(function(s,a){return s+(a.sqft||0);},0);
-  });
-
-  // Merge same tile_name + size.mm across all slots into one row
-  const groups = {};
-  const productIds = [];
-  slots.forEach(function(entry) {
-    var slotId = entry[0], sel = entry[1];
-    if (!sel || !sel.size || !sel.size.mm || !sel.tile_name) return;
-    var key = sel.tile_name + '|' + sel.size.mm;
-    var mmParts = sel.size.mm.split('\u00d7').map(Number);
-    var mmH = mmParts[0], mmW = mmParts[1];
-    var tilesPerBox = sel.size.tilesPerBox || (mmH>=600&&mmW>=1200?2:mmH>=600?4:6);
-    var spb = tileSqftPerTile(mmH, mmW) * tilesPerBox;
-    var qp  = ((q.quoted_prices||{})[slotId]) || {};
-    var boxP  = qp.pricePerBox>0  ? qp.pricePerBox  : qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*spb) : 0;
-    var sqftP = qp.pricePerSqft>0 ? qp.pricePerSqft : (boxP>0&&spb>0) ? parseFloat((boxP/spb).toFixed(1)) : 0;
-    var areaSqft = slotSqft[slotId] || slotSqft[slotId.replace(/_floor$|_wall$/,'')] || sel._sqft || 0;
-    var boxes = sel._qqBoxes > 0 ? sel._qqBoxes : (spb > 0 && areaSqft > 0 ? Math.ceil(areaSqft / spb) : 0);
-    if (!groups[key]) {
-      groups[key] = { tile_name:sel.tile_name, brand:sel.brand||'', size_mm:sel.size.mm, spb:spb, totalBoxes:0, totalSqft:0, slotIds:[], initBox:boxP, initSqft:sqftP, productId: sel.product_id||sel.productId||null };
-      if (sel.product_id||sel.productId) productIds.push(sel.product_id||sel.productId);
-    }
-    groups[key].totalBoxes += boxes;
-    groups[key].totalSqft  += areaSqft;
-    groups[key].slotIds.push(slotId);
-    if (boxP > groups[key].initBox) { groups[key].initBox = boxP; groups[key].initSqft = sqftP; }
-  });
-
-  // Fetch tier prices for all tile products (if any have product IDs)
-  const tierPrices = {};
-  if (productIds.length && myTiers.length) {
-    try {
-      const { data: prods } = await VW_DB.client
-        .from('products')
-        .select('id,mrp,price,vwp,tier1_price,tier2_price,tier3_price,tier4_price')
-        .in('id', productIds);
-      (prods||[]).forEach(p => { tierPrices[p.id] = p; });
-    } catch(_) {}
-  }
-
-  const TIER_LABELS = { tier1:'Tier 1', tier2:'Tier 2', tier3:'Tier 3', tier4:'Tier 4' };
-
-  return Object.values(groups).map(function(g, idx) {
-    const tp = g.productId ? tierPrices[g.productId] : null;
-    const mrp = tp?.mrp || 0;
-    const vwp = tp?.vwp || tp?.price || 0;
-
-    // Build tier buttons
-    const tierButtons = myTiers.length && tp ? myTiers.map(function(tier) {
-      const tierPrice = tp[tier+'_price'];
-      if (!tierPrice) return '';
-      const sqftPrice = g.spb > 0 ? (tierPrice/g.spb).toFixed(1) : '';
-      const discVsMrp = mrp > 0 ? Math.round((mrp-tierPrice)/mrp*100) : 0;
-      const discVsVwp = vwp > 0 ? Math.round((vwp-tierPrice)/vwp*100) : 0;
-      return '<button onclick="(function(){' +
-        'var b=document.getElementById(\'tq-box-'+idx+'\');' +
-        'var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
-        'if(b)b.value='+tierPrice+';if(s)s.value=\''+sqftPrice+'\';' +
-        'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
-        'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
-        '}).call(this)" class="tier-btn"' +
-        ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
-        '<div style="font-size:10px;font-weight:700;color:var(--gold)">' + TIER_LABELS[tier] + '</div>' +
-        '<div style="font-size:12px;font-weight:800">₹'+Number(tierPrice).toLocaleString('en-IN')+'</div>' +
-        '<div style="font-size:9px;color:var(--text3)">' + (discVsMrp>0?discVsMrp+'% off MRP':'') + (discVsVwp>0?' · '+discVsVwp+'% off VWP':'') + '</div>' +
-        '</button>';
-    }).filter(Boolean).join('') : '';
-
-    const vwpBtn = (tp && vwp > 0) ? '<button onclick="(function(){' +
-      'var b=document.getElementById(\'tq-box-'+idx+'\');var s=document.getElementById(\'tq-sqft-'+idx+'\');' +
-      'var spb='+g.spb.toFixed(4)+';if(b)b.value='+Math.round(vwp*g.spb)+';if(s)s.value=\''+vwp.toFixed(1)+'\';' +
-      'this.parentElement.querySelectorAll(\'.tier-btn\').forEach(function(x){x.style.borderColor=\'var(--border)\';x.style.background=\'var(--bg3)\';});' +
-      'this.style.borderColor=\'var(--gold)\';this.style.background=\'var(--gold-muted)\';' +
-      '}).call(this)" class="tier-btn"' +
-      ' style="flex:1;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;text-align:center">' +
-      '<div style="font-size:10px;font-weight:700;color:var(--text2)">VWP</div>' +
-      '<div style="font-size:12px;font-weight:800">₹'+Number(vwp).toLocaleString('en-IN')+'</div>' +
-      '<div style="font-size:9px;color:var(--text3)">' + (mrp>0?Math.round((mrp-vwp)/mrp*100)+'% off MRP':'Standard') + '</div>' +
-      '</button>' : '';
-
-    const mrpLine = mrp > 0 ? '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">MRP: ₹'+Number(mrp).toLocaleString('en-IN')+'/sqft' + (vwp>0?' · VWP: ₹'+Number(vwp).toLocaleString('en-IN')+'/sqft':'') + '</div>' : '';
-
-    return '<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid var(--gold)">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
-        '<div><div style="font-size:13px;font-weight:700">' + g.tile_name + '</div>' +
-        '<div style="font-size:11px;color:var(--text3)">' + g.brand + ' \u00b7 ' + g.size_mm + (g.totalSqft>0?' \u00b7 '+g.totalSqft.toFixed(1)+' sqft':'') + '</div></div>' +
-        (g.totalBoxes>0 ? '<div style="font-size:16px;font-weight:900;color:var(--gold)">' + g.totalBoxes + ' boxes</div>' : '<div style="font-size:11px;color:var(--text3)">boxes TBD</div>') +
-      '</div>' +
-      mrpLine +
-      (g.initBox===0 ? '<div style="font-size:11px;color:var(--text3);background:rgba(245,200,66,0.06);border:1px dashed var(--gold-border);border-radius:6px;padding:5px 8px;margin-bottom:8px">💡 Set price below — tap a tier or enter manually</div>' : '') +
-      // Tier quick-select buttons
-      ((vwpBtn || tierButtons) ? '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">' + vwpBtn + tierButtons + '</div>' : '') +
-      // Manual price inputs
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">' +
-        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / BOX</label>' +
-        '<input type="number" id="tq-box-' + idx + '" value="' + (g.initBox||'') + '" step="10" min="0" placeholder="Enter \u20b9/box"' +
-          ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '" data-slots="' + g.slotIds.join(',') + '"' +
-          ' style="width:100%;padding:8px;border:1.5px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:15px;font-weight:800;text-align:center;box-sizing:border-box"' +
-          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,sf=document.getElementById(\'tq-sqft-\'+i);if(sf)sf.value=s>0?((parseFloat(el.value)||0)/s).toFixed(1):\'\';})(this)"></div>' +
-        '<div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">\u20b9 / SQFT</label>' +
-        '<input type="number" id="tq-sqft-' + idx + '" value="' + (g.initSqft||'') + '" step="0.5" min="0"' +
-          ' data-spb="' + g.spb.toFixed(4) + '" data-idx="' + idx + '"' +
-          ' style="width:100%;padding:8px;border:1px solid var(--border);border-radius:7px;background:var(--bg2);color:var(--text);font-size:14px;text-align:center;box-sizing:border-box"' +
-          ' oninput="(function(el){var s=parseFloat(el.dataset.spb)||1,i=el.dataset.idx,bx=document.getElementById(\'tq-box-\'+i);if(bx)bx.value=Math.round((parseFloat(el.value)||0)*s)||\'\';})(this)"></div>' +
-      '</div>' +
-      (canManualOverride ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">✏️ Management: can enter any price above</div>' : '') +
-    '</div>';
-  }).join('') + _buildAccessoryPriceInputs(q);
-}
-
-function _buildAccessoryPriceInputs(q) {
-  const st = q._decoded || {};
-  const gs = q.grout_selections || st.groutSelections || {};
-  const as = q.adhesive_selections || st.adhesiveSelections || {};
-  const ss = q.spacer_selections || st.spacerSelections || {};
-
-  const hasSpacers  = Object.values(ss).some(s => s?.use);
-  const hasAdhesive = Object.values(as).some(s => s?.method && s.method !== 'none' && s.method !== 'mortar' && (s.adhBags||0) > 0);
-  const hasGrout    = Object.values(gs).some(g => g?.type && g.type !== 'none');
-  const hasMortar   = Object.values(as).some(s => s?.method === 'mortar');
-
-  if (!hasSpacers && !hasAdhesive && !hasGrout && !hasMortar) return '';
-
-  const saved = q.accessory_prices || {};
-
-  const accInput = (id, label, unit, initVal) =>
-    `<div style="margin-bottom:8px">` +
-    `<label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">${label} (₹/${unit})</label>` +
-    `<input type="number" id="tq-acc-${id}" value="${initVal||''}" step="1" min="0" placeholder="Enter price"` +
-    ` style="width:100%;padding:8px;border:1px solid var(--gold-border);border-radius:7px;background:var(--bg2);color:var(--gold);font-size:14px;text-align:center;box-sizing:border-box">` +
-    `</div>`;
-
-  return `<div style="background:var(--bg3);border-radius:9px;padding:9px 11px;margin-bottom:8px;border-left:3px solid #6B7280">` +
-    `<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🧰 Installation Material Prices</div>` +
-    (hasSpacers  ? accInput('spacer',  '📦 Spacers',       'pkt', saved.spacerPerPkt) : '') +
-    (hasAdhesive ? accInput('adhesive','🧲 Tile Adhesive', 'bag', saved.adhPerBag)    : '') +
-    (hasMortar   ? accInput('cement',  '🏗 Cement',        'bag', saved.cementPerBag) : '') +
-    (hasGrout    ? accInput('grout',   '🪨 Grout',         'kg',  saved.groutPerKg)   : '') +
-    `<div style="font-size:10px;color:var(--text3);margin-top:4px">These are added to the final total shown to customer.</div>` +
-    `</div>`;
-}
+// Resume an auto-saved draft tile quotation at the step where it was left off.
 
 async function tqPrintFromId(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
