@@ -195,7 +195,11 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
-    else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
+    else if (page === 'shop') {
+    html = await VW_SHOP.renderShopPage();
+    // Load products after render
+    setTimeout(() => VW_SHOP.loadShopProducts(null, ''), 100);
+  }
   else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
   else if (page === 'wallet') {
     const prof = VW_AUTH.getCurrentProfile();

@@ -8098,3 +8098,413 @@ window.VW_LABOR.renderContractorProfilePage = renderContractorProfilePage;
 window.VW_LABOR.saveContractorProfile = saveContractorProfile;
 window.VW_LABOR.submitContractorKYC = submitContractorKYC;
 window.VW_LABOR.toggleContractorActive = toggleContractorActive;
+
+// ═══════════════════════════════════════════════════════════════
+// B2C SHOP — HomeRun style quick commerce
+// ═══════════════════════════════════════════════════════════════
+
+const SHOP_CATEGORIES = [
+  { key:'Tiles',        icon:'⬜', label:'Tiles',          color:'#8B5CF6' },
+  { key:'Sanitary',     icon:'🚿', label:'Sanitary',       color:'#3B82F6' },
+  { key:'Plumbing',     icon:'🔧', label:'Plumbing',       color:'#06B6D4' },
+  { key:'Electricals',  icon:'⚡', label:'Electricals',    color:'#F59E0B' },
+  { key:'Paints',       icon:'🎨', label:'Paints',         color:'#EC4899' },
+  { key:'Hardware',     icon:'🔩', label:'Hardware',       color:'#6B7280' },
+  { key:'Tools',        icon:'🛠', label:'Tools',          color:'#EF4444' },
+  { key:'Appliances',   icon:'📦', label:'Appliances',     color:'#10B981' },
+  { key:'Plywood',      icon:'🪵', label:'Plywood',        color:'#92400E' },
+  { key:'Grout',        icon:'🪨', label:'Grout',          color:'#6B7280' },
+  { key:'Adhesive',     icon:'🧲', label:'Adhesive',       color:'#F97316' },
+  { key:'Waterproofing',icon:'💧', label:'Waterproofing',  color:'#0EA5E9' },
+];
+
+let _shopCart = {}; // {productId: qty}
+let _shopCategory = null;
+let _shopSearch = '';
+
+async function renderShopPage() {
+  // Load cart from Supabase if logged in
+  const prof = VW_AUTH.getCurrentProfile();
+  if (prof?.id) {
+    const { data: cart } = await VW_DB.client.from('carts')
+      .select('items').eq('profile_id', prof.id).single().catch(() => ({ data: null }));
+    if (cart?.items) {
+      _shopCart = {};
+      (cart.items || []).forEach(i => { _shopCart[i.product_id] = i.qty; });
+    }
+  }
+
+  return `
+  <div id="shop-root">
+    <!-- HERO STRIP -->
+    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 16px;margin:-12px -12px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.6)">📍 Delivering to</div>
+          <div style="font-size:13px;font-weight:700;color:#fff" onclick="VW_SHOP.selectDeliveryAddress()">
+            Vijayawada <span style="color:#f5c842">▾</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div onclick="VW_SHOP.openCart()" style="position:relative;cursor:pointer">
+            <span style="font-size:22px">🛒</span>
+            ${Object.keys(_shopCart).length > 0 ? `<span id="shop-cart-count" style="position:absolute;top:-4px;right:-6px;background:#f5c842;color:#000;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">${Object.values(_shopCart).reduce((a,b)=>a+b,0)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+      <!-- SEARCH -->
+      <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px">
+        <span style="font-size:16px;opacity:0.7">🔍</span>
+        <input type="text" id="shop-search-input" placeholder="Search tiles, pipes, switches..."
+          value="${_shopSearch}"
+          oninput="VW_SHOP.shopSearch(this.value)"
+          style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:13px;placeholder-color:rgba(255,255,255,0.5)">
+        ${_shopSearch ? `<button onclick="VW_SHOP.shopSearch('')" style="background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:16px">✕</button>` : ''}
+      </div>
+    </div>
+
+    <!-- DELIVERY PROMISE -->
+    <div style="display:flex;gap:0;background:#f5c842;overflow:hidden">
+      ${['⚡ 90-min delivery','🏪 Free pickup','💳 Pay by Wallet','🔄 Easy returns'].map(t =>
+        `<div style="flex:1;padding:6px 4px;text-align:center;font-size:9px;font-weight:800;color:#000;border-right:1px solid rgba(0,0,0,0.1)">${t}</div>`
+      ).join('')}
+    </div>
+
+    ${_shopSearch ? `
+    <!-- SEARCH RESULTS -->
+    <div id="shop-products-grid" style="padding:12px 0">
+      <div style="font-size:12px;color:var(--text3);padding:0 4px;margin-bottom:8px">Searching for "${_shopSearch}"...</div>
+    </div>` : `
+
+    <!-- CATEGORY TABS -->
+    <div style="padding:12px 0 4px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;padding:0 4px">Shop by Category</div>
+      <div style="display:flex;gap:10px;overflow-x:auto;padding:0 4px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
+        <button onclick="VW_SHOP.filterCategory(null)"
+          style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border-radius:12px;cursor:pointer;
+            border:${!_shopCategory?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${!_shopCategory?'var(--gold-muted)':'var(--bg2)'}">
+          <span style="font-size:22px">🏠</span>
+          <span style="font-size:10px;font-weight:700;color:${!_shopCategory?'var(--gold)':'var(--text)'}">All</span>
+        </button>
+        ${SHOP_CATEGORIES.map(c => `
+        <button onclick="VW_SHOP.filterCategory('${c.key}')"
+          style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border-radius:12px;cursor:pointer;
+            border:${_shopCategory===c.key?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${_shopCategory===c.key?'var(--gold-muted)':'var(--bg2)'}">
+          <span style="font-size:22px">${c.icon}</span>
+          <span style="font-size:10px;font-weight:700;white-space:nowrap;color:${_shopCategory===c.key?'var(--gold)':'var(--text)'}">${c.label}</span>
+        </button>`).join('')}
+      </div>
+    </div>
+
+    <!-- TILES SPECIAL SECTION -->
+    ${!_shopCategory || _shopCategory === 'Tiles' ? `
+    <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:800">⬜ Tiles</div>
+        <div style="font-size:11px;color:var(--text3)">Can't decide? Try at home</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_SHOP.openTileQuotation()" style="flex:1;padding:10px;border-radius:10px;background:#8B5CF6;border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          📐 Get Tile Quote
+        </button>
+        <button onclick="VW_SHOP.requestTileSample()" style="flex:1;padding:10px;border-radius:10px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#8B5CF6;font-size:12px;font-weight:700;cursor:pointer">
+          🏠 Try Sample at Home
+        </button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">Sample: ₹500/tile + transport · 100% redeemable · 2hr return window</div>
+    </div>` : ''}
+
+    <!-- PRODUCTS GRID -->
+    <div id="shop-products-grid"></div>`}
+  </div>`;
+}
+
+async function loadShopProducts(category, search) {
+  const container = document.getElementById('shop-products-grid');
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Loading...</div>';
+
+  let query = VW_DB.client.from('products')
+    .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images')
+    .eq('is_active', true)
+    .order('stock', { ascending: false })
+    .limit(40);
+
+  if (category) query = query.eq('category', category);
+  if (search) query = query.ilike('name', `%${search}%`);
+
+  const { data: products } = await query;
+
+  if (!products?.length) {
+    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:8px">${search ? '🔍' : '📦'}</div>
+      <div style="font-size:14px;font-weight:700">${search ? 'No results for "'+search+'"' : 'No products in this category yet'}</div>
+      <div style="font-size:12px;margin-top:4px">Check back soon or call us: 8712697930</div>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+  ${category ? `<div style="font-size:13px;font-weight:700;margin-bottom:10px;padding:0 4px">${category} <span style="color:var(--text3);font-size:11px;font-weight:400">(${products.length})</span></div>` : '<div style="font-size:13px;font-weight:700;margin-bottom:10px;padding:0 4px">All Products</div>'}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 4px">
+    ${products.map(p => shopProductCard(p)).join('')}
+  </div>`;
+}
+
+function shopProductCard(p) {
+  const price = p.vwp || p.price || 0;
+  const mrp   = p.mrp || 0;
+  const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const qty   = _shopCart[p.id] || 0;
+  const outOfStock = !p.stock || p.stock <= 0;
+  const img   = p.images?.[0] || null;
+
+  return `
+  <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative">
+    ${disc > 0 ? `<div style="position:absolute;top:8px;left:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;z-index:1">${disc}% OFF</div>` : ''}
+    <!-- IMAGE -->
+    <div style="height:110px;background:var(--bg3);display:flex;align-items:center;justify-content:center;overflow:hidden">
+      ${img
+        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=font-size:32px>${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>'">`
+        : `<span style="font-size:32px">${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>`}
+    </div>
+    <!-- INFO -->
+    <div style="padding:8px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${p.brand||p.subcategory||p.category}</div>
+      <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;min-height:32px">${p.name}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px">
+        <span style="font-size:14px;font-weight:900;color:var(--gold)">₹${price.toLocaleString('en-IN')}</span>
+        <span style="font-size:10px;color:var(--text3)">${p.unit||'pc'}</span>
+        ${mrp > price ? `<span style="font-size:10px;color:var(--text3);text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+      </div>
+      <!-- ADD TO CART -->
+      ${outOfStock ? `
+      <div style="text-align:center;padding:7px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">Out of Stock</div>` :
+      qty === 0 ? `
+      <button onclick="VW_SHOP.addToCart(${p.id})"
+        style="width:100%;padding:8px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:800;cursor:pointer">
+        + Add
+      </button>` : `
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--gold);border-radius:8px;overflow:hidden">
+        <button onclick="VW_SHOP.removeFromCart(${p.id})" style="width:36px;height:34px;background:none;border:none;font-size:18px;font-weight:900;cursor:pointer;color:#000">−</button>
+        <span style="font-size:14px;font-weight:900;color:#000">${qty}</span>
+        <button onclick="VW_SHOP.addToCart(${p.id})" style="width:36px;height:34px;background:none;border:none;font-size:18px;font-weight:900;cursor:pointer;color:#000">+</button>
+      </div>`}
+    </div>
+  </div>`;
+}
+
+function addToCart(productId) {
+  _shopCart[productId] = (_shopCart[productId] || 0) + 1;
+  _refreshShopCart();
+  _saveCartToSupabase();
+}
+
+function removeFromCart(productId) {
+  if (_shopCart[productId] > 1) _shopCart[productId]--;
+  else delete _shopCart[productId];
+  _refreshShopCart();
+  _saveCartToSupabase();
+}
+
+function _refreshShopCart() {
+  // Re-render cart count badge
+  const count = Object.values(_shopCart).reduce((a,b)=>a+b,0);
+  const badge = document.getElementById('shop-cart-count');
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'flex' : 'none'; }
+
+  // Re-render only the changed product card
+  loadShopProducts(_shopCategory, _shopSearch);
+}
+
+async function _saveCartToSupabase() {
+  const prof = VW_AUTH.getCurrentProfile();
+  if (!prof?.id) return;
+  const items = Object.entries(_shopCart).map(([id,qty]) => ({ product_id: parseInt(id), qty }));
+  await VW_DB.client.from('carts').upsert({
+    profile_id: prof.id,
+    items,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'profile_id' }).catch(() => {});
+}
+
+function filterCategory(cat) {
+  _shopCategory = cat;
+  renderShopPage().then(html => {
+    const root = document.getElementById('main-content');
+    if (root) root.innerHTML = html;
+    loadShopProducts(_shopCategory, _shopSearch);
+  });
+}
+
+function shopSearch(val) {
+  _shopSearch = val;
+  const container = document.getElementById('shop-products-grid');
+  if (container) loadShopProducts(null, val);
+}
+
+async function openCart() {
+  const productIds = Object.keys(_shopCart).map(Number);
+  if (!productIds.length) { showToast('Your cart is empty', 'info'); return; }
+
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,price,vwp,mrp,unit,stock')
+    .in('id', productIds);
+
+  const prodMap = {};
+  (products||[]).forEach(p => { prodMap[p.id] = p; });
+
+  const subtotal = productIds.reduce((sum, id) => {
+    const p = prodMap[id];
+    const price = p?.vwp || p?.price || 0;
+    return sum + price * (_shopCart[id] || 0);
+  }, 0);
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h3 style="margin:0">🛒 Your Cart</h3>
+    <button onclick="VW_SHOP.clearCart()" style="background:none;border:none;font-size:12px;color:var(--text3);cursor:pointer">Clear all</button>
+  </div>
+
+  ${productIds.map(id => {
+    const p = prodMap[id];
+    const qty = _shopCart[id] || 0;
+    const price = p?.vwp || p?.price || 0;
+    return p ? `
+    <div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700">${p.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.brand||''} · ₹${price.toLocaleString('en-IN')}/${p.unit||'pc'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button onclick="VW_SHOP.removeFromCart(${id});VW_SHOP.openCart()" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">−</button>
+        <span style="font-size:14px;font-weight:800;min-width:20px;text-align:center">${qty}</span>
+        <button onclick="VW_SHOP.addToCart(${id});VW_SHOP.openCart()" style="width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:14px">+</button>
+      </div>
+      <div style="font-size:13px;font-weight:800;color:var(--gold);min-width:60px;text-align:right">₹${(price*qty).toLocaleString('en-IN')}</div>
+    </div>` : '';
+  }).join('')}
+
+  <div style="margin-top:12px;padding:12px;background:var(--bg2);border-radius:10px">
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px">
+      <span style="color:var(--text3)">Subtotal</span><span style="font-weight:700">₹${subtotal.toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px">
+      <span style="color:var(--text3)">Delivery</span><span style="color:var(--green);font-weight:600">Calculated at checkout</span>
+    </div>
+  </div>
+
+  <button onclick="VW_SHOP.proceedToCheckout()" style="width:100%;margin-top:12px;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    Proceed to Checkout → ₹${subtotal.toLocaleString('en-IN')}
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">
+    Continue Shopping
+  </button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+function clearCart() {
+  _shopCart = {};
+  _saveCartToSupabase();
+  closeSheet();
+  showToast('Cart cleared', 'info');
+}
+
+async function proceedToCheckout() {
+  closeSheet();
+  navigateTo('checkout');
+}
+
+function openTileQuotation() {
+  closeSheet();
+  navigateTo('tile_quotes');
+  setTimeout(() => VW_TILES.openTileQuotation?.(), 300);
+}
+
+async function requestTileSample() {
+  // Show tile sample request sheet
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>🏠 Try Tile Sample at Home</h3>
+  <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px">
+    <div style="font-weight:700;color:#8B5CF6;margin-bottom:6px">How it works:</div>
+    <div style="color:var(--text2);line-height:1.6">
+      1. Select tiles you want to try<br>
+      2. We deliver samples to your site (₹500/tile + transport)<br>
+      3. See them in your actual space<br>
+      4. Return within 2 hours<br>
+      5. Buy → we deduct ₹500/tile from your bill (100% redeemable)
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Delivery Address</label>
+    <input type="text" id="sample-address" placeholder="Full site address for sample delivery">
+  </div>
+  <div class="form-group">
+    <label>Phone Number</label>
+    <input type="tel" id="sample-phone" placeholder="10-digit mobile" maxlength="10">
+  </div>
+  <div class="form-group">
+    <label>Which tiles do you want to try? (tile names / codes)</label>
+    <textarea id="sample-tiles" rows="3" placeholder="e.g. 600×1200 White Marble, 300×600 Wood texture..."
+      style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+    Available within 15km of our store · Vijayawada only · Subject to stock availability
+  </div>
+  <button onclick="VW_SHOP.submitSampleRequest()" style="width:100%;padding:13px;border-radius:10px;background:#8B5CF6;border:none;color:#fff;font-size:14px;font-weight:800;cursor:pointer">
+    📤 Request Sample Visit
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function submitSampleRequest() {
+  const address = document.getElementById('sample-address')?.value?.trim();
+  const phone   = document.getElementById('sample-phone')?.value?.trim();
+  const tiles   = document.getElementById('sample-tiles')?.value?.trim();
+
+  if (!address || !phone || !tiles) { showToast('Fill in all fields', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('sample_requests').insert({
+    profile_id: prof?.id || null,
+    customer_name: prof?.name || '',
+    customer_phone: phone,
+    delivery_address: { address },
+    products: [{ description: tiles }],
+    charge_per_pc: 500,
+    status: 'pending',
+  }).catch(() => {});
+
+  // Notify management + dispatch
+  await createPersistedNotification({
+    category: 'sample_request',
+    title: '🏠 Tile Sample Request',
+    body: `${phone} · ${address} · ${tiles}`,
+    actions: [{ label: '📞 Call Customer', action: 'call' }],
+  }).catch(() => {});
+
+  showToast('Sample request submitted! We will call you within 30 minutes to confirm.', 'success');
+  closeSheet();
+}
+
+function selectDeliveryAddress() {
+  navigateTo('my_addresses');
+}
+
+window.VW_SHOP = {
+  renderShopPage, loadShopProducts, addToCart, removeFromCart,
+  filterCategory, shopSearch, openCart, clearCart,
+  proceedToCheckout, openTileQuotation, requestTileSample,
+  submitSampleRequest, selectDeliveryAddress,
+};
