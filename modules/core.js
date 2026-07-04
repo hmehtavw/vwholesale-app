@@ -1638,7 +1638,7 @@ async function _commApproversFor(level){
 async function _commNotify(ids, title, body, relatedId){
   const now = new Date().toISOString();
   for (const id of ids){
-    await VW_DB.client.from('notifications').insert({ recipient_id:id, category:'commission_approval', title, body, related_table:'contractor_commissions', related_id:relatedId, read:false, created_at:now }).catch(()=>{});
+    await VW_DB.client.from('notifications').insert({ recipient_id:id, category:'commission_approval', title, body, related_table:'contractor_commissions', related_id:relatedId, read:false, created_at:now }).then(()=>{}).catch(()=>{});
   }
 }
 

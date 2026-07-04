@@ -6272,6 +6272,33 @@ async function tqSubmitForApproval() {
   }
 }
 
+async function tqResumeDraft(id) {
+  const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
+  if (!q) { showToast('Draft not found','warn'); return; }
+  _tqResumeData = {
+    ...q,
+    customer:{ name:q.customer_name||'', phone:q.customer_phone||'', site:q.site_address||'', id:q.customer_id||null },
+    contractor: q.contractor_commission ? { name:q.contractor_commission.contractor_name, phone:q.contractor_commission.contractor_phone, id:q.contractor_commission.contractor_id, commissionPct:q.contractor_commission.commission_pct } : null,
+    rooms: q.rooms||[], currentFlat:'',
+    tileSelections: q.tile_selections||{}, spacerSelections: q.spacer_selections||{},
+    spacerType: q.spacer?.type||'plus', adhesiveSelections: q.adhesive_selections||{},
+    beading: q.beading||[], groutSelections: q.grout_selections||{}, quotedPrices: q.quoted_prices||{},
+    accessories: q.accessories||[], floorTraps: q.floor_traps||[], soffit: q.soffit||{enabled:false},
+    delivery: q.delivery||{type:'self',distanceKm:0,floors:[],beyondFt:false,siteAddress:''},
+    laborRequired: q.labor_required||null, addons: q.addons||{}, wallDesigns: q.wall_designs||{},
+    extraProducts: q.extra_products||[],
+    selectedSize: q.selected_size||null, selectedProduct: q.selected_product||null,
+    spacer: q.spacer||{}, adhesive: q.adhesive||{}, grout: q.grout||{},
+    _inWallDesign:false, _designSlot:null, currentRoomIdx:0,
+    step: Math.min(8, Math.max(1, q.draft_step||1)),
+    breakagePct: q.breakage_pct ?? 10,
+    _savedQuoteId: id, _draftId: (q.status==='draft' ? id : null), _approvalStatus: q.approval_status,
+    _savedAccPrices: q.accessory_prices || {},
+  };
+  if (typeof closeSheet === 'function') closeSheet();
+  navigateTo('tiles');
+}
+
 async function openTileQuote(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
