@@ -5548,24 +5548,22 @@ async function renderTileQuotesList() {
     style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;
       border:1px solid ${highlight?'var(--gold-border)':q.approval_status==='approved'?'rgba(34,197,94,0.2)':q.approval_status==='rejected'?'rgba(239,68,68,0.2)':'var(--border)'}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-      <div>
-        <div style="font-size:13px;font-weight:700">${q.customer_name}</div>
-        <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft${q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${q.customer_name||'—'}</div>
+        <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${parseFloat(q.total_area_sqft||0).toFixed(1)} sqft</div>
       </div>
       ${statusBadge(q.approval_status, q)}
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:11px;color:var(--text3)">${new Date(q.created_at).toLocaleDateString('en-IN')} · By ${q.created_by||'—'}</div>
-      ${q.advance_amount > 0 ? `<div style="font-size:12px;font-weight:700;color:#378ADD">₹${parseInt(q.advance_amount).toLocaleString('en-IN')} advance</div>` : ''}
+      <div style="font-size:11px;color:var(--text3)">${new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${q.created_by||'—'}</div>
+      <div style="font-size:13px;font-weight:800;color:var(--gold)">
+        ${q.grand_total > 0 ? '₹'+parseInt(q.grand_total).toLocaleString('en-IN') :
+          q.quoted_price_per_sqft > 0 ? '₹'+q.quoted_price_per_sqft+'/sqft' :
+          q.advance_amount > 0 ? '<span style="color:#378ADD">₹'+parseInt(q.advance_amount).toLocaleString('en-IN')+' advance</span>' :
+          '<span style="color:var(--text3);font-size:11px">Price TBD</span>'}
+      </div>
     </div>
     ${q.rejection_reason ? `<div style="font-size:11px;color:var(--red);margin-top:4px;padding:4px 8px;background:rgba(239,68,68,0.06);border-radius:6px">Rejected: ${q.rejection_reason}</div>` : ''}
-    ${q.advance_amount > 0 ? '' : `
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
-      <button onclick="VW_TILES.tqEditQuote(${q.id})"
-        style="padding:5px 12px;border-radius:7px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);color:var(--gold);font-size:11px;font-weight:700;cursor:pointer">
-        ✏️ Edit
-      </button>
-    </div>`}
   </div>`;
 
   return `
