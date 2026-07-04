@@ -217,8 +217,10 @@ async function navigateToFresh(page, params, cacheKey) {
         🔍 Find Wallet
       </button>
       <div id="wt-result" style="margin-top:14px"></div>
-    </div>
-    <script>
+    </div>`;
+    // Inject cashierFindWallet safely
+    const _wtScript = document.createElement('script');
+    _wtScript.textContent = `
     async function cashierFindWallet() {
       const phone = document.getElementById('wt-phone')?.value?.trim();
       if (!phone || phone.length < 10) { showToast('Enter 10-digit phone', 'warn'); return; }
@@ -232,8 +234,8 @@ async function navigateToFresh(page, params, cacheKey) {
         '<div style="font-size:20px;font-weight:900;color:var(--gold);margin:8px 0">₹' + parseFloat(wallet?.balance||0).toLocaleString('en-IN') + ' balance</div>' +
         '<button onclick="VW_WALLET.showWalletTopup(' + wallet.id + ')" style="width:100%;padding:12px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:800;cursor:pointer">+ Add Money to Wallet</button>' +
         '</div>';
-    }
-    </script>`;
+    }`;
+    document.body.appendChild(_wtScript);
   }
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();

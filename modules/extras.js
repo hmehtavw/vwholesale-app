@@ -7999,25 +7999,31 @@ async function renderContractorProfilePage() {
     </button>
   </div>
 
-  <script>
-    window._cpRadius = ${cp?.service_radius_km || 10};
-    window._cpWorkTypes = ${JSON.stringify(cp?.work_types || ['both'])};
-    function selectRadius(km) {
+  </div>`;
+
+  // Inject scripts safely (not inline — avoids HTML parser terminating extras.js)
+  const _cpWorkTypesVal = cp?.work_types || ['both'];
+  setTimeout(() => {
+    window._cpRadius = cp?.service_radius_km || 10;
+    window._cpWorkTypes = _cpWorkTypesVal.slice();
+    window.selectRadius = function(km) {
       window._cpRadius = km;
       [10,20,30].forEach(r => {
         const btn = document.getElementById('cp-radius-'+r);
         if(btn){btn.style.borderColor=r===km?'var(--gold)':'var(--border)';btn.style.background=r===km?'var(--gold-muted)':'var(--bg2)';btn.style.color=r===km?'var(--gold)':'var(--text)';}
       });
-    }
-    function toggleWorkType(w) {
+    };
+    window.toggleWorkType = function(w) {
       const idx = window._cpWorkTypes.indexOf(w);
       if(idx>=0) window._cpWorkTypes.splice(idx,1); else window._cpWorkTypes.push(w);
       ['floor','wall','both'].forEach(t => {
         const btn = document.getElementById('cp-wt-'+t);
         if(btn){btn.style.borderColor=window._cpWorkTypes.includes(t)?'var(--gold)':'var(--border)';btn.style.background=window._cpWorkTypes.includes(t)?'var(--gold-muted)':'var(--bg2)';}
       });
-    }
-  </script>`;
+    };
+  }, 50);
+
+  return html;
 }
 
 async function saveContractorProfile(cpId) {
