@@ -1412,7 +1412,7 @@ async function requestNotifPermission() {
   try {
     if ('serviceWorker' in navigator && 'PushManager' in window) {
       const reg = await navigator.serviceWorker.ready;
-      const VAPID_PUBLIC = 'BNJA-Ibm9NQCVLTB9eME6BK0V5_THPGXM59D-yzLFIRR9_LzRThbeQuRMs1rjkPJSnro9zQ1c5wBIuz-wz_cqdA';
+      const VAPID_PUBLIC = 'BJzQp_iavXrtZpJKuXt0rqEv3QlsrzvbEk0XBv3VuOGeQYdMc7B0fspoKaMuk7fCVjZOYnYerdYAap21QbtVg7Y';
 
       // Check if already subscribed
       let sub = await reg.pushManager.getSubscription();
@@ -1493,11 +1493,45 @@ function clearNotifBadge() {
 // (e.g. "Create PO") so a person can act straight from the notification.
 
 async function createPersistedNotification({ category, title, body, recipientRole = null, recipientId = null, relatedTable = null, relatedId = null, actions = [] }) {
-  return await VW_DB.put(VW_DB.STORES.persistedNotifications, {
+  // Save in-app notification
+  const result = await VW_DB.put(VW_DB.STORES.persistedNotifications, {
     category, title, body, recipientRole, recipientId, relatedTable, relatedId, actions, readBy: [], createdAt: new Date().toISOString()
   });
+
+  // Also send web push if we have a specific recipient
+  if (recipientId) {
+    sendWebPush(recipientId, title, body).catch(() => {});
+  }
+
+  return result;
 }
 window.createPersistedNotification = createPersistedNotification;
+
+// Send background push notification via edge function
+async function sendWebPush(profileId, title, body, url) {
+  if (!profileId || !title) return;
+  try {
+    await fetch(
+      `${VW_DB.client.supabaseUrl}/functions/v1/web-push`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': VW_DB.client.supabaseKey,
+        },
+        body: JSON.stringify({
+          profile_id: profileId,
+          title,
+          body: body || '',
+          url: url || 'https://hmehtavw.github.io/vwholesale-app/',
+        }),
+      }
+    );
+  } catch(e) {
+    console.warn('Web push failed:', e);
+  }
+}
+window.sendWebPush = sendWebPush;
 
 async function getMyPersistedNotifications() {
   const profile = VW_AUTH.getCurrentProfile();
