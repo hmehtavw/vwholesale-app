@@ -7503,6 +7503,7 @@ async function renderDailyLogUpload(jobId) {
 
     function selectDailyStage(s) {
       window._dailyStage = s;
+      window.selectDailyStage = selectDailyStage;
       ['laying','grouting_pending','cleaning_pending','complete'].forEach(t => {
         const btn = document.getElementById('stage-'+t);
         if(btn){btn.style.background=t===s?'var(--gold-muted)':'var(--bg3)';btn.style.borderColor=t===s?'var(--gold)':'var(--border)';btn.style.color=t===s?'var(--gold)':'var(--text)';}
@@ -7572,8 +7573,8 @@ async function analyseDailyPhotos(jobId) {
       <div style="font-size:10px;color:var(--text3)">Confidence: ${data.confidence || 'medium'} · ${data.rooms_detected || 1} room(s) detected</div>
     `;
     if (sqftInput && data.sqft_estimate) sqftInput.value = data.sqft_estimate;
-    // Auto-select detected stage
-    if (data.work_stage && typeof selectDailyStage === 'function') selectDailyStage(data.work_stage);
+    // Auto-select detected stage via window function
+    if (data.work_stage && typeof window.selectDailyStage === 'function') window.selectDailyStage(data.work_stage);
 
     showToast('AI analysis complete — confirm the numbers below', 'success');
   } catch(e) {
@@ -7689,7 +7690,7 @@ async function processLaborPayment(logId) {
 
   await VW_DB.client.from('customer_wallets').update({
     balance: newBalance,
-    total_spent: VW_DB.client.rpc('increment', { column: 'total_spent', value: due }),
+    total_spent: (parseFloat((await VW_DB.client.from('customer_wallets').select('total_spent').eq('id',req.wallet_id).single().then(r=>r.data?.total_spent).catch(()=>0))||0) + due),
     last_activity_at: new Date().toISOString(),
   }).eq('id', req.wallet_id);
 
@@ -7850,3 +7851,244 @@ async function submitReview(jobId, reviewerType, stage) {
 
 window.VW_LABOR.renderLaborReviewForm = renderLaborReviewForm;
 window.VW_LABOR.submitReview = submitReview;
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRACTOR PROFILE + KYC
+// ═══════════════════════════════════════════════════════════════
+
+async function renderContractorProfilePage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  let { data: cp } = await VW_DB.client
+    .from('contractor_profiles')
+    .select('*')
+    .eq('profile_id', prof?.id)
+    .single()
+    .catch(() => ({ data: null }));
+
+  // Auto-create if not exists
+  if (!cp) {
+    const { data: newCp } = await VW_DB.client
+      .from('contractor_profiles')
+      .insert({ profile_id: prof?.id, name: prof?.name || '', phone: prof?.phone || '' })
+      .select('*').single().catch(() => ({ data: null }));
+    cp = newCp;
+  }
+
+  const kycColor = cp?.kyc_status === 'approved' ? 'var(--green)' : cp?.kyc_status === 'pending' ? 'var(--gold)' : 'var(--red)';
+  const kycLabel = cp?.kyc_status === 'approved' ? '✅ KYC Verified' : cp?.kyc_status === 'pending' ? '⏳ Under Review' : '❌ KYC Required';
+  const scoreColor = (cp?.contractor_score || 0) >= 70 ? 'var(--green)' : (cp?.contractor_score || 0) >= 40 ? 'var(--gold)' : 'var(--red)';
+
+  return `
+  <div class="module-header"><h2>👷 My Contractor Profile</h2></div>
+
+  <!-- SCORE CARD -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:16px;padding:16px;margin-bottom:14px;color:#fff">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:18px;font-weight:900">${cp?.name || prof?.name || '—'}</div>
+        <div style="font-size:12px;opacity:0.7;margin-top:2px">${cp?.phone || prof?.phone || '—'}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:30px;font-weight:900;color:${scoreColor}">${Math.round(cp?.contractor_score || 0)}</div>
+        <div style="font-size:10px;opacity:0.7">Score / 100</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;text-align:center">
+      <div><div style="font-size:18px;font-weight:800;color:#f5c842">${cp?.total_jobs_completed || 0}</div><div style="font-size:10px;opacity:0.7">Jobs Done</div></div>
+      <div><div style="font-size:18px;font-weight:800;color:#f5c842">${cp?.avg_rating?.toFixed(1) || '—'}</div><div style="font-size:10px;opacity:0.7">Avg Rating</div></div>
+      <div><div style="font-size:18px;font-weight:800;color:#f5c842">${cp?.total_sqft_laid ? Math.round(cp.total_sqft_laid).toLocaleString('en-IN') : '0'}</div><div style="font-size:10px;opacity:0.7">Sqft Laid</div></div>
+    </div>
+    <div style="margin-top:10px;padding:6px 10px;border-radius:8px;background:rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:11px;opacity:0.8">${cp?.is_active ? '🟢 Active — receiving job requests' : '🔴 Inactive — not receiving requests'}</span>
+      <span style="font-size:11px;font-weight:700;color:${kycColor}">${kycLabel}</span>
+    </div>
+  </div>
+
+  <!-- ACTIVATION TOGGLE -->
+  ${cp?.kyc_status === 'approved' ? `
+  <div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div>
+      <div style="font-size:13px;font-weight:700">Receive Job Requests</div>
+      <div style="font-size:11px;color:var(--text3)">Turn off when unavailable or on holiday</div>
+    </div>
+    <button onclick="VW_LABOR.toggleContractorActive(${cp?.id}, ${cp?.is_active})"
+      style="padding:8px 16px;border-radius:20px;border:none;cursor:pointer;font-size:12px;font-weight:700;
+        background:${cp?.is_active ? 'var(--green)' : 'var(--bg3)'};color:${cp?.is_active ? '#fff' : 'var(--text3)'}">
+      ${cp?.is_active ? '✓ Active' : 'Activate'}
+    </button>
+  </div>` : ''}
+
+  <!-- SERVICE AREA -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📍 Service Area</h3>
+    <div class="form-group">
+      <label>Your Location / Area</label>
+      <input type="text" id="cp-location" value="${cp?.location_label || ''}" placeholder="e.g. Bhavanipuram, Vijayawada">
+    </div>
+    <div class="form-group">
+      <label>Service Radius</label>
+      <div style="display:flex;gap:8px">
+        ${[10,20,30].map(km=>`
+        <button id="cp-radius-${km}" onclick="selectRadius(${km})"
+          style="flex:1;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;
+            border:${(cp?.service_radius_km||10)===km?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${(cp?.service_radius_km||10)===km?'var(--gold-muted)':'var(--bg2)'};
+            color:${(cp?.service_radius_km||10)===km?'var(--gold)':'var(--text)'}">
+          ${km} km
+        </button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Work Types</label>
+      <div style="display:flex;gap:8px">
+        ${['floor','wall','both'].map(w=>`
+        <button id="cp-wt-${w}" onclick="toggleWorkType('${w}')"
+          style="flex:1;padding:8px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;
+            border:${(cp?.work_types||['both']).includes(w)?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${(cp?.work_types||['both']).includes(w)?'var(--gold-muted)':'var(--bg2)'}">
+          ${w==='floor'?'🏠 Floor':w==='wall'?'🧱 Wall':'🏠+🧱 Both'}
+        </button>`).join('')}
+      </div>
+    </div>
+    <button onclick="VW_LABOR.saveContractorProfile(${cp?.id})"
+      style="width:100%;padding:10px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+      Save Service Details
+    </button>
+  </div>
+
+  <!-- BANK DETAILS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🏦 Bank Account (for payments)</h3>
+    ${cp?.kyc_status === 'approved' ? `
+    <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--green)">
+      ✅ Bank verified — payments will be transferred directly
+    </div>` : ''}
+    <div class="form-group">
+      <label>Account Number</label>
+      <input type="text" id="cp-account" value="${cp?.bank_account_no || ''}" placeholder="Bank account number">
+    </div>
+    <div class="form-group">
+      <label>IFSC Code</label>
+      <input type="text" id="cp-ifsc" value="${cp?.bank_ifsc || ''}" placeholder="e.g. SBIN0001234" style="text-transform:uppercase">
+    </div>
+    <div class="form-group">
+      <label>Bank Name</label>
+      <input type="text" id="cp-bank-name" value="${cp?.bank_name || ''}" placeholder="e.g. State Bank of India">
+    </div>
+  </div>
+
+  <!-- KYC DOCUMENTS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📄 KYC Documents</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:12px">Required to receive payments. Verified within 1 working day.</p>
+    ${[
+      { id:'pan', label:'PAN Card *', field:'pan_card_url', hint:'Clear photo of your PAN card' },
+      { id:'aadhaar', label:'Aadhaar Card *', field:'aadhaar_url', hint:'Front side of Aadhaar card' },
+      { id:'passbook', label:'Bank Passbook / Cheque', field:'passbook_url', hint:'First page of passbook or cancelled cheque' },
+    ].map(doc => `
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;font-weight:700;display:block;margin-bottom:3px">${doc.label}</label>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:5px">${doc.hint}</div>
+      ${cp?.[doc.field] ? `<div style="font-size:11px;color:var(--green);margin-bottom:5px">✅ Uploaded</div>` : ''}
+      <input type="file" id="cp-${doc.id}" accept="image/*,application/pdf"
+        style="width:100%;padding:6px;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;font-size:11px">
+    </div>`).join('')}
+    <button onclick="VW_LABOR.submitContractorKYC(${cp?.id})"
+      style="width:100%;padding:10px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px">
+      📤 Submit for KYC Verification
+    </button>
+  </div>
+
+  <script>
+    window._cpRadius = ${cp?.service_radius_km || 10};
+    window._cpWorkTypes = ${JSON.stringify(cp?.work_types || ['both'])};
+    function selectRadius(km) {
+      window._cpRadius = km;
+      [10,20,30].forEach(r => {
+        const btn = document.getElementById('cp-radius-'+r);
+        if(btn){btn.style.borderColor=r===km?'var(--gold)':'var(--border)';btn.style.background=r===km?'var(--gold-muted)':'var(--bg2)';btn.style.color=r===km?'var(--gold)':'var(--text)';}
+      });
+    }
+    function toggleWorkType(w) {
+      const idx = window._cpWorkTypes.indexOf(w);
+      if(idx>=0) window._cpWorkTypes.splice(idx,1); else window._cpWorkTypes.push(w);
+      ['floor','wall','both'].forEach(t => {
+        const btn = document.getElementById('cp-wt-'+t);
+        if(btn){btn.style.borderColor=window._cpWorkTypes.includes(t)?'var(--gold)':'var(--border)';btn.style.background=window._cpWorkTypes.includes(t)?'var(--gold-muted)':'var(--bg2)';}
+      });
+    }
+  </script>`;
+}
+
+async function saveContractorProfile(cpId) {
+  const update = {
+    location_label: document.getElementById('cp-location')?.value?.trim() || null,
+    service_radius_km: window._cpRadius || 10,
+    work_types: window._cpWorkTypes || ['both'],
+    bank_account_no: document.getElementById('cp-account')?.value?.trim() || null,
+    bank_ifsc: document.getElementById('cp-ifsc')?.value?.trim()?.toUpperCase() || null,
+    bank_name: document.getElementById('cp-bank-name')?.value?.trim() || null,
+    updated_at: new Date().toISOString(),
+  };
+  await VW_DB.client.from('contractor_profiles').update(update).eq('id', cpId);
+  showToast('Profile saved ✅', 'success');
+  navigateTo('contractor_profile');
+}
+
+async function submitContractorKYC(cpId) {
+  const prof = VW_AUTH.getCurrentProfile();
+  const panFile     = document.getElementById('cp-pan')?.files?.[0];
+  const aadhaarFile = document.getElementById('cp-aadhaar')?.files?.[0];
+  const passbookFile= document.getElementById('cp-passbook')?.files?.[0];
+
+  if (!panFile || !aadhaarFile) { showToast('PAN and Aadhaar are required', 'warn'); return; }
+
+  const uploadDoc = async (file, path) => {
+    if (!file) return null;
+    const { data, error } = await VW_DB.client.storage
+      .from('kyc-documents')
+      .upload(path, file, { upsert: true });
+    return error ? null : data?.path;
+  };
+
+  const panPath      = await uploadDoc(panFile,      `contractor/${cpId}/pan.${panFile.name.split('.').pop()}`);
+  const aadhaarPath  = await uploadDoc(aadhaarFile,  `contractor/${cpId}/aadhaar.${aadhaarFile.name.split('.').pop()}`);
+  const passbookPath = await uploadDoc(passbookFile, `contractor/${cpId}/passbook.${passbookFile?.name.split('.').pop()}`);
+
+  await VW_DB.client.from('contractor_profiles').update({
+    pan_card_url: panPath || undefined,
+    aadhaar_url: aadhaarPath || undefined,
+    passbook_url: passbookPath || undefined,
+    kyc_status: 'pending',
+  }).eq('id', cpId);
+
+  // Notify management for KYC review
+  const { data: mgmt } = await VW_DB.client.from('profiles')
+    .select('id').in('role', ['management','admin']).eq('status','approved');
+  for (const m of mgmt || []) {
+    await createPersistedNotification({
+      category: 'kyc_review',
+      title: `📄 Contractor KYC Submitted`,
+      body: `${prof?.name || ''} has submitted KYC documents for verification`,
+      recipientId: m.id,
+      relatedTable: 'contractor_profiles',
+      relatedId: cpId,
+      actions: [{ label: '👁 Review KYC', action: 'open_contractor_kyc' }],
+    }).catch(() => {});
+  }
+
+  showToast('KYC documents submitted — verified within 1 working day', 'success');
+  navigateTo('contractor_profile');
+}
+
+async function toggleContractorActive(cpId, currentlyActive) {
+  await VW_DB.client.from('contractor_profiles')
+    .update({ is_active: !currentlyActive }).eq('id', cpId);
+  showToast(currentlyActive ? 'You are now inactive' : 'You are now active — will receive job requests', 'success');
+  navigateTo('contractor_profile');
+}
+
+window.VW_LABOR.renderContractorProfilePage = renderContractorProfilePage;
+window.VW_LABOR.saveContractorProfile = saveContractorProfile;
+window.VW_LABOR.submitContractorKYC = submitContractorKYC;
+window.VW_LABOR.toggleContractorActive = toggleContractorActive;

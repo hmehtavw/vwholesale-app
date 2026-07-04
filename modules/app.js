@@ -195,11 +195,45 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
-    else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
+    else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
+  else if (page === 'labor_requests') html = await VW_LABOR.renderLaborRequestList();
   else if (page === 'wallet') {
     const prof = VW_AUTH.getCurrentProfile();
     const custId = prof?.customer_id || prof?.id;
     html = await VW_WALLET.renderCustomerWallet(custId);
+  }
+  else if (page === 'wallet_topup') {
+    // Cashier shortcut — top up a customer wallet by phone number
+    html = `
+    <div class="module-header"><h2>👛 Customer Wallet Top-Up</h2></div>
+    <div class="card">
+      <h3 class="card-title">Find Customer</h3>
+      <div class="form-group">
+        <label>Customer Phone Number</label>
+        <input type="tel" id="wt-phone" placeholder="10-digit mobile" maxlength="10"
+          style="font-size:18px;font-weight:700">
+      </div>
+      <button onclick="cashierFindWallet()" style="width:100%;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+        🔍 Find Wallet
+      </button>
+      <div id="wt-result" style="margin-top:14px"></div>
+    </div>
+    <script>
+    async function cashierFindWallet() {
+      const phone = document.getElementById('wt-phone')?.value?.trim();
+      if (!phone || phone.length < 10) { showToast('Enter 10-digit phone', 'warn'); return; }
+      const { data: cust } = await VW_DB.client.from('customers').select('id,name').eq('phone', phone).single().catch(()=>({data:null}));
+      if (!cust) { document.getElementById('wt-result').innerHTML='<div style="color:var(--red);font-size:13px">Customer not found</div>'; return; }
+      const wallet = await VW_WALLET.getOrCreateWallet(cust.id, cust.name, phone);
+      document.getElementById('wt-result').innerHTML=
+        '<div style="background:var(--bg2);border-radius:10px;padding:12px">' +
+        '<div style="font-size:14px;font-weight:700">' + cust.name + '</div>' +
+        '<div style="font-size:12px;color:var(--text3)">' + phone + '</div>' +
+        '<div style="font-size:20px;font-weight:900;color:var(--gold);margin:8px 0">₹' + parseFloat(wallet?.balance||0).toLocaleString('en-IN') + ' balance</div>' +
+        '<button onclick="VW_WALLET.showWalletTopup(' + wallet.id + ')" style="width:100%;padding:12px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:800;cursor:pointer">+ Add Money to Wallet</button>' +
+        '</div>';
+    }
+    </script>`;
   }
     else if (page === 'quotations') html = await renderStandaloneQuotationPage();
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();

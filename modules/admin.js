@@ -21,6 +21,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-tools" onclick="VW_SETTINGS.switchSettingsTab('tools',this)" style="display:inline-flex;margin-right:6px"><span class="et-icon">🔧</span>Tools</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-danger" onclick="VW_SETTINGS.switchSettingsTab('danger',this)" style="display:inline-flex"><span class="et-icon" style="color:var(--red)">⚠️</span><span style="color:var(--red)">Danger</span></button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-labor" onclick="VW_SETTINGS.switchSettingsTab('labor',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Labor</button>` : ''}
   </div>
 
   <div id="settings-tab-content">
@@ -43,6 +44,7 @@ async function switchSettingsTab(tab, btn) {
     case 'tools':       container.innerHTML = await renderSettingsTools(); break;
     case 'danger':      container.innerHTML = await renderSettingsDanger(); break;
     case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
+    case 'labor':       container.innerHTML = await renderLaborSettings(); break;
   }
 }
 
@@ -3673,3 +3675,127 @@ window.saveTaskDetail = saveTaskDetail;
 
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// LABOR SETTINGS TAB
+// ═══════════════════════════════════════════════════════════════
+async function renderLaborSettings() {
+  const cfg = await VW_DB.getSetting('labor_config', {
+    commission_floor: 20,
+    commission_wall: 25,
+    commission_both: 22,
+    commission_type: 'percent',
+    stage_deduction_grouting: 5,
+    stage_deduction_cleaning: 2,
+    site_deposit_default: 20,
+    site_deposit_min: 10,
+    site_deposit_max: 20,
+    min_contractor_score: 40,
+    wallet_min_topup: 500,
+  });
+
+  return `
+  <div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text2)">🏗 Labor Commission & Payment Settings</div>
+
+  <!-- COMMISSION -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">💰 Commission Structure</h3>
+    <div class="form-group">
+      <label>Commission Type</label>
+      <select id="ls-comm-type" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px">
+        <option value="percent" ${cfg.commission_type==='percent'?'selected':''}>% of total job value</option>
+        <option value="per_sqft" ${cfg.commission_type==='per_sqft'?'selected':''}>Fixed ₹ per sqft</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Floor Only</label>
+        <input type="number" id="ls-comm-floor" value="${cfg.commission_floor}" step="0.5" min="0">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Wall Only</label>
+        <input type="number" id="ls-comm-wall" value="${cfg.commission_wall}" step="0.5" min="0">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Floor + Wall</label>
+        <input type="number" id="ls-comm-both" value="${cfg.commission_both}" step="0.5" min="0">
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">TDS deducted separately at 1% from contractor payment.</div>
+  </div>
+
+  <!-- STAGE DEDUCTIONS -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📉 Stage-wise Deductions (₹/sqft withheld)</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:10px">Amount held back per sqft when work is incomplete. Released when that stage is done.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Grouting Pending (₹/sqft)</label>
+        <input type="number" id="ls-ded-grout" value="${cfg.stage_deduction_grouting}" step="0.5" min="0" placeholder="e.g. 5">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Cleaning Pending (₹/sqft)</label>
+        <input type="number" id="ls-ded-clean" value="${cfg.stage_deduction_cleaning}" step="0.5" min="0" placeholder="e.g. 2">
+      </div>
+    </div>
+  </div>
+
+  <!-- SITE DEPOSIT -->
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">🔒 Site Deposit Rules</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Default %</label>
+        <input type="number" id="ls-dep-default" value="${cfg.site_deposit_default}" min="10" max="20" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Minimum %</label>
+        <input type="number" id="ls-dep-min" value="${cfg.site_deposit_min}" min="5" max="15" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Maximum %</label>
+        <input type="number" id="ls-dep-max" value="${cfg.site_deposit_max}" min="15" max="30" step="1">
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">Executives can negotiate within min-max range. Refunded on clean handover.</div>
+  </div>
+
+  <!-- OTHER -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">⚙️ Other Settings</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Min Contractor Score</label>
+        <input type="number" id="ls-min-score" value="${cfg.min_contractor_score}" min="0" max="100" step="5">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Min Wallet Top-up (₹)</label>
+        <input type="number" id="ls-wallet-topup" value="${cfg.wallet_min_topup}" min="100" step="100">
+      </div>
+    </div>
+  </div>
+
+  <button onclick="saveLaborSettings()"
+    style="width:100%;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    💾 Save Labor Settings
+  </button>`;
+}
+
+async function saveLaborSettings() {
+  const cfg = {
+    commission_type:          document.getElementById('ls-comm-type')?.value || 'percent',
+    commission_floor:         parseFloat(document.getElementById('ls-comm-floor')?.value) || 20,
+    commission_wall:          parseFloat(document.getElementById('ls-comm-wall')?.value) || 25,
+    commission_both:          parseFloat(document.getElementById('ls-comm-both')?.value) || 22,
+    stage_deduction_grouting: parseFloat(document.getElementById('ls-ded-grout')?.value) || 5,
+    stage_deduction_cleaning: parseFloat(document.getElementById('ls-ded-clean')?.value) || 2,
+    site_deposit_default:     parseFloat(document.getElementById('ls-dep-default')?.value) || 20,
+    site_deposit_min:         parseFloat(document.getElementById('ls-dep-min')?.value) || 10,
+    site_deposit_max:         parseFloat(document.getElementById('ls-dep-max')?.value) || 20,
+    min_contractor_score:     parseFloat(document.getElementById('ls-min-score')?.value) || 40,
+    wallet_min_topup:         parseFloat(document.getElementById('ls-wallet-topup')?.value) || 500,
+  };
+  await VW_DB.setSetting('labor_config', cfg);
+  showToast('Labor settings saved ✅', 'success');
+}
+window.saveLaborSettings = saveLaborSettings;

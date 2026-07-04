@@ -1116,6 +1116,7 @@ function renderPaymentSection() {
       <option value="Card">Card</option>
       <option value="Bank Transfer">Bank Transfer</option>
       <option value="Cheque">Cheque</option>
+      <option value="Wallet">👛 VW Wallet</option>
       <option value="Split">Split Payment (multiple methods)</option>
     </select>
   </div>
