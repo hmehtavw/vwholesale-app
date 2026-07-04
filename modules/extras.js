@@ -7208,3 +7208,645 @@ window.VW_LABOR = {
   acceptBid,
   rejectLaborRequest,
 };
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRACTOR BID + DAILY LOG + PAYMENT MODULE
+// ═══════════════════════════════════════════════════════════════
+
+async function renderContractorBidForm(requestId) {
+  const { data: r } = await VW_DB.client.from('labor_requests')
+    .select('*').eq('id', requestId).single();
+  if (!r) return;
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('*').eq('profile_id', prof?.id).single().catch(() => ({ data: null }));
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>📝 Submit Bid — ${r.request_no}</h3>
+  <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11px">
+    <div style="font-weight:700;margin-bottom:4px">${r.customer_name} · ${r.total_sqft} sqft · ${r.work_type}</div>
+    <div style="color:var(--text3)">${r.site_address}</div>
+    <div style="color:var(--text3);margin-top:2px">Floor: ${r.floor_level===0?'Ground':r.floor_level+'th floor'} · Access: ${r.site_access?.replace('_',' ')} · Existing: ${r.old_flooring?.replace('_',' ')}</div>
+    ${r.notes?`<div style="color:var(--text2);margin-top:4px;font-style:italic">"${r.notes}"</div>`:''}
+  </div>
+
+  <!-- PRICE TYPE -->
+  <div class="form-group">
+    <label>Pricing Type</label>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button id="pt-sqft" onclick="selectBidPriceType('per_sqft')"
+        style="flex:1;padding:10px;border-radius:8px;border:2px solid var(--gold);background:var(--gold-muted);cursor:pointer;font-size:12px;font-weight:700;color:var(--gold)">
+        ₹ per Sqft
+      </button>
+      ${r.total_sqft <= 80 ? `
+      <button id="pt-lump" onclick="selectBidPriceType('lumpsum')"
+        style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:12px;font-weight:700;color:var(--text3)">
+        Lump Sum
+      </button>` : ''}
+    </div>
+  </div>
+
+  <!-- PER SQFT SECTION -->
+  <div id="bid-sqft-section">
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px">Rate per sqft by tile size</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div>
+          <label style="font-size:9px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Small tiles<br><span style="font-weight:400">Below 300mm</span></label>
+          <input type="number" id="bid-rate-small" placeholder="₹/sqft" step="0.5"
+            style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:9px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Medium tiles<br><span style="font-weight:400">300–600mm</span></label>
+          <input type="number" id="bid-rate-medium" placeholder="₹/sqft" step="0.5"
+            style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:9px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Large tiles<br><span style="font-weight:400">Above 600mm</span></label>
+          <input type="number" id="bid-rate-large" placeholder="₹/sqft" step="0.5"
+            style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;color:var(--gold);text-align:center;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LUMP SUM SECTION -->
+  <div id="bid-lump-section" style="display:none">
+    <div class="form-group">
+      <label>Total Lump Sum Amount (₹)</label>
+      <input type="number" id="bid-lumpsum" placeholder="Total for complete job" step="100"
+        style="font-size:18px;font-weight:800;color:var(--gold)">
+    </div>
+  </div>
+
+  <!-- JOB DETAILS -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    <div class="form-group" style="margin:0">
+      <label>Estimated Days</label>
+      <input type="number" id="bid-days" placeholder="Days to complete" min="1">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label>Earliest Start Date</label>
+      <input type="date" id="bid-start" min="${new Date().toISOString().split('T')[0]}">
+    </div>
+  </div>
+
+  <!-- OLD TILE REMOVAL -->
+  ${r.old_flooring !== 'bare_cement' ? `
+  <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:10px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px">🔨 Old ${r.old_flooring?.replace('_',' ')} Removal</div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button id="otr-yes" onclick="toggleOldTileRemoval(true)"
+        style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-size:12px">
+        ✅ I can handle removal
+      </button>
+      <button id="otr-no" onclick="toggleOldTileRemoval(false)"
+        style="flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-size:12px">
+        ❌ Not included
+      </button>
+    </div>
+    <div id="otr-charge-row" style="display:none">
+      <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">Demolition Charge (₹)</label>
+      <input type="number" id="bid-demo-charge" placeholder="Extra charge for removal" step="100"
+        style="width:100%;padding:8px;background:var(--bg3);border:1px solid var(--border);border-radius:7px;box-sizing:border-box">
+    </div>
+  </div>` : ''}
+
+  <div class="form-group">
+    <label>Notes to Customer (optional)</label>
+    <textarea id="bid-notes" rows="2" placeholder="Any clarifications, conditions, or questions..."
+      style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+
+  <button onclick="VW_LABOR.submitContractorBid(${requestId})"
+    style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    📤 Submit Bid
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._bidPriceType = 'per_sqft';
+    window._otrIncluded = false;
+    function selectBidPriceType(t) {
+      window._bidPriceType = t;
+      document.getElementById('bid-sqft-section').style.display = t==='per_sqft'?'block':'none';
+      const ls = document.getElementById('bid-lump-section');
+      if(ls) ls.style.display = t==='lumpsum'?'block':'none';
+      const sqftBtn = document.getElementById('pt-sqft');
+      const lumpBtn = document.getElementById('pt-lump');
+      if(sqftBtn) { sqftBtn.style.borderColor=t==='per_sqft'?'var(--gold)':'var(--border)'; sqftBtn.style.background=t==='per_sqft'?'var(--gold-muted)':'var(--bg2)'; sqftBtn.style.color=t==='per_sqft'?'var(--gold)':'var(--text3)'; }
+      if(lumpBtn) { lumpBtn.style.borderColor=t==='lumpsum'?'var(--gold)':'var(--border)'; lumpBtn.style.background=t==='lumpsum'?'var(--gold-muted)':'var(--bg2)'; lumpBtn.style.color=t==='lumpsum'?'var(--gold)':'var(--text3)'; }
+    }
+    function toggleOldTileRemoval(inc) {
+      window._otrIncluded = inc;
+      document.getElementById('otr-charge-row').style.display = inc?'block':'none';
+      const yb=document.getElementById('otr-yes'), nb=document.getElementById('otr-no');
+      if(yb){yb.style.background=inc?'rgba(34,197,94,0.1)':'var(--bg3)';yb.style.borderColor=inc?'var(--green)':'var(--border)';}
+      if(nb){nb.style.background=!inc?'rgba(239,68,68,0.08)':'var(--bg3)';nb.style.borderColor=!inc?'var(--red)':'var(--border)';}
+    }
+  `;
+  document.body.appendChild(s);
+}
+
+async function submitContractorBid(requestId) {
+  const days = parseInt(document.getElementById('bid-days')?.value) || 0;
+  const start = document.getElementById('bid-start')?.value;
+  if (!days || !start) { showToast('Enter estimated days and start date', 'warn'); return; }
+
+  const priceType = window._bidPriceType || 'per_sqft';
+  const lumpsum = parseFloat(document.getElementById('bid-lumpsum')?.value) || 0;
+  const rSmall  = parseFloat(document.getElementById('bid-rate-small')?.value) || 0;
+  const rMedium = parseFloat(document.getElementById('bid-rate-medium')?.value) || 0;
+  const rLarge  = parseFloat(document.getElementById('bid-rate-large')?.value) || 0;
+
+  if (priceType === 'lumpsum' && !lumpsum) { showToast('Enter lump sum amount', 'warn'); return; }
+  if (priceType === 'per_sqft' && !rLarge && !rMedium && !rSmall) { showToast('Enter at least one rate', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('id,name').eq('profile_id', prof?.id).single().catch(() => ({ data: null }));
+
+  const { error } = await VW_DB.client.from('contractor_bids').insert({
+    request_id: requestId,
+    contractor_profile_id: cp?.id || null,
+    contractor_name: cp?.name || prof?.name || '',
+    price_type: priceType,
+    price_per_sqft_small: rSmall || null,
+    price_per_sqft_medium: rMedium || null,
+    price_per_sqft_large: rLarge || null,
+    lumpsum_amount: lumpsum || null,
+    estimated_days: days,
+    earliest_start_date: start,
+    old_tile_removal: window._otrIncluded || false,
+    old_tile_removal_charge: parseFloat(document.getElementById('bid-demo-charge')?.value) || null,
+    notes: document.getElementById('bid-notes')?.value || '',
+    status: 'submitted',
+  });
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  showToast('Bid submitted ✅ — customer will review and respond', 'success');
+  closeSheet();
+}
+
+// ── DAILY LOG UPLOAD ──────────────────────────────────────────
+
+async function renderDailyLogUpload(jobId) {
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('*').eq('id', jobId).single();
+  if (!job) return;
+
+  // Check if already submitted today
+  const today = new Date().toISOString().split('T')[0];
+  const { data: existing } = await VW_DB.client.from('labor_daily_logs')
+    .select('id,contractor_confirmed_sqft,payment_status')
+    .eq('job_id', jobId).eq('log_date', today).single().catch(() => ({ data: null }));
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>📸 Today's Work Update — ${job.job_no}</h3>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:14px">
+    ${job.total_sqft_completed || 0} sqft done so far · ${job.total_sqft} sqft total
+  </div>
+
+  ${existing ? `
+  <div style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--green)">✅ Today's log already submitted</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">${existing.contractor_confirmed_sqft} sqft confirmed · Payment: ${existing.payment_status}</div>
+  </div>` : ''}
+
+  <div class="card" style="margin-bottom:10px">
+    <h3 class="card-title">📷 Upload Today's Work Photos</h3>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:8px">Upload 2-4 clear photos showing today's tile laying progress. AI will analyse and estimate sqft.</p>
+    <input type="file" id="daily-photos" multiple accept="image/*" onchange="previewDailyPhotos(this)"
+      style="width:100%;padding:8px;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;font-size:12px">
+    <div id="daily-photo-previews" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+  </div>
+
+  <button onclick="VW_LABOR.analyseDailyPhotos(${jobId})"
+    id="analyse-btn"
+    style="width:100%;padding:12px;border-radius:10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60A5FA;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">
+    🤖 Analyse Photos with AI
+  </button>
+
+  <!-- AI RESULT + CONTRACTOR CONFIRMATION -->
+  <div id="daily-ai-result" style="display:none;background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">🤖 AI Analysis</div>
+    <div id="ai-analysis-content"></div>
+
+    <div style="margin-top:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px">✏️ Confirm sqft completed today</label>
+      <input type="number" id="confirmed-sqft" step="0.5" min="0"
+        style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--gold-border);border-radius:8px;font-size:18px;font-weight:800;color:var(--gold);text-align:center;box-sizing:border-box">
+    </div>
+
+    <div style="margin-top:8px">
+      <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px">Work stage today</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${['laying','grouting_pending','cleaning_pending','complete'].map(s=>`
+        <button id="stage-${s}" onclick="selectDailyStage('${s}')"
+          style="flex:1;min-width:80px;padding:7px 4px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;font-size:10px;font-weight:700">
+          ${s==='laying'?'🔲 Laying':s==='grouting_pending'?'🪨 Grout pending':s==='cleaning_pending'?'🧴 Clean pending':'✅ Complete'}
+        </button>`).join('')}
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top:10px;margin-bottom:0">
+      <label>Notes for customer (optional)</label>
+      <input type="text" id="daily-notes" placeholder="e.g. Bathroom floor complete, kitchen in progress">
+    </div>
+  </div>
+
+  <div id="daily-amount-preview" style="display:none;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Amount due from customer today</div>
+    <div id="daily-amount-value" style="font-size:24px;font-weight:900;color:var(--gold)"></div>
+    <div id="daily-deduction-note" style="font-size:10px;color:var(--text3);margin-top:3px"></div>
+  </div>
+
+  <button id="submit-daily-log" onclick="VW_LABOR.submitDailyLog(${jobId})" style="display:none;width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    ✅ Confirm & Notify Customer
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._dailyPhotosData = [];
+    window._dailyStage = 'laying';
+    window._aiSuggestion = null;
+
+    function previewDailyPhotos(input) {
+      const preview = document.getElementById('daily-photo-previews');
+      window._dailyPhotosData = [];
+      if (!preview) return;
+      preview.innerHTML = '';
+      const files = Array.from(input.files).slice(0,4);
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const base64 = e.target.result.split(',')[1];
+          const mediaType = file.type || 'image/jpeg';
+          window._dailyPhotosData.push({ base64, mediaType });
+          preview.innerHTML += '<img src="'+e.target.result+'" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function selectDailyStage(s) {
+      window._dailyStage = s;
+      ['laying','grouting_pending','cleaning_pending','complete'].forEach(t => {
+        const btn = document.getElementById('stage-'+t);
+        if(btn){btn.style.background=t===s?'var(--gold-muted)':'var(--bg3)';btn.style.borderColor=t===s?'var(--gold)':'var(--border)';btn.style.color=t===s?'var(--gold)':'var(--text)';}
+      });
+      updateAmountPreview();
+    }
+
+    function updateAmountPreview() {
+      const sqft = parseFloat(document.getElementById('confirmed-sqft')?.value) || 0;
+      if (!sqft) return;
+      const stage = window._dailyStage || 'laying';
+      const deductions = ${JSON.stringify((await VW_DB.client.from('labor_requests').select('stage_deductions').eq('id', job.request_id).single().then(r=>r.data?.stage_deductions).catch(()=>null)) || { laying:0, grouting_pending:5, cleaning_pending:2 })};
+      const baseRate = ${job.agreed_price_large || job.agreed_price_medium || job.agreed_price_small || 0};
+      const deductRate = deductions[stage] || 0;
+      const effectiveRate = Math.max(0, baseRate - deductRate);
+      const amount = Math.round(sqft * effectiveRate);
+
+      const preview = document.getElementById('daily-amount-preview');
+      const amtEl = document.getElementById('daily-amount-value');
+      const noteEl = document.getElementById('daily-deduction-note');
+      const submitBtn = document.getElementById('submit-daily-log');
+
+      if (preview) preview.style.display = 'block';
+      if (amtEl) amtEl.textContent = '₹'+amount.toLocaleString('en-IN');
+      if (noteEl) noteEl.textContent = sqft+' sqft × ₹'+effectiveRate+'/sqft'+(deductRate>0?' (₹'+deductRate+'/sqft held for '+stage.replace('_',' ')+')'  :'');
+      if (submitBtn) submitBtn.style.display = 'block';
+    }
+  `;
+  document.body.appendChild(s);
+}
+
+async function analyseDailyPhotos(jobId) {
+  const photos = window._dailyPhotosData || [];
+  if (!photos.length) { showToast('Upload photos first', 'warn'); return; }
+
+  const btn = document.getElementById('analyse-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '🤖 Analysing...'; }
+
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('total_sqft').eq('id', jobId).single().catch(() => ({ data: null }));
+
+  try {
+    const res = await fetch(`https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/labor-photo-analysis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': VW_DB.client.supabaseKey },
+      body: JSON.stringify({ photos, totalSqft: job?.total_sqft, tileSize: 'mixed' }),
+    });
+    const { data } = await res.json();
+    window._aiSuggestion = data;
+
+    const result = document.getElementById('daily-ai-result');
+    const content = document.getElementById('ai-analysis-content');
+    const sqftInput = document.getElementById('confirmed-sqft');
+
+    if (result) result.style.display = 'block';
+    if (content) content.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:20px;font-weight:900;color:var(--gold)">${data.sqft_estimate || '?'}</div>
+          <div style="font-size:10px;color:var(--text3)">sqft estimated</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:13px;font-weight:700;color:var(--text)">${(data.work_stage||'').replace('_',' ')}</div>
+          <div style="font-size:10px;color:var(--text3)">work stage</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${data.observations || ''}</div>
+      <div style="font-size:10px;color:var(--text3)">Confidence: ${data.confidence || 'medium'} · ${data.rooms_detected || 1} room(s) detected</div>
+    `;
+    if (sqftInput && data.sqft_estimate) sqftInput.value = data.sqft_estimate;
+    // Auto-select detected stage
+    if (data.work_stage && typeof selectDailyStage === 'function') selectDailyStage(data.work_stage);
+
+    showToast('AI analysis complete — confirm the numbers below', 'success');
+  } catch(e) {
+    showToast('AI analysis failed — enter sqft manually', 'warn');
+    const result = document.getElementById('daily-ai-result');
+    if (result) result.style.display = 'block';
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '🔄 Re-analyse'; }
+}
+
+async function submitDailyLog(jobId) {
+  const confirmedSqft = parseFloat(document.getElementById('confirmed-sqft')?.value) || 0;
+  if (!confirmedSqft) { showToast('Confirm sqft completed today', 'warn'); return; }
+
+  const stage = window._dailyStage || 'laying';
+  const notes = document.getElementById('daily-notes')?.value || '';
+  const prof = VW_AUTH.getCurrentProfile();
+  const today = new Date().toISOString().split('T')[0];
+
+  // Get job and request for rate + deduction config
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('*').eq('id', jobId).single();
+  const { data: req } = await VW_DB.client.from('labor_requests').select('stage_deductions,commission_type,commission_value,tds_pct,wallet_id,customer_name,customer_phone').eq('id', job.request_id).single();
+
+  const baseRate = job.agreed_price_large || job.agreed_price_medium || job.agreed_price_small || 0;
+  const deductions = req?.stage_deductions || {};
+  const deductRate = deductions[stage] || 0;
+  const effectiveRate = Math.max(0, baseRate - deductRate);
+  const amountDue = Math.round(confirmedSqft * effectiveRate);
+
+  // Save daily log
+  const { data: log } = await VW_DB.client.from('labor_daily_logs').insert({
+    job_id: jobId,
+    log_date: today,
+    photos: (window._dailyPhotosData || []).map(p => ({ mediaType: p.mediaType })),
+    ai_analysis: window._aiSuggestion || null,
+    ai_sqft_suggestion: window._aiSuggestion?.sqft_estimate || null,
+    ai_work_stage: window._aiSuggestion?.work_stage || null,
+    contractor_confirmed_sqft: confirmedSqft,
+    contractor_confirmed_stage: stage,
+    contractor_notes: notes,
+    deduction_per_sqft: deductRate,
+    amount_due: amountDue,
+    payment_status: 'notified',
+    customer_notified_at: new Date().toISOString(),
+  }).select('id').single();
+
+  // Update job total sqft completed
+  await VW_DB.client.from('labor_jobs').update({
+    total_sqft_completed: (job.total_sqft_completed || 0) + confirmedSqft,
+    status: stage === 'complete' ? 'completed' : 'in_progress',
+  }).eq('id', jobId);
+
+  // Notify customer via wallet notification
+  if (req?.wallet_id) {
+    await createPersistedNotification({
+      category: 'labor_payment_due',
+      title: `🏗 Payment Due — ${job.job_no}`,
+      body: `${confirmedSqft} sqft completed today${deductRate > 0 ? ` · ₹${deductRate}/sqft held (${stage.replace('_',' ')})` : ''} · ₹${amountDue.toLocaleString('en-IN')} due now`,
+      relatedTable: 'labor_daily_logs',
+      relatedId: log?.id,
+      actions: [
+        { label: '💳 Pay Now', action: 'pay_labor_log' },
+        { label: '👁 View Job', action: 'open_labor_job' },
+      ],
+    }).catch(() => {});
+  }
+
+  showToast(`✅ Customer notified — ₹${amountDue.toLocaleString('en-IN')} due`, 'success');
+  closeSheet();
+}
+
+async function processLaborPayment(logId) {
+  const { data: log } = await VW_DB.client.from('labor_daily_logs').select('*').eq('id', logId).single();
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('*').eq('id', log.job_id).single();
+  const { data: req } = await VW_DB.client.from('labor_requests')
+    .select('wallet_id,commission_type,commission_value,tds_pct').eq('id', job.request_id).single();
+
+  if (!req?.wallet_id) { showToast('No wallet linked to this job', 'error'); return; }
+
+  const { data: wallet } = await VW_DB.client.from('customer_wallets').select('balance').eq('id', req.wallet_id).single();
+  const bal = parseFloat(wallet?.balance || 0);
+  const due = log.amount_due || 0;
+
+  if (bal < due) {
+    showToast(`Insufficient wallet balance. Available: ₹${bal.toLocaleString('en-IN')} · Due: ₹${due.toLocaleString('en-IN')}`, 'warn');
+    return;
+  }
+
+  // Calculate commission and TDS
+  const commValue = req.commission_value || 0;
+  const commType  = req.commission_type || 'percent';
+  const commission = commType === 'percent' ? Math.round(due * commValue / 100) : Math.round(due * commValue);
+  const tds = Math.round((due - commission) * (req.tds_pct || 1) / 100);
+  const netToContractor = due - commission - tds;
+
+  // Debit wallet
+  const newBalance = bal - due;
+  const prof = VW_AUTH.getCurrentProfile();
+
+  await VW_DB.client.from('wallet_transactions').insert({
+    wallet_id: req.wallet_id,
+    type: 'labor_payment',
+    amount: due,
+    balance_after: newBalance,
+    description: `Labor payment — ${job.job_no} · ${log.log_date} · ${log.contractor_confirmed_sqft} sqft`,
+    reference_type: 'labor_daily_log',
+    reference_id: logId,
+    payment_method: 'wallet',
+    processed_by: prof?.id,
+    processed_by_name: prof?.name || '',
+  });
+
+  await VW_DB.client.from('customer_wallets').update({
+    balance: newBalance,
+    total_spent: VW_DB.client.rpc('increment', { column: 'total_spent', value: due }),
+    last_activity_at: new Date().toISOString(),
+  }).eq('id', req.wallet_id);
+
+  // Save payment record
+  await VW_DB.client.from('labor_payments').insert({
+    job_id: job.id,
+    log_id: logId,
+    amount_collected: due,
+    commission_amount: commission,
+    tds_amount: tds,
+    net_to_contractor: netToContractor,
+    payment_method: 'wallet',
+    wallet_transaction_id: null,
+  });
+
+  // Mark log as paid
+  await VW_DB.client.from('labor_daily_logs').update({ payment_status: 'paid', paid_at: new Date().toISOString() }).eq('id', logId);
+
+  // Update job totals
+  await VW_DB.client.from('labor_jobs').update({
+    total_billed: (job.total_billed || 0) + due,
+    total_paid_to_contractor: (job.total_paid_to_contractor || 0) + netToContractor,
+  }).eq('id', job.id);
+
+  showToast(`₹${due.toLocaleString('en-IN')} paid · Contractor receives ₹${netToContractor.toLocaleString('en-IN')} (after commission + TDS)`, 'success');
+}
+
+// Expose
+window.VW_LABOR.renderContractorBidForm = renderContractorBidForm;
+window.VW_LABOR.submitContractorBid = submitContractorBid;
+window.VW_LABOR.renderDailyLogUpload = renderDailyLogUpload;
+window.VW_LABOR.analyseDailyPhotos = analyseDailyPhotos;
+window.VW_LABOR.submitDailyLog = submitDailyLog;
+window.VW_LABOR.processLaborPayment = processLaborPayment;
+
+// ── REVIEWS ───────────────────────────────────────────────────
+
+async function renderLaborReviewForm(jobId, reviewerType, stage) {
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('*').eq('id', jobId).single();
+  if (!job) return;
+
+  const isFinal = stage === 'final';
+  const revieweeName = reviewerType === 'customer' ? job.contractor_name : job.customer_name;
+  const revieweeType = reviewerType === 'customer' ? 'contractor' : 'customer';
+
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>${isFinal ? '⭐ Final Review' : '📊 Stage Review'}</h3>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:14px">
+    ${reviewerType === 'customer' ? `How is ${revieweeName}'s work?` : `How is ${revieweeName} as a customer?`}
+  </p>
+
+  <!-- STAR RATING -->
+  <div style="text-align:center;margin-bottom:16px">
+    <div id="star-display" style="font-size:40px;letter-spacing:4px">⭐⭐⭐⭐⭐</div>
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:8px">
+      ${[1,2,3,4,5].map(n=>`
+      <button onclick="setReviewRating(${n})"
+        id="star-${n}"
+        style="width:44px;height:44px;border-radius:50%;border:2px solid ${n<=3?'var(--gold)':'var(--border)'};background:${n<=3?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;font-size:18px">
+        ${n<=3?'⭐':'☆'}
+      </button>`).join('')}
+    </div>
+    <div id="rating-label" style="font-size:12px;color:var(--gold);margin-top:6px;font-weight:700">Good</div>
+  </div>
+
+  ${isFinal ? `
+  <!-- DETAILED REVIEW (final only) -->
+  <div class="form-group">
+    <label>${reviewerType === 'customer' ? 'Review the contractor\'s work' : 'Review this customer'}</label>
+    <textarea id="review-text" rows="3" placeholder="${reviewerType === 'customer' ?
+      'Quality of work, punctuality, cleanliness, behaviour...' :
+      'Payment behaviour, cooperation, site access, clarity of instructions...'}"
+      style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+  </div>
+  ${reviewerType === 'customer' ? `
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    ${['Work Quality','Punctuality','Cleanliness','Behaviour'].map(tag=>`
+    <button id="tag-${tag.replace(' ','_')}" onclick="toggleReviewTag('${tag}')"
+      style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);cursor:pointer;font-size:11px;font-weight:600">
+      ${tag}
+    </button>`).join('')}
+  </div>` : ''}
+  <div class="form-group">
+    <label>Upload photos of finished work (optional)</label>
+    <input type="file" id="review-photos" multiple accept="image/*"
+      style="width:100%;padding:8px;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;font-size:12px">
+  </div>` : ''}
+
+  <button onclick="VW_LABOR.submitReview('${jobId}','${reviewerType}','${stage}')"
+    style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+    Submit Review
+  </button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Later</button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const s = document.createElement('script');
+  s.textContent = `
+    window._reviewRating = 3;
+    window._reviewTags = [];
+    const ratingLabels = {1:'Poor',2:'Below Average',3:'Good',4:'Very Good',5:'Excellent'};
+    function setReviewRating(n) {
+      window._reviewRating = n;
+      for(let i=1;i<=5;i++){
+        const btn=document.getElementById('star-'+i);
+        if(btn){btn.textContent=i<=n?'⭐':'☆';btn.style.background=i<=n?'var(--gold-muted)':'var(--bg2)';btn.style.borderColor=i<=n?'var(--gold)':'var(--border)';}
+      }
+      const lbl=document.getElementById('rating-label');
+      if(lbl)lbl.textContent=ratingLabels[n]||'';
+    }
+    function toggleReviewTag(tag) {
+      const idx = window._reviewTags.indexOf(tag);
+      if(idx>=0) window._reviewTags.splice(idx,1); else window._reviewTags.push(tag);
+      const btn = document.getElementById('tag-'+tag.replace(' ','_'));
+      if(btn){btn.style.background=window._reviewTags.includes(tag)?'var(--gold-muted)':'var(--bg2)';btn.style.borderColor=window._reviewTags.includes(tag)?'var(--gold)':'var(--border)';}
+    }
+  `;
+  document.body.appendChild(s);
+}
+
+async function submitReview(jobId, reviewerType, stage) {
+  const rating = window._reviewRating || 3;
+  const text = document.getElementById('review-text')?.value || '';
+  const prof = VW_AUTH.getCurrentProfile();
+
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('*').eq('id', jobId).single();
+
+  await VW_DB.client.from('labor_reviews').insert({
+    job_id: jobId,
+    reviewer_type: reviewerType,
+    reviewer_id: prof?.id,
+    reviewer_name: prof?.name || '',
+    reviewee_type: reviewerType === 'customer' ? 'contractor' : 'customer',
+    reviewee_id: reviewerType === 'customer' ? job.contractor_profile_id : job.customer_id,
+    review_stage: stage,
+    rating,
+    review_text: text,
+  });
+
+  // Update contractor average rating
+  if (reviewerType === 'customer') {
+    const { data: allRevs } = await VW_DB.client.from('labor_reviews')
+      .select('rating').eq('reviewee_id', job.contractor_profile_id).eq('reviewer_type', 'customer');
+    const avgRating = allRevs?.length
+      ? allRevs.reduce((s,r) => s + r.rating, 0) / allRevs.length
+      : rating;
+    await VW_DB.client.from('contractor_profiles')
+      .update({ avg_rating: Math.round(avgRating * 10) / 10 })
+      .eq('id', job.contractor_profile_id);
+  }
+
+  showToast('Review submitted ✅', 'success');
+  closeSheet();
+}
+
+window.VW_LABOR.renderLaborReviewForm = renderLaborReviewForm;
+window.VW_LABOR.submitReview = submitReview;

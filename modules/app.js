@@ -1481,6 +1481,11 @@ async function handleNotificationAction(notifId, action) {
     await navigateTo('labor_requests');
     return;
   }
+  if (action === 'pay_labor_log') {
+    closeSheet();
+    if (n.relatedId) await VW_LABOR.processLaborPayment(n.relatedId);
+    return;
+  }
   if (action === 'open_labor_bid') {
     closeSheet();
     await navigateTo('labor_requests');
