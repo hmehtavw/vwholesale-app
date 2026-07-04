@@ -497,7 +497,9 @@ const ROLE_PAGES = {
   reception:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer','wishlist'],
   accounts:     ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns','gst','tile_quotes'],
   dispatch:     ['dashboard','tasks','feedback','training','dispatch'],
-  pending:      []
+  pending:      [],
+  customer:     ['shop','wallet','quotations','labor_requests','wishlist','feedback'],
+  contractor:   ['contractor_profile','labor_requests','wallet'],
 };
 
 // The toggleable permission set Admin can grant/revoke per person, and
@@ -627,7 +629,7 @@ async function signOut() {
 // ============================================================
 // UI: Login / Sign Up screen
 // ============================================================
-async function showAuthScreen() {
+async function showAuthScreen(mode) {
   let overlay = document.getElementById('identity-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -635,33 +637,311 @@ async function showAuthScreen() {
     overlay.className = 'identity-overlay';
     document.body.appendChild(overlay);
   }
+
   overlay.innerHTML = `
     <div class="identity-card">
       <div class="id-logo">VW</div>
-      <h2 id="auth-title">Log In</h2>
-      <p class="id-sub" id="auth-sub">Enter your phone number and PIN.</p>
+      <h2 style="margin-bottom:4px">V Wholesale</h2>
+      <p class="id-sub" style="margin-bottom:16px">Vijayawada's Home Building Store</p>
 
-      <div class="form-group" id="auth-name-group" style="display:none">
-        <label>Your Name</label>
-        <input type="text" id="auth-name" placeholder="Full name">
+      <!-- WHO ARE YOU -->
+      <div id="auth-role-select" style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text3);font-weight:700;margin-bottom:8px;text-transform:uppercase">I am a</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          ${[
+            { key:'customer', icon:'🏠', label:'Customer' },
+            { key:'contractor', icon:'👷', label:'Contractor' },
+            { key:'staff', icon:'🏪', label:'Staff' },
+          ].map(r => `
+          <button id="role-btn-${r.key}" onclick="selectAuthRole('${r.key}')"
+            style="padding:10px 6px;border-radius:10px;border:${r.key==='customer'?'2px solid var(--gold)':'1px solid var(--border)'};
+              background:${r.key==='customer'?'var(--gold-muted)':'var(--bg2)'};cursor:pointer;text-align:center">
+            <div style="font-size:20px;margin-bottom:4px">${r.icon}</div>
+            <div style="font-size:11px;font-weight:700;color:${r.key==='customer'?'var(--gold)':'var(--text)'}">${r.label}</div>
+          </button>`).join('')}
+        </div>
       </div>
-      <div class="form-group">
-        <label>Phone Number</label>
-        <input type="tel" id="auth-phone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric">
+
+      <!-- CUSTOMER / CONTRACTOR FORM -->
+      <div id="auth-public-form">
+        <div class="form-group">
+          <label>Phone Number *</label>
+          <input type="tel" id="auth-phone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric"
+            style="font-size:16px;font-weight:700">
+        </div>
+        <div class="form-group" id="auth-name-group">
+          <label>Full Name *</label>
+          <input type="text" id="auth-name" placeholder="Your full name">
+        </div>
+        <div class="form-group" id="auth-email-group" style="display:none">
+          <label>Email (optional)</label>
+          <input type="email" id="auth-email" placeholder="your@email.com">
+        </div>
+        <div id="auth-otp-group" style="display:none">
+          <div style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--green)">
+            ✅ OTP sent to your phone/email. Enter below.
+          </div>
+          <div class="form-group">
+            <label>OTP</label>
+            <input type="text" id="auth-otp" placeholder="6-digit OTP" maxlength="6" inputmode="numeric"
+              style="font-size:20px;font-weight:800;text-align:center;letter-spacing:8px">
+          </div>
+        </div>
+        <div id="auth-error" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
+        <button class="btn-primary full-width" id="auth-submit-btn" onclick="handlePublicAuthSubmit()">
+          Continue →
+        </button>
+        <button class="btn-secondary full-width" style="margin-top:8px" onclick="showStaffLogin()">
+          Staff Login →
+        </button>
       </div>
-      <div class="form-group">
-        <label>PIN</label>
-        <input type="password" id="auth-pin" placeholder="6-digit PIN" maxlength="6" inputmode="numeric">
+
+      <!-- STAFF FORM (hidden by default) -->
+      <div id="auth-staff-form" style="display:none">
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="staff-phone" placeholder="10-digit mobile" maxlength="10" inputmode="numeric">
+        </div>
+        <div class="form-group">
+          <label>PIN</label>
+          <input type="password" id="staff-pin" placeholder="6-digit PIN" maxlength="6" inputmode="numeric">
+        </div>
+        <div id="staff-auth-error" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
+        <button class="btn-primary full-width" id="staff-submit-btn" onclick="handleStaffLogin()">Log In</button>
+        <button class="btn-secondary full-width" style="margin-top:8px" onclick="toggleAuthMode()" id="auth-toggle-btn">New employee? Register</button>
+        <button class="btn-secondary full-width" style="margin-top:8px;background:none;border:none;color:var(--text3);font-size:13px" onclick="showForgotPin()">Forgot PIN?</button>
+        <button class="btn-secondary full-width" style="margin-top:8px;font-size:12px" onclick="showPublicLogin()">← Customer / Contractor Login</button>
       </div>
-      <div id="auth-error" style="color:var(--red);font-size:13px;margin-bottom:10px;display:none"></div>
-      <button class="btn-primary full-width" id="auth-submit-btn" onclick="handleAuthSubmit()">Log In</button>
-      <button class="btn-secondary full-width" style="margin-top:8px" onclick="toggleAuthMode()" id="auth-toggle-btn">New employee? Register</button>
-      <button class="btn-secondary full-width" style="margin-top:8px;background:none;border:none;color:var(--text3);font-size:13px" id="forgot-pin-btn" onclick="showForgotPin()">Forgot PIN?</button>
     </div>
   `;
+
+  // Inject auth helper scripts
+  const s = document.createElement('script');
+  s.textContent = `
+    window._authRole = 'customer';
+    window._authStep = 'details'; // details | otp
+
+    function selectAuthRole(role) {
+      window._authRole = role;
+      ['customer','contractor','staff'].forEach(r => {
+        const btn = document.getElementById('role-btn-'+r);
+        if (!btn) return;
+        btn.style.borderColor = r===role ? 'var(--gold)' : 'var(--border)';
+        btn.style.background = r===role ? 'var(--gold-muted)' : 'var(--bg2)';
+        btn.querySelector('div:last-child').style.color = r===role ? 'var(--gold)' : 'var(--text)';
+      });
+      if (role === 'staff') { showStaffLogin(); return; }
+      showPublicLogin();
+      // Show email for customer
+      const eg = document.getElementById('auth-email-group');
+      if (eg) eg.style.display = role==='customer' ? 'block' : 'none';
+      const ng = document.getElementById('auth-name-group');
+      if (ng) ng.style.display = 'block';
+    }
+
+    function showStaffLogin() {
+      document.getElementById('auth-public-form').style.display = 'none';
+      document.getElementById('auth-staff-form').style.display = 'block';
+      window._authRole = 'staff';
+      selectAuthRole('staff');
+    }
+
+    function showPublicLogin() {
+      document.getElementById('auth-public-form').style.display = 'block';
+      document.getElementById('auth-staff-form').style.display = 'none';
+    }
+
+    window.selectAuthRole = selectAuthRole;
+    window.showStaffLogin = showStaffLogin;
+    window.showPublicLogin = showPublicLogin;
+  `;
+  document.body.appendChild(s);
 }
 
-let authMode = 'login'; // login | signup
+// Public auth — customer / contractor OTP flow
+async function handlePublicAuthSubmit() {
+  const role    = window._authRole || 'customer';
+  const step    = window._authStep || 'details';
+  const phone   = (document.getElementById('auth-phone')?.value||'').replace(/\D/g,'').slice(-10);
+  const name    = (document.getElementById('auth-name')?.value||'').trim();
+  const email   = (document.getElementById('auth-email')?.value||'').trim();
+  const errEl   = document.getElementById('auth-error');
+  const btn     = document.getElementById('auth-submit-btn');
+
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Please wait...';
+
+  try {
+    if (step === 'details') {
+      if (phone.length !== 10) throw new Error('Enter a valid 10-digit phone number');
+      if (!name) throw new Error('Please enter your full name');
+
+      // Check if profile already exists → login flow
+      const { data: existing } = await sb.from('profiles')
+        .select('id,name,role,status').eq('phone', phone).maybeSingle();
+
+      if (existing) {
+        // Existing user — send OTP to verify
+        const otpEmail = email || (existing.email || `${phone}@vwholesale.in`);
+        await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: false } });
+        window._authOtpEmail = otpEmail;
+        window._authStep = 'otp';
+        window._authExistingProfile = existing;
+        document.getElementById('auth-otp-group').style.display = 'block';
+        document.getElementById('auth-name-group').style.display = 'none';
+        document.getElementById('auth-email-group').style.display = 'none';
+        btn.textContent = 'Verify OTP →';
+        btn.disabled = false;
+        return;
+      }
+
+      // New user — create profile with OTP verification
+      const otpEmail = email || `${phone}@vwholesale.in`;
+      await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: true } });
+      window._authOtpEmail = otpEmail;
+      window._authNewUser = { phone, name, email, role };
+      window._authStep = 'otp';
+      document.getElementById('auth-otp-group').style.display = 'block';
+      document.getElementById('auth-name-group').style.display = 'none';
+      document.getElementById('auth-email-group').style.display = 'none';
+      btn.textContent = 'Verify OTP →';
+      btn.disabled = false;
+
+    } else if (step === 'otp') {
+      const otp = (document.getElementById('auth-otp')?.value||'').trim();
+      if (!otp || otp.length < 6) throw new Error('Enter the 6-digit OTP');
+
+      const { error: otpErr } = await sb.auth.verifyOtp({
+        email: window._authOtpEmail,
+        token: otp,
+        type: 'email',
+      });
+      if (otpErr) throw new Error('Invalid or expired OTP. Please try again.');
+
+      // OTP verified — create or load profile
+      if (window._authNewUser) {
+        const u = window._authNewUser;
+        const newRole = u.role === 'contractor' ? 'contractor' : 'customer';
+        const newStatus = u.role === 'contractor' ? 'pending' : 'approved'; // contractors need approval
+
+        const { data: { user } } = await sb.auth.getUser();
+        await sb.from('profiles').insert({
+          id: user.id,
+          name: u.name,
+          phone: u.phone,
+          email: u.email || null,
+          role: newRole,
+          status: newStatus,
+        }).catch(() => {}); // may already exist from trigger
+
+        await loadCurrentProfile();
+      } else {
+        await loadCurrentProfile();
+      }
+
+      const overlay = document.getElementById('identity-overlay');
+      if (overlay) overlay.remove();
+      await routeByRole();
+    }
+  } catch(e) {
+    errEl.textContent = e.message || 'Something went wrong';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = window._authStep === 'otp' ? 'Verify OTP →' : 'Continue →';
+  }
+}
+window.handlePublicAuthSubmit = handlePublicAuthSubmit;
+
+async function handleStaffLogin() {
+  const phone = (document.getElementById('staff-phone')?.value||'').trim().replace(/\D/g,'').slice(-10);
+  const pin   = (document.getElementById('staff-pin')?.value||'').trim();
+  const errEl = document.getElementById('staff-auth-error');
+  const btn   = document.getElementById('staff-submit-btn');
+
+  errEl.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'Please wait...';
+
+  try {
+    if (authMode === 'signup') {
+      const name = document.getElementById('auth-name')?.value?.trim();
+      if (!name) throw new Error('Please enter your full name');
+      if (phone.length !== 10) throw new Error('Enter a valid 10-digit phone number');
+      if (pin.length !== 6) throw new Error('PIN must be exactly 6 digits');
+      const offers = await VW_DB.all(VW_DB.STORES.staffOffers);
+      const matchingOffer = offers.find(o => (o.candidatePhone||'').replace(/\D/g,'').slice(-10) === phone);
+      if (!matchingOffer) throw new Error('Your phone number is not registered for hiring. Please contact HR.');
+      if (!matchingOffer.inductionCompleted) throw new Error('Please complete your onboarding induction first.');
+      await signUp(phone, pin, name);
+    } else {
+      await signIn(phone, pin);
+    }
+    const overlay = document.getElementById('identity-overlay');
+    if (overlay) overlay.remove();
+    await routeByRole();
+  } catch(e) {
+    errEl.textContent = e.message || 'Something went wrong';
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? 'Log In' : 'Register';
+  }
+}
+window.handleStaffLogin = handleStaffLogin;
+
+// Route to correct home screen based on role
+async function routeByRole() {
+  await loadCurrentProfile();
+  const role = currentProfile?.role;
+  const status = currentProfile?.status;
+
+  if (!role) { await showAuthScreen(); return; }
+
+  // Contractor pending approval
+  if (role === 'contractor' && status === 'pending') {
+    showContractorPendingScreen(); return;
+  }
+
+  // Customer
+  if (role === 'customer') {
+    if (typeof init === 'function') await init();
+    navigateTo('shop'); // B2C home
+    return;
+  }
+
+  // Contractor approved
+  if (role === 'contractor') {
+    if (typeof init === 'function') await init();
+    navigateTo('contractor_profile');
+    return;
+  }
+
+  // Staff — existing flow
+  if (status === 'pending') { showPendingScreen(); return; }
+  if (typeof init === 'function') await init();
+}
+window.routeByRole = routeByRole;
+
+function showContractorPendingScreen() {
+  const overlay = document.createElement('div');
+  overlay.id = 'identity-overlay';
+  overlay.className = 'identity-overlay';
+  overlay.innerHTML = `
+    <div class="identity-card" style="text-align:center">
+      <div class="id-logo">👷</div>
+      <h2>Application Submitted</h2>
+      <p class="id-sub">Hi ${currentProfile?.name||''}! Your contractor application is under review. Our team will verify your details and activate your account within 24 hours.</p>
+      <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:12px 0;font-size:12px;color:var(--text3);text-align:left">
+        <div style="margin-bottom:4px">📄 Upload KYC documents to speed up approval</div>
+        <div>📞 Call us: 8712697930</div>
+      </div>
+      <button class="btn-secondary full-width" onclick="checkApprovalStatus()">Check Status</button>
+      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut().then(()=>location.reload())">Log Out</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+window.showContractorPendingScreen = showContractorPendingScreen;
+
+
 
 function showForgotPin() {
   const overlay = document.getElementById('identity-overlay');
@@ -832,14 +1112,27 @@ async function onAuthReady() {
     await showAuthScreen();
     return false;
   }
-  if (currentProfile.status === 'pending') {
+
+  const role = currentProfile.role;
+  const status = currentProfile.status;
+
+  // Contractor pending approval
+  if (role === 'contractor' && status === 'pending') {
+    showContractorPendingScreen();
+    return false;
+  }
+
+  // Staff pending
+  if (status === 'pending' && role !== 'customer' && role !== 'contractor') {
     showPendingScreen();
     return false;
   }
-  if (currentProfile.status === 'rejected') {
+
+  if (status === 'rejected') {
     showRejectedScreen();
     return false;
   }
+
   // approved
   renderIdentityBadge();
   if (typeof applyRolePermissions === 'function') applyRolePermissions();
