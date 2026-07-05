@@ -630,6 +630,7 @@ async function signIn(phone, pin) {
 async function signOut() {
   await sb.auth.signOut();
   currentProfile = null;
+  window.location.replace('./shop.html');
 }
 
 // ============================================================
@@ -940,7 +941,7 @@ function showContractorPendingScreen() {
         <div>📞 Call us: 8712697930</div>
       </div>
       <button class="btn-secondary full-width" onclick="checkApprovalStatus()">Check Status</button>
-      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut().then(()=>location.reload())">Log Out</button>
+      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut()">Log Out</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1087,7 +1088,7 @@ function showPendingScreen() {
       <p class="id-sub">Hi ${currentProfile?.name || ''}! Your access request has been sent to Management.
       You'll be able to use the app as soon as they approve your account.</p>
       <button class="btn-secondary full-width" onclick="checkApprovalStatus()">Check Status</button>
-      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut().then(()=>location.reload())">Log Out</button>
+      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut()">Log Out</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1155,7 +1156,7 @@ function showRejectedScreen() {
       <div class="id-logo">VW</div>
       <h2>Access Not Approved</h2>
       <p class="id-sub">Your access request was not approved. Please contact Management directly if you believe this is a mistake.</p>
-      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut().then(()=>location.reload())">Log Out</button>
+      <button class="btn-secondary full-width" style="margin-top:8px;color:var(--red)" onclick="VW_AUTH.signOut()">Log Out</button>
     </div>
   `;
   document.body.appendChild(overlay);
@@ -1177,7 +1178,7 @@ function renderIdentityBadge() {
         <button onclick="setExecStatus('available')">&#128994; Available</button>
         <button onclick="setExecStatus('busy')">&#128993; Busy</button>
         <button onclick="setExecStatus('break')">&#9898; On Break</button>
-        <button onclick="VW_AUTH.signOut().then(()=>location.reload())" style="border-top:1px solid var(--border);margin-top:4px;color:var(--text3)">Log Out</button>
+        <button onclick="VW_AUTH.signOut()" style="border-top:1px solid var(--border);margin-top:4px;color:var(--text3)">Log Out</button>
       </div>`;
     refreshExecStatusDot();
   } else {
@@ -1185,7 +1186,7 @@ function renderIdentityBadge() {
       <span class="id-badge-name">${currentProfile.name}</span>
     </div>
     <div id="status-menu" class="status-menu" style="display:none">
-      <button onclick="VW_AUTH.signOut().then(()=>location.reload())" style="color:var(--red)">Log Out</button>
+      <button onclick="VW_AUTH.signOut()" style="color:var(--red)">Log Out</button>
     </div>`;
   }
 }

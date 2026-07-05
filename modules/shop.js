@@ -2851,7 +2851,7 @@ async function renderCustomerProfilePage() {
   </div>
 
   <!-- SIGN OUT -->
-  <button onclick="VW_AUTH.signOut().then(()=>location.reload())"
+  <button onclick="VW_AUTH.signOut()"
     style="width:100%;padding:10px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:var(--red);font-size:13px;cursor:pointer">
     Sign Out
   </button>`;
