@@ -8113,9 +8113,13 @@ const SHOP_CATEGORIES = [
   { key:'Tools',        icon:'🛠', label:'Tools',          color:'#EF4444' },
   { key:'Appliances',   icon:'📦', label:'Appliances',     color:'#10B981' },
   { key:'Plywood',      icon:'🪵', label:'Plywood',        color:'#92400E' },
-  { key:'Grout',        icon:'🪨', label:'Grout',          color:'#6B7280' },
+  { key:'Grout',        icon:'🪨', label:'Grout',          color:'#64748B' },
   { key:'Adhesive',     icon:'🧲', label:'Adhesive',       color:'#F97316' },
   { key:'Waterproofing',icon:'💧', label:'Waterproofing',  color:'#0EA5E9' },
+  { key:'Profiles',     icon:'📏', label:'Profiles',       color:'#A78BFA' },
+  { key:'False Ceiling',icon:'🏗', label:'False Ceiling',  color:'#34D399' },
+  { key:'Spacer',       icon:'🔳', label:'Spacers',        color:'#94A3B8' },
+  { key:'Accessories',  icon:'🧰', label:'Accessories',    color:'#FB923C' },
 ];
 
 let _shopCart = {}; // {productId: qty}
@@ -8265,19 +8269,25 @@ function shopProductCard(p) {
   const qty   = _shopCart[p.id] || 0;
   const outOfStock = !p.stock || p.stock <= 0;
   const img   = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+  const catCfg = SHOP_CATEGORIES.find(c => c.key === p.category);
+  const catIcon = catCfg?.icon || '📦';
+  const catColor = catCfg?.color || '#6B7280';
 
   return `
   <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative">
     ${disc > 0 ? `<div style="position:absolute;top:8px;left:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;z-index:1">${disc}% OFF</div>` : ''}
-    <!-- IMAGE -->
-    <div style="height:110px;background:var(--bg3);display:flex;align-items:center;justify-content:center;overflow:hidden">
+    <!-- IMAGE / PLACEHOLDER -->
+    <div style="height:110px;background:${img ? 'var(--bg3)' : `linear-gradient(135deg,${catColor}22,${catColor}44)`};display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
       ${img
-        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<span style=font-size:32px>${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>'">`
-        : `<span style="font-size:32px">${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>`}
+        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML='<span style=font-size:36px>${catIcon}</span>'">`
+        : `<div style="text-align:center">
+            <div style="font-size:36px;margin-bottom:4px">${catIcon}</div>
+            <div style="font-size:9px;font-weight:700;color:${catColor};text-transform:uppercase;letter-spacing:.05em;opacity:0.8">${p.subcategory||p.category}</div>
+           </div>`}
     </div>
     <!-- INFO -->
     <div style="padding:8px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:2px">${p.brand||p.subcategory||p.category}</div>
+      ${p.brand ? `<div style="font-size:10px;color:var(--text3);margin-bottom:2px;font-weight:600">${p.brand}</div>` : ''}
       <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;min-height:32px">${p.name}</div>
       <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px">
         <span style="font-size:14px;font-weight:900;color:var(--gold)">₹${price.toLocaleString('en-IN')}</span>

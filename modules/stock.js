@@ -153,8 +153,15 @@ function renderProductList(products, filter = 'all', search = '') {
   return list.map(p => {
     const stockColor = p.stock <= (p.lowStockThreshold || LOW_STOCK_THRESHOLD) ? 'var(--red)' : p.stock <= 50 ? 'var(--gold)' : 'var(--green)';
     const stockPct = Math.min(100, Math.round(p.stock / 200 * 100));
+    const hasPhoto = p.photos?.length > 0;
     return `
     <div class="inv-row" onclick="openProduct(${p.id})">
+      <div style="width:44px;height:44px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg3);display:flex;align-items:center;justify-content:center;margin-right:8px;border:${hasPhoto?'2px solid var(--green)':'1px dashed var(--border)'}"
+        onclick="event.stopPropagation();quickPhotoUpload(${p.id},event)" title="${hasPhoto?'Change photo':'Add photo'}">
+        ${hasPhoto
+          ? `<img src="${p.photos[0]?.url||p.photos[0]}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:18px">📷</span>`}
+      </div>
       <div class="inv-info">
         <div class="inv-name">${p.name}</div>
         <div class="inv-meta">${p.category} · ₹${p.price.toLocaleString('en-IN')}/${p.unit}${p.rackNo?` · 📍 ${p.warehouseZone||''}${p.rackNo}/${p.shelfNo||''}`:''}</div>
@@ -3302,3 +3309,60 @@ async function saveProductPricing(id) {
 }
 
 
+
+// ─── QUICK PHOTO UPLOAD FOR SHOP ────────────────────────────────
+async function quickPhotoUpload(productId, event) {
+  event.stopPropagation(); // don't open product detail
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.capture = 'environment'; // use rear camera
+
+  input.onchange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    showToast('Uploading photo...', 'info');
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `products/${productId}/${Date.now()}.${ext}`;
+
+    const { error: upErr } = await VW_DB.client.storage
+      .from('product-photos')
+      .upload(path, file, { contentType: file.type, upsert: true });
+
+    if (upErr) { showToast('Upload failed: ' + upErr.message, 'error'); return; }
+
+    const { data: urlData } = VW_DB.client.storage
+      .from('product-photos')
+      .getPublicUrl(path);
+
+    const publicUrl = urlData?.publicUrl;
+    if (!publicUrl) { showToast('Could not get public URL', 'error'); return; }
+
+    // Fetch current photos and prepend new one
+    const { data: prod } = await VW_DB.client
+      .from('products').select('photos').eq('id', productId).single();
+
+    const existingPhotos = prod?.photos || [];
+    const newPhoto = { url: publicUrl, path, approved: true, uploadedAt: new Date().toISOString() };
+    const updatedPhotos = [newPhoto, ...existingPhotos];
+
+    await VW_DB.client.from('products').update({ photos: updatedPhotos }).eq('id', productId);
+    showToast('Photo uploaded ✅ — visible in shop immediately', 'success');
+
+    // Refresh the inventory row
+    const row = document.querySelector(`[onclick="openProduct(${productId})"]`);
+    if (row) {
+      const imgEl = row.querySelector('img');
+      const iconEl = row.querySelector('span[style*="font-size:18px"]');
+      if (imgEl) imgEl.src = publicUrl;
+      if (iconEl) {
+        iconEl.parentElement.innerHTML = `<img src="${publicUrl}" style="width:100%;height:100%;object-fit:cover">`;
+        iconEl.parentElement.style.border = '2px solid var(--green)';
+      }
+    }
+  };
+
+  input.click();
+}
+window.quickPhotoUpload = quickPhotoUpload;
