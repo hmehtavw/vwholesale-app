@@ -491,7 +491,134 @@ window.shareDailyReportWhatsApp = shareDailyReportWhatsApp;
 async function renderDashboard() {
   const profile = VW_AUTH.getCurrentProfile();
   const today = new Date().toISOString().split('T')[0];
-  const todayStr = new Date().toDateString();
+
+  // Show static shell immediately — no DB calls needed
+  const role = profile?.role || '';
+  const name = profile?.name || 'Staff';
+  const greet = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
+
+  // Show quick static dashboard first
+  const quickHTML = `
+  <div class="module-header">
+    <h2>${greet}, ${name.split(' ')[0]} 👋</h2>
+    <div style="font-size:11px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
+  </div>
+  <div class="snapshot-grid" style="margin-bottom:14px">
+    <div class="snap-item"><div class="snap-val" id="dash-revenue" style="color:var(--gold)">Loading...</div><div class="snap-label">Today's Revenue</div></div>
+    <div class="snap-item"><div class="snap-val" id="dash-visits">—</div><div class="snap-label">Visits Today</div></div>
+    <div class="snap-item"><div class="snap-val" id="dash-invoices">—</div><div class="snap-label">Invoices Today</div></div>
+  </div>
+  <div id="dash-pending-tqs"></div>
+  <div id="dash-tasks" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
+    <div style="font-size:12px;color:var(--text3)">Loading tasks...</div>
+  </div>
+  <div id="dash-low-stock" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
+    <div style="font-size:12px;color:var(--text3)">Checking stock...</div>
+  </div>`;
+
+  // Return static shell — background loads will update the page
+  setTimeout(() => loadDashboardData(today), 300);
+  return quickHTML;
+}
+
+async function loadDashboardData(today) {
+  try {
+    // Load one at a time with error handling
+    const invoicesRes = await VW_DB.client.from('invoices')
+      .select('id,total,payment_method,credit_sale,approval_status,payment_verified,amount_received')
+      .gte('date', today).limit(100).catch(() => ({ data: [] }));
+    const invoices = invoicesRes.data || [];
+    const revenue = invoices.filter(i => i.approval_status === 'approved')
+      .reduce((s,i) => s + (i.amount_received || i.total || 0), 0);
+
+    const el = document.getElementById('dash-revenue');
+    if (el) el.textContent = '₹' + Math.round(revenue).toLocaleString('en-IN');
+
+    const visitsRes = await VW_DB.client.from('visits')
+      .select('id,visitor_type').gte('date', today + 'T00:00:00').limit(100).catch(() => ({ data: [] }));
+    const visits = visitsRes.data || [];
+    const visEl = document.getElementById('dash-visits');
+    if (visEl) visEl.textContent = visits.length;
+    const invEl = document.getElementById('dash-invoices');
+    if (invEl) invEl.textContent = invoices.length;
+
+    // Pending TQs for management
+    const role = VW_AUTH.getRole?.();
+    if (['admin','management','store_manager'].includes(role)) {
+      const { data: pendingTQs } = await VW_DB.client.from('tile_quotations')
+        .select('id,tq_no,customer_name,grand_total').eq('approval_status','pending_approval')
+        .order('created_at').limit(10).catch(() => ({ data: [] }));
+
+      const tqEl = document.getElementById('dash-pending-tqs');
+      if (tqEl && pendingTQs?.length) {
+        const pipeline = pendingTQs.reduce((s,q) => s + (q.grand_total || 0), 0);
+        tqEl.innerHTML = `
+        <div class="card" style="border-left:4px solid var(--gold);margin-bottom:12px">
+          <div class="card-header-row">
+            <h3 class="card-title">⏳ ${pendingTQs.length} TQ${pendingTQs.length>1?'s':''} Pending Approval</h3>
+            <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('quick_approve')">⚡ Quick Approve</button>
+          </div>
+          ${pipeline > 0 ? `<div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">Pipeline: ₹${Math.round(pipeline).toLocaleString('en-IN')}</div>` : ''}
+          ${pendingTQs.slice(0,3).map(q => `
+          <div class="followup-row" onclick="VW_TILES.openTileQuote(${q.id})" style="cursor:pointer">
+            <div class="fu-info">
+              <div class="fu-name">${q.customer_name} · ${q.tq_no}</div>
+              <div class="fu-dept">${q.grand_total ? '₹'+parseInt(q.grand_total).toLocaleString('en-IN') : 'Price TBD'}</div>
+            </div>
+            <button class="btn-sm" style="background:var(--gold);color:#000" onclick="event.stopPropagation();navigateTo('quick_approve')">Approve →</button>
+          </div>`).join('')}
+        </div>`;
+      }
+    }
+
+    // Tasks
+    const tasksRes = await VW_DB.client.from('tasks')
+      .select('id,title,status,assigned_to_name,due_date')
+      .in('status',['pending','in_progress']).limit(10).catch(() => ({ data: [] }));
+    const tasks = tasksRes.data || [];
+    const taskEl = document.getElementById('dash-tasks');
+    if (taskEl) {
+      if (!tasks.length) {
+        taskEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">✅ No pending tasks</div>';
+      } else {
+        taskEl.innerHTML = `
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px">📋 Pending Tasks (${tasks.length})</div>
+        ${tasks.slice(0,5).map(t => `
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border2);font-size:12px">
+          <span>${t.title}</span>
+          <span style="color:var(--text3)">${t.assigned_to_name||'Unassigned'}</span>
+        </div>`).join('')}`;
+      }
+    }
+
+    // Low stock
+    const stockRes = await VW_DB.client.from('products')
+      .select('id,name,stock,low_stock_threshold,unit')
+      .eq('is_active',true).lte('stock',10).limit(5).catch(() => ({ data: [] }));
+    const lowStock = stockRes.data || [];
+    const stockEl = document.getElementById('dash-low-stock');
+    if (stockEl) {
+      if (!lowStock.length) {
+        stockEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">✅ Stock levels OK</div>';
+      } else {
+        stockEl.innerHTML = `
+        <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px">⚠️ Low Stock (${lowStock.length})</div>
+        ${lowStock.map(p => `
+        <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border2);font-size:12px">
+          <span>${p.name}</span>
+          <span style="color:var(--red);font-weight:700">${p.stock} ${p.unit}</span>
+        </div>`).join('')}`;
+      }
+    }
+
+  } catch(e) {
+    console.warn('Dashboard load error:', e);
+  }
+}
+
+async function renderDashboard_UNUSED() {
+  const profile = VW_AUTH.getCurrentProfile();
+  const today = new Date().toISOString().split('T')[0];
   try {
 
   // Load sequentially to avoid ERR_INSUFFICIENT_RESOURCES from too many parallel requests
@@ -1265,12 +1392,10 @@ async function enrollCCMember() {
 }
 
 async function renderFeedbackPage() {
-  const [feedbacks, visits, customers, tasks] = await Promise.all([
-    VW_DB.all(VW_DB.STORES.feedback),
-    VW_DB.all(VW_DB.STORES.visits),
-    VW_DB.all(VW_DB.STORES.customers),
-    VW_DB.all(VW_DB.STORES.tasks)
-  ]);
+  const feedbacks = await VW_DB.all(VW_DB.STORES.feedback).catch(() => []);
+  const visits    = await VW_DB.all(VW_DB.STORES.visits).catch(() => []);
+  const customers = await VW_DB.all(VW_DB.STORES.customers).catch(() => []);
+  const tasks     = await VW_DB.all(VW_DB.STORES.tasks).catch(() => []);
   const custMap = {}; customers.forEach(c=>custMap[c.id]=c);
   const avgRating = feedbacks.length ? (feedbacks.reduce((s,f)=>s+(f.rating||0),0)/feedbacks.length).toFixed(1) : '—';
 
@@ -2042,12 +2167,10 @@ window.openWhatsApp = (phone, name) => { const msg = VW_NOTIFY.waEncode(`Hello $
 window.callPhone = (phone) => { if (phone) window.location.href = `tel:${phone}`; };
 
 async function sendDailySummary() {
-  const [visits, invoices, tasks, feedback] = await Promise.all([
-    VW_DB.all(VW_DB.STORES.visits),
-    VW_DB.all(VW_DB.STORES.invoices),
-    VW_DB.all(VW_DB.STORES.tasks),
-    VW_DB.all(VW_DB.STORES.feedback)
-  ]);
+  const visits   = await VW_DB.all(VW_DB.STORES.visits).catch(() => []);
+  const invoices = await VW_DB.all(VW_DB.STORES.invoices).catch(() => []);
+  const tasks    = await VW_DB.all(VW_DB.STORES.tasks).catch(() => []);
+  const feedback = await VW_DB.all(VW_DB.STORES.feedback).catch(() => []);
   const today = new Date().toDateString();
   const todayInvoices = invoices.filter(i => new Date(i.date).toDateString() === today);
   const todayVisits = visits.filter(v => new Date(v.date).toDateString() === today);
