@@ -8146,6 +8146,8 @@ async function renderShopPage() {
           </div>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
+          <button onclick="VW_SHOP.openBarcodeScanner()" style="background:none;border:none;cursor:pointer;font-size:20px;padding:0" title="Scan barcode">📷</button>
+          <button onclick="navigateTo('tile_visualizer')" style="background:none;border:none;cursor:pointer;font-size:20px;padding:0" title="Room Visualizer">🪟</button>
           <div onclick="VW_SHOP.openCart()" style="position:relative;cursor:pointer">
             <span style="font-size:22px">🛒</span>
             ${Object.keys(_shopCart).length > 0 ? `<span id="shop-cart-count" style="position:absolute;top:-4px;right:-6px;background:#f5c842;color:#000;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">${Object.values(_shopCart).reduce((a,b)=>a+b,0)}</span>` : ''}
@@ -8650,6 +8652,21 @@ async function renderCheckoutPage() {
       </div>
       ${_checkoutState.slot?.id===slot.id?'<span style="color:var(--gold);font-weight:700">✓</span>':''}
     </div>`).join('')}
+  </div>
+
+  <!-- PROMO CODE -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">🎟 Promo Code</div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="promo-code-input" placeholder="Enter code (e.g. WELCOME10)"
+        style="flex:1;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:13px;text-transform:uppercase"
+        oninput="this.value=this.value.toUpperCase()">
+      <button onclick="VW_SHOP.applyPromoCode()"
+        style="padding:10px 16px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+        Apply
+      </button>
+    </div>
+    <div id="promo-result" style="font-size:12px;margin-top:6px"></div>
   </div>
 
   <!-- PAYMENT METHOD -->
@@ -10255,3 +10272,223 @@ async function renderPriceHistoryForCustomer(customerId) {
 
 window.VW_TILES = window.VW_TILES || {};
 window.VW_TILES.renderPriceHistoryForCustomer = renderPriceHistoryForCustomer;
+
+// ═══════════════════════════════════════════════════════════════
+// BARCODE / QR SCANNER — Product lookup via camera
+// ═══════════════════════════════════════════════════════════════
+
+async function openBarcodeScanner(onResult) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>📷 Scan Product Barcode</h3>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Point camera at product barcode or QR code</p>
+
+  <div id="barcode-scanner-area" style="background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3;position:relative;margin-bottom:14px">
+    <video id="barcode-video" style="width:100%;height:100%;object-fit:cover" autoplay playsinline muted></video>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:200px;height:100px;border:2px solid var(--gold);border-radius:8px;pointer-events:none">
+      <div style="position:absolute;top:-1px;left:-1px;width:20px;height:20px;border-top:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:2px 0 0 0"></div>
+      <div style="position:absolute;top:-1px;right:-1px;width:20px;height:20px;border-top:3px solid var(--gold);border-right:3px solid var(--gold);border-radius:0 2px 0 0"></div>
+      <div style="position:absolute;bottom:-1px;left:-1px;width:20px;height:20px;border-bottom:3px solid var(--gold);border-left:3px solid var(--gold);border-radius:0 0 0 2px"></div>
+      <div style="position:absolute;bottom:-1px;right:-1px;width:20px;height:20px;border-bottom:3px solid var(--gold);border-right:3px solid var(--gold);border-radius:0 0 2px 0"></div>
+    </div>
+    <div style="position:absolute;bottom:12px;width:100%;text-align:center;color:rgba(255,255,255,0.7);font-size:11px">Hold barcode within frame</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div class="form-group" style="margin:0">
+      <label>Or enter barcode manually</label>
+      <input type="text" id="manual-barcode" placeholder="Barcode number" inputmode="numeric"
+        oninput="VW_SHOP.lookupBarcode(this.value,true)">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label>Or search by name</label>
+      <input type="text" id="manual-name-search" placeholder="Product name"
+        oninput="VW_SHOP.quickProductSearch(this.value)">
+    </div>
+  </div>
+
+  <div id="barcode-result" style="min-height:60px"></div>
+
+  <button onclick="VW_SHOP.stopScanner();closeSheet()" style="width:100%;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer;margin-top:8px">
+    Close Scanner
+  </button>`;
+
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  // Store callback
+  window._barcodeCallback = onResult || null;
+
+  // Start camera + BarcodeDetector if available
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.getElementById('barcode-video');
+    if (video) {
+      video.srcObject = stream;
+      window._scannerStream = stream;
+    }
+
+    if ('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e'] });
+      const scanLoop = async () => {
+        if (!document.getElementById('barcode-video')) return; // sheet closed
+        try {
+          const barcodes = await detector.detect(video);
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue;
+            VW_SHOP.lookupBarcode(code, false);
+            return; // stop loop after first detect
+          }
+        } catch(e) {}
+        setTimeout(scanLoop, 300);
+      };
+      video.addEventListener('loadedmetadata', scanLoop);
+    } else {
+      document.getElementById('barcode-scanner-area').insertAdjacentHTML('beforeend',
+        '<div style="position:absolute;bottom:40px;width:100%;text-align:center;color:var(--gold);font-size:11px;font-weight:700">Camera scan not supported on this browser — enter barcode manually</div>'
+      );
+    }
+  } catch(e) {
+    document.getElementById('barcode-scanner-area').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:13px;padding:20px;text-align:center">Camera access denied.<br>Enter barcode manually below.</div>';
+  }
+}
+
+function stopScanner() {
+  const stream = window._scannerStream;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); window._scannerStream = null; }
+}
+
+async function lookupBarcode(code, isManual) {
+  if (!code || code.length < 4) return;
+  const resultEl = document.getElementById('barcode-result');
+  if (resultEl) resultEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:8px">Searching...</div>';
+
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,category,price,vwp,mrp,unit,stock')
+    .or(`barcode.eq.${code},model.ilike.%${code}%`)
+    .limit(3);
+
+  if (!products?.length) {
+    if (resultEl) resultEl.innerHTML = `<div style="font-size:12px;color:var(--red);padding:8px">No product found for "${code}"</div>`;
+    return;
+  }
+
+  if (isManual && products.length === 1) {
+    // Auto-stop camera and select
+    stopScanner();
+  }
+
+  renderBarcodeResults(products);
+}
+
+async function quickProductSearch(name) {
+  if (!name || name.length < 2) return;
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,category,price,vwp,mrp,unit,stock')
+    .ilike('name', `%${name}%`)
+    .limit(5);
+  renderBarcodeResults(products);
+}
+
+function renderBarcodeResults(products) {
+  const resultEl = document.getElementById('barcode-result');
+  if (!resultEl || !products?.length) return;
+
+  resultEl.innerHTML = products.map(p => {
+    const price = p.vwp || p.price || 0;
+    return `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer"
+      onclick="VW_SHOP.selectScannedProduct(${p.id},'${p.name.replace(/'/g,"\\'")}',${price})">
+      <div>
+        <div style="font-size:13px;font-weight:700">${p.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${p.brand||''} · ${p.category} · Stock: ${p.stock||0}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:900;color:var(--gold)">₹${price.toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--text3)">${p.unit||'pc'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectScannedProduct(id, name, price) {
+  stopScanner();
+  if (window._barcodeCallback) {
+    window._barcodeCallback({ id, name, price });
+  } else {
+    // Default: add to shop cart
+    addToCart(id);
+    showToast(`${name} added to cart`, 'success');
+  }
+  closeSheet();
+}
+
+window.VW_SHOP.openBarcodeScanner = openBarcodeScanner;
+window.VW_SHOP.stopScanner = stopScanner;
+window.VW_SHOP.lookupBarcode = lookupBarcode;
+window.VW_SHOP.quickProductSearch = quickProductSearch;
+window.VW_SHOP.selectScannedProduct = selectScannedProduct;
+
+// ═══════════════════════════════════════════════════════════════
+// PROMO CODE VALIDATION
+// ═══════════════════════════════════════════════════════════════
+
+async function applyPromoCode() {
+  const code = document.getElementById('promo-code-input')?.value?.trim().toUpperCase();
+  const resultEl = document.getElementById('promo-result');
+  if (!code) return;
+  if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Checking...</span>';
+
+  const { data: promo } = await VW_DB.client.from('promo_codes')
+    .select('*').eq('code', code).eq('is_active', true).single().catch(() => ({ data: null }));
+
+  if (!promo) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ Invalid or expired code</span>';
+    return;
+  }
+
+  const now = new Date();
+  if (promo.valid_until && new Date(promo.valid_until) < now) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ This code has expired</span>';
+    return;
+  }
+  if (promo.usage_limit && promo.used_count >= promo.usage_limit) {
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ This code has reached its usage limit</span>';
+    return;
+  }
+
+  const subtotal = _checkoutState.subtotal || 0;
+  if (promo.min_order_value && subtotal < promo.min_order_value) {
+    if (resultEl) resultEl.innerHTML = `<span style="color:var(--red)">❌ Minimum order ₹${promo.min_order_value.toLocaleString('en-IN')} required</span>`;
+    return;
+  }
+
+  // Calculate discount
+  let discount = promo.discount_type === 'percent'
+    ? Math.round(subtotal * promo.discount_value / 100)
+    : promo.discount_value;
+
+  if (promo.max_discount_amount) discount = Math.min(discount, promo.max_discount_amount);
+
+  _checkoutState.promoCode = code;
+  _checkoutState.promoDiscount = discount;
+  _checkoutState.promoDescription = promo.description;
+
+  if (resultEl) resultEl.innerHTML = `<span style="color:var(--green)">✅ ${promo.description} — ₹${discount.toLocaleString('en-IN')} off applied!</span>`;
+
+  // Refresh total display
+  const totalEl = document.querySelector('[onclick="VW_SHOP.placeOrder()"]');
+  const total = subtotal - discount;
+  if (totalEl) {
+    totalEl.textContent = `✅ Place Order · ₹${total.toLocaleString('en-IN')}`;
+    _checkoutState.total = total;
+  }
+  showToast(`₹${discount.toLocaleString('en-IN')} discount applied! 🎉`, 'success');
+}
+
+window.VW_SHOP.applyPromoCode = applyPromoCode;
+
+// Add scanner button to shop header
+window.VW_SHOP.openBarcodeScanner = openBarcodeScanner;

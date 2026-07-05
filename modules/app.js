@@ -233,7 +233,7 @@ async function navigateToFresh(page, params, cacheKey) {
   else if (page === 'contractor_shop') html = await VW_SHOP.renderContractorShopPage();
   else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
   else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
-  else if (page === 'tile_visualizer') html = typeof renderRoomVisualizerPage === 'function' ? await renderRoomVisualizerPage() : '<div class="module-header"><h2>Room Visualizer</h2></div><p class="empty-msg">Loading...</p>';
+  else if (page === 'tile_visualizer') html = typeof VW_VIS !== 'undefined' ? VW_VIS.renderVisualizerPage() : '<div class="module-header"><h2>Room Visualizer</h2></div><p class="empty-msg">Loading...</p>';
   else if (page === 'catalog') html = typeof VW_INVENTORY?.renderInventory === 'function' ? await VW_INVENTORY.renderInventory() : '<div class="module-header"><h2>Catalogue</h2></div>';
   else if (page === 'my_addresses') html = await VW_SHOP.renderMyAddressesPage();
   else if (page === 'track_order') html = await VW_SHOP.renderOrderTrackingPage(params?.id);
