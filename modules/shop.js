@@ -916,8 +916,9 @@ let _shopCategory = null;
 let _shopSearch = '';
 
 async function renderShopPage() {
-  // Load cart from Supabase if logged in
   const prof = VW_AUTH.getCurrentProfile();
+  const isGuest = !prof;
+
   if (prof?.id) {
     const { data: cart } = await VW_DB.client.from('carts')
       .select('items').eq('profile_id', prof.id).single().catch(() => ({ data: null }));
@@ -927,41 +928,53 @@ async function renderShopPage() {
     }
   }
 
+  const cartCount = Object.values(_shopCart).reduce((a,b)=>a+b,0);
+
   return `
   <div id="shop-root">
-    <!-- HERO STRIP -->
-    <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);padding:14px 16px;margin:-12px -12px 0">
+    <!-- DARK HEADER — HomeRun style -->
+    <div style="background:linear-gradient(180deg,#0d1117 0%,#161b22 100%);padding:10px 16px 12px;margin:-12px -12px 0">
+
+      <!-- ROW 1: Location + Actions -->
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.6)">📍 Delivering to</div>
-          <div style="font-size:13px;font-weight:700;color:#fff" onclick="VW_SHOP.selectDeliveryAddress()">
-            Vijayawada <span style="color:#f5c842">▾</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:32px;height:32px;background:rgba(245,200,66,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px">📍</div>
+          <div>
+            <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Delivering to</div>
+            <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.2">Vijayawada <span style="color:#f5c842;font-size:10px">▾</span></div>
           </div>
         </div>
-        <div style="display:flex;gap:10px;align-items:center">
-          <button onclick="VW_SHOP.openBarcodeScanner()" style="background:none;border:none;cursor:pointer;font-size:20px;padding:0" title="Scan barcode">📷</button>
-          <button onclick="navigateTo('tile_visualizer')" style="background:none;border:none;cursor:pointer;font-size:20px;padding:0" title="Room Visualizer">🪟</button>
-          <div onclick="VW_SHOP.openCart()" style="position:relative;cursor:pointer">
-            <span style="font-size:22px">🛒</span>
-            ${Object.keys(_shopCart).length > 0 ? `<span id="shop-cart-count" style="position:absolute;top:-4px;right:-6px;background:#f5c842;color:#000;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">${Object.values(_shopCart).reduce((a,b)=>a+b,0)}</span>` : ''}
-          </div>
+
+        <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="VW_SHOP.openBarcodeScanner()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:15px;padding:6px 8px;line-height:1">📷</button>
+          <button onclick="navigateTo('tile_visualizer')" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:15px;padding:6px 8px;line-height:1">🪟</button>
+          ${isGuest ? `
+          <button onclick="VW_AUTH.showAuthScreen()" style="background:#f5c842;border:none;border-radius:20px;cursor:pointer;padding:7px 16px;font-size:12px;font-weight:800;color:#000;letter-spacing:.02em">
+            Login
+          </button>` : `
+          <div onclick="VW_SHOP.openCart()" style="position:relative;cursor:pointer;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px">
+            <span style="font-size:18px">🛒</span>
+            ${cartCount > 0 ? `<span style="position:absolute;top:-5px;right:-5px;background:#f5c842;color:#000;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">${cartCount}</span>` : ''}
+          </div>`}
         </div>
       </div>
-      <!-- SEARCH -->
-      <div style="display:flex;gap:8px;align-items:center;background:rgba(255,255,255,0.1);border-radius:10px;padding:8px 12px">
-        <span style="font-size:16px;opacity:0.7">🔍</span>
-        <input type="text" id="shop-search-input" placeholder="Search tiles, pipes, switches..."
+
+      <!-- ROW 2: SEARCH -->
+      <div style="display:flex;align-items:center;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px 14px;gap:8px">
+        <span style="font-size:15px;opacity:0.4">🔍</span>
+        <input type="text" id="shop-search-input"
+          placeholder="Search tiles, sanitaryware, paints, tools..."
           value="${_shopSearch}"
           oninput="VW_SHOP.shopSearch(this.value)"
-          style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:13px;placeholder-color:rgba(255,255,255,0.5)">
-        ${_shopSearch ? `<button onclick="VW_SHOP.shopSearch('')" style="background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:16px">✕</button>` : ''}
+          style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:13px;min-width:0">
+        ${_shopSearch ? `<button onclick="VW_SHOP.shopSearch('')" style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:15px;padding:0">✕</button>` : ''}
       </div>
     </div>
 
-    <!-- DELIVERY PROMISE -->
-    <div style="display:flex;gap:0;background:#f5c842;overflow:hidden">
-      ${['⚡ 90-min delivery','🏪 Free pickup','💳 Pay by Wallet','🔄 Easy returns'].map(t =>
-        `<div style="flex:1;padding:6px 4px;text-align:center;font-size:9px;font-weight:800;color:#000;border-right:1px solid rgba(0,0,0,0.1)">${t}</div>`
+    <!-- DELIVERY PROMISE STRIP -->
+    <div style="display:flex;background:#f5c842;overflow:hidden">
+      ${['⚡ 90-min delivery','🏪 Free pickup','💳 Wallet pay','🔄 Easy returns'].map(t =>
+        `<div style="flex:1;padding:5px 2px;text-align:center;font-size:9px;font-weight:800;color:#000;border-right:1px solid rgba(0,0,0,0.1)">${t}</div>`
       ).join('')}
     </div>
 
@@ -1150,6 +1163,27 @@ function shopSearch(val) {
 }
 
 async function openCart() {
+  // Guest login gate — show login prompt before cart
+  const prof = VW_AUTH.getCurrentProfile();
+  if (!prof) {
+    const sheet = document.getElementById('bottom-sheet');
+    sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:16px 0">
+      <div style="font-size:48px;margin-bottom:12px">🔒</div>
+      <h3 style="margin-bottom:6px">Login to view cart</h3>
+      <p style="font-size:13px;color:var(--text3);margin-bottom:20px">Create a free account to place orders, track deliveries, and earn loyalty points</p>
+      <button onclick="closeSheet();VW_AUTH.showAuthScreen()"
+        style="width:100%;padding:13px;border-radius:12px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+        Login / Sign Up — Free
+      </button>
+      <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:none;border:1px solid var(--border);color:var(--text2);cursor:pointer">Continue browsing</button>
+    </div>`;
+    sheet.classList.add('open');
+    document.getElementById('sheet-overlay').classList.add('open');
+    return;
+  }
+
   const productIds = Object.keys(_shopCart).map(Number);
   if (!productIds.length) { showToast('Your cart is empty', 'info'); return; }
 

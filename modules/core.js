@@ -1108,9 +1108,10 @@ async function onAuthReady() {
   const overlay = document.getElementById('identity-overlay');
   if (overlay) overlay.remove();
 
+  // If no profile — show shop publicly (HomeRun style)
+  // Login only required at checkout or for staff features
   if (!currentProfile) {
-    await showAuthScreen();
-    return false;
+    return true; // allow app to load, shop is public
   }
 
   const role = currentProfile.role;

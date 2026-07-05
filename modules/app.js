@@ -46,6 +46,16 @@ function applyRolePermissions() {
   const allowed = VW_AUTH.getAllowedPages();
   const nav = document.getElementById('bottom-nav');
 
+  // GUEST — no profile, show minimal browse nav
+  if (!role) {
+    if (nav) nav.innerHTML = `
+      <button class="nav-btn active" data-page="shop" onclick="navigateTo('shop')"><span class="nav-icon">🏠</span><span>Home</span></button>
+      <button class="nav-btn" data-page="shop" onclick="navigateTo('shop')"><span class="nav-icon">🛒</span><span>Shop</span></button>
+      <button class="nav-btn" data-page="offers" onclick="navigateTo('offers')"><span class="nav-icon">🎁</span><span>Offers</span></button>
+      <button class="nav-btn" onclick="VW_AUTH.showAuthScreen()"><span class="nav-icon">👤</span><span>Login</span></button>`;
+    return;
+  }
+
   // Customer gets a different bottom nav
   if (role === 'customer') {
     if (nav) nav.innerHTML = `
@@ -1880,7 +1890,7 @@ async function init() {
 
   // Route to correct home based on role
   const _initRole = VW_AUTH.getRole?.();
-  if (_initRole === 'customer') {
+  if (!_initRole || _initRole === 'customer') {
     await navigateTo('shop');
   } else if (_initRole === 'contractor') {
     await navigateTo('labor_requests');
