@@ -7095,3 +7095,139 @@ const _QQ_ROOMS = [
 
 window._qqData = null;
 
+
+// ═══════════════════════════════════════════════════════════════
+// QUICK APPROVE — Swipe-style rapid approval for management
+// ═══════════════════════════════════════════════════════════════
+
+async function renderQuickApprovalPage() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const role = prof?.role || '';
+
+  if (!['admin','management','store_manager'].includes(role)) {
+    return '<div class="empty-msg">Quick approval is for management only</div>';
+  }
+
+  const { data: pending } = await VW_DB.client
+    .from('tile_quotations')
+    .select('id,tq_no,customer_name,customer_phone,site_address,total_area_sqft,rooms,approval_status,created_by,created_at,grand_total')
+    .eq('approval_status', 'pending_approval')
+    .order('created_at', { ascending: true })
+    .limit(20);
+
+  if (!pending?.length) {
+    return `
+    <div class="module-header"><h2>✅ Quick Approve</h2></div>
+    <div style="text-align:center;padding:40px">
+      <div style="font-size:48px">🎉</div>
+      <div style="font-size:16px;font-weight:700;margin-top:12px">All caught up!</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:4px">No pending TQs to approve</div>
+    </div>`;
+  }
+
+  return `
+  <div class="module-header">
+    <h2>⚡ Quick Approve</h2>
+    <span style="background:var(--red);color:#fff;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700">${pending.length} pending</span>
+  </div>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Set price and approve. One tap per TQ.</p>
+
+  ${pending.map((q, idx) => {
+    const sqft = parseFloat(q.total_area_sqft || 0);
+    const rooms = (q.rooms || []).length;
+    const daysSince = Math.floor((Date.now() - new Date(q.created_at)) / 86400000);
+
+    return `
+    <div style="background:var(--bg2);border-radius:14px;padding:14px;margin-bottom:12px;border:1px solid ${daysSince > 3 ? 'rgba(239,68,68,0.3)' : 'var(--border)'}">
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:15px;font-weight:800">${q.customer_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${q.created_by||'—'}</div>
+          ${q.site_address ? `<div style="font-size:11px;color:var(--text2)">${q.site_address}</div>` : ''}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;color:${daysSince > 3 ? 'var(--red)' : 'var(--text3)'}">${daysSince}d ago</div>
+          <div style="font-size:13px;font-weight:700;color:var(--gold)">${sqft.toFixed(0)} sqft</div>
+          ${rooms > 0 ? `<div style="font-size:10px;color:var(--text3)">${rooms} room${rooms>1?'s':''}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- PRICE INPUT -->
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px">
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">PRICE / SQFT (₹) *</label>
+          <input type="number" id="qa-price-${q.id}" placeholder="e.g. 55"
+            step="0.5" min="1"
+            oninput="document.getElementById('qa-total-${q.id}').textContent = this.value ? '₹' + Math.round(${sqft} * parseFloat(this.value)).toLocaleString('en-IN') : '—'"
+            style="width:100%;padding:10px;background:var(--bg3);border:1.5px solid var(--gold-border);border-radius:8px;font-size:16px;font-weight:800;color:var(--gold);text-align:center;box-sizing:border-box">
+        </div>
+        <div style="flex:1;text-align:center;padding:10px;background:var(--bg3);border-radius:8px">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">TOTAL</div>
+          <div id="qa-total-${q.id}" style="font-size:15px;font-weight:800;color:var(--gold)">—</div>
+        </div>
+      </div>
+
+      <!-- ACTIONS -->
+      <div style="display:flex;gap:8px">
+        <button onclick="VW_TILES.quickApprove(${q.id},'${q.tq_no}',${sqft})"
+          style="flex:3;padding:12px;border-radius:10px;background:var(--green);border:none;color:#fff;font-size:13px;font-weight:800;cursor:pointer">
+          ✅ Approve
+        </button>
+        <a href="tel:${q.customer_phone}"
+          style="flex:1;padding:12px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);font-size:13px;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center">
+          📞
+        </a>
+        <button onclick="VW_TILES.quickReject(${q.id})"
+          style="flex:1;padding:12px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:13px;cursor:pointer">
+          ✗
+        </button>
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+async function quickApprove(quoteId, tqNo, sqft) {
+  const priceInput = document.getElementById(`qa-price-${quoteId}`);
+  const price = parseFloat(priceInput?.value);
+
+  if (!price || price <= 0) {
+    showToast('Enter price per sqft first', 'warn');
+    priceInput?.focus();
+    return;
+  }
+
+  const grandTotal = Math.round(sqft * price);
+  const prof = VW_AUTH.getCurrentProfile();
+
+  try {
+    await VW_ESCALATION.approveTileQuoteStep(
+      quoteId, price, null, 'Quick approved', { pricePerSqft: price }, {}
+    );
+    showToast(`${tqNo} approved ✅ — ₹${grandTotal.toLocaleString('en-IN')}`, 'success');
+
+    // Remove this card from the page
+    const card = priceInput?.closest('[style*="border-radius:14px"]');
+    if (card) {
+      card.style.transition = 'opacity 0.3s, transform 0.3s';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(100px)';
+      setTimeout(() => card.remove(), 300);
+    }
+  } catch(e) {
+    showToast('Approval failed: ' + e.message, 'error');
+  }
+}
+
+async function quickReject(quoteId) {
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  await VW_TILES.tqReject?.() || await VW_DB.client.from('tile_quotations')
+    .update({ approval_status: 'rejected', rejection_reason: reason }).eq('id', quoteId);
+  showToast('TQ rejected', 'warn');
+  navigateTo('quick_approve');
+}
+
+window.VW_TILES.renderQuickApprovalPage = renderQuickApprovalPage;
+window.VW_TILES.quickApprove = quickApprove;
+window.VW_TILES.quickReject = quickReject;

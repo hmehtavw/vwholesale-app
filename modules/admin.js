@@ -24,6 +24,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-labor" onclick="VW_SETTINGS.switchSettingsTab('labor',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Labor</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-promos" onclick="VW_SETTINGS.switchSettingsTab('promos',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🎟</span>Promos</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-contractor_pricing" onclick="VW_SETTINGS.switchSettingsTab('contractor_pricing',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>B2B Pricing</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-dev" onclick="VW_SETTINGS.switchSettingsTab('dev',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🛠</span>Dev</button>` : ''}
   </div>
 
   <div id="settings-tab-content">
@@ -49,6 +50,18 @@ async function switchSettingsTab(tab, btn) {
     case 'labor':       container.innerHTML = await renderLaborSettings(); break;
     case 'promos':      container.innerHTML = await renderPromoSettings(); break;
     case 'contractor_pricing': container.innerHTML = await VW_SHOP.renderContractorPricingSettings(); break;
+    case 'dev': container.innerHTML = `
+      <div style="font-size:12px;font-weight:700;margin-bottom:12px">🛠 Developer Tools</div>
+      <button onclick="createTestCustomerAccount()" style="width:100%;padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;cursor:pointer;font-size:13px">
+        👤 Create Test Customer Account
+      </button>
+      <button onclick="VW_AUTOTEST.runAll()" style="width:100%;padding:10px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);margin-bottom:8px;cursor:pointer;font-size:13px">
+        🧪 Run Autotests
+      </button>
+      <button onclick="if(confirm('Clear all service worker caches?')) caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))).then(()=>location.reload())" style="width:100%;padding:10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);color:var(--red);cursor:pointer;font-size:13px">
+        🗑 Clear Cache & Reload
+      </button>
+    `; break;
   }
 }
 
@@ -4439,3 +4452,52 @@ window.recordVendorPayment = recordVendorPayment;
 window.renderSalesTargetsPage = renderSalesTargetsPage;
 window.VW_ADMIN = window.VW_ADMIN || {};
 window.VW_ADMIN.editSalesTargets = editSalesTargets;
+
+// ═══════════════════════════════════════════════════════════════
+// TEST CUSTOMER ACCOUNT — Create test account for B2C flow testing
+// ═══════════════════════════════════════════════════════════════
+
+async function createTestCustomerAccount() {
+  const phone = prompt('Phone number for test customer account (10 digits):');
+  if (!phone || phone.length < 10) { showToast('Valid phone number required', 'warn'); return; }
+
+  const name = prompt('Customer name:') || 'Test Customer';
+
+  // Check if profile exists
+  const { data: existing } = await VW_DB.client.from('profiles')
+    .select('id,role,name').eq('phone', phone).single().catch(() => ({ data: null }));
+
+  if (existing) {
+    if (existing.role === 'customer') {
+      showToast(`Profile already exists: ${existing.name} (customer)`, 'info');
+      return;
+    }
+    // Update role to customer
+    await VW_DB.client.from('profiles').update({ role: 'customer', name }).eq('phone', phone);
+    showToast(`${name} set as customer role ✅`, 'success');
+    return;
+  }
+
+  // Create new profile
+  const { data: newProf, error } = await VW_DB.client.from('profiles').insert({
+    phone,
+    name,
+    role: 'customer',
+    status: 'approved',
+    created_at: new Date().toISOString(),
+  }).select('id').single();
+
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+
+  // Create wallet
+  await VW_DB.client.from('customer_wallets').insert({
+    profile_id: newProf.id,
+    balance: 500,
+    currency: 'INR',
+  }).catch(() => {});
+
+  showToast(`Test customer created: ${name} (${phone}) with ₹500 wallet ✅`, 'success');
+  showToast('Log in with this phone number to test the customer app', 'info');
+}
+
+window.createTestCustomerAccount = createTestCustomerAccount;

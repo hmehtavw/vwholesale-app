@@ -227,6 +227,7 @@ async function navigateToFresh(page, params, cacheKey) {
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
   else if (page === 'bulk_photos') html = await VW_INVENTORY.renderBulkPhotoUploadPage();
   else if (page === 'follow_ups') html = await renderFollowUpDashboard();
+  else if (page === 'quick_approve') html = await VW_TILES.renderQuickApprovalPage();
   else if (page === 'daily_report') html = await renderDailyReportPage();
   else if (page === 'stock_valuation') html = await renderStockValuationReport();
   else if (page === 'vendor_payments') html = await renderVendorPaymentsPage();
@@ -803,7 +804,7 @@ async function renderDashboard() {
         <div class="card" style="border-left:4px solid var(--gold);margin-bottom:12px">
           <div class="card-header-row">
             <h3 class="card-title">⏳ ${pendingTQs.length} TQ${pendingTQs.length>1?'s':''} Awaiting Approval</h3>
-            <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('tile_quotes')">Review All</button>
+            <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('quick_approve')">⚡ Quick Approve</button>
           </div>
           ${totalPipeline > 0 ? `<div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">Pipeline: ₹${totalPipeline.toLocaleString('en-IN')}</div>` : ''}
           ${pendingTQs.slice(0,3).map(q => `
@@ -1465,19 +1466,26 @@ document.addEventListener('click', (e) => {
 
 async function refreshNotifBadge() {
   const count = await VW_NOTIFY.getUnreadNotificationCount();
+  const role  = VW_AUTH.getRole?.();
+
+  // For management/admin, also count pending TQs
+  let extra = 0;
+  if (role === 'admin' || role === 'management') {
+    const { count: pendingTQs } = await VW_DB.client
+      .from('tile_quotations')
+      .select('id', { count: 'exact', head: true })
+      .eq('approval_status', 'pending_approval')
+      .catch(() => ({ count: 0 }));
+    extra = pendingTQs || 0;
+  }
+
+  const total = (count || 0) + extra;
   const badge = document.getElementById('notif-badge');
-  if (!badge) return;
-  const prevCount = parseInt(badge.dataset.lastCount || '0');
-  badge.dataset.lastCount = count;
-  if (count > 0) {
-    badge.textContent = count;
-    badge.style.display = 'flex';
-    // Play sound if new notifications arrived and loud mode is on
-    if (count > prevCount && window._loudNotifEnabled) {
-      playNotificationAlert();
-    }
-  } else {
-    badge.style.display = 'none';
+  if (badge) {
+    badge.textContent = total > 0 ? (total > 99 ? '99+' : total) : '';
+    badge.style.display = total > 0 ? 'flex' : 'none';
+    if (extra > 0) badge.style.background = 'var(--red)'; // red when TQs pending
+    else badge.style.background = '';
   }
 }
 window.refreshNotifBadge = refreshNotifBadge;
