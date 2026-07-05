@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <title>V Wholesale Shop — Tiles, Sanitaryware & More | Vijayawada</title>
+  <meta name="description" content="Buy tiles, sanitaryware, plumbing, electricals and home building materials online. 60-min delivery in Vijayawada.">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fff;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    #shop-header {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .hr-topbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+    }
+    .hr-60 {
+      background: #2a7a3b; color: #fff;
+      font-size: 10px; font-weight: 900;
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      line-height: 1.1; flex-shrink: 0;
+    }
+    .hr-60 span:first-child { font-size: 16px; }
+    .hr-loc { flex: 1; }
+    .hr-loc .lbl { font-size: 11px; color: #666; }
+    .hr-loc .city { font-size: 13px; font-weight: 800; color: #1a1a1a; }
+    .hr-logo {
+      font-size: 18px; font-weight: 900; color: #f5c842;
+      background: #1a1a1a; padding: 4px 10px;
+      border-radius: 8px; letter-spacing: -1px;
+    }
+    .hr-actions { display: flex; gap: 6px; align-items: center; }
+    .hr-btn {
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; padding: 0; position: relative;
+    }
+    .hr-login-btn {
+      background: #f5c842; border: none; border-radius: 20px;
+      padding: 7px 14px; font-size: 12px; font-weight: 800;
+      color: #000; cursor: pointer;
+    }
+    .cart-badge {
+      position: absolute; top: -5px; right: -5px;
+      background: #2a7a3b; color: #fff;
+      border-radius: 50%; width: 17px; height: 17px;
+      font-size: 9px; font-weight: 900;
+      display: none; align-items: center; justify-content: center;
+    }
+    .hr-search-wrap { padding: 0 14px 12px; }
+    .hr-search-inner {
+      display: flex; align-items: center; gap: 8px;
+      background: #f3f4f6; border-radius: 12px;
+      padding: 10px 14px;
+    }
+    .hr-search-inner input {
+      flex: 1; background: none; border: none; outline: none;
+      font-size: 14px; color: #1a1a1a;
+    }
+
+    /* ── TRUST STRIP ── */
+    .trust-strip {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      background: #e8f5e9;
+      border-top: 1px solid #c8e6c9;
+      border-bottom: 1px solid #c8e6c9;
+    }
+    .trust-item {
+      padding: 7px 4px; text-align: center;
+      border-right: 1px solid #c8e6c9;
+    }
+    .trust-item:last-child { border-right: none; }
+    .trust-item .ti { font-size: 18px; }
+    .trust-item .tt { font-size: 9px; font-weight: 800; color: #2a7a3b; display: block; }
+    .trust-item .ts { font-size: 8px; color: #555; display: block; }
+
+    /* ── HERO BANNER ── */
+    .hero-banner {
+      margin: 10px 12px;
+      background: linear-gradient(135deg, #fff3cd, #ffe082);
+      border-radius: 14px; overflow: hidden;
+      border: 1px solid #f5c842; cursor: pointer;
+    }
+    .hero-inner {
+      padding: 18px 16px; position: relative;
+      overflow: hidden; min-height: 130px;
+    }
+    .hero-inner::after {
+      content: '⬜';
+      position: absolute; right: -10px; top: -10px;
+      font-size: 90px; opacity: 0.07; line-height: 1;
+    }
+    .hero-eyebrow {
+      font-size: 10px; font-weight: 800; color: #c8972b;
+      text-transform: uppercase; letter-spacing: .05em;
+      margin-bottom: 5px;
+    }
+    .hero-title {
+      font-size: 24px; font-weight: 900; color: #1a1a1a;
+      line-height: 1.1; margin-bottom: 4px;
+    }
+    .hero-sub { font-size: 12px; color: #555; margin-bottom: 14px; }
+    .hero-cta {
+      display: inline-block; background: #2a7a3b; color: #fff;
+      font-size: 12px; font-weight: 800;
+      padding: 8px 20px; border-radius: 20px;
+    }
+
+    /* ── SECTIONS ── */
+    .section { padding: 14px 12px 6px; }
+    .section-hdr {
+      display: flex; justify-content: space-between;
+      align-items: flex-end; margin-bottom: 12px;
+    }
+    .section-title { font-size: 17px; font-weight: 900; }
+    .section-sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .see-all { font-size: 12px; color: #2a7a3b; font-weight: 700; cursor: pointer; }
+
+    /* ── CATEGORY GRID ── */
+    .cat-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 10px; margin-bottom: 10px;
+    }
+    .cat-card {
+      display: flex; flex-direction: column;
+      align-items: center; cursor: pointer;
+    }
+    .cat-img {
+      width: 100%; aspect-ratio: 1;
+      background: #e8f5f0; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px; margin-bottom: 5px;
+      border: 1px solid #ddd;
+    }
+    .cat-name {
+      font-size: 10px; font-weight: 700;
+      text-align: center; line-height: 1.3;
+    }
+
+    /* ── DEALS SCROLL ── */
+    .deals-scroll {
+      display: flex; gap: 10px;
+      overflow-x: auto; padding: 0 12px 14px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .deals-scroll::-webkit-scrollbar { display: none; }
+    .deal-card {
+      flex: 0 0 155px; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 12px;
+      overflow: hidden;
+    }
+    .deal-img {
+      height: 130px; background: #f3f4f6;
+      display: flex; align-items: center;
+      justify-content: center; font-size: 52px;
+      position: relative; overflow: hidden;
+    }
+    .deal-img img { width: 100%; height: 100%; object-fit: cover; }
+    .deal-disc {
+      position: absolute; top: 8px; left: 8px;
+      background: #2a7a3b; color: #fff;
+      font-size: 10px; font-weight: 800;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .deal-assured {
+      position: absolute; bottom: 6px; left: 8px;
+      background: #fff3cd; border: 1px solid #f5c842;
+      font-size: 8px; font-weight: 800; color: #c8972b;
+      padding: 2px 6px; border-radius: 4px;
+    }
+    .deal-body { padding: 8px 10px 10px; }
+    .deal-brand { font-size: 10px; color: #888; font-weight: 600; margin-bottom: 2px; }
+    .deal-name {
+      font-size: 12px; font-weight: 700;
+      line-height: 1.3; margin-bottom: 3px; min-height: 32px;
+    }
+    .deal-replace {
+      font-size: 10px; color: #2a7a3b; font-weight: 700; margin-bottom: 5px;
+    }
+    .deal-price-row {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-top: 6px;
+    }
+    .deal-price { font-size: 15px; font-weight: 900; }
+    .deal-mrp {
+      font-size: 10px; color: #bbb;
+      text-decoration: line-through; margin-left: 4px;
+    }
+    .add-btn {
+      background: #2a7a3b; color: #fff; border: none;
+      border-radius: 8px; padding: 7px 16px;
+      font-size: 13px; font-weight: 800; cursor: pointer;
+    }
+    .qty-ctrl {
+      display: flex; align-items: center;
+      border: 2px solid #2a7a3b; border-radius: 8px; overflow: hidden;
+    }
+    .qty-btn {
+      background: none; border: none; color: #2a7a3b;
+      font-size: 18px; font-weight: 900; cursor: pointer;
+      width: 30px; height: 32px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .qty-num {
+      font-size: 13px; font-weight: 800;
+      min-width: 22px; text-align: center;
+    }
+
+    /* ── TRUST 2 ── */
+    .trust2 {
+      margin: 4px 12px 12px;
+      background: #e8f5e9; border-radius: 14px;
+      padding: 14px;
+      display: grid; grid-template-columns: repeat(4,1fr);
+      gap: 10px;
+    }
+    .trust2-item { text-align: center; }
+    .trust2-icon { font-size: 22px; margin-bottom: 4px; }
+    .trust2-lbl { font-size: 9px; font-weight: 800; color: #2a7a3b; }
+
+    /* ── LOGIN SHEET ── */
+    .sheet-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 200;
+    }
+    .sheet-overlay.open { display: block; }
+    .bottom-sheet {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-radius: 20px 20px 0 0;
+      padding: 8px 20px 30px; z-index: 201;
+      transform: translateY(100%); transition: transform .3s;
+    }
+    .bottom-sheet.open { transform: translateY(0); }
+    .sheet-handle {
+      width: 36px; height: 4px; background: #ddd;
+      border-radius: 20px; margin: 8px auto 16px;
+    }
+
+    /* ── BOTTOM NAV ── */
+    #bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #fff; border-top: 1px solid #eee;
+      display: flex; padding: 8px 0 12px; z-index: 100;
+    }
+    .nav-item {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; gap: 2px;
+      font-size: 9px; color: #999; cursor: pointer;
+    }
+    .nav-item.active { color: #2a7a3b; font-weight: 700; }
+    .nav-icon { font-size: 20px; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed; bottom: 80px; left: 50%;
+      transform: translateX(-50%);
+      background: #1a1a1a; color: #fff;
+      padding: 10px 18px; border-radius: 20px;
+      font-size: 13px; font-weight: 600;
+      opacity: 0; transition: opacity .3s; z-index: 300;
+      white-space: nowrap; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+
+    /* ── CATEGORY PAGE ── */
+    #cat-page { display: none; }
+    #cat-page.open { display: block; }
+    .cat-header {
+      background: #fff; border-bottom: 1px solid #eee;
+      padding: 12px 14px; display: flex;
+      align-items: center; gap: 12px;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .back-btn {
+      background: none; border: none;
+      font-size: 20px; cursor: pointer; color: #333;
+    }
+    .product-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 10px; padding: 12px;
+    }
+    .product-card {
+      background: #fff; border: 1px solid #e5e7eb;
+      border-radius: 12px; overflow: hidden;
+    }
+    .product-img {
+      height: 110px; background: #f3f4f6;
+      display: flex; align-items: center;
+      justify-content: center; font-size: 36px;
+      position: relative; overflow: hidden;
+    }
+    .product-img img { width: 100%; height: 100%; object-fit: cover; }
+    .product-body { padding: 8px; }
+    .product-brand { font-size: 9px; color: #888; font-weight: 600; margin-bottom: 2px; }
+    .product-name { font-size: 11px; font-weight: 700; line-height: 1.3; min-height: 28px; margin-bottom: 5px; }
+    .product-price { font-size: 14px; font-weight: 900; }
+    .product-mrp { font-size: 9px; color: #bbb; text-decoration: line-through; margin-left: 3px; }
+    .product-unit { font-size: 9px; color: #888; }
+
+    #main-page { padding-bottom: 80px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="shop-header">
+  <div class="hr-topbar">
+    <div class="hr-60"><span>60</span><span style="font-size:8px">Mins</span></div>
+    <div class="hr-loc">
+      <div class="lbl">Deliver To</div>
+      <div class="city">📍 Vijayawada ▾</div>
+    </div>
+    <div class="hr-logo">VW</div>
+    <div class="hr-actions">
+      <button class="hr-btn" onclick="openCart()" title="Cart">
+        🛍
+        <span class="cart-badge" id="cart-badge">0</span>
+      </button>
+      <button class="hr-login-btn" onclick="openLoginSheet()">Login</button>
+    </div>
+  </div>
+  <div class="hr-search-wrap">
+    <div class="hr-search-inner">
+      <span style="color:#999;font-size:16px">🔍</span>
+      <input id="search-input" type="text"
+        placeholder="Search for Tiles, Cement, Paints..."
+        oninput="handleSearch(this.value)">
+      <button id="search-clear" onclick="clearSearch()"
+        style="display:none;background:none;border:none;color:#999;cursor:pointer;font-size:16px">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- TRUST STRIP -->
+<div class="trust-strip">
+  <div class="trust-item"><div class="ti">💵</div><span class="tt">Pay on Delivery</span><span class="ts">Pay after verify</span></div>
+  <div class="trust-item"><div class="ti">🔄</div><span class="tt">7 Day Return</span><span class="ts">Quality issue? We replace</span></div>
+  <div class="trust-item"><div class="ti">🏷</div><span class="tt">Best Prices</span><span class="ts">Unbeatable, always</span></div>
+  <div class="trust-item"><div class="ti">🚚</div><span class="tt">10K+ Orders</span><span class="ts">Trusted by Vijayawada</span></div>
+</div>
+
+<!-- MAIN HOME PAGE -->
+<div id="main-page">
+
+  <!-- HERO BANNER -->
+  <div class="hero-banner" onclick="showCategory('Tiles')">
+    <div class="hero-inner">
+      <div class="hero-eyebrow">⚡ Vijayawada's #1 Home Store</div>
+      <div class="hero-title">BULK PRICES<br><span style="color:#c8972b">SLASHED!</span></div>
+      <div class="hero-sub">Tiles · Sanitaryware · Paints · Hardware & More</div>
+      <div class="hero-cta">Shop Now →</div>
+    </div>
+  </div>
+
+  <!-- CATEGORIES -->
+  <div class="section">
+    <div class="section-hdr">
+      <div><div class="section-title">Shop by Category</div></div>
+    </div>
+    <div class="cat-grid" id="cat-grid">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- DEALS -->
+  <div style="padding: 0 0 4px">
+    <div class="section-hdr" style="padding: 0 12px">
+      <div>
+        <div class="section-title">Deals of the Week</div>
+        <div class="section-sub">At our lowest ever price</div>
+      </div>
+      <div class="see-all" onclick="showCategory(null)">View all →</div>
+    </div>
+  </div>
+  <div class="deals-scroll" id="deals-scroll">
+    <div style="padding:20px;color:#888;font-size:13px">Loading...</div>
+  </div>
+
+  <!-- TILES STRIP -->
+  <div style="margin:0 12px 14px;background:linear-gradient(135deg,#1a0f35,#2d1b69);border-radius:14px;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:10px;font-weight:800;color:#A78BFA;text-transform:uppercase;margin-bottom:4px">🏆 Tile Specialist</div>
+        <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:2px">Find Your Perfect Tile</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.5)">600+ designs in stock · All sizes</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <a href="https://hmehtavw.github.io/vwholesale-app/" style="background:#f5c842;color:#000;font-size:10px;font-weight:800;padding:7px 14px;border-radius:8px;text-decoration:none;text-align:center;white-space:nowrap">📐 Get Quote</a>
+        <div onclick="openLoginSheet()" style="background:rgba(255,255,255,0.12);color:#fff;font-size:10px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;text-align:center;white-space:nowrap;border:1px solid rgba(255,255,255,0.2)">🏠 Try Sample</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRUST 2 -->
+  <div class="trust2">
+    <div class="trust2-item"><div class="trust2-icon">⚡</div><div class="trust2-lbl">60-Min Delivery</div></div>
+    <div class="trust2-item"><div class="trust2-icon">✅</div><div class="trust2-lbl">100% Genuine</div></div>
+    <div class="trust2-item"><div class="trust2-icon">💵</div><div class="trust2-lbl">Pay on Delivery</div></div>
+    <div class="trust2-item"><div class="trust2-icon">📦</div><div class="trust2-lbl">No Min Order</div></div>
+  </div>
+
+  <!-- OFFERS BANNER -->
+  <div style="margin:0 12px 20px;background:linear-gradient(135deg,#1a472a,#2a7a3b);border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">🎁 FIRST ORDER OFFER</div>
+      <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:2px">10% OFF — WELCOME10</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.6)">Free delivery on orders above ₹2,000</div>
+    </div>
+    <div onclick="openLoginSheet()" style="background:#f5c842;color:#000;font-size:11px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+      Shop Now
+    </div>
+  </div>
+
+</div><!-- /main-page -->
+
+<!-- CATEGORY PAGE -->
+<div id="cat-page">
+  <div class="cat-header">
+    <button class="back-btn" onclick="closeCategoryPage()">←</button>
+    <div id="cat-icon" style="width:36px;height:36px;background:#e8f5f0;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px"></div>
+    <div id="cat-title" style="font-size:16px;font-weight:900;flex:1"></div>
+    <button class="hr-btn" onclick="openCart()">🛍<span class="cart-badge" id="cat-cart-badge" style="display:none">0</span></button>
+  </div>
+  <div class="product-grid" id="product-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:30px;color:#888">Loading...</div>
+  </div>
+</div>
+
+<!-- CART SHEET -->
+<div class="sheet-overlay" id="sheet-overlay" onclick="closeSheet()"></div>
+<div class="bottom-sheet" id="bottom-sheet"></div>
+
+<!-- BOTTOM NAV -->
+<div id="bottom-nav">
+  <div class="nav-item active" onclick="goHome()"><span class="nav-icon">🏠</span>Home</div>
+  <div class="nav-item" onclick="showCategory(null)"><span class="nav-icon">🛒</span>Shop</div>
+  <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">🎁</span>Offers</div>
+  <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">📦</span>Orders</div>
+  <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">👤</span>Login</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ── CONFIG ──
+const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTM3NTgsImV4cCI6MjA2MDk4OTc1OH0.7P2tTmom7R6CxQrQhMvCFhfUAMMdxnEw2vAX2KDf2G0';
+
+const CATS = [
+  { key:'Tiles',        icon:'⬜', label:'Tiles',         color:'#8B5CF6' },
+  { key:'Sanitary',     icon:'🚿', label:'Sanitary',      color:'#3B82F6' },
+  { key:'Plumbing',     icon:'🔧', label:'Plumbing',      color:'#06B6D4' },
+  { key:'Electricals',  icon:'⚡', label:'Electricals',   color:'#F59E0B' },
+  { key:'Paints',       icon:'🎨', label:'Paints',        color:'#EC4899' },
+  { key:'Hardware',     icon:'🔩', label:'Hardware',      color:'#6B7280' },
+  { key:'Tools',        icon:'🛠', label:'Tools',         color:'#EF4444' },
+  { key:'Appliances',   icon:'📦', label:'Appliances',    color:'#10B981' },
+  { key:'Plywood',      icon:'🪵', label:'Plywood',       color:'#92400E' },
+  { key:'Grout',        icon:'🪨', label:'Grout',         color:'#64748B' },
+  { key:'Adhesive',     icon:'🧲', label:'Adhesive',      color:'#F97316' },
+  { key:'Waterproofing',icon:'💧', label:'Waterproofing', color:'#0EA5E9' },
+];
+
+let cart = {};
+
+// ── SUPABASE FETCH ──
+async function sbFetch(table, params = '') {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  });
+  return r.json();
+}
+
+// ── TOAST ──
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── CART ──
+function updateCartBadge() {
+  const total = Object.values(cart).reduce((a,b) => a+b, 0);
+  ['cart-badge','cat-cart-badge'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = total;
+    el.style.display = total > 0 ? 'flex' : 'none';
+  });
+}
+
+function addToCart(id, name, price) {
+  cart[id] = (cart[id] || 0) + 1;
+  updateCartBadge();
+  toast(name.slice(0,25) + ' added to cart');
+  refreshProductCards();
+}
+
+function removeFromCart(id) {
+  if (cart[id] > 1) cart[id]--;
+  else delete cart[id];
+  updateCartBadge();
+  refreshProductCards();
+}
+
+function openCart() {
+  if (Object.keys(cart).length === 0) { toast('Your cart is empty'); return; }
+  openLoginSheet('cart');
+}
+
+// ── LOGIN SHEET ──
+function openLoginSheet(context) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:8px 0 20px">
+      <div style="font-size:42px;margin-bottom:12px">${context === 'cart' ? '🛒' : '🔒'}</div>
+      <div style="font-size:17px;font-weight:800;margin-bottom:6px">${context === 'cart' ? 'Login to place order' : 'Login to V Wholesale'}</div>
+      <div style="font-size:13px;color:#666;margin-bottom:20px;line-height:1.6">
+        Create a free account to place orders,<br>track delivery and earn loyalty points
+      </div>
+      <a href="https://hmehtavw.github.io/vwholesale-app/" style="display:block;background:#2a7a3b;color:#fff;font-size:14px;font-weight:800;padding:14px;border-radius:12px;text-decoration:none;margin-bottom:10px">
+        Login / Sign Up — Free →
+      </a>
+      <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:#f3f4f6;border:none;font-size:13px;color:#555;cursor:pointer">
+        Continue Browsing
+      </button>
+    </div>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
+}
+
+function closeSheet() {
+  document.getElementById('bottom-sheet').classList.remove('open');
+  document.getElementById('sheet-overlay').classList.remove('open');
+}
+
+// ── SEARCH ──
+let searchTimer;
+function handleSearch(val) {
+  document.getElementById('search-clear').style.display = val ? 'block' : 'none';
+  clearTimeout(searchTimer);
+  if (val.length < 2) return;
+  searchTimer = setTimeout(() => showCategory(null, val), 400);
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  goHome();
+}
+
+// ── CATEGORY GRID ──
+function renderCatGrid() {
+  document.getElementById('cat-grid').innerHTML = CATS.slice(0,12).map(c => `
+    <div class="cat-card" onclick="showCategory('${c.key}')">
+      <div class="cat-img" style="background:${c.color}18;border-color:${c.color}33">${c.icon}</div>
+      <div class="cat-name">${c.label}</div>
+    </div>
+  `).join('') + `
+    <div class="cat-card" onclick="showCategory(null)">
+      <div class="cat-img" style="background:#f3f4f6;border-color:#ddd">+4</div>
+      <div class="cat-name" style="color:#666">More</div>
+    </div>`;
+}
+
+// ── LOAD DEALS ──
+async function loadDeals() {
+  try {
+    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&stock=gt.0&order=mrp.desc&limit=12');
+    if (!Array.isArray(products) || !products.length) {
+      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:#888;font-size:13px">Products coming soon</div>';
+      return;
+    }
+    renderDeals(products);
+  } catch(e) {
+    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:#888;font-size:13px">Unable to load — check connection</div>';
+  }
+}
+
+function productCard(p, style = 'deal') {
+  const price = p.vwp || p.price || 0;
+  const mrp   = p.mrp || 0;
+  const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const qty   = cart[p.id] || 0;
+  const oos   = !p.stock || p.stock <= 0;
+  const photos = Array.isArray(p.photos) ? p.photos : [];
+  const img   = p.images?.[0] || photos[0]?.url || photos[0] || null;
+  const cat   = CATS.find(c => c.key === p.category);
+  const icon  = cat?.icon || '📦';
+  const color = cat?.color || '#6B7280';
+  const safeName = p.name.replace(/'/g, "\\'");
+
+  if (style === 'deal') return `
+    <div class="deal-card">
+      <div class="deal-img" style="background:${img ? '#f3f4f6' : color+'18'}">
+        ${img ? `<img src="${img}" loading="lazy">` : icon}
+        ${disc > 0 ? `<div class="deal-disc">${disc}% OFF</div>` : ''}
+        <div class="deal-assured">⚡ ASSURED</div>
+      </div>
+      <div class="deal-body">
+        ${p.brand ? `<div class="deal-brand">${p.brand}</div>` : ''}
+        <div class="deal-name">${p.name}</div>
+        <div class="deal-replace">⚡ 7 Day Replacement</div>
+        <div class="deal-price-row">
+          <div>
+            <span class="deal-price">₹${price.toLocaleString('en-IN')}</span>
+            ${mrp > price ? `<span class="deal-mrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+          </div>
+          ${oos ? `<span style="font-size:10px;color:#bbb">Out of stock</span>`
+            : qty === 0 ? `<button class="add-btn" onclick="addToCart(${p.id},'${safeName}',${price})">ADD</button>`
+            : `<div class="qty-ctrl">
+                <button class="qty-btn" onclick="removeFromCart(${p.id})">−</button>
+                <span class="qty-num" id="qty-${p.id}">${qty}</span>
+                <button class="qty-btn" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
+               </div>`}
+        </div>
+      </div>
+    </div>`;
+
+  // Grid style
+  return `
+    <div class="product-card">
+      <div class="product-img" style="background:${img ? '#f3f4f6' : color+'18'}">
+        ${img ? `<img src="${img}" loading="lazy">` : icon}
+        ${disc > 0 ? `<div class="deal-disc">${disc}% OFF</div>` : ''}
+      </div>
+      <div class="product-body">
+        ${p.brand ? `<div class="product-brand">${p.brand}</div>` : ''}
+        <div class="product-name">${p.name}</div>
+        <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
+          <span class="product-price">₹${price.toLocaleString('en-IN')}</span>
+          <span class="product-unit">${p.unit||'pc'}</span>
+          ${mrp > price ? `<span class="product-mrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+        </div>
+        ${oos ? `<div style="text-align:center;padding:6px;background:#f3f4f6;border-radius:6px;font-size:10px;color:#888">Out of Stock</div>`
+          : qty === 0
+            ? `<div onclick="addToCart(${p.id},'${safeName}',${price})"
+                style="border:2px solid #2a7a3b;border-radius:8px;padding:7px;text-align:center;font-size:12px;font-weight:800;color:#2a7a3b;cursor:pointer">
+                + Add
+               </div>`
+            : `<div class="qty-ctrl" style="width:100%;justify-content:space-between">
+                <button class="qty-btn" onclick="removeFromCart(${p.id})">−</button>
+                <span class="qty-num" id="qty-${p.id}">${qty}</span>
+                <button class="qty-btn" style="background:#2a7a3b;color:#fff" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
+               </div>`}
+      </div>
+    </div>`;
+}
+
+function renderDeals(products) {
+  document.getElementById('deals-scroll').innerHTML = products.map(p => productCard(p, 'deal')).join('');
+}
+
+function refreshProductCards() {
+  // Refresh qty displays without full reload
+  Object.keys(cart).forEach(id => {
+    const el = document.getElementById('qty-' + id);
+    if (el) el.textContent = cart[id];
+  });
+}
+
+// ── CATEGORY PAGE ──
+async function showCategory(catKey, searchTerm) {
+  document.getElementById('main-page').style.display = 'none';
+  document.getElementById('cat-page').classList.add('open');
+
+  const cat = CATS.find(c => c.key === catKey);
+  document.getElementById('cat-icon').textContent = cat?.icon || '🔍';
+  document.getElementById('cat-icon').style.background = (cat?.color || '#666') + '18';
+  document.getElementById('cat-title').textContent = searchTerm ? `"${searchTerm}"` : (cat?.label || 'All Products');
+
+  const grid = document.getElementById('product-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:#888">Loading...</div>';
+
+  try {
+    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&order=stock.desc&limit=40';
+    if (catKey) url += `&category=eq.${encodeURIComponent(catKey)}`;
+    if (searchTerm) url += `&name=ilike.*${encodeURIComponent(searchTerm)}*`;
+
+    const products = await sbFetch('products', url);
+    if (!Array.isArray(products) || !products.length) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:#888">
+        <div style="font-size:36px;margin-bottom:8px">📦</div>
+        <div style="font-size:14px;font-weight:700">No products found</div>
+        <div style="font-size:12px;margin-top:4px">Call us: 8712697930</div>
+      </div>`;
+      return;
+    }
+    grid.innerHTML = products.map(p => productCard(p, 'grid')).join('');
+  } catch(e) {
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;color:#888;text-align:center">Failed to load. Check your connection.</div>';
+  }
+}
+
+function closeCategoryPage() {
+  document.getElementById('cat-page').classList.remove('open');
+  document.getElementById('main-page').style.display = '';
+}
+
+// ── HOME ──
+function goHome() {
+  closeCategoryPage();
+  clearSearch();
+}
+
+// ── INIT ──
+renderCatGrid();
+loadDeals();
+</script>
+
+</body>
+</html>
