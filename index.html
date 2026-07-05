@@ -8,6 +8,31 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <script>
+    // Redirect guests to shop.html — staff/admin stay on index.html
+    (function() {
+      try {
+        const SUPA_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTM3NTgsImV4cCI6MjA2MDk4OTc1OH0.7P2tTmom7R6CxQrQhMvCFhfUAMMdxnEw2vAX2KDf2G0';
+
+        // Check if a Supabase session exists in localStorage
+        const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+        if (storageKey) {
+          const session = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (session && session.access_token) {
+            // Has a session — stay on index.html (staff app)
+            return;
+          }
+        }
+        // No session — redirect to public shop (unless ?staff=1 override)
+        if (!window.location.pathname.endsWith('shop.html') && !window.location.search.includes('staff=1')) {
+          window.location.replace('./shop.html');
+        }
+      } catch(e) {
+        // Error reading storage — allow normal load
+      }
+    })();
+  </script>
   <meta name="theme-color" content="#060D45">
   <title>V Wholesale</title>
   <link rel="manifest" href="manifest.json">
