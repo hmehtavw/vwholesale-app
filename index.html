@@ -1177,20 +1177,20 @@ File||a instanceof Blob||a instanceof URL||"string"===typeof a){let b=new Image;
 c("Image load error"):b()};a.addEventListener("load",d);a.addEventListener("error",d)})}static async _postWorkerMessage(a,b,c,d){return e._postWorkerMessageSync(await a,b,c,d)}static _postWorkerMessageSync(a,b,c,d){if(!(a instanceof Worker))return-1;let f=e._workerMessageId++;a.postMessage({id:f,type:b,data:c},d);return f}}e.DEFAULT_CANVAS_SIZE=400;e.NO_QR_CODE_FOUND="No QR code found";e._disableBarcodeDetector=!1;e._workerMessageId=0;return e})
 //# sourceMappingURL=qr-scanner.umd.min.js.map
 </script>
-<script src="./modules/core.js?v8"></script>
-<script src="./modules/checkin.js?v8"></script>
-<script src="./modules/billing.js?v8"></script>
-<script src="./modules/people.js?v8"></script>
-<script src="./modules/stock.js?v8"></script>
-<script src="./modules/operations.js?v8"></script>
-<script src="./modules/admin.js?v8"></script>
-<script src="./modules/extras.js?v8"></script>
-<script src="./modules/shop.js?v8"></script>
-<script src="./modules/granite.js?v8"></script>
-<script src="./modules/tile-quotation.js?v8"></script>
-<script src="./modules/quick-quote.js?v8"></script>
-<script src="./modules/autotest.js?v8"></script>
-<script src="./modules/app.js?v8"></script>
+<script src="./modules/core.js"></script>
+<script src="./modules/checkin.js"></script>
+<script src="./modules/billing.js"></script>
+<script src="./modules/people.js"></script>
+<script src="./modules/stock.js"></script>
+<script src="./modules/operations.js"></script>
+<script src="./modules/admin.js"></script>
+<script src="./modules/extras.js"></script>
+<script src="./modules/shop.js"></script>
+<script src="./modules/granite.js"></script>
+<script src="./modules/tile-quotation.js"></script>
+<script src="./modules/quick-quote.js"></script>
+<script src="./modules/autotest.js"></script>
+<script src="./modules/app.js"></script>
   // Tile quotation wizard — all 5 languages
   'Rooms & Areas':{te:'గదులు & ప్రాంతాలు',hi:'कमरे और क्षेत्र',bn:'কক্ষ ও এলাকা',or:'କୋଠରି ଓ କ୍ଷେତ୍ର'},
   'Tile Size':{te:'టైల్ సైజు',hi:'ताइल का आकार',bn:'টাইলের মাপ',or:'ଟାଇଲ ଆକାର'},

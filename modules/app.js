@@ -1893,43 +1893,40 @@ async function init() {
     await navigateTo('dashboard');
   }
   try { _initI18nObserver(); if (_currentLang !== 'en') setTimeout(() => translatePageChrome(document.body), 100); } catch(e) {}
-  try { await refreshNotifBadge(); } catch(e) { console.warn('Notif badge refresh error', e); }
+  try { await refreshNotifBadge(); } catch(e) {}
 
   // Init data protection for non-admin staff
   try { initDataProtection(); } catch(e) {}
-  // Track login event
-  try { trackEvent('action', 'dashboard', 'login', { role: VW_AUTH.getCurrentProfile()?.role }); } catch(e) {}
 
-  // Escalation engine — check every 30 seconds (safety net for missed realtime events)
-  try { await VW_ESCALATION.checkEscalations(); } catch(e) { console.warn('Escalation check error', e); }
-  // Load packing charge rules into memory so billing can auto-calculate them
-  try { window._packingRules = await VW_DB.getSetting('packing_charge_rules', []); } catch(e) { window._packingRules = []; }
+  // Delay heavy background tasks so initial page load is fast
+  setTimeout(async () => {
+    try { window._packingRules = await VW_DB.getSetting('packing_charge_rules', []); } catch(e) { window._packingRules = []; }
+    try { await VW_ESCALATION.checkEscalations(); } catch(e) {}
+  }, 5000); // 5 second delay
+
+  // Realtime refresh — throttled
   setInterval(async () => {
-    try {
-      await VW_ESCALATION.checkEscalations();
-      await refreshCheckinList();
-    } catch(e) { console.warn('Escalation check error', e); }
-  }, 30000);
+    try { await VW_ESCALATION.checkEscalations(); } catch(e) {}
+  }, 60000); // every 60s not 30s
 
-  // Realtime — keep "Today's Activity" list and dashboard fresh without
-  // disturbing any form the user is currently filling in.
-  let refreshTimer = null;
-  const liveRefresh = () => {
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(async () => {
-      // Never re-render if user is on a form or transient state screen
-      if (currentPage === 'tile_quote_submitted') return;
-      if (currentPage === 'tiles') return; // don't interrupt tile quotation wizard
-      if (currentPage === 'dashboard') navigateTo('dashboard');
-      else if (currentPage === 'checkin') await refreshCheckinList();
-      else if (currentPage === 'tasks') navigateTo('tasks');
-    }, 600);
-  };
-  try {
-    VW_DB.subscribeTable(VW_DB.STORES.visits, liveRefresh);
-    VW_DB.subscribeTable(VW_DB.STORES.tasks, liveRefresh);
-    VW_DB.subscribeTable(VW_DB.STORES.executives, liveRefresh);
-  } catch(e) { console.warn('Realtime subscription error', e); }
+  // Realtime subscriptions — staff only, not for guests/customers
+  if (_initRole && !['customer','contractor'].includes(_initRole)) {
+    let refreshTimer = null;
+    const liveRefresh = () => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(async () => {
+        if (currentPage === 'tile_quote_submitted') return;
+        if (currentPage === 'tiles') return;
+        if (currentPage === 'dashboard') navigateTo('dashboard');
+        else if (currentPage === 'checkin') await refreshCheckinList();
+        else if (currentPage === 'tasks') navigateTo('tasks');
+      }, 2000); // longer debounce
+    };
+    try {
+      VW_DB.subscribeTable(VW_DB.STORES.visits, liveRefresh);
+      VW_DB.subscribeTable(VW_DB.STORES.tasks, liveRefresh);
+    } catch(e) {}
+  }
 }
 
 // Re-renders only the "Today's Activity" list on the Check-in page,
