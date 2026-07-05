@@ -175,10 +175,14 @@ async function navigateToFresh(page, params, cacheKey) {
   _navParams = params || null;
   stopActiveScanner();
   const allowed = VW_AUTH.getAllowedPages();
-  if (!allowed.includes(page)) {
+  // Always allow dashboard for authenticated staff — profile may still be loading
+  const isStaffPage = ['dashboard','checkin','billing','inventory','tile_quotes','quotations',
+    'vendors','tasks','leads','settings','eod','people','operations'].includes(page);
+  const profile = VW_AUTH.getCurrentProfile();
+  if (!allowed.includes(page) && !(isStaffPage && profile)) {
     showToast("You don't have access to this section.", 'warn');
     if (currentPage !== page) return;
-    page = 'dashboard';
+    page = 'shop';
   }
   currentPage = page;
   const content = document.getElementById('app-content');
@@ -1922,12 +1926,14 @@ async function init() {
 
   // CONTRACTOR PUBLIC PORTAL — ?contractor=TOKEN
   const contractorToken = urlParams.get('contractor');
-  if (contractorToken) {
+  if (contractorToken && contractorToken !== '1') {
+    // Specific contractor portal token
     document.getElementById('app-nav')?.style.setProperty('display','none','important');
     document.getElementById('app-header')?.style.setProperty('display','none','important');
     document.getElementById('app-content').innerHTML = await VW_CONTRACTOR.renderContractorPublicPortal(contractorToken);
     return;
   }
+  // ?contractor=1 means contractor login — fall through to normal auth
 
   // CONTRACTOR SIGNUP — ?signup=contractor
   const signupParam = urlParams.get('signup');

@@ -24,8 +24,10 @@
             return;
           }
         }
-        // No session — redirect to public shop (unless ?staff=1 override)
-        if (!window.location.pathname.endsWith('shop.html') && !window.location.search.includes('staff=1')) {
+        // No session — redirect to public shop (unless ?staff=1 or ?contractor=1 override)
+        const params = new URLSearchParams(window.location.search);
+        if (!window.location.pathname.endsWith('shop.html') && 
+            !params.has('staff') && !params.has('contractor')) {
           window.location.replace('./shop.html');
         }
       } catch(e) {
