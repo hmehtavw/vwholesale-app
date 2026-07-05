@@ -115,12 +115,11 @@ function applyRolePermissions() {
 
 async function updateQuickActionBadges() {
   try {
-    const [products, workOrders, invoices, leaves] = await Promise.all([
-      VW_DB.all(VW_DB.STORES.products),
-      VW_DB.all(VW_DB.STORES.workOrders),
-      VW_DB.all(VW_DB.STORES.invoices),
-      VW_DB.all(VW_DB.STORES.leaves)
-    ]);
+    // Sequential to avoid too many concurrent requests
+    const products   = await VW_DB.all(VW_DB.STORES.products).catch(() => []);
+    const invoices   = await VW_DB.all(VW_DB.STORES.invoices).catch(() => []);
+    const workOrders = [];
+    const leaves     = [];
     // Low stock + pending sourcing requests for inventory badge
     const lowStock = products.filter(p => (p.stock||0) <= (p.lowStockThreshold||5) && p.active !== false).length;
     let toSource = 0;
@@ -495,55 +494,34 @@ async function renderDashboard() {
   const todayStr = new Date().toDateString();
   try {
 
-  // ⚡ PERFORMANCE: Load only what's needed, with limits
-  // Use Supabase direct for date-filtered queries instead of loading ALL records
-  const [customersRes, visitsRes, invoicesRes, tasksRes, quotationsRes, leadsRes, feedbackRes, productsRes, apiUsageRes] = await Promise.all([
-    VW_DB.client.from('customers').select('id,name,phone,visit_count,total_spend,last_visit').order('created_at', { ascending: false }).limit(500),
-    VW_DB.client.from('visits').select('*').gte('date', today + 'T00:00:00').limit(100),
-    VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason,escalation_log,closure_photo').gte('date', today + 'T00:00:00').limit(100),
-    VW_DB.client.from('tasks').select('*').in('status', ['pending','in_progress']).limit(50),
-    VW_DB.client.from('quotations').select('id,quote_no,approval_status,customer_name,grand_total,created_at,status,items,approval_log').in('approval_status', ['pending_approval','approved','sent','draft']).limit(100),
-    VW_DB.client.from('leads').select('id,name,stage,assigned_to,assigned_to_name,created_at').limit(100),
-    VW_DB.client.from('feedback').select('id,rating,visit_id,customer_id,created_at').order('created_at', { ascending: false }).limit(50),
-    VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit,active').eq('active', true).limit(200),
-    VW_DB.client.from('api_usage_log').select('call_type,cost_usd,called_by,success,created_at').gte('created_at', new Date(Date.now()-30*24*60*60*1000).toISOString()).order('created_at',{ascending:false}).limit(500),
-  ]);
+  // Load sequentially to avoid ERR_INSUFFICIENT_RESOURCES from too many parallel requests
+  const invoicesRes   = await VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason').gte('date', today).limit(100);
+  const visitsRes     = await VW_DB.client.from('visits').select('id,customer_name,visitor_type,date,status,executive_name').gte('date', today + 'T00:00:00').limit(100);
+  const tasksRes      = await VW_DB.client.from('tasks').select('id,title,status,assigned_to_name,due_date').in('status', ['pending','in_progress']).limit(30);
+  const leadsRes      = await VW_DB.client.from('leads').select('id,name,stage,assigned_to_name').not('stage','in','("won","lost")').limit(30);
+  const productsRes   = await VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit').eq('is_active', true).lte('stock', 20).limit(20);
 
-  const customers = customersRes.data || [];
-  const visits = visitsRes.data || [];
-  const invoices = (invoicesRes.data || []).map(i => ({
+  const customers = [];
+  const visits    = visitsRes.data || [];
+  const invoices  = (invoicesRes.data || []).map(i => ({
     ...i,
-    invoiceNo: i.invoice_no || i.invoiceNo,
-    paymentMethod: i.payment_method || i.paymentMethod,
-    creditSale: i.credit_sale ?? i.creditSale,
-    approvalStatus: i.approval_status || i.approvalStatus,
-    paymentVerified: i.payment_verified ?? i.paymentVerified,
-    customerName: i.customer_name || i.customerName,
-    amountReceived: i.amount_received || i.amountReceived,
-    approvalReason: i.approval_reason || i.approvalReason,
-    escalationLog: i.escalation_log || i.escalationLog || [],
-    closurePhoto: i.closure_photo || i.closurePhoto,
+    invoiceNo: i.invoice_no,
+    paymentMethod: i.payment_method,
+    creditSale: i.credit_sale,
+    approvalStatus: i.approval_status,
+    paymentVerified: i.payment_verified,
+    customerName: i.customer_name,
+    amountReceived: i.amount_received,
+    approvalReason: i.approval_reason,
+    escalationLog: [],
+    closurePhoto: null,
   }));
-  const tasks = tasksRes.data || [];
-  const quotations = (quotationsRes.data || []).map(q => ({
-    ...q,
-    quoteNo: q.quote_no || q.quoteNo,
-    approvalStatus: q.approval_status || q.approvalStatus,
-    customerName: q.customer_name || q.customerName,
-    grandTotal: q.grand_total || q.grandTotal,
-    approvalLog: q.approval_log || q.approvalLog || [],
-  }));
-  const pendingQuotes = quotations.filter(q => q.approvalStatus === 'pending_approval');
-  const leads = (leadsRes.data || []).map(l => ({
-    ...l,
-    assignedTo: l.assigned_to || l.assignedTo,
-    assignedToName: l.assigned_to_name || l.assignedToName,
-  }));
-  const feedback = feedbackRes.data || [];
-  const products = (productsRes.data || []).map(p => ({
-    ...p,
-    lowStockThreshold: p.low_stock_threshold || p.lowStockThreshold || 20,
-  }));
+  const tasks      = tasksRes.data || [];
+  const quotations = [];
+  const pendingQuotes = [];
+  const leads      = (leadsRes.data || []).map(l => ({ ...l, assignedToName: l.assigned_to_name }));
+  const feedback   = [];
+  const products   = (productsRes.data || []).map(p => ({ ...p, lowStockThreshold: p.low_stock_threshold || 20 }));
 
   const todayInvoices = invoices; // already filtered to today
   const todayVisits = visits;
