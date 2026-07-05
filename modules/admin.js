@@ -23,6 +23,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-labor" onclick="VW_SETTINGS.switchSettingsTab('labor',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Labor</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-promos" onclick="VW_SETTINGS.switchSettingsTab('promos',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🎟</span>Promos</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-contractor_pricing" onclick="VW_SETTINGS.switchSettingsTab('contractor_pricing',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>B2B Pricing</button>` : ''}
   </div>
 
   <div id="settings-tab-content">
@@ -47,6 +48,7 @@ async function switchSettingsTab(tab, btn) {
     case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
     case 'labor':       container.innerHTML = await renderLaborSettings(); break;
     case 'promos':      container.innerHTML = await renderPromoSettings(); break;
+    case 'contractor_pricing': container.innerHTML = await VW_SHOP.renderContractorPricingSettings(); break;
   }
 }
 

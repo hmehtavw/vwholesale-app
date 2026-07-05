@@ -781,6 +781,37 @@ async function renderDashboard() {
   let holdAlertBanner = '';
   if (profile && ['admin','store_manager','management'].includes(profile.role)) {
     try { holdAlertBanner = await VW_TILES.renderHoldAlerts(); } catch(e) {}
+
+    // Fetch pending TQs for management pipeline view
+    try {
+      const { data: pendingTQs } = await VW_DB.client
+        .from('tile_quotations')
+        .select('id,tq_no,customer_name,total_area_sqft,grand_total,quoted_price_per_sqft,created_by,created_at')
+        .eq('approval_status','pending_approval')
+        .order('created_at', { ascending: true })
+        .limit(10);
+
+      if (pendingTQs?.length) {
+        const totalPipeline = pendingTQs.reduce((s,q) => s + parseFloat(q.grand_total||0), 0);
+        holdAlertBanner = (holdAlertBanner||'') + `
+        <div class="card" style="border-left:4px solid var(--gold);margin-bottom:12px">
+          <div class="card-header-row">
+            <h3 class="card-title">⏳ ${pendingTQs.length} TQ${pendingTQs.length>1?'s':''} Awaiting Approval</h3>
+            <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('tile_quotes')">Review All</button>
+          </div>
+          ${totalPipeline > 0 ? `<div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">Pipeline: ₹${totalPipeline.toLocaleString('en-IN')}</div>` : ''}
+          ${pendingTQs.slice(0,3).map(q => `
+          <div class="followup-row" onclick="VW_TILES.openTileQuote(${q.id})" style="cursor:pointer">
+            <div class="fu-info">
+              <div class="fu-name">${q.customer_name} · ${q.tq_no}</div>
+              <div class="fu-dept">${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft${q.grand_total?` · ₹${parseInt(q.grand_total).toLocaleString('en-IN')}`:q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:' · Price TBD'}</div>
+            </div>
+            <button class="btn-sm" style="background:var(--gold);color:#000" onclick="event.stopPropagation();VW_TILES.openTileQuote(${q.id})">Approve →</button>
+          </div>`).join('')}
+          ${pendingTQs.length > 3 ? `<p style="font-size:12px;color:var(--text3);margin-top:4px">+${pendingTQs.length-3} more pending</p>` : ''}
+        </div>`;
+      }
+    } catch(e) {}
   }
   if (profile && profile.role === 'admin') {
     if (lowStock.length) {

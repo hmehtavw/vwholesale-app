@@ -2435,11 +2435,20 @@ async function renderContractorProductGrid(category, discountPct) {
     return;
   }
 
+  // Pre-compute net prices for all products
+  const cfg = await VW_DB.getSetting('contractor_config', { tiles_discount_pct:15, sanitary_discount_pct:8, default_discount_pct:10 });
+  const getNetPrice = (vwp, category) => {
+    const disc = category === 'Tiles' ? (cfg.tiles_discount_pct||15)
+      : category === 'Sanitary' ? (cfg.sanitary_discount_pct||8)
+      : (cfg.default_discount_pct||10);
+    return Math.round(vwp * (1 - disc/100));
+  };
+
   container.innerHTML = `
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
     ${products.map(p => {
       const vwp = p.vwp || p.price || 0;
-      const netPrice = Math.round(vwp * (1 - (discountPct || 10) / 100));
+      const netPrice = getNetPrice(vwp, p.category);
       const img = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
       return `
       <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
@@ -3747,3 +3756,80 @@ window.VW_SHOP.renderStaffReturnsPage = renderStaffReturnsPage;
 window.VW_SHOP.scheduleReturnPickup = scheduleReturnPickup;
 window.VW_SHOP.markReturnPickedUp = markReturnPickedUp;
 window.VW_SHOP.rejectReturn = rejectReturn;
+
+// ═══════════════════════════════════════════════════════════════
+// B2B CONTRACTOR PRICING TIER
+// ═══════════════════════════════════════════════════════════════
+
+async function getContractorNetPrice(vwp, category) {
+  // Get contractor discount config from settings
+  const cfg = await VW_DB.getSetting('contractor_config', {
+    net_price_discount_pct: 10,
+    tiles_discount_pct: 15,   // higher discount on tiles
+    sanitary_discount_pct: 8,
+    default_discount_pct: 10,
+  });
+
+  const disc = category === 'Tiles' ? (cfg.tiles_discount_pct || 15)
+    : category === 'Sanitary' ? (cfg.sanitary_discount_pct || 8)
+    : (cfg.net_price_discount_pct || cfg.default_discount_pct || 10);
+
+  return Math.round(vwp * (1 - disc / 100));
+}
+
+async function renderContractorPricingSettings() {
+  const cfg = await VW_DB.getSetting('contractor_config', {
+    net_price_discount_pct: 10,
+    tiles_discount_pct: 15,
+    sanitary_discount_pct: 8,
+    default_discount_pct: 10,
+    markup_limit_pct: 40,
+  });
+
+  return `
+  <div style="font-size:12px;font-weight:700;margin-bottom:12px">🏗 Contractor Net Pricing</div>
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--text2)">
+    Contractors see VWP minus these discounts. They add their own markup to earn margin.
+  </div>
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">Category-wise Discounts (% off VWP)</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Tiles</label>
+        <input type="number" id="cp-tiles-disc" value="${cfg.tiles_discount_pct||15}" min="0" max="40" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Sanitary</label>
+        <input type="number" id="cp-sanitary-disc" value="${cfg.sanitary_discount_pct||8}" min="0" max="40" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>All Other Categories</label>
+        <input type="number" id="cp-default-disc" value="${cfg.default_discount_pct||10}" min="0" max="40" step="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Max Markup Allowed (%)</label>
+        <input type="number" id="cp-markup-limit" value="${cfg.markup_limit_pct||40}" min="0" max="100" step="5">
+      </div>
+    </div>
+    <button onclick="saveContractorPricingConfig()"
+      style="width:100%;margin-top:10px;padding:10px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+      💾 Save Contractor Pricing
+    </button>
+  </div>`;
+}
+
+async function saveContractorPricingConfig() {
+  const cfg = {
+    tiles_discount_pct:    parseFloat(document.getElementById('cp-tiles-disc')?.value) || 15,
+    sanitary_discount_pct: parseFloat(document.getElementById('cp-sanitary-disc')?.value) || 8,
+    default_discount_pct:  parseFloat(document.getElementById('cp-default-disc')?.value) || 10,
+    net_price_discount_pct:parseFloat(document.getElementById('cp-default-disc')?.value) || 10,
+    markup_limit_pct:      parseFloat(document.getElementById('cp-markup-limit')?.value) || 40,
+  };
+  await VW_DB.setSetting('contractor_config', cfg);
+  showToast('Contractor pricing saved ✅', 'success');
+}
+
+window.VW_SHOP.renderContractorPricingSettings = renderContractorPricingSettings;
+window.VW_SHOP.getContractorNetPrice = getContractorNetPrice;
+window.saveContractorPricingConfig = saveContractorPricingConfig;
