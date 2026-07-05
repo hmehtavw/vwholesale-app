@@ -6415,12 +6415,19 @@ async function openTileQuote(id) {
   const log = q.approval_log || [];
   const lastStep = log[log.length - 1];
   const myAllowedRoles = lastStep ? ((window.TQ_LEVEL_ROLES||{})[lastStep.level] || [lastStep.level]) : [];
-  const canIAction = q.approval_status === 'pending_approval' && lastStep?.status === 'pending' &&
-    (myRole === 'admin' || myAllowedRoles.includes(myRole));
+  const isAdmin = myRole === 'admin' || myRole === 'management';
+  const canIAction = q.approval_status === 'pending_approval' && (
+    isAdmin ||
+    (lastStep?.status === 'pending' && myAllowedRoles.includes(myRole))
+  );
+  // For admin/management with no approval_log, create a synthetic lastStep
+  const effectiveLastStep = lastStep || (isAdmin && q.approval_status === 'pending_approval'
+    ? { level: 'management', status: 'pending', notifiedAt: q.created_at, approverNames: [] }
+    : null);
   const isCashier = ['admin','accounts'].includes(myRole);
 
   // Pre-compute approval BOM HTML (async — needs tier price fetch)
-  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, lastStep?.level || myRole) : '';
+  const approvalBomHtml = canIAction ? await _tqBuildApprovalBOM(q, effectiveLastStep?.level || myRole) : '';
 
   const sheet = document.getElementById('bottom-sheet');
   const totalSqft = parseFloat(q.total_area_sqft||0);
@@ -6533,7 +6540,7 @@ async function openTileQuote(id) {
 
     ${canIAction ? `
     <div style="margin-bottom:12px;background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[lastStep.level]||''}</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--gold)">⚡ Your Action Required — ${LEVEL_LABELS_TQ[effectiveLastStep?.level]||'Management'}</div>
       ${approvalBomHtml}
       <div class="form-group" style="margin-bottom:10px">
         <label style="font-size:11px">Price note / reason (optional)</label>
@@ -6541,7 +6548,7 @@ async function openTileQuote(id) {
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="VW_TILES.tqApprove()" style="flex:2;padding:13px;border-radius:10px;background:rgba(34,197,94,0.1);border:2px solid var(--green);color:var(--green);font-size:13px;font-weight:700;cursor:pointer">
-          ✅ Approve${lastStep.level !== 'management' ? ' & Pass Up' : ' — Final'}
+          ✅ Approve${effectiveLastStep?.level !== 'management' ? ' & Pass Up' : ' — Final'}
         </button>
         <button onclick="VW_TILES.tqReject()" style="flex:1;padding:13px;border-radius:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.4);color:var(--red);font-size:13px;font-weight:700;cursor:pointer">
           ❌ Reject
