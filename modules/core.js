@@ -2365,15 +2365,26 @@ async function approveTileQuoteStep(tileQuoteId, pricePerSqft, pricePerBox, pric
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id', tileQuoteId).single();
   if (!q) return;
   const log = q.approval_log || [];
-  const last = log[log.length - 1];
-  if (!last || last.status !== 'pending') { showToast('No pending approval step', 'warn'); return; }
+  let last = log[log.length - 1];
 
   const profile = VW_AUTH.getCurrentProfile();
   const myRole = profile?.role || '';
+  const isAdmin = myRole === 'admin' || myRole === 'management';
+
+  // If no approval log entry, create one for admin/management direct approval
+  if (!last || last.status !== 'pending') {
+    if (isAdmin) {
+      // Create a synthetic approval entry
+      last = { level: 'management', status: 'pending', assignedAt: new Date().toISOString() };
+      log.push(last);
+    } else {
+      showToast('No pending approval step', 'warn');
+      return;
+    }
+  }
 
   // Verify this person can action this level
   const allowedRoles = TQ_LEVEL_ROLES[last.level] || [last.level];
-  const isAdmin = myRole === 'admin';
   if (!isAdmin && !allowedRoles.includes(myRole)) {
     showToast(`Only ${allowedRoles.join(' / ')} can approve at this stage`, 'warn');
     return;

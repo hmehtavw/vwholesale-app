@@ -5543,11 +5543,13 @@ async function renderTileQuotesList() {
   // Can I action this quote right now?
   const canIApprove = (q) => {
     if (q.approval_status !== 'pending_approval') return false;
+    // Admin and management can always approve any pending TQ
+    if (myRole === 'admin' || myRole === 'management') return true;
     const log = q.approval_log || [];
     const last = log[log.length-1];
     if (!last || last.status !== 'pending') return false;
     const allowedRoles = (window.TQ_LEVEL_ROLES || {})[last.level] || [last.level];
-    return myRole === 'admin' || allowedRoles.includes(myRole);
+    return allowedRoles.includes(myRole);
   };
 
   const statusBadge = (s, q) => {
