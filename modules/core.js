@@ -482,6 +482,8 @@ const ROLE_DISPLAY = {
   floor_manager:'Floor Manager', store_manager:'Store Manager', staff:'Staff',
   reception:'Reception', accounts:'Accounts', dispatch:'Dispatch', pending:'Pending'
 };
+const PUBLIC_PAGES = ['shop','offers','mood_board','tile_visualizer'];  // accessible without login
+
 const ROLE_PAGES = {
   admin:        ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal','commissions'],
   executive:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist'],
@@ -542,6 +544,10 @@ function getRole() {
 
 function getAllowedPages() {
   const role = getRole();
+
+  // Guests (no login) can access public pages
+  if (!role || !currentProfile) return [...PUBLIC_PAGES];
+
   if (role === 'admin') return ROLE_PAGES.admin;
   if (role === 'pending') return [];
 
@@ -1214,6 +1220,7 @@ window.VW_AUTH = {
   getRole, getAllowedPages, maskPhone, onAuthReady, showAuthScreen,
   renderIdentityBadge, PERMISSION_LABELS, PERMISSION_PAGES, isAdmin
 };
+window.PUBLIC_PAGES = PUBLIC_PAGES;
 window.handleAuthSubmit = handleAuthSubmit;
 window.toggleAuthMode = toggleAuthMode;
 window.checkApprovalStatus = checkApprovalStatus;
