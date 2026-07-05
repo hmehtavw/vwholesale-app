@@ -4,7 +4,7 @@ import re, sys, os, subprocess
 
 MODULES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'modules')
 MODULES = ['core.js','checkin.js','billing.js','people.js','stock.js',
-           'operations.js','admin.js','extras.js','granite.js',
+           'operations.js','admin.js','extras.js','shop.js','granite.js',
            'tile-quotation.js','quick-quote.js','autotest.js','app.js']
 
 errors = []
