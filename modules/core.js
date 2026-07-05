@@ -1115,10 +1115,16 @@ async function onAuthReady() {
   const overlay = document.getElementById('identity-overlay');
   if (overlay) overlay.remove();
 
-  // If no profile — show shop publicly (HomeRun style)
-  // Login only required at checkout or for staff features
+  // If no profile
   if (!currentProfile) {
-    return true; // allow app to load, shop is public
+    // ?staff=1 or ?contractor=1 — show login screen, not shop
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('staff') || params.has('contractor')) {
+      await showAuthScreen(params.has('contractor') ? 'contractor' : 'staff');
+      return false;
+    }
+    // Normal guest — allow shop to load publicly
+    return true;
   }
 
   const role = currentProfile.role;
