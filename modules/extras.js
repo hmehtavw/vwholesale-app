@@ -7209,3 +7209,93 @@ window.VW_LABOR = {
   rejectLaborRequest,
 };
 
+
+// ═══════════════════════════════════════════════════════════════
+// WHATSAPP FOLLOW-UP AUTOMATION
+// ═══════════════════════════════════════════════════════════════
+
+const WA_FOLLOW_UP_TEMPLATES = {
+  draft: {
+    label: 'Quote Ready',
+    message: (name, tqNo) =>
+      `Hi ${name}, your tile quotation ${tqNo} from V Wholesale is ready! We'd love to help you finalize your selection. Can we schedule a visit or call? 📞 8712697930`,
+  },
+  approved: {
+    label: 'Follow Up After Approval',
+    message: (name, tqNo, price) =>
+      `Hi ${name}, just checking in on your tile quotation ${tqNo}${price ? ` (₹${parseInt(price).toLocaleString('en-IN')})` : ''}. Have you had a chance to review? We can arrange a sample display or home visit if helpful. 🏠`,
+  },
+  advance_collected: {
+    label: 'Delivery Reminder',
+    message: (name, tqNo) =>
+      `Hi ${name}, thank you for confirming order ${tqNo} with V Wholesale! Our team will coordinate delivery/pickup timing with you. Please let us know your preferred schedule. 🚚`,
+  },
+  no_response: {
+    label: '3-Day No Response',
+    message: (name) =>
+      `Hi ${name}, hope your home project is going well! V Wholesale here — we wanted to check if you need any assistance with your tile or building material requirements. We're here to help! 😊`,
+  },
+};
+
+async function renderFollowUpDashboard() {
+  // Fetch TQs that need follow-up (approved but no advance, or draft more than 2 days old)
+  const twoDaysAgo = new Date(Date.now() - 2 * 86400000).toISOString();
+
+  const { data: needsFollowUp } = await VW_DB.client
+    .from('tile_quotations')
+    .select('id,tq_no,customer_name,customer_phone,approval_status,grand_total,created_at,updated_at')
+    .in('approval_status', ['draft','approved'])
+    .lt('updated_at', twoDaysAgo)
+    .order('updated_at', { ascending: true })
+    .limit(30);
+
+  return `
+  <div class="module-header">
+    <h2>💬 WA Follow-ups</h2>
+    <div style="font-size:11px;color:var(--text3)">${needsFollowUp?.length||0} need attention</div>
+  </div>
+
+  ${!(needsFollowUp?.length) ? `
+  <div style="text-align:center;padding:30px;color:var(--text3)">
+    <div style="font-size:32px">✅</div>
+    <div style="font-size:13px;margin-top:8px">All caught up! No follow-ups needed.</div>
+  </div>` :
+  needsFollowUp.map(q => {
+    const daysSince = Math.floor((Date.now() - new Date(q.updated_at)) / 86400000);
+    const urgency = daysSince > 7 ? 'var(--red)' : daysSince > 3 ? 'var(--gold)' : 'var(--text3)';
+    const tmpl = WA_FOLLOW_UP_TEMPLATES[q.approval_status] || WA_FOLLOW_UP_TEMPLATES.no_response;
+    const message = tmpl.message(q.customer_name?.split(' ')[0] || q.customer_name, q.tq_no, q.grand_total);
+    const waUrl = `https://wa.me/91${q.customer_phone}?text=${encodeURIComponent(message)}`;
+
+    return `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border-left:4px solid ${urgency}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${q.customer_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${q.tq_no} · ${q.approval_status}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;color:${urgency}">${daysSince}d ago</div>
+          ${q.grand_total ? `<div style="font-size:11px;color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</div>` : ''}
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.5;background:var(--bg3);border-radius:8px;padding:8px">
+        ${message.slice(0, 120)}...
+      </div>
+      <div style="display:flex;gap:6px">
+        <a href="${waUrl}" target="_blank"
+          style="flex:2;padding:9px;border-radius:8px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:12px;font-weight:700;text-decoration:none;text-align:center">
+          💬 Send on WhatsApp
+        </a>
+        <button onclick="VW_TILES.openTileQuote(${q.id})"
+          style="flex:1;padding:9px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);font-size:12px;cursor:pointer">
+          👁 View TQ
+        </button>
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+window.VW_FEATURES = window.VW_FEATURES || {};
+window.VW_FEATURES.renderFollowUpDashboard = renderFollowUpDashboard;
+window.renderFollowUpDashboard = renderFollowUpDashboard;

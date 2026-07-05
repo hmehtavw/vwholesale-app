@@ -3366,3 +3366,81 @@ async function quickPhotoUpload(productId, event) {
   input.click();
 }
 window.quickPhotoUpload = quickPhotoUpload;
+
+// ═══════════════════════════════════════════════════════════════
+// BULK PHOTO UPLOAD — Upload photos for multiple products quickly
+// ═══════════════════════════════════════════════════════════════
+async function renderBulkPhotoUploadPage() {
+  const { data: products } = await VW_DB.client
+    .from('products')
+    .select('id,name,brand,category,photos')
+    .eq('is_active', true)
+    .order('category', { ascending: true })
+    .limit(200);
+
+  const withPhotos    = products?.filter(p => p.photos?.length > 0) || [];
+  const withoutPhotos = products?.filter(p => !p.photos?.length) || [];
+
+  return `
+  <div class="module-header">
+    <h2>📷 Bulk Photo Upload</h2>
+    <div style="font-size:11px;color:var(--text3)">${withPhotos.length}/${products?.length} have photos</div>
+  </div>
+
+  <!-- PROGRESS BAR -->
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+      <span style="font-weight:700">Photo coverage</span>
+      <span style="color:var(--gold);font-weight:700">${Math.round(withPhotos.length/(products?.length||1)*100)}%</span>
+    </div>
+    <div style="background:var(--bg3);border-radius:20px;height:8px;overflow:hidden">
+      <div style="height:100%;background:var(--gold);border-radius:20px;width:${Math.round(withPhotos.length/(products?.length||1)*100)}%;transition:width .3s"></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">${withoutPhotos.length} products still need photos</div>
+  </div>
+
+  <!-- QUICK TIP -->
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:14px;font-size:12px">
+    <div style="font-weight:700;color:var(--gold);margin-bottom:4px">💡 Fastest way to add photos</div>
+    <div style="color:var(--text2)">Tap 📷 next to any product → phone camera opens → take photo → instantly uploaded to shop. No approval needed.</div>
+  </div>
+
+  <!-- PRODUCTS WITHOUT PHOTOS FIRST -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--red)">
+    ❌ Needs photo (${withoutPhotos.length})
+  </div>
+  ${withoutPhotos.map(p => `
+  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px;border:1px dashed var(--border)">
+    <button onclick="quickPhotoUpload(${p.id},event)"
+      style="width:48px;height:48px;border-radius:8px;background:var(--bg3);border:1px dashed var(--gold);cursor:pointer;font-size:22px;flex-shrink:0">
+      📷
+    </button>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+      <div style="font-size:10px;color:var(--text3)">${p.brand||''} · ${p.category}</div>
+    </div>
+  </div>`).join('')}
+
+  ${withPhotos.length ? `
+  <div style="font-size:12px;font-weight:700;margin:14px 0 8px;color:var(--green)">
+    ✅ Has photo (${withPhotos.length})
+  </div>
+  ${withPhotos.map(p => `
+  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px;border:1px solid var(--border)">
+    <div style="position:relative">
+      <img src="${p.photos[0]?.url||p.photos[0]}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;border:2px solid var(--green)">
+      <button onclick="quickPhotoUpload(${p.id},event)"
+        style="position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--gold);border:none;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center">
+        ✏️
+      </button>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.name}</div>
+      <div style="font-size:10px;color:var(--text3)">${p.brand||''} · ${p.category}</div>
+    </div>
+    <div style="font-size:10px;color:var(--green);flex-shrink:0">${p.photos.length} photo${p.photos.length>1?'s':''}</div>
+  </div>`).join('')}` : ''}`;
+}
+
+window.VW_INVENTORY.renderBulkPhotoUploadPage = renderBulkPhotoUploadPage;
+window.renderBulkPhotoUploadPage = renderBulkPhotoUploadPage;

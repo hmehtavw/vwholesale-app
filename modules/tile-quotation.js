@@ -120,6 +120,17 @@ async function _renderStep0() {
           <input type="text" id="tq-cust-site" value="${st.customer.site||''}"
             placeholder="e.g. Bhavanipuram" oninput="_tqState.customer.site=this.value">
         </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label>Reference Image (optional)</label>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Customer's inspiration photo, Pinterest image, or room photo</div>
+          ${st.customer.referenceImageUrl ? `
+          <div style="position:relative;margin-bottom:6px">
+            <img src="${st.customer.referenceImageUrl}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border)">
+            <button onclick="_tqState.customer.referenceImageUrl=null;_tqState.customer.referenceImageName=null;VW_TILES._renderStep0()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);border:none;border-radius:50%;width:22px;height:22px;color:#fff;cursor:pointer;font-size:12px">✕</button>
+          </div>` : ''}
+          <input type="file" accept="image/*" onchange="VW_TILES._uploadTQReferenceImage(this)"
+            style="width:100%;padding:6px;background:var(--bg3);border:1px dashed var(--border);border-radius:8px;font-size:11px">
+        </div>
         <button onclick="VW_TILES._saveNewCustomer()"
           style="width:100%;padding:8px;background:var(--gold);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">
           ✅ Save & Continue
@@ -4664,6 +4675,24 @@ async function tqBack() {
 }
 
 // Edit with Reason — re-opens from TQ Summary page. Delegates to tqEditQuote.
+async function _uploadTQReferenceImage(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `tq-references/${Date.now()}.${ext}`;
+  const { error } = await VW_DB.client.storage
+    .from('visit-photos')
+    .upload(path, file, { contentType: file.type, upsert: true });
+  if (error) { showToast('Upload failed: ' + error.message, 'error'); return; }
+  const { data: urlData } = VW_DB.client.storage.from('visit-photos').getPublicUrl(path);
+  _tqState.customer.referenceImageUrl  = urlData?.publicUrl || null;
+  _tqState.customer.referenceImageName = file.name;
+  showToast('Reference image uploaded ✅', 'success');
+  // Re-render step 0 to show preview
+  const content = document.getElementById('tq-step-content');
+  if (content) content.innerHTML = await _renderStep0();
+}
+
 async function _tqRequestEdit() {
   const id = _tqState._savedQuoteId || _tqState._draftId;
   if (!id) {
