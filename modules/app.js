@@ -1745,7 +1745,14 @@ function showToast(msg, type = 'info') {
 }
 
 async function init() {
-// Handle Cashfree payment return
+  // Force clear old SW caches on every load (safe — SW will re-cache)
+  if ('caches' in window) {
+    caches.keys().then(keys => keys.forEach(k => {
+      if (!k.includes('v8')) caches.delete(k);
+    })).catch(() => {});
+  }
+
+  // Handle Cashfree payment return
   const _cfUrlParams = new URLSearchParams(window.location.search);
   const cfOrder = _cfUrlParams.get('cf_order');
   if (cfOrder) {

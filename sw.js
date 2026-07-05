@@ -1,19 +1,18 @@
 // V Wholesale Service Worker — Offline PWA Support
-const CACHE_NAME = 'vwholesale-v7';
+const CACHE_NAME = 'vwholesale-v8';
 const OFFLINE_URLS = [
   '/vwholesale-app/',
   '/vwholesale-app/index.html',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700&display=swap',
 ];
 
-// Install — cache core assets
+// Install — cache core assets, skip waiting IMMEDIATELY
 self.addEventListener('install', event => {
+  self.skipWaiting(); // take over immediately, no waiting
   event.waitUntil(
     caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(OFFLINE_URLS).catch(err => console.log('Cache addAll error:', err));
+      return cache.addAll(OFFLINE_URLS).catch(err => console.log('Cache error:', err));
     })
   );
-  self.skipWaiting();
 });
 
 // Activate — clean old caches
