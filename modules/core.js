@@ -4,7 +4,7 @@
 // SUPABASE CONFIG — fill these in from Settings -> API
 // ============================================================
 const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_rowcFNrbdc8V0pJXJfUR_w_-bM5Ld3U';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0MTM3NTgsImV4cCI6MjA2MDk4OTc1OH0.7P2tTmom7R6CxQrQhMvCFhfUAMMdxnEw2vAX2KDf2G0';
 
 let sb;
 
