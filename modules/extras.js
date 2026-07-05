@@ -8667,6 +8667,41 @@ async function renderCheckoutPage() {
     </div>`).join('')}
   </div>
 
+  <!-- LOYALTY POINTS -->
+  ${await (async () => {
+    const { data: cust } = await VW_DB.client.from('customers')
+      .select('loyalty_points').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+    const points = cust?.loyalty_points || 0;
+    const cfg = await VW_DB.getSetting('loyalty_config', { pointValue:1, maxRedeemPct:10 });
+    const maxRedeem = Math.min(points, Math.floor(_checkoutState.subtotal * (cfg.maxRedeemPct||10) / 100 / (cfg.pointValue||1)));
+    const redeemValue = Math.floor(maxRedeem * (cfg.pointValue||1));
+    if (points < 10) return '';
+    return `
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">⭐ Loyalty Points</div>
+      <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:700">${points.toLocaleString('en-IN')} points available</div>
+            <div style="font-size:11px;color:var(--text3)">= ₹${(points*(cfg.pointValue||1)).toLocaleString('en-IN')} value</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="use-loyalty" onchange="VW_SHOP.toggleLoyaltyRedeem(${maxRedeem},${redeemValue})"
+              ${_checkoutState.loyaltyRedeem ? 'checked' : ''}>
+            <span style="font-size:12px;font-weight:700">Use points</span>
+          </label>
+        </div>
+        ${_checkoutState.loyaltyRedeem ? `
+        <div style="background:rgba(34,197,94,0.08);border-radius:8px;padding:8px;font-size:12px;color:var(--green)">
+          ✅ Using ${maxRedeem} points → ₹${redeemValue} discount applied
+        </div>` : `
+        <div style="font-size:11px;color:var(--text3)">
+          Redeem up to ${maxRedeem} points = ₹${redeemValue} off this order
+        </div>`}
+      </div>
+    </div>`;
+  })()}
+
   <!-- PROMO CODE -->
   <div style="margin-bottom:14px">
     <div style="font-size:12px;font-weight:700;margin-bottom:8px">🎟 Promo Code</div>
@@ -8959,11 +8994,26 @@ async function placeOrder() {
 
     // Award loyalty points (1 point per ₹100 spent by default)
     const loyaltyCfg = await VW_DB.getSetting('loyalty_config', { earnRate: 1, pointValue: 1 });
-    const pointsEarned = Math.floor(subtotal / 100 * (loyaltyCfg.earnRate || 1));
-    if (pointsEarned > 0) {
+    const pointsEarned = Math.floor((subtotal - (_checkoutState.promoDiscount||0)) / 100 * (loyaltyCfg.earnRate || 1));
+    if (pointsEarned > 0 && prof?.phone) {
       await VW_DB.client.from('customers')
-        .update({ loyalty_points: VW_DB.client.rpc('increment_loyalty', { p_phone: prof?.phone || '', p_points: pointsEarned }) })
-        .eq('phone', prof?.phone || '').catch(() => {});
+        .update({ loyalty_points: VW_DB.client.rpc('increment_loyalty', { p_phone: prof.phone, p_points: pointsEarned }) })
+        .eq('phone', prof.phone).catch(() => {});
+    }
+
+    // Increment promo code used_count if one was applied
+    if (_checkoutState.promoCode) {
+      await VW_DB.client.from('promo_codes')
+        .update({ used_count: VW_DB.client.rpc('increment_count', {}) })
+        .eq('code', _checkoutState.promoCode).catch(async () => {
+          // Fallback: manual increment
+          const { data: pc } = await VW_DB.client.from('promo_codes')
+            .select('used_count').eq('code', _checkoutState.promoCode).single().catch(() => ({ data: null }));
+          if (pc) await VW_DB.client.from('promo_codes')
+            .update({ used_count: (pc.used_count || 0) + 1 }).eq('code', _checkoutState.promoCode).catch(() => {});
+        });
+      _checkoutState.promoCode = null;
+      _checkoutState.promoDiscount = 0;
     }
 
     // Notify store
@@ -9097,19 +9147,41 @@ const ORDER_STATUS_FLOW = {
 };
 
 async function renderOrdersDashboard() {
-  const { data: orders } = await VW_DB.client
+  const searchQ = window._ordersSearch || '';
+  const dateFilter = window._ordersDate || '';
+
+  let query = VW_DB.client
     .from('orders')
     .select('id,order_no,customer_name,customer_phone,items,total,status,delivery_type,delivery_slot,placed_at,delivery_address,payment_method,payment_status')
     .not('status','in','("delivered","cancelled")')
     .order('placed_at', { ascending: true })
     .limit(50);
 
-  const { data: recentDone } = await VW_DB.client
+  if (searchQ) {
+    query = VW_DB.client.from('orders')
+      .select('id,order_no,customer_name,customer_phone,items,total,status,delivery_type,delivery_slot,placed_at,delivery_address,payment_method,payment_status')
+      .or(`order_no.ilike.%${searchQ}%,customer_name.ilike.%${searchQ}%,customer_phone.ilike.%${searchQ}%`)
+      .order('placed_at', { ascending: false })
+      .limit(30);
+  } else if (dateFilter) {
+    const start = new Date(dateFilter); start.setHours(0,0,0,0);
+    const end   = new Date(dateFilter); end.setHours(23,59,59,999);
+    query = VW_DB.client.from('orders')
+      .select('id,order_no,customer_name,customer_phone,items,total,status,delivery_type,delivery_slot,placed_at,delivery_address,payment_method,payment_status')
+      .gte('placed_at', start.toISOString())
+      .lte('placed_at', end.toISOString())
+      .order('placed_at', { ascending: false })
+      .limit(50);
+  }
+
+  const { data: orders } = await query;
+
+  const { data: recentDone } = !searchQ && !dateFilter ? await VW_DB.client
     .from('orders')
     .select('id,order_no,customer_name,total,status,delivered_at')
     .in('status',['delivered','cancelled'])
     .order('placed_at', { ascending: false })
-    .limit(10);
+    .limit(10) : { data: [] };
 
   const statCounts = {};
   (orders||[]).forEach(o => { statCounts[o.status] = (statCounts[o.status]||0)+1; });
@@ -9117,9 +9189,23 @@ async function renderOrdersDashboard() {
   return `
   <div class="module-header">
     <h2>🛒 Orders</h2>
-    <button onclick="navigateTo('orders')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">🔄 Refresh</button>
+    <button onclick="navigateTo('orders')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">🔄</button>
   </div>
 
+  <!-- SEARCH + DATE FILTER -->
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input type="text" id="orders-search" placeholder="Search by name, phone, order no..."
+      value="${searchQ}"
+      oninput="window._ordersSearch=this.value;clearTimeout(window._ordersSearchTimer);window._ordersSearchTimer=setTimeout(()=>navigateTo('orders'),400)"
+      style="flex:1;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px">
+    <input type="date" id="orders-date"
+      value="${dateFilter}"
+      onchange="window._ordersDate=this.value;navigateTo('orders')"
+      style="padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;width:130px">
+    ${(searchQ||dateFilter) ? `<button onclick="window._ordersSearch='';window._ordersDate='';document.getElementById('orders-search').value='';navigateTo('orders')" style="padding:8px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);font-size:12px;cursor:pointer">✕ Clear</button>` : ''}
+  </div>
+
+  ${!searchQ && !dateFilter ? `
   <!-- STAT PILLS -->
   <div style="display:flex;gap:8px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px">
     ${Object.entries(ORDER_STATUS_FLOW).filter(([k])=>k!=='delivered'&&k!=='cancelled').map(([status,cfg]) => `
@@ -9127,18 +9213,17 @@ async function renderOrdersDashboard() {
       <div style="font-size:20px;font-weight:900;color:${cfg.color}">${statCounts[status]||0}</div>
       <div style="font-size:10px;color:var(--text3);white-space:nowrap">${cfg.label.replace(/[⏳✅📦🚚✓✗]/g,'').trim()}</div>
     </div>`).join('')}
-  </div>
+  </div>` : ''}
 
-  <!-- ACTIVE ORDERS -->
+  <!-- ORDERS -->
   ${!(orders?.length) ? `
   <div style="text-align:center;padding:30px;color:var(--text3)">
     <div style="font-size:32px">📭</div>
-    <div style="font-size:13px;margin-top:8px">No active orders right now</div>
+    <div style="font-size:13px;margin-top:8px">${searchQ||dateFilter ? 'No orders match your search' : 'No active orders right now'}</div>
   </div>` :
   orders.map(o => renderOrderCard(o)).join('')}
 
-  <!-- RECENT COMPLETED -->
-  ${recentDone?.length ? `
+  ${recentDone?.length && !searchQ && !dateFilter ? `
   <div style="font-size:12px;font-weight:700;color:var(--text3);margin:16px 0 8px;text-transform:uppercase;letter-spacing:.05em">Recent Completed</div>
   ${recentDone.map(o => `
   <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
@@ -10704,3 +10789,172 @@ setTimeout(() => {
 
 window.VW_SHOP.renderTileMoodBoard = renderTileMoodBoard;
 window.VW_SHOP.generateMoodBoard = generateMoodBoard;
+
+// ─── LOYALTY REDEEM TOGGLE ────────────────────────────────────
+function toggleLoyaltyRedeem(maxPoints, redeemValue) {
+  const checked = document.getElementById('use-loyalty')?.checked;
+  _checkoutState.loyaltyRedeem = checked ? maxPoints : 0;
+  _checkoutState.loyaltyRedeemValue = checked ? redeemValue : 0;
+  // Update total display
+  const total = _checkoutState.subtotal - (_checkoutState.promoDiscount||0) - (_checkoutState.loyaltyRedeemValue||0);
+  const btn = document.querySelector('[onclick="VW_SHOP.placeOrder()"]');
+  if (btn) btn.textContent = `✅ Place Order · ₹${Math.max(0,total).toLocaleString('en-IN')}`;
+  showToast(checked ? `₹${redeemValue} loyalty discount applied` : 'Loyalty points removed', 'info');
+}
+window.VW_SHOP.toggleLoyaltyRedeem = toggleLoyaltyRedeem;
+
+// ─── CONTRACTOR SCORE AUTO-CALCULATION ───────────────────────
+async function recalculateContractorScore(cpId) {
+  // Score = 100 points max
+  // 40 pts: job completion rate (jobs completed / jobs accepted * 40)
+  // 30 pts: average rating (avg_rating / 5 * 30)
+  // 20 pts: response rate (response_rate * 20 / 100)
+  // 10 pts: purchase value bonus (total_purchase_value > 50000 = 10, > 10000 = 5)
+
+  const { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('*').eq('id', cpId).single().catch(() => ({ data: null }));
+  if (!cp) return;
+
+  const completionRate = cp.total_jobs_completed > 0 ? Math.min(1, cp.total_jobs_completed / Math.max(1, cp.total_jobs_completed)) : 0;
+  const ratingScore   = ((cp.avg_rating || 0) / 5) * 30;
+  const responseScore = ((cp.response_rate || 100) / 100) * 20;
+  const purchaseScore = cp.total_purchase_value >= 50000 ? 10 : cp.total_purchase_value >= 10000 ? 5 : 0;
+  const completionScore = completionRate * 40;
+
+  const newScore = Math.round(Math.min(100, completionScore + ratingScore + responseScore + purchaseScore));
+
+  await VW_DB.client.from('contractor_profiles')
+    .update({ contractor_score: newScore }).eq('id', cpId);
+
+  return newScore;
+}
+window.VW_LABOR.recalculateContractorScore = recalculateContractorScore;
+
+// ─── RETURNS STAFF MANAGEMENT ─────────────────────────────────
+async function renderStaffReturnsPage() {
+  const { data: returns } = await VW_DB.client
+    .from('customer_returns')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const statusColor = { requested:'var(--gold)', scheduled:'#60A5FA', picked_up:'var(--green)', completed:'var(--green)', rejected:'var(--red)' };
+
+  return `
+  <div class="module-header">
+    <h2>↩ Returns Management</h2>
+    <div style="font-size:11px;color:var(--text3)">${returns?.filter(r=>r.status==='requested').length||0} pending</div>
+  </div>
+
+  ${!(returns?.length) ? '<p class="empty-msg">No return requests yet</p>' :
+  returns.map(r => {
+    const sc = statusColor[r.status] || 'var(--text3)';
+    return `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border-left:4px solid ${sc}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${r.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${r.customer_phone||'—'}</div>
+        </div>
+        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:${sc}20;color:${sc}">${r.status}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px">${r.return_reason?.replace('_',' ')||'—'}</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">${r.description||''}</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      <div style="display:flex;gap:6px">
+        ${r.status === 'requested' ? `
+        <button onclick="VW_SHOP.scheduleReturnPickup(${r.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:#60A5FA;border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          📅 Schedule Pickup
+        </button>
+        <button onclick="VW_SHOP.rejectReturn(${r.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:12px;cursor:pointer">
+          ❌ Reject
+        </button>` : ''}
+        ${r.status === 'scheduled' ? `
+        <button onclick="VW_SHOP.markReturnPickedUp(${r.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          ✅ Mark Picked Up
+        </button>` : ''}
+        <a href="tel:${r.customer_phone}"
+          style="padding:8px 12px;border-radius:8px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:12px;text-decoration:none">
+          📞
+        </a>
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+async function scheduleReturnPickup(id) {
+  const date = prompt('Pickup date (DD/MM/YYYY):');
+  const time = prompt('Pickup time (e.g. 10am-12pm):');
+  if (!date || !time) return;
+
+  await VW_DB.client.from('customer_returns').update({
+    status: 'scheduled',
+    pickup_scheduled_at: new Date().toISOString(),
+    pickup_notes: `${date} ${time}`,
+  }).eq('id', id).catch(() => {});
+
+  // Notify customer
+  const { data: ret } = await VW_DB.client.from('customer_returns')
+    .select('profile_id,customer_name').eq('id', id).single().catch(() => ({ data: null }));
+  if (ret?.profile_id) {
+    await createPersistedNotification({
+      category: 'return_scheduled',
+      title: '📦 Return Pickup Scheduled',
+      body: `Your return pickup is scheduled for ${date} at ${time}. Please keep the item ready.`,
+      recipientId: ret.profile_id,
+    }).catch(() => {});
+  }
+
+  showToast('Pickup scheduled — customer notified', 'success');
+  navigateTo('staff_returns');
+}
+
+async function markReturnPickedUp(id) {
+  const { data: ret } = await VW_DB.client.from('customer_returns')
+    .select('profile_id,order_id').eq('id', id).single().catch(() => ({ data: null }));
+
+  await VW_DB.client.from('customer_returns').update({
+    status: 'picked_up',
+    picked_up_at: new Date().toISOString(),
+  }).eq('id', id);
+
+  // Refund to wallet
+  if (ret?.order_id) {
+    const { data: order } = await VW_DB.client.from('orders')
+      .select('total,payment_method').eq('id', ret.order_id).single().catch(() => ({ data: null }));
+    if (order?.payment_method === 'wallet' && ret?.profile_id) {
+      const { data: wallet } = await VW_DB.client.from('customer_wallets')
+        .select('id,balance').eq('profile_id', ret.profile_id).single().catch(() => ({ data: null }));
+      if (wallet) {
+        const newBal = parseFloat(wallet.balance) + parseFloat(order.total);
+        await VW_DB.client.from('customer_wallets').update({ balance: newBal }).eq('id', wallet.id);
+        await VW_DB.client.from('wallet_transactions').insert({
+          wallet_id: wallet.id,
+          type: 'refund',
+          amount: order.total,
+          balance_after: newBal,
+          description: 'Return refund',
+        });
+      }
+    }
+  }
+
+  showToast('Return picked up — refund processed', 'success');
+  navigateTo('staff_returns');
+}
+
+async function rejectReturn(id) {
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  await VW_DB.client.from('customer_returns').update({ status: 'rejected' }).eq('id', id);
+  showToast('Return rejected', 'warn');
+  navigateTo('staff_returns');
+}
+
+window.VW_SHOP.renderStaffReturnsPage = renderStaffReturnsPage;
+window.VW_SHOP.scheduleReturnPickup = scheduleReturnPickup;
+window.VW_SHOP.markReturnPickedUp = markReturnPickedUp;
+window.VW_SHOP.rejectReturn = rejectReturn;

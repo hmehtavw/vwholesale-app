@@ -225,6 +225,7 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'staff_returns') html = await VW_SHOP.renderStaffReturnsPage();
   else if (page === 'mood_board') html = await VW_SHOP.renderTileMoodBoard();
   else if (page === 'broadcast') html = await renderBroadcastPage();
   else if (page === 'contractor_kyc') html = await VW_LABOR.renderContractorKYCReview();
