@@ -645,6 +645,121 @@ async function showAuthScreen(mode) {
     document.body.appendChild(overlay);
   }
 
+  // If mode is 'staff' — go straight to staff PIN login
+  if (mode === 'staff') {
+    overlay.innerHTML = `
+    <div class="identity-card">
+      <div class="id-logo">VW</div>
+      <h2 style="margin-bottom:4px">Staff Login</h2>
+      <p class="id-sub" style="margin-bottom:16px">V Wholesale · Vijayawada</p>
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <input type="tel" id="staff-phone" class="form-input" placeholder="10-digit mobile" inputmode="numeric"
+          oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">6-Digit PIN</label>
+        <input type="password" id="staff-pin" class="form-input" placeholder="••••••" inputmode="numeric" maxlength="6"
+          onkeydown="if(event.key==='Enter')handleStaffLogin()">
+      </div>
+      <button class="btn-primary full-width" onclick="handleStaffLogin()">Log In →</button>
+      <a href="./shop.html" style="display:block;text-align:center;margin-top:12px;font-size:12px;color:var(--text3);text-decoration:none">← Back to Shop</a>
+    </div>`;
+    overlay.style.display = 'flex';
+
+    // Wire handleStaffLogin
+    window.handleStaffLogin = async function() {
+      const phone = document.getElementById('staff-phone')?.value?.trim();
+      const pin   = document.getElementById('staff-pin')?.value?.trim();
+      if (!phone || !pin) { showToast('Enter phone and PIN', 'warn'); return; }
+      const btn = document.querySelector('[onclick="handleStaffLogin()"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Logging in...'; }
+      try {
+        const { data, error } = await VW_DB.client.from('profiles')
+          .select('id,name,role,status,pin')
+          .eq('phone', phone).single();
+        if (error || !data) { showToast('Phone not found', 'error'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
+        if (data.pin !== pin) { showToast('Incorrect PIN', 'error'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
+        if (data.status === 'pending') { showToast('Account pending approval', 'warn'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
+        // Sign in with Supabase
+        await VW_DB.client.auth.signInWithPassword({ email: phone + '@vwholesale.in', password: pin });
+        overlay.remove();
+        await routeByRole();
+      } catch(e) {
+        showToast('Login failed: ' + e.message, 'error');
+        if(btn){btn.disabled=false;btn.textContent='Log In →';}
+      }
+    };
+    return;
+  }
+
+  // If mode is 'contractor' — go straight to contractor OTP login
+  if (mode === 'contractor') {
+    overlay.innerHTML = `
+    <div class="identity-card">
+      <div class="id-logo">👷</div>
+      <h2 style="margin-bottom:4px">Contractor Login</h2>
+      <p class="id-sub" style="margin-bottom:16px">V Wholesale Contractor Club</p>
+      <div class="form-group">
+        <label class="form-label">Phone Number</label>
+        <div style="display:flex;align-items:center;border:1.5px solid var(--gold-border);border-radius:10px;overflow:hidden">
+          <span style="padding:10px;background:var(--bg2);font-size:13px;font-weight:700;border-right:1px solid var(--border)">+91</span>
+          <input type="tel" id="contractor-phone" placeholder="10-digit mobile" inputmode="numeric"
+            style="flex:1;padding:10px;background:none;border:none;outline:none;font-size:14px;color:var(--text)"
+            oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Full Name</label>
+        <input type="text" id="contractor-name" class="form-input" placeholder="Your full name">
+      </div>
+      <button class="btn-primary full-width" onclick="handleContractorLogin()">Send OTP →</button>
+      <a href="./shop.html" style="display:block;text-align:center;margin-top:12px;font-size:12px;color:var(--text3);text-decoration:none">← Back to Shop</a>
+    </div>`;
+    overlay.style.display = 'flex';
+
+    window.handleContractorLogin = async function() {
+      const phone = document.getElementById('contractor-phone')?.value?.trim();
+      const name  = document.getElementById('contractor-name')?.value?.trim();
+      if (!phone || phone.length < 10) { showToast('Enter valid phone', 'warn'); return; }
+      const btn = document.querySelector('[onclick="handleContractorLogin()"]');
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending OTP...'; }
+      try {
+        const { error } = await VW_DB.client.auth.signInWithOtp({ phone: '+91' + phone, options: { data: { name, role: 'contractor' } } });
+        if (error) throw error;
+        // Show OTP input
+        document.querySelector('.identity-card').innerHTML = `
+          <div class="id-logo">📱</div>
+          <h2 style="margin-bottom:4px">Enter OTP</h2>
+          <p class="id-sub" style="margin-bottom:16px">Sent to +91 ${phone}</p>
+          <div class="form-group">
+            <label class="form-label">6-Digit OTP</label>
+            <input type="tel" id="contractor-otp" class="form-input" placeholder="• • • • • •"
+              inputmode="numeric" maxlength="6" style="text-align:center;font-size:20px;letter-spacing:8px">
+          </div>
+          <button class="btn-primary full-width" onclick="verifyContractorOTP('${phone}')">Verify →</button>`;
+      } catch(e) {
+        showToast('Failed to send OTP: ' + (e.message || 'Try again'), 'error');
+        if(btn){btn.disabled=false;btn.textContent='Send OTP →';}
+      }
+    };
+
+    window.verifyContractorOTP = async function(phone) {
+      const otp = document.getElementById('contractor-otp')?.value?.trim();
+      if (!otp || otp.length < 6) { showToast('Enter 6-digit OTP', 'warn'); return; }
+      try {
+        const { error } = await VW_DB.client.auth.verifyOtp({ phone: '+91' + phone, token: otp, type: 'sms' });
+        if (error) throw error;
+        overlay.remove();
+        await routeByRole();
+      } catch(e) {
+        showToast('Invalid OTP', 'error');
+      }
+    };
+    return;
+  }
+
+  // Default — show all three role options (customer self-registration)
   overlay.innerHTML = `
     <div class="identity-card">
       <div class="id-logo">VW</div>
@@ -899,8 +1014,13 @@ async function routeByRole() {
   await loadCurrentProfile();
   const role = currentProfile?.role;
   const status = currentProfile?.status;
+  const params = new URLSearchParams(window.location.search);
 
-  if (!role) { await showAuthScreen(); return; }
+  if (!role) {
+    const mode = params.has('contractor') ? 'contractor' : params.has('staff') ? 'staff' : undefined;
+    await showAuthScreen(mode);
+    return;
+  }
 
   // Contractor pending approval
   if (role === 'contractor' && status === 'pending') {
