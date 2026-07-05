@@ -472,19 +472,73 @@
 <div id="bottom-nav">
   <div class="nav-item active" onclick="goHome()"><span class="nav-icon">🏠</span>Home</div>
   <div class="nav-item" onclick="showCategory(null)"><span class="nav-icon">🛒</span>Shop</div>
-  <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">🎁</span>Offers</div>
-  <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">📦</span>Orders</div>
+  <div class="nav-item" onclick="openLoginSheet('offers')"><span class="nav-icon">🎁</span>Offers</div>
+  <div class="nav-item" onclick="openLoginSheet('orders')"><span class="nav-icon">📦</span>Orders</div>
   <div class="nav-item" onclick="openLoginSheet()"><span class="nav-icon">👤</span>Login</div>
 </div>
 
-<!-- STAFF LOGIN FOOTER LINK -->
-<div style="text-align:center;padding:14px;background:#f9f9f9;border-top:1px solid #eee">
-  <a href="./index.html?staff=1"
-    style="font-size:11px;color:#999;text-decoration:none;font-weight:600">
-    🏪 V Wholesale Staff Login
-  </a>
-  <div style="font-size:10px;color:#ccc;margin-top:2px">Vijayawada · 8712697930</div>
-</div>
+<!-- FOOTER -->
+<footer style="background:#1a1a1a;color:#fff;padding:28px 16px 100px">
+
+  <!-- BRAND -->
+  <div style="text-align:center;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.1)">
+    <div style="font-size:18px;font-weight:900;color:#f5c842;margin-bottom:4px">V Wholesale</div>
+    <div style="font-size:11px;color:rgba(255,255,255,0.5)">Vijayawada's Home Building Store</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:6px">📞 8712697930 &nbsp;·&nbsp; 📍 NH65, Bhavanipuram</div>
+  </div>
+
+  <!-- LINKS GRID -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+    <div>
+      <div style="font-size:11px;font-weight:800;color:#f5c842;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Company</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">About Us</a>
+        <a href="tel:8712697930" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Contact Us</a>
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Price Lists</a>
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">FAQ's</a>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;font-weight:800;color:#f5c842;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Policy</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Refund Policy</a>
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Privacy Policy</a>
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Terms of Service</a>
+        <a href="#" style="font-size:13px;color:rgba(255,255,255,0.7);text-decoration:none">Shipping Policy</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- PARTNER LOGINS -->
+  <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:800;color:#f5c842;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Partner Access</div>
+    <div style="display:flex;gap:8px">
+      <a href="./index.html?staff=1"
+        style="flex:1;display:block;text-align:center;padding:10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;text-decoration:none;font-size:12px;font-weight:700">
+        🏪 Staff Login
+      </a>
+      <a href="./index.html?staff=1"
+        style="flex:1;display:block;text-align:center;padding:10px;background:rgba(245,200,66,0.1);border:1px solid rgba(245,200,66,0.3);border-radius:10px;color:#f5c842;text-decoration:none;font-size:12px;font-weight:700">
+        👷 Contractor Login
+      </a>
+    </div>
+  </div>
+
+  <!-- NEWSLETTER -->
+  <div style="border-top:1px solid rgba(255,255,255,0.1);padding-top:16px;margin-bottom:16px;text-align:center">
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">Get New Products & Special Offers</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <input type="email" placeholder="your@email.com"
+        style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.08);color:#fff;font-size:13px;outline:none">
+      <button style="padding:10px 16px;background:#f5c842;border:none;border-radius:8px;color:#000;font-size:13px;font-weight:800;cursor:pointer">→</button>
+    </div>
+  </div>
+
+  <!-- COPYRIGHT -->
+  <div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.35);padding-top:12px;border-top:1px solid rgba(255,255,255,0.08)">
+    © 2026 Vassure Wholesale Pvt. Ltd. · All rights reserved
+  </div>
+</footer>
 
 <!-- TOAST -->
 <div id="toast"></div>
@@ -557,25 +611,171 @@ function openCart() {
 }
 
 // ── LOGIN SHEET ──
+// ── CUSTOMER LOGIN — OTP via Supabase ──
+let _loginPhone = '';
+
 function openLoginSheet(context) {
+  _loginPhone = '';
+  renderLoginSheet(context);
+  document.getElementById('sheet-overlay').classList.add('open');
+  document.getElementById('bottom-sheet').classList.add('open');
+}
+
+function renderLoginSheet(context) {
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div style="text-align:center;padding:8px 0 20px">
-      <div style="font-size:42px;margin-bottom:12px">${context === 'cart' ? '🛒' : '🔒'}</div>
-      <div style="font-size:17px;font-weight:800;margin-bottom:6px">${context === 'cart' ? 'Login to place order' : 'Login to V Wholesale'}</div>
-      <div style="font-size:13px;color:#666;margin-bottom:20px;line-height:1.6">
-        Create a free account to place orders,<br>track delivery and earn loyalty points
+    <div style="padding:4px 0 20px">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:36px;margin-bottom:8px">${context === 'cart' ? '🛒' : '👤'}</div>
+        <div style="font-size:17px;font-weight:800;margin-bottom:4px">
+          ${context === 'cart' ? 'Login to place order' : context === 'orders' ? 'Login to view orders' : 'Login to V Wholesale'}
+        </div>
+        <div style="font-size:12px;color:#888">Earn loyalty points · Track orders · Get offers</div>
       </div>
-      <a href="https://hmehtavw.github.io/vwholesale-app/" style="display:block;background:#2a7a3b;color:#fff;font-size:14px;font-weight:800;padding:14px;border-radius:12px;text-decoration:none;margin-bottom:10px">
-        Login / Sign Up — Free →
-      </a>
-      <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:#f3f4f6;border:none;font-size:13px;color:#555;cursor:pointer">
+
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
+        <div style="display:flex;align-items:center;border:1.5px solid #2a7a3b;border-radius:10px;overflow:hidden">
+          <span style="padding:12px 10px;background:#f3f4f6;font-size:13px;font-weight:700;color:#333;border-right:1px solid #ddd">+91</span>
+          <input id="login-phone" type="tel" inputmode="numeric" maxlength="10"
+            placeholder="10-digit mobile"
+            style="flex:1;padding:12px;border:none;outline:none;font-size:15px;font-weight:700"
+            oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Full Name</label>
+        <input id="login-name" type="text" placeholder="Your full name"
+          style="width:100%;padding:12px;border:1.5px solid #ddd;border-radius:10px;font-size:14px;outline:none;box-sizing:border-box">
+      </div>
+
+      <button onclick="sendCustomerOTP()"
+        style="width:100%;padding:13px;background:#2a7a3b;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:8px">
+        Send OTP →
+      </button>
+      <button onclick="closeSheet()"
+        style="width:100%;padding:11px;border-radius:10px;background:#f3f4f6;border:none;font-size:13px;color:#555;cursor:pointer">
         Continue Browsing
       </button>
     </div>`;
-  document.getElementById('sheet-overlay').classList.add('open');
-  sheet.classList.add('open');
+}
+
+function renderOTPSheet() {
+  document.getElementById('bottom-sheet').innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="padding:4px 0 20px">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:36px;margin-bottom:8px">📱</div>
+        <div style="font-size:17px;font-weight:800;margin-bottom:4px">Enter OTP</div>
+        <div style="font-size:12px;color:#888">Sent to +91 ${_loginPhone}</div>
+      </div>
+      <div style="background:#e8f5e9;border:1px solid #c8e6c9;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#2a7a3b;font-weight:600">
+        ✅ OTP sent to your mobile number
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">6-Digit OTP</label>
+        <input id="login-otp" type="tel" inputmode="numeric" maxlength="6"
+          placeholder="● ● ● ● ● ●"
+          style="width:100%;padding:14px;border:1.5px solid #2a7a3b;border-radius:10px;font-size:22px;font-weight:800;text-align:center;letter-spacing:8px;outline:none;box-sizing:border-box">
+      </div>
+      <button onclick="verifyCustomerOTP()"
+        style="width:100%;padding:13px;background:#2a7a3b;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;margin-bottom:8px">
+        Verify & Login →
+      </button>
+      <button onclick="renderLoginSheet()"
+        style="width:100%;padding:11px;border-radius:10px;background:#f3f4f6;border:none;font-size:13px;color:#555;cursor:pointer">
+        ← Change Number
+      </button>
+    </div>`;
+}
+
+async function sendCustomerOTP() {
+  const phone = document.getElementById('login-phone')?.value?.trim();
+  if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile number'); return; }
+
+  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending OTP...'; }
+
+  _loginPhone = phone;
+  window._loginName = document.getElementById('login-name')?.value?.trim() || '';
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ phone: '+91' + phone, create_user: true })
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      renderOTPSheet();
+    } else {
+      // Fallback: send to email derived from phone
+      const emailRes = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email: phone + '@vwholesale.in', create_user: true })
+      });
+      if (emailRes.ok) {
+        renderOTPSheet();
+      } else {
+        toast('Could not send OTP. Please call 8712697930');
+        if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
+      }
+    }
+  } catch(e) {
+    toast('Network error. Check connection.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
+  }
+}
+
+async function verifyCustomerOTP() {
+  const otp = document.getElementById('login-otp')?.value?.trim();
+  if (!otp || otp.length < 6) { toast('Enter the 6-digit OTP'); return; }
+
+  const btn = document.querySelector('[onclick="verifyCustomerOTP()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Verifying...'; }
+
+  try {
+    // Try SMS OTP first
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ phone: '+91' + _loginPhone, token: otp, type: 'sms' })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.access_token) {
+      localStorage.setItem('sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token',
+        JSON.stringify({ access_token: data.access_token, user: data.user }));
+      closeSheet();
+      toast('Welcome to V Wholesale! 🎉');
+      setTimeout(() => window.location.replace('./index.html'), 1200);
+    } else {
+      // Try email OTP verify
+      const emailRes = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email: _loginPhone + '@vwholesale.in', token: otp, type: 'email' })
+      });
+      const emailData = await emailRes.json();
+      if (emailRes.ok && emailData.access_token) {
+        localStorage.setItem('sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token',
+          JSON.stringify({ access_token: emailData.access_token, user: emailData.user }));
+        closeSheet();
+        toast('Welcome to V Wholesale! 🎉');
+        setTimeout(() => window.location.replace('./index.html'), 1200);
+      } else {
+        toast('Invalid OTP. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify & Login →'; }
+      }
+    }
+  } catch(e) {
+    toast('Verification failed. Try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Verify & Login →'; }
+  }
 }
 
 function closeSheet() {
