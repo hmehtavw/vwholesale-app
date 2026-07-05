@@ -50,9 +50,9 @@ function applyRolePermissions() {
   if (role === 'customer') {
     if (nav) nav.innerHTML = `
       <button class="nav-btn" data-page="shop" onclick="navigateTo('shop')"><span class="nav-icon">🏠</span><span>Home</span></button>
-      <button class="nav-btn" data-page="shop" onclick="navigateTo('shop');VW_SHOP.filterCategory(null)"><span class="nav-icon">🛒</span><span>Shop</span></button>
+      <button class="nav-btn" data-page="shop" onclick="navigateTo('shop')"><span class="nav-icon">🛒</span><span>Shop</span></button>
+      <button class="nav-btn" data-page="offers" onclick="navigateTo('offers')"><span class="nav-icon">🎁</span><span>Offers</span></button>
       <button class="nav-btn" data-page="my_orders" onclick="navigateTo('my_orders')"><span class="nav-icon">📦</span><span>Orders</span></button>
-      <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
       <button class="nav-btn" data-page="customer_profile" onclick="navigateTo('customer_profile')"><span class="nav-icon">👤</span><span>Profile</span></button>`;
     return;
   }
@@ -225,6 +225,9 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'contractor_kyc') html = await VW_LABOR.renderContractorKYCReview();
+  else if (page === 'sample_requests') html = await VW_SHOP.renderSampleRequestsDashboard();
+  else if (page === 'offers') html = await VW_SHOP.renderOffersPage();
   else if (page === 'customer_returns') html = await VW_SHOP.renderCustomerReturnRequest();
   else if (page === 'customer_profile') html = await VW_SHOP.renderCustomerProfilePage();
   else if (page === 'contractor_shop') html = await VW_SHOP.renderContractorShopPage();
@@ -1562,6 +1565,16 @@ async function handleNotificationAction(notifId, action) {
     closeSheet();
     navigateTo('inventory');
     setTimeout(() => VW_INVENTORY.showAddPO(n.relatedId), 100);
+    return;
+  }
+  if (action === 'open_contractor_kyc') {
+    closeSheet();
+    await navigateTo('contractor_kyc');
+    return;
+  }
+  if (action === 'open_returns') {
+    closeSheet();
+    await navigateTo('returns');
     return;
   }
   if (action === 'open_order') {

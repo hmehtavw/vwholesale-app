@@ -9879,3 +9879,379 @@ async function submitReturnRequest(orderId, orderNo) {
 window.VW_SHOP.renderCustomerReturnRequest = renderCustomerReturnRequest;
 window.VW_SHOP.openReturnForm = openReturnForm;
 window.VW_SHOP.submitReturnRequest = submitReturnRequest;
+
+// ═══════════════════════════════════════════════════════════════
+// CONTRACTOR KYC APPROVAL — Management view
+// ═══════════════════════════════════════════════════════════════
+
+async function renderContractorKYCReview() {
+  const { data: pending } = await VW_DB.client
+    .from('contractor_profiles')
+    .select('id,name,phone,kyc_status,pan_card_url,aadhaar_url,passbook_url,pan_no,bank_account_no,bank_ifsc,bank_name,contractor_score,created_at')
+    .in('kyc_status', ['pending','approved','rejected'])
+    .order('created_at', { ascending: false })
+    .limit(30);
+
+  const statusColor = { pending:'var(--gold)', approved:'var(--green)', rejected:'var(--red)' };
+
+  return `
+  <div class="module-header">
+    <h2>👷 Contractor KYC</h2>
+    <div style="font-size:11px;color:var(--text3)">${pending?.filter(p=>p.kyc_status==='pending').length||0} pending</div>
+  </div>
+
+  ${!(pending?.length) ? '<p class="empty-msg">No contractor KYC submissions yet</p>' :
+  pending.map(cp => `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border-left:4px solid ${statusColor[cp.kyc_status]||'var(--border)'}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div>
+        <div style="font-size:14px;font-weight:700">${cp.name||'—'}</div>
+        <div style="font-size:12px;color:var(--text3)">${cp.phone||'—'}</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${statusColor[cp.kyc_status]}20;color:${statusColor[cp.kyc_status]}">
+        ${cp.kyc_status}
+      </span>
+    </div>
+
+    <!-- BANK DETAILS -->
+    <div style="background:var(--bg3);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--text3)">Account</span><span>${cp.bank_account_no||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--text3)">IFSC</span><span>${cp.bank_ifsc||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--text3)">Bank</span><span>${cp.bank_name||'—'}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--text3)">PAN</span><span>${cp.pan_no||'—'}</span></div>
+    </div>
+
+    <!-- DOCUMENTS -->
+    <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+      ${[
+        { label:'PAN Card', url: cp.pan_card_url },
+        { label:'Aadhaar', url: cp.aadhaar_url },
+        { label:'Passbook', url: cp.passbook_url },
+      ].map(doc => doc.url ? `
+      <a href="${VW_DB.client.storage.from('kyc-documents').getPublicUrl(doc.url).data?.publicUrl||'#'}" target="_blank"
+        style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:#60A5FA;font-size:11px;font-weight:600;text-decoration:none">
+        📄 ${doc.label}
+      </a>` : `<span style="font-size:11px;color:var(--text3);padding:5px 10px;border-radius:8px;background:var(--bg3)">❌ ${doc.label}</span>`
+      ).join('')}
+    </div>
+
+    <!-- ACTIONS -->
+    ${cp.kyc_status === 'pending' ? `
+    <div style="display:flex;gap:8px">
+      <button onclick="VW_LABOR.approveContractorKYC(${cp.id})"
+        style="flex:1;padding:10px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+        ✅ Approve KYC
+      </button>
+      <button onclick="VW_LABOR.rejectContractorKYC(${cp.id})"
+        style="flex:1;padding:10px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:12px;font-weight:700;cursor:pointer">
+        ❌ Reject
+      </button>
+    </div>` : cp.kyc_status === 'approved' ? `
+    <div style="font-size:11px;color:var(--green)">✅ KYC approved — contractor can receive payments</div>` : `
+    <div style="font-size:11px;color:var(--red)">❌ KYC rejected</div>`}
+  </div>`).join('')}`;
+}
+
+async function approveContractorKYC(cpId) {
+  const prof = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('contractor_profiles').update({
+    kyc_status: 'approved',
+    kyc_reviewed_at: new Date().toISOString(),
+    kyc_reviewed_by: prof?.id,
+    is_active: true,
+  }).eq('id', cpId);
+
+  // Get contractor profile_id to notify them
+  const { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('profile_id,name').eq('id', cpId).single().catch(() => ({ data: null }));
+
+  if (cp?.profile_id) {
+    await createPersistedNotification({
+      category: 'kyc_approved',
+      title: '✅ KYC Verified — You can now receive jobs!',
+      body: 'Your documents have been verified. Your account is now active.',
+      recipientId: cp.profile_id,
+    }).catch(() => {});
+    await sendWebPush(cp.profile_id, '✅ KYC Approved!', 'Your contractor account is now active. Start receiving jobs!').catch(() => {});
+  }
+
+  showToast('KYC approved — contractor activated ✅', 'success');
+  navigateTo('contractor_kyc');
+}
+
+async function rejectContractorKYC(cpId) {
+  const reason = prompt('Reason for rejection (will be shared with contractor):');
+  if (!reason) return;
+
+  const prof = VW_AUTH.getCurrentProfile();
+  await VW_DB.client.from('contractor_profiles').update({
+    kyc_status: 'rejected',
+    kyc_reviewed_at: new Date().toISOString(),
+    kyc_reviewed_by: prof?.id,
+  }).eq('id', cpId);
+
+  const { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('profile_id').eq('id', cpId).single().catch(() => ({ data: null }));
+
+  if (cp?.profile_id) {
+    await createPersistedNotification({
+      category: 'kyc_rejected',
+      title: '❌ KYC Verification Failed',
+      body: `Reason: ${reason}. Please resubmit with correct documents.`,
+      recipientId: cp.profile_id,
+    }).catch(() => {});
+  }
+
+  showToast('KYC rejected — contractor notified', 'warn');
+  navigateTo('contractor_kyc');
+}
+
+window.VW_LABOR.approveContractorKYC = approveContractorKYC;
+window.VW_LABOR.rejectContractorKYC = rejectContractorKYC;
+window.VW_LABOR.renderContractorKYCReview = renderContractorKYCReview;
+
+// ═══════════════════════════════════════════════════════════════
+// SAMPLE REQUEST MANAGEMENT — Staff view
+// ═══════════════════════════════════════════════════════════════
+
+async function renderSampleRequestsDashboard() {
+  const { data: samples } = await VW_DB.client
+    .from('sample_requests')
+    .select('*')
+    .order('placed_at', { ascending: false })
+    .limit(30);
+
+  const statusColor = {
+    pending:'var(--gold)', out:'#60A5FA',
+    returned:'var(--green)', redeemed:'var(--green)', forfeited:'var(--red)'
+  };
+
+  return `
+  <div class="module-header">
+    <h2>🏠 Sample Requests</h2>
+    <div style="font-size:11px;color:var(--text3)">${samples?.filter(s=>s.status==='pending').length||0} pending</div>
+  </div>
+
+  ${!(samples?.length) ? '<p class="empty-msg">No sample requests yet</p>' :
+  samples.map(s => {
+    const addr = typeof s.delivery_address === 'string' ? JSON.parse(s.delivery_address||'{}') : (s.delivery_address||{});
+    const sc = statusColor[s.status] || 'var(--text3)';
+    return `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border-left:4px solid ${sc}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700">${s.customer_name||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${s.customer_phone||'—'}</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:2px">${addr.address||addr.address_line1||'No address'}</div>
+        </div>
+        <div style="text-align:right">
+          <span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:${sc}20;color:${sc}">${s.status}</span>
+          <div style="font-size:11px;color:var(--gold);margin-top:4px;font-weight:700">₹${s.total_charge||500}</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        ${(s.products||[]).map(p => p.description || p.name || '').join(', ') || 'Products not specified'}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">
+        Placed: ${new Date(s.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+        ${s.return_deadline ? ` · Return by: ${new Date(s.return_deadline).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${s.status === 'pending' ? `
+        <button onclick="VW_SHOP.dispatchSample(${s.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer">
+          🚚 Mark Dispatched
+        </button>` : ''}
+        ${s.status === 'out' ? `
+        <button onclick="VW_SHOP.markSampleReturned(${s.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
+          ✅ Mark Returned
+        </button>
+        <button onclick="VW_SHOP.markSampleForfeited(${s.id})"
+          style="flex:1;padding:8px;border-radius:8px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red);font-size:11px;cursor:pointer">
+          ⏰ Forfeited
+        </button>` : ''}
+        <a href="tel:${s.customer_phone}"
+          style="padding:8px 12px;border-radius:8px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-size:12px;font-weight:700;text-decoration:none">
+          📞
+        </a>
+      </div>
+    </div>`;
+  }).join('')}`;
+}
+
+async function dispatchSample(id) {
+  const returnDeadline = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2hrs from now
+  await VW_DB.client.from('sample_requests').update({
+    status: 'out',
+    return_deadline: returnDeadline,
+  }).eq('id', id);
+  showToast('Marked as dispatched — 2hr return window started', 'success');
+  navigateTo('sample_requests');
+}
+
+async function markSampleReturned(id) {
+  await VW_DB.client.from('sample_requests').update({
+    status: 'returned',
+    returned_at: new Date().toISOString(),
+  }).eq('id', id);
+  showToast('Sample returned ✅', 'success');
+  navigateTo('sample_requests');
+}
+
+async function markSampleForfeited(id) {
+  await VW_DB.client.from('sample_requests').update({ status: 'forfeited' }).eq('id', id);
+  showToast('Marked as forfeited — charge not refundable', 'warn');
+  navigateTo('sample_requests');
+}
+
+window.VW_SHOP.renderSampleRequestsDashboard = renderSampleRequestsDashboard;
+window.VW_SHOP.dispatchSample = dispatchSample;
+window.VW_SHOP.markSampleReturned = markSampleReturned;
+window.VW_SHOP.markSampleForfeited = markSampleForfeited;
+
+// ═══════════════════════════════════════════════════════════════
+// OFFERS & PROMOTIONS PAGE
+// ═══════════════════════════════════════════════════════════════
+
+async function renderOffersPage() {
+  // Fetch active offers from settings
+  const offers = await VW_DB.getSetting('active_offers', []);
+  // Fetch featured products (most discounted)
+  const { data: featured } = await VW_DB.client.from('products')
+    .select('id,name,brand,category,price,vwp,mrp,unit,images,photos')
+    .eq('is_active', true)
+    .gt('mrp', 0)
+    .gt('stock', 0)
+    .order('mrp', { ascending: false })
+    .limit(6);
+
+  const discounted = (featured||[]).filter(p => {
+    const price = p.vwp || p.price || 0;
+    return p.mrp > price * 1.1; // at least 10% discount
+  }).slice(0, 6);
+
+  return `
+  <div class="module-header"><h2>🎁 Offers & Deals</h2></div>
+
+  <!-- HERO OFFER BANNER -->
+  <div style="background:linear-gradient(135deg,#f5c842,#f59e0b);border-radius:16px;padding:20px;margin-bottom:16px;color:#000">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">🔥 Today's Special</div>
+    <div style="font-size:20px;font-weight:900;margin-bottom:4px">Free Delivery</div>
+    <div style="font-size:13px;font-weight:600;opacity:0.8">On all orders above ₹2,000 within Vijayawada</div>
+    <button onclick="navigateTo('shop')" style="margin-top:12px;padding:8px 20px;border-radius:20px;background:#000;color:#f5c842;border:none;font-size:12px;font-weight:800;cursor:pointer">
+      Shop Now →
+    </button>
+  </div>
+
+  <!-- LOYALTY OFFER -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:16px;margin-bottom:16px;color:#fff">
+    <div style="font-size:11px;font-weight:700;color:#f5c842;margin-bottom:6px">⭐ LOYALTY REWARDS</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Earn 1 point for every ₹100</div>
+    <div style="font-size:12px;opacity:0.7;margin-bottom:10px">Redeem points on future purchases · No expiry</div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:900;color:#f5c842">1pt</div>
+        <div style="font-size:9px;opacity:0.7">per ₹100</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:900;color:#f5c842">= ₹1</div>
+        <div style="font-size:9px;opacity:0.7">per point</div>
+      </div>
+      <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:16px;font-weight:900;color:#f5c842">∞</div>
+        <div style="font-size:9px;opacity:0.7">no expiry</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TILE SAMPLE OFFER -->
+  <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:14px;padding:16px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;color:#8B5CF6;margin-bottom:6px">🏠 TRY BEFORE YOU BUY</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Tile Sample at Home</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      ₹500 per tile · 100% redeemable on purchase · 2-hour return window
+    </div>
+    <button onclick="VW_SHOP.requestTileSample()" style="width:100%;padding:10px;border-radius:10px;background:#8B5CF6;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer">
+      Request Sample Visit →
+    </button>
+  </div>
+
+  <!-- CONTRACTOR OFFER -->
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:14px;padding:16px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">👷 CONTRACTOR CLUB</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Special Trade Pricing</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px">
+      Register as a contractor · Get exclusive net pricing · Earn on every referral
+    </div>
+    <button onclick="navigateTo('contractor_profile')" style="width:100%;padding:10px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+      Join Contractor Club →
+    </button>
+  </div>
+
+  ${discounted.length ? `
+  <!-- FEATURED DEALS -->
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px">🔥 Best Deals Right Now</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    ${discounted.map(p => {
+      const price = p.vwp || p.price || 0;
+      const disc = Math.round((p.mrp - price) / p.mrp * 100);
+      const img = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+      return `
+      <div onclick="navigateTo('shop')" style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:pointer">
+        <div style="position:relative">
+          <div style="height:90px;background:var(--bg3);display:flex;align-items:center;justify-content:center">
+            ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : `<span style="font-size:28px">${SHOP_CATEGORIES.find(c=>c.key===p.category)?.icon||'📦'}</span>`}
+          </div>
+          <div style="position:absolute;top:6px;right:6px;background:var(--red);color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px">${disc}% OFF</div>
+        </div>
+        <div style="padding:8px">
+          <div style="font-size:11px;font-weight:700;margin-bottom:2px;line-height:1.3">${p.name}</div>
+          <div style="display:flex;align-items:baseline;gap:4px">
+            <span style="font-size:13px;font-weight:900;color:var(--gold)">₹${price.toLocaleString('en-IN')}</span>
+            <span style="font-size:10px;color:var(--text3);text-decoration:line-through">₹${p.mrp.toLocaleString('en-IN')}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>` : ''}`;
+}
+
+window.VW_SHOP.renderOffersPage = renderOffersPage;
+
+// ═══════════════════════════════════════════════════════════════
+// PRICE HISTORY FOR RETURNING CUSTOMERS
+// ═══════════════════════════════════════════════════════════════
+
+async function renderPriceHistoryForCustomer(customerId) {
+  // Fetch past TQs for this customer with prices
+  const { data: tqs } = await VW_DB.client
+    .from('tile_quotations')
+    .select('tq_no,created_at,quoted_price_per_sqft,grand_total,total_area_sqft,approval_status')
+    .eq('customer_id', customerId)
+    .in('approval_status', ['approved','advance_collected'])
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  if (!tqs?.length) return '';
+
+  return `
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">📋 Previous Quotes for this Customer</div>
+    ${tqs.map(q => `
+    <div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border2)">
+      <div>
+        <span style="font-weight:600">${q.tq_no}</span>
+        <span style="color:var(--text3);margin-left:6px">${new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+      </div>
+      <div style="text-align:right">
+        ${q.quoted_price_per_sqft ? `<span style="color:var(--gold);font-weight:700">₹${q.quoted_price_per_sqft}/sqft</span>` : ''}
+        ${q.grand_total ? `<span style="color:var(--text3);margin-left:4px">· ₹${parseInt(q.grand_total).toLocaleString('en-IN')}</span>` : ''}
+      </div>
+    </div>`).join('')}
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">Approved quotes only · Shown to help you quote consistently</div>
+  </div>`;
+}
+
+window.VW_TILES = window.VW_TILES || {};
+window.VW_TILES.renderPriceHistoryForCustomer = renderPriceHistoryForCustomer;
