@@ -2016,6 +2016,14 @@ async function init() {
 
   // Route to correct home based on role
   const _initRole = VW_AUTH.getRole?.();
+
+  // If ?staff=1 or ?contractor=1 with no session — show login screen directly
+  const _initParams = new URLSearchParams(window.location.search);
+  if (!_initRole && (_initParams.has('staff') || _initParams.has('contractor'))) {
+    await VW_AUTH.showAuthScreen(_initParams.has('contractor') ? 'contractor' : 'staff');
+    return;
+  }
+
   if (!_initRole || _initRole === 'customer') {
     await navigateTo('shop');
   } else if (_initRole === 'contractor') {

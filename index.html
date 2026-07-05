@@ -24,10 +24,12 @@
             return;
           }
         }
-        // No session — redirect to public shop (unless ?staff=1 or ?contractor=1 override)
+        // No session — check if staff/contractor link
         const params = new URLSearchParams(window.location.search);
-        if (!window.location.pathname.endsWith('shop.html') && 
-            !params.has('staff') && !params.has('contractor')) {
+        // ?staff=1 or ?contractor=1 — always stay on index.html (show login screen)
+        if (params.has('staff') || params.has('contractor')) return;
+        // Otherwise redirect guests to shop
+        if (!window.location.pathname.endsWith('shop.html')) {
           window.location.replace('./shop.html');
         }
       } catch(e) {
