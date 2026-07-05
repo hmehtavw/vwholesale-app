@@ -185,6 +185,16 @@ async function navigateToFresh(page, params, cacheKey) {
   const content = document.getElementById('app-content');
   if (!content) return;
 
+  // Toggle white background for shop/customer pages
+  const shopPages = ['shop','offers','my_orders','customer_profile','mood_board','tile_visualizer','my_addresses','customer_returns','wallet'];
+  if (shopPages.includes(page)) {
+    content.classList.add('shop-mode');
+    content.style.padding = '0';
+  } else {
+    content.classList.remove('shop-mode');
+    content.style.padding = '';
+  }
+
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const activeBtn = document.querySelector(`.nav-btn[data-page="${page}"]`);
   if (activeBtn) activeBtn.classList.add('active');
