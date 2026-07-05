@@ -7299,3 +7299,152 @@ async function renderFollowUpDashboard() {
 window.VW_FEATURES = window.VW_FEATURES || {};
 window.VW_FEATURES.renderFollowUpDashboard = renderFollowUpDashboard;
 window.renderFollowUpDashboard = renderFollowUpDashboard;
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER STATEMENT OF ACCOUNT
+// ═══════════════════════════════════════════════════════════════
+
+async function renderCustomerStatement(customerId) {
+  if (!customerId) {
+    // Show search first
+    return `
+    <div class="module-header"><h2>📄 Statement of Account</h2></div>
+    <div class="card">
+      <h3 class="card-title">Find Customer</h3>
+      <div class="form-group">
+        <label>Search by Name or Phone</label>
+        <input type="text" id="stmt-search" placeholder="Type name or phone..."
+          oninput="VW_FEATURES.searchStatementCustomer(this.value)">
+      </div>
+      <div id="stmt-search-results"></div>
+    </div>`;
+  }
+
+  const { data: cust } = await VW_DB.client.from('customers')
+    .select('*').eq('id', customerId).single().catch(() => ({ data: null }));
+  if (!cust) return '<div class="empty-msg">Customer not found</div>';
+
+  // Fetch all TQs for this customer
+  const { data: tqs } = await VW_DB.client.from('tile_quotations')
+    .select('tq_no,created_at,approval_status,grand_total,advance_amount,quoted_price_per_sqft,total_area_sqft')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  // Fetch all invoices
+  const { data: invs } = await VW_DB.client.from('invoices')
+    .select('invoice_no,date,total,amount_received,payment_method,credit_sale')
+    .eq('customer_id', customerId)
+    .order('date', { ascending: false })
+    .limit(20).catch(() => ({ data: [] }));
+
+  const totalInvoiced = (invs||[]).reduce((s,i) => s + (i.total||0), 0);
+  const totalReceived = (invs||[]).reduce((s,i) => s + (i.amount_received||i.total||0), 0);
+  const totalAdvance  = (tqs||[]).reduce((s,q) => s + (q.advance_amount||0), 0);
+  const outstanding   = Math.max(0, totalInvoiced - totalReceived);
+  const loyaltyPoints = cust.loyalty_points || 0;
+
+  return `
+  <div class="module-header">
+    <h2>📄 Statement</h2>
+    <button onclick="printCustomerStatement(${customerId})" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">🖨 Print</button>
+  </div>
+
+  <!-- CUSTOMER HEADER -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:16px;margin-bottom:14px;color:#fff">
+    <div style="font-size:18px;font-weight:900">${cust.name}</div>
+    <div style="font-size:12px;opacity:0.7;margin-bottom:10px">${cust.phone || '—'} · ${cust.city || 'Vijayawada'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+      <div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:16px;font-weight:900;color:#f5c842">₹${totalInvoiced.toLocaleString('en-IN')}</div>
+        <div style="font-size:9px;opacity:0.7">Total Billed</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:16px;font-weight:900;color:${outstanding>0?'#ef4444':'#4ade80'}">₹${outstanding.toLocaleString('en-IN')}</div>
+        <div style="font-size:9px;opacity:0.7">Outstanding</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:16px;font-weight:900;color:#f5c842">${loyaltyPoints}</div>
+        <div style="font-size:9px;opacity:0.7">Loyalty Pts</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TQ HISTORY -->
+  ${tqs?.length ? `
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px">📐 Tile Quotations (${tqs.length})</div>
+  ${tqs.map(q => `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px;font-size:11px">
+    <div>
+      <span style="font-weight:700">${q.tq_no}</span>
+      <span style="color:var(--text3);margin-left:6px">${new Date(q.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+      <div style="color:var(--text3)">${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft${q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:''}</div>
+    </div>
+    <div style="text-align:right">
+      ${q.grand_total ? `<div style="font-weight:700;color:var(--gold)">₹${parseInt(q.grand_total).toLocaleString('en-IN')}</div>` : ''}
+      ${q.advance_amount ? `<div style="color:var(--green);font-size:10px">Adv: ₹${q.advance_amount.toLocaleString('en-IN')}</div>` : ''}
+      <span style="font-size:10px;padding:2px 6px;border-radius:10px;background:var(--bg3)">${q.approval_status?.replace('_',' ')}</span>
+    </div>
+  </div>`).join('')}` : ''}
+
+  <!-- INVOICE HISTORY -->
+  ${invs?.length ? `
+  <div style="font-size:12px;font-weight:700;margin:12px 0 8px">🧾 Invoices (${invs.length})</div>
+  ${invs.map(inv => `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px;font-size:11px">
+    <div>
+      <span style="font-weight:700">${inv.invoice_no}</span>
+      <div style="color:var(--text3)">${new Date(inv.date).toLocaleDateString('en-IN')} · ${inv.payment_method}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-weight:700">₹${(inv.total||0).toLocaleString('en-IN')}</div>
+      ${inv.credit_sale ? `<div style="color:var(--red);font-size:10px">Credit Sale</div>` : ''}
+    </div>
+  </div>`).join('')}` : '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">No invoices yet</div>'}
+
+  <!-- OUTSTANDING ALERT -->
+  ${outstanding > 0 ? `
+  <div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;margin-top:8px">
+    <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:4px">⚠️ Outstanding Balance</div>
+    <div style="font-size:20px;font-weight:900;color:var(--red)">₹${outstanding.toLocaleString('en-IN')}</div>
+    <a href="https://wa.me/91${cust.phone}?text=${encodeURIComponent('Hi ' + cust.name.split(' ')[0] + ', this is V Wholesale. Your account has an outstanding balance of ₹' + outstanding.toLocaleString('en-IN') + '. Please arrange payment at your earliest convenience. Thank you!')}"
+      target="_blank" style="display:block;margin-top:8px;padding:8px;border-radius:8px;background:#25D366;color:#fff;text-align:center;font-size:12px;font-weight:700;text-decoration:none">
+      💬 Send WhatsApp Reminder
+    </a>
+  </div>` : ''}`;
+}
+
+async function searchStatementCustomer(query) {
+  const el = document.getElementById('stmt-search-results');
+  if (!el || !query || query.length < 2) return;
+
+  const { data } = await VW_DB.client.from('customers')
+    .select('id,name,phone,city')
+    .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
+    .limit(5);
+
+  el.innerHTML = (data||[]).map(c => `
+  <div onclick="navigateTo('statement',{id:${c.id}})"
+    style="padding:10px;background:var(--bg2);border-radius:8px;margin-bottom:6px;cursor:pointer;border:1px solid var(--border)">
+    <div style="font-size:13px;font-weight:700">${c.name}</div>
+    <div style="font-size:11px;color:var(--text3)">${c.phone || '—'} · ${c.city || 'Vijayawada'}</div>
+  </div>`).join('') || '<div style="font-size:12px;color:var(--text3)">No customers found</div>';
+}
+
+async function printCustomerStatement(customerId) {
+  // Open printable version
+  const win = window.open('', '_blank');
+  win.document.write('<html><head><title>Statement</title><style>body{font-family:Arial;margin:20px;font-size:12px}@media print{.no-print{display:none}}</style></head><body>');
+  win.document.write('<h2>V Wholesale — Statement of Account</h2>');
+  win.document.write('<p>Loading...</p>');
+  const _ps = win.document.createElement('script');
+  _ps.textContent = 'window.onload = function(){ window.print(); }';
+  win.document.head.appendChild(_ps);
+  win.document.write('</body></html>');
+  win.document.close();
+}
+
+window.VW_FEATURES = window.VW_FEATURES || {};
+window.VW_FEATURES.renderCustomerStatement = renderCustomerStatement;
+window.VW_FEATURES.searchStatementCustomer = searchStatementCustomer;
+window.renderCustomerStatement = renderCustomerStatement;

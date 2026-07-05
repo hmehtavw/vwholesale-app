@@ -3687,3 +3687,104 @@ window.learnFromQuotationItems = learnFromQuotationItems;
 
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// DELIVERY CHALLAN — Print dispatch slip for tile deliveries
+// ═══════════════════════════════════════════════════════════════
+
+async function printDeliveryChallan(invoiceId, tqId) {
+  let data = {};
+
+  if (invoiceId) {
+    const inv = await VW_DB.client.from('invoices').select('*').eq('id', invoiceId).single().then(r=>r.data).catch(()=>null);
+    if (inv) data = { ...inv, source: 'invoice' };
+  } else if (tqId) {
+    const tq = await VW_DB.client.from('tile_quotations').select('*').eq('id', tqId).single().then(r=>r.data).catch(()=>null);
+    if (tq) {
+      data = {
+        customer_name: tq.customer_name,
+        customer_phone: tq.customer_phone,
+        site_address: tq.site_address,
+        items: [{
+          name: `Tiles (${tq.selected_size?.label || ''}) — ${parseFloat(tq.total_area_sqft||0).toFixed(1)} sqft`,
+          qty: tq.total_boxes || 0,
+          unit: 'boxes',
+        }, ...(tq.extra_products || []).map(p => ({ name: p.name, qty: p.qty || 1, unit: p.unit || 'pcs' }))],
+        ref_no: tq.tq_no,
+        source: 'tq',
+      };
+    }
+  }
+
+  if (!data.customer_name) { showToast('No data to generate challan', 'warn'); return; }
+
+  const challanNo = `DC/${new Date().getFullYear()}/${String(Date.now()).slice(-6)}`;
+  const today = new Date().toLocaleDateString('en-IN', { day:'numeric', month:'long', year:'numeric' });
+
+  const win = window.open('', '_blank', 'width=600,height=800');
+  win.document.write(`<!DOCTYPE html><html><head>
+  <meta charset="UTF-8">
+  <title>Delivery Challan</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; color: #000; font-size: 13px; }
+    .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 10px; }
+    .title { font-size: 20px; font-weight: bold; }
+    .sub { font-size: 12px; color: #555; }
+    .row { display: flex; justify-content: space-between; margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    th, td { border: 1px solid #000; padding: 6px 8px; text-align: left; }
+    th { background: #f0f0f0; font-weight: bold; }
+    .sign-row { display: flex; justify-content: space-between; margin-top: 40px; }
+    .sign-box { text-align: center; border-top: 1px solid #000; width: 150px; padding-top: 4px; font-size: 11px; }
+    @media print { body { margin: 0; } .no-print { display: none; } }
+  </style>
+  </head><body>
+  <div class="header">
+    <div class="title">V Wholesale</div>
+    <div class="sub">Vassure Wholesale Pvt. Ltd. · 1-1-153, NH65, Bhavanipuram, Vijayawada · 8712697930</div>
+    <div style="font-size:16px;font-weight:bold;margin-top:6px">DELIVERY CHALLAN</div>
+  </div>
+
+  <div class="row"><span><b>Challan No:</b> ${challanNo}</span><span><b>Date:</b> ${today}</span></div>
+  <div class="row"><span><b>Ref:</b> ${data.ref_no || data.invoice_no || '—'}</span></div>
+
+  <div style="background:#f9f9f9;border:1px solid #ddd;padding:10px;margin:10px 0;border-radius:4px">
+    <div><b>Customer:</b> ${data.customer_name || '—'}</div>
+    <div><b>Phone:</b> ${data.customer_phone || '—'}</div>
+    <div><b>Delivery Address:</b> ${data.site_address || data.delivery_address || '—'}</div>
+  </div>
+
+  <table>
+    <thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Remarks</th></tr></thead>
+    <tbody>
+      ${(data.items || []).map((item, i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${item.name || item.description || ''}</td>
+        <td>${item.qty || ''}</td>
+        <td>${item.unit || 'pcs'}</td>
+        <td></td>
+      </tr>`).join('')}
+      <tr><td colspan="5" style="height:40px"></td></tr>
+    </tbody>
+  </table>
+
+  <div style="font-size:11px;color:#555;margin-top:8px">
+    ⚠️ Please check goods at the time of delivery. Any damage/shortage to be reported immediately.
+    <br>Goods once accepted in good condition will not be accepted for return.
+  </div>
+
+  <div class="sign-row">
+    <div class="sign-box">Prepared by</div>
+    <div class="sign-box">Driver / Delivery Person</div>
+    <div class="sign-box">Customer Signature</div>
+  </div>
+
+  <div class="no-print" style="margin-top:20px;text-align:center">
+    <button onclick="window.print()" style="padding:10px 24px;background:#000;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px">🖨 Print Challan</button>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
+window.printDeliveryChallan = printDeliveryChallan;

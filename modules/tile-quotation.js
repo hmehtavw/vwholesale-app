@@ -6524,6 +6524,11 @@ async function openTileQuote(id) {
         '</div>';
     })()}
 
+    ${q.customer_id ? await (async () => {
+      try { return await VW_TILES.renderPriceHistoryForCustomer(q.customer_id); }
+      catch(e) { return ''; }
+    })() : ''}
+
     ${chainTimeline}
 
     ${canIAction ? `
@@ -6553,7 +6558,8 @@ async function openTileQuote(id) {
     <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>
     <button class="btn-primary full-width" style="background:#25D366;color:#fff;margin-bottom:8px;font-size:14px;padding:13px" onclick="closeSheet();VW_TILES.tqConvertToInvoice(${id})">
       🧾 Convert to Invoice & Bill
-    </button>` : ''}
+    </button>
+    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="printDeliveryChallan(null,${id})">🚚 Print Delivery Challan</button>` : ''}
 
     ${q.approval_status === 'approved' ? `
     <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `

@@ -1907,3 +1907,133 @@ window.VW_CONTRACTOR.addToMeasurement = addToMeasurement;
 
 
 
+
+// ═══════════════════════════════════════════════════════════════
+// BULK WHATSAPP — Send message to multiple customers
+// ═══════════════════════════════════════════════════════════════
+
+async function renderBulkWhatsApp() {
+  const { data: customers } = await VW_DB.client
+    .from('customers')
+    .select('id,name,phone,city,last_visit')
+    .not('phone', 'is', null)
+    .order('last_visit', { ascending: false, nullsFirst: false })
+    .limit(200);
+
+  const segments = {
+    all: customers || [],
+    recent: (customers||[]).filter(c => c.last_visit && new Date(c.last_visit) > new Date(Date.now() - 30*86400000)),
+    loyal: (customers||[]).filter(c => c.last_visit && new Date(c.last_visit) > new Date(Date.now() - 90*86400000)),
+  };
+
+  return `
+  <div class="module-header"><h2>💬 Bulk WhatsApp</h2></div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">Select Recipients</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${[
+        { key:'all',    label:`All Customers (${segments.all.length})` },
+        { key:'recent', label:`Last 30 Days (${segments.recent.length})` },
+        { key:'loyal',  label:`Last 90 Days (${segments.loyal.length})` },
+      ].map((s,i) => `
+      <button id="bwa-seg-${s.key}" onclick="selectBWASegment('${s.key}')"
+        style="padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+          border:${i===0?'2px solid var(--gold)':'1px solid var(--border)'};
+          background:${i===0?'var(--gold-muted)':'var(--bg2)'}">
+        ${s.label}
+      </button>`).join('')}
+    </div>
+    <div id="bwa-count" style="font-size:12px;color:var(--gold);font-weight:700;margin-bottom:10px">
+      ${segments.all.length} customers selected
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">Message</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      ${[
+        { label:'New Arrival', msg:'Hi {name}, exciting new arrivals at V Wholesale! Visit us for the latest tiles, sanitaryware and home improvement products. 📍 NH65, Bhavanipuram, Vijayawada. 📞 8712697930' },
+        { label:'Festival Offer', msg:'Hi {name}, special festival offers at V Wholesale! Huge discounts on tiles, electricals, paints and more. Valid this week only. 📞 8712697930' },
+        { label:'Follow-up', msg:'Hi {name}, hope your home project is going well! V Wholesale is here for all your building material needs. Visit us or call 8712697930.' },
+      ].map(t => `
+      <button onclick="document.getElementById('bwa-message').value=\`${t.msg}\`"
+        style="padding:6px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;background:var(--bg2);border:1px solid var(--border)">
+        ${t.label}
+      </button>`).join('')}
+    </div>
+    <div class="form-group" style="margin:0">
+      <label>Message (use {name} for customer name)</label>
+      <textarea id="bwa-message" rows="4" placeholder="Type your message here..."
+        style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box">Hi {name}, greetings from V Wholesale! 
+
+We have exciting new products and offers for you. Visit us at NH65, Bhavanipuram, Vijayawada or call 8712697930.
+
+Thank you for your continued support! 🙏</textarea>
+    </div>
+  </div>
+
+  <div style="background:rgba(245,200,66,0.06);border:1px solid var(--gold-border);border-radius:10px;padding:10px;margin-bottom:14px;font-size:11px;color:var(--text2)">
+    ⚠️ This opens WhatsApp for each customer one at a time. Send to max 50 at once to avoid WhatsApp rate limits.
+  </div>
+
+  <button onclick="VW_CRM.startBulkWhatsApp()" style="width:100%;padding:13px;border-radius:10px;background:#25D366;border:none;color:#fff;font-size:14px;font-weight:800;cursor:pointer">
+    💬 Start Sending on WhatsApp
+  </button>`;
+}
+
+async function startBulkWhatsApp() {
+  const msg = document.getElementById('bwa-message')?.value?.trim();
+  if (!msg) { showToast('Write a message first', 'warn'); return; }
+
+  const seg = window._bwaSegment || 'all';
+  const { data: customers } = await VW_DB.client
+    .from('customers')
+    .select('id,name,phone')
+    .not('phone', 'is', null)
+    .limit(seg === 'recent' ? 50 : seg === 'loyal' ? 100 : 200);
+
+  if (!customers?.length) { showToast('No customers with phone numbers', 'warn'); return; }
+
+  // Build all WhatsApp URLs
+  const messages = customers.slice(0, 50).map(c => {
+    const personalised = msg.replace(/{name}/g, c.name?.split(' ')[0] || c.name || 'there');
+    return `https://wa.me/91${c.phone}?text=${encodeURIComponent(personalised)}`;
+  });
+
+  let sent = 0;
+  const btn = document.querySelector('[onclick="VW_CRM.startBulkWhatsApp()"]');
+  if (btn) { btn.disabled = true; btn.textContent = `Opening ${messages.length} chats...`; }
+
+  // Open one at a time with delay (browser popup blocker limitation)
+  showToast(`Opening WhatsApp for ${messages.length} customers. Allow popups if blocked.`, 'info');
+
+  // Open first immediately, rest with timer
+  messages.forEach((url, i) => {
+    setTimeout(() => {
+      window.open(url, '_blank');
+      sent++;
+      if (sent === messages.length) {
+        if (btn) { btn.disabled = false; btn.textContent = '💬 Start Sending on WhatsApp'; }
+        showToast(`Opened ${sent} WhatsApp chats`, 'success');
+      }
+    }, i * 1500); // 1.5s delay between each
+  });
+}
+
+window.VW_CRM = window.VW_CRM || {};
+window.VW_CRM.renderBulkWhatsApp = renderBulkWhatsApp;
+window.VW_CRM.startBulkWhatsApp = startBulkWhatsApp;
+window.renderBulkWhatsApp = renderBulkWhatsApp;
+
+const _bwaSegments = {};
+window.selectBWASegment = function(seg) {
+  window._bwaSegment = seg;
+  ['all','recent','loyal'].forEach(s => {
+    const btn = document.getElementById('bwa-seg-'+s);
+    if (btn) {
+      btn.style.borderColor = s===seg ? 'var(--gold)' : 'var(--border)';
+      btn.style.background  = s===seg ? 'var(--gold-muted)' : 'var(--bg2)';
+    }
+  });
+};

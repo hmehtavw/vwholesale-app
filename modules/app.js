@@ -227,6 +227,8 @@ async function navigateToFresh(page, params, cacheKey) {
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
   else if (page === 'bulk_photos') html = await VW_INVENTORY.renderBulkPhotoUploadPage();
   else if (page === 'follow_ups') html = await renderFollowUpDashboard();
+  else if (page === 'statement') html = await renderCustomerStatement(params?.id || null);
+  else if (page === 'bulk_wa') html = await renderBulkWhatsApp();
   else if (page === 'staff_returns') html = await VW_SHOP.renderStaffReturnsPage();
   else if (page === 'mood_board') html = await VW_SHOP.renderTileMoodBoard();
   else if (page === 'broadcast') html = await renderBroadcastPage();
