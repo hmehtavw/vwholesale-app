@@ -4034,3 +4034,408 @@ async function sendBroadcast() {
 
 window.renderBroadcastPage = renderBroadcastPage;
 window.sendBroadcast = sendBroadcast;
+
+// ═══════════════════════════════════════════════════════════════
+// DAILY REVENUE SUMMARY — WhatsApp morning report
+// ═══════════════════════════════════════════════════════════════
+
+async function sendDailyRevenueReport() {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const yesterday = new Date(today - 86400000).toISOString().split('T')[0];
+
+  // Fetch today's data
+  const [invRes, tqRes, pendingRes, stockRes] = await Promise.all([
+    VW_DB.client.from('invoices')
+      .select('total,payment_method,amount_received')
+      .gte('date', todayStr).lte('date', todayStr),
+    VW_DB.client.from('tile_quotations')
+      .select('id,approval_status,grand_total')
+      .gte('created_at', todayStr + 'T00:00:00'),
+    VW_DB.client.from('tile_quotations')
+      .select('id,grand_total')
+      .eq('approval_status', 'pending_approval'),
+    VW_DB.client.from('products')
+      .select('id,name,stock,low_stock_threshold,price')
+      .eq('is_active', true)
+      .filter('stock', 'lte', 'low_stock_threshold')
+      .limit(5),
+  ]);
+
+  const invoices      = invRes.data || [];
+  const tqsToday      = tqRes.data || [];
+  const pendingTQs    = pendingRes.data || [];
+  const lowStock      = stockRes.data || [];
+
+  const todayRevenue  = invoices.reduce((s,i) => s + (i.amount_received || i.total || 0), 0);
+  const todayInvCount = invoices.length;
+  const tqsCreated    = tqsToday.length;
+  const tqsPending    = pendingTQs.length;
+  const pipeline      = pendingTQs.reduce((s,q) => s + (q.grand_total || 0), 0);
+  const approved      = tqsToday.filter(q => q.approval_status === 'approved').length;
+
+  const dayOfWeek = today.toLocaleDateString('en-IN', { weekday: 'long' });
+  const dateStr   = today.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  const msg = `*V Wholesale — Daily Report*
+📅 ${dayOfWeek}, ${dateStr}
+
+*💰 Today's Revenue*
+Invoices: ${todayInvCount} bills
+Amount: ₹${Math.round(todayRevenue).toLocaleString('en-IN')}
+
+*📐 Tile Quotations*
+New today: ${tqsCreated} TQs
+Approved today: ${approved}
+Pending approval: ${tqsPending} TQs
+Pipeline value: ₹${Math.round(pipeline).toLocaleString('en-IN')}
+
+${lowStock.length ? `*⚠️ Low Stock Alert*
+${lowStock.map(p => `${p.name}: ${p.stock} units`).join('\n')}
+
+` : ''}*📊 Quick Links*
+View app: https://hmehtavw.github.io/vwholesale-app
+
+V Wholesale, Vijayawada 🏪`;
+
+  const waUrl = `https://wa.me/91${VW_AUTH.getCurrentProfile()?.phone || ''}?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, '_blank');
+  showToast('Daily report ready — WhatsApp opening', 'success');
+  return msg;
+}
+
+async function renderDailyReportPage() {
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  const [invRes, tqRes, pendingRes, visitRes, taskRes] = await Promise.all([
+    VW_DB.client.from('invoices').select('total,payment_method,amount_received,credit_sale').gte('date', todayStr),
+    VW_DB.client.from('tile_quotations').select('id,approval_status,grand_total,created_by').gte('created_at', todayStr + 'T00:00:00'),
+    VW_DB.client.from('tile_quotations').select('id,tq_no,customer_name,grand_total').eq('approval_status','pending_approval').order('created_at'),
+    VW_DB.client.from('visits').select('id,customer_name,executive_name,status').gte('created_at', todayStr + 'T00:00:00').catch(() => ({ data: [] })),
+    VW_DB.client.from('tasks').select('id,status,assigned_to_name').gte('created_at', todayStr + 'T00:00:00').catch(() => ({ data: [] })),
+  ]);
+
+  const invoices   = invRes.data || [];
+  const tqs        = tqRes.data || [];
+  const pending    = pendingRes.data || [];
+  const visits     = visitRes.data || [];
+  const tasks      = taskRes.data || [];
+
+  const revenue    = invoices.reduce((s,i) => s + (i.amount_received || i.total || 0), 0);
+  const pipeline   = pending.reduce((s,q) => s + (q.grand_total || 0), 0);
+  const creditSales= invoices.filter(i => i.credit_sale).length;
+
+  return `
+  <div class="module-header">
+    <h2>📊 Daily Report</h2>
+    <button onclick="sendDailyRevenueReport()" style="background:#25D366;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;color:#fff;cursor:pointer">📲 Send WA</button>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:12px">${today.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+
+  <!-- REVENUE CARD -->
+  <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:16px;margin-bottom:12px;color:#fff">
+    <div style="font-size:11px;opacity:0.7;margin-bottom:4px">Today's Revenue</div>
+    <div style="font-size:32px;font-weight:900;color:#f5c842">₹${Math.round(revenue).toLocaleString('en-IN')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px">
+      <div style="text-align:center;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:18px;font-weight:900">${invoices.length}</div>
+        <div style="font-size:9px;opacity:0.7">Bills</div>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:18px;font-weight:900;color:${creditSales>0?'#ef4444':'#4ade80'}">${creditSales}</div>
+        <div style="font-size:9px;opacity:0.7">Credit Sales</div>
+      </div>
+      <div style="text-align:center;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px">
+        <div style="font-size:18px;font-weight:900">${visits.length}</div>
+        <div style="font-size:9px;opacity:0.7">Visits</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TQ PIPELINE -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700">📐 TQ Pipeline</div>
+      <div style="font-size:13px;font-weight:900;color:var(--gold)">₹${Math.round(pipeline).toLocaleString('en-IN')}</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+      <div><div style="font-size:18px;font-weight:800">${tqs.length}</div><div style="font-size:10px;color:var(--text3)">Created today</div></div>
+      <div><div style="font-size:18px;font-weight:800;color:var(--gold)">${pending.length}</div><div style="font-size:10px;color:var(--text3)">Pending approval</div></div>
+      <div><div style="font-size:18px;font-weight:800;color:var(--green)">${tqs.filter(q=>q.approval_status==='approved').length}</div><div style="font-size:10px;color:var(--text3)">Approved</div></div>
+    </div>
+    ${pending.length ? `
+    <div style="margin-top:10px;font-size:11px;font-weight:700;color:var(--red);margin-bottom:4px">⏳ Needs approval:</div>
+    ${pending.slice(0,3).map(q => `
+    <div onclick="VW_TILES.openTileQuote(${q.id})" style="cursor:pointer;padding:6px;background:var(--bg3);border-radius:6px;margin-bottom:4px;display:flex;justify-content:space-between;font-size:11px">
+      <span>${q.customer_name} · ${q.tq_no}</span>
+      <span style="color:var(--gold);font-weight:700">${q.grand_total?'₹'+parseInt(q.grand_total).toLocaleString('en-IN'):''}</span>
+    </div>`).join('')}` : ''}
+  </div>
+
+  <!-- TASKS SUMMARY -->
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">✅ Tasks Today</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:center">
+      <div><div style="font-size:18px;font-weight:800">${tasks.filter(t=>t.status==='completed').length}</div><div style="font-size:10px;color:var(--text3)">Completed</div></div>
+      <div><div style="font-size:18px;font-weight:800;color:var(--gold)">${tasks.filter(t=>t.status==='pending').length}</div><div style="font-size:10px;color:var(--text3)">Pending</div></div>
+    </div>
+  </div>
+
+  <button onclick="sendDailyRevenueReport()"
+    style="width:100%;padding:13px;border-radius:10px;background:#25D366;border:none;color:#fff;font-size:14px;font-weight:800;cursor:pointer">
+    📲 Send to My WhatsApp
+  </button>`;
+}
+
+window.sendDailyRevenueReport = sendDailyRevenueReport;
+window.renderDailyReportPage = renderDailyReportPage;
+
+// ═══════════════════════════════════════════════════════════════
+// STOCK VALUATION REPORT
+// ═══════════════════════════════════════════════════════════════
+
+async function renderStockValuationReport() {
+  const { data: products } = await VW_DB.client
+    .from('products')
+    .select('id,name,category,brand,stock,price,vwp,mrp,unit')
+    .eq('is_active', true)
+    .gt('stock', 0)
+    .order('category', { ascending: true });
+
+  const byCategory = {};
+  let grandTotal = 0;
+  let grandMRP = 0;
+
+  (products || []).forEach(p => {
+    const cost  = (p.vwp || p.price || 0) * (p.stock || 0);
+    const mrpV  = (p.mrp || 0) * (p.stock || 0);
+    grandTotal += cost;
+    grandMRP   += mrpV;
+    if (!byCategory[p.category]) byCategory[p.category] = { items: 0, cost: 0, mrp: 0 };
+    byCategory[p.category].items++;
+    byCategory[p.category].cost += cost;
+    byCategory[p.category].mrp  += mrpV;
+  });
+
+  return `
+  <div class="module-header">
+    <h2>📦 Stock Valuation</h2>
+    <div style="font-size:11px;color:var(--text3)">${new Date().toLocaleDateString('en-IN')}</div>
+  </div>
+
+  <!-- SUMMARY CARDS -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Stock at Cost</div>
+      <div style="font-size:18px;font-weight:900;color:var(--gold)">₹${Math.round(grandTotal/100000).toLocaleString('en-IN')}L</div>
+      <div style="font-size:10px;color:var(--text3)">₹${Math.round(grandTotal).toLocaleString('en-IN')}</div>
+    </div>
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Stock at MRP</div>
+      <div style="font-size:18px;font-weight:900;color:var(--green)">₹${Math.round(grandMRP/100000).toLocaleString('en-IN')}L</div>
+      <div style="font-size:10px;color:var(--text3)">₹${Math.round(grandMRP).toLocaleString('en-IN')}</div>
+    </div>
+  </div>
+
+  <!-- BY CATEGORY -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px">By Category</div>
+  ${Object.entries(byCategory).sort((a,b) => b[1].cost - a[1].cost).map(([cat, data]) => `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--bg2);border-radius:10px;margin-bottom:6px">
+    <div>
+      <div style="font-size:13px;font-weight:700">${cat}</div>
+      <div style="font-size:11px;color:var(--text3)">${data.items} products</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:13px;font-weight:800;color:var(--gold)">₹${Math.round(data.cost).toLocaleString('en-IN')}</div>
+      <div style="font-size:10px;color:var(--text3)">MRP: ₹${Math.round(data.mrp).toLocaleString('en-IN')}</div>
+    </div>
+  </div>`).join('')}
+
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-top:8px">
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700">
+      <span>Total Stock Value (Cost)</span>
+      <span style="color:var(--gold)">₹${Math.round(grandTotal).toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px">
+      <span style="color:var(--text3)">Potential Revenue (MRP)</span>
+      <span style="color:var(--green)">₹${Math.round(grandMRP).toLocaleString('en-IN')}</span>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-top:4px">
+      <span style="color:var(--text3)">Gross Margin Potential</span>
+      <span style="color:var(--green)">₹${Math.round(grandMRP - grandTotal).toLocaleString('en-IN')} (${Math.round((grandMRP-grandTotal)/grandMRP*100)}%)</span>
+    </div>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VENDOR PAYMENT TRACKING
+// ═══════════════════════════════════════════════════════════════
+
+async function renderVendorPaymentsPage() {
+  const { data: vendors } = await VW_DB.client
+    .from('vendors')
+    .select('id,name,phone,outstanding_amount,total_purchased,last_payment_date')
+    .gt('outstanding_amount', 0)
+    .order('outstanding_amount', { ascending: false })
+    .limit(30).catch(() => ({ data: [] }));
+
+  const { data: allVendors } = await VW_DB.client
+    .from('vendors')
+    .select('id,name,outstanding_amount,total_purchased')
+    .order('outstanding_amount', { ascending: false })
+    .limit(50).catch(() => ({ data: [] }));
+
+  const totalOutstanding = (allVendors||[]).reduce((s,v) => s + (v.outstanding_amount||0), 0);
+
+  return `
+  <div class="module-header">
+    <h2>💸 Vendor Payments</h2>
+    <div style="font-size:11px;color:var(--red);font-weight:700">Due: ₹${Math.round(totalOutstanding).toLocaleString('en-IN')}</div>
+  </div>
+
+  ${!(vendors?.length) ? '<p class="empty-msg">No outstanding vendor payments</p>' :
+  vendors.map(v => `
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px;border-left:4px solid var(--red)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div>
+        <div style="font-size:13px;font-weight:700">${v.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${v.phone||'—'}</div>
+        ${v.last_payment_date ? `<div style="font-size:10px;color:var(--text3)">Last payment: ${new Date(v.last_payment_date).toLocaleDateString('en-IN')}</div>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:900;color:var(--red)">₹${Math.round(v.outstanding_amount||0).toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--text3)">Total bought: ₹${Math.round(v.total_purchased||0).toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="VW_SHOP.recordVendorPayment(${v.id},'${v.name.replace(/'/g,"\\'")}')"
+        style="flex:1;padding:8px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer">
+        💰 Record Payment
+      </button>
+      ${v.phone ? `<a href="tel:${v.phone}" style="padding:8px 12px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);font-size:12px;text-decoration:none;display:flex;align-items:center">📞</a>` : ''}
+    </div>
+  </div>`).join('')}`;
+}
+
+async function recordVendorPayment(vendorId, vendorName) {
+  const amount = parseFloat(prompt(`Payment amount to ${vendorName} (₹):`));
+  if (!amount || amount <= 0) return;
+  const mode = prompt('Payment mode (cash/upi/bank):') || 'bank';
+  const ref  = prompt('Reference/UTR number (optional):') || '';
+
+  const prof = VW_AUTH.getCurrentProfile();
+
+  // Update vendor outstanding
+  const { data: v } = await VW_DB.client.from('vendors')
+    .select('outstanding_amount').eq('id', vendorId).single().catch(() => ({ data: null }));
+
+  if (v) {
+    const newOutstanding = Math.max(0, (v.outstanding_amount||0) - amount);
+    await VW_DB.client.from('vendors').update({
+      outstanding_amount: newOutstanding,
+      last_payment_date: new Date().toISOString(),
+    }).eq('id', vendorId);
+  }
+
+  // Record in vendor_payments table
+  await VW_DB.client.from('vendor_payments').insert({
+    vendor_id: vendorId,
+    amount,
+    payment_mode: mode,
+    reference: ref,
+    paid_by: prof?.name || '',
+    paid_at: new Date().toISOString(),
+  }).catch(() => {});
+
+  showToast(`₹${amount.toLocaleString('en-IN')} payment recorded to ${vendorName}`, 'success');
+  navigateTo('vendor_payments');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SALES TARGETS VS ACTUAL
+// ═══════════════════════════════════════════════════════════════
+
+async function renderSalesTargetsPage() {
+  const targets = await VW_DB.getSetting('sales_targets', {
+    monthly_revenue: 1000000,
+    monthly_tqs: 50,
+    monthly_invoices: 100,
+  });
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const pctMonth = dayOfMonth / daysInMonth;
+
+  const [invRes, tqRes] = await Promise.all([
+    VW_DB.client.from('invoices').select('total,amount_received').gte('date', monthStart.split('T')[0]),
+    VW_DB.client.from('tile_quotations').select('id,approval_status').gte('created_at', monthStart),
+  ]);
+
+  const actualRevenue  = (invRes.data||[]).reduce((s,i) => s + (i.amount_received||i.total||0), 0);
+  const actualTQs      = (tqRes.data||[]).length;
+  const actualInvoices = (invRes.data||[]).length;
+
+  const revenuePct  = Math.round(actualRevenue / targets.monthly_revenue * 100);
+  const tqPct       = Math.round(actualTQs / targets.monthly_tqs * 100);
+  const invoicePct  = Math.round(actualInvoices / targets.monthly_invoices * 100);
+  const expectedPct = Math.round(pctMonth * 100);
+
+  const renderTarget = (label, actual, target, pct, unit='') => {
+    const color = pct >= expectedPct ? 'var(--green)' : pct >= expectedPct * 0.8 ? 'var(--gold)' : 'var(--red)';
+    return `
+    <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:700">${label}</div>
+        <div style="font-size:12px;font-weight:700;color:${color}">${pct}%</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:20px;height:8px;overflow:hidden;margin-bottom:6px">
+        <div style="height:100%;background:${color};border-radius:20px;width:${Math.min(100,pct)}%;transition:width .3s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
+        <span>Actual: ${unit}${Math.round(actual).toLocaleString('en-IN')}</span>
+        <span>Target: ${unit}${target.toLocaleString('en-IN')}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">Expected at day ${dayOfMonth}: ${expectedPct}%</div>
+    </div>`;
+  };
+
+  return `
+  <div class="module-header">
+    <h2>🎯 Sales Targets</h2>
+    <button onclick="VW_ADMIN.editSalesTargets()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer">Edit</button>
+  </div>
+  <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+    ${now.toLocaleDateString('en-IN',{month:'long',year:'numeric'})} · Day ${dayOfMonth} of ${daysInMonth}
+  </div>
+
+  ${renderTarget('💰 Monthly Revenue', actualRevenue, targets.monthly_revenue, revenuePct, '₹')}
+  ${renderTarget('📐 Tile Quotations', actualTQs, targets.monthly_tqs, tqPct)}
+  ${renderTarget('🧾 Invoices', actualInvoices, targets.monthly_invoices, invoicePct)}
+
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-top:8px;font-size:12px">
+    <div style="font-weight:700;margin-bottom:4px">Projected Month-End</div>
+    <div style="color:var(--gold)">Revenue: ₹${Math.round(actualRevenue/pctMonth).toLocaleString('en-IN')}</div>
+    <div style="color:var(--text3);margin-top:2px">Based on current run rate (${dayOfMonth} days)</div>
+  </div>`;
+}
+
+async function editSalesTargets() {
+  const revenue  = parseFloat(prompt('Monthly revenue target (₹):') || 1000000);
+  const tqs      = parseInt(prompt('Monthly TQ target:') || 50);
+  const invoices = parseInt(prompt('Monthly invoices target:') || 100);
+
+  await VW_DB.setSetting('sales_targets', { monthly_revenue: revenue, monthly_tqs: tqs, monthly_invoices: invoices });
+  showToast('Targets updated ✅', 'success');
+  navigateTo('sales_targets');
+}
+
+window.renderDailyReportPage = renderDailyReportPage;
+window.renderStockValuationReport = renderStockValuationReport;
+window.renderVendorPaymentsPage = renderVendorPaymentsPage;
+window.recordVendorPayment = recordVendorPayment;
+window.renderSalesTargetsPage = renderSalesTargetsPage;
+window.VW_ADMIN = window.VW_ADMIN || {};
+window.VW_ADMIN.editSalesTargets = editSalesTargets;
