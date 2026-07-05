@@ -225,6 +225,7 @@ async function navigateToFresh(page, params, cacheKey) {
   }
   else if (page === 'orders') html = await VW_SHOP.renderOrdersDashboard();
   else if (page === 'checkout') html = await VW_SHOP.renderCheckoutPage();
+  else if (page === 'broadcast') html = await renderBroadcastPage();
   else if (page === 'contractor_kyc') html = await VW_LABOR.renderContractorKYCReview();
   else if (page === 'sample_requests') html = await VW_SHOP.renderSampleRequestsDashboard();
   else if (page === 'offers') html = await VW_SHOP.renderOffersPage();
@@ -1675,13 +1676,32 @@ function showToast(msg, type = 'info') {
 }
 
 async function init() {
-  // Handle Cashfree payment return
+// Handle Cashfree payment return
   const _cfUrlParams = new URLSearchParams(window.location.search);
   const cfOrder = _cfUrlParams.get('cf_order');
   if (cfOrder) {
     window.history.replaceState({}, '', window.location.pathname);
     window._pendingCFOrder = cfOrder;
   }
+
+  // Global error boundary — catch unhandled promise rejections
+  window.addEventListener('unhandledrejection', event => {
+    const msg = event.reason?.message || String(event.reason || '');
+    // Ignore known non-critical errors
+    if (msg.includes('NetworkError') || msg.includes('Failed to fetch') || 
+        msg.includes('AbortError') || msg.includes('Load failed')) return;
+    console.error('Unhandled rejection:', event.reason);
+    if (typeof showToast === 'function') {
+      showToast('Something went wrong — please try again', 'error');
+    }
+    event.preventDefault();
+  });
+
+  // Global JS error handler
+  window.addEventListener('error', event => {
+    if (event.message?.includes('Script error')) return;
+    console.error('JS error:', event.error);
+  });
 
   try {
     await VW_DB.initDB();

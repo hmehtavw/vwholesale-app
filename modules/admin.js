@@ -22,6 +22,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-danger" onclick="VW_SETTINGS.switchSettingsTab('danger',this)" style="display:inline-flex"><span class="et-icon" style="color:var(--red)">⚠️</span><span style="color:var(--red)">Danger</span></button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-labor" onclick="VW_SETTINGS.switchSettingsTab('labor',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Labor</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-promos" onclick="VW_SETTINGS.switchSettingsTab('promos',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🎟</span>Promos</button>` : ''}
   </div>
 
   <div id="settings-tab-content">
@@ -45,6 +46,7 @@ async function switchSettingsTab(tab, btn) {
     case 'danger':      container.innerHTML = await renderSettingsDanger(); break;
     case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
     case 'labor':       container.innerHTML = await renderLaborSettings(); break;
+    case 'promos':      container.innerHTML = await renderPromoSettings(); break;
   }
 }
 
@@ -3799,3 +3801,233 @@ async function saveLaborSettings() {
   showToast('Labor settings saved ✅', 'success');
 }
 window.saveLaborSettings = saveLaborSettings;
+
+// ═══════════════════════════════════════════════════════════════
+// PROMO CODE ADMIN
+// ═══════════════════════════════════════════════════════════════
+async function renderPromoSettings() {
+  const { data: codes } = await VW_DB.client
+    .from('promo_codes')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  return `
+  <div style="font-size:12px;font-weight:700;margin-bottom:12px;color:var(--text2)">🎟 Promo Code Management</div>
+
+  <!-- ADD NEW CODE -->
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">+ Create New Promo Code</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0">
+        <label>Code *</label>
+        <input type="text" id="pc-code" placeholder="e.g. SUMMER20" style="text-transform:uppercase"
+          oninput="this.value=this.value.toUpperCase()">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Description</label>
+        <input type="text" id="pc-desc" placeholder="e.g. Summer sale 20% off">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+      <div class="form-group" style="margin:0">
+        <label>Type</label>
+        <select id="pc-type">
+          <option value="percent">% Discount</option>
+          <option value="flat">Flat ₹ Off</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Value</label>
+        <input type="number" id="pc-value" placeholder="e.g. 10 or 200" min="1">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Max Discount (₹)</label>
+        <input type="number" id="pc-max" placeholder="Leave blank = unlimited">
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+      <div class="form-group" style="margin:0">
+        <label>Min Order (₹)</label>
+        <input type="number" id="pc-min" placeholder="0 = no minimum" value="0">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Usage Limit</label>
+        <input type="number" id="pc-limit" placeholder="Leave blank = unlimited">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Valid Until</label>
+        <input type="date" id="pc-expiry">
+      </div>
+    </div>
+    <button onclick="savePromoCode()"
+      style="width:100%;margin-top:10px;padding:10px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:700;cursor:pointer">
+      + Create Code
+    </button>
+  </div>
+
+  <!-- EXISTING CODES -->
+  <div style="font-size:12px;font-weight:700;margin-bottom:8px">Active Codes (${codes?.filter(c=>c.is_active).length||0})</div>
+  ${!(codes?.length) ? '<p class="empty-msg">No promo codes yet</p>' :
+  codes.map(c => `
+  <div style="background:var(--bg2);border-radius:10px;padding:10px;margin-bottom:8px;border:1px solid ${c.is_active?'var(--border)':'var(--border2)'}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:14px;font-weight:900;font-family:monospace;color:${c.is_active?'var(--gold)':'var(--text3)'}">${c.code}</span>
+        <span style="font-size:11px;padding:2px 7px;border-radius:10px;background:${c.is_active?'rgba(34,197,94,0.1)':'rgba(239,68,68,0.08)'};color:${c.is_active?'var(--green)':'var(--red)'}">${c.is_active?'Active':'Inactive'}</span>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="togglePromoCode(${c.id},${c.is_active})"
+          style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg3);font-size:11px;cursor:pointer">
+          ${c.is_active?'Disable':'Enable'}
+        </button>
+        <button onclick="deletePromoCode(${c.id})"
+          style="padding:4px 10px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:var(--red);font-size:11px;cursor:pointer">
+          Delete
+        </button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">${c.description||'—'}</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:3px">
+      ${c.discount_type==='percent'?c.discount_value+'% off':' ₹'+c.discount_value+' off'}
+      ${c.max_discount_amount?' · Max ₹'+c.max_discount_amount:''}
+      ${c.min_order_value?' · Min order ₹'+c.min_order_value:''}
+      · Used ${c.used_count||0}/${c.usage_limit||'∞'}
+      ${c.valid_until?' · Expires '+new Date(c.valid_until).toLocaleDateString('en-IN'):''}
+    </div>
+  </div>`).join('')}`;
+}
+
+async function savePromoCode() {
+  const code  = document.getElementById('pc-code')?.value?.trim().toUpperCase();
+  const desc  = document.getElementById('pc-desc')?.value?.trim();
+  const type  = document.getElementById('pc-type')?.value;
+  const value = parseFloat(document.getElementById('pc-value')?.value);
+  const max   = parseFloat(document.getElementById('pc-max')?.value) || null;
+  const min   = parseFloat(document.getElementById('pc-min')?.value) || 0;
+  const limit = parseInt(document.getElementById('pc-limit')?.value) || null;
+  const expiry= document.getElementById('pc-expiry')?.value;
+
+  if (!code || !value) { showToast('Code and value are required', 'warn'); return; }
+
+  const prof = VW_AUTH.getCurrentProfile();
+  const { error } = await VW_DB.client.from('promo_codes').insert({
+    code, description: desc || null, discount_type: type, discount_value: value,
+    max_discount_amount: max, min_order_value: min, usage_limit: limit,
+    valid_until: expiry ? new Date(expiry).toISOString() : null,
+    is_active: true, created_by: prof?.id,
+  });
+
+  if (error) { showToast(error.message.includes('unique') ? 'Code already exists' : error.message, 'error'); return; }
+  showToast(`Code ${code} created ✅`, 'success');
+  VW_SETTINGS.switchSettingsTab('promos', document.getElementById('stab-promos'));
+}
+
+async function togglePromoCode(id, currentActive) {
+  await VW_DB.client.from('promo_codes').update({ is_active: !currentActive }).eq('id', id);
+  showToast(currentActive ? 'Code disabled' : 'Code enabled', 'success');
+  VW_SETTINGS.switchSettingsTab('promos', document.getElementById('stab-promos'));
+}
+
+async function deletePromoCode(id) {
+  if (!confirm('Delete this promo code?')) return;
+  await VW_DB.client.from('promo_codes').delete().eq('id', id);
+  showToast('Code deleted', 'info');
+  VW_SETTINGS.switchSettingsTab('promos', document.getElementById('stab-promos'));
+}
+
+window.savePromoCode = savePromoCode;
+window.togglePromoCode = togglePromoCode;
+window.deletePromoCode = deletePromoCode;
+
+// ═══════════════════════════════════════════════════════════════
+// CUSTOMER BROADCAST — Send push to all/segment customers
+// ═══════════════════════════════════════════════════════════════
+async function renderBroadcastPage() {
+  // Count push subscribers
+  const { count: pushCount } = await VW_DB.client
+    .from('push_subscriptions')
+    .select('id', { count:'exact', head:true });
+
+  return `
+  <div class="module-header"><h2>📢 Customer Broadcast</h2></div>
+
+  <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px">Push Notification Reach</div>
+    <div style="font-size:28px;font-weight:900;color:var(--gold)">${pushCount||0}</div>
+    <div style="font-size:11px;color:var(--text3)">customers with notifications enabled</div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">📤 Send Push Notification</h3>
+    <div class="form-group">
+      <label>Title *</label>
+      <input type="text" id="bc-title" placeholder="e.g. 🎉 Weekend Sale — 15% off all tiles!">
+    </div>
+    <div class="form-group">
+      <label>Message *</label>
+      <textarea id="bc-body" rows="3" placeholder="e.g. Shop now at V Wholesale and save big this weekend. Offer valid till Sunday!"
+        style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div class="form-group">
+      <label>Target</label>
+      <select id="bc-target">
+        <option value="all">All customers (${pushCount||0})</option>
+        <option value="customers">Customers only</option>
+        <option value="contractors">Contractors only</option>
+      </select>
+    </div>
+    <div id="bc-preview" style="background:var(--bg3);border-radius:10px;padding:10px;margin-bottom:10px;font-size:11px;color:var(--text3)">
+      Preview will appear here as you type...
+    </div>
+    <button onclick="sendBroadcast()" style="width:100%;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+      📤 Send to ${pushCount||0} customers
+    </button>
+  </div>
+
+  <div id="bc-result"></div>`;
+}
+
+async function sendBroadcast() {
+  const title  = document.getElementById('bc-title')?.value?.trim();
+  const body   = document.getElementById('bc-body')?.value?.trim();
+  const target = document.getElementById('bc-target')?.value;
+
+  if (!title || !body) { showToast('Title and message required', 'warn'); return; }
+
+  const btn = document.querySelector('[onclick="sendBroadcast()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+
+  try {
+    // Get all push subscriptions for target
+    let query = VW_DB.client.from('push_subscriptions').select('profile_id');
+    const { data: subs } = await query;
+
+    if (!subs?.length) { showToast('No subscribers found', 'warn'); if (btn) { btn.disabled=false; btn.textContent='Send'; } return; }
+
+    let sent = 0;
+    const unique = [...new Set(subs.map(s => s.profile_id))];
+
+    for (const profileId of unique) {
+      try {
+        await sendWebPush(profileId, title, body, 'https://hmehtavw.github.io/vwholesale-app/');
+        sent++;
+      } catch(e) {}
+    }
+
+    const resultEl = document.getElementById('bc-result');
+    if (resultEl) resultEl.innerHTML = `
+      <div style="background:rgba(34,197,94,0.08);border:1px solid var(--green);border-radius:10px;padding:12px">
+        <div style="font-size:14px;font-weight:700;color:var(--green)">✅ Broadcast sent</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px">Delivered to ${sent} of ${unique.length} subscribers</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${new Date().toLocaleString('en-IN')}</div>
+      </div>`;
+    showToast(`Broadcast sent to ${sent} customers`, 'success');
+  } catch(e) {
+    showToast('Broadcast failed: ' + e.message, 'error');
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = 'Send'; }
+}
+
+window.renderBroadcastPage = renderBroadcastPage;
+window.sendBroadcast = sendBroadcast;
