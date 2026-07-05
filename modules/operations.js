@@ -3142,24 +3142,38 @@ async function savePO(status) {
   record.supabaseId = sbPO?.id;
   await VW_DB.put(VW_DB.STORES.purchaseOrders, record);
 
-  // Notify Management via in-app bell
-  try {
-    const { data: mgmt } = await VW_DB.client.from('profiles')
-      .select('id,name').in('role',['management','admin']).eq('status','approved');
-    for (const m of mgmt||[]) {
-      await createPersistedNotification({
-        category: 'po_approval',
-        title: `🛒 PO Approval Needed — ${poNo}`,
-        body: `${prof?.name||'Purchase Manager'} raised PO for ${record.vendorName} · ₹${Math.round(totalValue).toLocaleString('en-IN')}`,
-        recipientId: m.id,
-        relatedTable: 'purchase_orders',
-        relatedId: sbPO?.id,
-        actions: [{ label: '👁 Review PO', action: 'open_po_approval' }],
-      }).catch(()=>{});
-    }
-  } catch(_) {}
+  // Auto-approve low-value POs (below threshold set in settings)
+  const poSettings = await VW_DB.getSetting('po_config', { auto_approve_below: 5000 });
+  const autoApproveThreshold = poSettings.auto_approve_below || 5000;
 
-  showToast(`${poNo} submitted for Management approval`, 'success');
+  if (totalValue <= autoApproveThreshold) {
+    // Auto-approve — no management notification needed
+    if (sbPO?.id) {
+      await VW_DB.client.from('purchase_orders')
+        .update({ status: 'approved', approved_at: new Date().toISOString(), approved_by: 'Auto (below ₹' + autoApproveThreshold.toLocaleString('en-IN') + ')' })
+        .eq('id', sbPO.id).catch(() => {});
+    }
+    showToast(`${poNo} auto-approved (below ₹${autoApproveThreshold.toLocaleString('en-IN')}) ✅`, 'success');
+  } else {
+    // Notify Management via in-app bell
+    try {
+      const { data: mgmt } = await VW_DB.client.from('profiles')
+        .select('id,name').in('role',['management','admin']).eq('status','approved');
+      for (const m of mgmt||[]) {
+        await createPersistedNotification({
+          category: 'po_approval',
+          title: `🛒 PO Approval Needed — ${poNo}`,
+          body: `${prof?.name||'Purchase Manager'} raised PO for ${record.vendorName} · ₹${Math.round(totalValue).toLocaleString('en-IN')}`,
+          recipientId: m.id,
+          relatedTable: 'purchase_orders',
+          relatedId: sbPO?.id,
+          actions: [{ label: '👁 Review PO', action: 'open_po_approval' }],
+        }).catch(()=>{});
+      }
+    } catch(_) {}
+    showToast(`${poNo} submitted for Management approval`, 'success');
+  }
+
   closeSheet();
   navigateTo('vendors');
 }

@@ -172,6 +172,24 @@ async function addToCart(productId) {
   showToast(`${p.name} added`, 'success');
 }
 
+// Add a manual line item (e.g. from TQ conversion) without needing a product ID
+function addManualLineItem({ name, price, qty = 1, gst = 18, hsn = '', fromTQ = null }) {
+  activeCart.items.push({
+    productId: null,
+    name,
+    price,
+    qty,
+    unit: 'item',
+    gst,
+    hsn,
+    fromTQ,
+    isManual: true,
+  });
+  refreshCart();
+  showToast(`${name.slice(0, 30)} added to bill`, 'success');
+}
+window.addManualLineItem = addManualLineItem;
+
 // Scanning during billing keeps the camera open across multiple items —
 // a real order is rarely just one product — and only closes once the
 // person taps Cancel or Done.

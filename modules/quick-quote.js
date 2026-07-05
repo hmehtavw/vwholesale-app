@@ -1610,6 +1610,7 @@ window.VW_TILES = {
   tqToggleTrap, tqSetTrapQty, tqToggleSoffit, tqSelectSoffit,
   // Actions
   tqSharePDF, tqPrint, tqSaveQuote, tqSubmitForApproval, _tqRequestEdit,
+  tqConvertToInvoice,
   tqEditQuote, tqConfirmEditQuote, _tqBuildApprovalBOM,
   tqApprove, tqReject, tqConfirmReject,
   tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,

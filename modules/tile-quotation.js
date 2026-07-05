@@ -6079,6 +6079,76 @@ async function tqReject() {
   document.getElementById('sheet-overlay').classList.add('open');
 }
 
+async function tqConvertToInvoice(id) {
+  const { data: q } = await VW_DB.client
+    .from('tile_quotations')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (!q) { showToast('Quotation not found', 'error'); return; }
+  if (!q.advance_amount) { showToast('Collect advance first before converting to invoice', 'warn'); return; }
+
+  // Build cart items from TQ
+  const pricePerSqft = q.quoted_price_per_sqft || 0;
+  const totalSqft    = parseFloat(q.total_area_sqft || 0);
+  const tileTotal    = Math.round(pricePerSqft * totalSqft);
+  const extraProducts= q.extra_products || [];
+  const extraTotal   = extraProducts.reduce((s, p) => s + ((p.price || 0) * (p.qty || 1)), 0);
+  const deliveryCost = (q.delivery?.transportCost || 0) + (q.delivery?.loadingCost || 0) + (q.delivery?.floorCost || 0);
+  const grandTotal   = q.grand_total || (tileTotal + extraTotal + deliveryCost);
+  const balanceDue   = grandTotal - (q.advance_amount || 0);
+
+  // Navigate to billing and pre-populate
+  closeSheet();
+  await navigateTo('billing');
+
+  // Wait for billing to load then populate
+  setTimeout(() => {
+    // Set customer
+    if (typeof setActiveCustomer === 'function' && q.customer_id) {
+      setActiveCustomer(q.customer_id);
+    }
+
+    // Add tile item to cart
+    if (typeof addManualLineItem === 'function') {
+      addManualLineItem({
+        name: `Tiles — ${q.tq_no} (${totalSqft.toFixed(1)} sqft @ ₹${pricePerSqft}/sqft)`,
+        price: tileTotal,
+        qty: 1,
+        gst: 12,
+        hsn: '6907',
+        fromTQ: id,
+      });
+
+      // Add extra products
+      extraProducts.forEach(p => {
+        addManualLineItem({
+          name: p.name,
+          price: p.price || 0,
+          qty: p.qty || 1,
+          gst: 18,
+        });
+      });
+
+      // Add delivery if any
+      if (deliveryCost > 0) {
+        addManualLineItem({
+          name: 'Delivery & Transport',
+          price: deliveryCost,
+          qty: 1,
+          gst: 18,
+        });
+      }
+    }
+
+    // Show advance deduction message
+    if (balanceDue < grandTotal) {
+      showToast(`₹${(q.advance_amount||0).toLocaleString('en-IN')} advance already collected — balance due: ₹${balanceDue.toLocaleString('en-IN')}`, 'info');
+    }
+  }, 600);
+}
+
 async function tqReprintReceipt(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
@@ -6480,7 +6550,10 @@ async function openTileQuote(id) {
     </button>` : ''}
 
     ${q.advance_amount > 0 ? `
-    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>` : ''}
+    <button class="btn-secondary full-width" style="margin-bottom:8px" onclick="VW_TILES.tqReprintReceipt(${id})">🖨 Reprint Advance Receipt</button>
+    <button class="btn-primary full-width" style="background:#25D366;color:#fff;margin-bottom:8px;font-size:14px;padding:13px" onclick="closeSheet();VW_TILES.tqConvertToInvoice(${id})">
+      🧾 Convert to Invoice & Bill
+    </button>` : ''}
 
     ${q.approval_status === 'approved' ? `
     <button class="btn-primary full-width" style="margin-bottom:8px;background:#25D366" onclick="VW_TILES.tqPrintFromId(${id})">📄 Print & Share with Customer</button>` : `
