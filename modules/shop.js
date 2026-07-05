@@ -928,306 +928,585 @@ async function renderShopPage() {
     }
   }
 
-  const cartCount = Object.values(_shopCart).reduce((a,b)=>a+b,0);
+  const cartCount = Object.values(_shopCart).reduce((a,b) => a+b, 0);
 
   return `
-  <div id="shop-root">
-    <!-- DARK HEADER — HomeRun style -->
-    <div style="background:linear-gradient(180deg,#0d1117 0%,#161b22 100%);padding:10px 16px 12px;margin:-12px -12px 0">
+  <style>
+    #shop-root {
+      background: #fff;
+      color: #1a1a1a;
+      margin: -12px -12px 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    .hr-header {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 0;
+      position: sticky; top: 0; z-index: 100;
+    }
+    .hr-topbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px;
+    }
+    .hr-hamburger {
+      font-size: 20px; cursor: pointer; color: #333; background: none; border: none; padding: 0;
+    }
+    .hr-delivery-badge {
+      background: #2a7a3b; color: #fff;
+      font-size: 10px; font-weight: 900;
+      width: 44px; height: 44px; border-radius: 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      flex-shrink: 0; line-height: 1.1;
+    }
+    .hr-delivery-badge span:first-child { font-size: 16px; font-weight: 900; }
+    .hr-deliver-to {
+      flex: 1; cursor: pointer;
+    }
+    .hr-deliver-to .label { font-size: 11px; color: #666; }
+    .hr-deliver-to .pincode {
+      font-size: 13px; font-weight: 800; color: #1a1a1a;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .hr-logo {
+      font-size: 22px; font-weight: 900; color: #f5c842;
+      background: #1a1a1a; padding: 4px 10px; border-radius: 8px;
+      letter-spacing: -1px; flex-shrink: 0;
+    }
+    .hr-icons { display: flex; gap: 8px; align-items: center; }
+    .hr-icon-btn {
+      background: none; border: none; cursor: pointer; font-size: 22px; color: #333; padding: 0; position: relative;
+    }
+    .hr-cart-badge {
+      position: absolute; top: -5px; right: -5px;
+      background: #2a7a3b; color: #fff;
+      border-radius: 50%; width: 17px; height: 17px;
+      font-size: 9px; font-weight: 900;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .hr-search {
+      padding: 0 14px 12px;
+    }
+    .hr-search-inner {
+      display: flex; align-items: center; gap: 8px;
+      background: #f3f4f6; border-radius: 12px; padding: 10px 14px;
+    }
+    .hr-search-inner input {
+      flex: 1; background: none; border: none; outline: none;
+      font-size: 14px; color: #1a1a1a;
+    }
+    .hr-trust-strip {
+      background: #e8f5e9;
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr;
+      border-top: 1px solid #c8e6c9; border-bottom: 1px solid #c8e6c9;
+    }
+    .hr-trust-item {
+      padding: 8px 4px; text-align: center; border-right: 1px solid #c8e6c9;
+    }
+    .hr-trust-item:last-child { border-right: none; }
+    .hr-trust-icon { font-size: 18px; margin-bottom: 2px; }
+    .hr-trust-title { font-size: 9px; font-weight: 800; color: #2a7a3b; display: block; }
+    .hr-trust-sub { font-size: 8px; color: #555; display: block; line-height: 1.3; }
+    .hr-hero-banner {
+      margin: 10px 12px;
+      border-radius: 14px; overflow: hidden; cursor: pointer;
+      background: linear-gradient(135deg,#fff3cd,#ffe082);
+      border: 1px solid #f5c842;
+    }
+    .hr-hero-inner {
+      padding: 16px;
+      position: relative; overflow: hidden; min-height: 120px;
+    }
+    .hr-hero-eyebrow {
+      font-size: 10px; font-weight: 800; color: #c8972b; text-transform: uppercase;
+      letter-spacing: .05em; margin-bottom: 5px;
+    }
+    .hr-hero-title {
+      font-size: 22px; font-weight: 900; color: #1a1a1a; line-height: 1.1; margin-bottom: 4px;
+    }
+    .hr-hero-sub { font-size: 12px; color: #555; margin-bottom: 12px; }
+    .hr-hero-cta {
+      display: inline-block; background: #2a7a3b; color: #fff;
+      font-size: 12px; font-weight: 800; padding: 7px 18px; border-radius: 20px; cursor: pointer;
+    }
+    .hr-section { padding: 14px 12px 4px; }
+    .hr-section-header {
+      display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px;
+    }
+    .hr-section-title { font-size: 17px; font-weight: 900; color: #1a1a1a; }
+    .hr-section-sub { font-size: 11px; color: #888; margin-top: 2px; }
+    .hr-see-all { font-size: 12px; color: #2a7a3b; font-weight: 700; cursor: pointer; }
+    .hr-cat-grid {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 10px;
+    }
+    .hr-cat-card {
+      display: flex; flex-direction: column; align-items: center; cursor: pointer;
+    }
+    .hr-cat-img {
+      width: 100%; aspect-ratio: 1;
+      background: #e8f5f0; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 30px; margin-bottom: 5px;
+      border: 1px solid #ddd;
+    }
+    .hr-cat-name { font-size: 10px; font-weight: 700; color: #1a1a1a; text-align: center; line-height: 1.3; }
+    .hr-deals-scroll {
+      display: flex; gap: 10px;
+      overflow-x: auto; padding: 0 12px 14px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    }
+    .hr-deals-scroll::-webkit-scrollbar { display: none; }
+    .hr-deal-card {
+      flex: 0 0 155px; background: #fff;
+      border: 1px solid #e5e7eb; border-radius: 12px;
+      overflow: hidden; cursor: pointer;
+    }
+    .hr-deal-img {
+      height: 130px; background: #f3f4f6;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 52px; position: relative;
+    }
+    .hr-deal-disc {
+      position: absolute; top: 8px; left: 8px;
+      background: #2a7a3b; color: #fff; font-size: 10px; font-weight: 800;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .hr-deal-assured {
+      position: absolute; bottom: 6px; left: 8px;
+      background: #fff3cd; border: 1px solid #f5c842;
+      font-size: 8px; font-weight: 800; color: #c8972b;
+      padding: 2px 6px; border-radius: 4px;
+      display: flex; align-items: center; gap: 3px;
+    }
+    .hr-deal-body { padding: 8px 10px 10px; }
+    .hr-deal-name { font-size: 12px; font-weight: 700; color: #1a1a1a; line-height: 1.3; margin-bottom: 3px; min-height: 32px; }
+    .hr-deal-price { font-size: 15px; font-weight: 900; color: #1a1a1a; }
+    .hr-deal-mrp { font-size: 11px; color: #999; text-decoration: line-through; margin-left: 4px; }
+    .hr-deal-row { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; }
+    .hr-add-btn {
+      background: #2a7a3b; color: #fff; border: none;
+      border-radius: 8px; padding: 7px 18px;
+      font-size: 13px; font-weight: 800; cursor: pointer; min-width: 72px;
+    }
+    .hr-qty-ctrl {
+      display: flex; align-items: center; gap: 0;
+      border: 2px solid #2a7a3b; border-radius: 8px; overflow: hidden;
+    }
+    .hr-qty-btn {
+      background: none; border: none; color: #2a7a3b;
+      font-size: 18px; font-weight: 900; cursor: pointer;
+      width: 30px; height: 32px; display: flex; align-items: center; justify-content: center;
+    }
+    .hr-qty-num { font-size: 13px; font-weight: 800; color: #1a1a1a; min-width: 20px; text-align: center; }
+    .hr-trust2 {
+      margin: 4px 12px 12px;
+      background: #e8f5e9; border-radius: 14px; padding: 14px;
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;
+    }
+    .hr-trust2-item { text-align: center; }
+    .hr-trust2-icon { font-size: 22px; margin-bottom: 4px; }
+    .hr-trust2-label { font-size: 9px; font-weight: 800; color: #2a7a3b; }
+    .hr-promo-banner {
+      margin: 0 12px 12px;
+      background: linear-gradient(135deg,#1a472a,#2a7a3b);
+      border-radius: 14px; padding: 14px 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+  </style>
 
-      <!-- ROW 1: Location + Actions -->
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:32px;height:32px;background:rgba(245,200,66,0.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px">📍</div>
-          <div>
-            <div style="font-size:9px;color:rgba(255,255,255,0.4);font-weight:700;text-transform:uppercase;letter-spacing:.06em">Delivering to</div>
-            <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.2">Vijayawada <span style="color:#f5c842;font-size:10px">▾</span></div>
+  <div id="shop-root">
+
+    <!-- STICKY HEADER -->
+    <div class="hr-header">
+      <div class="hr-topbar">
+        <button class="hr-hamburger">☰</button>
+
+        <!-- 60 MINS BADGE -->
+        <div class="hr-delivery-badge">
+          <span>60</span>
+          <span style="font-size:8px;font-weight:700">Mins</span>
+        </div>
+
+        <!-- DELIVER TO -->
+        <div class="hr-deliver-to">
+          <div class="label">Deliver To</div>
+          <div class="pincode">
+            📍 Vijayawada <span style="color:#2a7a3b;font-size:11px">▾</span>
           </div>
         </div>
 
-        <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="VW_SHOP.openBarcodeScanner()" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:15px;padding:6px 8px;line-height:1">📷</button>
-          <button onclick="navigateTo('tile_visualizer')" style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;cursor:pointer;font-size:15px;padding:6px 8px;line-height:1">🪟</button>
+        <!-- VW LOGO -->
+        <div class="hr-logo">VW</div>
+
+        <!-- ACCOUNT + CART -->
+        <div class="hr-icons">
           ${isGuest ? `
-          <button onclick="VW_AUTH.showAuthScreen()" style="background:#f5c842;border:none;border-radius:20px;cursor:pointer;padding:7px 16px;font-size:12px;font-weight:800;color:#000;letter-spacing:.02em">
-            Login
-          </button>` : `
-          <div onclick="VW_SHOP.openCart()" style="position:relative;cursor:pointer;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:6px 10px">
-            <span style="font-size:18px">🛒</span>
-            ${cartCount > 0 ? `<span style="position:absolute;top:-5px;right:-5px;background:#f5c842;color:#000;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:flex;align-items:center;justify-content:center">${cartCount}</span>` : ''}
-          </div>`}
+          <button class="hr-icon-btn" onclick="VW_AUTH.showAuthScreen()" title="Login">👤</button>` : `
+          <button class="hr-icon-btn" onclick="navigateTo('customer_profile')" title="Account">👤</button>`}
+          <button class="hr-icon-btn" onclick="VW_SHOP.openCart()" title="Cart">
+            🛍
+            ${cartCount > 0 ? `<span class="hr-cart-badge">${cartCount}</span>` : ''}
+          </button>
         </div>
       </div>
 
-      <!-- ROW 2: SEARCH -->
-      <div style="display:flex;align-items:center;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:9px 14px;gap:8px">
-        <span style="font-size:15px;opacity:0.4">🔍</span>
-        <input type="text" id="shop-search-input"
-          placeholder="Search tiles, sanitaryware, paints, tools..."
-          value="${_shopSearch}"
-          oninput="VW_SHOP.shopSearch(this.value)"
-          style="flex:1;background:none;border:none;outline:none;color:#fff;font-size:13px;min-width:0">
-        ${_shopSearch ? `<button onclick="VW_SHOP.shopSearch('')" style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:15px;padding:0">✕</button>` : ''}
+      <!-- SEARCH -->
+      <div class="hr-search">
+        <div class="hr-search-inner">
+          <span style="color:#999;font-size:16px">🔍</span>
+          <input id="shop-search-input" type="text"
+            placeholder="Search for Cement, Tiles, Paints..."
+            value="${_shopSearch}"
+            oninput="VW_SHOP.shopSearch(this.value)">
+          ${_shopSearch ? `<button onclick="VW_SHOP.shopSearch('')" style="background:none;border:none;color:#999;cursor:pointer;font-size:16px">✕</button>` : `
+          <button onclick="VW_SHOP.openBarcodeScanner()" style="background:none;border:none;cursor:pointer;font-size:16px">📷</button>`}
+        </div>
       </div>
-    </div>
-
-    <!-- DELIVERY PROMISE STRIP -->
-    <div style="display:flex;background:#f5c842;overflow:hidden">
-      ${['⚡ 90-min delivery','🏪 Free pickup','💳 Wallet pay','🔄 Easy returns'].map(t =>
-        `<div style="flex:1;padding:5px 2px;text-align:center;font-size:9px;font-weight:800;color:#000;border-right:1px solid rgba(0,0,0,0.1)">${t}</div>`
-      ).join('')}
     </div>
 
     ${_shopSearch ? `
     <!-- SEARCH RESULTS -->
-    <div id="shop-products-grid" style="padding:12px 0">
-      <div style="font-size:12px;color:var(--text3);padding:0 4px;margin-bottom:8px">Searching for "${_shopSearch}"...</div>
-    </div>` : `
+    <div style="background:#fff;padding:12px">
+      <div style="font-size:12px;color:#888;margin-bottom:8px">Results for "<strong>${_shopSearch}</strong>"</div>
+    </div>
+    <div id="shop-products-grid" style="background:#fff;padding:0 12px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+    ` : `
 
-    <!-- HOMERUN-STYLE HOME PAGE -->
+    <!-- TRUST STRIP -->
+    <div class="hr-trust-strip">
+      <div class="hr-trust-item">
+        <div class="hr-trust-icon">💵</div>
+        <span class="hr-trust-title">Pay on Delivery</span>
+        <span class="hr-trust-sub">Pay after you receive &amp; verify</span>
+      </div>
+      <div class="hr-trust-item">
+        <div class="hr-trust-icon">🔄</div>
+        <span class="hr-trust-title">7 Day Return</span>
+        <span class="hr-trust-sub">Any quality issue, we replace</span>
+      </div>
+      <div class="hr-trust-item">
+        <div class="hr-trust-icon">🏷</div>
+        <span class="hr-trust-title">Best Prices</span>
+        <span class="hr-trust-sub">Unbeatable pricing, always</span>
+      </div>
+      <div class="hr-trust-item">
+        <div class="hr-trust-icon">🚚</div>
+        <span class="hr-trust-title">10K+ Orders</span>
+        <span class="hr-trust-sub">Vijayawada's trusted store</span>
+      </div>
+    </div>
 
-    <!-- HERO BANNER CAROUSEL -->
-    <div style="position:relative;overflow:hidden;background:#000;margin:0 -0px">
-      <!-- Banner 1: 90-min delivery hero -->
-      <div style="background:linear-gradient(135deg,#1a1200,#2d1f00);padding:20px 16px 24px;position:relative;overflow:hidden;min-height:140px">
-        <div style="position:absolute;right:-10px;top:-10px;font-size:100px;opacity:0.06;line-height:1">🚀</div>
-        <div style="font-size:10px;background:#f5c842;color:#000;font-weight:800;padding:3px 10px;border-radius:20px;display:inline-block;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">⚡ Vijayawada's #1</div>
-        <div style="font-size:22px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:6px">Tiles, Sanitaryware<br>& 3,000+ Products</div>
-        <div style="font-size:13px;color:rgba(245,200,66,0.9);font-weight:700;margin-bottom:14px">Delivered in 90 Minutes</div>
-        <div style="display:flex;gap:8px">
-          <div onclick="VW_SHOP.filterCategory('Tiles')" style="background:#f5c842;color:#000;font-size:11px;font-weight:800;padding:7px 16px;border-radius:20px;cursor:pointer">Shop Tiles →</div>
-          <div onclick="navigateTo('tile_visualizer')" style="background:rgba(255,255,255,0.1);color:#fff;font-size:11px;font-weight:700;padding:7px 16px;border-radius:20px;cursor:pointer;border:1px solid rgba(255,255,255,0.2)">🪟 Visualizer</div>
+    <!-- HERO BANNER -->
+    <div class="hr-hero-banner" onclick="VW_SHOP.filterCategory('Tiles')">
+      <div class="hr-hero-inner">
+        <div style="position:absolute;right:-5px;top:-5px;font-size:80px;opacity:0.08;line-height:1">⬜</div>
+        <div class="hr-hero-eyebrow">⚡ Vijayawada's #1 Home Store</div>
+        <div class="hr-hero-title">BULK PRICES<br><span style="color:#c8972b">SLASHED!</span></div>
+        <div class="hr-hero-sub">Tiles · Sanitaryware · Paints · Hardware & More</div>
+        <div class="hr-hero-cta">Shop Now →</div>
+      </div>
+    </div>
+
+    <!-- CATEGORY GRID -->
+    <div class="hr-section">
+      <div class="hr-section-header">
+        <div>
+          <div class="hr-section-title">Shop by Category</div>
         </div>
-        <!-- Banner dots -->
-        <div style="position:absolute;bottom:10px;right:16px;display:flex;gap:4px">
-          <div style="width:20px;height:3px;background:#f5c842;border-radius:20px"></div>
-          <div style="width:6px;height:3px;background:rgba(255,255,255,0.3);border-radius:20px"></div>
-          <div style="width:6px;height:3px;background:rgba(255,255,255,0.3);border-radius:20px"></div>
+        <div class="hr-see-all" onclick="VW_SHOP.filterCategory(null)">View all</div>
+      </div>
+      <div class="hr-cat-grid">
+        ${SHOP_CATEGORIES.slice(0,12).map(c => `
+        <div class="hr-cat-card" onclick="VW_SHOP.filterCategory('${c.key}')">
+          <div class="hr-cat-img" style="background:${c.color}18;border-color:${c.color}33">${c.icon}</div>
+          <div class="hr-cat-name">${c.label}</div>
+        </div>`).join('')}
+        <div class="hr-cat-card" onclick="VW_SHOP.filterCategory(null)">
+          <div class="hr-cat-img" style="background:#f3f4f6;border-color:#ddd">
+            <span style="font-size:18px;color:#666">+4</span>
+          </div>
+          <div class="hr-cat-name" style="color:#666">More</div>
+        </div>
+        <div class="hr-cat-card" onclick="navigateTo('tile_visualizer')">
+          <div class="hr-cat-img" style="background:#ede9fe;border-color:#c4b5fd">🪟</div>
+          <div class="hr-cat-name" style="color:#7c3aed">Visualizer</div>
+        </div>
+        <div class="hr-cat-card" onclick="navigateTo('mood_board')">
+          <div class="hr-cat-img" style="background:#fce7f3;border-color:#f9a8d4">🎨</div>
+          <div class="hr-cat-name" style="color:#be185d">Mood Board</div>
+        </div>
+        <div class="hr-cat-card" onclick="VW_TILES.openQuickQuote()">
+          <div class="hr-cat-img" style="background:#fffbeb;border-color:#fcd34d">📐</div>
+          <div class="hr-cat-name" style="color:#b45309">Tile Quote</div>
         </div>
       </div>
+    </div>
+
+    <!-- DEALS OF THE WEEK -->
+    <div style="padding:14px 0 0">
+      <div class="hr-section-header" style="padding:0 12px">
+        <div>
+          <div class="hr-section-title">Deals Of The Week</div>
+          <div class="hr-section-sub">At our lowest ever price</div>
+        </div>
+        <div class="hr-see-all" onclick="VW_SHOP.filterCategory(null)">View all →</div>
+      </div>
+    </div>
+    <!-- HORIZONTAL SCROLL DEALS — filled by JS -->
+    <div id="shop-deals-scroll" class="hr-deals-scroll">
+      <div style="display:flex;align-items:center;justify-content:center;width:100%;padding:20px;color:#888;font-size:13px">Loading deals...</div>
     </div>
 
     <!-- TILES SPECIALIST STRIP -->
-    <div style="margin:10px 12px;background:linear-gradient(135deg,#1a0f35,#12082a);border-radius:14px;padding:12px 14px;border:1px solid rgba(139,92,246,0.2);display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:10px;font-weight:700;color:#A78BFA;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">🏆 Tile Specialist</div>
-        <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:2px">Find your perfect tile</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.5)">600+ designs in stock</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        <div onclick="VW_TILES.openQuickQuote()" style="background:#8B5CF6;color:#fff;font-size:10px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;text-align:center">📐 Get Quote</div>
-        <div onclick="navigateTo('mood_board')" style="background:rgba(236,72,153,0.15);border:1px solid rgba(236,72,153,0.3);color:#EC4899;font-size:10px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;text-align:center">🎨 Mood Board</div>
-      </div>
-    </div>
-
-    <!-- CATEGORY GRID — HomeRun style with icons -->
-    <div style="padding:12px 12px 4px">
-      <div style="font-size:13px;font-weight:800;margin-bottom:12px">Shop by Category</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
-        ${SHOP_CATEGORIES.slice(0,8).map(c => `
-        <div onclick="VW_SHOP.filterCategory('${c.key}')"
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
-          <div style="width:36px;height:36px;background:${c.color}22;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">${c.icon}</div>
-          <div style="font-size:9px;font-weight:700;color:var(--text2);line-height:1.2">${c.label}</div>
-        </div>`).join('')}
-      </div>
-      <!-- Second row -->
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
-        ${SHOP_CATEGORIES.slice(8,12).map(c => `
-        <div onclick="VW_SHOP.filterCategory('${c.key}')"
-          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
-          <div style="width:36px;height:36px;background:${c.color}22;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">${c.icon}</div>
-          <div style="font-size:9px;font-weight:700;color:var(--text2);line-height:1.2">${c.label}</div>
-        </div>`).join('')}
-        <div onclick="navigateTo('shop')" style="background:var(--bg2);border:1px dashed var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
-          <div style="font-size:18px">⊕</div>
-          <div style="font-size:9px;font-weight:700;color:var(--text3)">All 16</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- DEALS OF THE WEEK — like HomeRun -->
-    <div style="padding:0 12px 12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div>
-          <div style="font-size:14px;font-weight:900">🔥 Deals of the Week</div>
-          <div style="font-size:10px;color:var(--text3)">Lowest prices on top products</div>
-        </div>
-        <div onclick="VW_SHOP.filterCategory(null)" style="font-size:11px;color:var(--gold);font-weight:700;cursor:pointer">View all →</div>
-      </div>
-      <div id="shop-products-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <!-- Products load here via loadShopProducts() -->
-        <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);font-size:12px">Loading deals...</div>
-      </div>
-    </div>
-
-    <!-- TRUST STRIP — HomeRun style -->
-    <div style="margin:4px 12px 12px;background:var(--bg2);border-radius:14px;padding:12px;border:1px solid var(--border)">
-      <div style="font-size:11px;font-weight:800;text-align:center;margin-bottom:10px;color:var(--text2)">Why V Wholesale?</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        ${[
-          ['⚡','90-Min Delivery','Within Vijayawada'],
-          ['✅','Genuine Products','No fakes, guaranteed'],
-          ['💳','Pay on Delivery','Cash, UPI, Wallet'],
-          ['🔄','Easy Returns','7-day return policy'],
-        ].map(([icon,title,sub]) => `
-        <div style="display:flex;align-items:flex-start;gap:8px">
-          <div style="font-size:18px;flex-shrink:0">${icon}</div>
-          <div>
-            <div style="font-size:11px;font-weight:700">${title}</div>
-            <div style="font-size:9px;color:var(--text3)">${sub}</div>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>
-
-    <!-- OFFERS STRIP -->
-    <div style="margin:0 12px 16px;background:linear-gradient(135deg,#0f3020,#0a2018);border-radius:14px;padding:14px;border:1px solid rgba(34,197,94,0.15)">
+    <div style="margin:0 12px 14px;background:linear-gradient(135deg,#1a0f35,#2d1b69);border-radius:14px;padding:14px 16px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">🎁 Free Delivery</div>
-          <div style="font-size:14px;font-weight:800;margin-bottom:2px">Orders above ₹2,000</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.5)">Use code WELCOME10 for 10% off your first order</div>
+          <div style="font-size:10px;font-weight:800;color:#A78BFA;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">🏆 Tile Specialist</div>
+          <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:2px">Find Your Perfect Tile</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.5)">600+ designs · All sizes in stock</div>
         </div>
-        <div onclick="navigateTo('offers')" style="background:var(--green);color:#fff;font-size:11px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer;white-space:nowrap">
-          View Offers
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div onclick="VW_TILES.openQuickQuote()" style="background:#f5c842;color:#000;font-size:10px;font-weight:800;padding:7px 14px;border-radius:8px;cursor:pointer;text-align:center;white-space:nowrap">📐 Get Quote</div>
+          <div onclick="VW_SHOP.requestTileSample()" style="background:rgba(255,255,255,0.12);color:#fff;font-size:10px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;text-align:center;white-space:nowrap;border:1px solid rgba(255,255,255,0.2)">🏠 Try Sample</div>
         </div>
       </div>
     </div>
 
-  </div>
+    <!-- TRUST SECTION 2 -->
+    <div class="hr-trust2">
+      <div class="hr-trust2-item">
+        <div class="hr-trust2-icon">⚡</div>
+        <div class="hr-trust2-label">Lightning Fast</div>
+      </div>
+      <div class="hr-trust2-item">
+        <div class="hr-trust2-icon">✅</div>
+        <div class="hr-trust2-label">100% Genuine</div>
+      </div>
+      <div class="hr-trust2-item">
+        <div class="hr-trust2-icon">💵</div>
+        <div class="hr-trust2-label">Pay on Delivery</div>
+      </div>
+      <div class="hr-trust2-item">
+        <div class="hr-trust2-icon">📦</div>
+        <div class="hr-trust2-label">No Min Order</div>
+      </div>
+    </div>
+
+    <!-- OFFERS PROMO BANNER -->
+    <div class="hr-promo-banner">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);margin-bottom:4px">🎁 FIRST ORDER OFFER</div>
+        <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:2px">10% OFF with WELCOME10</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.6)">Free delivery on orders above ₹2,000</div>
+      </div>
+      <div onclick="navigateTo('offers')" style="background:#f5c842;color:#000;font-size:11px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer;white-space:nowrap;flex-shrink:0">
+        View Offers
+      </div>
+    </div>
+
+    <!-- SPACER -->
+    <div style="height:20px"></div>
+
   `}
 
   </div>`;
 
-  // Trigger product load after render
+  // After render, load deals into horizontal scroll
   setTimeout(() => {
-    if (!_shopSearch) loadShopProducts(null, '');
-  }, 100);
+    if (!_shopSearch) {
+      loadShopProducts(null, '');   // load deals section
+    }
+  }, 80);
 }
 
+
 async function loadShopProducts(category, search) {
-  const container = document.getElementById('shop-products-grid');
-  if (!container) return;
-  container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">Loading...</div>';
+  // After category tap — fill the grid
+  if (category || search) {
+    const container = document.getElementById('shop-products-grid');
+    if (!container) return;
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px">Loading...</div>';
 
-  let query = VW_DB.client.from('products')
-    .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images,photos')
-    .eq('is_active', true)
-    .order('stock', { ascending: false })
-    .limit(40);
+    let query = VW_DB.client.from('products')
+      .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images,photos')
+      .eq('is_active', true).order('stock', { ascending: false }).limit(40);
 
-  if (category) query = query.eq('category', category);
-  if (search) query = query.ilike('name', `%${search}%`);
+    if (category) query = query.eq('category', category);
+    if (search)   query = query.ilike('name', `%${search}%`);
 
-  const { data: products } = await query;
+    const { data: products } = await query;
 
-  if (!products?.length) {
-    container.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">
-      <div style="font-size:40px;margin-bottom:8px">${search ? '🔍' : '📦'}</div>
-      <div style="font-size:14px;font-weight:700">${search ? 'No results for "'+search+'"' : 'No products in this category yet'}</div>
-      <div style="font-size:12px;margin-top:4px">Check back soon or call us: 8712697930</div>
-    </div>`;
+    if (!products?.length) {
+      container.innerHTML = `<div style="text-align:center;padding:40px;color:#888">
+        <div style="font-size:40px;margin-bottom:8px">${search ? '🔍' : '📦'}</div>
+        <div style="font-size:14px;font-weight:700;color:#333">${search ? 'No results for "'+search+'"' : 'Coming soon!'}</div>
+        <div style="font-size:12px;margin-top:4px;color:#888">Call us: 8712697930</div>
+      </div>`;
+      return;
+    }
+    container.style.cssText = 'background:#fff;padding:0 12px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px';
+    container.innerHTML = products.map(p => homeRunProductCard(p)).join('');
     return;
   }
 
-  container.innerHTML = `
-  ${category ? `<div style="font-size:13px;font-weight:700;margin-bottom:10px;padding:0 4px">${category} <span style="color:var(--text3);font-size:11px;font-weight:400">(${products.length})</span></div>` : '<div style="font-size:13px;font-weight:700;margin-bottom:10px;padding:0 4px">All Products</div>'}
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:0 4px">
-    ${products.map(p => shopProductCard(p)).join('')}
-  </div>`;
+  // Home page — fill the horizontal deals scroll
+  const dealsEl = document.getElementById('shop-deals-scroll');
+  if (!dealsEl) return;
+
+  const { data: products } = await VW_DB.client.from('products')
+    .select('id,name,brand,category,price,vwp,mrp,stock,unit,images,photos')
+    .eq('is_active', true).gt('stock', 0)
+    .order('mrp', { ascending: false }).limit(12);
+
+  if (!products?.length) {
+    dealsEl.innerHTML = '<div style="padding:20px;color:#888;font-size:13px">No products yet</div>';
+    return;
+  }
+
+  dealsEl.innerHTML = products.map(p => {
+    const price  = p.vwp || p.price || 0;
+    const mrp    = p.mrp || 0;
+    const disc   = mrp > price && price > 0 ? Math.round((mrp - price) / mrp * 100) : 0;
+    const qty    = _shopCart[p.id] || 0;
+    const oos    = !p.stock || p.stock <= 0;
+    const img    = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+    const cat    = SHOP_CATEGORIES.find(c => c.key === p.category);
+    const icon   = cat?.icon || '📦';
+    const color  = cat?.color || '#6B7280';
+
+    return `
+    <div class="hr-deal-card">
+      <div class="hr-deal-img" style="background:${img ? '#f3f4f6' : color+'18'}">
+        ${img
+          ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">`
+          : `<span style="font-size:52px">${icon}</span>`}
+        ${disc > 0 ? `<div class="hr-deal-disc">${disc}% OFF</div>` : ''}
+        <div class="hr-deal-assured">⚡ ASSURED</div>
+      </div>
+      <div class="hr-deal-body">
+        ${p.brand ? `<div style="font-size:10px;color:#888;font-weight:600;margin-bottom:2px">${p.brand}</div>` : ''}
+        <div class="hr-deal-name">${p.name}</div>
+        <div style="font-size:10px;color:#2a7a3b;font-weight:700;margin-bottom:4px">⚡ 7 Day Replacement</div>
+        <div class="hr-deal-row">
+          <div>
+            <span class="hr-deal-price">₹${price.toLocaleString('en-IN')}</span>
+            ${mrp > price ? `<span class="hr-deal-mrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+          </div>
+          ${oos
+            ? `<span style="font-size:10px;color:#999">Out of stock</span>`
+            : qty === 0
+              ? `<button class="hr-add-btn" onclick="VW_SHOP.addToCart(${p.id})">ADD</button>`
+              : `<div class="hr-qty-ctrl">
+                  <button class="hr-qty-btn" onclick="VW_SHOP.removeFromCart(${p.id})">−</button>
+                  <span class="hr-qty-num">${qty}</span>
+                  <button class="hr-qty-btn" onclick="VW_SHOP.addToCart(${p.id})">+</button>
+                </div>`}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function shopProductCard(p) {
-  const price = p.vwp || p.price || 0;
-  const mrp   = p.mrp || 0;
-  const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const qty   = _shopCart[p.id] || 0;
-  const outOfStock = !p.stock || p.stock <= 0;
-  const img   = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
-  const catCfg = SHOP_CATEGORIES.find(c => c.key === p.category);
-  const catIcon = catCfg?.icon || '📦';
-  const catColor = catCfg?.color || '#6B7280';
+function homeRunProductCard(p) {
+  const price  = p.vwp || p.price || 0;
+  const mrp    = p.mrp || 0;
+  const disc   = mrp > price && price > 0 ? Math.round((mrp - price) / mrp * 100) : 0;
+  const qty    = _shopCart[p.id] || 0;
+  const oos    = !p.stock || p.stock <= 0;
+  const img    = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+  const cat    = SHOP_CATEGORIES.find(c => c.key === p.category);
+  const icon   = cat?.icon || '📦';
+  const color  = cat?.color || '#6B7280';
 
   return `
-  <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);position:relative">
-    ${disc > 0 ? `<div style="position:absolute;top:8px;left:8px;background:#EF4444;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:20px;z-index:1">${disc}% OFF</div>` : ''}
-    <!-- IMAGE / PLACEHOLDER -->
-    <div style="height:110px;background:${img ? 'var(--bg3)' : `linear-gradient(135deg,${catColor}22,${catColor}44)`};display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;position:relative">
+    <div style="height:110px;background:${img ? '#f3f4f6' : color+'18'};display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
       ${img
-        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.parentElement.innerHTML='<span style=font-size:36px>${catIcon}</span>'">`
-        : `<div style="text-align:center">
-            <div style="font-size:36px;margin-bottom:4px">${catIcon}</div>
-            <div style="font-size:9px;font-weight:700;color:${catColor};text-transform:uppercase;letter-spacing:.05em;opacity:0.8">${p.subcategory||p.category}</div>
-           </div>`}
+        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+        : `<span style="font-size:36px">${icon}</span>`}
+      ${disc > 0 ? `<div style="position:absolute;top:6px;left:6px;background:#2a7a3b;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${disc}% OFF</div>` : ''}
     </div>
-    <!-- INFO -->
     <div style="padding:8px">
-      ${p.brand ? `<div style="font-size:10px;color:var(--text3);margin-bottom:2px;font-weight:600">${p.brand}</div>` : ''}
-      <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:6px;min-height:32px">${p.name}</div>
-      <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:8px">
-        <span style="font-size:14px;font-weight:900;color:var(--gold)">₹${price.toLocaleString('en-IN')}</span>
-        <span style="font-size:10px;color:var(--text3)">${p.unit||'pc'}</span>
-        ${mrp > price ? `<span style="font-size:10px;color:var(--text3);text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+      ${p.brand ? `<div style="font-size:9px;color:#888;font-weight:600;margin-bottom:2px">${p.brand}</div>` : ''}
+      <div style="font-size:11px;font-weight:700;line-height:1.3;color:#1a1a1a;margin-bottom:4px;min-height:28px">${p.name}</div>
+      <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
+        <span style="font-size:14px;font-weight:900;color:#1a1a1a">₹${price.toLocaleString('en-IN')}</span>
+        <span style="font-size:9px;color:#888">${p.unit||'pc'}</span>
+        ${mrp > price ? `<span style="font-size:9px;color:#bbb;text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
       </div>
-      <!-- ADD TO CART -->
-      ${outOfStock ? `
-      <div style="text-align:center;padding:7px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">Out of Stock</div>` :
-      qty === 0 ? `
-      <button onclick="VW_SHOP.addToCart(${p.id})"
-        style="width:100%;padding:8px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:800;cursor:pointer">
-        + Add
-      </button>` : `
-      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--gold);border-radius:8px;overflow:hidden">
-        <button onclick="VW_SHOP.removeFromCart(${p.id})" style="width:36px;height:34px;background:none;border:none;font-size:18px;font-weight:900;cursor:pointer;color:#000">−</button>
-        <span style="font-size:14px;font-weight:900;color:#000">${qty}</span>
-        <button onclick="VW_SHOP.addToCart(${p.id})" style="width:36px;height:34px;background:none;border:none;font-size:18px;font-weight:900;cursor:pointer;color:#000">+</button>
-      </div>`}
+      ${oos
+        ? `<div style="text-align:center;padding:6px;background:#f3f4f6;border-radius:6px;font-size:10px;color:#888">Out of Stock</div>`
+        : qty === 0
+          ? `<div style="display:flex;align-items:center;justify-content:space-between;border:1.5px solid #2a7a3b;border-radius:8px;overflow:hidden">
+              <button onclick="VW_SHOP.addToCart(${p.id})" style="flex:1;padding:7px;background:none;border:none;font-size:11px;font-weight:800;color:#2a7a3b;cursor:pointer">+ Add</button>
+              <div style="width:1px;height:30px;background:#2a7a3b;opacity:0.3"></div>
+              <div style="width:36px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#2a7a3b;cursor:pointer" onclick="VW_SHOP.addToCart(${p.id})">+</div>
+            </div>`
+          : `<div style="display:flex;align-items:center;justify-content:space-between;border:1.5px solid #2a7a3b;border-radius:8px;overflow:hidden">
+              <button onclick="VW_SHOP.removeFromCart(${p.id})" style="width:32px;height:30px;background:none;border:none;font-size:18px;font-weight:900;color:#2a7a3b;cursor:pointer">−</button>
+              <span style="font-size:13px;font-weight:800;color:#1a1a1a">${qty}</span>
+              <button onclick="VW_SHOP.addToCart(${p.id})" style="width:32px;height:30px;background:#2a7a3b;border:none;font-size:16px;font-weight:900;color:#fff;cursor:pointer">+</button>
+            </div>`}
     </div>
   </div>`;
-}
-
-function addToCart(productId) {
-  _shopCart[productId] = (_shopCart[productId] || 0) + 1;
-  _refreshShopCart();
-  _saveCartToSupabase();
-}
-
-function removeFromCart(productId) {
-  if (_shopCart[productId] > 1) _shopCart[productId]--;
-  else delete _shopCart[productId];
-  _refreshShopCart();
-  _saveCartToSupabase();
-}
-
-function _refreshShopCart() {
-  // Re-render cart count badge
-  const count = Object.values(_shopCart).reduce((a,b)=>a+b,0);
-  const badge = document.getElementById('shop-cart-count');
-  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'flex' : 'none'; }
-
-  // Re-render only the changed product card
-  loadShopProducts(_shopCategory, _shopSearch);
-}
-
-async function _saveCartToSupabase() {
-  const prof = VW_AUTH.getCurrentProfile();
-  if (!prof?.id) return;
-  const items = Object.entries(_shopCart).map(([id,qty]) => ({ product_id: parseInt(id), qty }));
-  await VW_DB.client.from('carts').upsert({
-    profile_id: prof.id,
-    items,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'profile_id' }).catch(() => {});
 }
 
 function filterCategory(cat) {
   _shopCategory = cat;
-  renderShopPage().then(html => {
-    const root = document.getElementById('main-content');
-    if (root) root.innerHTML = html;
-    loadShopProducts(_shopCategory, _shopSearch);
-  });
+  if (!cat) {
+    // Reset to home
+    renderShopPage().then(html => {
+      const root = document.getElementById('main-content');
+      if (root) root.innerHTML = html;
+      loadShopProducts(null, '');
+    });
+    return;
+  }
+
+  // Show category page inline — HomeRun style
+  const root = document.getElementById('main-content');
+  if (!root) { renderShopPage().then(html => { document.getElementById('main-content').innerHTML = html; loadShopProducts(cat, ''); }); return; }
+
+  const catCfg = SHOP_CATEGORIES.find(c => c.key === cat) || { icon:'📦', label: cat, color:'#666' };
+
+  root.innerHTML = `
+  <style>
+    #shop-root { background: #fff; color: #1a1a1a; margin: -12px -12px 0; min-height: 100vh; }
+    .hr-add-btn { background: #2a7a3b; color: #fff; border: none; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .hr-qty-ctrl { display: flex; align-items: center; border: 2px solid #2a7a3b; border-radius: 8px; overflow: hidden; }
+    .hr-qty-btn { background: none; border: none; color: #2a7a3b; font-size: 18px; font-weight: 900; cursor: pointer; width: 30px; height: 32px; display: flex; align-items: center; justify-content: center; }
+    .hr-qty-num { font-size: 13px; font-weight: 800; color: #1a1a1a; min-width: 20px; text-align: center; }
+  </style>
+  <div id="shop-root">
+    <!-- MINI HEADER -->
+    <div style="background:#fff;border-bottom:1px solid #eee;padding:10px 14px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100">
+      <button onclick="VW_SHOP.filterCategory(null)" style="background:none;border:none;font-size:20px;cursor:pointer;color:#333;padding:0">←</button>
+      <div style="width:36px;height:36px;background:${catCfg.color}18;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">${catCfg.icon}</div>
+      <div style="flex:1">
+        <div style="font-size:16px;font-weight:900;color:#1a1a1a">${catCfg.label}</div>
+      </div>
+      <button onclick="VW_SHOP.openCart()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#333;position:relative;padding:0">
+        🛍 <span id="cat-cart-count" style="position:absolute;top:-4px;right:-4px;background:#2a7a3b;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:${Object.values(_shopCart).reduce((a,b)=>a+b,0)>0?'flex':'none'};align-items:center;justify-content:center">${Object.values(_shopCart).reduce((a,b)=>a+b,0)}</span>
+      </button>
+    </div>
+
+    <!-- SEARCH IN CATEGORY -->
+    <div style="padding:10px 14px">
+      <div style="display:flex;align-items:center;background:#f3f4f6;border-radius:12px;padding:9px 14px;gap:8px">
+        <span style="color:#999;font-size:15px">🔍</span>
+        <input type="text" placeholder="Search in ${catCfg.label}..."
+          oninput="VW_SHOP.shopSearch(this.value)"
+          style="flex:1;background:none;border:none;outline:none;font-size:13px;color:#1a1a1a">
+      </div>
+    </div>
+
+    <!-- PRODUCT GRID -->
+    <div id="shop-products-grid" style="background:#fff;padding:0 12px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div style="grid-column:1/-1;text-align:center;padding:30px;color:#888;font-size:13px">Loading ${catCfg.label}...</div>
+    </div>
+  </div>`;
+
+  loadShopProducts(cat, '');
 }
 
 function shopSearch(val) {
