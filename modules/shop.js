@@ -984,52 +984,126 @@ async function renderShopPage() {
       <div style="font-size:12px;color:var(--text3);padding:0 4px;margin-bottom:8px">Searching for "${_shopSearch}"...</div>
     </div>` : `
 
-    <!-- CATEGORY TABS -->
-    <div style="padding:12px 0 4px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:10px;padding:0 4px">Shop by Category</div>
-      <div style="display:flex;gap:10px;overflow-x:auto;padding:0 4px 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none">
-        <button onclick="VW_SHOP.filterCategory(null)"
-          style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border-radius:12px;cursor:pointer;
-            border:${!_shopCategory?'2px solid var(--gold)':'1px solid var(--border)'};
-            background:${!_shopCategory?'var(--gold-muted)':'var(--bg2)'}">
-          <span style="font-size:22px">🏠</span>
-          <span style="font-size:10px;font-weight:700;color:${!_shopCategory?'var(--gold)':'var(--text)'}">All</span>
-        </button>
-        ${SHOP_CATEGORIES.map(c => `
-        <button onclick="VW_SHOP.filterCategory('${c.key}')"
-          style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border-radius:12px;cursor:pointer;
-            border:${_shopCategory===c.key?'2px solid var(--gold)':'1px solid var(--border)'};
-            background:${_shopCategory===c.key?'var(--gold-muted)':'var(--bg2)'}">
-          <span style="font-size:22px">${c.icon}</span>
-          <span style="font-size:10px;font-weight:700;white-space:nowrap;color:${_shopCategory===c.key?'var(--gold)':'var(--text)'}">${c.label}</span>
-        </button>`).join('')}
+    <!-- HOMERUN-STYLE HOME PAGE -->
+
+    <!-- HERO BANNER CAROUSEL -->
+    <div style="position:relative;overflow:hidden;background:#000;margin:0 -0px">
+      <!-- Banner 1: 90-min delivery hero -->
+      <div style="background:linear-gradient(135deg,#1a1200,#2d1f00);padding:20px 16px 24px;position:relative;overflow:hidden;min-height:140px">
+        <div style="position:absolute;right:-10px;top:-10px;font-size:100px;opacity:0.06;line-height:1">🚀</div>
+        <div style="font-size:10px;background:#f5c842;color:#000;font-weight:800;padding:3px 10px;border-radius:20px;display:inline-block;margin-bottom:10px;text-transform:uppercase;letter-spacing:.04em">⚡ Vijayawada's #1</div>
+        <div style="font-size:22px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:6px">Tiles, Sanitaryware<br>& 3,000+ Products</div>
+        <div style="font-size:13px;color:rgba(245,200,66,0.9);font-weight:700;margin-bottom:14px">Delivered in 90 Minutes</div>
+        <div style="display:flex;gap:8px">
+          <div onclick="VW_SHOP.filterCategory('Tiles')" style="background:#f5c842;color:#000;font-size:11px;font-weight:800;padding:7px 16px;border-radius:20px;cursor:pointer">Shop Tiles →</div>
+          <div onclick="navigateTo('tile_visualizer')" style="background:rgba(255,255,255,0.1);color:#fff;font-size:11px;font-weight:700;padding:7px 16px;border-radius:20px;cursor:pointer;border:1px solid rgba(255,255,255,0.2)">🪟 Visualizer</div>
+        </div>
+        <!-- Banner dots -->
+        <div style="position:absolute;bottom:10px;right:16px;display:flex;gap:4px">
+          <div style="width:20px;height:3px;background:#f5c842;border-radius:20px"></div>
+          <div style="width:6px;height:3px;background:rgba(255,255,255,0.3);border-radius:20px"></div>
+          <div style="width:6px;height:3px;background:rgba(255,255,255,0.3);border-radius:20px"></div>
+        </div>
       </div>
     </div>
 
-    <!-- TILES SPECIAL SECTION -->
-    ${!_shopCategory || _shopCategory === 'Tiles' ? `
-    <div style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:12px;padding:12px;margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:13px;font-weight:800">⬜ Tiles</div>
-        <div style="font-size:11px;color:var(--text3)">Can't decide? Try at home</div>
+    <!-- TILES SPECIALIST STRIP -->
+    <div style="margin:10px 12px;background:linear-gradient(135deg,#1a0f35,#12082a);border-radius:14px;padding:12px 14px;border:1px solid rgba(139,92,246,0.2);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#A78BFA;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">🏆 Tile Specialist</div>
+        <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:2px">Find your perfect tile</div>
+        <div style="font-size:10px;color:rgba(255,255,255,0.5)">600+ designs in stock</div>
       </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="VW_SHOP.openTileQuotation()" style="flex:1;padding:10px;border-radius:10px;background:#8B5CF6;border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-          📐 Get Tile Quote
-        </button>
-        <button onclick="VW_SHOP.requestTileSample()" style="flex:1;padding:10px;border-radius:10px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#8B5CF6;font-size:12px;font-weight:700;cursor:pointer">
-          🏠 Try at Home
-        </button>
-        <button onclick="navigateTo('mood_board')" style="flex:1;padding:10px;border-radius:10px;background:rgba(236,72,153,0.1);border:1px solid rgba(236,72,153,0.3);color:#EC4899;font-size:12px;font-weight:700;cursor:pointer">
-          🎨 Mood Board
-        </button>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div onclick="VW_TILES.openQuickQuote()" style="background:#8B5CF6;color:#fff;font-size:10px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;text-align:center">📐 Get Quote</div>
+        <div onclick="navigateTo('mood_board')" style="background:rgba(236,72,153,0.15);border:1px solid rgba(236,72,153,0.3);color:#EC4899;font-size:10px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;text-align:center">🎨 Mood Board</div>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">Sample: ₹500/tile + transport · 100% redeemable · 2hr return window</div>
-    </div>` : ''}
+    </div>
 
-    <!-- PRODUCTS GRID -->
-    <div id="shop-products-grid"></div>`}
+    <!-- CATEGORY GRID — HomeRun style with icons -->
+    <div style="padding:12px 12px 4px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:12px">Shop by Category</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
+        ${SHOP_CATEGORIES.slice(0,8).map(c => `
+        <div onclick="VW_SHOP.filterCategory('${c.key}')"
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="width:36px;height:36px;background:${c.color}22;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">${c.icon}</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text2);line-height:1.2">${c.label}</div>
+        </div>`).join('')}
+      </div>
+      <!-- Second row -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        ${SHOP_CATEGORIES.slice(8,12).map(c => `
+        <div onclick="VW_SHOP.filterCategory('${c.key}')"
+          style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">
+          <div style="width:36px;height:36px;background:${c.color}22;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">${c.icon}</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text2);line-height:1.2">${c.label}</div>
+        </div>`).join('')}
+        <div onclick="navigateTo('shop')" style="background:var(--bg2);border:1px dashed var(--border);border-radius:12px;padding:10px 4px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+          <div style="font-size:18px">⊕</div>
+          <div style="font-size:9px;font-weight:700;color:var(--text3)">All 16</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEALS OF THE WEEK — like HomeRun -->
+    <div style="padding:0 12px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:900">🔥 Deals of the Week</div>
+          <div style="font-size:10px;color:var(--text3)">Lowest prices on top products</div>
+        </div>
+        <div onclick="VW_SHOP.filterCategory(null)" style="font-size:11px;color:var(--gold);font-weight:700;cursor:pointer">View all →</div>
+      </div>
+      <div id="shop-products-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <!-- Products load here via loadShopProducts() -->
+        <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--text3);font-size:12px">Loading deals...</div>
+      </div>
+    </div>
+
+    <!-- TRUST STRIP — HomeRun style -->
+    <div style="margin:4px 12px 12px;background:var(--bg2);border-radius:14px;padding:12px;border:1px solid var(--border)">
+      <div style="font-size:11px;font-weight:800;text-align:center;margin-bottom:10px;color:var(--text2)">Why V Wholesale?</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${[
+          ['⚡','90-Min Delivery','Within Vijayawada'],
+          ['✅','Genuine Products','No fakes, guaranteed'],
+          ['💳','Pay on Delivery','Cash, UPI, Wallet'],
+          ['🔄','Easy Returns','7-day return policy'],
+        ].map(([icon,title,sub]) => `
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <div style="font-size:18px;flex-shrink:0">${icon}</div>
+          <div>
+            <div style="font-size:11px;font-weight:700">${title}</div>
+            <div style="font-size:9px;color:var(--text3)">${sub}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- OFFERS STRIP -->
+    <div style="margin:0 12px 16px;background:linear-gradient(135deg,#0f3020,#0a2018);border-radius:14px;padding:14px;border:1px solid rgba(34,197,94,0.15)">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">🎁 Free Delivery</div>
+          <div style="font-size:14px;font-weight:800;margin-bottom:2px">Orders above ₹2,000</div>
+          <div style="font-size:11px;color:rgba(255,255,255,0.5)">Use code WELCOME10 for 10% off your first order</div>
+        </div>
+        <div onclick="navigateTo('offers')" style="background:var(--green);color:#fff;font-size:11px;font-weight:800;padding:8px 14px;border-radius:10px;cursor:pointer;white-space:nowrap">
+          View Offers
+        </div>
+      </div>
+    </div>
+
+  </div>
+  `}
+
   </div>`;
+
+  // Trigger product load after render
+  setTimeout(() => {
+    if (!_shopSearch) loadShopProducts(null, '');
+  }, 100);
 }
 
 async function loadShopProducts(category, search) {
