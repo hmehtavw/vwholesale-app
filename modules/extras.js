@@ -8212,7 +8212,10 @@ async function renderShopPage() {
           📐 Get Tile Quote
         </button>
         <button onclick="VW_SHOP.requestTileSample()" style="flex:1;padding:10px;border-radius:10px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#8B5CF6;font-size:12px;font-weight:700;cursor:pointer">
-          🏠 Try Sample at Home
+          🏠 Try at Home
+        </button>
+        <button onclick="navigateTo('mood_board')" style="flex:1;padding:10px;border-radius:10px;background:rgba(236,72,153,0.1);border:1px solid rgba(236,72,153,0.3);color:#EC4899;font-size:12px;font-weight:700;cursor:pointer">
+          🎨 Mood Board
         </button>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">Sample: ₹500/tile + transport · 100% redeemable · 2hr return window</div>
@@ -10492,3 +10495,202 @@ window.VW_SHOP.applyPromoCode = applyPromoCode;
 
 // Add scanner button to shop header
 window.VW_SHOP.openBarcodeScanner = openBarcodeScanner;
+
+// ═══════════════════════════════════════════════════════════════
+// TILE MOOD BOARD — AI-powered tile combination suggestions
+// ═══════════════════════════════════════════════════════════════
+
+async function renderTileMoodBoard() {
+  const { data: tiles } = await VW_DB.client
+    .from('products')
+    .select('id,name,brand,category,subcategory,price,vwp,mrp,unit,images,photos')
+    .eq('category', 'Tiles')
+    .eq('is_active', true)
+    .gt('stock', 0)
+    .limit(30);
+
+  const rooms = ['Living Room', 'Master Bedroom', 'Bathroom', 'Kitchen', 'Balcony', 'Outdoor'];
+  const styles = ['Modern', 'Classic', 'Rustic', 'Minimalist', 'Luxury', 'Traditional'];
+
+  return `
+  <div class="module-header"><h2>🎨 Tile Mood Board</h2></div>
+  <p style="font-size:12px;color:var(--text3);margin-bottom:14px">AI suggests the best tile combinations for your space</p>
+
+  <div class="card" style="margin-bottom:14px">
+    <h3 class="card-title">Tell us about your space</h3>
+    <div class="form-group">
+      <label>Room Type</label>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+        ${rooms.map((r,i) => `
+        <button id="mb-room-${i}" onclick="selectMBRoom('${r}',${i})"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+            border:${i===0?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${i===0?'var(--gold-muted)':'var(--bg2)'};
+            color:${i===0?'var(--gold)':'var(--text)'}">
+          ${r}
+        </button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Style Preference</label>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
+        ${styles.map((s,i) => `
+        <button id="mb-style-${i}" onclick="selectMBStyle('${s}',${i})"
+          style="flex:0 0 auto;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;
+            border:${i===0?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${i===0?'var(--gold-muted)':'var(--bg2)'};
+            color:${i===0?'var(--gold)':'var(--text)'}">
+          ${s}
+        </button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Budget Range (₹/sqft)</label>
+      <div style="display:flex;gap:8px">
+        ${[['Under ₹50','0','50'],['₹50-100','50','100'],['₹100-200','100','200'],['₹200+','200','9999']].map(([label,min,max],i) => `
+        <button id="mb-budget-${i}" onclick="selectMBBudget(${min},${max},${i})"
+          style="flex:1;padding:8px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;
+            border:${i===1?'2px solid var(--gold)':'1px solid var(--border)'};
+            background:${i===1?'var(--gold-muted)':'var(--bg2)'}">
+          ${label}
+        </button>`).join('')}
+      </div>
+    </div>
+    <button onclick="VW_SHOP.generateMoodBoard()"
+      style="width:100%;padding:12px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
+      ✨ Generate Mood Board
+    </button>
+  </div>
+
+  <div id="mood-board-result"></div>`;
+}
+
+async function generateMoodBoard() {
+  const room  = window._mbRoom  || 'Living Room';
+  const style = window._mbStyle || 'Modern';
+  const minB  = window._mbBudgetMin ?? 50;
+  const maxB  = window._mbBudgetMax ?? 100;
+
+  const resultEl = document.getElementById('mood-board-result');
+  if (resultEl) resultEl.innerHTML = `
+    <div style="text-align:center;padding:30px">
+      <div style="font-size:40px;animation:spin 1.5s linear infinite">✨</div>
+      <div style="font-size:14px;font-weight:700;margin-top:12px">Curating your mood board...</div>
+    </div>`;
+
+  // Fetch matching tiles
+  const { data: tiles } = await VW_DB.client.from('products')
+    .select('id,name,brand,subcategory,price,vwp,mrp,unit,images,photos')
+    .eq('category','Tiles').eq('is_active',true).gt('stock',0)
+    .gte('vwp', minB).lte('vwp', maxB <= 9999 ? maxB : 99999)
+    .limit(20);
+
+  if (!tiles?.length) {
+    if (resultEl) resultEl.innerHTML = '<p class="empty-msg">No tiles found in this budget range</p>';
+    return;
+  }
+
+  // Use Claude to suggest combinations
+  try {
+    const tileList = tiles.map(t => `${t.name} (${t.brand||''}) ₹${t.vwp||t.price}/sqft`).join(', ');
+    const prompt = `You are a tile design expert for V Wholesale in Vijayawada, India.
+A customer wants tiles for their ${room} in a ${style} style. Budget: ₹${minB}-${maxB}/sqft.
+
+Available tiles: ${tileList}
+
+Suggest 3 curated combinations (name each combination). For each:
+- Primary tile (floor)
+- Accent tile (feature wall or border, if applicable)  
+- Why this works for ${room} in ${style} style
+- Estimated total look
+
+Return ONLY valid JSON array with structure:
+[{"name":"...", "primary":"tile name", "accent":"tile name or null", "reason":"...", "look":"..."}]`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    const text = data?.content?.[0]?.text || '[]';
+    const suggestions = JSON.parse(text.replace(/```json\n?|```/g,'').trim());
+
+    if (resultEl) resultEl.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px">✨ Curated for your ${room} — ${style} Style</div>
+    ${suggestions.map((s,i) => {
+      const primaryTile = tiles.find(t => t.name.toLowerCase().includes(s.primary?.toLowerCase().split(' ')[0]||''));
+      const accentTile  = s.accent ? tiles.find(t => t.name.toLowerCase().includes(s.accent?.toLowerCase().split(' ')[0]||'')) : null;
+      return `
+      <div style="background:var(--bg2);border-radius:12px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
+        <div style="font-size:14px;font-weight:800;color:var(--gold);margin-bottom:6px">Look ${i+1}: ${s.name}</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          ${[primaryTile, accentTile].filter(Boolean).map(t => {
+            const img = t?.images?.[0] || t?.photos?.[0]?.url || t?.photos?.[0] || null;
+            const price = t?.vwp || t?.price || 0;
+            return `
+            <div style="flex:1;background:var(--bg3);border-radius:8px;overflow:hidden">
+              ${img ? `<img src="${img}" style="width:100%;height:80px;object-fit:cover">` : `<div style="height:80px;display:flex;align-items:center;justify-content:center;font-size:28px">⬜</div>`}
+              <div style="padding:6px">
+                <div style="font-size:10px;font-weight:700;line-height:1.3">${t?.name||''}</div>
+                <div style="font-size:11px;color:var(--gold);font-weight:700">₹${price}/sqft</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${s.reason}</div>
+        <div style="font-size:11px;color:var(--text3);font-style:italic">"${s.look}"</div>
+        <button onclick="navigateTo('shop')" style="width:100%;margin-top:8px;padding:8px;border-radius:8px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer">
+          🛒 Shop These Tiles
+        </button>
+      </div>`;
+    }).join('')}`;
+
+  } catch(e) {
+    // Fallback — show random selections from stock
+    const picks = tiles.sort(() => Math.random() - 0.5).slice(0, 6);
+    if (resultEl) resultEl.innerHTML = `
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Tiles for your ${room}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${picks.map(p => shopProductCard(p)).join('')}
+    </div>`;
+  }
+}
+
+const _mbSelections = { room: 'Living Room', style: 'Modern', budgetMin: 50, budgetMax: 100 };
+setTimeout(() => {
+  window._mbRoom = 'Living Room';
+  window._mbStyle = 'Modern';
+  window._mbBudgetMin = 50;
+  window._mbBudgetMax = 100;
+  window.selectMBRoom = (r, i) => {
+    window._mbRoom = r;
+    document.querySelectorAll('[id^="mb-room-"]').forEach((b,idx) => {
+      b.style.borderColor = idx===i?'var(--gold)':'var(--border)';
+      b.style.background  = idx===i?'var(--gold-muted)':'var(--bg2)';
+      b.style.color       = idx===i?'var(--gold)':'var(--text)';
+    });
+  };
+  window.selectMBStyle = (s, i) => {
+    window._mbStyle = s;
+    document.querySelectorAll('[id^="mb-style-"]').forEach((b,idx) => {
+      b.style.borderColor = idx===i?'var(--gold)':'var(--border)';
+      b.style.background  = idx===i?'var(--gold-muted)':'var(--bg2)';
+      b.style.color       = idx===i?'var(--gold)':'var(--text)';
+    });
+  };
+  window.selectMBBudget = (min, max, i) => {
+    window._mbBudgetMin = min; window._mbBudgetMax = max;
+    document.querySelectorAll('[id^="mb-budget-"]').forEach((b,idx) => {
+      b.style.borderColor = idx===i?'var(--gold)':'var(--border)';
+      b.style.background  = idx===i?'var(--gold-muted)':'var(--bg2)';
+    });
+  };
+}, 0);
+
+window.VW_SHOP.renderTileMoodBoard = renderTileMoodBoard;
+window.VW_SHOP.generateMoodBoard = generateMoodBoard;

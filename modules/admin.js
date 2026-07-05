@@ -1387,7 +1387,7 @@ async function addPromoCode() {
   if (container) container.innerHTML = await renderSettingsTools();
 }
 
-async function deletePromoCode(code) {
+async function deleteBillingPromoCode(code) {
   const promos = await VW_DB.getSetting('promo_codes', {});
   delete promos[code];
   await VW_DB.setSetting('promo_codes', promos);
@@ -3938,6 +3938,7 @@ async function deletePromoCode(id) {
 window.savePromoCode = savePromoCode;
 window.togglePromoCode = togglePromoCode;
 window.deletePromoCode = deletePromoCode;
+window.deleteBillingPromoCode = deleteBillingPromoCode;
 
 // ═══════════════════════════════════════════════════════════════
 // CUSTOMER BROADCAST — Send push to all/segment customers
