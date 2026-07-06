@@ -9,7 +9,10 @@
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="shortcut icon" href="icon-192.png">
   <script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});</script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -273,11 +276,12 @@
     /* ─── DESKTOP RESPONSIVE ─── */
     @media(min-width:600px){
       body{max-width:480px;margin:0 auto;box-shadow:0 0 40px rgba(0,0,0,.1)}
-      #hdr,#bnav,#pg-home,#pg-cat,.footer{max-width:480px}
+      #hdr{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
+      #bnav{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
+      .pdp-bar{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
       .overlay,.pdp-overlay{background:rgba(0,0,0,.6)}
-      .sheet,.pdp{max-width:480px;left:50%;transform:translateX(-50%) translateY(105%)}
+      .sheet,.pdp{max-width:480px;left:50%;transform:translateX(-50%) translateY(105%);right:auto;width:480px}
       .sheet.open,.pdp.open{transform:translateX(-50%) translateY(0)}
-      .pdp-bar{max-width:480px;left:50%;transform:translateX(-50%)}
     }
     /* ─── DIVIDER ─── */
     .div{height:8px;background:var(--bg);margin:16px 0 0}
@@ -913,7 +917,7 @@ async function openPDP(productId) {
         ${p.brand ? `<div class="pdp-spec-row"><div class="pdp-spec-k">Brand</div><div class="pdp-spec-v">${p.brand}</div></div>` : ''}
         <div class="pdp-spec-row"><div class="pdp-spec-k">Category</div><div class="pdp-spec-v">${p.category||'—'}</div></div>
         <div class="pdp-spec-row"><div class="pdp-spec-k">Unit</div><div class="pdp-spec-v">${p.unit||'Each'}</div></div>
-        <div class="pdp-spec-row"><div class="pdp-spec-k">Availability</div><div class="pdp-spec-v" style="color:${oos?'var(--red)':'var(--g)';font-weight:700}">${oos ? 'Out of Stock' : '✓ In Stock'}</div></div>
+        <div class="pdp-spec-row"><div class="pdp-spec-k">Availability</div><div class="pdp-spec-v" style="color:${oos?'var(--red)':'var(--g)'};font-weight:700">${oos ? 'Out of Stock' : '✓ In Stock'}</div></div>
       </div>
 
       <!-- MORE FROM CATEGORY -->
