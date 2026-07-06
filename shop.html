@@ -704,6 +704,152 @@
     <button onclick="openLoginSheet()" style="background:var(--black);color:var(--gold);border:none;border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;font-weight:900;white-space:nowrap">Join Free →</button>
   </div>
 
+  <div class="divider"></div>
+
+  <!-- ── DELIVERY ZONE CHECKER ── -->
+  <div style="padding:16px 14px 0">
+    <div class="section-hdr" style="margin-bottom:10px">
+      <div>
+        <div class="section-title">Check Delivery to Your Area</div>
+        <div class="section-sub">AP & Telangana · Same-day in Vijayawada</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;flex:1;border:1.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden">
+        <span style="padding:0 10px;font-size:15px">📍</span>
+        <input id="pincode-check-input" type="tel" inputmode="numeric" maxlength="6"
+          placeholder="Enter 6-digit pincode"
+          style="flex:1;padding:11px 0;border:none;outline:none;font-size:14px;font-weight:700;color:var(--text)"
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+      </div>
+      <button onclick="checkDeliveryPincode()" style="background:var(--green);color:#fff;border:none;border-radius:var(--radius-sm);padding:0 16px;font-size:13px;font-weight:800">Check</button>
+    </div>
+    <div id="pincode-result" style="margin-bottom:14px"></div>
+  </div>
+
+  <!-- ── STORES MAP — AP + TELANGANA ── -->
+  <div style="padding:0 14px 16px">
+    <div style="background:var(--black);border-radius:var(--radius-lg);overflow:hidden;padding:18px 16px">
+      <div style="font-size:10px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">📍 Our Presence</div>
+      <div style="font-size:17px;font-weight:900;color:#fff;margin-bottom:2px">AP & Telangana</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:16px">1 store open · 13 cities coming soon</div>
+
+      <!-- SVG MAP — AP & Telangana stylised -->
+      <svg viewBox="0 0 320 380" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:300px">
+        <!-- AP Region background -->
+        <path d="M60,180 L50,140 L70,100 L110,80 L160,70 L210,85 L250,110 L270,150 L260,200 L240,250 L210,300 L180,340 L150,360 L120,350 L90,320 L70,280 L55,240 Z"
+          fill="#1a2e1a" stroke="#2a7a3b" stroke-width="1.5" opacity="0.9"/>
+        <!-- Telangana Region background -->
+        <path d="M110,80 L160,70 L210,85 L250,110 L240,160 L220,190 L190,200 L160,195 L130,185 L110,165 L105,130 Z"
+          fill="#1a1a2e" stroke="#8B5CF6" stroke-width="1.5" opacity="0.9"/>
+
+        <!-- State labels -->
+        <text x="155" y="270" fill="rgba(255,255,255,0.3)" font-size="11" font-weight="700" text-anchor="middle" font-family="system-ui">ANDHRA PRADESH</text>
+        <text x="175" y="140" fill="rgba(255,255,255,0.3)" font-size="9" font-weight="700" text-anchor="middle" font-family="system-ui">TELANGANA</text>
+
+        <!-- ── CURRENT STORE — VIJAYAWADA ── -->
+        <!-- Pulse ring -->
+        <circle cx="168" cy="210" r="14" fill="rgba(245,200,66,0.15)" stroke="rgba(245,200,66,0.4)" stroke-width="1"/>
+        <circle cx="168" cy="210" r="8" fill="#F5C842" opacity="0.9"/>
+        <circle cx="168" cy="210" r="4" fill="#fff"/>
+        <text x="168" y="232" fill="#F5C842" font-size="8" font-weight="800" text-anchor="middle" font-family="system-ui">VIJAYAWADA</text>
+        <text x="168" y="241" fill="rgba(245,200,66,0.6)" font-size="6.5" text-anchor="middle" font-family="system-ui">OPEN NOW</text>
+
+        <!-- ── COMING SOON DOTS — AP ── -->
+        <!-- Guntur -->
+        <circle cx="155" cy="230" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="155" y="247" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Guntur</text>
+        <!-- Nellore -->
+        <circle cx="148" cy="295" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="148" y="310" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Nellore</text>
+        <!-- Ongole -->
+        <circle cx="152" cy="270" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="152" y="285" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Ongole</text>
+        <!-- Tirupati -->
+        <circle cx="140" cy="330" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="140" y="344" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Tirupati</text>
+        <!-- Kadapa -->
+        <circle cx="130" cy="310" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="118" y="318" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Kadapa</text>
+        <!-- Kurnool -->
+        <circle cx="110" cy="270" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="98" y="278" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Kurnool</text>
+        <!-- Anantapur -->
+        <circle cx="95" cy="295" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="83" y="303" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Anantapur</text>
+        <!-- Rajahmundry -->
+        <circle cx="200" cy="185" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="214" y="189" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Rajamundry</text>
+        <!-- Anakapalle -->
+        <circle cx="220" cy="165" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="234" y="169" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Anakapalle</text>
+        <!-- Visakhapatnam -->
+        <circle cx="235" cy="148" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="249" y="152" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Vizag</text>
+        <!-- Srikakulam -->
+        <circle cx="248" cy="128" r="4" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+        <text x="262" y="132" fill="rgba(255,255,255,0.5)" font-size="6" text-anchor="middle" font-family="system-ui">Srikakulam</text>
+
+        <!-- ── COMING SOON DOTS — TELANGANA ── -->
+        <!-- Khammam -->
+        <circle cx="155" cy="170" r="4" fill="rgba(139,92,246,0.6)" stroke="rgba(139,92,246,0.8)" stroke-width="1"/>
+        <text x="143" y="165" fill="rgba(139,92,246,0.8)" font-size="6" text-anchor="middle" font-family="system-ui">Khammam</text>
+        <!-- Warangal -->
+        <circle cx="178" cy="148" r="4" fill="rgba(139,92,246,0.6)" stroke="rgba(139,92,246,0.8)" stroke-width="1"/>
+        <text x="178" y="141" fill="rgba(139,92,246,0.8)" font-size="6" text-anchor="middle" font-family="system-ui">Warangal</text>
+      </svg>
+
+      <!-- LEGEND -->
+      <div style="display:flex;gap:16px;margin-top:8px;justify-content:center">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.7)">
+          <div style="width:8px;height:8px;border-radius:50%;background:#F5C842"></div>
+          Open Now
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.7)">
+          <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.3);border:1px solid rgba(255,255,255,0.5)"></div>
+          Coming Soon (AP)
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,0.7)">
+          <div style="width:8px;height:8px;border-radius:50%;background:rgba(139,92,246,0.6);border:1px solid rgba(139,92,246,0.8)"></div>
+          Coming Soon (TG)
+        </div>
+      </div>
+    </div>
+
+    <!-- STORE CARD — VIJAYAWADA (CURRENT) -->
+    <div style="background:var(--grey1);border:1.5px solid var(--border);border-radius:var(--radius-md);padding:14px;margin-top:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="display:inline-flex;align-items:center;gap:5px;background:#dcfce7;border:1px solid #86efac;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:800;color:var(--green);margin-bottom:6px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--green)"></span>
+            OPEN NOW
+          </div>
+          <div style="font-size:14px;font-weight:900;margin-bottom:2px">V Wholesale · Vijayawada</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:4px">NH65, Bhavanipuram, Vijayawada — 520012</div>
+          <div style="font-size:11px;color:var(--text3)">Mon–Sat · 9:00 AM – 7:30 PM</div>
+        </div>
+        <a href="https://maps.google.com/?q=Vassure+Wholesale+Vijayawada+NH65+Bhavanipuram" target="_blank"
+          style="background:var(--green);color:#fff;font-size:11px;font-weight:800;padding:8px 12px;border-radius:var(--radius-sm);white-space:nowrap;flex-shrink:0">
+          📍 Maps
+        </a>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <a href="tel:8712697930" style="flex:1;text-align:center;padding:9px;background:var(--white);border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-weight:800;color:var(--text)">📞 Call</a>
+        <div onclick="showPickupOption()" style="flex:1;text-align:center;padding:9px;background:var(--black);border-radius:var(--radius-sm);font-size:12px;font-weight:800;color:var(--gold);cursor:pointer">🏪 Self Pickup</div>
+      </div>
+    </div>
+
+    <!-- COMING SOON CITIES LIST -->
+    <div style="margin-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Coming Soon</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${['Guntur','Nellore','Ongole','Tirupati','Kadapa','Kurnool','Anantapur','Rajamundry','Anakapalle','Vizag','Srikakulam','Khammam 🟣','Warangal 🟣'].map(city => `
+        <div style="background:var(--grey1);border:1px solid var(--border);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:var(--text2)">${city}</div>`).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">🟣 = Telangana</div>
+    </div>
+  </div>
+
 </div><!-- /main-page -->
 
 
@@ -877,6 +1023,7 @@ function addToCart(id, name, price) {
   updateCartBadge();
   toast('Added: ' + name.slice(0,28));
   refreshProductCards();
+  trackAddToCart(id, name, price);
 }
 
 function removeFromCart(id) {
@@ -1078,14 +1225,27 @@ async function openPDP(productId) {
     moreProducts = Array.isArray(moreData) ? moreData : [];
   } catch(e) {}
 
+  const zone = getPincodeZone(document.getElementById('pincode-check-input')?.value?.trim() || '520012');
+  const deliveryBadge = zone === 'vijayawada'
+    ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>'
+    : zone === 'ap' || zone === 'telangana'
+    ? '<span style="background:#fff7ed;color:#c2410c;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #fed7aa">🚚 3–4 day delivery</span>'
+    : '<span style="background:var(--grey1);color:var(--text3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">📍 Vijayawada pickup</span>';
+  const isWishlisted = _wishlist.has(productId);
+  trackViewProduct(p.id, p.name, p.category, price);
+
   pdpSheet.innerHTML = `
     <div class="pdp-img-wrap" style="background:${img ? '#f5f5f5' : color+'18'}">
       ${img ? `<img src="${img}" alt="${p.name}">` : `<span style="font-size:80px">${icon}</span>`}
       ${disc > 0 ? `<div class="pdp-disc-badge">${disc}% OFF</div>` : ''}
       <button class="pdp-close" onclick="closePDP()">✕</button>
+      <button id="pdp-wish-btn" onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:12px;right:48px;background:rgba(0,0,0,0.4);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
     </div>
     <div class="pdp-body">
-      ${p.brand ? `<div class="pdp-brand">${p.brand}</div>` : ''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        ${p.brand ? `<div class="pdp-brand">${p.brand}</div>` : '<div></div>'}
+        ${deliveryBadge}
+      </div>
       <div class="pdp-name">${p.name}</div>
       <div class="pdp-price-row">
         <span class="pdp-price">₹${price.toLocaleString('en-IN')}</span>
@@ -1186,7 +1346,7 @@ function handleSearch(val) {
   document.getElementById('search-clear').style.display = val ? 'block' : 'none';
   clearTimeout(searchTimer);
   if (val.length < 2) return;
-  searchTimer = setTimeout(() => showCategory(null, val), 400);
+  searchTimer = setTimeout(() => { showCategory(null, val); trackSearch(val); }, 400);
 }
 function clearSearch() {
   document.getElementById('search-input').value = '';
@@ -1426,6 +1586,7 @@ async function showCategory(catKey, searchTerm) {
   _sortMode = 'default';
   _activeBrand = null;
   _activePriceRange = null;
+  trackCategoryView(catKey || 'All');
 
   try {
     let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&order=stock.desc&limit=40';
@@ -1487,7 +1648,152 @@ function goHome() {
   }
 })();
 
+// ── DELIVERY ZONES ──
+// Vijayawada pincodes — 2-4 hr delivery
+const VJ_PINCODES = new Set([
+  '520001','520002','520003','520004','520007','520008','520010',
+  '520011','520012','520013','520015','520019','520021','520022',
+  '520023','520024','520025','520026','520027','520028',
+  '521001','521002','521101','521108','521126','521150',
+  '521156','521157','521163','521164','521165'
+]);
+
+// AP pincodes prefix ranges (500-535 = AP/Telangana)
+// Telangana: 500xxx-509xxx, AP: 515xxx-535xxx + 502-504
+const AP_PREFIXES = ['50','51','52','53'];
+const TG_PREFIXES = ['500','501','502','503','504','505','506','507','508','509'];
+
+function getPincodeZone(pin) {
+  if (!pin || pin.length !== 6) return null;
+  if (VJ_PINCODES.has(pin)) return 'vijayawada';
+  const p3 = pin.slice(0,3);
+  const p2 = pin.slice(0,2);
+  if (TG_PREFIXES.includes(p3)) return 'telangana';
+  if (AP_PREFIXES.includes(p2) && parseInt(pin) >= 500000 && parseInt(pin) <= 535999) return 'ap';
+  return 'outside';
+}
+
+function checkDeliveryPincode() {
+  const pin = document.getElementById('pincode-check-input')?.value?.trim();
+  const el = document.getElementById('pincode-result');
+  if (!pin || pin.length < 6) { el.innerHTML = '<div style="font-size:12px;color:var(--red)">Enter a valid 6-digit pincode</div>'; return; }
+  const zone = getPincodeZone(pin);
+  const msgs = {
+    vijayawada: `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:var(--radius-sm);padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:var(--green);margin-bottom:2px">✅ Deliverable — Vijayawada</div>
+      <div style="font-size:12px;color:#166534">⚡ 2–4 hour delivery · Self pickup available at NH65 Bhavanipuram</div>
+    </div>`,
+    ap: `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--radius-sm);padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:#c2410c;margin-bottom:2px">🚚 Andhra Pradesh — Deliverable</div>
+      <div style="font-size:12px;color:#9a3412">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
+    </div>`,
+    telangana: `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:var(--radius-sm);padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:#6d28d9;margin-bottom:2px">🚚 Telangana — Deliverable</div>
+      <div style="font-size:12px;color:#5b21b6">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
+    </div>`,
+    outside: `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--radius-sm);padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:2px">❌ Outside Service Area</div>
+      <div style="font-size:12px;color:#991b1b">We currently serve Andhra Pradesh & Telangana only. Call us for special arrangements.</div>
+    </div>`
+  };
+  el.innerHTML = msgs[zone] || msgs.outside;
+  trackEvent('pincode_check', { pincode: pin, zone });
+}
+
+function showPickupOption() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:4px 0 8px">
+      <div style="font-size:36px;margin-bottom:10px">🏪</div>
+      <div style="font-size:17px;font-weight:900;margin-bottom:4px">Self Pickup — Free</div>
+      <div style="font-size:12px;color:var(--grey3);margin-bottom:20px">Collect from our store — no delivery charge</div>
+    </div>
+    <div style="background:var(--grey1);border-radius:var(--radius-md);padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:4px">📍 V Wholesale Store</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">NH65, Bhavanipuram, Vijayawada — 520012</div>
+      <div style="font-size:11px;color:var(--text3)">Mon–Sat · 9:00 AM – 7:30 PM · <a href="tel:8712697930" style="color:var(--green);font-weight:700">87126 97930</a></div>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+      ✅ Order online and select "Store Pickup" at checkout<br>
+      ✅ Ready within 30–45 minutes for in-stock items<br>
+      ✅ No delivery charge · Pay at pickup or online
+    </div>
+    <button onclick="openLoginSheet('cart')" style="width:100%;padding:13px;background:var(--green);border:none;border-radius:var(--radius-md);color:#fff;font-size:14px;font-weight:900;cursor:pointer">
+      Shop & Pickup →
+    </button>
+    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;border-radius:var(--radius-md);background:var(--grey1);border:none;font-size:13px;color:var(--text2);cursor:pointer">Close</button>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
+}
+
+// ── WISHLIST ──
+let _wishlist = new Set();
+
+function toggleWishlist(productId, productName, btn) {
+  if (_wishlist.has(productId)) {
+    _wishlist.delete(productId);
+    if (btn) { btn.textContent = '♡'; btn.style.color = 'var(--grey3)'; }
+    toast('Removed from wishlist');
+  } else {
+    _wishlist.add(productId);
+    if (btn) { btn.textContent = '♥'; btn.style.color = '#e11d48'; }
+    toast('Added to wishlist ♥');
+  }
+  trackEvent('wishlist_toggle', { product_id: productId, action: _wishlist.has(productId) ? 'add' : 'remove' });
+  // Persist to localStorage
+  localStorage.setItem('vw_wishlist', JSON.stringify([..._wishlist]));
+}
+
+function loadWishlist() {
+  try {
+    const saved = localStorage.getItem('vw_wishlist');
+    if (saved) _wishlist = new Set(JSON.parse(saved));
+  } catch(e) {}
+}
+
+// ── ANALYTICS ──
+function trackEvent(eventName, params = {}) {
+  try {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', eventName, params);
+    }
+  } catch(e) {}
+}
+
+// Track key events
+function trackAddToCart(id, name, price) {
+  trackEvent('add_to_cart', { currency:'INR', value: price, items:[{item_id:id, item_name:name, price}] });
+}
+function trackViewProduct(id, name, category, price) {
+  trackEvent('view_item', { currency:'INR', value:price, items:[{item_id:id, item_name:name, item_category:category, price}] });
+}
+function trackSearch(term) {
+  trackEvent('search', { search_term: term });
+}
+function trackCategoryView(category) {
+  trackEvent('view_item_list', { item_list_name: category || 'All Products' });
+}
+
+// ── GA4 INIT (will only fire when you add your Measurement ID) ──
+// Replace G-XXXXXXXXXX with your actual GA4 Measurement ID
+// Get it from: analytics.google.com → Admin → Data Streams → Web → Measurement ID
+const GA4_ID = 'G-XXXXXXXXXX'; // TODO: Replace with your Measurement ID
+
+if (GA4_ID !== 'G-XXXXXXXXXX') {
+  const gaScript = document.createElement('script');
+  gaScript.async = true;
+  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`;
+  document.head.appendChild(gaScript);
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', GA4_ID, { page_title: 'V Wholesale Shop', page_location: window.location.href });
+  window.gtag = gtag;
+}
+
 // ── INIT ──
+loadWishlist();
 renderCatGrid();
 loadDeals();
 </script>

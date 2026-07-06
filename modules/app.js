@@ -241,6 +241,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
+    else if (page === 'brand_catalog') html = await VW_ADMIN.renderBrandCatalogPage();
     else if (page === 'shop') {
     html = await VW_SHOP.renderShopPage();
     // Load products after render
@@ -1148,6 +1149,7 @@ async function renderDashboard_UNUSED() {
     <button class="qa-btn" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
     <button class="qa-btn" onclick="navigateTo('accounts')"><span class="qa-icon">💳</span><span>Accounts</span></button>
     <button class="qa-btn" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
+    <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">📦</span><span>Catalog</span></button>
   </div>
 
   <!-- EXECUTIVE LEADERBOARD -->

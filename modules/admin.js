@@ -4501,3 +4501,279 @@ async function createTestCustomerAccount() {
 }
 
 window.createTestCustomerAccount = createTestCustomerAccount;
+
+// ═══════════════════════════════════════════════════════════════
+// BRAND CATALOG MANAGER — Non-Tile Products
+// Separate from non_inventory_tiles (tiles only).
+// Handles: Sanitary, Plumbing, Electricals, Paints, Hardware, etc.
+// ═══════════════════════════════════════════════════════════════
+
+const CATALOG_CATS = ['Sanitary','Plumbing','Electricals','Paints','Hardware','Tools','Appliances','Plywood','Grout','Adhesive','Waterproofing'];
+
+async function renderBrandCatalogPage() {
+  const { data: items } = await VW_DB.client.from('brand_catalog_items')
+    .select('id,brand,category,product_name,mrp,is_active,show_in_shop,order_based,available_qty,pushed_to_inventory,created_at')
+    .order('created_at', { ascending: false }).limit(200);
+
+  const total = items?.length || 0;
+  const active = items?.filter(i => i.is_active)?.length || 0;
+  const inShop = items?.filter(i => i.show_in_shop)?.length || 0;
+  const pushed = items?.filter(i => i.pushed_to_inventory)?.length || 0;
+  const brands = [...new Set((items||[]).map(i => i.brand).filter(Boolean))];
+
+  return `
+  <div class="module-header">
+    <h2>📦 Brand Catalog Manager</h2>
+    <p style="font-size:12px;color:var(--text3);margin-top:4px">Non-tile products — Sanitary, Plumbing, Electricals & more</p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    ${[['Total',total,'var(--text)'],['Active',active,'var(--green)'],['In Shop',inShop,'var(--gold)'],['In Inventory',pushed,'#60A5FA']].map(([l,v,c]) => `
+    <div style="background:var(--bg2);border-radius:10px;padding:10px;text-align:center">
+      <div style="font-size:20px;font-weight:900;color:${c}">${v}</div>
+      <div style="font-size:10px;color:var(--text3)">${l}</div>
+    </div>`).join('')}
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    <button onclick="openAddCatalogItem()" style="padding:10px 16px;background:var(--gold);border:none;border-radius:8px;color:#000;font-size:13px;font-weight:800;cursor:pointer">+ Add Item</button>
+    <button onclick="openBulkUploadCatalog()" style="padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer">📄 Bulk CSV Upload</button>
+    <button onclick="loadBrandCatalogItems()" style="padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer">↻ Refresh</button>
+  </div>
+  <div style="display:flex;gap:8px;margin-bottom:10px;overflow-x:auto;padding-bottom:4px">
+    <button onclick="loadBrandCatalogItems()" style="flex-shrink:0;padding:6px 14px;border-radius:20px;background:var(--gold);border:none;color:#000;font-size:12px;font-weight:700;cursor:pointer">All</button>
+    <button onclick="loadBrandCatalogItems('active')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer">Active Only</button>
+    <button onclick="loadBrandCatalogItems('inactive')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer">Inactive</button>
+    <button onclick="loadBrandCatalogItems('not_pushed')" style="flex-shrink:0;padding:6px 14px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer">Not in Inventory</button>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px">
+    <button onclick="loadBrandCatalogItems(null,null)" style="flex-shrink:0;padding:5px 12px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:11px;cursor:pointer">All Brands</button>
+    ${brands.slice(0,10).map(b => `<button onclick="loadBrandCatalogItems(null,'${b.replace(/'/g,"\\'")}'" style="flex-shrink:0;padding:5px 12px;border-radius:20px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:11px;cursor:pointer">${b}</button>`).join('')}
+  </div>
+  <div id="brand-catalog-list">${renderBrandCatalogTable(items||[])}</div>`;
+}
+
+function renderBrandCatalogTable(items) {
+  if (!items.length) return `<div style="text-align:center;padding:40px;color:var(--text3)"><div style="font-size:32px;margin-bottom:8px">📦</div><div style="font-size:14px;font-weight:700">No catalog items yet</div><div style="font-size:12px;margin-top:4px">Add items manually or bulk upload via CSV</div></div>`;
+  return `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${items.length} item(s)</div>` +
+  items.map(item => `
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:8px;border:1px solid var(--border);${!item.is_active?'opacity:.65':''}">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:800;margin-bottom:2px">${item.product_name}</div>
+        <div style="font-size:11px;color:var(--text3)">${item.brand||'—'} · ${item.category||'—'}</div>
+        <div style="font-size:12px;color:var(--gold);margin-top:2px;font-weight:700">₹${parseFloat(item.mrp||0).toLocaleString('en-IN')} MRP</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          <span style="color:${item.is_active?'var(--green)':'var(--text3)'}">Active</span>
+          <div onclick="toggleCatalogField(${item.id},'is_active',${!item.is_active})" style="width:36px;height:20px;border-radius:10px;background:${item.is_active?'var(--green)':'var(--bg3)'};border:1px solid var(--border);position:relative;cursor:pointer">
+            <div style="position:absolute;top:2px;${item.is_active?'right:2px':'left:2px'};width:14px;height:14px;border-radius:50%;background:#fff"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700">
+          <span style="color:${item.show_in_shop?'var(--gold)':'var(--text3)'}">In Shop</span>
+          <div onclick="toggleCatalogField(${item.id},'show_in_shop',${!item.show_in_shop})" style="width:36px;height:20px;border-radius:10px;background:${item.show_in_shop?'var(--gold)':'var(--bg3)'};border:1px solid var(--border);position:relative;cursor:pointer">
+            <div style="position:absolute;top:2px;${item.show_in_shop?'right:2px':'left:2px'};width:14px;height:14px;border-radius:50%;background:#fff"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+      ${item.order_based ? '<span style="background:rgba(245,200,66,0.12);border:1px solid var(--gold-border);color:var(--gold);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">Order Based</span>' : `<span style="background:rgba(34,197,94,0.1);border:1px solid var(--green);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">Stock: ${item.available_qty}</span>`}
+      ${item.pushed_to_inventory ? '<span style="background:rgba(96,165,250,0.1);border:1px solid #60A5FA;color:#60A5FA;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">✓ In Inventory</span>' : '<span style="background:var(--bg3);border:1px solid var(--border);color:var(--text3);font-size:10px;padding:2px 8px;border-radius:10px">Not in Inventory</span>'}
+    </div>
+    <div style="display:flex;gap:6px">
+      <button onclick="editCatalogItem(${item.id})" style="flex:1;padding:7px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:700;cursor:pointer">✏️ Edit</button>
+      ${!item.pushed_to_inventory ? `<button onclick="pushCatalogToInventory(${item.id})" style="flex:1;padding:7px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:11px;font-weight:700;cursor:pointer">→ Push to Inventory</button>` : `<button style="flex:1;padding:7px;border-radius:8px;background:rgba(96,165,250,0.1);border:1px solid #60A5FA;color:#60A5FA;font-size:11px;font-weight:700;cursor:default">✓ In Inventory</button>`}
+      <button onclick="deleteCatalogItem(${item.id})" style="padding:7px 10px;border-radius:8px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:var(--red);font-size:11px;cursor:pointer">🗑</button>
+    </div>
+  </div>`).join('');
+}
+
+async function loadBrandCatalogItems(filter, brand) {
+  const listEl = document.getElementById('brand-catalog-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Loading...</div>';
+  let query = VW_DB.client.from('brand_catalog_items').select('id,brand,category,product_name,mrp,is_active,show_in_shop,order_based,available_qty,pushed_to_inventory,created_at').order('created_at',{ascending:false}).limit(200);
+  if (filter === 'active') query = query.eq('is_active', true);
+  if (filter === 'inactive') query = query.eq('is_active', false);
+  if (filter === 'not_pushed') query = query.eq('pushed_to_inventory', false);
+  if (brand) query = query.eq('brand', brand);
+  const { data: items } = await query;
+  listEl.innerHTML = renderBrandCatalogTable(items || []);
+}
+
+async function toggleCatalogField(id, field, value) {
+  await VW_DB.client.from('brand_catalog_items').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  showToast(value ? 'Enabled ✅' : 'Disabled', 'success');
+  loadBrandCatalogItems();
+}
+
+function openAddCatalogItem(prefill) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div>
+  <h3>${prefill ? 'Edit' : '+'} Catalog Item</h3>
+  <div style="max-height:72vh;overflow-y:auto;padding-bottom:10px">
+    <div class="form-group"><label>Brand *</label><input type="text" id="bci-brand" placeholder="e.g. Hindware, Jaguar, Havells" value="${prefill?.brand||''}"></div>
+    <div class="form-group"><label>Category *</label><select id="bci-category"><option value="">Select category</option>${CATALOG_CATS.map(c=>`<option value="${c}"${prefill?.category===c?' selected':''}>${c}</option>`).join('')}</select></div>
+    <div class="form-group"><label>Sub-Category</label><input type="text" id="bci-subcat" placeholder="e.g. Faucets, Wall Switches" value="${prefill?.subcategory||''}"></div>
+    <div class="form-group"><label>Product Name *</label><input type="text" id="bci-name" placeholder="Full product name" value="${prefill?.product_name||''}"></div>
+    <div class="form-group"><label>Model No.</label><input type="text" id="bci-model" placeholder="e.g. FLR-2340" value="${prefill?.model_no||''}"></div>
+    <div class="form-group"><label>Description</label><textarea id="bci-desc" rows="2" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;box-sizing:border-box">${prefill?.description||''}</textarea></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div class="form-group" style="margin:0"><label>MRP (₹) *</label><input type="number" id="bci-mrp" value="${prefill?.mrp||''}" placeholder="0" min="0"></div>
+      <div class="form-group" style="margin:0"><label>Unit</label><select id="bci-unit">${['pc','set','kg','ltr','box','mtr','sqft'].map(u=>`<option value="${u}"${prefill?.unit===u?' selected':''}>${u}</option>`).join('')}</select></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <div class="form-group" style="margin:0"><label>GST %</label><select id="bci-gst">${['5','12','18','28'].map(g=>`<option value="${g}"${String(prefill?.gst_pct||18)===g?' selected':''}>${g}%</option>`).join('')}</select></div>
+      <div class="form-group" style="margin:0"><label>Lead Time (days)</label><input type="number" id="bci-lead" value="${prefill?.lead_time_days||7}" min="1"></div>
+    </div>
+    <div class="form-group"><label>Image URL</label><input type="url" id="bci-img" placeholder="https://..." value="${prefill?.image_url||''}"></div>
+    <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:10px 0">
+      <div style="font-size:12px;font-weight:800;margin-bottom:8px">Availability</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button id="bci-order-btn" onclick="bciSelectMode('order')" style="flex:1;padding:8px;border-radius:8px;border:${(!prefill||prefill.order_based)?'2px solid var(--gold)':'1px solid var(--border)'};background:${(!prefill||prefill.order_based)?'var(--gold-muted)':'var(--bg3)'};color:${(!prefill||prefill.order_based)?'var(--gold)':'var(--text3)'};font-size:11px;font-weight:700;cursor:pointer">Order Based</button>
+        <button id="bci-stock-btn" onclick="bciSelectMode('stock')" style="flex:1;padding:8px;border-radius:8px;border:${(prefill&&!prefill.order_based)?'2px solid var(--green)':'1px solid var(--border)'};background:${(prefill&&!prefill.order_based)?'rgba(34,197,94,0.08)':'var(--bg3)'};color:${(prefill&&!prefill.order_based)?'var(--green)':'var(--text3)'};font-size:11px;font-weight:700;cursor:pointer">In Stock</button>
+      </div>
+      <div id="bci-qty-row" style="display:${(prefill&&!prefill.order_based)?'block':'none'}">
+        <div class="form-group" style="margin:0"><label>Available Qty</label><input type="number" id="bci-qty" value="${prefill?.available_qty||0}" min="0"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:10px;margin-bottom:8px">
+      <div><div style="font-size:12px;font-weight:700">Activate Item</div><div style="font-size:10px;color:var(--text3)">Enable for system use</div></div>
+      <input type="checkbox" id="bci-active" ${(!prefill||prefill.is_active)?'checked':''} style="width:20px;height:20px;cursor:pointer">
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--bg2);border-radius:10px;margin-bottom:14px">
+      <div><div style="font-size:12px;font-weight:700">Show in B2C Shop</div><div style="font-size:10px;color:var(--text3)">Visible to online customers</div></div>
+      <input type="checkbox" id="bci-shop" ${prefill?.show_in_shop?'checked':''} style="width:20px;height:20px;cursor:pointer">
+    </div>
+    <button onclick="saveCatalogItem(${prefill?.id||''})" style="width:100%;padding:14px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">💾 Save Item</button>
+    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>
+  </div>`;
+  const s = document.createElement('script');
+  s.textContent = `
+    window._bciMode = ${(!prefill||prefill.order_based)?'\'order\'':'\'stock\''};
+    function bciSelectMode(m) {
+      window._bciMode=m;
+      const ob=document.getElementById('bci-order-btn'),sb=document.getElementById('bci-stock-btn'),qr=document.getElementById('bci-qty-row');
+      if(ob){ob.style.border=m==='order'?'2px solid var(--gold)':'1px solid var(--border)';ob.style.background=m==='order'?'var(--gold-muted)':'var(--bg3)';ob.style.color=m==='order'?'var(--gold)':'var(--text3)';}
+      if(sb){sb.style.border=m==='stock'?'2px solid var(--green)':'1px solid var(--border)';sb.style.background=m==='stock'?'rgba(34,197,94,0.08)':'var(--bg3)';sb.style.color=m==='stock'?'var(--green)':'var(--text3)';}
+      if(qr) qr.style.display=m==='stock'?'block':'none';
+    }
+  `;
+  document.body.appendChild(s);
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function editCatalogItem(id) {
+  const { data: item } = await VW_DB.client.from('brand_catalog_items').select('*').eq('id', id).single().catch(()=>({data:null}));
+  if (!item) { showToast('Item not found','error'); return; }
+  openAddCatalogItem(item);
+}
+
+async function saveCatalogItem(editId) {
+  const brand = document.getElementById('bci-brand')?.value?.trim();
+  const category = document.getElementById('bci-category')?.value;
+  const name = document.getElementById('bci-name')?.value?.trim();
+  const mrp = parseFloat(document.getElementById('bci-mrp')?.value) || 0;
+  if (!brand || !category || !name) { showToast('Brand, category and name are required','warn'); return; }
+  const payload = {
+    brand, category,
+    subcategory: document.getElementById('bci-subcat')?.value?.trim()||null,
+    product_name: name,
+    model_no: document.getElementById('bci-model')?.value?.trim()||null,
+    description: document.getElementById('bci-desc')?.value?.trim()||null,
+    mrp, unit: document.getElementById('bci-unit')?.value||'pc',
+    gst_pct: parseFloat(document.getElementById('bci-gst')?.value)||18,
+    lead_time_days: parseInt(document.getElementById('bci-lead')?.value)||7,
+    image_url: document.getElementById('bci-img')?.value?.trim()||null,
+    order_based: window._bciMode !== 'stock',
+    available_qty: parseInt(document.getElementById('bci-qty')?.value)||0,
+    is_active: document.getElementById('bci-active')?.checked ?? true,
+    show_in_shop: document.getElementById('bci-shop')?.checked ?? false,
+    catalog_source: 'manual', updated_at: new Date().toISOString(),
+  };
+  let error;
+  if (editId) { ({error} = await VW_DB.client.from('brand_catalog_items').update(payload).eq('id', editId)); }
+  else { ({error} = await VW_DB.client.from('brand_catalog_items').insert(payload)); }
+  if (error) { showToast('Save failed: '+error.message,'error'); return; }
+  showToast(editId?'Item updated ✅':'Item added ✅','success');
+  closeSheet();
+  navigateTo('brand_catalog');
+}
+
+async function pushCatalogToInventory(id) {
+  const {data:item} = await VW_DB.client.from('brand_catalog_items').select('*').eq('id',id).single().catch(()=>({data:null}));
+  if (!item) { showToast('Item not found','error'); return; }
+  if (!item.is_active) { showToast('Activate this item before pushing to inventory','warn'); return; }
+  const {data:newProd, error} = await VW_DB.client.from('products').insert({
+    name: item.product_name, brand: item.brand, category: item.category,
+    subcategory: item.subcategory||null, description: item.description||null,
+    unit: item.unit||'pc', mrp: item.mrp||0, price: item.mrp||0, vwp: null,
+    gst: item.gst_pct||18, stock: item.order_based?0:(item.available_qty||0),
+    available_stock: item.order_based?0:(item.available_qty||0),
+    image_url: item.image_url||null, is_active: true, added_by: 'brand_catalog',
+    custom_fields: { model_no:item.model_no, lead_time_days:item.lead_time_days, order_based:item.order_based, catalog_item_id:item.id },
+  }).select('id').single();
+  if (error) { showToast('Push failed: '+error.message,'error'); return; }
+  await VW_DB.client.from('brand_catalog_items').update({ pushed_to_inventory:true, inventory_product_id:newProd.id, pushed_at:new Date().toISOString() }).eq('id',id);
+  showToast(`✅ Added to inventory (ID: ${newProd.id}). Set VWP price in Inventory.`,'success');
+  loadBrandCatalogItems();
+}
+
+async function deleteCatalogItem(id) {
+  if (!confirm('Delete this item?')) return;
+  await VW_DB.client.from('brand_catalog_items').delete().eq('id',id);
+  showToast('Item deleted','warn');
+  loadBrandCatalogItems();
+}
+
+function openBulkUploadCatalog() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+  <div class="sheet-handle"></div><h3>📄 Bulk CSV Upload</h3>
+  <div style="background:var(--bg2);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:var(--text2);line-height:1.7">
+    <div style="font-weight:800;margin-bottom:4px">Required columns:</div>
+    brand, category, product_name, mrp, unit, model_no, description, gst_pct, lead_time_days, image_url
+    <div style="margin-top:6px;font-size:10px;color:var(--text3)">category: ${CATALOG_CATS.join(', ')}</div>
+  </div>
+  <input type="file" id="bci-csv-file" accept=".csv" style="width:100%;padding:10px;border:1.5px dashed var(--border);border-radius:8px;font-size:12px;margin-bottom:12px">
+  <button onclick="processBulkCatalogCSV()" style="width:100%;padding:13px;border-radius:10px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">Upload & Import</button>
+  <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text);cursor:pointer">Cancel</button>`;
+  sheet.classList.add('open'); document.getElementById('sheet-overlay').classList.add('open');
+}
+
+async function processBulkCatalogCSV() {
+  const file = document.getElementById('bci-csv-file')?.files?.[0];
+  if (!file) { showToast('Select a CSV file first','warn'); return; }
+  const btn = document.querySelector('[onclick="processBulkCatalogCSV()"]');
+  if (btn) { btn.disabled=true; btn.textContent='Processing...'; }
+  const text = await file.text();
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
+  const rows = [];
+  for (let i=1;i<lines.length;i++) {
+    const vals = lines[i].split(',').map(v=>v.trim().replace(/^"|"$/g,''));
+    const row = {}; headers.forEach((h,idx) => { row[h]=vals[idx]||null; });
+    if (!row.brand||!row.category||!row.product_name) continue;
+    if (!CATALOG_CATS.includes(row.category)) continue;
+    rows.push({ brand:row.brand, category:row.category, product_name:row.product_name, model_no:row.model_no||null, description:row.description||null, mrp:parseFloat(row.mrp)||0, unit:row.unit||'pc', gst_pct:parseFloat(row.gst_pct)||18, lead_time_days:parseInt(row.lead_time_days)||7, image_url:row.image_url||null, order_based:true, is_active:false, show_in_shop:false, catalog_source:'csv_upload' });
+  }
+  if (!rows.length) { showToast('No valid rows found','error'); if(btn){btn.disabled=false;btn.textContent='Upload & Import';} return; }
+  let inserted=0;
+  for (let i=0;i<rows.length;i+=50) { const {error}=await VW_DB.client.from('brand_catalog_items').insert(rows.slice(i,i+50)); if(!error) inserted+=Math.min(50,rows.length-i); }
+  showToast(`✅ ${inserted} items imported. Review and activate below.`,'success');
+  closeSheet(); navigateTo('brand_catalog');
+}
+
+window.VW_ADMIN.renderBrandCatalogPage = renderBrandCatalogPage;
+window.openAddCatalogItem = openAddCatalogItem;
+window.saveCatalogItem = saveCatalogItem;
+window.editCatalogItem = editCatalogItem;
+window.pushCatalogToInventory = pushCatalogToInventory;
+window.deleteCatalogItem = deleteCatalogItem;
+window.loadBrandCatalogItems = loadBrandCatalogItems;
+window.toggleCatalogField = toggleCatalogField;
+window.openBulkUploadCatalog = openBulkUploadCatalog;
+window.processBulkCatalogCSV = processBulkCatalogCSV;
