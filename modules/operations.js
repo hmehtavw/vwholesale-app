@@ -3060,8 +3060,29 @@ function addPOItem() {
       qty: 1,
       expectedRate: 0
     });
+    _poCheckLotWarning(parseInt(opt.value));
   }
   renderPOItemsList();
+}
+
+// ── Lot match warning on reorder ──
+// If the product being reordered still has stock from an existing lot, warn the buyer:
+// tiles from a different lot/shade batch can visibly mismatch on the same floor.
+async function _poCheckLotWarning(productId) {
+  try {
+    const { data: p } = await VW_DB.client.from('products')
+      .select('name,stock,current_lot_no,current_shade_no').eq('id', productId).single();
+    if (!p) return;
+    const hasLot = p.current_lot_no || p.current_shade_no;
+    const stockNum = parseFloat(p.stock) || 0;
+    if (!hasLot || stockNum <= 0) return;
+    const item = (window._poDraft?.items||[]).find(i => i.productId === productId);
+    if (item) item._lotWarning = {
+      lot: p.current_lot_no || '—', shade: p.current_shade_no || '—', stock: stockNum,
+    };
+    renderPOItemsList();
+    showToast(`⚠️ ${p.name}: existing stock is Lot ${p.current_lot_no||'?'}${p.current_shade_no?' / Shade '+p.current_shade_no:''} — request the SAME lot from vendor or expect shade variation`, 'warn');
+  } catch(e) {}
 }
 
 function renderPOItemsList() {
@@ -3076,6 +3097,10 @@ function renderPOItemsList() {
     <div style="display:flex;gap:8px;align-items:center;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px">
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600">${item.name}</div>
+        ${item._lotWarning ? `
+        <div style="font-size:10px;background:rgba(245,200,66,0.1);border:1px solid var(--gold-border);border-radius:6px;padding:4px 8px;margin-top:4px;color:var(--gold)">
+          ⚠️ ${item._lotWarning.stock} in stock from Lot <strong>${item._lotWarning.lot}</strong>${item._lotWarning.shade!=='—'?` / Shade <strong>${item._lotWarning.shade}</strong>`:''} — request same lot to avoid shade mismatch
+        </div>` : ''}
         <div style="display:flex;gap:8px;margin-top:4px">
           <input type="number" value="${item.qty}" min="1" style="width:70px"
             onchange="window._poDraft.items[${i}].qty=parseFloat(this.value)||1;VW_VENDOR.renderPOItemsList()"
@@ -3547,6 +3572,11 @@ async function confirmReceivePO(poId) {
       is_current: true,
     }));
   if (lotInserts.length) {
+    // Previous lots of these products are no longer the current batch
+    const lotProductIds = [...new Set(lotInserts.map(l => l.product_id))];
+    await VW_DB.client.from('product_lots')
+      .update({ is_current: false })
+      .in('product_id', lotProductIds).catch(()=>{});
     await VW_DB.client.from('product_lots').insert(lotInserts).catch(()=>{});
   }
 
