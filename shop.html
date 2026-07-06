@@ -675,20 +675,37 @@
 const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
-const CATS = [
-  { key:'Tiles',         icon:'⬜', label:'Tiles',          color:'#8B5CF6' },
-  { key:'Sanitary',      icon:'🚿', label:'Sanitary',       color:'#3B82F6' },
-  { key:'Plumbing',      icon:'🔧', label:'Plumbing',       color:'#06B6D4' },
-  { key:'Electricals',   icon:'⚡', label:'Electricals',    color:'#F59E0B' },
-  { key:'Paints',        icon:'🎨', label:'Paints',         color:'#EC4899' },
-  { key:'Hardware',      icon:'🔩', label:'Hardware',       color:'#6B7280' },
-  { key:'Tools',         icon:'🛠', label:'Tools',          color:'#EF4444' },
-  { key:'Appliances',    icon:'📦', label:'Appliances',     color:'#10B981' },
-  { key:'Plywood',       icon:'🪵', label:'Plywood',        color:'#92400E' },
-  { key:'Grout',         icon:'🪨', label:'Grout',          color:'#64748B' },
-  { key:'Adhesive',      icon:'🧲', label:'Adhesive',       color:'#F97316' },
-  { key:'Waterproofing', icon:'💧', label:'Waterproofing',  color:'#0EA5E9' },
-];
+// CATS loaded from DB — see loadCategories()
+let CATS = [];
+
+async function loadCategories() {
+  try {
+    const data = await sbFetch('shop_categories', '?is_active=eq.true&order=sort_order.asc');
+    if (Array.isArray(data) && data.length) {
+      CATS = data;
+      renderCatGrid();
+      renderCatNav();
+    }
+  } catch(e) {
+    console.error('loadCategories error:', e);
+    // Fallback to defaults if DB fails
+    CATS = [
+      { key:'Tiles',         icon:'⬜', label:'Tiles',             color:'#8B5CF6' },
+      { key:'Sanitary',      icon:'🚿', label:'Sanitaryware',      color:'#3B82F6' },
+      { key:'Plumbing',      icon:'🔧', label:'Plumbing',          color:'#06B6D4' },
+      { key:'Electricals',   icon:'⚡', label:'Electricals',       color:'#F59E0B' },
+      { key:'Paints',        icon:'🎨', label:'Paints',            color:'#EC4899' },
+      { key:'Hardware',      icon:'🔩', label:'Hardware',          color:'#6B7280' },
+      { key:'Tools',         icon:'🛠', label:'Tools',             color:'#EF4444' },
+      { key:'Appliances',    icon:'🏠', label:'Appliances',        color:'#10B981' },
+      { key:'Adhesives',     icon:'🪣', label:'Adhesives & Grout', color:'#F97316' },
+      { key:'Waterproofing', icon:'💧', label:'Waterproofing',     color:'#0EA5E9' },
+    ];
+    renderCatGrid();
+    renderCatNav();
+  }
+}
+
 
 let cart = {};
 

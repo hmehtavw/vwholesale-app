@@ -4777,3 +4777,236 @@ window.loadBrandCatalogItems = loadBrandCatalogItems;
 window.toggleCatalogField = toggleCatalogField;
 window.openBulkUploadCatalog = openBulkUploadCatalog;
 window.processBulkCatalogCSV = processBulkCatalogCSV;
+
+// ============================================================
+// CATEGORY MANAGER
+// ============================================================
+
+async function renderCategoryManagerPage() {
+  const container = document.getElementById('main-content');
+  if (!container) return;
+
+  const { data: cats, error } = await VW_DB.client
+    .from('shop_categories')
+    .select('*')
+    .order('sort_order');
+
+  if (error) { showToast('Failed to load categories', 'error'); return; }
+
+  container.innerHTML = `
+    <div style="padding:16px 0 8px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h2 style="font-size:20px;font-weight:900;margin-bottom:2px">Shop Categories</h2>
+        <div style="font-size:12px;color:var(--ink3)">Manage categories shown in shop.html · Changes live immediately</div>
+      </div>
+      <button onclick="openAddCategoryModal()" style="padding:10px 18px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">+ Add Category</button>
+    </div>
+
+    <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#C2410C">
+      ℹ️ <strong>key</strong> must match the <code>category</code> column in your products table exactly (case-sensitive).
+      Drag rows to reorder (coming soon) — for now change sort_order numbers.
+    </div>
+
+    <div style="background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#F9FAFB;border-bottom:1px solid var(--line)">
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">#</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Icon</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Key (DB)</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Label (Shop)</th>
+            <th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Color</th>
+            <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Active</th>
+            <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Nav Bar</th>
+            <th style="padding:10px 14px;text-align:center;font-size:11px;font-weight:700;color:var(--ink3);text-transform:uppercase">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="cat-mgr-tbody">
+          ${cats.map(c => `
+          <tr data-cat-id="${c.id}" style="border-bottom:1px solid var(--line);${!c.is_active?'opacity:.5':''}">
+            <td style="padding:10px 14px;color:var(--ink3);font-size:11px;font-weight:700">${c.sort_order}</td>
+            <td style="padding:10px 14px;font-size:22px">${c.icon}</td>
+            <td style="padding:10px 14px">
+              <code style="font-size:12px;background:#F3F4F6;padding:2px 6px;border-radius:4px;font-weight:700">${c.key}</code>
+            </td>
+            <td style="padding:10px 14px;font-weight:700">${c.label}</td>
+            <td style="padding:10px 14px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <div style="width:20px;height:20px;border-radius:4px;background:${c.color}"></div>
+                <code style="font-size:11px;color:var(--ink3)">${c.color}</code>
+              </div>
+            </td>
+            <td style="padding:10px 14px;text-align:center">
+              <button onclick="toggleCatField(${c.id},'is_active',${!c.is_active})"
+                style="padding:4px 10px;border-radius:20px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:${c.is_active?'#DCFCE7':'#FEE2E2'};color:${c.is_active?'#166534':'#991B1B'}">
+                ${c.is_active ? 'Active' : 'Off'}
+              </button>
+            </td>
+            <td style="padding:10px 14px;text-align:center">
+              <button onclick="toggleCatField(${c.id},'show_in_nav',${!c.show_in_nav})"
+                style="padding:4px 10px;border-radius:20px;border:none;font-size:11px;font-weight:700;cursor:pointer;background:${c.show_in_nav?'#DBEAFE':'#F3F4F6'};color:${c.show_in_nav?'#1D4ED8':'#6B7280'}">
+                ${c.show_in_nav ? 'Shown' : 'Hidden'}
+              </button>
+            </td>
+            <td style="padding:10px 14px;text-align:center">
+              <button onclick="openEditCategoryModal(${c.id})"
+                style="padding:5px 10px;border:1px solid var(--line);border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:#fff;margin-right:4px">
+                ✏️ Edit
+              </button>
+              <button onclick="deleteCategoryRow(${c.id},'${c.key}')"
+                style="padding:5px 10px;border:1px solid #FCA5A5;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;background:#FEF2F2;color:#DC2626">
+                🗑
+              </button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:16px;padding:12px 14px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;font-size:12px;color:#166534">
+      <strong>💡 How it works:</strong> shop.html fetches categories from this table on every page load.
+      Changes here are live within seconds — no code deployment needed.
+      The <strong>key</strong> is what filters products (must match products.category exactly).
+      <strong>Label</strong> is what customers see. <strong>Nav Bar</strong> = show in desktop category bar.
+    </div>`;
+}
+
+async function toggleCatField(id, field, newVal) {
+  const { error } = await VW_DB.client
+    .from('shop_categories')
+    .update({ [field]: newVal, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) { showToast('Update failed', 'error'); return; }
+  showToast(`Updated successfully`, 'success');
+  renderCategoryManagerPage();
+}
+
+function openAddCategoryModal() {
+  openSheet('add-category', `
+    <div class="sheet-handle"></div>
+    <h3 style="font-size:16px;font-weight:900;margin-bottom:16px">Add Category</h3>
+    <div style="display:grid;gap:12px">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Key * (must match products.category)</label>
+        <input id="cat-key" placeholder="e.g. Tiles" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;font-weight:700;outline:none">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Label (Customer-facing)</label>
+        <input id="cat-label" placeholder="e.g. Wall Tiles" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Icon (Emoji)</label>
+          <input id="cat-icon" placeholder="⬜" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:22px;outline:none;text-align:center">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Color (hex)</label>
+          <input id="cat-color" type="color" value="#6B7280" style="width:100%;padding:6px;border:1.5px solid var(--line);border-radius:8px;height:42px;cursor:pointer">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Sort Order</label>
+        <input id="cat-sort" type="number" value="99" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div style="display:flex;gap:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="cat-active" checked> Active in shop
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="cat-nav" checked> Show in nav bar
+        </label>
+      </div>
+    </div>
+    <button onclick="saveCategoryModal()" style="width:100%;margin-top:16px;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer">
+      Save Category
+    </button>
+  `);
+}
+
+async function openEditCategoryModal(id) {
+  const { data, error } = await VW_DB.client.from('shop_categories').select('*').eq('id', id).single();
+  if (error || !data) { showToast('Failed to load', 'error'); return; }
+
+  openSheet('edit-category', `
+    <div class="sheet-handle"></div>
+    <h3 style="font-size:16px;font-weight:900;margin-bottom:16px">Edit Category</h3>
+    <input type="hidden" id="cat-edit-id" value="${data.id}">
+    <div style="display:grid;gap:12px">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Key * (must match products.category)</label>
+        <input id="cat-key" value="${data.key}" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;font-weight:700;outline:none">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Label</label>
+        <input id="cat-label" value="${data.label}" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Icon</label>
+          <input id="cat-icon" value="${data.icon}" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:22px;outline:none;text-align:center">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Color</label>
+          <input id="cat-color" type="color" value="${data.color}" style="width:100%;padding:6px;border:1.5px solid var(--line);border-radius:8px;height:42px;cursor:pointer">
+        </div>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:var(--ink3);display:block;margin-bottom:4px;text-transform:uppercase">Sort Order</label>
+        <input id="cat-sort" type="number" value="${data.sort_order}" style="width:100%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;outline:none">
+      </div>
+      <div style="display:flex;gap:16px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="cat-active" ${data.is_active?'checked':''}> Active
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="cat-nav" ${data.show_in_nav?'checked':''}> Nav bar
+        </label>
+      </div>
+    </div>
+    <button onclick="saveCategoryModal(true)" style="width:100%;margin-top:16px;padding:13px;background:var(--green);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer">
+      Update Category
+    </button>
+  `);
+}
+
+async function saveCategoryModal(isEdit = false) {
+  const key   = document.getElementById('cat-key')?.value?.trim();
+  const label = document.getElementById('cat-label')?.value?.trim();
+  const icon  = document.getElementById('cat-icon')?.value?.trim() || '📦';
+  const color = document.getElementById('cat-color')?.value || '#6B7280';
+  const sort  = parseInt(document.getElementById('cat-sort')?.value) || 99;
+  const active= document.getElementById('cat-active')?.checked ?? true;
+  const nav   = document.getElementById('cat-nav')?.checked ?? true;
+
+  if (!key || !label) { showToast('Key and Label are required', 'error'); return; }
+
+  const payload = { key, label, icon, color, sort_order: sort, is_active: active, show_in_nav: nav, updated_at: new Date().toISOString() };
+
+  let error;
+  if (isEdit) {
+    const id = parseInt(document.getElementById('cat-edit-id')?.value);
+    ({ error } = await VW_DB.client.from('shop_categories').update(payload).eq('id', id));
+  } else {
+    ({ error } = await VW_DB.client.from('shop_categories').insert(payload));
+  }
+
+  if (error) { showToast('Save failed: ' + error.message, 'error'); return; }
+  showToast(`Category ${isEdit?'updated':'added'} ✅`, 'success');
+  closeSheet();
+  renderCategoryManagerPage();
+}
+
+async function deleteCategoryRow(id, key) {
+  if (!confirm(`Delete category "${key}"?\n\nProducts with this category key will still exist — they just won't show as a category card.`)) return;
+  const { error } = await VW_DB.client.from('shop_categories').delete().eq('id', id);
+  if (error) { showToast('Delete failed', 'error'); return; }
+  showToast(`Category deleted`, 'success');
+  renderCategoryManagerPage();
+}
+
+window.VW_ADMIN.renderCategoryManagerPage = renderCategoryManagerPage;
+window.toggleCatField = toggleCatField;
+window.openAddCategoryModal = openAddCategoryModal;
+window.openEditCategoryModal = openEditCategoryModal;
+window.saveCategoryModal = saveCategoryModal;
+window.deleteCategoryRow = deleteCategoryRow;
