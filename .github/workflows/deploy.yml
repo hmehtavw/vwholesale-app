@@ -8,15 +8,6 @@ on:
       - 'modules/**'
       - 'sw.js'
       - 'manifest.json'
-      - 'shop.html'
-      - 'about.html'
-      - 'contact.html'
-      - 'privacy.html'
-      - 'terms.html'
-      - 'refund.html'
-      - 'shipping.html'
-      - 'icon-192.png'
-      - 'icon-512.png'
   workflow_dispatch:
 
 permissions:
