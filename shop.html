@@ -675,9 +675,40 @@
 const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
-// CATS loaded from DB — see loadCategories()
-let CATS = [];
+let CATS = [
+  { key:'Tiles',            icon:'⬜', label:'Tiles',              color:'#8B5CF6' },
+  { key:'Sanitary',         icon:'🚽', label:'Sanitaryware',       color:'#3B82F6' },
+  { key:'Faucets',          icon:'🚰', label:'Faucets & Taps',     color:'#0369A1' },
+  { key:'Showers',          icon:'🚿', label:'Showers',            color:'#0284C7' },
+  { key:'Basins',           icon:'🪠', label:'Wash Basins',        color:'#2563EB' },
+  { key:'Kitchen Sinks',    icon:'🫧', label:'Kitchen Sinks',      color:'#065F46' },
+  { key:'Wires',            icon:'🔌', label:'Wires & Cables',     color:'#F59E0B' },
+  { key:'Switches',         icon:'💡', label:'Switches & Sockets', color:'#D97706' },
+  { key:'Protection',       icon:'⚡', label:'MCB & DB Boxes',     color:'#B45309' },
+  { key:'LED Lights',       icon:'💡', label:'LED Lights',         color:'#EAB308' },
+  { key:'Fans',             icon:'🌀', label:'Fans',               color:'#0D9488' },
+  { key:'Pipes',            icon:'🔧', label:'Pipes & CPVC',       color:'#06B6D4' },
+  { key:'Plywood',          icon:'🪵', label:'Plywood',            color:'#92400E' },
+  { key:'Boards',           icon:'📋', label:'MDF & Boards',       color:'#78350F' },
+  { key:'Laminates',        icon:'🗂', label:'Laminates',          color:'#6B21A8' },
+  { key:'Door Hardware',    icon:'🔑', label:'Door Hardware',      color:'#6B7280' },
+  { key:'Cabinet Hardware', icon:'🗄', label:'Cabinet Hardware',   color:'#4B5563' },
+  { key:'Doors',            icon:'🚪', label:'Doors',              color:'#7C2D12' },
+  { key:'Windows',          icon:'🪟', label:'Windows',            color:'#A16207' },
+  { key:'Paints',           icon:'🎨', label:'Paints',             color:'#EC4899' },
+  { key:'Waterproofing',    icon:'💧', label:'Waterproofing',      color:'#BE185D' },
+  { key:'Tile Chemicals',   icon:'🧪', label:'Tile Chemicals',     color:'#9D174D' },
+  { key:'Power Tools',      icon:'🔨', label:'Power Tools',        color:'#EF4444' },
+  { key:'Hand Tools',       icon:'🛠', label:'Hand Tools',         color:'#DC2626' },
+  { key:'Large Appliances', icon:'🏠', label:'Large Appliances',   color:'#10B981' },
+  { key:'Plumbing',         icon:'⚙', label:'Plumbing Acc',        color:'#0C4A6E' },
+  { key:'Cement',           icon:'🏗', label:'Cement',             color:'#57534E' },
+  { key:'Steel',            icon:'🔩', label:'Steel & Metal',      color:'#44403C' },
+  { key:'Blocks',           icon:'🧱', label:'Bricks & Blocks',    color:'#292524' },
+  { key:'Profiles',         icon:'📐', label:'Profiles & Trims',   color:'#7C3AED' },
+];
 
+// Try to load live categories from DB in background
 async function loadCategories() {
   try {
     const data = await sbFetch('shop_categories', '?is_active=eq.true&order=sort_order.asc&limit=100');
@@ -687,22 +718,7 @@ async function loadCategories() {
       renderCatNav();
     }
   } catch(e) {
-    console.error('loadCategories error:', e);
-    // Fallback to defaults if DB fails
-    CATS = [
-      { key:'Tiles',         icon:'⬜', label:'Tiles',             color:'#8B5CF6' },
-      { key:'Sanitary',      icon:'🚿', label:'Sanitaryware',      color:'#3B82F6' },
-      { key:'Plumbing',      icon:'🔧', label:'Plumbing',          color:'#06B6D4' },
-      { key:'Electricals',   icon:'⚡', label:'Electricals',       color:'#F59E0B' },
-      { key:'Paints',        icon:'🎨', label:'Paints',            color:'#EC4899' },
-      { key:'Hardware',      icon:'🔩', label:'Hardware',          color:'#6B7280' },
-      { key:'Tools',         icon:'🛠', label:'Tools',             color:'#EF4444' },
-      { key:'Appliances',    icon:'🏠', label:'Appliances',        color:'#10B981' },
-      { key:'Adhesives',     icon:'🪣', label:'Adhesives & Grout', color:'#F97316' },
-      { key:'Waterproofing', icon:'💧', label:'Waterproofing',     color:'#0EA5E9' },
-    ];
-    renderCatGrid();
-    renderCatNav();
+    console.warn('Using default categories:', e.message);
   }
 }
 
@@ -925,12 +941,14 @@ async function openPDP(productId) {
   const pdpOverlay = document.getElementById('pdp-overlay');
   const actionBar = document.getElementById('pdp-action-bar');
 
+  // Find product from already-loaded list
   let p = _pdpProducts.find(x => x.id === productId);
-  // Always re-fetch full details for rich PDP
-  try {
-    const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,model,category,subcategory,price,vwp,mrp,unit,stock,photos,image_url,description,warranty_months,tile_size_mm,tile_size_label,tile_finish,tile_type,tiles_per_box,coverage_per_box,box_weight_kg,tile_thickness_mm,colour_family,surface_type,custom_fields,gst,hsn,barcode,recommended_adhesive,recommended_grout`);
-    if (Array.isArray(data) && data[0]) p = data[0];
-  } catch(e) { if (!p) return; }
+  if (!p) {
+    try {
+      const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,category,price,vwp,mrp,unit,stock,photos`);
+      p = Array.isArray(data) ? data[0] : null;
+    } catch(e) {}
+  }
   if (!p) return;
 
   const price = p.vwp || p.price || 0;
@@ -939,69 +957,34 @@ async function openPDP(productId) {
   const qty = cart[p.id] || 0;
   const oos = !p.stock || p.stock <= 0;
   const photos = Array.isArray(p.photos) ? p.photos : [];
-  const imgSrc = p.image_url || photos[0]?.url || photos[0] || null;
-  const allImgs = [imgSrc, ...photos.slice(1).map(x=>x?.url||x)].filter(Boolean);
+  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
   const cat = CATS.find(c => c.key === p.category);
   const icon = cat?.icon || '📦';
   const color = cat?.color || '#6B7280';
-  const safeName = p.name.replace(/'/g, "\'");
-  const isWishlisted = _wishlist.has(productId);
+  const safeName = p.name.replace(/'/g, "\\'");
+
+  // Load more from same brand/category
+  let moreProducts = [];
+  try {
+    const moreData = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=6`);
+    moreProducts = Array.isArray(moreData) ? moreData : [];
+  } catch(e) {}
 
   const zone = getPincodeZone(document.getElementById('pincode-check-input')?.value?.trim() || '520012');
   const deliveryBadge = zone === 'vijayawada'
-    ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>'
-    : '<span style="background:#fff7ed;color:#c2410c;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid #fed7aa">🚚 3–4 day delivery</span>';
-
-  function specRow(k, v) {
-    if (v === null || v === undefined || v === '') return '';
-    return `<div class="pdp-spec-row"><div class="pdp-spec-k">${k}</div><div class="pdp-spec-v">${v}</div></div>`;
-  }
-  const cf = (typeof p.custom_fields === 'object' && p.custom_fields) ? p.custom_fields : {};
-
-  const specRows = [
-    specRow('Brand', p.brand),
-    specRow('Model', p.model),
-    specRow('Category', p.category),
-    specRow('Sub-category', p.subcategory),
-    specRow('Colour', p.colour_family),
-    specRow('Surface', p.surface_type),
-    specRow('Finish', p.tile_finish),
-    specRow('Type', p.tile_type),
-    specRow('Size', p.tile_size_label || p.tile_size_mm),
-    specRow('Tiles per Box', p.tiles_per_box),
-    specRow('Coverage per Box', p.coverage_per_box ? p.coverage_per_box + ' sq.ft' : null),
-    specRow('Box Weight', p.box_weight_kg ? p.box_weight_kg + ' kg' : null),
-    specRow('Thickness', p.tile_thickness_mm ? p.tile_thickness_mm + ' mm' : null),
-    specRow('Unit', p.unit || 'Each'),
-    specRow('GST', p.gst ? p.gst + '%' : null),
-    specRow('HSN Code', p.hsn),
-    specRow('Warranty', p.warranty_months ? (p.warranty_months >= 12 ? Math.floor(p.warranty_months/12) + ' Year' + (p.warranty_months>=24?'s':'') : p.warranty_months + ' Months') : null),
-    specRow('Availability', `<span style="color:${oos?'var(--red)':'var(--g)'};font-weight:800">${oos?'Out of Stock':'✓ In Stock'}</span>`),
-    ...Object.entries(cf).map(([k,v]) => specRow(k,v))
-  ].filter(Boolean).join('');
-
-  const galleryHtml = allImgs.length > 1
-    ? `<div style="display:flex;gap:6px;overflow-x:auto;padding:8px 16px;background:#fff;border-bottom:1px solid var(--bdr);scrollbar-width:none">
-        ${allImgs.map((src,i) => `<img src="${src}" onclick="document.getElementById('pdp-main-img').src='${src}'" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:2px solid ${i===0?'var(--g)':'var(--bdr)'};flex-shrink:0;cursor:pointer">`).join('')}
-       </div>` : '';
-
-  let moreProducts = [];
-  try {
-    const md = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,image_url,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=8`);
-    moreProducts = Array.isArray(md) ? md : [];
-  } catch(e) {}
-
+    ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>'
+    : zone === 'ap' || zone === 'telangana'
+    ? '<span style="background:#fff7ed;color:#c2410c;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #fed7aa">🚚 3–4 day delivery</span>'
+    : '<span style="background:var(--bg);color:var(--t3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">📍 Vijayawada pickup</span>';
+  const isWishlisted = _wishlist.has(productId);
   trackViewProduct(p.id, p.name, p.category, price);
 
   pdpSheet.innerHTML = `
-    <div style="position:relative">
-      <div class="pdp-imgwrap" style="background:${imgSrc?'#f8f8f8':color+'18'}">
-        ${imgSrc ? `<img id="pdp-main-img" src="${imgSrc}" alt="${p.name}" style="width:100%;height:100%;object-fit:contain;padding:16px">` : `<span style="font-size:80px">${icon}</span>`}
-        ${disc > 0 ? `<div class="pdp-pct">${disc}% OFF</div>` : ''}
-        <button class="pdp-close" onclick="closePDP()">✕</button>
-        <button onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:10px;right:48px;background:rgba(0,0,0,.3);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
-      </div>
-      ${galleryHtml}
+    <div class="pdp-imgwrap" style="background:${img ? '#f5f5f5' : color+'18'}">
+      ${img ? `<img src="${img}" alt="${p.name}">` : `<span style="font-size:80px">${icon}</span>`}
+      ${disc > 0 ? `<div class="pdp-pct">${disc}% OFF</div>` : ''}
+      <button class="pdp-close" onclick="closePDP()">✕</button>
+      <button id="pdp-wish-btn" onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:12px;right:48px;background:rgba(0,0,0,0.4);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
     </div>
     <div class="pdp-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -1012,40 +995,578 @@ async function openPDP(productId) {
       <div class="pdp-prow">
         <span class="pdp-price">₹${price.toLocaleString('en-IN')}</span>
         <span class="pdp-unit">/ ${p.unit||'pc'}</span>
-        ${mrp > price ? `<span class="pdp-omrp">₹${mrp.toLocaleString('en-IN')}</span><span style="color:var(--g);font-size:11px;font-weight:800;margin-left:4px">${disc}% off</span>` : ''}
+        ${mrp > price ? `<span class="pdp-omrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
       </div>
-      <div class="pdp-gst">Inclusive of all taxes${p.gst ? ` · GST ${p.gst}%` : ''}</div>
+      <div class="pdp-gst">Inclusive of all taxes</div>
 
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin:14px 0">
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🚚</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">2–4 Hr<br>Delivery</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">✅</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">100%<br>Genuine</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🔄</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">7 Day<br>Returns</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">💳</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Pay on<br>Delivery</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🏷</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Wholesale<br>Price</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">📞</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Call<br>Support</div></div>
-      </div>
-
-      ${p.description ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Product Description</div><div style="font-size:13px;color:var(--t2);line-height:1.65;background:var(--bg);border-radius:10px;padding:12px 14px">${p.description}</div></div>` : ''}
-
-      ${specRows ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Specifications</div><div class="pdp-spec">${specRows}</div></div>` : ''}
-
-      ${(p.recommended_adhesive || p.recommended_grout) ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Recommended Products</div><div class="pdp-spec">${specRow('Adhesive',p.recommended_adhesive)}${specRow('Grout',p.recommended_grout)}</div></div>` : ''}
-
-      <div style="background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
-        <div style="font-size:28px">🏪</div>
-        <div style="flex:1"><div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:2px">Visit V Wholesale Store</div><div style="font-size:10px;color:rgba(255,255,255,.6)">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
-        <a href="tel:8712697930" style="flex-shrink:0;padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:11px;font-weight:700;color:#fff;border:1px solid rgba(255,255,255,.25);text-decoration:none">📞 Call</a>
+      <!-- TRUST ICONS -->
+      <div class="pdp-trust" style="margin-top:16px;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:12px 0">
+        <div class="pdp-ti"><div class="pdp-ti-icon">🚚</div><div class="pdp-ti-lbl">2–4 hr Delivery</div></div>
+        <div class="pdp-ti"><div class="pdp-ti-icon">✅</div><div class="pdp-ti-lbl">100% Genuine</div></div>
+        <div class="pdp-ti"><div class="pdp-ti-icon">🔄</div><div class="pdp-ti-lbl">7 Day Return</div></div>
+        <div class="pdp-ti"><div class="pdp-ti-icon">🔒</div><div class="pdp-ti-lbl">Secure Payment</div></div>
+        <div class="pdp-ti"><div class="pdp-ti-icon">📞</div><div class="pdp-ti-lbl">Call Support</div></div>
+        <div class="pdp-ti"><div class="pdp-ti-icon">🏷</div><div class="pdp-ti-lbl">Best Price</div></div>
       </div>
 
-      ${moreProducts.length ? `<div style="margin-bottom:8px"><div style="font-size:14px;font-weight:800;margin-bottom:10px">More from ${p.category}</div><div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px 4px">${moreProducts.map(mp=>{const mP=mp.vwp||mp.price||0;const mI=mp.image_url||(Array.isArray(mp.photos)?mp.photos[0]?.url||mp.photos[0]:null);const mC=CATS.find(c=>c.key===mp.category);return `<div onclick="closePDP();setTimeout(()=>openPDP(${mp.id}),200)" style="flex:0 0 120px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden;cursor:pointer"><div style="height:80px;background:${mI?'#f8f8f8':(mC?.color||'#6B7280')+'18'};display:flex;align-items:center;justify-content:font-size:28px;overflow:hidden">${mI?`<img src="${mI}" style="width:100%;height:100%;object-fit:cover">`:(mC?.icon||'📦')}</div><div style="padding:6px 8px"><div style="font-size:10px;font-weight:700;line-height:1.3;margin-bottom:3px">${mp.name.slice(0,40)}</div><div style="font-size:12px;font-weight:900">₹${mP.toLocaleString('en-IN')}</div></div></div>`;}).join('')}</div></div>` : ''}
+      <!-- SPECS -->
+      <div class="pdp-spec-h">Specifications</div>
+      <div class="pdp-spec">
+        ${p.brand ? `<div class="pdp-spec-row"><div class="pdp-spec-k">Brand</div><div class="pdp-spec-v">${p.brand}</div></div>` : ''}
+        <div class="pdp-spec-row"><div class="pdp-spec-k">Category</div><div class="pdp-spec-v">${p.category||'—'}</div></div>
+        <div class="pdp-spec-row"><div class="pdp-spec-k">Unit</div><div class="pdp-spec-v">${p.unit||'Each'}</div></div>
+        <div class="pdp-spec-row"><div class="pdp-spec-k">Availability</div><div class="pdp-spec-v" style="color:${oos?'var(--red)':'var(--g)'};font-weight:700">${oos ? 'Out of Stock' : '✓ In Stock'}</div></div>
+      </div>
+
+      <!-- MORE FROM CATEGORY -->
+      ${moreProducts.length ? `
+      <div class="pdp-more-from">
+        <div class="pdp-more-h">More from ${p.category}</div>
+        <div class="pdp-more-scr">
+          ${moreProducts.map(mp => {
+            const mPrice = mp.vwp || mp.price || 0;
+            const mImg = mp.images?.[0] || (Array.isArray(mp.photos) ? mp.photos[0]?.url || mp.photos[0] : null) || null;
+            const mCat = CATS.find(c => c.key === mp.category);
+            const mIcon = mCat?.icon || '📦';
+            const mColor = mCat?.color || '#6B7280';
+            return `
+            <div class="pdp-mcard" onclick="closePDP();setTimeout(()=>openPDP(${mp.id}),200)">
+              <div class="pdp-mi" style="background:${mImg?'#f5f5f5':mColor+'18'}">
+                ${mImg ? `<img src="${mImg}" style="width:100%;height:100%;object-fit:cover">` : `<span>${mIcon}</span>`}
+              </div>
+              <div class="pdp-mb">
+                <div class="pdp-mn">${mp.name}</div>
+                <div class="pdp-mp">₹${mPrice.toLocaleString('en-IN')}</div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
 
       <div style="height:20px"></div>
     </div>`;
 
+  // Action bar
   actionBar.className = 'pdp-bar';
-  updatePDPBar(p.id, safeName, price, oos);
+  actionBar.innerHTML = `
+    <a href="tel:8712697930" class="pdp-bar-call">📞</a>
+    ${oos
+      ? `<button class="pdp-bar-atc" style="background:var(--t3);cursor:default">Out of Stock</button>`
+      : qty === 0
+        ? `<button class="pdp-bar-atc" onclick="addToCart(${p.id},'${safeName}',${price});document.getElementById('pdp-action-bar').innerHTML=this.parentNode.innerHTML;updatePDPBar(${p.id},'${safeName}',${price})">Add to Cart</button>`
+        : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
+            <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${p.id});updatePDPBar(${p.id},'${safeName}',${price})">−</button>
+            <span style="flex:1;text-align:center;font-size:16px;font-weight:900" id="pdp-qty-${p.id}">${qty}</span>
+            <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${p.id},'${safeName}',${price});updatePDPBar(${p.id},'${safeName}',${price})">+</button>
+           </div>`}`;
+
   pdpOverlay.classList.add('open');
   pdpSheet.classList.add('open');
 }
 
+function updatePDPBar(id, name, price) {
+  const actionBar = document.getElementById('pdp-action-bar');
+  const qty = cart[id] || 0;
+  const safeName = name.replace(/'/g, "\\'");
+  actionBar.innerHTML = `
+    <a href="tel:8712697930" class="pdp-bar-call">📞</a>
+    ${qty === 0
+      ? `<button class="pdp-bar-atc" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">Add to Cart</button>`
+      : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
+          <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${id});updatePDPBar(${id},'${safeName}',${price})">−</button>
+          <span style="flex:1;text-align:center;font-size:16px;font-weight:900">${qty}</span>
+          <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">+</button>
+         </div>`}`;
+}
 
+function closePDP() {
+  document.getElementById('pdp-sheet').classList.remove('open');
+  document.getElementById('pdp-overlay').style.display = 'none';
+  document.getElementById('pdp-action-bar').className = 'pdp-bar off';
+}
+
+// ── SEARCH ──
+let searchTimer;
+function handleSearch(val) {
+  document.getElementById('search-clear').style.display = val ? 'block' : 'none';
+  clearTimeout(searchTimer);
+  if (val.length < 2) return;
+  searchTimer = setTimeout(() => { showCategory(null, val); trackSearch(val); }, 400);
+}
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  goHome();
+}
+
+// ── CATEGORY GRID ──
+function renderCatGrid() {
+  document.getElementById('cat-grid').innerHTML = CATS.map(c => `
+    <div class="ccard" onclick="showCategory('${c.key}');setNav('shop')">
+      <div class="cimg" style="background:${c.color}15;border-color:${c.color}30">${c.icon}</div>
+      <div class="clabel">${c.label}</div>
+    </div>
+  `).join('') + `
+    <div class="ccard" onclick="showCategory(null);setNav('shop')">
+      <div class="cimg" style="background:var(--bg);border-color:var(--bdr);font-size:16px;font-weight:800;color:var(--t3)">+4</div>
+      <div class="clabel" style="color:var(--t3)">More</div>
+    </div>`;
+}
+
+
+// ── CATEGORY NAV BAR (desktop) ──
+function renderCatNav() {
+  const el = document.getElementById('cat-nav-items');
+  if (!el) return;
+  el.innerHTML = CATS.filter(c => c.show_in_nav !== false).map(c =>
+    `<div class="cat-nav-item" onclick="showCategory('${c.key}');setNav('shop')">${c.icon} ${c.label}</div>`
+  ).join('') + `<div class="cat-nav-item" onclick="showCategory(null);setNav('shop')">All Products →</div>`;
+}
+
+// ── LOAD DEALS ──
+async function loadDeals() {
+  try {
+    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=20');
+    if (!Array.isArray(products) || !products.length) {
+      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon — visit us at NH65, Bhavanipuram</div>';
+      return;
+    }
+    // Sort by discount % descending for best deals
+    products.sort((a,b) => {
+      const da = a.mrp > (a.vwp||a.price||0) ? (a.mrp-(a.vwp||a.price||0))/a.mrp : 0;
+      const db = b.mrp > (b.vwp||b.price||0) ? (b.mrp-(b.vwp||b.price||0))/b.mrp : 0;
+      return db - da;
+    });
+    _pdpProducts = [...products];
+    renderDeals(products);
+  } catch(e) {
+    console.error('loadDeals error:', e);
+    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">📞 Call us at 8712697930 · Catalogue available in-store</div>';
+  }
+}
+
+// ── PRODUCT CARD (deal style) ──
+function dealCard(p) {
+  const price = p.vwp || p.price || 0;
+  const mrp = p.mrp || 0;
+  const disc = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const qty = cart[p.id] || 0;
+  const oos = !p.stock || p.stock <= 0;
+  const photos = Array.isArray(p.photos) ? p.photos : [];
+  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
+  const cat = CATS.find(c => c.key === p.category);
+  const icon = cat?.icon || '📦';
+  const color = cat?.color || '#6B7280';
+  const safeName = p.name.replace(/'/g, "\\'");
+
+  return `
+  <div class="dcard" onclick="openPDP(${p.id})">
+    <div class="dimg" style="background:${img?'#f5f5f5':color+'18'}">
+      ${img ? `<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : icon}
+      ${disc > 0 ? `<div class="dpct">${disc}% OFF</div>` : ''}
+      <div class="dspd">⚡ 2–4 hrs</div>
+    </div>
+    <div class="dbody">
+      ${p.brand ? `<div class="dbr">${p.brand}</div>` : ''}
+      <div class="dnm">${p.name}</div>
+      <div class="drow" onclick="event.stopPropagation()">
+        <div>
+          <span class="dpr">₹${price.toLocaleString('en-IN')}</span>
+          ${mrp > price ? `<span class="dmrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+        </div>
+        ${oos ? `<span style="font-size:10px;color:var(--t3)">Out of stock</span>`
+          : qty === 0
+            ? `<button class="btn-add" onclick="addToCart(${p.id},'${safeName}',${price})">ADD</button>`
+            : `<div class="qrow">
+                <button class="qbtn" onclick="removeFromCart(${p.id})">−</button>
+                <span class="qn" id="qty-${p.id}">${qty}</span>
+                <button class="qbtn" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
+               </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── GRID PRODUCT CARD ──
+function gridCard(p) {
+  const price = p.vwp || p.price || 0;
+  const mrp = p.mrp || 0;
+  const disc = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const qty = cart[p.id] || 0;
+  const oos = !p.stock || p.stock <= 0;
+  const photos = Array.isArray(p.photos) ? p.photos : [];
+  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
+  const cat = CATS.find(c => c.key === p.category);
+  const icon = cat?.icon || '📦';
+  const color = cat?.color || '#6B7280';
+  const safeName = p.name.replace(/'/g, "\\'");
+
+  return `
+  <div class="pc" onclick="openPDP(${p.id})">
+    <div class="pc-img" style="background:${img?'#f5f5f5':color+'18'}">
+      ${img ? `<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : icon}
+      ${disc > 0 ? `<div style="position:absolute;top:6px;left:6px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">${disc}% OFF</div>` : ''}
+    </div>
+    <div class="pc-body">
+      ${p.brand ? `<div class="pc-br">${p.brand}</div>` : ''}
+      <div class="pc-nm">${p.name}</div>
+      <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:7px">
+        <span class="pc-price">₹${price.toLocaleString('en-IN')}</span>
+        <span class="pc-unit">${p.unit||'pc'}</span>
+        ${mrp > price ? `<span class="pc-mrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+      </div>
+      <div onclick="event.stopPropagation()">
+        ${oos
+          ? `<div style="text-align:center;padding:7px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--t3)">Out of Stock</div>`
+          : qty === 0
+            ? `<div onclick="addToCart(${p.id},'${safeName}',${price})"
+                style="border:2px solid var(--g);border-radius:8px;padding:7px;text-align:center;font-size:12px;font-weight:800;color:var(--g);cursor:pointer">
+                + Add
+               </div>`
+            : `<div class="qrow" style="width:100%;justify-content:space-between">
+                <button class="qbtn" onclick="removeFromCart(${p.id})">−</button>
+                <span class="qn" id="qty-${p.id}">${qty}</span>
+                <button class="qbtn" style="background:var(--g);color:#fff" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
+               </div>`}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderDeals(products) {
+  document.getElementById('deals-scroll').innerHTML = products.map(dealCard).join('');
+}
+
+// ── SORT / FILTER ──
+let _sortMode = 'default';
+let _currentProducts = [];
+
+function toggleSort() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:15px;font-weight:800;margin-bottom:16px">Sort By</div>
+    ${[
+      ['default','Relevance'],
+      ['price_asc','Price: Low to High'],
+      ['price_desc','Price: High to Low'],
+      ['disc_desc','Biggest Discount'],
+    ].map(([val,label]) => `
+    <div onclick="applySort('${val}')" style="padding:13px 0;border-bottom:1px solid var(--bdr);font-size:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">
+      ${label}
+      ${_sortMode===val ? '<span style="color:var(--g);font-weight:900">✓</span>' : ''}
+    </div>`).join('')}`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
+}
+
+function applySort(mode) {
+  _sortMode = mode;
+  closeSheet();
+  let sorted = [..._currentProducts];
+  if (mode === 'price_asc') sorted.sort((a,b) => (a.vwp||a.price||0) - (b.vwp||b.price||0));
+  else if (mode === 'price_desc') sorted.sort((a,b) => (b.vwp||b.price||0) - (a.vwp||a.price||0));
+  else if (mode === 'disc_desc') sorted.sort((a,b) => {
+    const da = a.mrp > (a.vwp||a.price) ? Math.round((a.mrp-(a.vwp||a.price))/a.mrp*100) : 0;
+    const db = b.mrp > (b.vwp||b.price) ? Math.round((b.mrp-(b.vwp||b.price))/b.mrp*100) : 0;
+    return db - da;
+  });
+  document.getElementById('product-grid').innerHTML = sorted.map(gridCard).join('');
+}
+
+function toggleFilter() {
+  // Get unique brands from current products
+  const brands = [...new Set(_currentProducts.map(p => p.brand).filter(Boolean))];
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:15px;font-weight:800;margin-bottom:16px">Filter</div>
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Brand</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+      ${brands.map(b => `
+      <button onclick="applyBrandFilter('${b}',this)"
+        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--bdr);background:#fff;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer">
+        ${b}
+      </button>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Price Range</div>
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      ${[['0-500','₹0–₹500'],['500-2000','₹500–₹2K'],['2000-10000','₹2K–₹10K'],['10000+','₹10K+']].map(([val,label]) => `
+      <button onclick="applyPriceFilter('${val}',this)"
+        style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--bdr);background:#fff;font-size:11px;font-weight:700;color:var(--t2);cursor:pointer">
+        ${label}
+      </button>`).join('')}
+    </div>
+    <button onclick="clearFilters()" style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;font-weight:700;cursor:pointer">Clear All Filters</button>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
+}
+
+let _activeBrand = null, _activePriceRange = null;
+
+function applyBrandFilter(brand, btn) {
+  document.querySelectorAll('#bottom-sheet button').forEach(b => {
+    if (b.textContent.trim() === brand) { b.style.background='var(--t1)'; b.style.color='var(--gold)'; b.style.borderColor='var(--t1)'; }
+  });
+  _activeBrand = brand;
+}
+
+function applyPriceFilter(range, btn) {
+  _activePriceRange = range;
+  closeSheet();
+  let filtered = [..._currentProducts];
+  if (_activeBrand) filtered = filtered.filter(p => p.brand === _activeBrand);
+  const [min, max] = range.includes('+') ? [parseInt(range),Infinity] : range.split('-').map(Number);
+  filtered = filtered.filter(p => { const pr = p.vwp||p.price||0; return pr >= min && pr <= max; });
+  document.getElementById('product-grid').innerHTML = filtered.length
+    ? filtered.map(gridCard).join('')
+    : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">
+        <div style="font-size:36px;margin-bottom:8px">🔍</div>
+        <div style="font-size:14px;font-weight:700">No products match this filter</div>
+       </div>`;
+}
+
+function clearFilters() {
+  _activeBrand = null; _activePriceRange = null; closeSheet();
+  document.getElementById('product-grid').innerHTML = _currentProducts.map(gridCard).join('');
+}
+
+// ── CATEGORY PAGE ──
+async function showCategory(catKey, searchTerm) {
+  document.getElementById('pg-home').style.display = 'none';
+  document.getElementById('pg-cat').classList.add('open');
+
+  const cat = CATS.find(c => c.key === catKey);
+  const catIconEl = document.getElementById('cat-icon');
+  catIconEl.textContent = cat?.icon || '🔍';
+  catIconEl.style.background = (cat?.color || '#666') + '18';
+  document.getElementById('cat-title').textContent = searchTerm ? `"${searchTerm}"` : (cat?.label || 'All Products');
+
+  const grid = document.getElementById('product-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">Loading...</div>';
+
+  _sortMode = 'default';
+  _activeBrand = null;
+  _activePriceRange = null;
+  trackCategoryView(catKey || 'All');
+
+  try {
+    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=40';
+    if (catKey) url += `&category=eq.${encodeURIComponent(catKey)}`;
+    if (searchTerm) url += `&name=ilike.*${encodeURIComponent(searchTerm)}*`;
+
+    const products = await sbFetch('products', url);
+    if (!Array.isArray(products) || !products.length) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
+        <div style="font-size:48px;margin-bottom:12px">📦</div>
+        <div style="font-size:15px;font-weight:800;color:var(--t2);margin-bottom:6px">No products found</div>
+        <div style="font-size:13px">Call us: <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
+      </div>`;
+      return;
+    }
+    _currentProducts = products;
+    _pdpProducts = [...products, ..._pdpProducts.filter(p => !products.find(x => x.id===p.id))];
+    grid.innerHTML = products.map(gridCard).join('');
+  } catch(e) {
+    console.error('showCategory error:', e);
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
+      <div style="font-size:40px;margin-bottom:12px">📦</div>
+      <div style="font-size:14px;font-weight:800;color:var(--t2);margin-bottom:6px">Unable to load products</div>
+      <div style="font-size:12px;margin-bottom:16px">${e.message||'Check your connection'}</div>
+      <button onclick="showCategory(currentCatKey)" style="padding:10px 22px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">↺ Retry</button>
+    </div>`;
+  }
+}
+
+function closeCategoryPage() {
+  document.getElementById('pg-cat').classList.remove('open');
+  document.getElementById('pg-home').style.display = '';
+  setNav('home');
+}
+
+function goHome() {
+  closeCategoryPage();
+  clearSearch();
+  setNav('home');
+}
+
+// ── CASHFREE RETURN HANDLER ──
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  const vwOrder = p.get('vw_order');
+  const cfOrder = p.get('cf_order');
+  if (vwOrder && cfOrder) {
+    window.history.replaceState({}, '', './shop.html');
+    setTimeout(() => {
+      const sheet = document.getElementById('bottom-sheet');
+      const overlay = document.getElementById('sheet-overlay');
+      sheet.innerHTML = `
+        <div class="sheet-handle"></div>
+        <div style="text-align:center;padding:20px 0 10px">
+          <div style="font-size:52px;margin-bottom:14px">⏳</div>
+          <div style="font-size:18px;font-weight:900;margin-bottom:6px">Payment Processing</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:16px">Your order is placed. We're confirming your payment — you'll get an SMS once confirmed.</div>
+          <div style="background:var(--bg);border-radius:10px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:16px">Order Ref: #${vwOrder}</div>
+          <button onclick="closeSheet()" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">Continue Shopping</button>
+          <div style="font-size:11px;color:var(--t3);margin-top:10px">Questions? Call <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
+        </div>`;
+      sheet.classList.add('open');
+      overlay.classList.add('open');
+    }, 500);
+  }
+})();
+
+// ── DELIVERY ZONES ──
+// Vijayawada pincodes — 2-4 hr delivery
+const VJ_PINCODES = new Set([
+  '520001','520002','520003','520004','520007','520008','520010',
+  '520011','520012','520013','520015','520019','520021','520022',
+  '520023','520024','520025','520026','520027','520028',
+  '521001','521002','521101','521108','521126','521150',
+  '521156','521157','521163','521164','521165'
+]);
+
+// AP pincodes prefix ranges (500-535 = AP/Telangana)
+// Telangana: 500xxx-509xxx, AP: 515xxx-535xxx + 502-504
+const AP_PREFIXES = ['50','51','52','53'];
+const TG_PREFIXES = ['500','501','502','503','504','505','506','507','508','509'];
+
+function getPincodeZone(pin) {
+  if (!pin || pin.length !== 6) return null;
+  if (VJ_PINCODES.has(pin)) return 'vijayawada';
+  const p3 = pin.slice(0,3);
+  const p2 = pin.slice(0,2);
+  if (TG_PREFIXES.includes(p3)) return 'telangana';
+  if (AP_PREFIXES.includes(p2) && parseInt(pin) >= 500000 && parseInt(pin) <= 535999) return 'ap';
+  return 'outside';
+}
+
+function checkDeliveryPincode() {
+  const pin = document.getElementById('pincode-check-input')?.value?.trim();
+  const el = document.getElementById('pz-result');
+  if (!pin || pin.length < 6) { el.innerHTML = '<div style="font-size:12px;color:var(--red)">Enter a valid 6-digit pincode</div>'; return; }
+  const zone = getPincodeZone(pin);
+  const msgs = {
+    vijayawada: `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:var(--g);margin-bottom:2px">✅ Deliverable — Vijayawada</div>
+      <div style="font-size:12px;color:#166534">⚡ 2–4 hour delivery · Self pickup available at NH65 Bhavanipuram</div>
+    </div>`,
+    ap: `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:#c2410c;margin-bottom:2px">🚚 Andhra Pradesh — Deliverable</div>
+      <div style="font-size:12px;color:#9a3412">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
+    </div>`,
+    telangana: `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:#6d28d9;margin-bottom:2px">🚚 Telangana — Deliverable</div>
+      <div style="font-size:12px;color:#5b21b6">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
+    </div>`,
+    outside: `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:2px">❌ Outside Service Area</div>
+      <div style="font-size:12px;color:#991b1b">We currently serve Andhra Pradesh & Telangana only. Call us for special arrangements.</div>
+    </div>`
+  };
+  el.innerHTML = msgs[zone] || msgs.outside;
+  trackEvent('pincode_check', { pincode: pin, zone });
+}
+
+function showPickupOption() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;padding:4px 0 8px">
+      <div style="font-size:36px;margin-bottom:10px">🏪</div>
+      <div style="font-size:17px;font-weight:900;margin-bottom:4px">Self Pickup — Free</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:20px">Collect from our store — no delivery charge</div>
+    </div>
+    <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:4px">📍 V Wholesale Store</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:6px">NH65, Bhavanipuram, Vijayawada — 520012</div>
+      <div style="font-size:11px;color:var(--t3)">Mon–Sat · 9:00 AM – 7:30 PM · <a href="tel:8712697930" style="color:var(--g);font-weight:700">87126 97930</a></div>
+    </div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.6">
+      ✅ Order online and select "Store Pickup" at checkout<br>
+      ✅ Ready within 30–45 minutes for in-stock items<br>
+      ✅ No delivery charge · Pay at pickup or online
+    </div>
+    <button onclick="openLoginSheet('cart')" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">
+      Shop & Pickup →
+    </button>
+    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">Close</button>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
+}
+
+// ── WISHLIST ──
+let _wishlist = new Set();
+
+function toggleWishlist(productId, productName, btn) {
+  if (_wishlist.has(productId)) {
+    _wishlist.delete(productId);
+    if (btn) { btn.textContent = '♡'; btn.style.color = 'var(--t3)'; }
+    toast('Removed from wishlist');
+  } else {
+    _wishlist.add(productId);
+    if (btn) { btn.textContent = '♥'; btn.style.color = '#e11d48'; }
+    toast('Added to wishlist ♥');
+  }
+  trackEvent('wishlist_toggle', { product_id: productId, action: _wishlist.has(productId) ? 'add' : 'remove' });
+  // Persist to localStorage
+  localStorage.setItem('vw_wishlist', JSON.stringify([..._wishlist]));
+}
+
+function loadWishlist() {
+  try {
+    const saved = localStorage.getItem('vw_wishlist');
+    if (saved) _wishlist = new Set(JSON.parse(saved));
+  } catch(e) {}
+}
+
+// ── ANALYTICS ──
+function trackEvent(eventName, params = {}) {
+  try {
+    if (typeof gtag !== 'undefined') {
+      gtag('event', eventName, params);
+    }
+  } catch(e) {}
+}
+
+// Track key events
+function trackAddToCart(id, name, price) {
+  trackEvent('add_to_cart', { currency:'INR', value: price, items:[{item_id:id, item_name:name, price}] });
+}
+function trackViewProduct(id, name, category, price) {
+  trackEvent('view_item', { currency:'INR', value:price, items:[{item_id:id, item_name:name, item_category:category, price}] });
+}
+function trackSearch(term) {
+  trackEvent('search', { search_term: term });
+}
+function trackCategoryView(category) {
+  trackEvent('view_item_list', { item_list_name: category || 'All Products' });
+}
+
+// ── GA4 INIT (will only fire when you add your Measurement ID) ──
+// Replace G-XXXXXXXXXX with your actual GA4 Measurement ID
+// Get it from: analytics.google.com → Admin → Data Streams → Web → Measurement ID
+const GA4_ID = 'G-XXXXXXXXXX'; // TODO: Replace with your Measurement ID
+
+if (GA4_ID !== 'G-XXXXXXXXXX') {
+  const gaScript = document.createElement('script');
+  gaScript.async = true;
+  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`;
+  document.head.appendChild(gaScript);
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', GA4_ID, { page_title: 'V Wholesale Shop', page_location: window.location.href });
+  window.gtag = gtag;
+}
+
+// ── INIT ──
+loadWishlist();
+renderCatGrid();
+renderCatNav();
+loadCategories();
+loadDeals();
+</script>
+
+</body>
+</html>
