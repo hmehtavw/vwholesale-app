@@ -680,7 +680,7 @@ let CATS = [];
 
 async function loadCategories() {
   try {
-    const data = await sbFetch('shop_categories', '?is_active=eq.true&order=sort_order.asc');
+    const data = await sbFetch('shop_categories', '?is_active=eq.true&order=sort_order.asc&limit=100');
     if (Array.isArray(data) && data.length) {
       CATS = data;
       renderCatGrid();
