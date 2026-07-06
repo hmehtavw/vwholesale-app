@@ -912,7 +912,7 @@ async function openPDP(productId) {
   let p = _pdpProducts.find(x => x.id === productId);
   if (!p) {
     try {
-      const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos`);
+      const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,category,price,vwp,mrp,unit,stock,photos`);
       p = Array.isArray(data) ? data[0] : null;
     } catch(e) {}
   }
@@ -933,7 +933,7 @@ async function openPDP(productId) {
   // Load more from same brand/category
   let moreProducts = [];
   try {
-    const moreData = await sbFetch('products', `?select=id,name,price,vwp,mrp,images,photos,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=6`);
+    const moreData = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=6`);
     moreProducts = Array.isArray(moreData) ? moreData : [];
   } catch(e) {}
 
@@ -1093,7 +1093,7 @@ function renderCatNav() {
 // ── LOAD DEALS ──
 async function loadDeals() {
   try {
-    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&limit=20');
+    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=20');
     if (!Array.isArray(products) || !products.length) {
       document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon — visit us at NH65, Bhavanipuram</div>';
       return;
@@ -1318,7 +1318,7 @@ async function showCategory(catKey, searchTerm) {
   trackCategoryView(catKey || 'All');
 
   try {
-    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&limit=40';
+    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=40';
     if (catKey) url += `&category=eq.${encodeURIComponent(catKey)}`;
     if (searchTerm) url += `&name=ilike.*${encodeURIComponent(searchTerm)}*`;
 
@@ -1335,7 +1335,13 @@ async function showCategory(catKey, searchTerm) {
     _pdpProducts = [...products, ..._pdpProducts.filter(p => !products.find(x => x.id===p.id))];
     grid.innerHTML = products.map(gridCard).join('');
   } catch(e) {
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--t3)">Failed to load. Check your connection.</div>';
+    console.error('showCategory error:', e);
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
+      <div style="font-size:40px;margin-bottom:12px">📦</div>
+      <div style="font-size:14px;font-weight:800;color:var(--t2);margin-bottom:6px">Unable to load products</div>
+      <div style="font-size:12px;margin-bottom:16px">${e.message||'Check your connection'}</div>
+      <button onclick="showCategory(currentCatKey)" style="padding:10px 22px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">↺ Retry</button>
+    </div>`;
   }
 }
 
