@@ -7448,3 +7448,69 @@ window.VW_FEATURES = window.VW_FEATURES || {};
 window.VW_FEATURES.renderCustomerStatement = renderCustomerStatement;
 window.VW_FEATURES.searchStatementCustomer = searchStatementCustomer;
 window.renderCustomerStatement = renderCustomerStatement;
+
+// ── Wallet: load more transactions (was missing) ──
+async function loadMoreWalletTxns(walletId) {
+  try {
+    const offset = window._walletTxnOffset || 10;
+    const { data: txns } = await VW_DB.client
+      .from('wallet_transactions')
+      .select('*')
+      .eq('wallet_id', walletId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + 9);
+    if (!txns || !txns.length) { showToast('No more transactions'); return; }
+    window._walletTxnOffset = offset + txns.length;
+    const list = document.querySelector('#wallet-txn-list') || document.querySelector('[data-wallet-txns]');
+    if (list) {
+      list.insertAdjacentHTML('beforeend', txns.map(t => `
+        <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+          <div><div style="font-size:13px;font-weight:600">${t.description || t.type}</div>
+          <div style="font-size:11px;color:var(--text3)">${new Date(t.created_at).toLocaleDateString('en-IN')}</div></div>
+          <div style="font-size:14px;font-weight:800;color:${t.amount >= 0 ? 'var(--green)' : 'var(--red)'}">${t.amount >= 0 ? '+' : ''}₹${Math.abs(t.amount).toLocaleString('en-IN')}</div>
+        </div>`).join(''));
+    }
+  } catch(e) { showToast('Failed to load transactions', 'error'); }
+}
+window.loadMoreWalletTxns = loadMoreWalletTxns;
+
+// ── Wallet: KYC upload (was missing) ──
+function showKYCUpload(walletId) {
+  openSheet('kyc-upload', `
+    <div class="sheet-handle"></div>
+    <h3 style="font-size:16px;font-weight:900;margin-bottom:6px">KYC Documents</h3>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Required for wallet balance above ₹10,000 (RBI guidelines)</div>
+    <div style="display:grid;gap:10px">
+      <label style="display:block;padding:14px;border:1.5px dashed var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:13px">
+        📄 Upload Aadhaar (front & back)
+        <input type="file" accept="image/*,.pdf" multiple style="display:none" onchange="handleKYCFile(this, ${walletId}, 'aadhaar')">
+      </label>
+      <label style="display:block;padding:14px;border:1.5px dashed var(--border);border-radius:10px;text-align:center;cursor:pointer;font-size:13px">
+        🪪 Upload PAN Card
+        <input type="file" accept="image/*,.pdf" style="display:none" onchange="handleKYCFile(this, ${walletId}, 'pan')">
+      </label>
+    </div>
+    <div id="kyc-status" style="margin-top:12px;font-size:12px;color:var(--text3)"></div>
+    <button onclick="closeSheet()" style="width:100%;margin-top:16px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Done</button>
+  `);
+}
+window.showKYCUpload = showKYCUpload;
+
+async function handleKYCFile(input, walletId, docType) {
+  const status = document.getElementById('kyc-status');
+  if (!input.files?.length) return;
+  if (status) status.textContent = 'Uploading...';
+  try {
+    for (const file of input.files) {
+      const path = `kyc/${walletId}/${docType}_${Date.now()}_${file.name}`;
+      const { error } = await VW_DB.client.storage.from('documents').upload(path, file);
+      if (error) throw error;
+    }
+    await VW_DB.client.from('customer_wallets').update({ kyc_status: 'submitted' }).eq('id', walletId);
+    if (status) status.innerHTML = '<span style="color:var(--green)">✅ Uploaded. Under review (1-2 days).</span>';
+    showToast('KYC documents uploaded', 'success');
+  } catch(e) {
+    if (status) status.innerHTML = '<span style="color:var(--red)">Upload failed. Try again or visit store.</span>';
+  }
+}
+window.handleKYCFile = handleKYCFile;

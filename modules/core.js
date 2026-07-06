@@ -594,6 +594,21 @@ async function loadCurrentProfile() {
   if (!sessionData.session) { currentProfile = null; return null; }
   const userId = sessionData.session.user.id;
   currentProfile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
+
+  // Auto-create customer profile for new shop.html OTP signups
+  if (!currentProfile) {
+    const u = sessionData.session.user;
+    const phone = (u.phone || u.email || '').replace('+91','').replace('@vwholesale.app','').replace(/\D/g,'').slice(-10);
+    const name = u.user_metadata?.name || localStorage.getItem('vw_pending_name') || ('Customer ' + phone.slice(-4));
+    try {
+      await sb.from('profiles').insert({
+        id: userId, name, phone,
+        role: 'customer', status: 'approved'
+      });
+      currentProfile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
+      localStorage.removeItem('vw_pending_name');
+    } catch(e) { console.warn('Customer profile auto-create failed:', e); }
+  }
   return currentProfile;
 }
 

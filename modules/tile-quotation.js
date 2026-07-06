@@ -6015,7 +6015,16 @@ function tqPrintAdvanceReceipt(q, txnRef) {
     @media print{.print-btn{display:none}}
     .wa-btn{display:block;margin:0 0 16px;padding:10px 24px;background:#25D366;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;width:100%}
     @media print{.wa-btn{display:none}}
-  </style></head><body>
+  </style>
+  <scr` + `ipt>
+    function shareReceiptWA() {
+      var msg = encodeURIComponent(document.title + '%0A' + 'Vassure Wholesale Pvt Ltd, Vijayawada' + '%0A' + 'Amount received. Thank you!' + '%0A' + 'Call: 8712697930');
+      var phone = '${(q.customer_phone||'').replace(/\D/g,'').slice(-10)}';
+      var url = phone ? 'https://wa.me/91' + phone + '?text=' + msg : 'https://wa.me/?text=' + msg;
+      window.open(url, '_blank');
+    }
+  </scr` + `ipt>
+  </head><body>
   <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
   <button class="wa-btn" onclick="shareReceiptWA()">💬 Share via WhatsApp</button>
   <div class="brand">Vassure Wholesale Pvt Ltd</div>

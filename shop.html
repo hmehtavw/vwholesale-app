@@ -908,7 +908,9 @@ async function verifyCustomerOTP() {
     });
     const data = await res.json();
     if (res.ok && data.access_token) {
-      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify({access_token:data.access_token,user:data.user}));
+      data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
+      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
+      if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
       if (Object.keys(cart).length > 0) localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
       closeSheet(); toast('Welcome to V Wholesale! 🎉');
       setTimeout(() => window.location.replace('./index.html'), 1200); return;
@@ -920,7 +922,9 @@ async function verifyCustomerOTP() {
     });
     const ed = await er.json();
     if (er.ok && ed.access_token) {
-      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify({access_token:ed.access_token,user:ed.user}));
+      ed.expires_at = Math.floor(Date.now()/1000) + (ed.expires_in || 3600);
+      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(ed));
+      if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
       if (Object.keys(cart).length > 0) localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
       closeSheet(); toast('Welcome to V Wholesale! 🎉');
       setTimeout(() => window.location.replace('./index.html'), 1200);
@@ -941,14 +945,11 @@ async function openPDP(productId) {
   const pdpOverlay = document.getElementById('pdp-overlay');
   const actionBar = document.getElementById('pdp-action-bar');
 
-  // Find product from already-loaded list
   let p = _pdpProducts.find(x => x.id === productId);
-  if (!p) {
-    try {
-      const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,category,price,vwp,mrp,unit,stock,photos`);
-      p = Array.isArray(data) ? data[0] : null;
-    } catch(e) {}
-  }
+  try {
+    const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,model,category,subcategory,price,vwp,mrp,unit,stock,photos,image_url,description,warranty_months,tile_size_mm,tile_size_label,tile_finish,tile_type,tiles_per_box,coverage_per_box,box_weight_kg,tile_thickness_mm,colour_family,surface_type,gst,hsn`);
+    if (Array.isArray(data) && data[0]) p = data[0];
+  } catch(e) { if (!p) return; }
   if (!p) return;
 
   const price = p.vwp || p.price || 0;
@@ -957,113 +958,96 @@ async function openPDP(productId) {
   const qty = cart[p.id] || 0;
   const oos = !p.stock || p.stock <= 0;
   const photos = Array.isArray(p.photos) ? p.photos : [];
-  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
+  const imgSrc = p.image_url || photos[0]?.url || photos[0] || null;
   const cat = CATS.find(c => c.key === p.category);
   const icon = cat?.icon || '📦';
   const color = cat?.color || '#6B7280';
   const safeName = p.name.replace(/'/g, "\\'");
+  const isWishlisted = _wishlist.has(productId);
 
-  // Load more from same brand/category
+  function specRow(k, v) {
+    if (v === null || v === undefined || v === '' || v === 0) return '';
+    return `<div class="pdp-spec-row"><div class="pdp-spec-k">${k}</div><div class="pdp-spec-v">${v}</div></div>`;
+  }
+  const specRows = [
+    specRow('Brand', p.brand),
+    specRow('Model', p.model),
+    specRow('Category', p.category),
+    specRow('Sub-category', p.subcategory),
+    specRow('Colour', p.colour_family),
+    specRow('Surface', p.surface_type),
+    specRow('Finish', p.tile_finish),
+    specRow('Type', p.tile_type),
+    specRow('Size', p.tile_size_label || p.tile_size_mm),
+    specRow('Tiles / Box', p.tiles_per_box),
+    specRow('Coverage / Box', p.coverage_per_box ? p.coverage_per_box + ' sq.ft' : null),
+    specRow('Box Weight', p.box_weight_kg ? p.box_weight_kg + ' kg' : null),
+    specRow('Thickness', p.tile_thickness_mm ? p.tile_thickness_mm + ' mm' : null),
+    specRow('Unit', p.unit || 'Each'),
+    specRow('GST', p.gst ? p.gst + '%' : null),
+    specRow('HSN', p.hsn),
+    specRow('Warranty', p.warranty_months ? (p.warranty_months >= 12 ? Math.floor(p.warranty_months/12)+' Year'+(p.warranty_months>=24?'s':'') : p.warranty_months+' Months') : null),
+    specRow('Availability', `<span style="color:${oos?'var(--red)':'var(--g)'};font-weight:800">${oos?'Out of Stock':'✓ In Stock'}</span>`)
+  ].filter(Boolean).join('');
+
   let moreProducts = [];
   try {
-    const moreData = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=6`);
-    moreProducts = Array.isArray(moreData) ? moreData : [];
+    const md = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,image_url,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=8`);
+    moreProducts = Array.isArray(md) ? md : [];
   } catch(e) {}
 
-  const zone = getPincodeZone(document.getElementById('pincode-check-input')?.value?.trim() || '520012');
-  const deliveryBadge = zone === 'vijayawada'
-    ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>'
-    : zone === 'ap' || zone === 'telangana'
-    ? '<span style="background:#fff7ed;color:#c2410c;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #fed7aa">🚚 3–4 day delivery</span>'
-    : '<span style="background:var(--bg);color:var(--t3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">📍 Vijayawada pickup</span>';
-  const isWishlisted = _wishlist.has(productId);
   trackViewProduct(p.id, p.name, p.category, price);
 
   pdpSheet.innerHTML = `
-    <div class="pdp-imgwrap" style="background:${img ? '#f5f5f5' : color+'18'}">
-      ${img ? `<img src="${img}" alt="${p.name}">` : `<span style="font-size:80px">${icon}</span>`}
-      ${disc > 0 ? `<div class="pdp-pct">${disc}% OFF</div>` : ''}
-      <button class="pdp-close" onclick="closePDP()">✕</button>
-      <button id="pdp-wish-btn" onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:12px;right:48px;background:rgba(0,0,0,0.4);border:none;border-radius:50%;width:30px;height:30px;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
+    <div style="position:relative">
+      <div class="pdp-imgwrap" style="background:${imgSrc?'#f8f8f8':color+'18'}">
+        ${imgSrc ? `<img src="${imgSrc}" alt="${p.name}" style="width:100%;height:100%;object-fit:contain;padding:16px">` : `<span style="font-size:80px">${icon}</span>`}
+        ${disc > 0 ? `<div class="pdp-pct">${disc}% OFF</div>` : ''}
+        <button class="pdp-close" onclick="closePDP()">✕</button>
+        <button onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:10px;right:48px;background:rgba(0,0,0,.3);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
+      </div>
     </div>
     <div class="pdp-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         ${p.brand ? `<div class="pdp-br">${p.brand}</div>` : '<div></div>'}
-        ${deliveryBadge}
+        <span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>
       </div>
       <div class="pdp-nm">${p.name}</div>
       <div class="pdp-prow">
         <span class="pdp-price">₹${price.toLocaleString('en-IN')}</span>
         <span class="pdp-unit">/ ${p.unit||'pc'}</span>
-        ${mrp > price ? `<span class="pdp-omrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
+        ${mrp > price ? `<span class="pdp-omrp">₹${mrp.toLocaleString('en-IN')}</span><span style="color:var(--g);font-size:11px;font-weight:800;margin-left:4px">${disc}% off</span>` : ''}
       </div>
-      <div class="pdp-gst">Inclusive of all taxes</div>
+      <div class="pdp-gst">Inclusive of all taxes${p.gst ? ` · GST ${p.gst}%` : ''}</div>
 
-      <!-- TRUST ICONS -->
-      <div class="pdp-trust" style="margin-top:16px;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:12px 0">
-        <div class="pdp-ti"><div class="pdp-ti-icon">🚚</div><div class="pdp-ti-lbl">2–4 hr Delivery</div></div>
-        <div class="pdp-ti"><div class="pdp-ti-icon">✅</div><div class="pdp-ti-lbl">100% Genuine</div></div>
-        <div class="pdp-ti"><div class="pdp-ti-icon">🔄</div><div class="pdp-ti-lbl">7 Day Return</div></div>
-        <div class="pdp-ti"><div class="pdp-ti-icon">🔒</div><div class="pdp-ti-lbl">Secure Payment</div></div>
-        <div class="pdp-ti"><div class="pdp-ti-icon">📞</div><div class="pdp-ti-lbl">Call Support</div></div>
-        <div class="pdp-ti"><div class="pdp-ti-icon">🏷</div><div class="pdp-ti-lbl">Best Price</div></div>
-      </div>
-
-      <!-- SPECS -->
-      <div class="pdp-spec-h">Specifications</div>
-      <div class="pdp-spec">
-        ${p.brand ? `<div class="pdp-spec-row"><div class="pdp-spec-k">Brand</div><div class="pdp-spec-v">${p.brand}</div></div>` : ''}
-        <div class="pdp-spec-row"><div class="pdp-spec-k">Category</div><div class="pdp-spec-v">${p.category||'—'}</div></div>
-        <div class="pdp-spec-row"><div class="pdp-spec-k">Unit</div><div class="pdp-spec-v">${p.unit||'Each'}</div></div>
-        <div class="pdp-spec-row"><div class="pdp-spec-k">Availability</div><div class="pdp-spec-v" style="color:${oos?'var(--red)':'var(--g)'};font-weight:700">${oos ? 'Out of Stock' : '✓ In Stock'}</div></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin:14px 0">
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🚚</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">2–4 Hr<br>Delivery</div></div>
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">✅</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">100%<br>Genuine</div></div>
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🔄</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">7 Day<br>Returns</div></div>
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">💳</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Pay on<br>Delivery</div></div>
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🏷</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Wholesale<br>Price</div></div>
+        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">📞</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Call<br>Support</div></div>
       </div>
 
-      <!-- MORE FROM CATEGORY -->
-      ${moreProducts.length ? `
-      <div class="pdp-more-from">
-        <div class="pdp-more-h">More from ${p.category}</div>
-        <div class="pdp-more-scr">
-          ${moreProducts.map(mp => {
-            const mPrice = mp.vwp || mp.price || 0;
-            const mImg = mp.images?.[0] || (Array.isArray(mp.photos) ? mp.photos[0]?.url || mp.photos[0] : null) || null;
-            const mCat = CATS.find(c => c.key === mp.category);
-            const mIcon = mCat?.icon || '📦';
-            const mColor = mCat?.color || '#6B7280';
-            return `
-            <div class="pdp-mcard" onclick="closePDP();setTimeout(()=>openPDP(${mp.id}),200)">
-              <div class="pdp-mi" style="background:${mImg?'#f5f5f5':mColor+'18'}">
-                ${mImg ? `<img src="${mImg}" style="width:100%;height:100%;object-fit:cover">` : `<span>${mIcon}</span>`}
-              </div>
-              <div class="pdp-mb">
-                <div class="pdp-mn">${mp.name}</div>
-                <div class="pdp-mp">₹${mPrice.toLocaleString('en-IN')}</div>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
+      ${p.description ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Product Description</div><div style="font-size:13px;color:var(--t2);line-height:1.65;background:var(--bg);border-radius:10px;padding:12px 14px">${p.description}</div></div>` : ''}
 
+      ${specRows ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Specifications</div><div class="pdp-spec">${specRows}</div></div>` : ''}
+
+      <div style="background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:28px">🏪</div>
+        <div style="flex:1"><div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:2px">Visit V Wholesale Store</div><div style="font-size:10px;color:rgba(255,255,255,.6)">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
+        <a href="tel:8712697930" style="flex-shrink:0;padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:11px;font-weight:700;color:#fff;border:1px solid rgba(255,255,255,.25);text-decoration:none">📞 Call</a>
+      </div>
+
+      ${moreProducts.length ? `<div style="margin-bottom:8px"><div style="font-size:14px;font-weight:800;margin-bottom:10px">More from ${p.category}</div><div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px 4px">${moreProducts.map(mp=>{const mP=mp.vwp||mp.price||0;const mI=mp.image_url||(Array.isArray(mp.photos)?mp.photos[0]?.url||mp.photos[0]:null);const mC=CATS.find(c=>c.key===mp.category);return `<div onclick="closePDP();setTimeout(()=>openPDP(${mp.id}),200)" style="flex:0 0 120px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden;cursor:pointer"><div style="height:80px;background:${mI?'#f8f8f8':(mC?.color||'#6B7280')+'18'};display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden">${mI?`<img src="${mI}" style="width:100%;height:100%;object-fit:cover">`:(mC?.icon||'📦')}</div><div style="padding:6px 8px"><div style="font-size:10px;font-weight:700;line-height:1.3;margin-bottom:3px">${mp.name.slice(0,42)}</div><div style="font-size:12px;font-weight:900">₹${mP.toLocaleString('en-IN')}</div></div></div>`;}).join('')}</div></div>` : ''}
       <div style="height:20px"></div>
     </div>`;
 
-  // Action bar
   actionBar.className = 'pdp-bar';
-  actionBar.innerHTML = `
-    <a href="tel:8712697930" class="pdp-bar-call">📞</a>
-    ${oos
-      ? `<button class="pdp-bar-atc" style="background:var(--t3);cursor:default">Out of Stock</button>`
-      : qty === 0
-        ? `<button class="pdp-bar-atc" onclick="addToCart(${p.id},'${safeName}',${price});document.getElementById('pdp-action-bar').innerHTML=this.parentNode.innerHTML;updatePDPBar(${p.id},'${safeName}',${price})">Add to Cart</button>`
-        : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
-            <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${p.id});updatePDPBar(${p.id},'${safeName}',${price})">−</button>
-            <span style="flex:1;text-align:center;font-size:16px;font-weight:900" id="pdp-qty-${p.id}">${qty}</span>
-            <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${p.id},'${safeName}',${price});updatePDPBar(${p.id},'${safeName}',${price})">+</button>
-           </div>`}`;
-
+  updatePDPBar(p.id, safeName, price, oos);
   pdpOverlay.classList.add('open');
   pdpSheet.classList.add('open');
 }
-
 function updatePDPBar(id, name, price) {
   const actionBar = document.getElementById('pdp-action-bar');
   const qty = cart[id] || 0;
