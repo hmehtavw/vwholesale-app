@@ -4693,6 +4693,32 @@ async function _uploadTQReferenceImage(input) {
   if (content) content.innerHTML = await _renderStep0();
 }
 
+// ── Revision history: snapshot the current DB row as vN before any edit ──
+async function _tqSnapshotRevision(id, reason, prof) {
+  const { data: current } = await VW_DB.client.from('tile_quotations')
+    .select('*').eq('id', id).single().catch(()=>({ data: null }));
+  if (!current) return null;
+  const { data: lastRev } = await VW_DB.client
+    .from('tq_revisions').select('version').eq('tq_id', id)
+    .order('version', { ascending: false }).limit(1).single()
+    .catch(()=>({ data: null }));
+  const nextVersion = (lastRev?.version ? lastRev.version + 1 : (current.version || 1));
+  await VW_DB.client.from('tq_revisions').insert({
+    tq_id: id,
+    tq_no: current.tq_no,
+    version: nextVersion,
+    snapshot: current,
+    changed_by: prof?.id || null,
+    changed_by_name: prof?.name || '',
+    change_reason: reason || '',
+  }).catch(()=>{});
+  // Bump version on the live quote
+  await VW_DB.client.from('tile_quotations')
+    .update({ version: nextVersion + 1 })
+    .eq('id', id).catch(()=>{});
+  return nextVersion;
+}
+
 async function _tqRequestEdit() {
   const id = _tqState._savedQuoteId || _tqState._draftId;
   if (!id) {
@@ -4707,34 +4733,10 @@ async function _tqRequestEdit() {
     const reason = prompt('Reason for editing this quotation? (This will be recorded in revision history)');
     if (reason === null) return; // cancelled
     const prof = VW_AUTH.getCurrentProfile();
-
-    // Save current state as a revision snapshot BEFORE editing
-    const { data: current } = await VW_DB.client.from('tile_quotations')
-      .select('*').eq('id', id).single().catch(()=>({ data: null }));
-
-    if (current) {
-      const { data: lastRev } = await VW_DB.client
-        .from('tq_revisions').select('version').eq('tq_id', id)
-        .order('version', { ascending: false }).limit(1).single()
-        .catch(()=>({ data: null }));
-
-      const nextVersion = (lastRev?.version || current.version || 1);
-      await VW_DB.client.from('tq_revisions').insert({
-        tq_id: id,
-        tq_no: current.tq_no,
-        version: nextVersion,
-        snapshot: current,
-        changed_by: prof?.id || null,
-        changed_by_name: prof?.name || '',
-        change_reason: reason,
-      }).catch(()=>{});
-
-      // Bump version on the live quote
-      await VW_DB.client.from('tile_quotations')
-        .update({ version: nextVersion + 1, approval_status: 'draft' })
-        .eq('id', id).catch(()=>{});
-    }
-    showToast(`Revision v${(current?.version||1)} saved — editing now`, 'info');
+    const savedV = await _tqSnapshotRevision(id, reason, prof);
+    await VW_DB.client.from('tile_quotations')
+      .update({ approval_status: 'draft' }).eq('id', id).catch(()=>{});
+    showToast(`Revision v${savedV || 1} saved — editing now`, 'info');
   }
 
   await tqEditQuote(id);
@@ -5890,6 +5892,9 @@ async function tqConfirmEditQuote(id) {
     .select('approval_log,approval_status').eq('id', id).single();
   if (!q) { showToast('Quote not found', 'warn'); return; }
 
+  // Save a full revision snapshot (v1, v2, v3...) before the edit resets anything
+  await _tqSnapshotRevision(id, reason, profile);
+
   // Auto-reject any pending steps in the approval log
   const log = (q.approval_log || []).map(step => {
     if (step.status === 'pending') {
@@ -6182,6 +6187,75 @@ async function tqReprintReceipt(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) return;
   tqPrintAdvanceReceipt(q, '');
+}
+
+// ── Revision history viewer: v1, v2, v3... with what changed between versions ──
+async function tqShowRevisions(id) {
+  const [{ data: revs }, { data: live }] = await Promise.all([
+    VW_DB.client.from('tq_revisions')
+      .select('version,changed_by_name,change_reason,created_at,snapshot')
+      .eq('tq_id', id).order('version', { ascending: true }),
+    VW_DB.client.from('tile_quotations')
+      .select('tq_no,version,grand_total,total_boxes,total_area_sqft,rooms,approval_status,updated_at').eq('id', id).single(),
+  ]);
+
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet) return;
+
+  // Key metrics extractor for diffing
+  const keyOf = (s) => ({
+    total: s?.grand_total || 0,
+    boxes: s?.total_boxes || 0,
+    sqft:  parseFloat(s?.total_area_sqft || 0),
+    rooms: (s?.rooms || []).length,
+  });
+  const fmtMoney = (n) => n > 0 ? '₹' + Math.round(n).toLocaleString('en-IN') : '—';
+  const fmtDate  = (d) => d ? new Date(d).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+
+  // Build timeline: snapshots (v1..vN) + current live version at the end
+  const entries = (revs || []).map(r => ({
+    v: r.version, by: r.changed_by_name, reason: r.change_reason,
+    at: r.created_at, k: keyOf(r.snapshot), isLive: false,
+  }));
+  entries.push({
+    v: live?.version || (entries.length + 1), by: '', reason: '',
+    at: live?.updated_at, k: keyOf(live), isLive: true,
+  });
+
+  const rows = entries.map((e, i) => {
+    const prev = i > 0 ? entries[i-1] : null;
+    const diffs = [];
+    if (prev) {
+      if (e.k.total !== prev.k.total) diffs.push(`Total ${fmtMoney(prev.k.total)} → <strong>${fmtMoney(e.k.total)}</strong>`);
+      if (e.k.boxes !== prev.k.boxes) diffs.push(`Boxes ${prev.k.boxes} → <strong>${e.k.boxes}</strong>`);
+      if (e.k.sqft.toFixed(1) !== prev.k.sqft.toFixed(1)) diffs.push(`Area ${prev.k.sqft.toFixed(1)} → <strong>${e.k.sqft.toFixed(1)}</strong> sqft`);
+      if (e.k.rooms !== prev.k.rooms) diffs.push(`Rooms ${prev.k.rooms} → <strong>${e.k.rooms}</strong>`);
+    }
+    return `
+    <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:${e.isLive?'rgba(34,197,94,0.12)':'var(--bg2)'};border:1.5px solid ${e.isLive?'var(--green)':'var(--border)'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:${e.isLive?'var(--green)':'var(--text2)'}">v${e.v}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700">${e.isLive ? 'Current version' : 'Snapshot before edit'}
+          <span style="font-weight:400;color:var(--text3);font-size:11px">· ${fmtDate(e.at)}</span></div>
+        ${e.by ? `<div style="font-size:11px;color:var(--text3)">Edited by ${e.by}</div>` : ''}
+        ${e.reason ? `<div style="font-size:11px;color:var(--gold);margin-top:2px">"${e.reason}"</div>` : ''}
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">
+          ${fmtMoney(e.k.total)} · ${e.k.boxes} boxes · ${e.k.sqft.toFixed(1)} sqft · ${e.k.rooms} rooms
+        </div>
+        ${diffs.length ? `<div style="font-size:11px;color:#60A5FA;margin-top:3px">Δ ${diffs.join(' · ')}</div>`
+          : (prev ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">No changes to totals</div>' : '')}
+      </div>
+    </div>`;
+  }).join('');
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <h3 style="font-size:15px;font-weight:900;margin-bottom:2px">📜 Revision History</h3>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">${live?.tq_no || ''} · ${entries.length} version${entries.length>1?'s':''}</div>
+    ${entries.length > 1 ? rows : `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12px">No edits yet — this quotation is still on its first version.</div>`}
+    <button class="btn-secondary full-width" style="margin-top:12px" onclick="VW_TILES.openTileQuote(${id})">← Back to Quote</button>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay')?.classList.add('open');
 }
 
 async function tqSaveQuote() { return tqSubmitForApproval(); }
@@ -6630,6 +6704,9 @@ async function openTileQuote(id) {
     <div style="background:var(--bg2);border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:var(--text3);text-align:center">
       🔒 Editing locked — advance collected
     </div>`}
+    <button onclick="VW_TILES.tqShowRevisions(${id})" style="width:100%;padding:10px;border-radius:10px;background:var(--bg2);border:1px solid var(--border);color:var(--text2);font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">
+      📜 Revision History${q.version > 1 ? ` (v${q.version})` : ''}
+    </button>
     <button class="btn-secondary full-width" onclick="closeSheet()">Close</button>`;
 
   sheet.classList.add('open');

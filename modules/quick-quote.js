@@ -1649,7 +1649,7 @@ window.VW_TILES = {
   tqConvertToInvoice,
   tqEditQuote, tqConfirmEditQuote, _tqBuildApprovalBOM,
   tqApprove, tqReject, tqConfirmReject,
-  tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt,
+  tqCollectAdvance, tqConfirmAdvance, tqPrintAdvanceReceipt, tqReprintReceipt, tqShowRevisions,
   _tqCheckMaterialStock, _tqGetMaterialsList, _tqCreateMaterialIntents, _tqRenderMaterialsCard,
   openQuickQuote, _qqLoadPriceHistory, _qqEnsureCustomer, _qqSaveEstimate, _qqConvertToFullTQ, _qqBuildPayload,
   qqEditExisting, qqConvertExisting, qqDeleteEstimate, _qqScreen, _qqPhoneInput, _qqSearchPhone, _qqClearCustomer, _qqFromCustomer,
