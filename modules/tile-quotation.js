@@ -4879,7 +4879,29 @@ function tqSharePDF() {
 }
 
 // ───── PRINT ────────────────────────────────────────────────
-function tqPrint() {
+// Fetch tile images (image_url/photos) + name/brand for all selected tiles in a quote state.
+// Returns { productId: { img, name, brand } } — attached to state as _tileImgMap for _buildPrintHTML.
+async function _tqFetchTileImages(st) {
+  const ids = new Set();
+  Object.values(st.tileSelections || {}).forEach(sel => { if (sel?.selectedTileId) ids.add(sel.selectedTileId); });
+  // design-step tiles too (multi-tile wall designs)
+  Object.values(st.design_tiles || {}).forEach(arr => (arr||[]).forEach(t => { if (t?.id) ids.add(t.id); }));
+  if (!ids.size) return {};
+  try {
+    const { data } = await VW_DB.client.from('products')
+      .select('id,name,brand,image_url,photos').in('id', [...ids]);
+    const map = {};
+    (data||[]).forEach(p => {
+      map[p.id] = {
+        img: p.image_url || p.photos?.[0]?.url || p.photos?.[0] || '',
+        name: p.name, brand: p.brand,
+      };
+    });
+    return map;
+  } catch(e) { return {}; }
+}
+
+async function tqPrint() {
   // Print/Share only allowed after management approval
   const savedId = _tqState._savedQuoteId;
   const approvalStatus = _tqState._approvalStatus;
@@ -4894,6 +4916,7 @@ function tqPrint() {
     return;
   }
 
+  _tqState._tileImgMap = await _tqFetchTileImages(_tqState);
   const html = _buildPrintHTML();
   const win = window.open('','_blank');
   if (!win) { showToast('Allow popups to print','warn'); return; }
@@ -4907,8 +4930,9 @@ function _buildPrintHTML(overrideState) {
   const st = overrideState || _tqState;
   const slots = _getTileSlots ? _getTileSlots() : [];
 
-  // Build per-slot BOM rows
-  const slotRows = slots.map(slot => {
+  // Build ONE SECTION PER ROOM — tile image, name, brand, size, boxes, rate, amount
+  const _imgs = (st._tileImgMap || {});   // productId → {img, name, brand} fetched by _tqFetchTileImages
+  const roomSections = slots.map(slot => {
     const sel = (st.tileSelections||{})[slot.id] || {};
     const sz = sel.size;
     const qp = (st.quotedPrices||{})[slot.id] || {};
@@ -4921,16 +4945,25 @@ function _buildPrintHTML(overrideState) {
     const lineTotal = qp.pricePerBox>0 ? qp.pricePerBox*boxes : (qp.pricePerSqft>0 ? Math.round(qp.pricePerSqft*roomSqft) : 0);
     const priceStr = qp.pricePerBox>0 ? '₹'+qp.pricePerBox.toLocaleString('en-IN')+'/box' : (qp.pricePerSqft>0 ? '₹'+qp.pricePerSqft+'/sqft' : 'As approved');
     const label = slot.label || slot.room?.label || slot.room?.type || 'Room';
-    // Tile image if available
-    const imgUrl = sel.photos?.[0]?.url || sel.imageUrl || '';
-    const imgHtml = imgUrl ? '<img src="'+imgUrl+'" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1px solid #ddd;margin-right:6px;vertical-align:middle">' : '';
-    return '<tr><td>'+label+'<br><small style="color:#666">'+sz.mm+'mm</small></td>' +
-      '<td>'+imgHtml+(sel.tile_name||'—')+'<br><small style="color:#666">'+(sel.brand||'')+'</small></td>' +
-      '<td style="text-align:center">'+roomSqft.toFixed(1)+'</td>' +
-      '<td style="text-align:center">'+boxes+'</td>' +
-      '<td style="text-align:right">'+priceStr+'</td>' +
-      '<td style="text-align:right;font-weight:700">'+(lineTotal>0?'₹'+lineTotal.toLocaleString('en-IN'):'—')+'</td></tr>';
+    const pInfo = _imgs[sel.selectedTileId] || {};
+    const tileName  = sel.tile_name || sel.name || pInfo.name || sz.mm+'mm tile';
+    const tileBrand = sel.brand || pInfo.brand || '';
+    const imgUrl = pInfo.img || sel.photos?.[0]?.url || sel.imageUrl || '';
+    const imgHtml = imgUrl
+      ? '<img src="'+imgUrl+'" style="width:76px;height:76px;object-fit:cover;border-radius:6px;border:1px solid #ddd">'
+      : '<div style="width:76px;height:76px;border-radius:6px;border:1px solid #ddd;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:26px">⬜</div>';
+    return '<div class="room-sec">' +
+      '<div class="room-hd">'+label+' <span style="font-weight:400;color:#666;font-size:11px">· '+roomSqft.toFixed(1)+' sqft · '+sz.mm+'mm</span></div>' +
+      '<div style="display:flex;gap:10px;align-items:center;padding:8px 0">' + imgHtml +
+        '<div style="flex:1">' +
+          '<div style="font-weight:700;font-size:13px">'+tileName+'</div>' +
+          (tileBrand?'<div style="font-size:11px;color:#666">'+tileBrand+'</div>':'') +
+          '<div style="font-size:11px;color:#666;margin-top:3px">'+boxes+' boxes · '+priceStr+'</div>' +
+        '</div>' +
+        '<div style="text-align:right;font-weight:800;font-size:14px">'+(lineTotal>0?'₹'+lineTotal.toLocaleString('en-IN'):'—')+'</div>' +
+      '</div></div>';
   }).filter(Boolean).join('');
+  const slotRows = roomSections; // kept name for the fallback check below
 
   // Totals
   const totalSqft = _tqTotalSqft ? _tqTotalSqft() : 0;
@@ -5042,24 +5075,11 @@ function _buildPrintHTML(overrideState) {
   </div>
 </div>
 
-<!-- TILE BOM -->
-<h3>📋 Tile Bill of Materials</h3>
-<table>
-  <thead>
-    <tr>
-      <th>Room / Area</th>
-      <th>Tile</th>
-      <th style="text-align:center">Sqft</th>
-      <th style="text-align:center">Boxes</th>
-      <th style="text-align:right">Rate</th>
-      <th style="text-align:right">Amount</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${slotRows || '<tr><td colspan="6" style="text-align:center;color:#999">Price to be set during approval</td></tr>'}
-    ${tileTotal>0?'<tr class="total-row"><td colspan="4"><strong>Tiles Subtotal</strong></td><td></td><td style="text-align:right">₹'+tileTotal.toLocaleString('en-IN')+'</td></tr>':''}
-  </tbody>
-</table>
+<!-- TILE BOM — one section per room with tile image -->
+<h3>📋 Room-wise Tile Selection</h3>
+<style>.room-sec{border:1px solid #e5e5e5;border-radius:8px;padding:8px 12px;margin-bottom:8px;page-break-inside:avoid}.room-hd{font-weight:800;font-size:13px;border-bottom:1px solid #eee;padding-bottom:5px}</style>
+${slotRows || '<div style="text-align:center;color:#999;padding:14px;border:1px dashed #ddd;border-radius:8px">Price to be set during approval</div>'}
+${tileTotal>0?'<div style="text-align:right;font-size:13px;padding:6px 4px"><strong>Tiles Subtotal: ₹'+tileTotal.toLocaleString('en-IN')+'</strong></div>':''}
 
 <!-- EXTRAS -->
 ${extraProducts.length?`
@@ -6641,6 +6661,7 @@ async function tqPrintFromId(id) {
     tqNo: q.tq_no,
     _approvalStatus: q.approval_status,
   };
+  printState._tileImgMap = await _tqFetchTileImages({ tileSelections: printState.tileSelections, design_tiles: q.design_tiles || {} });
 
   // Override _tqState temporarily so _getTileSlots and _tqTotalSqft work
   const _prevState = _tqState;
