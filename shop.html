@@ -424,7 +424,7 @@
 
   <!-- TRUST 2 -->
   <div class="trust2">
-    <div class="trust2-item"><div class="trust2-icon">⚡</div><div class="trust2-lbl">60-Min Delivery</div></div>
+    <div class="trust2-item"><div class="trust2-icon">⚡</div><div class="trust2-lbl">90-Min Delivery</div></div>
     <div class="trust2-item"><div class="trust2-icon">✅</div><div class="trust2-lbl">100% Genuine</div></div>
     <div class="trust2-item"><div class="trust2-icon">💵</div><div class="trust2-lbl">Pay on Delivery</div></div>
     <div class="trust2-item"><div class="trust2-icon">📦</div><div class="trust2-lbl">No Min Order</div></div>
@@ -750,6 +750,10 @@ async function verifyCustomerOTP() {
     if (res.ok && data.access_token) {
       localStorage.setItem('sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token',
         JSON.stringify({ access_token: data.access_token, user: data.user }));
+      // Persist cart so index.html can restore it
+      if (Object.keys(cart).length > 0) {
+        localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
+      }
       closeSheet();
       toast('Welcome to V Wholesale! 🎉');
       setTimeout(() => window.location.replace('./index.html'), 1200);
@@ -764,6 +768,9 @@ async function verifyCustomerOTP() {
       if (emailRes.ok && emailData.access_token) {
         localStorage.setItem('sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token',
           JSON.stringify({ access_token: emailData.access_token, user: emailData.user }));
+        if (Object.keys(cart).length > 0) {
+          localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
+        }
         closeSheet();
         toast('Welcome to V Wholesale! 🎉');
         setTimeout(() => window.location.replace('./index.html'), 1200);

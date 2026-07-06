@@ -926,6 +926,19 @@ async function renderShopPage() {
       _shopCart = {};
       (cart.items || []).forEach(i => { _shopCart[i.product_id] = i.qty; });
     }
+    // Restore any cart saved from shop.html before login redirect
+    try {
+      const pending = localStorage.getItem('vw_pending_cart');
+      if (pending) {
+        const pendingCart = JSON.parse(pending);
+        Object.entries(pendingCart).forEach(([id, qty]) => {
+          _shopCart[id] = (_shopCart[id] || 0) + qty;
+        });
+        localStorage.removeItem('vw_pending_cart');
+        const items = Object.entries(_shopCart).map(([id, qty]) => ({ product_id: parseInt(id), qty }));
+        VW_DB.client.from('carts').upsert({ profile_id: prof.id, items, updated_at: new Date().toISOString() }, { onConflict: 'profile_id' }).catch(() => {});
+      }
+    } catch(e) {}
   }
 
   const cartCount = Object.values(_shopCart).reduce((a,b) => a+b, 0);
@@ -938,9 +951,9 @@ async function renderShopPage() {
       <div class="hr-topbar">
         <button class="hr-hamburger">☰</button>
 
-        <!-- 60 MINS BADGE -->
+        <!-- 90 MINS BADGE -->
         <div class="hr-delivery-badge">
-          <span>60</span>
+          <span>90</span>
           <span style="font-size:8px;font-weight:700">Mins</span>
         </div>
 
@@ -1886,6 +1899,10 @@ async function placeOrder() {
   if (!slot) { showToast('Please select a delivery slot', 'warn'); return; }
   if (!products.length) { showToast('Cart is empty', 'warn'); return; }
 
+  // Calculate delivery charge: free within Vijayawada (pickup always free)
+  const deliveryCharge = deliveryType === 'pickup' ? 0 : 0; // Free delivery in Vijayawada
+  const orderTotal = subtotal + deliveryCharge;
+
   const prof = VW_AUTH.getCurrentProfile();
   const btn = document.querySelector('[onclick="VW_SHOP.placeOrder()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Placing order...'; }
@@ -1901,7 +1918,7 @@ async function placeOrder() {
             'apikey': VW_DB.client.supabaseKey },
           body: JSON.stringify({
             order_id: `TEMP_${Date.now()}`,
-            order_amount: subtotal,
+            order_amount: orderTotal,
             customer_name: prof?.name || '',
             customer_phone: prof?.phone || '',
           }),
@@ -1916,12 +1933,12 @@ async function placeOrder() {
         document.head.appendChild(cfScript);
         await new Promise(res => { cfScript.onload = res; });
       }
-      const cashfreeObj = window.Cashfree({ mode: 'sandbox' });
+      const cashfreeObj = window.Cashfree({ mode: 'production' });
       cashfreeObj.checkout({
         paymentSessionId: cfData.payment_session_id,
         returnUrl: window.location.href + '?cf_order=' + cfData.cf_order_id,
       });
-      if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${subtotal.toLocaleString('en-IN')}`; }
+      if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${orderTotal.toLocaleString('en-IN')}`; }
       return;
     }
     // For wallet payment — check balance first
@@ -1929,14 +1946,14 @@ async function placeOrder() {
       const { data: wallet } = await VW_DB.client.from('customer_wallets')
         .select('balance').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
       const bal = parseFloat(wallet?.balance || 0);
-      if (bal < subtotal) {
-        showToast(`Insufficient wallet balance. Available: ₹${bal.toLocaleString('en-IN')} · Required: ₹${subtotal.toLocaleString('en-IN')}`, 'warn');
-        if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${subtotal.toLocaleString('en-IN')}`; }
+      if (bal < orderTotal) {
+        showToast(`Insufficient wallet balance. Available: ₹${bal.toLocaleString('en-IN')} · Required: ₹${orderTotal.toLocaleString('en-IN')}`, 'warn');
+        if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${orderTotal.toLocaleString('en-IN')}`; }
         return;
       }
     }
 
-    // Create order
+    // Create order — placed_at stored explicitly for My Orders sort reliability
     const { data: order, error } = await VW_DB.client.from('orders').insert({
       profile_id: prof?.id || null,
       customer_name: prof?.name || '',
@@ -1944,13 +1961,14 @@ async function placeOrder() {
       delivery_address: deliveryType === 'delivery' ? address : { label: 'Store Pickup', address_line1: '1-1-153, NH 65, Bhavanipuram, Vijayawada' },
       items: products,
       subtotal: subtotal,
-      delivery_charge: 0,
-      total: subtotal,
+      delivery_charge: deliveryCharge,
+      total: orderTotal,
       payment_method: payMethod,
-      payment_status: payMethod === 'cod' ? 'pending' : 'pending',
+      payment_status: 'pending',
       delivery_type: deliveryType,
       delivery_slot: slot?.label,
       status: 'placed',
+      placed_at: new Date().toISOString(),
     }).select('id,order_no').single();
 
     if (error) throw new Error(error.message);
@@ -1960,16 +1978,16 @@ async function placeOrder() {
       const { data: wallet } = await VW_DB.client.from('customer_wallets')
         .select('id,balance,total_spent').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
       if (wallet) {
-        const newBal = parseFloat(wallet.balance) - subtotal;
+        const newBal = parseFloat(wallet.balance) - orderTotal;
         await VW_DB.client.from('customer_wallets').update({
           balance: newBal,
-          total_spent: parseFloat(wallet.total_spent || 0) + subtotal,
+          total_spent: parseFloat(wallet.total_spent || 0) + orderTotal,
           last_activity_at: new Date().toISOString(),
         }).eq('id', wallet.id);
         await VW_DB.client.from('wallet_transactions').insert({
           wallet_id: wallet.id,
           type: 'purchase',
-          amount: subtotal,
+          amount: orderTotal,
           balance_after: newBal,
           description: `Order ${order.order_no}`,
           reference_type: 'order',
@@ -1989,22 +2007,25 @@ async function placeOrder() {
     const loyaltyCfg = await VW_DB.getSetting('loyalty_config', { earnRate: 1, pointValue: 1 });
     const pointsEarned = Math.floor((subtotal - (_checkoutState.promoDiscount||0)) / 100 * (loyaltyCfg.earnRate || 1));
     if (pointsEarned > 0 && prof?.phone) {
-      await VW_DB.client.from('customers')
-        .update({ loyalty_points: VW_DB.client.rpc('increment_loyalty', { p_phone: prof.phone, p_points: pointsEarned }) })
-        .eq('phone', prof.phone).catch(() => {});
+      // Fetch current points then increment directly (rpc-as-value doesn't work in Supabase JS)
+      const { data: _custRow } = await VW_DB.client.from('customers')
+        .select('id,loyalty_points').eq('phone', prof.phone).single().catch(() => ({ data: null }));
+      if (_custRow) {
+        await VW_DB.client.from('customers')
+          .update({ loyalty_points: (_custRow.loyalty_points || 0) + pointsEarned })
+          .eq('id', _custRow.id).catch(() => {});
+      }
     }
 
     // Increment promo code used_count if one was applied
     if (_checkoutState.promoCode) {
-      await VW_DB.client.from('promo_codes')
-        .update({ used_count: VW_DB.client.rpc('increment_count', {}) })
-        .eq('code', _checkoutState.promoCode).catch(async () => {
-          // Fallback: manual increment
-          const { data: pc } = await VW_DB.client.from('promo_codes')
-            .select('used_count').eq('code', _checkoutState.promoCode).single().catch(() => ({ data: null }));
-          if (pc) await VW_DB.client.from('promo_codes')
-            .update({ used_count: (pc.used_count || 0) + 1 }).eq('code', _checkoutState.promoCode).catch(() => {});
-        });
+      const { data: _pc } = await VW_DB.client.from('promo_codes')
+        .select('used_count').eq('code', _checkoutState.promoCode).single().catch(() => ({ data: null }));
+      if (_pc) {
+        await VW_DB.client.from('promo_codes')
+          .update({ used_count: (_pc.used_count || 0) + 1 })
+          .eq('code', _checkoutState.promoCode).catch(() => {});
+      }
       _checkoutState.promoCode = null;
       _checkoutState.promoDiscount = 0;
     }
@@ -2092,13 +2113,6 @@ async function renderMyOrdersPage() {
     return `
     <div style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div>
-          <div style="font-size:13px;font-weight:800">${o.order_no}</div>
-          <div style="font-size:11px;color:var(--text3)">${new Date(o.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-        </div>
-        <span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;background:rgba(245,200,66,0.1);color:${sc.color}">${sc.label}</span>
-      </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <div>
           <div style="font-size:13px;font-weight:800">${o.order_no}</div>
           <div style="font-size:11px;color:var(--text3)">${new Date(o.placed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
@@ -3923,11 +3937,13 @@ async function markReturnPickedUp(id) {
     picked_up_at: new Date().toISOString(),
   }).eq('id', id);
 
-  // Refund to wallet
+  // Refund based on payment method
   if (ret?.order_id) {
     const { data: order } = await VW_DB.client.from('orders')
-      .select('total,payment_method').eq('id', ret.order_id).single().catch(() => ({ data: null }));
+      .select('id,total,payment_method,order_no').eq('id', ret.order_id).single().catch(() => ({ data: null }));
+
     if (order?.payment_method === 'wallet' && ret?.profile_id) {
+      // Wallet payment — auto-refund to wallet
       const { data: wallet } = await VW_DB.client.from('customer_wallets')
         .select('id,balance').eq('profile_id', ret.profile_id).single().catch(() => ({ data: null }));
       if (wallet) {
@@ -3938,13 +3954,25 @@ async function markReturnPickedUp(id) {
           type: 'refund',
           amount: order.total,
           balance_after: newBal,
-          description: 'Return refund',
+          description: `Return refund — ${order.order_no || ret.order_id}`,
+          reference_type: 'customer_return',
+          reference_id: id,
         });
       }
+      showToast(`Return picked up — ₹${parseFloat(order.total).toLocaleString('en-IN')} refunded to customer wallet`, 'success');
+    } else if (order?.payment_method === 'cod') {
+      // COD — cash refund at store or delivery agent
+      showToast('Return picked up — COD order: process cash refund manually at store counter', 'warn');
+    } else if (order?.payment_method === 'online') {
+      // Online payment — needs manual bank transfer
+      showToast('Return picked up — online payment: initiate bank transfer refund via Cashfree dashboard', 'warn');
+    } else {
+      showToast('Return picked up — verify payment method and process refund manually', 'warn');
     }
+  } else {
+    showToast('Return picked up', 'success');
   }
 
-  showToast('Return picked up — refund processed', 'success');
   navigateTo('staff_returns');
 }
 
