@@ -675,14 +675,23 @@ async function showAuthScreen(mode) {
       const btn = document.querySelector('[onclick="handleStaffLogin()"]');
       if (btn) { btn.disabled = true; btn.textContent = 'Logging in...'; }
       try {
-        const { data, error } = await VW_DB.client.from('profiles')
-          .select('id,name,role,status,pin')
-          .eq('phone', phone).single();
-        if (error || !data) { showToast('Phone not found', 'error'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
-        if (data.pin !== pin) { showToast('Incorrect PIN', 'error'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
-        if (data.status === 'pending') { showToast('Account pending approval', 'warn'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
-        // Sign in with Supabase
-        await VW_DB.client.auth.signInWithPassword({ email: phone + '@vwholesale.in', password: pin });
+        // Authenticate via Supabase Auth (email = phone@vwholesale.in, password = PIN)
+        const { data: authData, error: authError } = await VW_DB.client.auth.signInWithPassword({
+          email: phone.replace(/\D/g,'').slice(-10) + '@vwholesale.in',
+          password: pin
+        });
+        if (authError) {
+          showToast('Incorrect phone or PIN', 'error');
+          if(btn){btn.disabled=false;btn.textContent='Log In →';}
+          return;
+        }
+        // Load profile after successful auth
+        const { data: profile, error: profileError } = await VW_DB.client
+          .from('profiles')
+          .select('id,name,role,status')
+          .eq('phone', phone.replace(/\D/g,'').slice(-10)).single();
+        if (profileError || !profile) { showToast('Profile not found. Contact admin.', 'error'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
+        if (profile.status === 'pending') { showToast('Account pending approval', 'warn'); if(btn){btn.disabled=false;btn.textContent='Log In →';} return; }
         overlay.remove();
         await routeByRole();
       } catch(e) {
