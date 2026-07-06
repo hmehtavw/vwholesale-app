@@ -1505,11 +1505,13 @@ function loadWishlist() {
 }
 
 // ── ANALYTICS ──
+// Events are always pushed to dataLayer, so anything fired before GA4
+// finishes loading is buffered and delivered once gtag initialises.
+window.dataLayer = window.dataLayer || [];
 function trackEvent(eventName, params = {}) {
   try {
-    if (typeof gtag !== 'undefined') {
-      gtag('event', eventName, params);
-    }
+    if (typeof window.gtag === 'function') window.gtag('event', eventName, params);
+    else window.dataLayer.push({ event: eventName, ...params });
   } catch(e) {}
 }
 
@@ -1527,22 +1529,26 @@ function trackCategoryView(category) {
   trackEvent('view_item_list', { item_list_name: category || 'All Products' });
 }
 
-// ── GA4 INIT (will only fire when you add your Measurement ID) ──
-// Replace G-XXXXXXXXXX with your actual GA4 Measurement ID
-// Get it from: analytics.google.com → Admin → Data Streams → Web → Measurement ID
-const GA4_ID = 'G-XXXXXXXXXX'; // TODO: Replace with your Measurement ID
-
-if (GA4_ID !== 'G-XXXXXXXXXX') {
+// ── GA4 INIT — Measurement ID is read from the settings table (key:
+// 'ga4_measurement_id'), so it can be activated from the staff admin
+// panel with zero code deploys. Nothing loads while the ID is empty:
+// no script requests, no console noise. Early events buffer in dataLayer.
+(async function initGA4() {
+  let gaId = '';
+  try {
+    const rows = await sbFetch('settings', '?key=eq.ga4_measurement_id&select=value');
+    gaId = (Array.isArray(rows) && rows[0]) ? String(rows[0].value || '').replace(/"/g,'').trim() : '';
+  } catch(e) {}
+  if (!/^G-[A-Z0-9]{6,}$/i.test(gaId)) return; // no valid ID configured yet
   const gaScript = document.createElement('script');
   gaScript.async = true;
-  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`;
+  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
   document.head.appendChild(gaScript);
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-  gtag('config', GA4_ID, { page_title: 'V Wholesale Shop', page_location: window.location.href });
+  function gtag(){ window.dataLayer.push(arguments); }
   window.gtag = gtag;
-}
+  gtag('js', new Date());
+  gtag('config', gaId, { page_title: 'V Wholesale Shop', page_location: window.location.href });
+})();
 
 // ── INIT ──
 loadWishlist();
