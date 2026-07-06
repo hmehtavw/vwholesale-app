@@ -628,6 +628,11 @@ async function sbFetch(table, params = '') {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
   });
+  if (!r.ok) {
+    const err = await r.text();
+    console.error('sbFetch error:', r.status, err);
+    throw new Error('API error ' + r.status);
+  }
   return r.json();
 }
 
@@ -1009,15 +1014,22 @@ function renderCatGrid() {
 // ── LOAD DEALS ──
 async function loadDeals() {
   try {
-    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&stock=gt.0&order=mrp.desc&limit=14');
+    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&limit=20');
     if (!Array.isArray(products) || !products.length) {
-      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon</div>';
+      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon — visit us at NH65, Bhavanipuram</div>';
       return;
     }
+    // Sort by discount % descending for best deals
+    products.sort((a,b) => {
+      const da = a.mrp > (a.vwp||a.price||0) ? (a.mrp-(a.vwp||a.price||0))/a.mrp : 0;
+      const db = b.mrp > (b.vwp||b.price||0) ? (b.mrp-(b.vwp||b.price||0))/b.mrp : 0;
+      return db - da;
+    });
     _pdpProducts = [...products];
     renderDeals(products);
   } catch(e) {
-    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Unable to load</div>';
+    console.error('loadDeals error:', e);
+    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">📞 Call us at 8712697930 · Catalogue available in-store</div>';
   }
 }
 
@@ -1227,7 +1239,7 @@ async function showCategory(catKey, searchTerm) {
   trackCategoryView(catKey || 'All');
 
   try {
-    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&order=stock.desc&limit=40';
+    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&limit=40';
     if (catKey) url += `&category=eq.${encodeURIComponent(catKey)}`;
     if (searchTerm) url += `&name=ilike.*${encodeURIComponent(searchTerm)}*`;
 
