@@ -7137,12 +7137,40 @@ async function renderQuickApprovalPage() {
     return '<div class="empty-msg">Quick approval is for management only</div>';
   }
 
-  const { data: pending } = await VW_DB.client
+  // Role gate — only approval-chain roles may use Quick Approve.
+  // Executives and other staff must not see one-tap approve actions.
+  const _qaProfile = VW_AUTH.getCurrentProfile();
+  const _qaRole = _qaProfile?.role || '';
+  const _qaApproverRoles = ['tl','sr_executive','floor_manager','store_manager','management','admin'];
+  if (!_qaApproverRoles.includes(_qaRole)) {
+    return `
+    <div class="module-header"><h2>⚡ Quick Approve</h2></div>
+    <div style="text-align:center;padding:40px">
+      <div style="font-size:48px">🔒</div>
+      <div style="font-size:16px;font-weight:700;margin-top:12px">Not authorized</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:4px">Quotation approvals are handled by TL / Sr Executive and above.<br>Your submitted quotes appear in Tile Quotations.</div>
+      <button class="btn-secondary" style="margin-top:16px" onclick="navigateTo('tile_quotes')">← Tile Quotations</button>
+    </div>`;
+  }
+
+  const { data: allPending } = await VW_DB.client
     .from('tile_quotations')
-    .select('id,tq_no,customer_name,customer_phone,site_address,total_area_sqft,rooms,approval_status,created_by,created_at,grand_total')
+    .select('id,tq_no,customer_name,customer_phone,site_address,total_area_sqft,rooms,approval_status,approval_log,created_by,created_at,grand_total')
     .eq('approval_status', 'pending_approval')
     .order('created_at', { ascending: true })
     .limit(20);
+
+  // Level filter — non-admin/management approvers only see quotes pending at THEIR level,
+  // so the escalation chain is respected (TL can't jump quotes waiting on Store Manager).
+  const _qaIsSenior = ['admin','management'].includes(_qaRole);
+  const pending = (allPending || []).filter(q => {
+    if (_qaIsSenior) return true;
+    const log = q.approval_log || [];
+    const last = log[log.length - 1];
+    if (!last || last.status !== 'pending') return false;
+    const allowed = (window.TQ_LEVEL_ROLES || {})[last.level] || [last.level];
+    return allowed.includes(_qaRole);
+  });
 
   if (!pending?.length) {
     return `
@@ -7217,6 +7245,10 @@ async function renderQuickApprovalPage() {
 }
 
 async function quickApprove(quoteId, tqNo, sqft) {
+  const _role = VW_AUTH.getCurrentProfile()?.role || '';
+  if (!['tl','sr_executive','floor_manager','store_manager','management','admin'].includes(_role)) {
+    showToast('Not authorized to approve quotations', 'error'); return;
+  }
   const priceInput = document.getElementById(`qa-price-${quoteId}`);
   const price = parseFloat(priceInput?.value);
 
@@ -7249,6 +7281,10 @@ async function quickApprove(quoteId, tqNo, sqft) {
 }
 
 async function quickReject(quoteId) {
+  const _role = VW_AUTH.getCurrentProfile()?.role || '';
+  if (!['tl','sr_executive','floor_manager','store_manager','management','admin'].includes(_role)) {
+    showToast('Not authorized to reject quotations', 'error'); return;
+  }
   const reason = prompt('Reason for rejection:');
   if (!reason) return;
   await VW_TILES.tqReject?.() || await VW_DB.client.from('tile_quotations')
