@@ -1158,7 +1158,7 @@ async function loadShopProducts(category, search) {
     container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px">Loading...</div>';
 
     let query = VW_DB.client.from('products')
-      .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,images,photos')
+      .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,image_url,photos')
       .eq('is_active', true).order('stock', { ascending: false }).limit(40);
 
     if (category) query = query.eq('category', category);
@@ -1184,7 +1184,7 @@ async function loadShopProducts(category, search) {
   if (!dealsEl) return;
 
   const { data: products } = await VW_DB.client.from('products')
-    .select('id,name,brand,category,price,vwp,mrp,stock,unit,images,photos')
+    .select('id,name,brand,category,price,vwp,mrp,stock,unit,image_url,photos')
     .eq('is_active', true).gt('stock', 0)
     .order('mrp', { ascending: false }).limit(12);
 
@@ -1199,7 +1199,7 @@ async function loadShopProducts(category, search) {
     const disc   = mrp > price && price > 0 ? Math.round((mrp - price) / mrp * 100) : 0;
     const qty    = _shopCart[p.id] || 0;
     const oos    = !p.stock || p.stock <= 0;
-    const img    = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+    const img    = p.image_url || p.photos?.[0]?.url || p.photos?.[0] || null;
     const cat    = SHOP_CATEGORIES.find(c => c.key === p.category);
     const icon   = cat?.icon || '📦';
     const color  = cat?.color || '#6B7280';
@@ -1243,7 +1243,7 @@ function homeRunProductCard(p) {
   const disc   = mrp > price && price > 0 ? Math.round((mrp - price) / mrp * 100) : 0;
   const qty    = _shopCart[p.id] || 0;
   const oos    = !p.stock || p.stock <= 0;
-  const img    = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+  const img    = p.image_url || p.photos?.[0]?.url || p.photos?.[0] || null;
   const cat    = SHOP_CATEGORIES.find(c => c.key === p.category);
   const icon   = cat?.icon || '📦';
   const color  = cat?.color || '#6B7280';
@@ -1572,7 +1572,7 @@ async function renderCheckoutPage() {
 
   // Load products
   const { data: products } = await VW_DB.client.from('products')
-    .select('id,name,brand,price,vwp,mrp,unit,stock,images').in('id', productIds);
+    .select('id,name,brand,price,vwp,mrp,unit,stock,image_url,photos').in('id', productIds);
   const prodMap = {};
   (products||[]).forEach(p => prodMap[p.id] = p);
 
@@ -2693,7 +2693,7 @@ async function renderContractorProductGrid(category, discountPct) {
   container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Loading...</div>';
 
   const { data: products } = await VW_DB.client.from('products')
-    .select('id,name,brand,category,price,vwp,mrp,unit,stock,images,photos')
+    .select('id,name,brand,category,price,vwp,mrp,unit,stock,image_url,photos')
     .eq('category', category)
     .eq('is_active', true)
     .gt('stock', 0)
@@ -2718,7 +2718,7 @@ async function renderContractorProductGrid(category, discountPct) {
     ${products.map(p => {
       const vwp = p.vwp || p.price || 0;
       const netPrice = getNetPrice(vwp, p.category);
-      const img = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+      const img = p.image_url || p.photos?.[0]?.url || p.photos?.[0] || null;
       return `
       <div style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border)">
         <div style="height:90px;background:var(--bg3);display:flex;align-items:center;justify-content:center">
@@ -3301,7 +3301,7 @@ async function renderOffersPage() {
   const offers = await VW_DB.getSetting('active_offers', []);
   // Fetch featured products (most discounted)
   const { data: featured } = await VW_DB.client.from('products')
-    .select('id,name,brand,category,price,vwp,mrp,unit,images,photos')
+    .select('id,name,brand,category,price,vwp,mrp,unit,image_url,photos')
     .eq('is_active', true)
     .gt('mrp', 0)
     .gt('stock', 0)
@@ -3378,7 +3378,7 @@ async function renderOffersPage() {
     ${discounted.map(p => {
       const price = p.vwp || p.price || 0;
       const disc = Math.round((p.mrp - price) / p.mrp * 100);
-      const img = p.images?.[0] || p.photos?.[0]?.url || p.photos?.[0] || null;
+      const img = p.image_url || p.photos?.[0]?.url || p.photos?.[0] || null;
       return `
       <div onclick="navigateTo('shop')" style="background:var(--bg2);border-radius:12px;overflow:hidden;border:1px solid var(--border);cursor:pointer">
         <div style="position:relative">
@@ -3665,7 +3665,7 @@ window.VW_SHOP.openBarcodeScanner = openBarcodeScanner;
 async function renderTileMoodBoard() {
   const { data: tiles } = await VW_DB.client
     .from('products')
-    .select('id,name,brand,category,subcategory,price,vwp,mrp,unit,images,photos')
+    .select('id,name,brand,category,subcategory,price,vwp,mrp,unit,image_url,photos')
     .eq('category', 'Tiles')
     .eq('is_active', true)
     .gt('stock', 0)
@@ -3742,7 +3742,7 @@ async function generateMoodBoard() {
 
   // Fetch matching tiles
   const { data: tiles } = await VW_DB.client.from('products')
-    .select('id,name,brand,subcategory,price,vwp,mrp,unit,images,photos')
+    .select('id,name,brand,subcategory,price,vwp,mrp,unit,image_url,photos')
     .eq('category','Tiles').eq('is_active',true).gt('stock',0)
     .gte('vwp', minB).lte('vwp', maxB <= 9999 ? maxB : 99999)
     .limit(20);
@@ -3792,7 +3792,7 @@ Return ONLY valid JSON array with structure:
         <div style="font-size:14px;font-weight:800;color:var(--gold);margin-bottom:6px">Look ${i+1}: ${s.name}</div>
         <div style="display:flex;gap:8px;margin-bottom:10px">
           ${[primaryTile, accentTile].filter(Boolean).map(t => {
-            const img = t?.images?.[0] || t?.photos?.[0]?.url || t?.photos?.[0] || null;
+            const img = t?.image_url || t?.photos?.[0]?.url || t?.photos?.[0] || null;
             const price = t?.vwp || t?.price || 0;
             return `
             <div style="flex:1;background:var(--bg3);border-radius:8px;overflow:hidden">

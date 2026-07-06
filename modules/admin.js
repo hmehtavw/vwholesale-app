@@ -2199,9 +2199,9 @@ async function approveOfferIntoStaff(offerId) {
       phone, name: offer.candidateName,
       role: offer.role || 'staff',
       status: 'approved',
-      staffId,
-      approvedAt: new Date().toISOString(),
-      approvedBy: profile?.name || ''
+      staff_id: staffId,
+      approved_at: new Date().toISOString(),
+      approved_by: profile?.name || ''
     });
   }
 
