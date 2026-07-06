@@ -6,6 +6,16 @@
   <meta name="theme-color" content="#ffffff">
   <title>V Wholesale Shop — Tiles, Sanitaryware & More | Vijayawada</title>
   <meta name="description" content="Buy tiles, sanitaryware, plumbing, electricals and home building materials online. 60-min delivery in Vijayawada.">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
 
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }

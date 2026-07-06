@@ -1,8 +1,18 @@
 // V Wholesale Service Worker — Offline PWA Support
-const CACHE_NAME = 'vwholesale-v9';
+const CACHE_NAME = 'vwholesale-v10';
 const OFFLINE_URLS = [
   '/vwholesale-app/',
   '/vwholesale-app/index.html',
+  '/vwholesale-app/shop.html',
+  '/vwholesale-app/about.html',
+  '/vwholesale-app/contact.html',
+  '/vwholesale-app/privacy.html',
+  '/vwholesale-app/terms.html',
+  '/vwholesale-app/refund.html',
+  '/vwholesale-app/shipping.html',
+  '/vwholesale-app/icon-192.png',
+  '/vwholesale-app/icon-512.png',
+  '/vwholesale-app/manifest.json',
 ];
 
 // Install — cache core assets, skip waiting IMMEDIATELY

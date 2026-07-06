@@ -1,48 +1,44 @@
 {
-  "name": "V Wholesale — Customer OS",
+  "name": "V Wholesale — Home Building Store",
   "short_name": "V Wholesale",
-  "description": "V Wholesale Customer OS — Home Building & Improvement Retail Platform, Vijayawada",
-  "start_url": "/vwholesale-app/",
+  "description": "Tiles, Sanitaryware, Paints & More — 90-min delivery in Vijayawada",
+  "start_url": "/vwholesale-app/shop.html",
   "display": "standalone",
-  "background_color": "#060D45",
-  "theme_color": "#060D45",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a1a",
   "orientation": "portrait",
   "scope": "/vwholesale-app/",
   "lang": "en-IN",
-  "categories": ["business", "productivity"],
+  "categories": ["shopping", "business"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='32' fill='%23060D45'/><text x='96' y='130' font-family='Arial' font-size='90' font-weight='900' text-anchor='middle' fill='%23F5C842'>VW</text></svg>",
+      "src": "/vwholesale-app/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='80' fill='%23060D45'/><text x='256' y='350' font-family='Arial' font-size='240' font-weight='900' text-anchor='middle' fill='%23F5C842'>VW</text></svg>",
+      "src": "/vwholesale-app/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
   "screenshots": [],
   "shortcuts": [
     {
-      "name": "New Invoice",
-      "short_name": "Invoice",
-      "description": "Create a new billing invoice",
-      "url": "/vwholesale-app/?action=new-invoice"
+      "name": "Shop Now",
+      "short_name": "Shop",
+      "description": "Browse products and place orders",
+      "url": "/vwholesale-app/shop.html",
+      "icons": [{ "src": "/vwholesale-app/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "New Quotation",
-      "short_name": "Quote",
-      "description": "Create a new quotation",
-      "url": "/vwholesale-app/?action=new-quotation"
-    },
-    {
-      "name": "Check In Customer",
-      "short_name": "Check In",
-      "description": "Check in a walk-in customer",
-      "url": "/vwholesale-app/?page=checkin"
+      "name": "Staff Login",
+      "short_name": "Staff",
+      "description": "Staff dashboard login",
+      "url": "/vwholesale-app/index.html?staff=1",
+      "icons": [{ "src": "/vwholesale-app/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

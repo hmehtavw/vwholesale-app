@@ -1678,9 +1678,9 @@ async function renderCheckoutPage() {
     const { data: cust } = await VW_DB.client.from('customers')
       .select('loyalty_points').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
     const points = cust?.loyalty_points || 0;
-    const cfg = await VW_DB.getSetting('loyalty_config', { pointValue:1, maxRedeemPct:10 });
-    const maxRedeem = Math.min(points, Math.floor(_checkoutState.subtotal * (cfg.maxRedeemPct||10) / 100 / (cfg.pointValue||1)));
-    const redeemValue = Math.floor(maxRedeem * (cfg.pointValue||1));
+    const cfg = await VW_DB.getSetting('loyalty_config', { earnRate:10, pointValue:0.1, maxRedeemPct:100 });
+    const maxRedeem = Math.min(points, Math.floor(_checkoutState.subtotal * (cfg.maxRedeemPct||100) / 100 / (cfg.pointValue||0.1)));
+    const redeemValue = parseFloat((maxRedeem * (cfg.pointValue||0.1)).toFixed(2));
     if (points < 10) return '';
     return `
     <div style="margin-bottom:14px">
@@ -1749,16 +1749,26 @@ async function renderCheckoutPage() {
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
       <span style="color:var(--text3)">Delivery</span>
-      <span style="color:var(--green)">${_checkoutState.deliveryType==='pickup'?'Free':'₹0 (within Vijayawada)'}</span>
+      <span style="color:var(--green)">${_checkoutState.deliveryType==='pickup'?'Free':'Free (within Vijayawada)'}</span>
     </div>
+    ${(_checkoutState.promoDiscount||0) > 0 ? `
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--green)">🏷 Promo (${_checkoutState.promoCode})</span>
+      <span style="color:var(--green)">−₹${(_checkoutState.promoDiscount).toLocaleString('en-IN')}</span>
+    </div>` : ''}
+    ${(_checkoutState.loyaltyRedeemValue||0) > 0 ? `
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0">
+      <span style="color:var(--green)">⭐ Loyalty Points</span>
+      <span style="color:var(--green)">−₹${(_checkoutState.loyaltyRedeemValue).toLocaleString('en-IN')}</span>
+    </div>` : ''}
     <div style="display:flex;justify-content:space-between;font-size:14px;font-weight:900;padding:8px 0 0;border-top:1px solid var(--border2);margin-top:6px">
-      <span>Total</span><span style="color:var(--gold)">₹${_checkoutState.subtotal.toLocaleString('en-IN')}</span>
+      <span>Total</span><span style="color:var(--gold)">₹${Math.max(0,_checkoutState.subtotal-(_checkoutState.promoDiscount||0)-(_checkoutState.loyaltyRedeemValue||0)).toLocaleString('en-IN')}</span>
     </div>
   </div>
 
   <button onclick="VW_SHOP.placeOrder()"
     style="width:100%;padding:15px;border-radius:12px;background:var(--gold);border:none;color:#000;font-size:15px;font-weight:900;cursor:pointer">
-    ✅ Place Order · ₹${_checkoutState.subtotal.toLocaleString('en-IN')}
+    ✅ Place Order · ₹${Math.max(0,_checkoutState.subtotal-(_checkoutState.promoDiscount||0)-(_checkoutState.loyaltyRedeemValue||0)).toLocaleString('en-IN')}
   </button>
   <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px">
     GST inclusive · All prices shown are final · Delivery within Vijayawada only
@@ -1901,7 +1911,9 @@ async function placeOrder() {
 
   // Calculate delivery charge: free within Vijayawada (pickup always free)
   const deliveryCharge = deliveryType === 'pickup' ? 0 : 0; // Free delivery in Vijayawada
-  const orderTotal = subtotal + deliveryCharge;
+  const promoDiscount  = _checkoutState.promoDiscount || 0;
+  const loyaltyDiscount = _checkoutState.loyaltyRedeemValue || 0;
+  const orderTotal = Math.max(0, subtotal + deliveryCharge - promoDiscount - loyaltyDiscount);
 
   const prof = VW_AUTH.getCurrentProfile();
   const btn = document.querySelector('[onclick="VW_SHOP.placeOrder()"]');
@@ -1919,6 +1931,7 @@ async function placeOrder() {
         items: products,
         subtotal: subtotal,
         delivery_charge: deliveryCharge,
+        discount: promoDiscount + loyaltyDiscount,
         total: orderTotal,
         payment_method: 'online',
         payment_status: 'pending',
@@ -1991,6 +2004,7 @@ async function placeOrder() {
       items: products,
       subtotal: subtotal,
       delivery_charge: deliveryCharge,
+      discount: promoDiscount + loyaltyDiscount,
       total: orderTotal,
       payment_method: payMethod,
       payment_status: 'pending',
@@ -2036,8 +2050,8 @@ async function placeOrder() {
     }, { onConflict: 'profile_id' }).catch(() => {});
 
     // Award loyalty points (1 point per ₹100 spent by default)
-    const loyaltyCfg = await VW_DB.getSetting('loyalty_config', { earnRate: 1, pointValue: 1 });
-    const pointsEarned = Math.floor((subtotal - (_checkoutState.promoDiscount||0)) / 100 * (loyaltyCfg.earnRate || 1));
+    const loyaltyCfg = await VW_DB.getSetting('loyalty_config', { earnRate: 10, pointValue: 0.1, maxRedeemPct: 100 });
+    const pointsEarned = Math.floor((subtotal - (_checkoutState.promoDiscount||0)) / 100 * (loyaltyCfg.earnRate || 10));
     if (pointsEarned > 0 && prof?.phone) {
       // Fetch current points then increment directly (rpc-as-value doesn't work in Supabase JS)
       const { data: _custRow } = await VW_DB.client.from('customers')
@@ -2123,12 +2137,13 @@ async function renderMyOrdersPage() {
     .limit(20);
 
   const statusConfig = {
+    pending_payment:    { label:'💳 Awaiting Payment',     color:'#F97316' },
     placed:             { label:'⏳ Order Placed',         color:'var(--gold)' },
     confirmed:          { label:'✅ Confirmed',             color:'var(--green)' },
     picking:            { label:'📦 Picking & Packing',    color:'#60A5FA' },
     out_for_delivery:   { label:'🚚 Out for Delivery',     color:'#8B5CF6' },
     delivered:          { label:'✓ Delivered',             color:'var(--green)' },
-    cancelled:          { label:'Cancelled',               color:'var(--red)' },
+    cancelled:          { label:'✗ Cancelled',             color:'var(--red)' },
   };
 
   return `
@@ -2177,12 +2192,13 @@ window.VW_SHOP.renderMyOrdersPage = renderMyOrdersPage;
 // ═══════════════════════════════════════════════════════════════
 
 const ORDER_STATUS_FLOW = {
-  placed:           { label:'⏳ Placed',           next:'confirmed',         color:'var(--gold)',    action:'Confirm Order' },
-  confirmed:        { label:'✅ Confirmed',          next:'picking',           color:'var(--green)',   action:'Start Picking' },
-  picking:          { label:'📦 Picking & Packing', next:'out_for_delivery',  color:'#60A5FA',       action:'Mark Ready / Out' },
-  out_for_delivery: { label:'🚚 Out for Delivery',  next:'delivered',         color:'#8B5CF6',       action:'Mark Delivered' },
-  delivered:        { label:'✓ Delivered',           next:null,               color:'var(--green)',   action:null },
-  cancelled:        { label:'✗ Cancelled',           next:null,               color:'var(--red)',     action:null },
+  pending_payment:  { label:'💳 Awaiting Payment',  next:'placed',            color:'#F97316',       action:'Mark Paid (COD/Manual)' },
+  placed:           { label:'⏳ Placed',             next:'confirmed',         color:'var(--gold)',   action:'Confirm Order' },
+  confirmed:        { label:'✅ Confirmed',           next:'picking',           color:'var(--green)',  action:'Start Picking' },
+  picking:          { label:'📦 Picking & Packing',  next:'out_for_delivery',  color:'#60A5FA',      action:'Mark Ready / Out' },
+  out_for_delivery: { label:'🚚 Out for Delivery',   next:'delivered',         color:'#8B5CF6',      action:'Mark Delivered' },
+  delivered:        { label:'✓ Delivered',            next:null,               color:'var(--green)',  action:null },
+  cancelled:        { label:'✗ Cancelled',            next:null,               color:'var(--red)',    action:null },
 };
 
 async function renderOrdersDashboard() {
@@ -2839,8 +2855,8 @@ async function renderCustomerProfilePage() {
     .eq('phone', prof.phone).single().catch(() => ({ data: null }));
 
   const points = cust?.loyalty_points || 0;
-  const cfg = await VW_DB.getSetting('loyalty_config', { pointValue:1, earnRate:1 });
-  const pointsValue = Math.floor(points * (cfg.pointValue || 1));
+  const cfg = await VW_DB.getSetting('loyalty_config', { earnRate:10, pointValue:0.1, maxRedeemPct:100 });
+  const pointsValue = parseFloat((points * (cfg.pointValue || 0.1)).toFixed(2));
 
   // Fetch order count
   const { count: orderCount } = await VW_DB.client.from('orders')
@@ -3313,15 +3329,15 @@ async function renderOffersPage() {
   <!-- LOYALTY OFFER -->
   <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:14px;padding:16px;margin-bottom:16px;color:#fff">
     <div style="font-size:11px;font-weight:700;color:#f5c842;margin-bottom:6px">⭐ LOYALTY REWARDS</div>
-    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Earn 1 point for every ₹100</div>
+    <div style="font-size:16px;font-weight:800;margin-bottom:4px">Earn 10 points for every ₹100</div>
     <div style="font-size:12px;opacity:0.7;margin-bottom:10px">Redeem points on future purchases · No expiry</div>
     <div style="display:flex;gap:8px">
       <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:900;color:#f5c842">1pt</div>
+        <div style="font-size:16px;font-weight:900;color:#f5c842">10pts</div>
         <div style="font-size:9px;opacity:0.7">per ₹100</div>
       </div>
       <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
-        <div style="font-size:16px;font-weight:900;color:#f5c842">= ₹1</div>
+        <div style="font-size:16px;font-weight:900;color:#f5c842">= ₹0.10</div>
         <div style="font-size:9px;opacity:0.7">per point</div>
       </div>
       <div style="flex:1;background:rgba(255,255,255,0.08);border-radius:8px;padding:8px;text-align:center">
