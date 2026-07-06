@@ -6385,11 +6385,31 @@ async function tqSubmitForApproval() {
 async function tqResumeDraft(id) {
   const { data: q } = await VW_DB.client.from('tile_quotations').select('*').eq('id',id).single();
   if (!q) { showToast('Draft not found','warn'); return; }
+  // Normalize legacy QQ-shaped rooms (from older QQ→TQ conversions) into the
+  // TQ-wizard shape { id, areas:[{sqft,subType}], def } so slots and totals work.
+  const _normRooms = (q.rooms||[]).map((room, ri) => {
+    if (room.id && Array.isArray(room.areas)) return room; // already TQ-shaped
+    const areas = [];
+    if (room.surface === 'floor' || room.surface === 'both') {
+      let fsq = 0;
+      if (room.mode === 'sqft') fsq = parseFloat(room.sqft) || 0;
+      else { const l=parseFloat(room.l)||0, w=parseFloat(room.w)||0; fsq = l*w; if (room.skirtingIn>0) fsq += 2*(l+w)*(room.skirtingIn/12); }
+      if (fsq > 0) areas.push({ sqft: Math.round(fsq*10)/10, subType: 'floor' });
+    }
+    if (room.surface === 'wall' || room.surface === 'both') {
+      const wl=parseFloat(room.wl)||0, wh=parseFloat(room.wh)||0;
+      const dw=room.hasDoor===true&&room.type!=='Kitchen'?parseFloat(room.dw)||0:0;
+      const dh=room.hasDoor===true&&room.type!=='Kitchen'?parseFloat(room.dh)||0:0;
+      const wsq=Math.max(0, wl*wh-dw*dh);
+      if (wsq > 0) areas.push({ sqft: Math.round(wsq*10)/10, subType: 'wall' });
+    }
+    return { ...room, id: room.id || ('qq'+ri), label: room.label||room.type, def: room.def || { areaType: room.surface }, areas };
+  });
   _tqResumeData = {
     ...q,
     customer:{ name:q.customer_name||'', phone:q.customer_phone||'', site:q.site_address||'', id:q.customer_id||null },
     contractor: q.contractor_commission ? { name:q.contractor_commission.contractor_name, phone:q.contractor_commission.contractor_phone, id:q.contractor_commission.contractor_id, commissionPct:q.contractor_commission.commission_pct } : null,
-    rooms: q.rooms||[], currentFlat:'',
+    rooms: _normRooms, currentFlat:'',
     tileSelections: q.tile_selections||{}, spacerSelections: q.spacer_selections||{},
     spacerType: q.spacer?.type||'plus', adhesiveSelections: q.adhesive_selections||{},
     beading: q.beading||[], groutSelections: q.grout_selections||{}, quotedPrices: q.quoted_prices||{},

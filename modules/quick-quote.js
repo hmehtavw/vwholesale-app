@@ -1424,13 +1424,49 @@ async function _qqConvertToFullTQ() {
     // Map QQ room data → TQ wizard slot format so tiles, sizes & prices carry forward
     const tqSels = _qqToTQSelections(_qqData.rooms);
 
+    // Transform QQ-shaped rooms → TQ-wizard-shaped rooms.
+    // The TQ wizard (_getTileSlots, _renderStep2, tqSubmitForApproval) requires rooms
+    // with { id, areas:[{sqft, subType}], def:{areaType} }. QQ rooms lack these, which
+    // made every slot id "undefined", broke the carried-forward tile matching, zeroed
+    // all totals, and caused Submit for Approval to fail on converted quotations.
+    // Room ids MUST be 'qq'+index to match the slot ids _qqToTQSelections generates.
+    const tqRooms = _qqData.rooms.map((room, ri) => {
+      const areas = [];
+      // Floor area — mirrors _qqSqft floor math (sqft mode or l×w + skirting)
+      if (room.surface === 'floor' || room.surface === 'both') {
+        let fsq = 0;
+        if (room.mode === 'sqft') fsq = parseFloat(room.sqft) || 0;
+        else {
+          const l = parseFloat(room.l) || 0, w = parseFloat(room.w) || 0;
+          fsq = l * w;
+          if (room.skirtingIn > 0) fsq += 2 * (l + w) * (room.skirtingIn / 12);
+        }
+        if (fsq > 0) areas.push({ sqft: Math.round(fsq * 10) / 10, subType: 'floor' });
+      }
+      // Wall area — mirrors _qqSqft wall math (wl×wh − door)
+      if (room.surface === 'wall' || room.surface === 'both') {
+        const wl = parseFloat(room.wl) || 0, wh = parseFloat(room.wh) || 0;
+        const dw = room.hasDoor === true && room.type !== 'Kitchen' ? parseFloat(room.dw) || 0 : 0;
+        const dh = room.hasDoor === true && room.type !== 'Kitchen' ? parseFloat(room.dh) || 0 : 0;
+        const wsq = Math.max(0, wl * wh - dw * dh);
+        if (wsq > 0) areas.push({ sqft: Math.round(wsq * 10) / 10, subType: 'wall' });
+      }
+      return {
+        ...room,                                  // keep QQ fields (floorDesign/wallDesign/etc.)
+        id: 'qq' + ri,                            // matches _qqToTQSelections slot ids
+        label: room.label || room.type,
+        def: { areaType: room.surface },
+        areas,
+      };
+    });
+
     // Create the Full TQ record with TQ-compatible tile data
     const { data: newTQ, error } = await VW_DB.client.from('tile_quotations').insert({
       customer_name: _qqData.customer.name,
       customer_phone: _qqData.customer.phone || '',
       customer_id: _qqData.customer.id || null,
       site_address: _qqData.customer.site || '',
-      rooms: payload.rooms,                   // QQ rooms with floorDesign/wallDesign intact
+      rooms: tqRooms,                         // TQ-wizard-shaped rooms (id + areas + def)
       tile_selections: tqSels.tileSelections, // TQ-format: slot IDs the wizard expects
       quoted_prices: tqSels.quotedPrices,     // TQ-format: price per room surface
       total_area_sqft: payload.total_area_sqft,
