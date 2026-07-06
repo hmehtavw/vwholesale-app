@@ -959,6 +959,38 @@ function goHome() {
   clearSearch();
 }
 
+// ── CASHFREE RETURN HANDLER ──
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  const vwOrder = p.get('vw_order');
+  const cfOrder = p.get('cf_order');
+  if (vwOrder && cfOrder) {
+    // Clean URL
+    window.history.replaceState({}, '', './shop.html');
+    // Show payment status toast
+    setTimeout(() => {
+      const sheet = document.getElementById('bottom-sheet');
+      const overlay = document.getElementById('sheet-overlay');
+      sheet.innerHTML = `
+        <div class="sheet-handle"></div>
+        <div style="text-align:center;padding:20px 0 10px">
+          <div style="font-size:48px;margin-bottom:12px">⏳</div>
+          <div style="font-size:17px;font-weight:800;margin-bottom:6px">Payment Processing</div>
+          <div style="font-size:13px;color:#666;margin-bottom:16px">Your order has been placed. We're confirming your payment — you'll receive an SMS once confirmed.</div>
+          <div style="background:#f5f5f5;border-radius:10px;padding:10px;font-size:12px;color:#888;margin-bottom:16px">
+            Order Reference: #${vwOrder}
+          </div>
+          <button onclick="closeSheet()" style="width:100%;padding:12px;background:#2a7a3b;border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:800;cursor:pointer">
+            Continue Shopping
+          </button>
+          <div style="font-size:11px;color:#999;margin-top:10px">Questions? Call <a href="tel:8712697930" style="color:#2a7a3b;font-weight:700">8712697930</a></div>
+        </div>`;
+      sheet.classList.add('open');
+      overlay.classList.add('open');
+    }, 500);
+  }
+})();
+
 // ── INIT ──
 renderCatGrid();
 loadDeals();

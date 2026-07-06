@@ -1910,23 +1910,52 @@ async function placeOrder() {
   try {
     // For online payment — create Cashfree order first
     if (payMethod === 'online') {
+      // Step 1: Create DB order first with pending_payment status so we have a real order ID
+      const { data: pendingOrder, error: pendingErr } = await VW_DB.client.from('orders').insert({
+        profile_id: prof?.id || null,
+        customer_name: prof?.name || '',
+        customer_phone: prof?.phone || '',
+        delivery_address: deliveryType === 'delivery' ? address : { label: 'Store Pickup', address_line1: '1-1-153, NH 65, Bhavanipuram, Vijayawada' },
+        items: products,
+        subtotal: subtotal,
+        delivery_charge: deliveryCharge,
+        total: orderTotal,
+        payment_method: 'online',
+        payment_status: 'pending',
+        delivery_type: deliveryType,
+        delivery_slot: slot?.label,
+        status: 'pending_payment',
+        placed_at: new Date().toISOString(),
+      }).select('id,order_no').single();
+
+      if (pendingErr) throw new Error('Could not create order: ' + pendingErr.message);
+
+      // Step 2: Create Cashfree payment order using real DB order ID
       const cfRes = await fetch(
         'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/cashfree-order',
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json',
-            'apikey': VW_DB.client.supabaseKey },
+          headers: { 'Content-Type': 'application/json', 'apikey': VW_DB.client.supabaseKey },
           body: JSON.stringify({
-            order_id: `TEMP_${Date.now()}`,
+            order_id: String(pendingOrder.id),
             order_amount: orderTotal,
             customer_name: prof?.name || '',
             customer_phone: prof?.phone || '',
+            return_url: `https://hmehtavw.github.io/vwholesale-app/shop.html?cf_order={order_id}&vw_order=${pendingOrder.id}`,
           }),
         }
       );
       const cfData = await cfRes.json();
-      if (cfData.error) throw new Error('Payment init failed: ' + cfData.error);
-      // Load Cashfree JS SDK dynamically
+      if (cfData.error) {
+        // Cleanup the pending order if Cashfree fails
+        await VW_DB.client.from('orders').update({ status: 'cancelled', cancellation_reason: 'Payment init failed' }).eq('id', pendingOrder.id).catch(() => {});
+        throw new Error('Payment init failed: ' + cfData.error);
+      }
+
+      // Step 3: Store Cashfree order ID against our order
+      await VW_DB.client.from('orders').update({ cashfree_order_id: cfData.cf_order_id }).eq('id', pendingOrder.id).catch(() => {});
+
+      // Step 4: Load Cashfree SDK and launch checkout
       if (!window.Cashfree) {
         const cfScript = document.createElement('script');
         cfScript.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
@@ -1934,17 +1963,17 @@ async function placeOrder() {
         await new Promise(res => { cfScript.onload = res; });
       }
       const cashfreeObj = window.Cashfree({ mode: 'production' });
-      cashfreeObj.checkout({
-        paymentSessionId: cfData.payment_session_id,
-        returnUrl: window.location.href + '?cf_order=' + cfData.cf_order_id,
-      });
+      cashfreeObj.checkout({ paymentSessionId: cfData.payment_session_id });
       if (btn) { btn.disabled = false; btn.textContent = `✅ Place Order · ₹${orderTotal.toLocaleString('en-IN')}`; }
       return;
     }
     // For wallet payment — check balance first
     if (payMethod === 'wallet') {
-      const { data: wallet } = await VW_DB.client.from('customer_wallets')
-        .select('balance').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
+      const { data: custRow } = await VW_DB.client.from('customers')
+        .select('id').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+      const { data: wallet } = custRow
+        ? await VW_DB.client.from('customer_wallets').select('balance').eq('customer_id', custRow.id).single().catch(() => ({ data: null }))
+        : { data: null };
       const bal = parseFloat(wallet?.balance || 0);
       if (bal < orderTotal) {
         showToast(`Insufficient wallet balance. Available: ₹${bal.toLocaleString('en-IN')} · Required: ₹${orderTotal.toLocaleString('en-IN')}`, 'warn');
@@ -1975,8 +2004,11 @@ async function placeOrder() {
 
     // Deduct from wallet if wallet payment
     if (payMethod === 'wallet') {
-      const { data: wallet } = await VW_DB.client.from('customer_wallets')
-        .select('id,balance,total_spent').eq('profile_id', prof?.id || '').single().catch(() => ({ data: null }));
+      const { data: _wCust } = await VW_DB.client.from('customers')
+        .select('id').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+      const { data: wallet } = _wCust
+        ? await VW_DB.client.from('customer_wallets').select('id,balance,total_spent').eq('customer_id', _wCust.id).single().catch(() => ({ data: null }))
+        : { data: null };
       if (wallet) {
         const newBal = parseFloat(wallet.balance) - orderTotal;
         await VW_DB.client.from('customer_wallets').update({
@@ -2363,9 +2395,12 @@ async function cancelOrder(orderId) {
   }).eq('id', orderId);
 
   // Refund to wallet if paid by wallet
-  if (o?.payment_method === 'wallet' && o?.profile_id) {
-    const { data: wallet } = await VW_DB.client.from('customer_wallets')
-      .select('id,balance').eq('profile_id', o.profile_id).single().catch(() => ({ data: null }));
+  if (o?.payment_method === 'wallet' && o?.customer_phone) {
+    const { data: _rCust } = await VW_DB.client.from('customers')
+      .select('id').eq('phone', o.customer_phone).single().catch(() => ({ data: null }));
+    const { data: wallet } = _rCust
+      ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _rCust.id).single().catch(() => ({ data: null }))
+      : { data: null };
     if (wallet) {
       const newBal = parseFloat(wallet.balance) + parseFloat(o.total || 0);
       await VW_DB.client.from('customer_wallets').update({ balance: newBal }).eq('id', wallet.id);
@@ -3944,8 +3979,11 @@ async function markReturnPickedUp(id) {
 
     if (order?.payment_method === 'wallet' && ret?.profile_id) {
       // Wallet payment — auto-refund to wallet
-      const { data: wallet } = await VW_DB.client.from('customer_wallets')
-        .select('id,balance').eq('profile_id', ret.profile_id).single().catch(() => ({ data: null }));
+      const { data: _retCust } = await VW_DB.client.from('customers')
+        .select('id').eq('phone', order.customer_phone || '').single().catch(() => ({ data: null }));
+      const { data: wallet } = _retCust
+        ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _retCust.id).single().catch(() => ({ data: null }))
+        : { data: null };
       if (wallet) {
         const newBal = parseFloat(wallet.balance) + parseFloat(order.total);
         await VW_DB.client.from('customer_wallets').update({ balance: newBal }).eq('id', wallet.id);
