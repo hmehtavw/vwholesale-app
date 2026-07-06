@@ -490,15 +490,15 @@ async function sbFetch(table, params = '') {
 // ── TOAST ──
 function toast(msg) {
   const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('on');
-  setTimeout(() => el.classList.remove('on'), 2500);
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
 }
 
 // ── NAV ──
 function setNav(id) {
-  document.querySelectorAll('.bnav-item').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('nav-' + id);
-  if (el) el.classList.add('on');
+  if (el) el.classList.add('active');
 }
 
 // ── CART ──
@@ -546,8 +546,8 @@ let _loginPhone = '';
 function openLoginSheet(context) {
   _loginPhone = '';
   renderLoginSheet(context);
-  document.getElementById('sheet-overlay').classList.add('on');
-  document.getElementById('bottom-sheet').classList.add('on');
+  document.getElementById('sheet-overlay').classList.add('open');
+  document.getElementById('bottom-sheet').classList.add('open');
 }
 
 function renderLoginSheet(context) {
@@ -564,29 +564,29 @@ function renderLoginSheet(context) {
       <div style="text-align:center;margin-bottom:20px">
         <div style="font-size:42px;margin-bottom:10px">${icon}</div>
         <div style="font-size:18px;font-weight:900;margin-bottom:4px">${title}</div>
-        <div style="font-size:12px;color:var(--muted)">Earn loyalty points · Track orders · Get exclusive offers</div>
+        <div style="font-size:12px;color:var(--t3)">Earn loyalty points · Track orders · Get exclusive offers</div>
       </div>
       <div style="margin-bottom:12px">
-        <label style="font-size:11px;font-weight:700;color:var(--ink2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
         <div style="display:flex;align-items:center;border:1.5px solid var(--g);border-radius:10px;overflow:hidden">
-          <span style="padding:12px 10px;background:var(--surface);font-size:13px;font-weight:700;color:var(--ink2);border-right:1px solid var(--line)">+91</span>
+          <span style="padding:12px 10px;background:var(--bg);font-size:13px;font-weight:700;color:var(--t2);border-right:1px solid var(--border)">+91</span>
           <input id="login-phone" type="tel" inputmode="numeric" maxlength="10"
             placeholder="10-digit mobile"
-            style="flex:1;padding:12px;border:none;outline:none;font-size:16px;font-weight:700;color:var(--ink)"
+            style="flex:1;padding:12px;border:none;outline:none;font-size:16px;font-weight:700;color:var(--t1)"
             oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
         </div>
       </div>
       <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;color:var(--ink2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Full Name</label>
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Full Name</label>
         <input id="login-name" type="text" placeholder="Your full name"
-          style="width:100%;padding:12px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;outline:none;color:var(--ink);box-sizing:border-box">
+          style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:10px;font-size:14px;outline:none;color:var(--t1);box-sizing:border-box">
       </div>
       <button onclick="sendCustomerOTP()"
         style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
         Send OTP →
       </button>
       <button onclick="closeSheet()"
-        style="width:100%;padding:12px;border-radius:10px;background:var(--surface);border:none;font-size:13px;color:var(--ink2);cursor:pointer">
+        style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">
         Continue Browsing
       </button>
     </div>`;
@@ -599,7 +599,7 @@ function renderOTPSheet() {
       <div style="text-align:center;margin-bottom:20px">
         <div style="font-size:42px;margin-bottom:10px">📱</div>
         <div style="font-size:18px;font-weight:900;margin-bottom:4px">Enter OTP</div>
-        <div style="font-size:12px;color:var(--muted)">Sent to +91 ${_loginPhone}</div>
+        <div style="font-size:12px;color:var(--t3)">Sent to +91 ${_loginPhone}</div>
       </div>
       <div style="background:var(--glt);border:1px solid #C8E6D0;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--g);font-weight:600">
         ✅ OTP sent successfully
@@ -607,14 +607,14 @@ function renderOTPSheet() {
       <div style="margin-bottom:16px">
         <input id="login-otp" type="tel" inputmode="numeric" maxlength="6"
           placeholder="● ● ● ● ● ●"
-          style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:24px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--ink)">
+          style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:24px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)">
       </div>
       <button onclick="verifyCustomerOTP()"
         style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
         Verify & Continue →
       </button>
       <button onclick="renderLoginSheet()"
-        style="width:100%;padding:12px;border-radius:10px;background:var(--surface);border:none;font-size:13px;color:var(--ink2);cursor:pointer">
+        style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">
         ← Change Number
       </button>
     </div>`;
@@ -678,8 +678,8 @@ async function verifyCustomerOTP() {
 }
 
 function closeSheet() {
-  document.getElementById('bottom-sheet').classList.remove('on');
-  document.getElementById('sheet-overlay').classList.remove('on');
+  document.getElementById('bottom-sheet').classList.remove('open');
+  document.getElementById('sheet-overlay').classList.remove('open');
 }
 
 // ── PRODUCT DETAIL PAGE (PDP SHEET) ──
@@ -724,7 +724,7 @@ async function openPDP(productId) {
     ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>'
     : zone === 'ap' || zone === 'telangana'
     ? '<span style="background:#fff7ed;color:#c2410c;font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;border:1px solid #fed7aa">🚚 3–4 day delivery</span>'
-    : '<span style="background:var(--surface);color:var(--t3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">📍 Vijayawada pickup</span>';
+    : '<span style="background:var(--bg);color:var(--t3);font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px">📍 Vijayawada pickup</span>';
   const isWishlisted = _wishlist.has(productId);
   trackViewProduct(p.id, p.name, p.category, price);
 
@@ -749,7 +749,7 @@ async function openPDP(productId) {
       <div class="pdp-gst">Inclusive of all taxes</div>
 
       <!-- TRUST ICONS -->
-      <div class="pdp-trust" style="margin-top:16px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0">
+      <div class="pdp-trust" style="margin-top:16px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0">
         <div class="pdp-ti"><div class="pdp-ti-icon">🚚</div><div class="pdp-ti-lbl">2–4 hr Delivery</div></div>
         <div class="pdp-ti"><div class="pdp-ti-icon">✅</div><div class="pdp-ti-lbl">100% Genuine</div></div>
         <div class="pdp-ti"><div class="pdp-ti-icon">🔄</div><div class="pdp-ti-lbl">7 Day Return</div></div>
@@ -800,17 +800,17 @@ async function openPDP(productId) {
   actionBar.innerHTML = `
     <a href="tel:8712697930" class="pdp-bar-call">📞</a>
     ${oos
-      ? `<button class="pdp-bar-atc" style="background:var(--muted);cursor:default">Out of Stock</button>`
+      ? `<button class="pdp-bar-atc" style="background:var(--t3);cursor:default">Out of Stock</button>`
       : qty === 0
         ? `<button class="pdp-bar-atc" onclick="addToCart(${p.id},'${safeName}',${price});document.getElementById('pdp-action-bar').innerHTML=this.parentNode.innerHTML;updatePDPBar(${p.id},'${safeName}',${price})">Add to Cart</button>`
-        : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:var(--r12);overflow:hidden">
+        : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
             <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${p.id});updatePDPBar(${p.id},'${safeName}',${price})">−</button>
             <span style="flex:1;text-align:center;font-size:16px;font-weight:900" id="pdp-qty-${p.id}">${qty}</span>
             <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${p.id},'${safeName}',${price});updatePDPBar(${p.id},'${safeName}',${price})">+</button>
            </div>`}`;
 
-  pdpOverlay.classList.add('on');
-  pdpSheet.classList.add('on');
+  pdpOverlay.classList.add('open');
+  pdpSheet.classList.add('open');
 }
 
 function updatePDPBar(id, name, price) {
@@ -821,7 +821,7 @@ function updatePDPBar(id, name, price) {
     <a href="tel:8712697930" class="pdp-bar-call">📞</a>
     ${qty === 0
       ? `<button class="pdp-bar-atc" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">Add to Cart</button>`
-      : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:var(--r12);overflow:hidden">
+      : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
           <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${id});updatePDPBar(${id},'${safeName}',${price})">−</button>
           <span style="flex:1;text-align:center;font-size:16px;font-weight:900">${qty}</span>
           <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">+</button>
@@ -829,7 +829,7 @@ function updatePDPBar(id, name, price) {
 }
 
 function closePDP() {
-  document.getElementById('pdp-sheet').classList.remove('on');
+  document.getElementById('pdp-sheet').classList.remove('open');
   document.getElementById('pdp-overlay').style.display = 'none';
   document.getElementById('pdp-action-bar').className = 'pdp-bar off';
 }
@@ -851,14 +851,14 @@ function clearSearch() {
 // ── CATEGORY GRID ──
 function renderCatGrid() {
   document.getElementById('cat-grid').innerHTML = CATS.slice(0,12).map(c => `
-    <div class="cat-item" onclick="showCategory('${c.key}');setNav('shop')">
-      <div class="cat-icon" style="background:${c.color}15;border-color:${c.color}30">${c.icon}</div>
+    <div class="ccard" onclick="showCategory('${c.key}');setNav('shop')">
+      <div class="cemoji" style="background:${c.color}15;border-color:${c.color}30">${c.icon}</div>
       <div class="clabel">${c.label}</div>
     </div>
   `).join('') + `
-    <div class="cat-item" onclick="showCategory(null);setNav('shop')">
-      <div class="cat-icon" style="background:var(--surface2);border-color:var(--line);font-size:16px;font-weight:800;color:var(--muted)">+4</div>
-      <div class="clabel" style="color:var(--muted)">More</div>
+    <div class="ccard" onclick="showCategory(null);setNav('shop')">
+      <div class="cemoji" style="background:var(--surface2);border-color:var(--border);font-size:16px;font-weight:800;color:var(--t3)">+4</div>
+      <div class="clabel" style="color:var(--t3)">More</div>
     </div>`;
 }
 
@@ -867,13 +867,13 @@ async function loadDeals() {
   try {
     const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,images,photos&is_active=eq.true&stock=gt.0&order=mrp.desc&limit=14');
     if (!Array.isArray(products) || !products.length) {
-      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">Products coming soon</div>';
+      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon</div>';
       return;
     }
     _pdpProducts = [...products];
     renderDeals(products);
   } catch(e) {
-    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--muted);font-size:13px">Unable to load</div>';
+    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Unable to load</div>';
   }
 }
 
@@ -895,18 +895,18 @@ function dealCard(p) {
   <div class="dcard" onclick="openPDP(${p.id})">
     <div class="dimg" style="background:${img?'#f5f5f5':color+'18'}">
       ${img ? `<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : icon}
-      ${disc > 0 ? `<div class="deal-pct">${disc}% OFF</div>` : ''}
-      <div class="deal-spd">⚡ 2–4 hrs</div>
+      ${disc > 0 ? `<div class="dpct">${disc}% OFF</div>` : ''}
+      <div class="dspd">⚡ 2–4 hrs</div>
     </div>
     <div class="dbody">
-      ${p.brand ? `<div class="deal-br">${p.brand}</div>` : ''}
-      <div class="deal-nm">${p.name}</div>
-      <div class="deal-foot" onclick="event.stopPropagation()">
+      ${p.brand ? `<div class="dbr">${p.brand}</div>` : ''}
+      <div class="dnm">${p.name}</div>
+      <div class="drow" onclick="event.stopPropagation()">
         <div>
           <span class="dpr">₹${price.toLocaleString('en-IN')}</span>
           ${mrp > price ? `<span class="dmrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
         </div>
-        ${oos ? `<span style="font-size:10px;color:var(--muted)">Out of stock</span>`
+        ${oos ? `<span style="font-size:10px;color:var(--t3)">Out of stock</span>`
           : qty === 0
             ? `<button class="btn-add" onclick="addToCart(${p.id},'${safeName}',${price})">ADD</button>`
             : `<div class="qrow">
@@ -949,10 +949,10 @@ function gridCard(p) {
       </div>
       <div onclick="event.stopPropagation()">
         ${oos
-          ? `<div style="text-align:center;padding:7px;background:var(--surface);border-radius:6px;font-size:10px;color:var(--muted)">Out of Stock</div>`
+          ? `<div style="text-align:center;padding:7px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--t3)">Out of Stock</div>`
           : qty === 0
             ? `<div onclick="addToCart(${p.id},'${safeName}',${price})"
-                style="border:2px solid var(--g);border-radius:var(--r8);padding:7px;text-align:center;font-size:12px;font-weight:800;color:var(--g);cursor:pointer">
+                style="border:2px solid var(--g);border-radius:8px;padding:7px;text-align:center;font-size:12px;font-weight:800;color:var(--g);cursor:pointer">
                 + Add
                </div>`
             : `<div class="qrow" style="width:100%;justify-content:space-between">
@@ -984,12 +984,12 @@ function toggleSort() {
       ['price_desc','Price: High to Low'],
       ['disc_desc','Biggest Discount'],
     ].map(([val,label]) => `
-    <div onclick="applySort('${val}')" style="padding:13px 0;border-bottom:1px solid var(--line);font-size:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">
+    <div onclick="applySort('${val}')" style="padding:13px 0;border-bottom:1px solid var(--border);font-size:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">
       ${label}
       ${_sortMode===val ? '<span style="color:var(--g);font-weight:900">✓</span>' : ''}
     </div>`).join('')}`;
-  document.getElementById('sheet-overlay').classList.add('on');
-  sheet.classList.add('on');
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
 }
 
 function applySort(mode) {
@@ -1013,25 +1013,25 @@ function toggleFilter() {
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div style="font-size:15px;font-weight:800;margin-bottom:16px">Filter</div>
-    <div style="font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Brand</div>
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Brand</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
       ${brands.map(b => `
       <button onclick="applyBrandFilter('${b}',this)"
-        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--line);background:var(--white);font-size:12px;font-weight:700;color:var(--ink2);cursor:pointer">
+        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--white);font-size:12px;font-weight:700;color:var(--t2);cursor:pointer">
         ${b}
       </button>`).join('')}
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Price Range</div>
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Price Range</div>
     <div style="display:flex;gap:8px;margin-bottom:20px">
       ${[['0-500','₹0–₹500'],['500-2000','₹500–₹2K'],['2000-10000','₹2K–₹10K'],['10000+','₹10K+']].map(([val,label]) => `
       <button onclick="applyPriceFilter('${val}',this)"
-        style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--line);background:var(--white);font-size:11px;font-weight:700;color:var(--ink2);cursor:pointer">
+        style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);font-size:11px;font-weight:700;color:var(--t2);cursor:pointer">
         ${label}
       </button>`).join('')}
     </div>
-    <button onclick="clearFilters()" style="width:100%;padding:12px;border-radius:10px;background:var(--surface);border:none;font-size:13px;font-weight:700;cursor:pointer">Clear All Filters</button>`;
-  document.getElementById('sheet-overlay').classList.add('on');
-  sheet.classList.add('on');
+    <button onclick="clearFilters()" style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;font-weight:700;cursor:pointer">Clear All Filters</button>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
 }
 
 let _activeBrand = null, _activePriceRange = null;
@@ -1052,7 +1052,7 @@ function applyPriceFilter(range, btn) {
   filtered = filtered.filter(p => { const pr = p.vwp||p.price||0; return pr >= min && pr <= max; });
   document.getElementById('product-grid').innerHTML = filtered.length
     ? filtered.map(gridCard).join('')
-    : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">
+    : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">
         <div style="font-size:36px;margin-bottom:8px">🔍</div>
         <div style="font-size:14px;font-weight:700">No products match this filter</div>
        </div>`;
@@ -1066,7 +1066,7 @@ function clearFilters() {
 // ── CATEGORY PAGE ──
 async function showCategory(catKey, searchTerm) {
   document.getElementById('pg-home').style.display = 'none';
-  document.getElementById('pg-cat').classList.add('on');
+  document.getElementById('pg-cat').classList.add('open');
 
   const cat = CATS.find(c => c.key === catKey);
   const catIconEl = document.getElementById('cat-icon');
@@ -1075,7 +1075,7 @@ async function showCategory(catKey, searchTerm) {
   document.getElementById('cat-title').textContent = searchTerm ? `"${searchTerm}"` : (cat?.label || 'All Products');
 
   const grid = document.getElementById('product-grid');
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted)">Loading...</div>';
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">Loading...</div>';
 
   _sortMode = 'default';
   _activeBrand = null;
@@ -1089,9 +1089,9 @@ async function showCategory(catKey, searchTerm) {
 
     const products = await sbFetch('products', url);
     if (!Array.isArray(products) || !products.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--muted)">
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
         <div style="font-size:48px;margin-bottom:12px">📦</div>
-        <div style="font-size:15px;font-weight:800;color:var(--ink2);margin-bottom:6px">No products found</div>
+        <div style="font-size:15px;font-weight:800;color:var(--t2);margin-bottom:6px">No products found</div>
         <div style="font-size:13px">Call us: <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
       </div>`;
       return;
@@ -1100,12 +1100,12 @@ async function showCategory(catKey, searchTerm) {
     _pdpProducts = [...products, ..._pdpProducts.filter(p => !products.find(x => x.id===p.id))];
     grid.innerHTML = products.map(gridCard).join('');
   } catch(e) {
-    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted)">Failed to load. Check your connection.</div>';
+    grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--t3)">Failed to load. Check your connection.</div>';
   }
 }
 
 function closeCategoryPage() {
-  document.getElementById('pg-cat').classList.remove('on');
+  document.getElementById('pg-cat').classList.remove('open');
   document.getElementById('pg-home').style.display = '';
   setNav('home');
 }
@@ -1131,13 +1131,13 @@ function goHome() {
         <div style="text-align:center;padding:20px 0 10px">
           <div style="font-size:52px;margin-bottom:14px">⏳</div>
           <div style="font-size:18px;font-weight:900;margin-bottom:6px">Payment Processing</div>
-          <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Your order is placed. We're confirming your payment — you'll get an SMS once confirmed.</div>
-          <div style="background:var(--surface);border-radius:10px;padding:10px;font-size:12px;color:var(--ink2);margin-bottom:16px">Order Ref: #${vwOrder}</div>
+          <div style="font-size:13px;color:var(--t3);margin-bottom:16px">Your order is placed. We're confirming your payment — you'll get an SMS once confirmed.</div>
+          <div style="background:var(--bg);border-radius:10px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:16px">Order Ref: #${vwOrder}</div>
           <button onclick="closeSheet()" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">Continue Shopping</button>
-          <div style="font-size:11px;color:var(--muted);margin-top:10px">Questions? Call <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
+          <div style="font-size:11px;color:var(--t3);margin-top:10px">Questions? Call <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
         </div>`;
-      sheet.classList.add('on');
-      overlay.classList.add('on');
+      sheet.classList.add('open');
+      overlay.classList.add('open');
     }, 500);
   }
 })();
@@ -1173,19 +1173,19 @@ function checkDeliveryPincode() {
   if (!pin || pin.length < 6) { el.innerHTML = '<div style="font-size:12px;color:var(--red)">Enter a valid 6-digit pincode</div>'; return; }
   const zone = getPincodeZone(pin);
   const msgs = {
-    vijayawada: `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:var(--r8);padding:10px 12px">
+    vijayawada: `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px">
       <div style="font-size:13px;font-weight:800;color:var(--g);margin-bottom:2px">✅ Deliverable — Vijayawada</div>
       <div style="font-size:12px;color:#166534">⚡ 2–4 hour delivery · Self pickup available at NH65 Bhavanipuram</div>
     </div>`,
-    ap: `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--r8);padding:10px 12px">
+    ap: `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px">
       <div style="font-size:13px;font-weight:800;color:#c2410c;margin-bottom:2px">🚚 Andhra Pradesh — Deliverable</div>
       <div style="font-size:12px;color:#9a3412">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
     </div>`,
-    telangana: `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:var(--r8);padding:10px 12px">
+    telangana: `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 12px">
       <div style="font-size:13px;font-weight:800;color:#6d28d9;margin-bottom:2px">🚚 Telangana — Deliverable</div>
       <div style="font-size:12px;color:#5b21b6">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
     </div>`,
-    outside: `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:var(--r8);padding:10px 12px">
+    outside: `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px">
       <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:2px">❌ Outside Service Area</div>
       <div style="font-size:12px;color:#991b1b">We currently serve Andhra Pradesh & Telangana only. Call us for special arrangements.</div>
     </div>`
@@ -1201,24 +1201,24 @@ function showPickupOption() {
     <div style="text-align:center;padding:4px 0 8px">
       <div style="font-size:36px;margin-bottom:10px">🏪</div>
       <div style="font-size:17px;font-weight:900;margin-bottom:4px">Self Pickup — Free</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:20px">Collect from our store — no delivery charge</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:20px">Collect from our store — no delivery charge</div>
     </div>
-    <div style="background:var(--surface);border-radius:var(--r12);padding:14px;margin-bottom:16px">
+    <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:16px">
       <div style="font-size:13px;font-weight:800;margin-bottom:4px">📍 V Wholesale Store</div>
-      <div style="font-size:12px;color:var(--ink2);margin-bottom:6px">NH65, Bhavanipuram, Vijayawada — 520012</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:6px">NH65, Bhavanipuram, Vijayawada — 520012</div>
       <div style="font-size:11px;color:var(--t3)">Mon–Sat · 9:00 AM – 7:30 PM · <a href="tel:8712697930" style="color:var(--g);font-weight:700">87126 97930</a></div>
     </div>
-    <div style="font-size:12px;color:var(--ink2);margin-bottom:16px;line-height:1.6">
+    <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.6">
       ✅ Order online and select "Store Pickup" at checkout<br>
       ✅ Ready within 30–45 minutes for in-stock items<br>
       ✅ No delivery charge · Pay at pickup or online
     </div>
-    <button onclick="openLoginSheet('cart')" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:var(--r12);color:#fff;font-size:14px;font-weight:900;cursor:pointer">
+    <button onclick="openLoginSheet('cart')" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">
       Shop & Pickup →
     </button>
-    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;border-radius:var(--r12);background:var(--surface);border:none;font-size:13px;color:var(--ink2);cursor:pointer">Close</button>`;
-  document.getElementById('sheet-overlay').classList.add('on');
-  sheet.classList.add('on');
+    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">Close</button>`;
+  document.getElementById('sheet-overlay').classList.add('open');
+  sheet.classList.add('open');
 }
 
 // ── WISHLIST ──
@@ -1227,7 +1227,7 @@ let _wishlist = new Set();
 function toggleWishlist(productId, productName, btn) {
   if (_wishlist.has(productId)) {
     _wishlist.delete(productId);
-    if (btn) { btn.textContent = '♡'; btn.style.color = 'var(--muted)'; }
+    if (btn) { btn.textContent = '♡'; btn.style.color = 'var(--t3)'; }
     toast('Removed from wishlist');
   } else {
     _wishlist.add(productId);
