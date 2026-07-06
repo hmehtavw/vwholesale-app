@@ -273,15 +273,27 @@
     .ft-copy{font-size:10px;color:rgba(255,255,255,.2);text-align:center;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
 
 
-    /* ─── DESKTOP RESPONSIVE ─── */
+    /* ─── DESKTOP: centered mobile app ─── */
     @media(min-width:600px){
-      body{max-width:480px;margin:0 auto;box-shadow:0 0 40px rgba(0,0,0,.1)}
-      #hdr{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
-      #bnav{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
-      .pdp-bar{max-width:480px;left:50%;transform:translateX(-50%);right:auto;width:480px}
-      .overlay,.pdp-overlay{background:rgba(0,0,0,.6)}
-      .sheet,.pdp{max-width:480px;left:50%;transform:translateX(-50%) translateY(105%);right:auto;width:480px}
-      .sheet.open,.pdp.open{transform:translateX(-50%) translateY(0)}
+      html{background:#E8E8E8}
+      body{max-width:480px;margin:0 auto;background:#F4F4F4;min-height:100vh;position:relative;box-shadow:0 0 60px rgba(0,0,0,.15)}
+      /* sticky header inside body — works because body is the scroll container */
+      #hdr{width:100%}
+      /* fixed elements need manual centering */
+      #bnav,
+      .pdp-bar{
+        left:50%;
+        transform:translateX(-50%);
+        width:480px;
+      }
+      .overlay,.pdp-overlay{background:rgba(0,0,0,.55)}
+      .sheet,.pdp{
+        left:50%;
+        transform:translateX(-50%) translateY(105%);
+        width:480px;
+      }
+      .sheet.open{transform:translateX(-50%) translateY(0)}
+      .pdp.open{transform:translateX(-50%) translateY(0)}
     }
     /* ─── DIVIDER ─── */
     .div{height:8px;background:var(--bg);margin:16px 0 0}
