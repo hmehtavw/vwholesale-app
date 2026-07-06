@@ -2,21 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#16783A">
   <title>V Wholesale — Tiles, Sanitaryware & Home Building Materials | Vijayawada</title>
   <meta name="description" content="Vijayawada's home building store. Tiles, sanitaryware, plumbing, electricals and more. 2-4 hr delivery in Vijayawada, AP & Telangana.">
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="V Wholesale">
-  <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="shortcut icon" href="icon-192.png">
   <script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});</script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+    html,body{-webkit-tap-highlight-color:transparent}
     body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#F4F4F4;color:#111}
     a{text-decoration:none;color:inherit}
     button{cursor:pointer;font-family:inherit;border:none;background:none}
@@ -29,459 +28,505 @@
       --bg:#F4F4F4;--card:#fff;--bdr:#E5E5E5;
       --t1:#111;--t2:#444;--t3:#777;--t4:#BBB;
       --r6:6px;--r10:10px;--r14:14px;--r20:20px;--rfull:100px;
+      --wrap:1200px;
     }
 
-    /* ─── HEADER ─── */
+    /* ─── LAYOUT WRAPPER ─── */
+    .w{width:100%;max-width:var(--wrap);margin:0 auto;padding:0 16px}
+
+    /* ─── DESKTOP HEADER ─── */
     #hdr{background:#fff;border-bottom:1.5px solid var(--bdr);position:sticky;top:0;z-index:100}
-    .hrow{display:flex;align-items:center;gap:10px;padding:10px 14px 0}
+    .hdr-inner{display:flex;align-items:center;gap:16px;padding:12px 24px;max-width:var(--wrap);margin:0 auto}
     .logo{display:flex;align-items:center;gap:8px;flex-shrink:0;text-decoration:none}
-    .lbox{width:34px;height:34px;background:var(--g);border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff;letter-spacing:-.5px}
+    .lbox{width:36px;height:36px;background:var(--g);border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff}
     .ltext{line-height:1}
-    .lname{font-size:14px;font-weight:900;color:var(--t1);letter-spacing:-.3px}
-    .lcity{font-size:9px;color:var(--g);font-weight:600;margin-top:1px;display:block}
-    .hsp{flex:1}
-    .dbadge{display:none;align-items:center;gap:4px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--rfull);padding:4px 10px;font-size:11px;font-weight:700;color:var(--g)}
-    .hbtns{display:flex;gap:6px;flex-shrink:0}
-    .hcart{position:relative;width:38px;height:38px;border-radius:var(--r10);background:var(--bg);border:1.5px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:18px}
-    .cbadge{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;background:var(--red);border-radius:var(--rfull);border:2px solid #fff;font-size:8px;font-weight:900;color:#fff;display:none;align-items:center;justify-content:center;padding:0 3px}
-    .hsignin{height:38px;padding:0 16px;background:var(--g);border-radius:var(--rfull);font-size:12px;font-weight:800;color:#fff;flex-shrink:0}
-    .hsearch{padding:8px 14px 10px}
-    .sbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:9px 12px;transition:border-color .15s}
+    .lname{font-size:15px;font-weight:900;color:var(--t1)}
+    .lcity{font-size:9px;color:var(--g);font-weight:600;display:block;margin-top:1px}
+    .hdr-del{display:flex;align-items:center;gap:5px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--rfull);padding:5px 12px;font-size:11px;font-weight:700;color:var(--g);white-space:nowrap;flex-shrink:0}
+    .hdr-search{flex:1;max-width:540px}
+    .sbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:9px 14px;transition:border-color .15s}
     .sbox:focus-within{border-color:var(--g)}
     .sbox svg{flex-shrink:0;color:var(--t3)}
     .sbox input{flex:1;background:none;border:none;outline:none;font-size:13px;color:var(--t1)}
     .sbox input::placeholder{color:var(--t3)}
-    #search-clear{color:var(--t3);font-size:14px;display:none;flex-shrink:0}
+    #search-clear{color:var(--t3);font-size:14px;display:none}
+    .hdr-spacer{flex:1}
+    .hdr-btns{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .hcart{position:relative;display:flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--bdr);border-radius:var(--rfull);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;background:var(--bg)}
+    .hcart span.ctxt{display:none}
+    .cbadge{background:var(--red);color:#fff;border-radius:var(--rfull);min-width:18px;height:18px;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;padding:0 4px}
+    .hsignin{height:38px;padding:0 20px;background:var(--g);border-radius:var(--rfull);font-size:13px;font-weight:800;color:#fff}
+
+    /* ─── CATEGORY NAV BAR (desktop only) ─── */
+    #cat-nav{background:#fff;border-bottom:1px solid var(--bdr);display:none}
+    .cat-nav-inner{display:flex;align-items:center;gap:0;max-width:var(--wrap);margin:0 auto;overflow-x:auto;scrollbar-width:none;padding:0 24px}
+    .cat-nav-inner::-webkit-scrollbar{display:none}
+    .cat-nav-item{flex:0 0 auto;padding:10px 14px;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;transition:color .15s,border-color .15s}
+    .cat-nav-item:hover{color:var(--g);border-bottom-color:var(--g)}
 
     /* ─── TRUST BAR ─── */
-    .tbar{background:#fff;border-bottom:1px solid var(--bdr);display:flex;overflow-x:auto;scrollbar-width:none}
+    .tbar{background:#fff;border-bottom:1px solid var(--bdr);overflow-x:auto;scrollbar-width:none}
     .tbar::-webkit-scrollbar{display:none}
-    .ti{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:8px 14px;border-right:1px solid var(--bdr);white-space:nowrap}
+    .tbar-inner{display:flex;align-items:center;max-width:var(--wrap);margin:0 auto;padding:0 24px}
+    .ti{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 16px 8px 0;border-right:1px solid var(--bdr);margin-right:16px;white-space:nowrap}
     .ti:last-child{border-right:none}
-    .ti-icon{font-size:14px}
-    .ti-lbl{font-size:10px;font-weight:700;color:var(--t2)}
+    .ti-icon{font-size:15px}
+    .ti-lbl{font-size:11px;font-weight:700;color:var(--t2)}
 
-    /* ─── HOME PAGE ─── */
-    #pg-home{padding-bottom:76px}
+    /* ─── MOBILE SEARCH (hidden on desktop) ─── */
+    .mob-search{padding:8px 14px 10px;display:none;background:#fff;border-bottom:1px solid var(--bdr)}
+    .mob-search .sbox{background:var(--bg)}
 
-    /* ─── HERO BANNER ─── */
-    .hero{margin:10px 14px 0;border-radius:var(--r14);overflow:hidden;background:linear-gradient(130deg,#0D5C2C 0%,#16783A 60%,#1E9248 100%);position:relative;min-height:148px}
-    .hero-inner{padding:20px 18px 18px;color:#fff;position:relative;z-index:1}
-    .hero-tag{position:absolute;top:0;right:0;background:var(--gold);color:#fff;font-size:9px;font-weight:900;padding:5px 10px;border-radius:0 var(--r14) 0 var(--r10);line-height:1.4;text-align:center;z-index:2}
-    .hero-kicker{font-size:10px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.08em;margin-bottom:7px;display:flex;align-items:center;gap:6px}
-    .hero-kicker::before{content:'';width:16px;height:1.5px;background:rgba(255,255,255,.5);border-radius:2px}
-    .hero-h{font-size:27px;font-weight:900;line-height:1.1;letter-spacing:-.5px;margin-bottom:6px}
+    /* ─── PAGE WRAPPER ─── */
+    #pg-home{padding-bottom:20px}
+    #pg-home.mob-pad{padding-bottom:76px}
+
+    /* ─── HERO ─── */
+    .hero-wrap{padding:20px 24px 0;max-width:var(--wrap);margin:0 auto}
+    .hero{border-radius:var(--r14);overflow:hidden;background:linear-gradient(130deg,#0D5C2C 0%,#16783A 60%,#1E9248 100%);position:relative;min-height:160px}
+    .hero-inner{padding:28px 32px 26px;color:#fff;position:relative;z-index:1}
+    .hero-tag{position:absolute;top:0;right:0;background:var(--gold);color:#fff;font-size:9px;font-weight:900;padding:6px 12px;border-radius:0 var(--r14) 0 var(--r10);line-height:1.4;text-align:center}
+    .hero-kicker{font-size:11px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+    .hero-kicker::before{content:'';width:18px;height:1.5px;background:rgba(255,255,255,.5)}
+    .hero-h{font-size:34px;font-weight:900;line-height:1.05;letter-spacing:-.7px;margin-bottom:8px}
     .hero-h b{color:var(--gold)}
-    .hero-sub{font-size:11.5px;color:rgba(255,255,255,.6);margin-bottom:18px;line-height:1.5}
-    .hero-btns{display:flex;gap:8px;flex-wrap:wrap}
-    .hbtn-pri{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--g);font-size:13px;font-weight:800;padding:10px 18px;border-radius:var(--rfull)}
-    .hbtn-sec{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;padding:10px 16px;border-radius:var(--rfull);border:1px solid rgba(255,255,255,.3)}
+    .hero-sub{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:22px}
+    .hero-btns{display:flex;gap:10px;flex-wrap:wrap}
+    .hbtn-pri{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--g);font-size:13px;font-weight:800;padding:11px 22px;border-radius:var(--rfull)}
+    .hbtn-sec{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;padding:11px 18px;border-radius:var(--rfull);border:1px solid rgba(255,255,255,.3)}
 
-    /* ─── SECTION HEADERS ─── */
-    .sec-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding:18px 14px 12px}
-    .sec-t{font-size:17px;font-weight:900;color:var(--t1)}
+    /* ─── SECTION ─── */
+    .sec-wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px}
+    .sec-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding:22px 0 14px}
+    .sec-t{font-size:18px;font-weight:900;color:var(--t1)}
     .sec-sub{font-size:11px;color:var(--t3);margin-top:2px}
-    .sec-all{font-size:12px;font-weight:700;color:var(--g);background:var(--glt);border:1px solid var(--gbdr);padding:5px 12px;border-radius:var(--rfull)}
+    .sec-all{font-size:12px;font-weight:700;color:var(--g);background:var(--glt);border:1px solid var(--gbdr);padding:6px 14px;border-radius:var(--rfull)}
 
     /* ─── CATEGORY GRID ─── */
-    /* 3 columns with real product-photo style cards like IBO/HomeRun */
-    .cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 14px}
-    .ccard{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .1s}
+    .cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .ccard{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
+    .ccard:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px)}
     .ccard:active{transform:scale(.97)}
-    .cimg{height:88px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden}
+    .cimg{height:90px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:42px;overflow:hidden}
     .cimg img{width:100%;height:100%;object-fit:cover}
-    .clabel{font-size:11px;font-weight:800;text-align:center;color:var(--t1);padding:8px 4px 10px;line-height:1.3;background:#fff}
+    .clabel{font-size:11px;font-weight:800;text-align:center;color:var(--t1);padding:8px 6px 10px;line-height:1.3;background:#fff}
 
-    /* ─── HORIZONTAL SCROLL ─── */
-    .hscroll{display:flex;gap:10px;overflow-x:auto;padding:0 14px 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    /* ─── HSCROLL ─── */
+    .hscroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
     .hscroll::-webkit-scrollbar{display:none}
 
     /* ─── DEAL CARD ─── */
-    .dcard{flex:0 0 154px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer}
-    .dimg{height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:44px;position:relative;overflow:hidden}
+    .dcard{flex:0 0 180px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
+    .dcard:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px)}
+    .dimg{height:130px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:48px;position:relative;overflow:hidden}
     .dimg img{width:100%;height:100%;object-fit:cover}
-    .dpct{position:absolute;top:6px;left:6px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:var(--rfull)}
-    .dspd{position:absolute;bottom:5px;right:6px;background:var(--g);color:#fff;font-size:8px;font-weight:800;padding:2px 7px;border-radius:var(--rfull)}
-    .dbody{padding:9px 10px 10px}
+    .dpct{position:absolute;top:7px;left:7px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:var(--rfull)}
+    .dspd{position:absolute;bottom:6px;right:7px;background:var(--g);color:#fff;font-size:8px;font-weight:800;padding:2px 7px;border-radius:var(--rfull)}
+    .dbody{padding:10px 11px 11px}
     .dbr{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
-    .dnm{font-size:11.5px;font-weight:700;color:var(--t1);line-height:1.35;min-height:30px;margin-bottom:7px}
+    .dnm{font-size:12px;font-weight:700;color:var(--t1);line-height:1.35;min-height:30px;margin-bottom:8px}
     .drow{display:flex;align-items:center;justify-content:space-between;gap:4px}
-    .dpr{font-size:14px;font-weight:900;color:var(--t1)}
+    .dpr{font-size:15px;font-weight:900}
     .dmrp{font-size:9px;color:var(--t4);text-decoration:line-through}
     .btn-add{background:var(--g);color:#fff;font-size:12px;font-weight:800;padding:6px 14px;border-radius:var(--r6)}
     .qrow{display:flex;align-items:center;border:1.5px solid var(--g);border-radius:var(--r6);overflow:hidden}
-    .qbtn{background:none;color:var(--g);font-size:18px;font-weight:700;width:28px;height:28px;display:flex;align-items:center;justify-content:center}
+    .qbtn{background:none;color:var(--g);font-size:18px;font-weight:700;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
     .qfill{background:var(--g);color:#fff}
-    .qn{font-size:13px;font-weight:800;min-width:20px;text-align:center}
+    .qn{font-size:13px;font-weight:800;min-width:22px;text-align:center}
 
     /* ─── PROMO CARDS ─── */
-    .pcard{flex:0 0 188px;border-radius:var(--r14);padding:16px 14px;cursor:pointer}
+    .pcard{flex:0 0 200px;border-radius:var(--r14);padding:18px 16px;cursor:pointer;transition:transform .1s}
+    .pcard:hover{transform:translateY(-2px)}
     .pkick{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;opacity:.75;margin-bottom:5px}
-    .ph{font-size:19px;font-weight:900;margin-bottom:3px}
+    .ph{font-size:20px;font-weight:900;margin-bottom:3px}
     .psub{font-size:10px;opacity:.7;line-height:1.5;margin-bottom:10px}
     .pcode{display:inline-block;font-size:10px;font-weight:800;padding:4px 9px;border-radius:var(--r6);border:1.5px dashed currentColor;opacity:.85}
 
-    /* ─── WHY US STRIP ─── */
-    .why-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0 14px}
-    .why-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:14px 12px;display:flex;align-items:flex-start;gap:10px}
-    .why-icon{font-size:24px;flex-shrink:0;margin-top:1px}
-    .why-title{font-size:12px;font-weight:800;color:var(--t1);margin-bottom:2px}
+    /* ─── WHY US ─── */
+    .why-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+    .why-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:16px 14px;display:flex;align-items:flex-start;gap:12px}
+    .why-icon{font-size:26px;flex-shrink:0}
+    .why-title{font-size:12px;font-weight:800;color:var(--t1);margin-bottom:3px}
     .why-sub{font-size:10px;color:var(--t3);line-height:1.4}
 
     /* ─── CONTRACTOR BANNER ─── */
-    .cc-banner{margin:0 14px;background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:var(--r14);padding:20px;display:flex;align-items:center;gap:14px;cursor:pointer}
-    .cc-emoji{font-size:40px;flex-shrink:0}
+    .cc-banner{background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:var(--r14);padding:24px 28px;display:flex;align-items:center;gap:20px;cursor:pointer}
+    .cc-emoji{font-size:48px;flex-shrink:0}
     .cc-kicker{font-size:9px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
-    .cc-h{font-size:16px;font-weight:900;color:#fff;margin-bottom:3px}
-    .cc-sub{font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px;line-height:1.4}
-    .cc-pills{display:flex;gap:6px;flex-wrap:wrap}
-    .cc-pill{padding:4px 10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--rfull);font-size:10px;font-weight:700;color:#fff}
-    .cc-btn{flex-shrink:0;padding:10px 14px;background:var(--gold);border-radius:var(--r10);font-size:12px;font-weight:900;color:#fff;text-align:center;white-space:nowrap}
+    .cc-h{font-size:20px;font-weight:900;color:#fff;margin-bottom:4px}
+    .cc-sub{font-size:12px;color:rgba(255,255,255,.55);margin-bottom:14px;line-height:1.4}
+    .cc-pills{display:flex;gap:8px;flex-wrap:wrap}
+    .cc-pill{padding:5px 12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--rfull);font-size:11px;font-weight:700;color:#fff}
+    .cc-btn{margin-left:auto;flex-shrink:0;padding:12px 20px;background:var(--gold);border-radius:var(--r10);font-size:13px;font-weight:900;color:#fff;text-align:center;white-space:nowrap}
 
-    /* ─── PINCODE CHECKER ─── */
-    .pzwrap{padding:0 14px}
-    .pzrow{display:flex;gap:8px;margin-bottom:8px}
-    .pzfield{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:0 12px;height:46px}
+    /* ─── DELIVERY ZONE ─── */
+    .pzrow{display:flex;gap:10px;margin-bottom:10px}
+    .pzfield{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:0 14px;height:48px}
     .pzfield:focus-within{border-color:var(--g)}
     .pzfield input{flex:1;border:none;background:none;outline:none;font-size:14px;font-weight:700;color:var(--t1)}
     .pzfield input::placeholder{color:var(--t3);font-weight:400}
-    .pzbtn{height:46px;padding:0 20px;background:var(--g);color:#fff;font-size:13px;font-weight:800;border-radius:var(--r10)}
-    #pz-result{font-size:12px;margin-bottom:2px}
-    .pz-ok{background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r10);padding:10px 12px;color:var(--g)}
-    .pz-ap{background:#FFF7ED;border:1px solid #FED7AA;border-radius:var(--r10);padding:10px 12px;color:#C2410C}
-    .pz-tg{background:#F5F3FF;border:1px solid #C4B5FD;border-radius:var(--r10);padding:10px 12px;color:#6D28D9}
-    .pz-no{background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--r10);padding:10px 12px;color:var(--red)}
+    .pzbtn{height:48px;padding:0 22px;background:var(--g);color:#fff;font-size:13px;font-weight:800;border-radius:var(--r10)}
+    #pz-result{font-size:12px}
+    .pz-ok{background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r10);padding:10px 14px;color:var(--g)}
+    .pz-ap{background:#FFF7ED;border:1px solid #FED7AA;border-radius:var(--r10);padding:10px 14px;color:#C2410C}
+    .pz-tg{background:#F5F3FF;border:1px solid #C4B5FD;border-radius:var(--r10);padding:10px 14px;color:#6D28D9}
+    .pz-no{background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--r10);padding:10px 14px;color:var(--red)}
     .pz-lbl{font-weight:800;font-size:12px;margin-bottom:2px}
     .pz-txt{font-size:11px;opacity:.8}
 
     /* ─── STORES MAP ─── */
-    .mapwrap{margin:0 14px;background:#1A2B1A;border-radius:var(--r14);overflow:hidden}
-    .maphdr{padding:16px 16px 0}
+    .mapwrap{background:#1A2B1A;border-radius:var(--r14);overflow:hidden}
+    .maphdr{padding:18px 20px 0}
     .mkick{font-size:9px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
-    .mt{font-size:16px;font-weight:900;color:#fff;margin-bottom:2px}
+    .mt{font-size:17px;font-weight:900;color:#fff;margin-bottom:2px}
     .msub{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:6px}
-    .mleg{display:flex;gap:16px;justify-content:center;padding:4px 16px 12px}
+    .mleg{display:flex;gap:16px;justify-content:center;padding:4px 20px 14px}
     .mleg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)}
     .mleg-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-    .sopen{margin:0 14px 10px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:13px;display:flex;align-items:center;gap:10px}
+    .sopen{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:14px;display:flex;align-items:center;gap:10px;margin-bottom:10px}
     .sopen-dot{width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 3px rgba(34,197,94,.2);flex-shrink:0}
-    .sopen-name{font-size:13px;font-weight:800;color:var(--t1)}
+    .sopen-name{font-size:13px;font-weight:800}
     .sopen-addr{font-size:10px;color:var(--t3);margin-top:1px}
-    .sbtns{display:flex;gap:6px;margin-left:auto;flex-shrink:0}
-    .sbtn-call{padding:8px 12px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--g)}
-    .sbtn-pk{padding:8px 12px;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--t2);cursor:pointer}
-    .cities{padding:0 14px 16px;display:flex;flex-wrap:wrap;gap:6px}
+    .sbtns{display:flex;gap:6px;margin-left:auto}
+    .sbtn-call{padding:8px 14px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--g)}
+    .sbtn-pk{padding:8px 14px;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--t2);cursor:pointer}
+    .cities{display:flex;flex-wrap:wrap;gap:6px;padding-top:4px}
     .cpill{padding:4px 12px;border-radius:var(--rfull);border:1px solid var(--bdr);font-size:10px;font-weight:600;color:var(--t2);background:var(--card)}
     .cpill-tg{border-color:#C4B5FD;color:#7C3AED;background:#F5F3FF}
 
     /* ─── CAT PAGE ─── */
-    #pg-cat{display:none;min-height:100vh;padding-bottom:80px}
+    #pg-cat{display:none;min-height:100vh;padding-bottom:20px}
     #pg-cat.open{display:block}
-    .cathdr{background:var(--card);border-bottom:1px solid var(--bdr);padding:10px 14px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:50}
-    .catback{font-size:22px;color:var(--t1);padding:0 2px}
-    .caticon{width:32px;height:32px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-    .cattitle{font-size:15px;font-weight:900;flex:1}
-    .sfbar{display:flex;border-bottom:1px solid var(--bdr);background:var(--card);position:sticky;top:52px;z-index:49}
-    .sfbtn{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:10px;font-size:12px;font-weight:700;color:var(--t2);border-right:1px solid var(--bdr)}
+    .cathdr{background:var(--card);border-bottom:1px solid var(--bdr);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;max-width:100%}
+    .catback{font-size:22px;color:var(--t1);padding:0 4px}
+    .caticon{width:34px;height:34px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+    .cattitle{font-size:16px;font-weight:900;flex:1}
+    .sfbar{display:flex;border-bottom:1px solid var(--bdr);background:var(--card);position:sticky;top:54px;z-index:49;max-width:100%}
+    .sfbtn{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:10px 18px;font-size:12px;font-weight:700;color:var(--t2);border-right:1px solid var(--bdr)}
     .sfbtn:last-child{border-right:none}
-    .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px 90px}
-    .pc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden}
-    .pc-img{height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:36px;position:relative;overflow:hidden}
+    .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 24px 40px;max-width:var(--wrap);margin:0 auto}
+    .pc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
+    .pc:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px)}
+    .pc-img{height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:42px;position:relative;overflow:hidden}
     .pc-img img{width:100%;height:100%;object-fit:cover}
-    .pc-pct{position:absolute;top:6px;left:6px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:var(--r6)}
-    .pc-body{padding:9px}
+    .pc-pct{position:absolute;top:7px;left:7px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:var(--rfull)}
+    .pc-body{padding:10px}
     .pc-br{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:2px}
-    .pc-nm{font-size:11.5px;font-weight:700;line-height:1.35;min-height:30px;margin-bottom:6px}
-    .pc-price{font-size:15px;font-weight:900;color:var(--t1)}
+    .pc-nm{font-size:12px;font-weight:700;line-height:1.35;min-height:30px;margin-bottom:6px}
+    .pc-price{font-size:15px;font-weight:900}
     .pc-unit{font-size:9px;color:var(--t3);margin-left:2px}
     .pc-mrp{font-size:9px;color:var(--t4);text-decoration:line-through;margin-left:4px}
-    .pc-add{display:block;width:100%;margin-top:7px;padding:9px;background:var(--g);color:#fff;border-radius:var(--r6);font-size:13px;font-weight:800;text-align:center}
-    .pc-qrow{display:flex;align-items:center;border:1.5px solid var(--g);border-radius:var(--r6);overflow:hidden;margin-top:7px}
-    .pc-qbtn{flex:0 0 36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--g)}
+    .pc-add{display:block;width:100%;margin-top:8px;padding:9px;background:var(--g);color:#fff;border-radius:var(--r6);font-size:13px;font-weight:800;text-align:center;cursor:pointer}
+    .pc-qrow{display:flex;align-items:center;border:1.5px solid var(--g);border-radius:var(--r6);overflow:hidden;margin-top:8px}
+    .pc-qbtn{flex:0 0 38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--g)}
     .pc-qfill{background:var(--g);color:#fff}
     .pc-qn{flex:1;text-align:center;font-size:14px;font-weight:800}
 
     /* ─── PDP SHEET ─── */
     .pdp{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;z-index:200;max-height:92vh;overflow-y:auto;transform:translateY(105%);transition:transform .32s cubic-bezier(.32,.72,0,1)}
     .pdp.open{transform:translateY(0)}
-    .pdp-imgwrap{height:230px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:80px;position:relative;overflow:hidden}
+    .pdp-imgwrap{height:240px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:80px;position:relative;overflow:hidden}
     .pdp-imgwrap img{width:100%;height:100%;object-fit:contain;padding:16px}
     .pdp-pct{position:absolute;top:12px;left:12px;background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:4px 10px;border-radius:var(--rfull)}
-    .pdp-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}
-    .pdp-wish{position:absolute;top:10px;right:48px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);font-size:16px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer}
-    .pdp-body{padding:16px 16px 110px}
+    .pdp-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);border:none;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .pdp-wish{position:absolute;top:10px;right:48px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .pdp-body{padding:16px 20px 120px}
     .pdp-br{font-size:10px;font-weight:800;color:var(--g);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-    .pdp-nm{font-size:18px;font-weight:900;line-height:1.25;letter-spacing:-.3px;margin-bottom:8px}
+    .pdp-nm{font-size:20px;font-weight:900;line-height:1.25;letter-spacing:-.3px;margin-bottom:8px}
     .pdp-prow{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
-    .pdp-price{font-size:26px;font-weight:900}
+    .pdp-price{font-size:28px;font-weight:900}
     .pdp-unit{font-size:12px;color:var(--t3)}
     .pdp-omrp{font-size:13px;color:var(--t4);text-decoration:line-through}
     .pdp-gst{font-size:11px;color:var(--t3);margin-bottom:14px}
     .pdp-trust{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin-bottom:16px}
     .pdp-ti{text-align:center}
-    .pdp-ti-icon{font-size:18px;margin-bottom:3px}
+    .pdp-ti-icon{font-size:20px;margin-bottom:3px}
     .pdp-ti-lbl{font-size:9px;color:var(--t3);font-weight:600;line-height:1.3}
     .pdp-spec-h{font-size:14px;font-weight:800;margin-bottom:8px}
     .pdp-spec{border:1px solid var(--bdr);border-radius:var(--r10);overflow:hidden;margin-bottom:18px}
     .pdp-spec-row{display:flex;border-bottom:1px solid var(--bdr);font-size:12px}
     .pdp-spec-row:last-child{border-bottom:none}
-    .pdp-spec-k{width:45%;padding:9px 10px;background:var(--bg);color:var(--t2);font-weight:600}
-    .pdp-spec-v{flex:1;padding:9px 10px;color:var(--t1)}
+    .pdp-spec-k{width:45%;padding:9px 12px;background:var(--bg);color:var(--t2);font-weight:600}
+    .pdp-spec-v{flex:1;padding:9px 12px;color:var(--t1)}
     .pdp-more-from{margin-top:20px}
-    .pdp-more-h{font-size:13px;font-weight:800;margin-bottom:10px}
-    .pdp-more-scr{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 16px}
+    .pdp-more-h{font-size:14px;font-weight:800;margin-bottom:10px}
+    .pdp-more-scr{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
     .pdp-more-scr::-webkit-scrollbar{display:none}
-    .pdp-mcard{flex:0 0 110px;border:1px solid var(--bdr);border-radius:var(--r10);overflow:hidden;cursor:pointer}
-    .pdp-mi{height:75px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:26px}
+    .pdp-mcard{flex:0 0 120px;border:1px solid var(--bdr);border-radius:var(--r10);overflow:hidden;cursor:pointer}
+    .pdp-mi{height:80px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:28px}
     .pdp-mi img{width:100%;height:100%;object-fit:cover}
-    .pdp-mb{padding:6px 7px}
+    .pdp-mb{padding:7px 8px}
     .pdp-mn{font-size:10px;font-weight:700;line-height:1.3;min-height:26px}
     .pdp-mp{font-size:12px;font-weight:900;margin-top:3px}
-    .pdp-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bdr);padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:201}
+    .pdp-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bdr);padding:12px 20px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:201}
     .pdp-bar.off{display:none}
-    .pdp-bar-call{width:48px;height:48px;border-radius:var(--r10);background:var(--glt);border:1.5px solid var(--gbdr);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;text-decoration:none}
-    .pdp-bar-atc{flex:1;padding:14px;background:var(--g);border-radius:var(--r10);color:#fff;font-size:14px;font-weight:900;border:none;cursor:pointer}
+    .pdp-bar-call{width:50px;height:50px;border-radius:var(--r10);background:var(--glt);border:1.5px solid var(--gbdr);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;text-decoration:none}
+    .pdp-bar-atc{flex:1;padding:14px;background:var(--g);border-radius:var(--r10);color:#fff;font-size:15px;font-weight:900;border:none;cursor:pointer}
 
-    /* ─── SHEETS ─── */
+    /* ─── SHEETS / OVERLAY ─── */
     .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;backdrop-filter:blur(1px)}
     .overlay.open{display:block}
-    .sheet{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:88vh;overflow-y:auto;padding:0 18px calc(22px + env(safe-area-inset-bottom))}
+    .sheet{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:88vh;overflow-y:auto;padding:0 20px calc(24px + env(safe-area-inset-bottom))}
     .sheet.open{transform:translateY(0)}
     .sheet-handle{width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:10px auto 18px}
     .pdp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:199}
     .pdp-overlay.open{display:block}
 
     /* ─── TOAST ─── */
-    #toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 20px;border-radius:var(--rfull);font-size:12px;font-weight:600;opacity:0;transition:opacity .2s;z-index:300;pointer-events:none;white-space:nowrap}
+    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 22px;border-radius:var(--rfull);font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;z-index:300;pointer-events:none;white-space:nowrap}
     #toast.show{opacity:1}
 
-    /* ─── BOTTOM NAV ─── */
-    #bnav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1.5px solid var(--bdr);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
+    /* ─── MOBILE BOTTOM NAV ─── */
+    #bnav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1.5px solid var(--bdr);display:none;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
     .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;font-size:9px;font-weight:600;color:var(--t3);border:none;background:none;cursor:pointer}
     .nav-item.active{color:var(--g)}
     .nav-icon{font-size:20px;line-height:1}
 
     /* ─── FOOTER ─── */
-    .footer{background:#1A2B1A;padding:28px 14px calc(80px + env(safe-area-inset-bottom))}
-    .ft-logo{font-size:16px;font-weight:900;color:var(--gold)}
-    .ft-tagline{font-size:11px;color:rgba(255,255,255,.35);margin-top:2px;margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid rgba(255,255,255,.08)}
-    .ft-cols{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px}
-    .ft-head{font-size:9px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px}
-    .ft-link{display:block;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px}
-    .ft-access{display:flex;gap:6px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);margin-bottom:14px}
-    .ft-abtn{flex:1;padding:11px 0;text-align:center;border-radius:var(--r10);font-size:11px;font-weight:700}
-    .ft-copy{font-size:10px;color:rgba(255,255,255,.2);text-align:center;padding-top:12px;border-top:1px solid rgba(255,255,255,.06)}
+    .footer{background:#1A2B1A;padding:36px 24px 32px;margin-top:20px}
+    .footer-inner{max-width:var(--wrap);margin:0 auto}
+    .ft-top{display:flex;gap:40px;margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid rgba(255,255,255,.08)}
+    .ft-brand{min-width:200px}
+    .ft-logo{font-size:18px;font-weight:900;color:var(--gold)}
+    .ft-tagline{font-size:12px;color:rgba(255,255,255,.4);margin-top:4px;line-height:1.5}
+    .ft-contact{margin-top:12px;font-size:12px;color:rgba(255,255,255,.5)}
+    .ft-contact a{color:var(--gold)}
+    .ft-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;flex:1}
+    .ft-head{font-size:10px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
+    .ft-link{display:block;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px;cursor:pointer}
+    .ft-link:hover{color:rgba(255,255,255,.8)}
+    .ft-bottom{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+    .ft-copy{font-size:11px;color:rgba(255,255,255,.25)}
+    .ft-access{display:flex;gap:8px}
+    .ft-abtn{padding:8px 16px;border-radius:var(--r6);font-size:11px;font-weight:700}
 
-
-    /* ─── DESKTOP: centered mobile app ─── */
-    @media(min-width:600px){
-      html{background:#E8E8E8}
-      body{max-width:480px;margin:0 auto;background:#F4F4F4;min-height:100vh;position:relative;box-shadow:0 0 60px rgba(0,0,0,.15)}
-      /* sticky header inside body — works because body is the scroll container */
-      #hdr{width:100%}
-      /* fixed elements need manual centering */
-      #bnav,
-      .pdp-bar{
-        left:50%;
-        transform:translateX(-50%);
-        width:480px;
-      }
-      .overlay,.pdp-overlay{background:rgba(0,0,0,.55)}
-      .sheet,.pdp{
-        left:50%;
-        transform:translateX(-50%) translateY(105%);
-        width:480px;
-      }
-      .sheet.open{transform:translateX(-50%) translateY(0)}
-      .pdp.open{transform:translateX(-50%) translateY(0)}
-    }
     /* ─── DIVIDER ─── */
-    .div{height:8px;background:var(--bg);margin:16px 0 0}
+    .div-line{height:1px;background:var(--bdr);margin:4px 0}
+
+    /* ══════════════════════════════════════
+       MOBILE OVERRIDES  (≤ 767px)
+    ══════════════════════════════════════ */
+    @media(max-width:767px){
+      :root{--wrap:100%}
+      .hdr-inner{padding:10px 14px 0;gap:10px}
+      .hdr-del{display:none}
+      .hdr-search{display:none}
+      .mob-search{display:block}
+      #cat-nav{display:none!important}
+      .hero-wrap{padding:10px 14px 0}
+      .hero-inner{padding:20px 18px 18px}
+      .hero-h{font-size:26px}
+      .sec-wrap{padding:0 14px}
+      .sec-hdr{padding:16px 0 10px}
+      .sec-t{font-size:16px}
+      .cgrid{grid-template-columns:repeat(3,1fr);gap:8px}
+      .cimg{height:80px;font-size:36px}
+      .clabel{font-size:10px;padding:6px 4px 8px}
+      .dcard{flex:0 0 150px}
+      .dimg{height:118px}
+      .pcard{flex:0 0 188px}
+      .why-grid{grid-template-columns:1fr 1fr}
+      .cc-banner{padding:16px 16px}
+      .cc-h{font-size:16px}
+      .cc-btn{padding:10px 14px;font-size:12px}
+      .pgrid{grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px 80px}
+      .cathdr{padding:10px 14px}
+      .sfbar{top:52px}
+      .footer{padding:28px 14px 80px}
+      .ft-top{flex-direction:column;gap:20px}
+      .ft-cols{grid-template-columns:1fr 1fr;gap:16px}
+      .ft-bottom{flex-direction:column;align-items:flex-start}
+      #bnav{display:flex}
+      #pg-home{padding-bottom:76px}
+      #pg-cat{padding-bottom:80px}
+      .pdp-bar,.sheet,.pdp{left:0;right:0;transform:translateY(105%)}
+      .pdp.open,.sheet.open{transform:translateY(0)}
+      #toast{bottom:76px}
+      .sopen{flex-wrap:wrap}
+    }
+
+    /* ══════════════════════════════════════
+       DESKTOP OVERRIDES  (≥ 768px)
+    ══════════════════════════════════════ */
+    @media(min-width:768px){
+      #cat-nav{display:block}
+      .hcart span.ctxt{display:inline}
+      .cgrid{grid-template-columns:repeat(6,1fr)}
+      .cimg{height:100px}
+      .dcard{flex:0 0 200px}
+      .why-grid{grid-template-columns:repeat(4,1fr)}
+      /* PDP and sheets centered on desktop */
+      .pdp,.sheet{max-width:600px;left:50%;right:auto;transform:translateX(-50%) translateY(105%);border-radius:16px 16px 0 0}
+      .pdp.open,.sheet.open{transform:translateX(-50%) translateY(0)}
+      .pdp-bar{max-width:600px;left:50%;right:auto;transform:translateX(-50%);border-radius:0 0 0 0}
+    }
   </style>
 </head>
 <body>
 
-<!-- ═══════════ HEADER ═══════════ -->
+<!-- ══ HEADER ══ -->
 <div id="hdr">
-  <div class="hrow">
-    <div class="logo">
+  <div class="hdr-inner">
+    <a class="logo" href="./shop.html">
       <div class="lbox">VW</div>
       <div class="ltext">
         <div class="lname">V Wholesale</div>
         <span class="lcity">Vijayawada's Store</span>
       </div>
+    </a>
+    <div class="hdr-del">📍 Vijayawada · 2–4 hrs</div>
+    <div class="hdr-search">
+      <div class="sbox">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="search-input" type="text" placeholder="Search tiles, cement, paints, brands…" oninput="handleSearch(this.value)">
+        <button id="search-clear" onclick="clearSearch()">✕</button>
+      </div>
     </div>
-    <div class="hsp"></div>
-    <div class="dbadge" id="delivery-badge">
-      <span>📍</span><span>Vijayawada · 2–4 hrs</span>
-    </div>
-    <div class="hbtns">
+    <div class="hdr-spacer"></div>
+    <div class="hdr-btns">
       <button class="hcart" onclick="openCart()">
-        🛍<span class="cbadge" id="cart-badge">0</span>
+        🛍 <span class="ctxt">Cart</span>
+        <span class="cbadge" id="cart-badge">0</span>
       </button>
       <button class="hsignin" onclick="openLoginSheet()">Sign in</button>
     </div>
   </div>
-  <div class="hsearch">
+  <!-- Mobile search -->
+  <div class="mob-search">
     <div class="sbox">
       <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search-input" type="text" placeholder="Search tiles, cement, paints, brands…" oninput="handleSearch(this.value)">
-      <button id="search-clear" onclick="clearSearch()">✕</button>
+      <input id="search-input-mob" type="text" placeholder="Search tiles, cement, paints…" oninput="handleSearch(this.value)">
+      <button onclick="clearSearch()">✕</button>
     </div>
   </div>
 </div>
 
-<!-- ═══════════ TRUST BAR ═══════════ -->
-<div class="tbar">
-  <div class="ti"><span class="ti-icon">🚚</span><span class="ti-lbl">2–4 Hr Delivery</span></div>
-  <div class="ti"><span class="ti-icon">💳</span><span class="ti-lbl">Pay on Delivery</span></div>
-  <div class="ti"><span class="ti-icon">🔄</span><span class="ti-lbl">7 Day Returns</span></div>
-  <div class="ti"><span class="ti-icon">✅</span><span class="ti-lbl">100% Genuine</span></div>
-  <div class="ti"><span class="ti-icon">💰</span><span class="ti-lbl">Wholesale Prices</span></div>
-  <div class="ti"><span class="ti-icon">🏪</span><span class="ti-lbl">Self Pickup</span></div>
+<!-- ══ CATEGORY NAV BAR (desktop) ══ -->
+<div id="cat-nav">
+  <div class="cat-nav-inner" id="cat-nav-items"></div>
 </div>
 
-<!-- ═══════════ HOME PAGE ═══════════ -->
+<!-- ══ TRUST BAR ══ -->
+<div class="tbar">
+  <div class="tbar-inner">
+    <div class="ti"><span class="ti-icon">🚚</span><span class="ti-lbl">2–4 Hr Delivery in Vijayawada</span></div>
+    <div class="ti"><span class="ti-icon">💳</span><span class="ti-lbl">Pay on Delivery</span></div>
+    <div class="ti"><span class="ti-icon">🔄</span><span class="ti-lbl">7 Day Easy Returns</span></div>
+    <div class="ti"><span class="ti-icon">✅</span><span class="ti-lbl">100% Genuine Products</span></div>
+    <div class="ti"><span class="ti-icon">💰</span><span class="ti-lbl">Wholesale Pricing</span></div>
+    <div class="ti"><span class="ti-icon">🏪</span><span class="ti-lbl">Self Pickup Available</span></div>
+  </div>
+</div>
+
+<!-- ══ HOME PAGE ══ -->
 <div id="pg-home">
 
   <!-- HERO -->
-  <div class="hero" onclick="showCategory(null);setNav('shop')">
-    <div class="hero-tag">⚡ 2–4 hr<br>Delivery</div>
-    <div class="hero-inner">
-      <div class="hero-kicker">Vijayawada's #1 Home Store</div>
-      <h1 class="hero-h">Build Better.<br><b>Pay Less.</b></h1>
-      <p class="hero-sub">Tiles · Sanitaryware · Plumbing · Electricals & More</p>
-      <div class="hero-btns">
-        <button class="hbtn-pri" onclick="event.stopPropagation();showCategory(null);setNav('shop')">Shop Now →</button>
-        <button class="hbtn-sec" onclick="event.stopPropagation();showCategory('Tiles');setNav('shop')">Browse Tiles</button>
+  <div class="hero-wrap">
+    <div class="hero">
+      <div class="hero-tag">⚡ 2–4 hr<br>Delivery</div>
+      <div class="hero-inner">
+        <div class="hero-kicker">Vijayawada's #1 Home Building Store</div>
+        <h1 class="hero-h">Build Better.<br><b>Pay Less.</b></h1>
+        <p class="hero-sub">Tiles · Sanitaryware · Plumbing · Electricals · Paints & More</p>
+        <div class="hero-btns">
+          <button class="hbtn-pri" onclick="showCategory(null);setNav('shop')">Shop Now →</button>
+          <button class="hbtn-sec" onclick="showCategory('Tiles');setNav('shop')">Browse Tiles</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- CATEGORIES -->
-  <div class="sec-hdr">
-    <div>
-      <div class="sec-t">Shop by Category</div>
+  <div class="sec-wrap">
+    <div class="sec-hdr">
+      <div><div class="sec-t">Shop by Category</div></div>
+      <button class="sec-all" onclick="showCategory(null);setNav('shop')">View All →</button>
     </div>
-    <button class="sec-all" onclick="showCategory(null);setNav('shop')">All →</button>
+    <div class="cgrid" id="cat-grid"></div>
   </div>
-  <div class="cgrid" id="cat-grid"></div>
-
-  <div class="div"></div>
 
   <!-- DEALS -->
-  <div class="sec-hdr">
-    <div>
-      <div class="sec-t">Best Deals</div>
-      <div class="sec-sub">Lowest prices right now</div>
-    </div>
-    <button class="sec-all" onclick="showCategory(null);setNav('shop')">All →</button>
-  </div>
-  <div class="hscroll" id="deals-scroll">
-    <div style="padding:20px;color:var(--t3);font-size:13px">Loading…</div>
-  </div>
-
-  <div class="div"></div>
-
-  <!-- OFFERS STRIP -->
-  <div class="sec-hdr" style="padding-bottom:8px">
-    <div class="sec-t">Offers for You</div>
-  </div>
-  <div class="hscroll">
-    <div class="pcard" style="background:linear-gradient(135deg,#0D5C2C,#16783A);color:#fff" onclick="openLoginSheet('offers')">
-      <div class="pkick">🎁 New Customer</div>
-      <div class="ph">10% Off</div>
-      <div class="psub">Free delivery above ₹2,000</div>
-      <div class="pcode">WELCOME10</div>
-    </div>
-    <div class="pcard" style="background:linear-gradient(135deg,#1C1035,#2D1B6B);color:#fff" onclick="showCategory('Tiles');setNav('shop')">
-      <div class="pkick">🏆 Tile Specialist</div>
-      <div class="ph">600+ Designs</div>
-      <div class="psub">All sizes · All finishes in stock</div>
-      <div class="pcode" style="color:#A78BFA;border-color:#A78BFA">Free quote →</div>
-    </div>
-    <div class="pcard" style="background:linear-gradient(135deg,#C8700A,#E8901A);color:#fff" onclick="openLoginSheet()">
-      <div class="pkick">⭐ Loyalty Rewards</div>
-      <div class="ph">Earn Points</div>
-      <div class="psub">10 pts per ₹100 · Redeem anytime</div>
-      <div class="pcode">Join free →</div>
-    </div>
-    <div class="pcard" style="background:linear-gradient(135deg,#1e3a5f,#2563EB);color:#fff" onclick="openLoginSheet()">
-      <div class="pkick">💳 V Wallet</div>
-      <div class="ph">₹200 Bonus</div>
-      <div class="psub">Add ₹1,000 to wallet · Get ₹200 extra</div>
-      <div class="pcode">FLAT200</div>
-    </div>
-  </div>
-
-  <div class="div"></div>
-
-  <!-- WHY SHOP WITH US -->
-  <div class="sec-hdr" style="padding-bottom:10px">
-    <div class="sec-t">Why V Wholesale?</div>
-  </div>
-  <div class="why-grid">
-    <div class="why-card">
-      <div class="why-icon">🚚</div>
+  <div class="sec-wrap">
+    <div class="sec-hdr">
       <div>
-        <div class="why-title">2–4 Hr Delivery</div>
-        <div class="why-sub">Fastest in Vijayawada. Same-day guaranteed.</div>
+        <div class="sec-t">Best Deals</div>
+        <div class="sec-sub">Lowest prices right now</div>
       </div>
+      <button class="sec-all" onclick="showCategory(null);setNav('shop')">View All →</button>
     </div>
-    <div class="why-card">
-      <div class="why-icon">💰</div>
-      <div>
-        <div class="why-title">Wholesale Pricing</div>
-        <div class="why-sub">Trade rates for everyone. No hidden costs.</div>
+    <div class="hscroll" id="deals-scroll">
+      <div style="padding:24px;color:var(--t3);font-size:13px">Loading…</div>
+    </div>
+  </div>
+
+  <!-- OFFERS -->
+  <div class="sec-wrap">
+    <div class="sec-hdr"><div class="sec-t">Offers for You</div></div>
+    <div class="hscroll">
+      <div class="pcard" style="background:linear-gradient(135deg,#0D5C2C,#16783A);color:#fff" onclick="openLoginSheet('offers')">
+        <div class="pkick">🎁 New Customer</div>
+        <div class="ph">10% Off</div>
+        <div class="psub">Free delivery on orders above ₹2,000</div>
+        <div class="pcode">WELCOME10</div>
       </div>
-    </div>
-    <div class="why-card">
-      <div class="why-icon">✅</div>
-      <div>
-        <div class="why-title">100% Genuine</div>
-        <div class="why-sub">Direct from brands. Always authentic.</div>
+      <div class="pcard" style="background:linear-gradient(135deg,#1C1035,#2D1B6B);color:#fff" onclick="showCategory('Tiles');setNav('shop')">
+        <div class="pkick">🏆 Tile Specialist</div>
+        <div class="ph">600+ Designs</div>
+        <div class="psub">All sizes · All finishes in stock</div>
+        <div class="pcode" style="color:#A78BFA;border-color:#A78BFA">Free quote →</div>
       </div>
-    </div>
-    <div class="why-card">
-      <div class="why-icon">🔄</div>
-      <div>
-        <div class="why-title">Easy 7-Day Returns</div>
-        <div class="why-sub">Free pickup, instant refund.</div>
+      <div class="pcard" style="background:linear-gradient(135deg,#C8700A,#E8901A);color:#fff" onclick="openLoginSheet()">
+        <div class="pkick">⭐ Loyalty Rewards</div>
+        <div class="ph">Earn Points</div>
+        <div class="psub">10 pts per ₹100 · Redeem anytime</div>
+        <div class="pcode">Join free →</div>
+      </div>
+      <div class="pcard" style="background:linear-gradient(135deg,#1e3a5f,#2563EB);color:#fff" onclick="openLoginSheet()">
+        <div class="pkick">💳 V Wallet</div>
+        <div class="ph">₹200 Bonus</div>
+        <div class="psub">Add ₹1,000 to wallet · Get ₹200 extra</div>
+        <div class="pcode">FLAT200</div>
       </div>
     </div>
   </div>
 
-  <div class="div"></div>
+  <!-- WHY US -->
+  <div class="sec-wrap">
+    <div class="sec-hdr"><div class="sec-t">Why V Wholesale?</div></div>
+    <div class="why-grid">
+      <div class="why-card"><div class="why-icon">🚚</div><div><div class="why-title">2–4 Hr Delivery</div><div class="why-sub">Fastest in Vijayawada. Same-day guaranteed.</div></div></div>
+      <div class="why-card"><div class="why-icon">💰</div><div><div class="why-title">Wholesale Pricing</div><div class="why-sub">Trade rates for everyone. No hidden costs.</div></div></div>
+      <div class="why-card"><div class="why-icon">✅</div><div><div class="why-title">100% Genuine</div><div class="why-sub">Direct from brands. Always authentic.</div></div></div>
+      <div class="why-card"><div class="why-icon">🔄</div><div><div class="why-title">Easy 7-Day Returns</div><div class="why-sub">Free pickup. Instant refund.</div></div></div>
+    </div>
+  </div>
 
   <!-- CONTRACTOR CLUB -->
-  <div style="padding:16px 0">
+  <div class="sec-wrap" style="padding-top:16px;padding-bottom:4px">
     <div class="cc-banner" onclick="openLoginSheet()">
       <div class="cc-emoji">👷</div>
       <div style="flex:1;min-width:0">
         <div class="cc-kicker">Contractor Club</div>
         <div class="cc-h">B2B Pricing + Referral Rewards</div>
-        <div class="cc-sub">Exclusive rates for trade professionals</div>
+        <div class="cc-sub">Exclusive rates for trade professionals across AP & Telangana</div>
         <div class="cc-pills">
           <span class="cc-pill">Plumbers</span>
           <span class="cc-pill">Electricians</span>
           <span class="cc-pill">Painters</span>
           <span class="cc-pill">Tilers</span>
+          <span class="cc-pill">Contractors</span>
         </div>
       </div>
-      <div class="cc-btn">Join<br>Free →</div>
+      <div class="cc-btn">Join Free →</div>
     </div>
   </div>
 
-  <div class="div"></div>
-
-  <!-- DELIVERY ZONE CHECKER -->
-  <div class="sec-hdr" style="padding-bottom:10px">
-    <div>
-      <div class="sec-t">Check Delivery</div>
-      <div class="sec-sub">AP & Telangana · Same-day in Vijayawada</div>
+  <!-- DELIVERY ZONE + MAP -->
+  <div class="sec-wrap">
+    <div class="sec-hdr">
+      <div><div class="sec-t">Check Delivery to Your Area</div><div class="sec-sub">AP & Telangana covered · Same-day in Vijayawada</div></div>
     </div>
-  </div>
-  <div class="pzwrap">
     <div class="pzrow">
       <div class="pzfield">
         <span style="font-size:16px">📍</span>
@@ -489,16 +534,13 @@
       </div>
       <button class="pzbtn" onclick="checkDeliveryPincode()">Check</button>
     </div>
-    <div id="pz-result"></div>
-  </div>
+    <div id="pz-result" style="margin-bottom:16px"></div>
 
-  <!-- STORES MAP -->
-  <div style="padding:12px 0 0">
     <div class="mapwrap">
       <div class="maphdr">
         <div class="mkick">Our Stores</div>
         <div class="mt">AP & Telangana</div>
-        <div class="msub">1 open · 13 cities coming soon</div>
+        <div class="msub">1 store open · 13 cities coming soon</div>
       </div>
       <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:220px;display:block">
         <path d="M62,165 L52,130 L72,92 L112,72 L162,62 L212,77 L252,102 L270,140 L260,188 L240,236 L212,284 L182,322 L152,340 L122,330 L92,302 L72,264 L57,226 Z" fill="#1A2E1A" stroke="#2E7D4F" stroke-width="1"/>
@@ -506,8 +548,7 @@
         <text x="158" y="248" fill="rgba(255,255,255,.15)" font-size="8.5" font-weight="700" text-anchor="middle" font-family="system-ui">ANDHRA PRADESH</text>
         <text x="178" y="128" fill="rgba(255,255,255,.15)" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">TELANGANA</text>
         <circle cx="168" cy="197" r="11" fill="rgba(232,144,26,.15)" stroke="rgba(232,144,26,.4)" stroke-width="1"/>
-        <circle cx="168" cy="197" r="6" fill="#E8901A"/>
-        <circle cx="168" cy="197" r="3" fill="#fff"/>
+        <circle cx="168" cy="197" r="6" fill="#E8901A"/><circle cx="168" cy="197" r="3" fill="#fff"/>
         <text x="168" y="215" fill="#E8901A" font-size="7" font-weight="800" text-anchor="middle" font-family="system-ui">VIJAYAWADA</text>
         <text x="168" y="223" fill="rgba(232,144,26,.5)" font-size="5.5" text-anchor="middle" font-family="system-ui">OPEN NOW</text>
         <circle cx="155" cy="218" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="155" y="232" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Guntur</text>
@@ -525,40 +566,35 @@
         <circle cx="178" cy="136" r="3.5" fill="rgba(139,92,246,.6)" stroke="rgba(139,92,246,.9)" stroke-width=".8"/><text x="178" y="129" fill="rgba(139,92,246,.8)" font-size="5.5" text-anchor="middle" font-family="system-ui">Warangal</text>
       </svg>
       <div class="mleg">
-        <div class="mleg-item"><span class="mleg-dot" style="background:#E8901A"></span>Open Now</div>
+        <div class="mleg-item"><span class="mleg-dot" style="background:#E8901A"></span>Open</div>
         <div class="mleg-item"><span class="mleg-dot" style="background:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.5)"></span>AP — Soon</div>
         <div class="mleg-item"><span class="mleg-dot" style="background:rgba(139,92,246,.6)"></span>Telangana — Soon</div>
       </div>
     </div>
-    <div class="sopen">
-      <div class="sopen-dot"></div>
-      <div>
-        <div class="sopen-name">V Wholesale · Vijayawada</div>
-        <div class="sopen-addr">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div>
+    <div style="margin-top:10px">
+      <div class="sopen">
+        <div class="sopen-dot"></div>
+        <div><div class="sopen-name">V Wholesale · Vijayawada</div><div class="sopen-addr">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
+        <div class="sbtns">
+          <a href="tel:8712697930" class="sbtn-call">📞 Call</a>
+          <button class="sbtn-pk" onclick="showPickupOption()">Pickup Info</button>
+        </div>
       </div>
-      <div class="sbtns">
-        <a href="tel:8712697930" class="sbtn-call">📞 Call</a>
-        <button class="sbtn-pk" onclick="showPickupOption()">Pickup</button>
+      <div class="cities">
+        <span class="cpill">Guntur</span><span class="cpill">Nellore</span><span class="cpill">Ongole</span><span class="cpill">Tirupati</span><span class="cpill">Kadapa</span><span class="cpill">Kurnool</span><span class="cpill">Anantapur</span><span class="cpill">Rajamundry</span><span class="cpill">Anakapalle</span><span class="cpill">Vizag</span><span class="cpill">Srikakulam</span><span class="cpill cpill-tg">Khammam</span><span class="cpill cpill-tg">Warangal</span>
       </div>
-    </div>
-    <div class="cities">
-      <span class="cpill">Guntur</span><span class="cpill">Nellore</span><span class="cpill">Ongole</span>
-      <span class="cpill">Tirupati</span><span class="cpill">Kadapa</span><span class="cpill">Kurnool</span>
-      <span class="cpill">Anantapur</span><span class="cpill">Rajamundry</span><span class="cpill">Anakapalle</span>
-      <span class="cpill">Vizag</span><span class="cpill">Srikakulam</span>
-      <span class="cpill cpill-tg">Khammam</span><span class="cpill cpill-tg">Warangal</span>
     </div>
   </div>
 
 </div><!-- /pg-home -->
 
-<!-- ═══════════ CATEGORY PAGE ═══════════ -->
+<!-- ══ CATEGORY PAGE ══ -->
 <div id="pg-cat">
   <div class="cathdr">
     <button class="catback" onclick="closeCategoryPage()">←</button>
     <div class="caticon" id="cat-icon"></div>
     <span class="cattitle" id="cat-title">Products</span>
-    <button class="hcart" onclick="openCart()" style="position:relative">🛍<span class="cbadge" id="cat-cart-badge" style="display:none">0</span></button>
+    <button class="hcart" onclick="openCart()" style="position:relative">🛍 <span class="cbadge" id="cat-cart-badge" style="display:none">0</span></button>
   </div>
   <div class="sfbar">
     <button class="sfbtn" onclick="toggleSort()">↕ Sort</button>
@@ -569,38 +605,55 @@
   </div>
 </div>
 
-<!-- ═══════════ FOOTER ═══════════ -->
+<!-- ══ FOOTER ══ -->
 <div class="footer">
-  <div class="ft-logo">V Wholesale</div>
-  <div class="ft-tagline">Vijayawada's home building store · NH65, Bhavanipuram · <a href="tel:8712697930" style="color:var(--gold)">87126 97930</a></div>
-  <div class="ft-cols">
-    <div>
-      <div class="ft-head">Shop</div>
-      <a class="ft-link" onclick="showCategory('Tiles');setNav('shop')">Tiles</a>
-      <a class="ft-link" onclick="showCategory('Sanitary');setNav('shop')">Sanitaryware</a>
-      <a class="ft-link" onclick="showCategory('Plumbing');setNav('shop')">Plumbing</a>
-      <a class="ft-link" onclick="showCategory('Electricals');setNav('shop')">Electricals</a>
-      <a class="ft-link" onclick="showCategory('Paints');setNav('shop')">Paints</a>
-      <a class="ft-link" onclick="showCategory('Hardware');setNav('shop')">Hardware</a>
+  <div class="footer-inner">
+    <div class="ft-top">
+      <div class="ft-brand">
+        <div class="ft-logo">V Wholesale</div>
+        <div class="ft-tagline">Vijayawada's home building store<br>NH65, Bhavanipuram · 520012</div>
+        <div class="ft-contact">📞 <a href="tel:8712697930">87126 97930</a><br>📧 <a href="mailto:hello@vwholesale.in">hello@vwholesale.in</a></div>
+      </div>
+      <div class="ft-cols">
+        <div>
+          <div class="ft-head">Shop</div>
+          <a class="ft-link" onclick="showCategory('Tiles');setNav('shop')">Tiles</a>
+          <a class="ft-link" onclick="showCategory('Sanitary');setNav('shop')">Sanitaryware</a>
+          <a class="ft-link" onclick="showCategory('Plumbing');setNav('shop')">Plumbing</a>
+          <a class="ft-link" onclick="showCategory('Electricals');setNav('shop')">Electricals</a>
+          <a class="ft-link" onclick="showCategory('Paints');setNav('shop')">Paints</a>
+          <a class="ft-link" onclick="showCategory('Hardware');setNav('shop')">Hardware</a>
+        </div>
+        <div>
+          <div class="ft-head">Company</div>
+          <a class="ft-link" href="./about.html">About Us</a>
+          <a class="ft-link" href="./contact.html">Contact Us</a>
+          <a class="ft-link" href="./privacy.html">Privacy Policy</a>
+          <a class="ft-link" href="./terms.html">Terms of Service</a>
+          <a class="ft-link" href="./refund.html">Refund Policy</a>
+          <a class="ft-link" href="./shipping.html">Shipping Policy</a>
+        </div>
+        <div>
+          <div class="ft-head">Partner Access</div>
+          <a class="ft-link" href="./index.html?staff=1">🏪 Staff Login</a>
+          <a class="ft-link" href="./index.html?contractor=1">👷 Contractor Login</a>
+          <div class="ft-head" style="margin-top:16px">Store Hours</div>
+          <div class="ft-link" style="cursor:default">Mon – Sat</div>
+          <div class="ft-link" style="cursor:default">9:00 AM – 7:30 PM</div>
+        </div>
+      </div>
     </div>
-    <div>
-      <div class="ft-head">Company</div>
-      <a class="ft-link" href="./about.html">About Us</a>
-      <a class="ft-link" href="./contact.html">Contact</a>
-      <a class="ft-link" href="./privacy.html">Privacy Policy</a>
-      <a class="ft-link" href="./terms.html">Terms of Service</a>
-      <a class="ft-link" href="./refund.html">Refund Policy</a>
-      <a class="ft-link" href="./shipping.html">Shipping</a>
+    <div class="ft-bottom">
+      <div class="ft-copy">© 2026 Vassure Wholesale Pvt. Ltd. · GSTIN 37AAJCV5725H1ZZ</div>
+      <div class="ft-access">
+        <a href="./index.html?staff=1" class="ft-abtn" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.6);border:1px solid rgba(255,255,255,.12)">Staff Login</a>
+        <a href="./index.html?contractor=1" class="ft-abtn" style="background:rgba(232,144,26,.1);color:var(--gold);border:1px solid rgba(232,144,26,.25)">Contractor Login</a>
+      </div>
     </div>
   </div>
-  <div class="ft-access">
-    <a href="./index.html?staff=1" class="ft-abtn" style="background:rgba(255,255,255,.06);color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.1)">🏪 Staff Login</a>
-    <a href="./index.html?contractor=1" class="ft-abtn" style="background:rgba(232,144,26,.1);color:var(--gold);border:1px solid rgba(232,144,26,.25)">👷 Contractor</a>
-  </div>
-  <div class="ft-copy">© 2026 Vassure Wholesale Pvt. Ltd. · GSTIN 37AAJCV5725H1ZZ</div>
 </div>
 
-<!-- ═══════════ BOTTOM NAV ═══════════ -->
+<!-- ══ MOBILE BOTTOM NAV ══ -->
 <nav id="bnav">
   <button class="nav-item active" id="nav-home" onclick="goHome();setNav('home')"><span class="nav-icon">🏠</span><span>Home</span></button>
   <button class="nav-item" id="nav-shop" onclick="showCategory(null);setNav('shop')"><span class="nav-icon">🛒</span><span>Shop</span></button>
@@ -609,7 +662,7 @@
   <button class="nav-item" id="nav-account" onclick="openLoginSheet()"><span class="nav-icon">👤</span><span>Account</span></button>
 </nav>
 
-<!-- ═══════════ OVERLAYS ═══════════ -->
+<!-- ══ OVERLAYS ══ -->
 <div class="overlay" id="sheet-overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="bottom-sheet"></div>
 <div class="pdp-overlay" id="pdp-overlay" onclick="closePDP()"></div>
@@ -1025,6 +1078,16 @@ function renderCatGrid() {
       <div class="cimg" style="background:var(--bg);border-color:var(--bdr);font-size:16px;font-weight:800;color:var(--t3)">+4</div>
       <div class="clabel" style="color:var(--t3)">More</div>
     </div>`;
+}
+
+
+// ── CATEGORY NAV BAR (desktop) ──
+function renderCatNav() {
+  const el = document.getElementById('cat-nav-items');
+  if (!el) return;
+  el.innerHTML = CATS.map(c =>
+    `<div class="cat-nav-item" onclick="showCategory('${c.key}');setNav('shop')">${c.icon} ${c.label}</div>`
+  ).join('') + `<div class="cat-nav-item" onclick="showCategory(null);setNav('shop')">All Products →</div>`;
 }
 
 // ── LOAD DEALS ──
@@ -1461,6 +1524,7 @@ if (GA4_ID !== 'G-XXXXXXXXXX') {
 // ── INIT ──
 loadWishlist();
 renderCatGrid();
+renderCatNav();
 loadDeals();
 </script>
 
