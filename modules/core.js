@@ -677,7 +677,7 @@ async function showAuthScreen(mode) {
       try {
         // Authenticate via Supabase Auth (email = phone@vwholesale.in, password = PIN)
         const { data: authData, error: authError } = await VW_DB.client.auth.signInWithPassword({
-          email: phone.replace(/\D/g,'').slice(-10) + '@vwholesale.in',
+          email: phoneToEmail(phone),
           password: pin
         });
         if (authError) {
@@ -913,7 +913,7 @@ async function handlePublicAuthSubmit() {
 
       if (existing) {
         // Existing user — send OTP to verify
-        const otpEmail = email || (existing.email || `${phone}@vwholesale.in`);
+        const otpEmail = email || (existing.email || `${phone}${EMAIL_DOMAIN}`);
         await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: false } });
         window._authOtpEmail = otpEmail;
         window._authStep = 'otp';
@@ -927,7 +927,7 @@ async function handlePublicAuthSubmit() {
       }
 
       // New user — create profile with OTP verification
-      const otpEmail = email || `${phone}@vwholesale.in`;
+      const otpEmail = email || `${phone}${EMAIL_DOMAIN}`;
       await sb.auth.signInWithOtp({ email: otpEmail, options: { shouldCreateUser: true } });
       window._authOtpEmail = otpEmail;
       window._authNewUser = { phone, name, email, role };
