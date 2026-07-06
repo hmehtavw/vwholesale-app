@@ -1121,6 +1121,8 @@ async function submitPinResetRequest() {
 }
 window.submitPinResetRequest = submitPinResetRequest;
 
+let authMode = 'login';
+
 function toggleAuthMode() {
   authMode = authMode === 'login' ? 'signup' : 'login';
   document.getElementById('auth-title').textContent = authMode === 'login' ? 'Log In' : 'Register';
