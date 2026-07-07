@@ -3035,7 +3035,7 @@ async function _confirmAddToInventory(tileId) {
 
 // ─── EXPORT ───────────────────────────────────────────────────────────────────
 window.VW_NON_INV = {
-  renderCatalogUploadPage,
+  renderCatalogUploadPage, renderCatalogReviewPage,
   switchNonInvTab,
   searchCatalog,
   _filterCatalog: async (field, val) => {
@@ -3444,3 +3444,458 @@ async function renderBulkPhotoUploadPage() {
 
 window.VW_INVENTORY.renderBulkPhotoUploadPage = renderBulkPhotoUploadPage;
 window.renderBulkPhotoUploadPage = renderBulkPhotoUploadPage;
+
+// ═══════════════════════════════════════════════════════════════════
+// CATALOG UPLOAD & PRICING SYSTEM
+// Upload PDF → AI extracts all products → Set pricing tiers → Go Live
+// ═══════════════════════════════════════════════════════════════════
+
+// Roles that can see trade/cost price
+const _COST_PRICE_ROLES = ['admin','management','category','purchase','store_manager'];
+
+function _canSeeCostPrice() {
+  const role = VW_AUTH.getCurrentProfile()?.role || '';
+  return _COST_PRICE_ROLES.includes(role);
+}
+
+// Price tier labels
+const PRICE_TIERS = [
+  { key:'tier1_price', label:'B2C Retail',       icon:'🛒', desc:'Customer-facing shop price' },
+  { key:'tier2_price', label:'Contractor Club',   icon:'🏗', desc:'Approved contractors & professionals' },
+  { key:'tier3_price', label:'B2B Dealer',        icon:'🏪', desc:'Shops & trade partners' },
+  { key:'tier4_price', label:'Project / Bulk',    icon:'📦', desc:'Large project orders' },
+];
+
+// ── UPLOAD PAGE ──────────────────────────────────────────────────
+async function renderCatalogUploadPage() {
+  const { data: cats } = await VW_DB.client.from('shop_categories')
+    .select('key,label,department').eq('is_active', true).order('sort_order');
+
+  return `
+  <div class="module-header">
+    <h2>📦 Upload Brand Catalog</h2>
+    <button class="btn-sm" onclick="navigateTo('catalog_review')">📋 Review Extracted Items</button>
+  </div>
+
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-header-row"><h3 class="card-title">Catalog Details</h3></div>
+
+    <div class="form-row">
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Brand Name *</label>
+        <input id="cu-brand" type="text" class="form-input" placeholder="e.g. Jaquar, Asian Paints, Kajaria">
+      </div>
+      <div class="form-group" style="flex:1">
+        <label class="form-label">Product Type *</label>
+        <select id="cu-type" class="form-input" onchange="window._cuTypeChange()">
+          <option value="general">General Products (Sanitary, Electrical, Paints, etc.)</option>
+          <option value="tile">Tiles / Flooring</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group" id="cu-cat-group">
+      <label class="form-label">Category</label>
+      <select id="cu-category" class="form-input">
+        <option value="">-- Select Category --</option>
+        ${(cats||[]).map(c => `<option value="${c.key}">${c.label}</option>`).join('')}
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Catalog File (PDF or Images) *</label>
+      <input id="cu-file" type="file" accept=".pdf,image/*" multiple class="form-input"
+        onchange="window._cuPreview(this)">
+      <div id="cu-preview" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input id="cu-notes" type="text" class="form-input" placeholder="e.g. FY2025 price list, pages 1-40 only">
+    </div>
+  </div>
+
+  <!-- Bulk pricing defaults (applied to all extracted items, editable later) -->
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-header-row">
+      <h3 class="card-title">💰 Bulk Pricing Defaults</h3>
+      <span style="font-size:11px;color:var(--text3)">Applied to all extracted items · edit individually after</span>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Set as % below MRP. Leave blank to set prices manually after extraction.</div>
+
+    ${_canSeeCostPrice() ? `
+    <div class="form-group">
+      <label class="form-label">🔒 Trade / Cost Price (% below MRP)</label>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input id="cu-trade-pct" type="number" class="form-input" placeholder="e.g. 35 = MRP minus 35%" min="0" max="90" step="0.5" style="flex:1">
+        <span style="font-size:12px;color:var(--text3)">% below MRP</span>
+      </div>
+    </div>` : ''}
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${PRICE_TIERS.map(t => `
+      <div class="form-group" style="margin:0">
+        <label class="form-label">${t.icon} ${t.label}</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input id="cu-${t.key}-pct" type="number" class="form-input" placeholder="% below MRP"
+            min="0" max="90" step="0.5" style="flex:1;font-size:13px">
+          <span style="font-size:11px;color:var(--text3)">%</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${t.desc}</div>
+      </div>`).join('')}
+    </div>
+
+    <div class="form-row" style="margin-top:12px">
+      <div class="form-group" style="flex:1;margin:0">
+        <label class="form-label">GST %</label>
+        <select id="cu-gst" class="form-input">
+          <option value="">-- Extract from catalog --</option>
+          <option value="5">5%</option>
+          <option value="12">12%</option>
+          <option value="18" selected>18% (default)</option>
+          <option value="28">28%</option>
+          <option value="0">0% (exempt)</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;margin:0">
+        <label class="form-label">Lead Time (days)</label>
+        <input id="cu-lead" type="number" class="form-input" value="7" min="1" max="90">
+      </div>
+    </div>
+  </div>
+
+  <div id="cu-status" style="display:none;background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--gold)"></div>
+
+  <button onclick="processCatalogUploadNew()" class="btn-primary" style="width:100%;padding:14px;font-size:15px">
+    🤖 Extract with AI →
+  </button>`;
+}
+window._cuTypeChange = function() {
+  const isTile = document.getElementById('cu-type')?.value === 'tile';
+  const catGroup = document.getElementById('cu-cat-group');
+  if (catGroup) catGroup.style.display = isTile ? 'none' : '';
+};
+window._cuPreview = function(input) {
+  const el = document.getElementById('cu-preview');
+  if (!el) return;
+  const files = [...(input.files||[])];
+  el.textContent = files.map(f => `${f.name} (${(f.size/1024/1024).toFixed(1)} MB)`).join(' · ');
+};
+
+async function processCatalogUploadNew() {
+  const brand    = document.getElementById('cu-brand')?.value?.trim();
+  const type     = document.getElementById('cu-type')?.value;
+  const catKey   = document.getElementById('cu-category')?.value || null;
+  const files    = document.getElementById('cu-file')?.files;
+  const notes    = document.getElementById('cu-notes')?.value?.trim();
+  const isTile   = type === 'tile';
+
+  if (!brand) { showToast('Enter brand name','warn'); return; }
+  if (!files?.length) { showToast('Select a catalog file','warn'); return; }
+
+  const btn = document.querySelector('[onclick="processCatalogUploadNew()"]');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Uploading...'; }
+
+  const status = document.getElementById('cu-status');
+  if (status) { status.style.display='block'; status.textContent='Creating catalog batch...'; }
+
+  // Collect bulk pricing
+  const bulkTrade  = parseFloat(document.getElementById('cu-trade-pct')?.value||0)||null;
+  const bulkTier1  = parseFloat(document.getElementById('cu-tier1_price-pct')?.value||0)||null;
+  const bulkTier2  = parseFloat(document.getElementById('cu-tier2_price-pct')?.value||0)||null;
+  const bulkTier3  = parseFloat(document.getElementById('cu-tier3_price-pct')?.value||0)||null;
+  const bulkTier4  = parseFloat(document.getElementById('cu-tier4_price-pct')?.value||0)||null;
+  const bulkGst    = parseFloat(document.getElementById('cu-gst')?.value||0)||null;
+  const leadTime   = parseInt(document.getElementById('cu-lead')?.value||7);
+  const prof       = VW_AUTH.getCurrentProfile();
+
+  try {
+    // Create batch record
+    const { data: batch, error: be } = await VW_DB.client.from('catalog_batches').insert({
+      brand, category_key: catKey||null, file_name: files[0].name,
+      bulk_gst_pct: bulkGst, bulk_trade_pct: bulkTrade,
+      bulk_tier1_pct: bulkTier1, bulk_tier2_pct: bulkTier2,
+      bulk_tier3_pct: bulkTier3, bulk_tier4_pct: bulkTier4,
+      uploaded_by: prof?.name||'', notes, status:'processing',
+    }).select().single();
+    if (be) throw be;
+
+    let totalExtracted = 0;
+    for (let fi=0; fi<files.length; fi++) {
+      const file = files[fi];
+      if (status) status.textContent = `Reading file ${fi+1}/${files.length}: ${file.name}...`;
+
+      // Convert to base64
+      const b64 = await new Promise((res,rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(',')[1]);
+        r.onerror = () => rej(new Error('File read failed'));
+        r.readAsDataURL(file);
+      });
+
+      if (status) status.textContent = `🤖 AI extracting from ${file.name}...`;
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/catalog-extract`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({
+          fileBase64: b64, fileType: file.type, fileName: file.name,
+          brand, categoryKey: catKey, batchId: batch.id, isTile,
+        }),
+      });
+      const result = await response.json();
+      if (!result.success) throw new Error(result.error || 'Extraction failed');
+      totalExtracted += result.extracted || 0;
+      if (status) status.textContent = `✅ File ${fi+1}: extracted ${result.extracted} items. Total so far: ${totalExtracted}`;
+    }
+
+    // Apply bulk pricing to all extracted items
+    if (totalExtracted > 0) {
+      if (status) status.textContent = `Applying bulk pricing to ${totalExtracted} items...`;
+      await _applyBulkPricing(batch.id, isTile, {
+        bulkTrade, bulkTier1, bulkTier2, bulkTier3, bulkTier4, bulkGst, leadTime
+      });
+    }
+
+    if (status) status.innerHTML = `<strong>✅ Done! ${totalExtracted} products extracted.</strong><br>
+      <a style="color:var(--gold);cursor:pointer;text-decoration:underline" onclick="navigateTo('catalog_review')">
+      → Review & set prices to go live</a>`;
+    if (btn) { btn.disabled=false; btn.textContent='🤖 Extract with AI →'; }
+
+  } catch(e) {
+    showToast('Error: ' + e.message,'error');
+    if (status) status.textContent = '❌ Error: ' + e.message;
+    if (btn) { btn.disabled=false; btn.textContent='🤖 Extract with AI →'; }
+  }
+}
+
+async function _applyBulkPricing(batchId, isTile, bulk) {
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const { data: items } = await VW_DB.client.from(table)
+    .select('id,mrp' + (isTile ? ',mrp_per_sqft' : '')).eq('catalog_batch_id', batchId);
+
+  for (const item of (items||[])) {
+    const base = isTile ? (item.mrp_per_sqft||0) : (item.mrp||0);
+    const calc = (pct) => pct && base > 0 ? Math.round(base * (1 - pct/100) * 100)/100 : null;
+    const update = {
+      gst_pct:      bulk.bulkGst || (isTile ? 18 : null) || undefined,
+      lead_time_days: bulk.leadTime || 7,
+      ...(isTile ? {} : { availability: 'on_order' }),
+    };
+    if (bulk.bulkTrade) update.trade_price = calc(bulk.bulkTrade);
+    if (bulk.bulkTier1) update.tier1_price = calc(bulk.bulkTier1);
+    if (bulk.bulkTier2) update.tier2_price = calc(bulk.bulkTier2);
+    if (bulk.bulkTier3) update.tier3_price = calc(bulk.bulkTier3);
+    if (bulk.bulkTier4) update.tier4_price = calc(bulk.bulkTier4);
+    await VW_DB.client.from(table).update(update).eq('id', item.id);
+  }
+}
+
+// ── REVIEW PAGE ──────────────────────────────────────────────────
+async function renderCatalogReviewPage() {
+  // Load recent batches
+  const { data: batches } = await VW_DB.client.from('catalog_batches')
+    .select('*').order('created_at',{ascending:false}).limit(20);
+
+  // Load pending items (not yet live)
+  const { data: pending } = await VW_DB.client.from('brand_catalog_items')
+    .select('*').eq('show_in_shop',false).eq('is_active',false).order('created_at',{ascending:false}).limit(100);
+
+  const { data: tilePending } = await VW_DB.client.from('non_inventory_tiles')
+    .select('*').eq('status','draft').order('created_at',{ascending:false}).limit(100);
+
+  const canCost = _canSeeCostPrice();
+
+  return `
+  <div class="module-header">
+    <h2>🔍 Catalog Review</h2>
+    <button class="btn-sm btn-primary" onclick="navigateTo('catalog_upload')">+ Upload New</button>
+  </div>
+
+  <!-- Batch summary -->
+  ${(batches||[]).length ? `
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-header-row"><h3 class="card-title">Recent Uploads</h3></div>
+    ${batches.map(b => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
+      <div>
+        <div style="font-weight:700">${b.brand} <span style="color:var(--text3)">${b.file_name||''}</span></div>
+        <div style="color:var(--text3)">${new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${b.items_extracted||0} items · ${b.items_live||0} live</div>
+      </div>
+      <span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:${b.status==='live'?'rgba(34,197,94,0.1)':'rgba(245,200,66,0.1)'};color:${b.status==='live'?'var(--green)':'var(--gold)'}">${b.status}</span>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <!-- Bulk actions bar -->
+  <div class="card" style="margin-bottom:12px;background:rgba(245,200,66,0.05);border:1px solid var(--gold-border)">
+    <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚡ Bulk Actions — apply to all pending items</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">
+      ${PRICE_TIERS.map(t => `
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;font-weight:700;min-width:80px">${t.icon} ${t.label}</span>
+        <input id="bulk-${t.key}" type="number" placeholder="% below MRP" min="0" max="90"
+          style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg2);color:var(--text)">
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <select id="bulk-gst" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg2);color:var(--text)">
+        <option value="">GST — keep as-is</option>
+        <option value="5">5%</option><option value="12">12%</option>
+        <option value="18">18%</option><option value="28">28%</option>
+      </select>
+      <button onclick="applyBulkPricingToAll()" class="btn-primary" style="flex:1;padding:7px;font-size:12px">Apply to All Pending</button>
+      <button onclick="makeAllLive()" style="flex:1;padding:7px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Make All Live</button>
+    </div>
+  </div>
+
+  <!-- Pending general products -->
+  <div class="card-title" style="font-size:13px;font-weight:800;margin-bottom:8px">
+    📦 Pending Products (${(pending||[]).length})
+  </div>
+  ${(pending||[]).length === 0 ? '<div class="empty-state"><p>No pending products</p></div>' :
+    (pending||[]).map(p => _renderCatalogItemRow(p, false, canCost)).join('')}
+
+  <!-- Pending tiles -->
+  ${(tilePending||[]).length ? `
+  <div class="card-title" style="font-size:13px;font-weight:800;margin:14px 0 8px">
+    ⬜ Pending Tiles (${tilePending.length})
+  </div>
+  ${tilePending.map(t => _renderCatalogItemRow(t, true, canCost)).join('')}` : ''}`;
+}
+
+function _renderCatalogItemRow(item, isTile, canCost) {
+  const mrp    = isTile ? (item.mrp_per_sqft||0) : (item.mrp||0);
+  const unit   = isTile ? 'sqft' : (item.unit||'Pc');
+  const name   = isTile ? `${item.brand||''} ${item.design_name||''}` : item.product_name;
+  const sub    = isTile
+    ? [item.size_mm, item.finish, item.colour_family].filter(Boolean).join(' · ')
+    : [item.category, item.model_no].filter(Boolean).join(' · ');
+
+  const tierInputs = PRICE_TIERS.map(t => `
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <label style="font-size:9px;color:var(--text3);text-transform:uppercase">${t.icon} ${t.label}</label>
+      <input type="number" value="${item[t.key]||''}" min="0" step="0.5"
+        onchange="updateCatalogItemPrice(${item.id},'${t.key}',this.value,${isTile})"
+        style="width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg2);color:var(--text)"
+        placeholder="₹//${unit}">
+    </div>`).join('');
+
+  const costInput = canCost ? `
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <label style="font-size:9px;color:var(--red);text-transform:uppercase">🔒 Cost</label>
+      <input type="number" value="${item.trade_price||''}" min="0" step="0.5"
+        onchange="updateCatalogItemPrice(${item.id},'trade_price',this.value,${isTile})"
+        style="width:100%;padding:5px 6px;border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg2);color:var(--red)"
+        placeholder="Cost">
+    </div>` : '';
+
+  return `
+  <div id="cat-item-${item.id}" style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700">${name}</div>
+        <div style="font-size:11px;color:var(--text3)">${sub}</div>
+        ${mrp > 0 ? `<div style="font-size:11px;color:var(--gold)">MRP: ₹${mrp}/${unit}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+        <select onchange="updateCatalogItemField(${item.id},'gst_pct',this.value,${isTile})"
+          style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg2);color:var(--text)">
+          <option value="5" ${item.gst_pct==5?'selected':''}>GST 5%</option>
+          <option value="12" ${item.gst_pct==12?'selected':''}>GST 12%</option>
+          <option value="18" ${(!item.gst_pct||item.gst_pct==18)?'selected':''}>GST 18%</option>
+          <option value="28" ${item.gst_pct==28?'selected':''}>GST 28%</option>
+          <option value="0" ${item.gst_pct==0?'selected':''}>GST 0%</option>
+        </select>
+        <button onclick="makeCatalogItemLive(${item.id},${isTile})"
+          style="padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">
+          ✅ Go Live
+        </button>
+        <button onclick="deleteCatalogItem(${item.id},${isTile})"
+          style="padding:5px 8px;background:none;color:var(--text3);border:1px solid var(--border);border-radius:7px;font-size:11px;cursor:pointer">🗑</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(${canCost?5:4},1fr);gap:6px">
+      ${tierInputs}
+      ${costInput}
+    </div>
+  </div>`;
+}
+
+async function updateCatalogItemPrice(id, field, value, isTile) {
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const v = parseFloat(value)||null;
+  await VW_DB.client.from(table).update({ [field]: v, updated_at: new Date().toISOString() }).eq('id', id);
+}
+
+async function updateCatalogItemField(id, field, value, isTile) {
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  await VW_DB.client.from(table).update({ [field]: parseFloat(value)||null, updated_at: new Date().toISOString() }).eq('id', id);
+}
+
+async function makeCatalogItemLive(id, isTile) {
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const update = isTile
+    ? { status: 'approved', show_in_shop: true }
+    : { is_active: true, show_in_shop: true };
+  await VW_DB.client.from(table).update(update).eq('id', id);
+  const el = document.getElementById(`cat-item-${id}`);
+  if (el) { el.style.opacity='0.4'; el.innerHTML += '<div style="text-align:center;font-size:11px;color:var(--green);padding:4px">✅ Live on shop</div>'; }
+  showToast('Item is now live on B2C shop ✓','success');
+}
+
+async function deleteCatalogItem(id, isTile) {
+  if (!confirm('Delete this item?')) return;
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  await VW_DB.client.from(table).delete().eq('id', id);
+  document.getElementById(`cat-item-${id}`)?.remove();
+}
+
+async function applyBulkPricingToAll() {
+  const gst    = parseFloat(document.getElementById('bulk-gst')?.value)||null;
+  const tiers  = {};
+  PRICE_TIERS.forEach(t => {
+    const v = parseFloat(document.getElementById(`bulk-${t.key}`)?.value)||null;
+    if (v) tiers[t.key + '_pct'] = v;
+  });
+  if (!gst && !Object.keys(tiers).length) { showToast('Set at least one value to apply','warn'); return; }
+
+  showToast('Applying bulk pricing...','info');
+  // Apply to general products
+  const { data: items } = await VW_DB.client.from('brand_catalog_items')
+    .select('id,mrp').eq('show_in_shop',false).eq('is_active',false);
+  for (const item of (items||[])) {
+    const update = {};
+    if (gst) update.gst_pct = gst;
+    PRICE_TIERS.forEach(t => {
+      const pct = tiers[t.key+'_pct'];
+      if (pct && item.mrp > 0) update[t.key] = Math.round(item.mrp * (1-pct/100) * 100)/100;
+    });
+    if (Object.keys(update).length) {
+      await VW_DB.client.from('brand_catalog_items').update(update).eq('id', item.id);
+    }
+  }
+  showToast('Bulk pricing applied ✓','success');
+  navigateTo('catalog_review');
+}
+
+async function makeAllLive() {
+  if (!confirm('Make ALL pending catalog items live on the B2C shop?')) return;
+  await VW_DB.client.from('brand_catalog_items')
+    .update({ is_active: true, show_in_shop: true })
+    .eq('show_in_shop', false).eq('is_active', false);
+  await VW_DB.client.from('non_inventory_tiles')
+    .update({ status: 'approved', show_in_shop: true })
+    .eq('status', 'draft');
+  showToast('All items now live on shop ✓','success');
+  navigateTo('catalog_review');
+}
+
+window.processCatalogUploadNew  = processCatalogUploadNew;
+window.renderCatalogUploadPage  = renderCatalogUploadPage;
+window.renderCatalogReviewPage  = renderCatalogReviewPage;
+window.updateCatalogItemPrice   = updateCatalogItemPrice;
+window.updateCatalogItemField   = updateCatalogItemField;
+window.makeCatalogItemLive      = makeCatalogItemLive;
+window.deleteCatalogItem        = deleteCatalogItem;
+window.applyBulkPricingToAll    = applyBulkPricingToAll;
+window.makeAllLive              = makeAllLive;

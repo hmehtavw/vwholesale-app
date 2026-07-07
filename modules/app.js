@@ -244,6 +244,8 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
     else if (page === 'brand_catalog') html = await VW_ADMIN.renderBrandCatalogPage();
     else if (page === 'category_manager') { await VW_ADMIN.renderCategoryManagerPage(); return; }
+    else if (page === 'catalog_upload') { html = await VW_STOCK.renderCatalogUploadPage(); }
+    else if (page === 'catalog_review') { html = await VW_STOCK.renderCatalogReviewPage(); }
     else if (page === 'shop') {
     html = await VW_SHOP.renderShopPage();
     // Load products after render
@@ -1031,6 +1033,8 @@ async function renderDashboard() {
     <button class="qa-btn" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
     <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">📦</span><span>Catalog</span></button>
       <button class="qa-btn" onclick="navigateTo('category_manager')"><span class="qa-icon">🗂</span><span>Categories</span></button>
+      <button class="qa-btn" onclick="navigateTo('catalog_upload')"><span class="qa-icon">📦</span><span>Upload Catalog</span></button>
+      <button class="qa-btn" onclick="navigateTo('catalog_review')"><span class="qa-icon">🔍</span><span>Review Catalog</span></button>
   </div>
 
   <!-- EXECUTIVE LEADERBOARD -->

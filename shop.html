@@ -1211,6 +1211,88 @@ function renderCatNav() {
 }
 
 // ── LOAD DEALS ──
+async function loadCatalogItems(categoryKey) {
+  // Load live catalog items for a category (brand_catalog_items + non_inventory_tiles)
+  // Tier pricing applied based on logged-in customer type (future: from session)
+  try {
+    const priceField = 'tier1_price'; // B2C default; contractor gets tier2 etc.
+    let q = VW_DB ? VW_DB.client.from('brand_catalog_items')
+      .select('id,brand,product_name,model_no,category,mrp,tier1_price,tier2_price,gst_pct,image_url,availability,lead_time_days,unit')
+      .eq('show_in_shop', true).eq('is_active', true) : null;
+    if (!q) return [];
+    if (categoryKey) q = q.eq('category_key', categoryKey);
+    const { data } = await q.limit(40);
+    return data || [];
+  } catch(e) { return []; }
+}
+
+function catalogCard(item) {
+  const price = item.tier1_price || item.mrp || 0;
+  const mrp   = item.mrp || 0;
+  const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const img   = item.image_url || '';
+  const avail = item.availability === 'in_stock' ? '✓ In Stock' : `🕐 ${item.lead_time_days||7} days`;
+  const availColor = item.availability === 'in_stock' ? 'var(--g)' : 'var(--t3)';
+  return `<div class="pcard" style="min-width:160px;flex:0 0 160px;cursor:pointer" onclick="openCatalogPDP(${item.id})">
+    <div style="height:120px;background:${img?'#f8f8f8':'#e8e8e8'};border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+      ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:36px">📦</span>'}
+    </div>
+    <div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">${item.brand||''}</div>
+    <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:4px">${(item.product_name||'').slice(0,40)}</div>
+    ${price > 0 ? `<div style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:14px;font-weight:900">₹${price.toLocaleString('en-IN')}</span>
+      ${mrp > price ? `<span style="font-size:10px;color:var(--t3);text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>
+      <span style="font-size:10px;color:var(--g);font-weight:800">${disc}% off</span>` : ''}
+    </div>
+    <div style="font-size:10px;color:${availColor};margin-top:2px">${avail}</div>
+    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${(item.product_name||'').replace(/'/g,"\'")}')"
+      style="width:100%;margin-top:6px;padding:7px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
+      ${item.availability==='in_stock' ? 'Add to Cart' : 'Request Order'}
+    </button>` : `<div style="font-size:11px;color:var(--t3)">Price on request</div>
+    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${(item.product_name||'').replace(/'/g,"\'")}')"
+      style="width:100%;margin-top:6px;padding:7px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
+      Get Best Price
+    </button>`}
+  </div>`;
+}
+
+function openCatalogRequestSheet(itemId, itemName) {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:32px;margin-bottom:8px">📦</div>
+      <div style="font-size:16px;font-weight:900">Request Order</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">${itemName}</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Your Mobile</label>
+      <input id="cr-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"
+        style="width:100%;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:15px;font-weight:700;outline:none;box-sizing:border-box"
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Quantity Needed</label>
+      <input id="cr-qty" type="number" placeholder="e.g. 10" min="1"
+        style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:15px;outline:none;box-sizing:border-box">
+    </div>
+    <a id="cr-wa-btn" href="#" target="_blank"
+      onclick="window._buildCatalogWA('${itemName}',${itemId})"
+      style="display:block;width:100%;padding:14px;background:#25D366;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;margin-bottom:8px">
+      💬 Request via WhatsApp
+    </a>
+    <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:none;font-size:12px;color:var(--t2);cursor:pointer">Cancel</button>`;
+  document.getElementById('sheet-overlay')?.classList.add('open');
+  sheet.classList.add('open');
+}
+window._buildCatalogWA = function(name, id) {
+  const phone = document.getElementById('cr-phone')?.value?.trim();
+  const qty   = document.getElementById('cr-qty')?.value?.trim();
+  const msg   = `Hi V Wholesale! I want to order:\n\n*${name}*${qty?' (Qty: '+qty+')':''}\nMy number: ${phone||'—'}\n\nPlease confirm availability and price.`;
+  document.getElementById('cr-wa-btn').href = `https://wa.me/918712697930?text=${encodeURIComponent(msg)}`;
+};
+window.openCatalogRequestSheet = openCatalogRequestSheet;
+
 async function loadDeals() {
   try {
     const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=20');
