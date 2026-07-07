@@ -499,31 +499,655 @@ window.shareDailyReportWhatsApp = shareDailyReportWhatsApp;
 async function renderDashboard() {
   const profile = VW_AUTH.getCurrentProfile();
   const today = new Date().toISOString().split('T')[0];
+  try {
 
-  const role = profile?.role || '';
-  const name = profile?.name || 'Staff';
-  const greet = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
+  // Load sequentially to avoid ERR_INSUFFICIENT_RESOURCES from too many parallel requests
+  const todayIST = today + 'T00:00:00+05:30'; // IST midnight for timestamptz columns
+  const invoicesRes   = await VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason').gte('date', todayIST).limit(100);
+  const visitsRes     = await VW_DB.client.from('visits').select('id,customer_name,visitor_type,date,status,executive_name').gte('date', todayIST).limit(100);
+  const tasksRes      = await VW_DB.client.from('tasks').select('id,title,status,assigned_to_name,due_date').in('status', ['pending','in_progress']).limit(30);
+  const leadsRes      = await VW_DB.client.from('leads').select('id,name,stage,assigned_to_name').not('stage','in','("won","lost")').limit(30);
+  const productsRes   = await VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit').eq('is_active', true).lte('stock', 20).limit(20);
 
-  const quickHTML = `
-  <div class="module-header">
-    <h2>${greet}, ${name.split(' ')[0]} 👋</h2>
-    <div style="font-size:11px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
-  </div>
-  <div class="snapshot-grid" style="margin-bottom:14px">
-    <div class="snap-item"><div class="snap-val" id="dash-revenue" style="color:var(--gold)">₹0</div><div class="snap-label">Today's Revenue</div></div>
-    <div class="snap-item"><div class="snap-val" id="dash-visits">0</div><div class="snap-label">Visits Today</div></div>
-    <div class="snap-item"><div class="snap-val" id="dash-invoices">0</div><div class="snap-label">Invoices Today</div></div>
-  </div>
-  <div id="dash-pending-tqs"></div>
-  <div id="dash-tasks" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
-    <div style="font-size:12px;color:var(--text3)">✅ No pending tasks</div>
-  </div>
-  <div id="dash-low-stock" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
-    <div style="font-size:12px;color:var(--text3)">✅ Stock levels OK</div>
+  const customers = [];
+  const visits    = visitsRes.data || [];
+  const invoices  = (invoicesRes.data || []).map(i => ({
+    ...i,
+    invoiceNo: i.invoice_no,
+    paymentMethod: i.payment_method,
+    creditSale: i.credit_sale,
+    approvalStatus: i.approval_status,
+    paymentVerified: i.payment_verified,
+    customerName: i.customer_name,
+    amountReceived: i.amount_received,
+    approvalReason: i.approval_reason,
+    escalationLog: [],
+    closurePhoto: null,
+  }));
+  const tasks      = tasksRes.data || [];
+  const quotations = [];
+  const pendingQuotes = [];
+  const leads      = (leadsRes.data || []).map(l => ({ ...l, assignedToName: l.assigned_to_name }));
+  const feedback   = [];
+  const products   = (productsRes.data || []).map(p => ({ ...p, lowStockThreshold: p.low_stock_threshold || 20 }));
+
+  const todayInvoices = invoices; // already filtered to today
+  const todayVisits = visits;
+  const todayCustomers = todayVisits.filter(v => v.visitor_type === 'customer' || v.visitorType === 'customer');
+  const todayVisitors = todayVisits.filter(v => v.visitor_type !== 'customer' && v.visitorType !== 'customer');
+  const todayBilling = invoices.filter(i => i.approvalStatus === 'approved').reduce((s,i)=>s+(i.total||0),0);
+  const todayPendingApproval = invoices.filter(i => i.approvalStatus === 'pending_approval').length;
+
+  // Cashier / Accounts role gets a focused daily till summary instead of
+  // the full admin dashboard — shows exactly what they need for handover.
+  if (profile && profile.role === 'accounts') {
+    const cash = todayInvoices.filter(i => (i.paymentMethod||'').toLowerCase() === 'cash' && !i.creditSale);
+    const upi  = todayInvoices.filter(i => ['upi','qr scan'].includes((i.paymentMethod||'').toLowerCase()) && !i.creditSale);
+    const card = todayInvoices.filter(i => ['card','credit card','debit card'].includes((i.paymentMethod||'').toLowerCase()) && !i.creditSale);
+    const credit = todayInvoices.filter(i => i.creditSale);
+    const pending = invoices.filter(i => !i.paymentVerified && i.approvalStatus !== 'pending_approval');
+    const cashTotal = cash.reduce((s,i)=>s+(i.amountReceived||i.total||0),0);
+    const upiTotal = upi.reduce((s,i)=>s+(i.amountReceived||i.total||0),0);
+    const cardTotal = card.reduce((s,i)=>s+(i.amountReceived||i.total||0),0);
+    const creditTotal = credit.reduce((s,i)=>s+(i.total||0),0);
+    const grandTotal = cashTotal + upiTotal + cardTotal;
+    return `
+    <div class="module-header"><h2>Daily Till Summary</h2>
+      <span style="font-size:12px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</span>
+    </div>
+    <div class="snapshot-grid" style="margin-bottom:14px">
+      <div class="snap-item"><div class="snap-val" style="color:var(--gold)">₹${Math.round(grandTotal).toLocaleString('en-IN')}</div><div class="snap-label">Total Collected</div></div>
+      <div class="snap-item"><div class="snap-val">${todayInvoices.length}</div><div class="snap-label">Invoices Today</div></div>
+      <div class="snap-item"><div class="snap-val" style="color:var(--red)">${pending.length}</div><div class="snap-label">Pending Verification</div></div>
+    </div>
+    <div class="card">
+      <h3 class="card-title">Payment Breakdown</h3>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:8px">
+          <span>💵 Cash (${cash.length} bills)</span><span style="font-weight:700">₹${Math.round(cashTotal).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:8px">
+          <span>📱 UPI/QR (${upi.length} bills)</span><span style="font-weight:700">₹${Math.round(upiTotal).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:8px">
+          <span>💳 Card (${card.length} bills)</span><span style="font-weight:700">₹${Math.round(cardTotal).toLocaleString('en-IN')}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--bg2);border-radius:8px;opacity:0.7">
+          <span>📝 Credit (${credit.length} bills — collect later)</span><span style="font-weight:700">₹${Math.round(creditTotal).toLocaleString('en-IN')}</span>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3 class="card-title">Today's Invoices</h3>
+      ${!todayInvoices.length ? '<p class="empty-msg">No invoices yet today</p>' :
+      todayInvoices.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(inv => {
+        const cust = customers.find(c=>c.id===inv.customerId);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${inv.invoiceNo}</div>
+            <div style="font-size:12px;color:var(--text3)">${cust?cust.name:'Walk-in'} · ${inv.paymentMethod||'Credit'}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700">₹${(inv.total||0).toLocaleString('en-IN')}</div>
+            <div style="font-size:11px;color:${inv.paymentVerified?'#22c55e':'var(--gold)'}">${inv.paymentVerified?'✓ Verified':'Needs Verification'}</div>
+          </div>
+        </div>`}).join('')}
+    </div>
+    <div style="padding:12px 0">
+      <button class="btn-primary full-width" onclick="navigateTo('eod')">📊 End of Day Reconciliation</button>
+    </div>`;
+  }
+
+  // ===== FIELD EXECUTIVE DASHBOARD =====
+  // Executives (field team and in-store) get a focused view:
+  // their leads, today's activity, quick actions for field work
+  if (profile && profile.role === 'executive') {
+    const myLeads = leads.filter(l => l.assignedTo === profile.id || l.assignedToName === profile.name);
+    const myInvoices = invoices.filter(i =>
+      i.createdByProfileId === profile.id ||
+      i.salesExecutiveId === profile.id ||
+      (i.salespersonCredits||[]).some(c => c.staffId === profile.id)
+    );
+    const monthStart2 = new Date(); monthStart2.setDate(1); monthStart2.setHours(0,0,0,0);
+    const myMonthSales = myInvoices
+      .filter(i => new Date(i.date) >= monthStart2 && i.approvalStatus === 'approved')
+      .reduce((s,i) => s + (i.total||0), 0);
+    const openLeads = myLeads.filter(l => l.stage !== 'Won' && l.stage !== 'Lost');
+    const followUps = myLeads.filter(l => l.followUpDate && new Date(l.followUpDate).toDateString() === today);
+    const myTasks = tasks.filter(t => t.assignedToProfileId === profile.id && t.status !== 'resolved');
+
+    return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div>
+        <h2 style="margin:0">Good ${new Date().getHours()<12?'Morning':'Afternoon'}, ${(profile.name||'').split(' ')[0]}! 👋</h2>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</p>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:700;color:var(--gold)">₹${myMonthSales>=100000?Math.round(myMonthSales/100000)+'L':myMonthSales>=1000?Math.round(myMonthSales/1000)+'K':Math.round(myMonthSales).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:var(--text3)">My Month Sales</div>
+      </div>
+    </div>
+
+    <!-- Quick Actions for Field Team -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <button class="btn-primary" style="padding:12px;font-size:13px" onclick="navigateTo('checkin')">🚶 New Check-in</button>
+      <button class="btn-secondary" style="padding:12px;font-size:13px" onclick="VW_CRM.showAddLead(null)">➕ New Lead</button>
+      <button class="btn-secondary" style="padding:12px;font-size:13px" onclick="navigateTo('cart')">🧾 New Invoice</button>
+      <button class="btn-secondary" style="padding:12px;font-size:13px" onclick="navigateTo('catalogs')">📄 Share Catalog</button>
+    </div>
+
+    ${followUps.length ? `
+    <div class="alert-card" style="margin-bottom:12px">
+      <div class="alert-title">📅 ${followUps.length} Follow-up${followUps.length>1?'s':''} Due Today</div>
+      ${followUps.map(l => {
+        const cust = customers.find(c => c.id === l.customerId);
+        return `<div class="cust-row" onclick="VW_CRM.openLead(${l.id})">
+          <div class="staff-avatar" style="background:rgba(200,151,43,0.15);color:var(--gold)">📞</div>
+          <div class="cust-info">
+            <div class="cust-name">${cust?.name||l.customerName||'Customer'}</div>
+            <div class="cust-meta">${l.department||'—'} · ${l.stage||'Lead'}</div>
+          </div>
+          ${cust?.phone ? `<a class="btn-call" href="https://wa.me/91${cust.phone.replace(/\D/g,'')}?text=${encodeURIComponent('Hi '+cust.name+', following up on your requirement. How can I help?')}" target="_blank" onclick="event.stopPropagation()">💬</a>` : ''}
+        </div>`;
+      }).join('')}
+    </div>` : ''}
+
+    ${myTasks.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">My Open Tasks <span class="badge">${myTasks.length}</span></h3>
+      ${myTasks.slice(0,4).map(t => `
+      <div class="task-card" onclick="VW_TASKS.openTaskDetail(${t.id})">
+        <div class="task-card-header">
+          <span class="task-dept">${t.department}</span>
+          <span class="task-stage">${t.stage||'Lead'}</span>
+        </div>
+        <div class="task-desc">${t.description||'—'}</div>
+        <div class="task-meta">${t.customerName||'—'}</div>
+      </div>`).join('')}
+      ${myTasks.length > 4 ? `<button class="btn-secondary full-width" style="margin-top:6px" onclick="navigateTo('tasks')">View all ${myTasks.length} tasks</button>` : ''}
+    </div>` : ''}
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header-row">
+        <h3 class="card-title">My Leads <span class="badge">${openLeads.length}</span></h3>
+        <button class="btn-sm" onclick="navigateTo('crm')">View All</button>
+      </div>
+      ${!openLeads.length ? '<p class="empty-msg">No open leads — add your first lead above</p>' :
+      openLeads.slice(0,5).map(l => {
+        const cust = customers.find(c => c.id === l.customerId);
+        const stageColors = {Lead:'#888',Visited:'#378ADD',Quoted:'#EF9F27',Negotiating:'#7F77DD',Won:'#22c55e',Lost:'#ef4444'};
+        return `<div class="cust-row" onclick="VW_CRM.openLead(${l.id})">
+          <div class="staff-avatar" style="background:rgba(55,138,221,0.15);color:#378ADD">${(cust?.name||l.customerName||'?')[0]}</div>
+          <div class="cust-info">
+            <div class="cust-name">${cust?.name||l.customerName||'Customer'}</div>
+            <div class="cust-meta">${l.department} · ${l.followUpDate ? new Date(l.followUpDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'No follow-up set'}</div>
+          </div>
+          <span style="font-size:11px;color:${stageColors[l.stage]||'#888'};font-weight:600">${l.stage||'Lead'}</span>
+        </div>`;
+      }).join('')}
+    </div>
+
+    <!-- WhatsApp Greeting Templates -->
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">Quick Greetings 💬</h3>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:10px">Select a customer then tap to send — opens WhatsApp directly</p>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="btn-secondary" onclick="showFieldGreeting('followup')" style="text-align:left;font-size:13px">👋 Follow-up — "How's your project going?"</button>
+        <button class="btn-secondary" onclick="showFieldGreeting('thankyou')" style="text-align:left;font-size:13px">🙏 Thank You — After a meeting/visit</button>
+        <button class="btn-secondary" onclick="showFieldGreeting('offer')" style="text-align:left;font-size:13px">🎁 Special Offer — Share a promotion</button>
+        <button class="btn-secondary" onclick="showFieldGreeting('festive')" style="text-align:left;font-size:13px">🎉 Festive Greeting</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 class="card-title">My Recent Sales</h3>
+      ${!myInvoices.length ? '<p class="empty-msg">No sales yet this month</p>' :
+      myInvoices.slice(0,5).sort((a,b)=>new Date(b.date)-new Date(a.date)).map(i => {
+        const cust = customers.find(c => c.id === i.customerId);
+        return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2)">
+          <div>
+            <div style="font-size:13px;font-weight:600">${i.invoiceNo}</div>
+            <div style="font-size:12px;color:var(--text3)">${cust?.name||'Walk-in'} · ${new Date(i.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700">₹${(i.total||0).toLocaleString('en-IN')}</div>
+            <div style="font-size:11px;color:${i.closurePhoto?'#22c55e':'var(--text3)'}">${i.closurePhoto?'📸 ✓':'📸 Needed'}</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+  // todayBilling already set above
+  // todayPendingApproval already set above
+  const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+  const { data: monthData } = await VW_DB.client.from('invoices')
+    .select('total').eq('approval_status','approved')
+    .gte('date', monthStart.toISOString()).limit(500);
+  const monthBilling = (monthData||[]).reduce((s,i)=>s+(i.total||0),0);
+  const wonLeads = leads.filter(l=>l.stage==='Won').length;
+  const convRate = leads.length ? Math.round(wonLeads/leads.length*100) : 0;
+  const avgRating = feedback.length ? (feedback.reduce((s,f)=>s+(f.rating||0),0)/feedback.length).toFixed(1) : '—';
+
+  const deptCount = {};
+  tasks.forEach(t => { if(t.department) deptCount[t.department] = (deptCount[t.department]||0)+1; });
+  const topDept = Object.entries(deptCount).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  // Urgent escalations (Floor Manager / Store Manager / Management level, still unaccepted)
+  let urgentBanner = '';
+  if (profile && profile.role === 'admin') {
+    const urgentLevels = ['floor_manager','store_manager','management'];
+    const escalationContacts = await VW_DB.getSetting('escalationContacts', {});
+    const contactKeyMap = { floor_manager:'floorManager', store_manager:'storeManager', management:'management' };
+
+    // Warn if escalation contacts not set up — quotation approvals will get stuck
+    const missingContacts = ['floorManager','storeManager','management'].filter(k => !escalationContacts[k]?.phone);
+    if (missingContacts.length) {
+      urgentBanner += `
+      <div style="padding:12px;background:rgba(200,151,43,0.1);border:1px solid rgba(200,151,43,0.4);border-radius:10px;margin-bottom:10px">
+        <div style="font-weight:600;font-size:13px;color:var(--gold);margin-bottom:4px">⚠️ Escalation Contacts Not Set Up</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:8px">Quotation and invoice approvals will get stuck — nobody to notify at Floor Manager / Store Manager / Management levels.</p>
+        <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('settings')">Go to Settings → Escalation Contacts</button>
+      </div>`;
+    }
+
+    const urgentItems = [];
+    visits.forEach(v => {
+      if (v.status !== 'pending') return;
+      const last = (v.escalationLog||[]).slice(-1)[0];
+      if (last && last.status === 'pending' && urgentLevels.includes(last.level)) {
+        urgentItems.push({ id: v.id, type: 'visit', name: v.customerName || 'Customer', level: last.level, since: last.notifiedAt, dept: '' });
+      }
+    });
+    tasks.forEach(t => {
+      if (t.status !== 'pending') return;
+      const last = (t.escalationLog||[]).slice(-1)[0];
+      if (last && last.status === 'pending' && urgentLevels.includes(last.level)) {
+        urgentItems.push({ id: t.id, type: 'task', name: t.customerName || 'Customer', level: last.level, since: last.notifiedAt, dept: t.department || '' });
+      }
+    });
+    if (urgentItems.length) {
+      urgentBanner += `
+      <div class="alert-card">
+        <div class="alert-title">🚨 ${urgentItems.length} Needs Urgent Attention — tap to view &amp; resolve</div>
+        ${urgentItems.map(it => {
+          const waitMin = Math.max(1, Math.round((Date.now() - new Date(it.since).getTime())/60000));
+          const levelLabel = VW_ESCALATION.LEVEL_LABELS[it.level] || it.level;
+          const contact = escalationContacts[contactKeyMap[it.level]] || {};
+          const msg = VW_NOTIFY.waEncode(`🚨 URGENT: ${it.name} has been waiting ${waitMin} min at V Wholesale with no response. Please attend immediately.`);
+          const openFn = it.type === 'visit' ? `VW_CHECKIN.openVisitDetail(${it.id})` : `VW_TASKS.openTaskDetail(${it.id})`;
+          return `<div class="cust-row" onclick="${openFn}">
+            <div class="staff-avatar" style="background:rgba(239,68,68,0.15);color:var(--red)">🚨</div>
+            <div class="cust-info"><div class="cust-name">${it.name}${it.dept?' &middot; '+it.dept:''}</div><div class="cust-meta">Waiting ${waitMin} min &middot; Escalated to ${levelLabel}${contact.name?' ('+contact.name+')':''}</div></div>
+            ${contact.phone ? `<a class="btn-call" style="flex:0;padding:8px 12px;background:rgba(34,197,94,0.12);color:#22c55e;border-color:rgba(34,197,94,0.3)" href="https://wa.me/91${contact.phone}?text=${msg}" target="_blank" onclick="event.stopPropagation()">💬</a>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+  }
+
+  // Low-stock products (Admin only)
+  const lowStock = (profile && profile.role === 'admin')
+    ? products.filter(p => p.stock <= (p.lowStockThreshold || 20))
+    : [];
+  let lowStockBanner = '';
+  // Stock hold alerts for SM/Management
+  let holdAlertBanner = '';
+  if (profile && ['admin','store_manager','management'].includes(profile.role)) {
+    try { holdAlertBanner = await VW_TILES.renderHoldAlerts(); } catch(e) {}
+
+    // Fetch pending TQs for management pipeline view
+    try {
+      const { data: pendingTQs } = await VW_DB.client
+        .from('tile_quotations')
+        .select('id,tq_no,customer_name,total_area_sqft,grand_total,quoted_price_per_sqft,created_by,created_at')
+        .eq('approval_status','pending_approval')
+        .order('created_at', { ascending: true })
+        .limit(10);
+
+      if (pendingTQs?.length) {
+        const totalPipeline = pendingTQs.reduce((s,q) => s + parseFloat(q.grand_total||0), 0);
+        holdAlertBanner = (holdAlertBanner||'') + `
+        <div class="card" style="border-left:4px solid var(--gold);margin-bottom:12px">
+          <div class="card-header-row">
+            <h3 class="card-title">⏳ ${pendingTQs.length} TQ${pendingTQs.length>1?'s':''} Awaiting Approval</h3>
+            <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('quick_approve')">⚡ Quick Approve</button>
+          </div>
+          ${totalPipeline > 0 ? `<div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">Pipeline: ₹${totalPipeline.toLocaleString('en-IN')}</div>` : ''}
+          ${pendingTQs.slice(0,3).map(q => `
+          <div class="followup-row" onclick="VW_TILES.openTileQuote(${q.id})" style="cursor:pointer">
+            <div class="fu-info">
+              <div class="fu-name">${q.customer_name} · ${q.tq_no}</div>
+              <div class="fu-dept">${parseFloat(q.total_area_sqft||0).toFixed(0)} sqft${q.grand_total?` · ₹${parseInt(q.grand_total).toLocaleString('en-IN')}`:q.quoted_price_per_sqft?` · ₹${q.quoted_price_per_sqft}/sqft`:' · Price TBD'}</div>
+            </div>
+            <button class="btn-sm" style="background:var(--gold);color:#000" onclick="event.stopPropagation();VW_TILES.openTileQuote(${q.id})">Approve →</button>
+          </div>`).join('')}
+          ${pendingTQs.length > 3 ? `<p style="font-size:12px;color:var(--text3);margin-top:4px">+${pendingTQs.length-3} more pending</p>` : ''}
+        </div>`;
+      }
+    } catch(e) {}
+  }
+  if (profile && profile.role === 'admin') {
+    if (lowStock.length) {
+      lowStockBanner = `
+      <div class="alert-card">
+        <div class="alert-title">📦 ${lowStock.length} Item${lowStock.length>1?'s':''} Low on Stock</div>
+        ${lowStock.slice(0,5).map(p => `
+          <div class="followup-row">
+            <div class="fu-info"><div class="fu-name">${p.name}</div><div class="fu-dept">${p.category} &middot; ${p.stock} ${p.unit} left</div></div>
+            <div style="display:flex;gap:4px">
+              <button class="btn-sm" onclick="VW_VENDOR.quickPOFromLowStock(${p.id})">📋 PO</button>
+              <button class="btn-sm" onclick="navigateTo('inventory')">View</button>
+            </div>
+          </div>`).join('')}
+        ${lowStock.length > 5 ? `<p style="font-size:12px;color:var(--text3);margin-top:4px">+${lowStock.length-5} more — see Inventory</p>` : ''}
+      </div>`;
+    }
+  }
+
+  // Quotations summary (status + department breakdown)
+  let quotesCard = '';
+  if (quotations.length) {
+    const qCounts = { draft:0, sent:0, converted:0 };
+    const qDeptCount = {};
+    quotations.forEach(q => {
+      qCounts[q.status] = (qCounts[q.status]||0)+1;
+      (q.items||[]).forEach(it => { if (it.department) qDeptCount[it.department] = (qDeptCount[it.department]||0)+1; });
+    });
+    const topQDepts = Object.entries(qDeptCount).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    quotesCard = `
+    <div class="card">
+      <div class="card-header-row">
+        <h3 class="card-title">Tile Quotations</h3>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm" style="background:rgba(245,200,66,0.15);border:1px solid var(--gold-border);color:var(--gold)" onclick="VW_TILES.openQuickQuote()">⚡ Quick</button>
+          <button class="btn-sm" onclick="navigateTo('tile_quotes')">View All</button>
+        </div>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><span class="stat-num">${qCounts.draft||0}</span><span class="stat-label">Draft</span></div>
+        <div class="stat"><span class="stat-num">${qCounts.sent||0}</span><span class="stat-label">Sent</span></div>
+        <div class="stat"><span class="stat-num">${qCounts.converted||0}</span><span class="stat-label">Converted</span></div>
+      </div>
+      ${topQDepts.length ? `<p style="font-size:12px;color:var(--text3);margin-top:8px">Top categories: ${topQDepts.map(([d,c])=>`${d} (${c})`).join(', ')}</p>` : ''}
+    </div>`;
+  }
+
+  // ===== APPROVAL CARDS (Credit Sales / Price Overrides / Quotations) =====
+  // Three separate cards rather than one combined list, scoped to what
+  // THIS viewer can actually act on right now (same logic as the detail
+  // screens use) so nobody sees a pile of approvals that aren't theirs.
+  const pendingInvoices = invoices.filter(i => i.approvalStatus === 'pending_approval');
+  const creditPending = [];
+  const overridePending = [];
+  for (const inv of pendingInvoices) {
+    if (!(await currentUserCanApproveInvoice(inv))) continue;
+    if (inv.creditSale) creditPending.push(inv);
+    else if (inv.approvalReason === 'price_override') overridePending.push(inv);
+  }
+  const quotePending = [];
+  for (const q of quotations.filter(q => q.approvalStatus === 'pending_approval')) {
+    if (await currentUserCanApprove(q)) quotePending.push(q);
+  }
+
+  const approvalCards = (creditPending.length || overridePending.length || quotePending.length) ? `
+  <div class="approval-cards-row">
+    ${creditPending.length ? `
+    <div class="card approval-card" onclick="goToQuotations()" style="cursor:pointer">
+      <h3 class="card-title">💳 Credit Sales <span class="badge">${creditPending.length}</span></h3>
+      ${creditPending.slice(0,3).map(i => `<div style="font-size:12px;padding:3px 0">${i.invoiceNo} — ₹${i.total.toLocaleString('en-IN')}</div>`).join('')}
+    </div>` : ''}
+    ${overridePending.length ? `
+    <div class="card approval-card" onclick="goToQuotations()" style="cursor:pointer">
+      <h3 class="card-title">💰 Price Overrides <span class="badge">${overridePending.length}</span></h3>
+      ${overridePending.slice(0,3).map(i => `<div style="font-size:12px;padding:3px 0">${i.invoiceNo} — ₹${i.total.toLocaleString('en-IN')}</div>`).join('')}
+    </div>` : ''}
+    ${quotePending.length ? `
+    <div class="card approval-card" onclick="goToQuotations()" style="cursor:pointer">
+      <h3 class="card-title">📄 Quotations <span class="badge">${quotePending.length}</span></h3>
+      ${quotePending.slice(0,3).map(q => {
+        const delayed = (q.approvalLog||[]).some(e => e.level==='tl' && (e.branches||[]).some(b => b.escalatedToManagement && b.status==='pending'));
+        return `<div style="font-size:12px;padding:3px 0">${delayed?'⏰ ':''}${q.quoteNo||''} — ${q.customerName||''}${delayed?' <span style="color:var(--red)">(delayed)</span>':''}</div>`;
+      }).join('')}
+    </div>` : ''}
+  </div>` : '';
+
+  // ===== DAILY SALES / PAYMENTS / CASH REPORT =====
+  const todayInvoicesList = invoices.filter(i => new Date(i.date).toDateString() === today && i.approvalStatus !== 'pending_approval');
+  const dailyReport = {
+    cash: 0, bankUpi: 0, creditOutstanding: 0, advancesCollected: 0, totalBilled: 0
+  };
+  for (const inv of todayInvoicesList) {
+    dailyReport.totalBilled += inv.total || 0;
+    if (inv.creditSale) {
+      dailyReport.creditOutstanding += inv.balanceDue || inv.total || 0;
+    } else {
+      const method = (inv.paymentMethod || '').toLowerCase();
+      if (method === 'cash') dailyReport.cash += inv.amountReceived || 0;
+      else if (method) dailyReport.bankUpi += inv.amountReceived || 0; // QR Scan, Bank Transfer, Cheque, Card all bucket here
+    }
+    dailyReport.advancesCollected += inv.advanceAmount || 0;
+  }
+  // Advances collected directly on Quotations today (not yet converted to
+  // an invoice) count separately, since that money is real and in-hand
+  // even though no invoice exists yet.
+  const todayQuoteAdvances = quotations.filter(q => q.advanceCollectedAt && new Date(q.advanceCollectedAt).toDateString() === today)
+    .reduce((s,q) => s + (q.advanceAmount || 0), 0);
+  dailyReport.advancesCollected += todayQuoteAdvances;
+
+  const dailyReportCard = `
+  <div class="card">
+    <div class="card-header-row">
+      <h3 class="card-title">📊 Today's Sales &amp; Cash Report</h3>
+      <button class="btn-sm" onclick="shareDailyReportWhatsApp()">💬 Share</button>
+    </div>
+    <div class="total-row"><span>💵 Cash</span><span>₹${Math.round(dailyReport.cash).toLocaleString('en-IN')}</span></div>
+    <div class="total-row"><span>🏦 Bank / UPI / Card</span><span>₹${Math.round(dailyReport.bankUpi).toLocaleString('en-IN')}</span></div>
+    <div class="total-row"><span>📝 Credit Outstanding</span><span style="color:var(--gold)">₹${Math.round(dailyReport.creditOutstanding).toLocaleString('en-IN')}</span></div>
+    <div class="total-row"><span>💰 Advances Collected</span><span>₹${Math.round(dailyReport.advancesCollected).toLocaleString('en-IN')}</span></div>
+    <div class="total-row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-weight:700"><span>Total Billed Today</span><span>₹${Math.round(dailyReport.totalBilled).toLocaleString('en-IN')}</span></div>
   </div>`;
+  window._lastDailyReport = dailyReport;
+  const canSeeDailyReport = await currentUserCanSeeDailyReport();
 
-  setTimeout(() => loadDashboardData(today), 300);
-  return quickHTML;
+  // ── API usage stats ──
+  const _apiAll = (apiUsageRes?.data||[]);
+  const _apiToday = _apiAll.filter(l=>l.created_at?.startsWith(today));
+  const _usdInr = 84;
+  const _uSum = logs => {
+    const b={},t={}; let c=0;
+    logs.forEach(l=>{ b[l.call_type]=(b[l.call_type]||0)+1; t[l.call_type]=(t[l.call_type]||0)+parseFloat(l.cost_usd||0); c+=parseFloat(l.cost_usd||0); });
+    return {b,t,c};
+  };
+  const _uDay=_uSum(_apiToday), _uMon=_uSum(_apiAll);
+  const _utl={ai_visualizer_describe:'✨ AI Describe',ai_visualizer_render:'🖼 AI Render',grn_scan:'📷 GRN Scan',catalog_ocr:'📋 Catalog OCR'};
+
+  return `
+  <!-- DASHBOARD HERO -->
+  <div style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;color:var(--text3);font-weight:500">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-top:2px">Welcome back, ${profile?.name?.split(' ')[0] || 'Admin'} 👋</div>
+      </div>
+    </div>
+  </div>
+
+  ${urgentBanner}
+  ${holdAlertBanner}
+  ${approvalCards}
+
+  <!-- KEY METRICS -->
+  <div class="metric-grid-4" style="margin-bottom:14px">
+    <div class="metric-card gold">
+      <div class="mc-label">Today's Billing</div>
+      <div class="mc-value">₹${todayBilling >= 100000 ? (todayBilling/100000).toFixed(1)+'L' : todayBilling >= 1000 ? Math.round(todayBilling/1000)+'K' : Math.round(todayBilling)}</div>
+      ${todayPendingApproval ? `<div class="mc-sub" style="color:var(--gold)">+${todayPendingApproval} pending</div>` : `<div class="mc-sub">${todayInvoicesList.length} invoice${todayInvoicesList.length!==1?'s':''}</div>`}
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Month</div>
+      <div class="mc-value">₹${monthBilling >= 100000 ? (monthBilling/100000).toFixed(1)+'L' : monthBilling >= 1000 ? Math.round(monthBilling/1000)+'K' : Math.round(monthBilling)}</div>
+      <div class="mc-sub">this month</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Walk-ins</div>
+      <div class="mc-value">${todayCustomers.length}</div>
+      <div class="mc-sub">customers today</div>
+    </div>
+    <div class="metric-card ${lowStock.length > 0 ? 'danger' : ''}">
+      <div class="mc-label">Low Stock</div>
+      <div class="mc-value">${lowStock.length}</div>
+      <div class="mc-sub">${lowStock.length > 0 ? 'need restocking' : 'all good'}</div>
+    </div>
+  </div>
+
+  <!-- BIRTHDAY BANNER -->
+  ${await (async () => {
+    const bdays = await VW_EXTRAS.checkCustomerBirthdays();
+    if (!bdays.length) return '';
+    return `<div class="announce-card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-size:14px;font-weight:700;color:var(--gold)">🎂 ${bdays.length} Birthday${bdays.length>1?'s':''} Today</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">${bdays.map(c=>c.name).join(', ')}</div></div>
+        <button class="btn-sm" style="background:var(--gold);color:#000;flex-shrink:0" onclick="sendCustomerBirthdayWishes()">Send Wishes</button>
+      </div>
+    </div>`;
+  })()}
+
+  <!-- QUICK ACTIONS -->
+  <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Quick Actions</div>
+  <div class="quick-actions" style="margin-bottom:16px">
+    <button class="qa-btn" onclick="navigateTo('checkin')"><span class="qa-icon">🚶</span><span>Check In</span></button>
+    <button class="qa-btn" onclick="navigateTo('cart')"><span class="qa-icon">🧾</span><span>New Bill</span></button>
+    <button class="qa-btn" onclick="showQuotationPicker()" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon" style="color:var(--gold)">📋</span><span style="color:var(--gold);font-weight:700">Quotation</span></button>
+    <button class="qa-btn" onclick="navigateTo('crm')"><span class="qa-icon">👥</span><span>CRM</span></button>
+    <button class="qa-btn" onclick="navigateTo('inventory')"><span class="qa-icon">📦</span><span>Inventory</span></button>
+    <button class="qa-btn" onclick="navigateTo('dispatch')"><span class="qa-icon">🚚</span><span>Dispatch</span></button>
+    <button class="qa-btn" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
+    <button class="qa-btn" onclick="navigateTo('accounts')"><span class="qa-icon">💳</span><span>Accounts</span></button>
+    <button class="qa-btn" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
+    <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">📦</span><span>Catalog</span></button>
+      <button class="qa-btn" onclick="navigateTo('category_manager')"><span class="qa-icon">🗂</span><span>Categories</span></button>
+  </div>
+
+  <!-- EXECUTIVE LEADERBOARD -->
+  ${await VW_EXTRAS.renderExecutiveSalesCard(invoices, [], today)}
+
+  <!-- LOW STOCK BANNER -->
+  ${lowStockBanner}
+
+  <!-- DAILY REPORT -->
+  ${canSeeDailyReport ? dailyReportCard : ''}
+
+  <!-- PENDING QUOTATIONS -->
+  ${quotesCard}
+
+  ${profile && profile.role === 'admin' ? `
+  <div style="margin-bottom:14px;display:flex;gap:8px">
+    <button class="btn-secondary" style="flex:1" onclick="sendDailySummary()">📤 Daily Summary WA</button>
+    <button class="btn-secondary" style="flex:1" onclick="navigateTo('analytics')">📈 Analytics</button>
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">Business Snapshot</h3>
+    <div class="snapshot-grid">
+      <div class="snap-item"><div class="snap-val">${customers.length}</div><div class="snap-label">Customers</div></div>
+      <div class="snap-item"><div class="snap-val">${invoices.length}</div><div class="snap-label">Orders</div></div>
+      <div class="snap-item"><div class="snap-val">${convRate}%</div><div class="snap-label">Conversion</div></div>
+      <div class="snap-item"><div class="snap-val">${leads.filter(l=>l.stage!=='Won'&&l.stage!=='Lost').length}</div><div class="snap-label">Open Leads</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header-row">
+      <h3 class="card-title">Invoices</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm active" id="inv-filter-today" onclick="filterDashboardInvoices('today',this)">Today</button>
+        <button class="btn-sm" id="inv-filter-week" onclick="filterDashboardInvoices('week',this)">Week</button>
+        <button class="btn-sm" id="inv-filter-all" onclick="filterDashboardInvoices('all',this)">All</button>
+      </div>
+    </div>
+    <div id="dashboard-invoice-list">
+    ${todayInvoices.length === 0 ? '<p class="empty-msg">No invoices today yet</p>' :
+    [...todayInvoices].sort((a,b) => new Date(b.date)-new Date(a.date)).map(inv => {
+      const cust = customers.find(c => c.id === inv.customerId);
+      const isPaid = inv.paymentVerified;
+      const isPending = inv.approvalStatus === 'pending_approval';
+      return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);cursor:pointer" onclick="switchBillingTab('invoices');navigateTo('cart')">
+        <div>
+          <div style="font-weight:600;font-size:13px">${inv.invoiceNo}</div>
+          <div style="font-size:12px;color:var(--text3)">${cust ? cust.name : 'Walk-in'} · ${new Date(inv.date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-weight:700;font-size:13px">₹${(inv.total||0).toLocaleString('en-IN')}</div>
+          <span style="font-size:11px;color:${isPending?'var(--gold)':isPaid?'#22c55e':'#378ADD'}">${isPending?'⏳ Pending':isPaid?'✓ Verified':'Active'}</span>
+        </div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>
+
+  ${topDept.length ? `
+  <div class="card">
+    <h3 class="card-title">Top Departments</h3>
+    ${topDept.map(([dept,count],i)=>`
+    <div class="dept-rank-row">
+      <span class="dept-rank-no">${i+1}</span>
+      <span class="dept-rank-name">${dept}</span>
+      <div class="dept-rank-bar-bg"><div class="dept-rank-bar" style="width:${Math.round(count/topDept[0][1]*100)}%"></div></div>
+      <span class="dept-rank-count">${count}</span>
+    </div>`).join('')}
+  </div>` : ''}
+
+  ${VW_AUTH.isAdmin() ? `<div class="card" style="margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <h3 class="card-title" style="margin:0">🤖 AI Usage</h3>
+      <div style="text-align:right">
+        <div style="font-size:9px;color:var(--text3)">This month</div>
+        <div style="font-size:14px;font-weight:800;color:var(--gold)">₹${Math.round(_uMon.c*_usdInr).toLocaleString('en-IN')}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:10px;color:var(--text3)">Today</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gold)">${_apiToday.length}</div>
+        <div style="font-size:10px;color:var(--text3)">calls · ₹${Math.round(_uDay.c*_usdInr)}</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+        <div style="font-size:10px;color:var(--text3)">Month</div>
+        <div style="font-size:22px;font-weight:800;color:var(--gold)">${_apiAll.length}</div>
+        <div style="font-size:10px;color:var(--text3)">calls · $${_uMon.c.toFixed(2)}</div>
+      </div>
+    </div>
+    ${Object.keys(_utl).map(type => {
+      const tc=_uDay.b[type]||0, mc=_uMon.b[type]||0;
+      if(!tc&&!mc) return '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:12px;font-weight:600">${_utl[type]}</div>
+        <div style="display:flex;gap:14px">
+          <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">Today</div><div style="font-size:12px;font-weight:700">${tc}</div></div>
+          <div style="text-align:center"><div style="font-size:9px;color:var(--text3)">Month</div><div style="font-size:12px;font-weight:700;color:var(--gold)">${mc}</div></div>
+        </div>
+      </div>`;
+    }).join('')}
+    ${_apiAll.length===0?`<div style="text-align:center;padding:12px;color:var(--text3);font-size:12px">No AI calls yet — appears here once staff uses Visualizer, GRN scan, or Catalog OCR</div>`:''}
+    <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:center">⚡ Quick Quote = ₹0 · $1 ≈ ₹${_usdInr}</div>
+  </div>` : ''}
+
+  <div class="card">
+    <h3 class="card-title">Recent Activity</h3>
+    <div id="recent-activity">${await renderRecentActivity(visits, customers)}</div>
+  </div>
+  `;
+  } catch(e) {
+    console.error('Dashboard load error:', e);
+    return `<div style="padding:20px;text-align:center">
+      <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">Dashboard could not load</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">${e?.message||'Check connection and try again'}</div>
+      <button onclick="navigateTo('dashboard')" style="padding:10px 20px;background:var(--gold);border:none;border-radius:8px;font-weight:700;cursor:pointer">↻ Retry</button>
+    </div>`;
+  }
 }
 
 async function loadDashboardData(today) {
