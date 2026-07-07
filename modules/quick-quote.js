@@ -1982,7 +1982,6 @@ async function checkAndSendHoldReminders() {
         `📞 V Wholesale: 8712697930 · Vijayawada`
       );
       // Note: This opens WA for exec to send — not auto-sent
-      console.log('Hold reminder WA ready for:', hold.customer_phone, 'msg length:', waMsg.length);
     }
 
     // Mark as sent
@@ -2020,7 +2019,7 @@ async function lookupTileCustomerFull(phone, prefix, showOwnershipWarning) {
       found = exact.find(c => (c.phone||'').replace(/\D/g,'').endsWith(last10)) || exact[0];
     }
   } catch(e) {
-    console.log('Supabase lookup error:', e.message);
+    console.warn('Supabase lookup error:', e.message);
   }
 
   // Fallback to IndexedDB if Supabase returned nothing

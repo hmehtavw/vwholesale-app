@@ -411,7 +411,6 @@ function checkFYRollover() {
   if (now.getMonth() === 3 && now.getDate() === 1) {
     // April 1 — clear any cached FY so fresh sequences are used
     localStorage.removeItem('vw_fy_cache');
-    console.log('Financial year rolled over to', getFinancialYearLabel());
   }
 }
 checkFYRollover();
