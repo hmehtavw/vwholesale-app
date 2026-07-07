@@ -508,6 +508,7 @@ async function renderDashboard() {
   const tasksRes      = await VW_DB.client.from('tasks').select('id,title,status,assigned_to_name,due_date').in('status', ['pending','in_progress']).limit(30);
   const leadsRes      = await VW_DB.client.from('leads').select('id,name,stage,assigned_to_name').not('stage','in','("won","lost")').limit(30);
   const productsRes   = await VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit').eq('is_active', true).lte('stock', 20).limit(20);
+  const apiUsageRes   = await VW_DB.client.from('api_usage_log').select('call_type,cost_usd,created_at,called_by').gte('created_at', todayIST).limit(200).catch(() => ({ data: [] }));
 
   const customers = [];
   const visits    = visitsRes.data || [];
