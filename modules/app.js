@@ -500,31 +500,28 @@ async function renderDashboard() {
   const profile = VW_AUTH.getCurrentProfile();
   const today = new Date().toISOString().split('T')[0];
 
-  // Show static shell immediately — no DB calls needed
   const role = profile?.role || '';
   const name = profile?.name || 'Staff';
   const greet = new Date().getHours() < 12 ? 'Good morning' : new Date().getHours() < 17 ? 'Good afternoon' : 'Good evening';
 
-  // Show quick static dashboard first
   const quickHTML = `
   <div class="module-header">
     <h2>${greet}, ${name.split(' ')[0]} 👋</h2>
     <div style="font-size:11px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div>
   </div>
   <div class="snapshot-grid" style="margin-bottom:14px">
-    <div class="snap-item"><div class="snap-val" id="dash-revenue" style="color:var(--gold)">Loading...</div><div class="snap-label">Today's Revenue</div></div>
-    <div class="snap-item"><div class="snap-val" id="dash-visits">—</div><div class="snap-label">Visits Today</div></div>
-    <div class="snap-item"><div class="snap-val" id="dash-invoices">—</div><div class="snap-label">Invoices Today</div></div>
+    <div class="snap-item"><div class="snap-val" id="dash-revenue" style="color:var(--gold)">₹0</div><div class="snap-label">Today's Revenue</div></div>
+    <div class="snap-item"><div class="snap-val" id="dash-visits">0</div><div class="snap-label">Visits Today</div></div>
+    <div class="snap-item"><div class="snap-val" id="dash-invoices">0</div><div class="snap-label">Invoices Today</div></div>
   </div>
   <div id="dash-pending-tqs"></div>
   <div id="dash-tasks" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
-    <div style="font-size:12px;color:var(--text3)">Loading tasks...</div>
+    <div style="font-size:12px;color:var(--text3)">✅ No pending tasks</div>
   </div>
   <div id="dash-low-stock" style="background:var(--bg2);border-radius:12px;padding:12px;margin-bottom:10px">
-    <div style="font-size:12px;color:var(--text3)">Checking stock...</div>
+    <div style="font-size:12px;color:var(--text3)">✅ Stock levels OK</div>
   </div>`;
 
-  // Return static shell — background loads will update the page
   setTimeout(() => loadDashboardData(today), 300);
   return quickHTML;
 }
