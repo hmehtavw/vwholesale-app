@@ -1,29 +1,60 @@
 // Load price history from recent approved/pending quotes
-// Builds: window._qqPriceHistory[productId] = { pricePerBox, tqNo, date }
-async function _qqLoadPriceHistory() {
-  const { data } = await VW_DB.client
-    .from('tile_quotations')
-    .select('tq_no, tile_selections, quoted_prices, created_at')
-    .in('approval_status', ['approved', 'pending_approval'])
-    .order('created_at', { ascending: false })
-    .limit(50);
-
+// Builds: window._qqPriceHistory[productId] = { pricePerBox, tqNo, date, mine }
+// When customerPhone is given, THAT customer's own quotes take priority
+// (mine:true → "This customer was quoted..."), then recent store-wide quotes fill gaps.
+async function _qqLoadPriceHistory(customerPhone) {
   const history = {};
-  (data||[]).forEach(q => {
+  const harvest = (rows, mine) => (rows||[]).forEach(q => {
     const tqNo = q.tq_no;
     const dateStr = new Date(q.created_at).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
     Object.entries(q.tile_selections||{}).forEach(([slotId, sel]) => {
-      const pid = sel?.productId;
+      // selections store selectedTileId (converted quotes) or productId or id
+      const pid = sel?.selectedTileId || sel?.productId || sel?.id;
       if (!pid) return;
       const qp = (q.quoted_prices||{})[slotId];
       const priceBox = qp?.pricePerBox || 0;
       if (!priceBox) return;
-      // Keep most recent approved price per product
-      if (!history[pid]) {
-        history[pid] = { pricePerBox: priceBox, tqNo, date: dateStr };
+      // customer-specific beats global; within a scope, most recent wins
+      if (!history[pid] || (mine && !history[pid].mine)) {
+        history[pid] = { pricePerBox: priceBox, tqNo, date: dateStr, mine: !!mine };
       }
     });
+    // QQ-shaped rooms: tiles live in floorDesign/wallDesign tileMap
+    (q.rooms||[]).forEach(room => {
+      ['floorDesign','wallDesign'].forEach(k => {
+        Object.values(room?.[k]?.tileMap||{}).forEach(t => {
+          if (!t?.id || !t?.price_per_sqft) return;
+          if (!history[t.id] || (mine && !history[t.id].mine)) {
+            history[t.id] = { pricePerSqft: t.price_per_sqft, tqNo, date: dateStr, mine: !!mine };
+          }
+        });
+      });
+    });
   });
+
+  // 1) This customer's own quotation history (any status — it's what THEY saw)
+  if (customerPhone) {
+    const phone = String(customerPhone).replace(/\D/g,'').slice(-10);
+    if (phone.length === 10) {
+      const { data: mineRows } = await VW_DB.client
+        .from('tile_quotations')
+        .select('tq_no, tile_selections, quoted_prices, rooms, created_at')
+        .eq('customer_phone', phone)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      harvest(mineRows, true);
+    }
+  }
+
+  // 2) Store-wide recent approved/pending quotes fill the gaps
+  const { data } = await VW_DB.client
+    .from('tile_quotations')
+    .select('tq_no, tile_selections, quoted_prices, rooms, created_at')
+    .in('approval_status', ['approved', 'pending_approval'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+  harvest(data, false);
+
   window._qqPriceHistory = history;
 }
 
@@ -220,6 +251,9 @@ async function _qqFromCustomer() {
   // Ensure customer is saved to Supabase BEFORE moving to rooms
   // so they're immediately findable if a second QQ starts right after
   await _qqEnsureCustomer().catch(() => {});
+  // Returning customer → reload price history scoped to THEM so their
+  // last quoted prices show first on the output screen
+  _qqLoadPriceHistory(phone).catch(() => {});
   _qqScreen('rooms');
   _qqAutoSave().catch(() => {});
 }
@@ -918,7 +952,7 @@ function _qqShowOutput() {
                 const sh = _sessionHintKeys[r.tile.id];
                 if (sh) return `<div id="qq-hint-fl-${ri}-${code}" data-hint-src="${sh.boxKey}" data-apply-type="fl" data-apply-ri="${ri}" data-apply-code="${code}" data-apply-spb="${sqftPerBox_fl.toFixed(4)}" data-apply-bk="${boxKey}" data-apply-sk="${sqftKey}" data-hint-label="${sh.label}" style="margin-top:4px;display:none;width:100%;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;text-align:left;box-sizing:border-box" onclick="VW_TILES._qqApplyHint(this)">💡 Same tile — ₹<span class="hint-price"></span>/box in ${sh.label} — <span class="hint-action">tap to use</span></div>`;
                 const ph = window._qqPriceHistory?.[r.tile.id];
-                if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
+                if (ph?.pricePerBox) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('fl',${ri},'${code}',${sqftPerBox_fl.toFixed(4)},'${boxKey}','${sqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:${ph.mine?'rgba(96,165,250,0.08)':'rgba(245,200,66,0.07)'};border:1px dashed ${ph.mine?'#60A5FA':'var(--gold-border)'};color:${ph.mine?'#60A5FA':'var(--gold)'};font-size:10px;cursor:pointer;text-align:left">💡 ${ph.mine?'THIS customer was quoted':'Previously quoted'} ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
                 return '';
               })()}
               ${(_sessionHintKeys[r.tile.id] = { label: room.type+' Floor', boxKey, sqftKey, sqftPerBox: sqftPerBox_fl }, '')}
@@ -990,7 +1024,7 @@ function _qqShowOutput() {
                 const sh = _sessionHintKeys[r.tile.id];
                 if (sh) return `<div id="qq-hint-wl-${ri}-${code}" data-hint-src="${sh.boxKey}" data-apply-type="wl" data-apply-ri="${ri}" data-apply-code="${code}" data-apply-spb="${sqftPerBox_wl.toFixed(4)}" data-apply-bk="${wBoxKey}" data-apply-sk="${wSqftKey}" data-hint-label="${sh.label}" style="margin-top:4px;display:none;width:100%;padding:3px 8px;border-radius:5px;font-size:10px;font-weight:700;cursor:pointer;text-align:left;box-sizing:border-box" onclick="VW_TILES._qqApplyHint(this)">💡 Same tile — ₹<span class="hint-price"></span>/box in ${sh.label} — <span class="hint-action">tap to use</span></div>`;
                 const ph = window._qqPriceHistory?.[r.tile.id];
-                if (ph) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:rgba(245,200,66,0.07);border:1px dashed var(--gold-border);color:var(--gold);font-size:10px;cursor:pointer;text-align:left">💡 Previously quoted ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
+                if (ph?.pricePerBox) return `<button type="button" onclick="VW_TILES._qqUpdatePrice('wl',${ri},'${code}',${sqftPerBox_wl.toFixed(4)},'${wBoxKey}','${wSqftKey}',true,${ph.pricePerBox})" style="margin-top:4px;width:100%;padding:3px 8px;border-radius:5px;background:${ph.mine?'rgba(96,165,250,0.08)':'rgba(245,200,66,0.07)'};border:1px dashed ${ph.mine?'#60A5FA':'var(--gold-border)'};color:${ph.mine?'#60A5FA':'var(--gold)'};font-size:10px;cursor:pointer;text-align:left">💡 ${ph.mine?'THIS customer was quoted':'Previously quoted'} ₹${ph.pricePerBox}/box on ${ph.tqNo} (${ph.date}) — tap to use</button>`;
                 return '';
               })()}
               ${(_sessionHintKeys[r.tile.id] = { label: room.type+' Wall', boxKey: wBoxKey, sqftKey: wSqftKey, sqftPerBox: sqftPerBox_wl }, '')}

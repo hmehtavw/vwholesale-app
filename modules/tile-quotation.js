@@ -307,6 +307,9 @@ async function searchCustomerByPhone(phone) {
     const found = custRows?.[0];
     if (found) {
       _tqState.customer = { ...found, site: found.address || '', _found: true, totalQuotes: 0 };
+      // Returning customer → load THEIR price history so Step 6 auto-applies
+      // the price they were last quoted for the same tile
+      _qqLoadPriceHistory(found.phone).catch(() => {});
       if (el) el.innerHTML = `
         <div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:10px;padding:10px">
           <div style="display:flex;justify-content:space-between;align-items:center">
@@ -2147,12 +2150,17 @@ function tqSelectProduct(p) {
   const slots = _getTileSlots();
   const firstWallOrFloor = slots[0];
   if (firstWallOrFloor && !_tqState.quotedPrices[firstWallOrFloor.id]) {
+    // Returning customer? Use the price THEY were last quoted for this tile,
+    // so quotes stay consistent visit-to-visit. Falls back to inventory price.
+    const hist = window._qqPriceHistory?.[p.id];
+    const useHistPrice = hist?.mine && hist.pricePerBox > 0;
     _tqState.quotedPrices[firstWallOrFloor.id] = {
-      pricePerBox: p.price || p.sale_price || 0,
+      pricePerBox: useHistPrice ? hist.pricePerBox : (p.price || p.sale_price || 0),
       pricePerSqft: 0,
-      note: '',
+      note: useHistPrice ? `Last quoted to this customer on ${hist.tqNo}` : '',
       upsell: false,
     };
+    if (useHistPrice) showToast(`💡 ₹${hist.pricePerBox}/box applied — last quoted to this customer on ${hist.tqNo} (${hist.date})`, 'info');
   }
   // Auto-suggest grout colour from tile
   _autoSuggestGroutColour(p);
