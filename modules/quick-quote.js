@@ -708,6 +708,12 @@ function _qqAssignTile(code, id, name, brand, size, price, stock, tpb) {
   _qqScreen('design_assign');
   // Auto-save progress silently
   _qqAutoSave().catch(()=>{});
+  // Mood-board: suggest matching tiles for this code (tap to swap)
+  if (id && window.VW_TILES?._tileMoodSuggest) {
+    window.VW_TILES._tileMoodSuggest(id, (t) =>
+      _qqAssignTile(code, t.id, t.name, t.brand, size, t.price_per_sqft || price, t.stock, t.tiles_per_box || tpb)
+    );
+  }
 }
 
 function _qqAssignNext() {

@@ -2156,6 +2156,8 @@ function tqSelectProduct(p) {
   }
   // Auto-suggest grout colour from tile
   _autoSuggestGroutColour(p);
+  // Mood-board: suggest 2-3 matching tiles by colour & size (best-effort, non-blocking)
+  if (p.id) _tileMoodSuggest(p.id, (t) => tqSelectProduct(t)).catch?.(()=>{});
   document.getElementById('tq-step-content').innerHTML = '<div style="padding:16px;text-align:center"><div class="spinner"></div></div>';
   _renderStep6().then(html => { document.getElementById('tq-step-content').innerHTML = html; });
 }
@@ -7394,3 +7396,71 @@ async function quickReject(quoteId) {
 window.VW_TILES.renderQuickApprovalPage = renderQuickApprovalPage;
 window.VW_TILES.quickApprove = quickApprove;
 window.VW_TILES.quickReject = quickReject;
+
+// ═══════════════════════════════════════════════════════════
+// TILE MOOD-BOARD SUGGESTIONS (Feature 6)
+// When a base tile is selected in QQ or TQ, suggest 2-3 matching
+// tiles by colour family and size — one tap applies the suggestion.
+// ═══════════════════════════════════════════════════════════
+async function _tileMoodSuggest(baseTileId, applyFn) {
+  try {
+    if (!baseTileId) return;
+    const { data: base } = await VW_DB.client.from('products')
+      .select('id,name,brand,colour_family,tile_size_mm,tile_size_label,price,price_per_sqft,tile_finish')
+      .eq('id', baseTileId).single();
+    if (!base) return;
+
+    // Candidates: active tiles of the SAME SIZE, excluding the base tile
+    let q = VW_DB.client.from('products')
+      .select('id,name,brand,colour_family,tile_size_mm,tile_size_label,price,price_per_sqft,stock,tile_finish,image_url,photos')
+      .eq('is_active', true).eq('category', 'Tiles').neq('id', base.id).limit(24);
+    if (base.tile_size_mm) q = q.eq('tile_size_mm', base.tile_size_mm);
+    const { data: cands } = await q;
+    if (!cands?.length) return;
+
+    // Rank: same colour family first, then in-stock, then same finish
+    const scored = cands.map(t => {
+      let score = 0;
+      if (base.colour_family && t.colour_family === base.colour_family) score += 3;
+      if ((parseFloat(t.stock) || 0) > 0) score += 2;
+      if (base.tile_finish && t.tile_finish === base.tile_finish) score += 1;
+      return { t, score };
+    }).sort((a,b) => b.score - a.score).slice(0, 3).map(x => x.t);
+    if (!scored.length) return;
+
+    // Floating dismissible card
+    document.getElementById('mood-suggest-card')?.remove();
+    window._moodTiles = scored;
+    window._moodApply = (i) => {
+      const t = window._moodTiles?.[i];
+      document.getElementById('mood-suggest-card')?.remove();
+      if (t && typeof applyFn === 'function') applyFn(t);
+    };
+    const card = document.createElement('div');
+    card.id = 'mood-suggest-card';
+    card.style.cssText = 'position:fixed;bottom:78px;left:12px;right:12px;z-index:9500;background:var(--bg2,#1a1a2e);border:1px solid var(--gold-border,#8a6d1d);border-radius:14px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.45);animation:slideUp .25s ease';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:800;color:var(--gold,#F5C842)">✨ Goes well with ${base.name.slice(0,30)}</div>
+        <button onclick="document.getElementById('mood-suggest-card').remove()" style="background:none;border:none;color:var(--text3,#888);font-size:16px;cursor:pointer;padding:0 4px">✕</button>
+      </div>
+      ${scored.map((t,i) => {
+        const img = t.image_url || t.photos?.[0]?.url || t.photos?.[0] || '';
+        const priceStr = t.price_per_sqft > 0 ? '₹'+t.price_per_sqft+'/sqft' : (t.price > 0 ? '₹'+Number(t.price).toLocaleString('en-IN')+'/box' : '');
+        return `
+        <div onclick="window._moodApply(${i})" style="display:flex;gap:10px;align-items:center;padding:7px 6px;border-radius:9px;cursor:pointer;border:1px solid transparent" onmouseover="this.style.borderColor='var(--gold-border,#8a6d1d)'" onmouseout="this.style.borderColor='transparent'">
+          ${img ? `<img src="${img}" style="width:38px;height:38px;object-fit:cover;border-radius:6px;flex-shrink:0">` : `<div style="width:38px;height:38px;border-radius:6px;background:var(--bg3,#22223a);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">⬜</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:700;color:var(--text,#eee);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.name}</div>
+            <div style="font-size:10px;color:var(--text3,#888)">${[t.brand, t.colour_family, t.tile_size_label||t.tile_size_mm].filter(Boolean).join(' · ')}</div>
+          </div>
+          <div style="font-size:11px;font-weight:800;color:var(--gold,#F5C842);flex-shrink:0">${priceStr}</div>
+        </div>`;
+      }).join('')}
+      <div style="font-size:9px;color:var(--text3,#777);text-align:center;margin-top:6px">Matched by size & colour · tap to use</div>`;
+    document.body.appendChild(card);
+    // Auto-dismiss after 20s so it never blocks work
+    setTimeout(() => document.getElementById('mood-suggest-card')?.remove(), 20000);
+  } catch(e) { /* suggestions are best-effort, never block the flow */ }
+}
+window.VW_TILES._tileMoodSuggest = _tileMoodSuggest;
