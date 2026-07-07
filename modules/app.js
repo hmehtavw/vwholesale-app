@@ -531,19 +531,21 @@ async function renderDashboard() {
 
 async function loadDashboardData(today) {
   try {
-    // Load one at a time with error handling
+    // Both invoices.date and visits.date are timestamptz — must use ISO string with time
+    const todayStart = today + 'T00:00:00+05:30'; // IST midnight
+
     const invoicesRes = await VW_DB.client.from('invoices')
       .select('id,total,payment_method,credit_sale,approval_status,payment_verified,amount_received')
-      .gte('date', today).limit(100).catch(() => ({ data: [] }));
+      .gte('date', todayStart).limit(100).catch(() => ({ data: [] }));
     const invoices = invoicesRes.data || [];
     const revenue = invoices.filter(i => i.approval_status === 'approved')
       .reduce((s,i) => s + (i.amount_received || i.total || 0), 0);
 
     const el = document.getElementById('dash-revenue');
-    if (el) el.textContent = '₹' + Math.round(revenue).toLocaleString('en-IN');
+    if (el) el.textContent = revenue > 0 ? '₹' + Math.round(revenue).toLocaleString('en-IN') : '₹0';
 
     const visitsRes = await VW_DB.client.from('visits')
-      .select('id,visitor_type').gte('date', today + 'T00:00:00').limit(100).catch(() => ({ data: [] }));
+      .select('id,visitor_type').gte('date', todayStart).limit(100).catch(() => ({ data: [] }));
     const visits = visitsRes.data || [];
     const visEl = document.getElementById('dash-visits');
     if (visEl) visEl.textContent = visits.length;
@@ -599,11 +601,11 @@ async function loadDashboardData(today) {
       }
     }
 
-    // Low stock
+    // Low stock — stock column is TEXT so filter in JS after fetch
     const stockRes = await VW_DB.client.from('products')
       .select('id,name,stock,low_stock_threshold,unit')
-      .eq('is_active',true).lte('stock',10).limit(5).catch(() => ({ data: [] }));
-    const lowStock = stockRes.data || [];
+      .eq('is_active',true).limit(200).catch(() => ({ data: [] }));
+    const lowStock = (stockRes.data || []).filter(p => (parseFloat(p.stock) || 0) <= (p.low_stock_threshold || 10)).slice(0, 5);
     const stockEl = document.getElementById('dash-low-stock');
     if (stockEl) {
       if (!lowStock.length) {
