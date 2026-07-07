@@ -324,7 +324,14 @@ async function searchCustomerByPhone(phone) {
         <button onclick="VW_TILES.sendCustomerRegistrationLink()"
           style="margin-top:6px;font-size:11px;padding:5px 12px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:7px;color:#60A5FA;cursor:pointer">
           📲 Send quote tracker link
-        </button>`;
+        </button>
+        ${(found.reference_images||[]).length ? `
+        <div style="margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:5px">📷 Customer's reference images (${found.reference_images.length})</div>
+          <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none">
+            ${found.reference_images.map(img => `<img src="${img.url||img}" onclick="window.open('${img.url||img}','_blank')" style="width:52px;height:52px;object-fit:cover;border-radius:7px;border:1px solid var(--border);cursor:pointer;flex-shrink:0">`).join('')}
+          </div>
+        </div>` : ''}`;
       _updateStep0NextBtn();
       return;
     }

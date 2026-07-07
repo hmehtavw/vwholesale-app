@@ -264,6 +264,21 @@ async function openCustomer(id) {
       </div>
       ${c.stage_updated_at ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">Updated ${new Date(c.stage_updated_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>` : ''}
     </div>
+    <div style="margin:8px 0 4px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">📷 Reference Images ${(c.reference_images||[]).length ? `(${c.reference_images.length})` : ''}</div>
+      <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+        ${(c.reference_images||[]).map((img,ii) => `
+        <div style="position:relative;flex-shrink:0">
+          <img src="${img.url||img}" onclick="window.open('${img.url||img}','_blank')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--border);cursor:pointer">
+          <button onclick="removeCustomerRefImage(${c.id},${ii})" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;font-size:10px;cursor:pointer;line-height:1">✕</button>
+        </div>`).join('')}
+        <label style="flex-shrink:0;width:64px;height:64px;border:1.5px dashed var(--border);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:10px;gap:2px">
+          <span style="font-size:18px">＋</span>Add
+          <input type="file" accept="image/*" multiple style="display:none" onchange="uploadCustomerRefImages(${c.id},this)">
+        </label>
+      </div>
+      <div style="font-size:10px;color:var(--text3)">Design references, site photos, Pinterest screenshots — visible when quoting</div>
+    </div>
     <div class="sheet-actions">
       <button class="btn-primary" onclick="goToCart(${c.id},null);closeSheet()">🛒 New Bill</button>
       <button class="btn-secondary" onclick="showAddLead(${c.id});closeSheet()">➕ Add Lead</button>
@@ -2086,3 +2101,40 @@ async function setConstructionStage(customerId, stage) {
   }
 }
 window.setConstructionStage = setConstructionStage;
+
+
+// ═══ Feature 9: Customer reference images (design refs, site photos) ═══
+async function uploadCustomerRefImages(customerId, input) {
+  if (!input.files?.length) return;
+  showToast('Uploading ' + input.files.length + ' image(s)…', 'info');
+  const c = await VW_DB.getById(VW_DB.STORES.customers, customerId);
+  if (!c) return;
+  const refs = Array.isArray(c.reference_images) ? c.reference_images : [];
+  for (const file of input.files) {
+    try {
+      const path = `${customerId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+      const { error } = await VW_DB.client.storage.from('customer-refs').upload(path, file, { upsert: false });
+      if (error) throw error;
+      const { data: pub } = VW_DB.client.storage.from('customer-refs').getPublicUrl(path);
+      refs.push({ url: pub.publicUrl, name: file.name, at: new Date().toISOString() });
+    } catch(e) { showToast('Upload failed: ' + (e.message||file.name), 'error'); }
+  }
+  c.reference_images = refs;
+  await VW_DB.put(VW_DB.STORES.customers, c);
+  await VW_DB.client.from('customers').update({ reference_images: refs }).eq('id', customerId).catch(()=>{});
+  showToast('Reference images saved ✓', 'success');
+  openCustomer(customerId);
+}
+window.uploadCustomerRefImages = uploadCustomerRefImages;
+
+async function removeCustomerRefImage(customerId, idx) {
+  const c = await VW_DB.getById(VW_DB.STORES.customers, customerId);
+  if (!c) return;
+  const refs = Array.isArray(c.reference_images) ? c.reference_images : [];
+  refs.splice(idx, 1);
+  c.reference_images = refs;
+  await VW_DB.put(VW_DB.STORES.customers, c);
+  await VW_DB.client.from('customers').update({ reference_images: refs }).eq('id', customerId).catch(()=>{});
+  openCustomer(customerId);
+}
+window.removeCustomerRefImage = removeCustomerRefImage;
