@@ -255,6 +255,15 @@ async function openCustomer(id) {
       <div class="sheet-stat"><span>${invoices.length}</span><small>Orders</small></div>
       <div class="sheet-stat"><span>₹${Math.round(totalSpend/1000)}K</span><small>Spent</small></div>
     </div>
+    <div style="margin:10px 0 4px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🏗 Construction Stage ${c.construction_stage ? `<span style="color:var(--gold)">· ${c.construction_stage}</span>` : ''}</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none">
+        ${['Foundation','Structure','Brickwork','Plastering','Flooring & Tiling','Bathroom Fitting','Painting','Finishing','Handover'].map(st => `
+        <button onclick="setConstructionStage(${c.id},'${st.replace(/'/g,"\\'")}')"
+          style="flex-shrink:0;padding:6px 11px;border-radius:16px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid ${c.construction_stage===st?'var(--gold)':'var(--border)'};background:${c.construction_stage===st?'rgba(245,200,66,0.15)':'var(--bg2)'};color:${c.construction_stage===st?'var(--gold)':'var(--text2)'}">${st}</button>`).join('')}
+      </div>
+      ${c.stage_updated_at ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">Updated ${new Date(c.stage_updated_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>` : ''}
+    </div>
     <div class="sheet-actions">
       <button class="btn-primary" onclick="goToCart(${c.id},null);closeSheet()">🛒 New Bill</button>
       <button class="btn-secondary" onclick="showAddLead(${c.id});closeSheet()">➕ Add Lead</button>
@@ -2037,3 +2046,43 @@ window.selectBWASegment = function(seg) {
     }
   });
 };
+
+// ═══ Feature 8: Stage-wise follow-up automation ═══
+// Set the customer's construction stage → WhatsApp follow-up opens
+// prefilled with the Admin-editable template for that stage.
+async function setConstructionStage(customerId, stage) {
+  const c = await VW_DB.getById(VW_DB.STORES.customers, customerId);
+  if (!c) return;
+  const prev = c.construction_stage;
+  const now = new Date().toISOString();
+
+  // Persist stage
+  c.construction_stage = stage;
+  c.stage_updated_at = now;
+  await VW_DB.put(VW_DB.STORES.customers, c);
+  await VW_DB.client.from('customers')
+    .update({ construction_stage: stage, stage_updated_at: now })
+    .eq('id', customerId).catch(()=>{});
+
+  showToast(`Stage: ${stage} ✓`, 'success');
+  openCustomer(customerId); // refresh chips
+
+  // Stage actually changed → trigger the WhatsApp follow-up template
+  if (prev !== stage) {
+    let templates = {};
+    try { templates = await VW_DB.getSetting('stage_followup_templates', {}); } catch(e) {}
+    const tpl = templates?.[stage];
+    if (tpl && c.phone) {
+      const msg = tpl.replace(/\{name\}/g, c.name || 'there').replace(/\{stage\}/g, stage);
+      const digits = String(c.phone).replace(/\D/g,'').slice(-10);
+      setTimeout(() => {
+        if (confirm(`Send ${stage} follow-up to ${c.name} on WhatsApp?`)) {
+          window.open(`https://wa.me/91${digits}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+      }, 350);
+    }
+    // Audit trail
+    auditLog?.('customer_stage_change', 'customer', customerId, prev||'', stage, {}, `Stage → ${stage}`)?.catch?.(()=>{});
+  }
+}
+window.setConstructionStage = setConstructionStage;

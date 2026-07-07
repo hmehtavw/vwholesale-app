@@ -23,6 +23,7 @@ async function renderSettingsPage() {
     ${isAdmin ? `<button class="entry-type-btn" id="stab-costs" onclick="VW_SETTINGS.switchSettingsTab('costs',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">💰</span>Costs</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-labor" onclick="VW_SETTINGS.switchSettingsTab('labor',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Labor</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-promos" onclick="VW_SETTINGS.switchSettingsTab('promos',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🎟</span>Promos</button>` : ''}
+    ${isAdmin ? `<button class="entry-type-btn" id="stab-stages" onclick="VW_SETTINGS.switchSettingsTab('stages',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>Stage Msgs</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-contractor_pricing" onclick="VW_SETTINGS.switchSettingsTab('contractor_pricing',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🏗</span>B2B Pricing</button>` : ''}
     ${isAdmin ? `<button class="entry-type-btn" id="stab-dev" onclick="VW_SETTINGS.switchSettingsTab('dev',this)" style="display:inline-flex;margin-left:6px"><span class="et-icon">🛠</span>Dev</button>` : ''}
   </div>
@@ -49,6 +50,7 @@ async function switchSettingsTab(tab, btn) {
     case 'costs':       container.innerHTML = await VW_SETTINGS.renderCostOptimizationTab(); break;
     case 'labor':       container.innerHTML = await renderLaborSettings(); break;
     case 'promos':      container.innerHTML = await renderPromoSettings(); break;
+    case 'stages':      container.innerHTML = await renderStageTemplateSettings(); break;
     case 'contractor_pricing': container.innerHTML = await VW_SHOP.renderContractorPricingSettings(); break;
     case 'dev': container.innerHTML = `
       <div style="font-size:12px;font-weight:700;margin-bottom:12px">🛠 Developer Tools</div>
@@ -5010,3 +5012,37 @@ window.openAddCategoryModal = openAddCategoryModal;
 window.openEditCategoryModal = openEditCategoryModal;
 window.saveCategoryModal = saveCategoryModal;
 window.deleteCategoryRow = deleteCategoryRow;
+
+
+// ═══ Feature 8: Stage follow-up template editor ═══
+const VW_STAGES = ['Foundation','Structure','Brickwork','Plastering','Flooring & Tiling','Bathroom Fitting','Painting','Finishing','Handover'];
+
+async function renderStageTemplateSettings() {
+  let templates = {};
+  try { templates = await VW_DB.getSetting('stage_followup_templates', {}); } catch(e) {}
+  return `
+  <div style="font-size:12px;color:var(--text3);margin-bottom:12px">
+    When staff set a customer's construction stage in CRM, WhatsApp opens prefilled with the template below.
+    Use <code>{name}</code> for the customer's name. Changes apply instantly — no deploy needed.
+  </div>
+  ${VW_STAGES.map(st => `
+  <div style="margin-bottom:12px">
+    <label style="font-size:11px;font-weight:700;color:var(--gold);display:block;margin-bottom:4px">🏗 ${st}</label>
+    <textarea id="stage-tpl-${st.replace(/[^a-z]/gi,'')}" rows="3"
+      style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:12px;line-height:1.5;box-sizing:border-box;resize:vertical">${(templates[st]||'').replace(/</g,'&lt;')}</textarea>
+  </div>`).join('')}
+  <button onclick="saveStageTemplates()" style="width:100%;padding:13px;background:var(--gold);color:#000;border:none;border-radius:10px;font-size:14px;font-weight:800;cursor:pointer">💾 Save Templates</button>`;
+}
+
+async function saveStageTemplates() {
+  const templates = {};
+  VW_STAGES.forEach(st => {
+    const el = document.getElementById('stage-tpl-' + st.replace(/[^a-z]/gi,''));
+    if (el && el.value.trim()) templates[st] = el.value.trim();
+  });
+  try {
+    await VW_DB.setSetting('stage_followup_templates', templates);
+    showToast('Stage templates saved ✓', 'success');
+  } catch(e) { showToast('Save failed: ' + e.message, 'error'); }
+}
+window.saveStageTemplates = saveStageTemplates;
