@@ -1226,32 +1226,40 @@ async function loadCatalogItems(categoryKey) {
   } catch(e) { return []; }
 }
 
-function catalogCard(item) {
-  const price = item.tier1_price || item.mrp || 0;
-  const mrp   = item.mrp || 0;
-  const disc  = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const img   = item.image_url || '';
-  const avail = item.availability === 'in_stock' ? '✓ In Stock' : `🕐 ${item.lead_time_days||7} days`;
-  const availColor = item.availability === 'in_stock' ? 'var(--g)' : 'var(--t3)';
-  return `<div class="pcard" style="min-width:160px;flex:0 0 160px;cursor:pointer" onclick="openCatalogPDP(${item.id})">
-    <div style="height:120px;background:${img?'#f8f8f8':'#e8e8e8'};border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+function catalogCard(item, tierKey) {
+  // tierKey: tier1_price (B2C default), tier2_price (contractor), tier3_price (B2B), tier4_price (project)
+  tierKey = tierKey || 'tier1_price';
+  const price  = item[tierKey] || item.tier1_price || 0;
+  const mrp    = item.mrp || 0;
+  const save   = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const img    = item.image_url || '';
+  const avail  = item.availability === 'in_stock' ? '✓ In Stock' : `🕐 ${item.lead_time_days||7} days`;
+  const aColor = item.availability === 'in_stock' ? 'var(--g)' : 'var(--t3)';
+  const nm     = (item.product_name||'').slice(0,42);
+  const safeNm = (item.product_name||'').replace(/'/g,"\\'");
+  return `<div class="pcard" style="min-width:160px;flex:0 0 160px;cursor:pointer" onclick="openCatalogRequestSheet(${item.id},'${safeNm}')">
+    <div style="height:120px;background:${img?'#f8f8f8':'#eef2f7'};border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
       ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:36px">📦</span>'}
+      ${save > 0 ? `<div style="position:absolute;top:6px;left:6px;background:var(--g);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px">${save}% OFF</div>` : ''}
     </div>
-    <div style="font-size:10px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">${item.brand||''}</div>
-    <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:4px">${(item.product_name||'').slice(0,40)}</div>
-    ${price > 0 ? `<div style="display:flex;align-items:center;gap:6px">
-      <span style="font-size:14px;font-weight:900">₹${price.toLocaleString('en-IN')}</span>
-      ${mrp > price ? `<span style="font-size:10px;color:var(--t3);text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>
-      <span style="font-size:10px;color:var(--g);font-weight:800">${disc}% off</span>` : ''}
-    </div>
-    <div style="font-size:10px;color:${availColor};margin-top:2px">${avail}</div>
-    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${(item.product_name||'').replace(/'/g,"\'")}')"
-      style="width:100%;margin-top:6px;padding:7px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
-      ${item.availability==='in_stock' ? 'Add to Cart' : 'Request Order'}
-    </button>` : `<div style="font-size:11px;color:var(--t3)">Price on request</div>
-    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${(item.product_name||'').replace(/'/g,"\'")}')"
-      style="width:100%;margin-top:6px;padding:7px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
-      Get Best Price
+    <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">${item.brand||''}</div>
+    <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:5px">${nm}</div>
+    ${price > 0 ? `
+    <div style="font-size:16px;font-weight:900;color:var(--t1)">₹${price.toLocaleString('en-IN')}<span style="font-size:10px;font-weight:600;color:var(--t3)"> /${item.unit||'pc'}</span></div>
+    ${mrp > price ? `
+    <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
+      <span style="font-size:10px;color:var(--t3);text-decoration:line-through">MRP ₹${mrp.toLocaleString('en-IN')}</span>
+      <span style="font-size:10px;color:var(--g);font-weight:800">You save ${save}%</span>
+    </div>` : ''}
+    <div style="font-size:10px;color:${aColor};margin-top:3px">${avail}</div>
+    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${safeNm}')"
+      style="width:100%;margin-top:7px;padding:8px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
+      ${item.availability==='in_stock' ? '🛒 Add to Cart' : '💬 Request Order'}
+    </button>` : `
+    <div style="font-size:11px;color:var(--t3);margin-bottom:6px">Price on request</div>
+    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${safeNm}')"
+      style="width:100%;padding:8px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
+      💬 Get Best Price
     </button>`}
   </div>`;
 }

@@ -3691,205 +3691,383 @@ async function _applyBulkPricing(batchId, isTile, bulk) {
   }
 }
 
-// ── REVIEW PAGE ──────────────────────────────────────────────────
+// ── PRICING MODELS ─────────────────────────────────────────────
+// Model 1: MRP − Trade Discount = Cost → set tier prices manually/as % below MRP
+// Model 2: Cost + Markup % per tier
+// Model 3: MRP − Scheme Discount + GST inclusive = final price (special scheme)
+
+function calcPricing(mrp, gstPct, model, params) {
+  // Returns { cost, tier1, tier2, tier3, tier4, margin1 }
+  const gst = (parseFloat(gstPct)||18) / 100;
+  mrp = parseFloat(mrp)||0;
+  if (!mrp) return {};
+
+  if (model === 1) {
+    // MRP − trade disc = cost; tiers = MRP − tier disc %
+    const cost = Math.round(mrp * (1 - (params.tradePct||0)/100) * 100)/100;
+    const t = (pct) => pct ? Math.round(mrp * (1 - pct/100) * 100)/100 : null;
+    return {
+      cost,
+      tier1: t(params.t1Pct), tier2: t(params.t2Pct),
+      tier3: t(params.t3Pct), tier4: t(params.t4Pct),
+      margin1: params.t1Pct ? Math.round((1 - cost / t(params.t1Pct)) * 1000)/10 : null,
+    };
+  }
+  if (model === 2) {
+    // Cost + markup % per tier
+    const cost = parseFloat(params.cost)||0;
+    const m = (pct) => pct ? Math.round(cost * (1 + pct/100) * 100)/100 : null;
+    return {
+      cost,
+      tier1: m(params.t1Pct), tier2: m(params.t2Pct),
+      tier3: m(params.t3Pct), tier4: m(params.t4Pct),
+      margin1: params.t1Pct ? parseFloat(params.t1Pct) : null,
+    };
+  }
+  if (model === 3) {
+    // MRP − scheme disc + GST inclusive = final price
+    const base = mrp * (1 - (params.schemePct||0)/100);
+    const final = Math.round(base * (1 + gst) * 100)/100;
+    return { cost: null, tier1: final, tier2: final, tier3: final, tier4: final, margin1: null };
+  }
+  return {};
+}
+
+// ── REVIEW PAGE ─────────────────────────────────────────────────
 async function renderCatalogReviewPage() {
-  // Load recent batches
   const { data: batches } = await VW_DB.client.from('catalog_batches')
     .select('*').order('created_at',{ascending:false}).limit(20);
 
-  // Load pending items (not yet live)
-  const { data: pending } = await VW_DB.client.from('brand_catalog_items')
-    .select('*').eq('show_in_shop',false).eq('is_active',false).order('created_at',{ascending:false}).limit(100);
-
-  const { data: tilePending } = await VW_DB.client.from('non_inventory_tiles')
-    .select('*').eq('status','draft').order('created_at',{ascending:false}).limit(100);
-
   const canCost = _canSeeCostPrice();
+  const role = VW_AUTH.getCurrentProfile()?.role||'';
 
   return `
   <div class="module-header">
-    <h2>🔍 Catalog Review</h2>
+    <h2>🔍 Catalog Review & Pricing</h2>
     <button class="btn-sm btn-primary" onclick="navigateTo('catalog_upload')">+ Upload New</button>
   </div>
 
-  <!-- Batch summary -->
+  <!-- Batch tabs -->
   ${(batches||[]).length ? `
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-header-row"><h3 class="card-title">Recent Uploads</h3></div>
+  <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px;scrollbar-width:none">
+    <button class="btn-sm" style="flex-shrink:0;background:var(--gold);color:#000" onclick="loadBatchItems('all')">All Pending</button>
     ${batches.map(b => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border2);font-size:12px">
-      <div>
-        <div style="font-weight:700">${b.brand} <span style="color:var(--text3)">${b.file_name||''}</span></div>
-        <div style="color:var(--text3)">${new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${b.items_extracted||0} items · ${b.items_live||0} live</div>
-      </div>
-      <span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:${b.status==='live'?'rgba(34,197,94,0.1)':'rgba(245,200,66,0.1)'};color:${b.status==='live'?'var(--green)':'var(--gold)'}">${b.status}</span>
-    </div>`).join('')}
+    <button class="btn-sm" style="flex-shrink:0" onclick="loadBatchItems(${b.id})">
+      ${b.brand} <span style="color:var(--text3)">${b.items_extracted||0} items</span>
+    </button>`).join('')}
   </div>` : ''}
 
-  <!-- Bulk actions bar -->
-  <div class="card" style="margin-bottom:12px;background:rgba(245,200,66,0.05);border:1px solid var(--gold-border)">
-    <div style="font-size:12px;font-weight:700;margin-bottom:8px">⚡ Bulk Actions — apply to all pending items</div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px">
-      ${PRICE_TIERS.map(t => `
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px;font-weight:700;min-width:80px">${t.icon} ${t.label}</span>
-        <input id="bulk-${t.key}" type="number" placeholder="% below MRP" min="0" max="90"
-          style="flex:1;padding:6px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg2);color:var(--text)">
-      </div>`).join('')}
+  <!-- Bulk Pricing Formula Bar -->
+  <div class="card" style="margin-bottom:12px;border:1px solid var(--gold-border);background:rgba(245,200,66,0.04)">
+    <div style="font-size:12px;font-weight:800;margin-bottom:10px">⚡ Bulk Pricing — applies to all visible items</div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700">
+        <input type="radio" name="bulk-model" value="1" checked onchange="window._bulkModelChange(1)"> Model 1 — MRP − Disc
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700">
+        <input type="radio" name="bulk-model" value="2" onchange="window._bulkModelChange(2)"> Model 2 — Cost + Markup
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:700">
+        <input type="radio" name="bulk-model" value="3" onchange="window._bulkModelChange(3)"> Model 3 — Scheme + GST
+      </label>
     </div>
+
+    <!-- Model 1 inputs -->
+    <div id="bulk-m1" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      ${canCost ? `<div><label style="font-size:10px;color:var(--red);font-weight:700;display:block;margin-bottom:3px">🔒 Trade Disc %</label>
+        <input id="bm1-trade" type="number" placeholder="e.g. 35" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid rgba(239,68,68,.3);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--red);box-sizing:border-box"></div>` : ''}
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🛒 Tier 1 (B2C) % below MRP</label>
+        <input id="bm1-t1" type="number" placeholder="e.g. 25" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🏗 Tier 2 (Contractor) %</label>
+        <input id="bm1-t2" type="number" placeholder="e.g. 30" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🏪 Tier 3 (B2B) %</label>
+        <input id="bm1-t3" type="number" placeholder="e.g. 33" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">📦 Tier 4 (Project) %</label>
+        <input id="bm1-t4" type="number" placeholder="e.g. 37" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+    </div>
+
+    <!-- Model 2 inputs -->
+    <div id="bulk-m2" style="display:none;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      ${canCost ? `<div><label style="font-size:10px;color:var(--red);font-weight:700;display:block;margin-bottom:3px">🔒 Your Cost ₹ (or use trade disc)</label>
+        <input id="bm2-cost" type="number" placeholder="e.g. 2730" min="0" step="0.5"
+          style="width:100%;padding:7px;border:1px solid rgba(239,68,68,.3);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--red);box-sizing:border-box"></div>` : ''}
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🛒 Tier 1 Markup %</label>
+        <input id="bm2-t1" type="number" placeholder="e.g. 20" min="0" max="200" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🏗 Tier 2 Markup %</label>
+        <input id="bm2-t2" type="number" placeholder="e.g. 15" min="0" max="200" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🏪 Tier 3 Markup %</label>
+        <input id="bm2-t3" type="number" placeholder="e.g. 10" min="0" max="200" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">📦 Tier 4 Markup %</label>
+        <input id="bm2-t4" type="number" placeholder="e.g. 5" min="0" max="200" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+    </div>
+
+    <!-- Model 3 inputs -->
+    <div id="bulk-m3" style="display:none;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">🎯 Scheme Discount %</label>
+        <input id="bm3-scheme" type="number" placeholder="e.g. 25" min="0" max="90" step="0.5"
+          style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text);box-sizing:border-box"></div>
+      <div><label style="font-size:10px;color:var(--text3);font-weight:700;display:block;margin-bottom:3px">GST % (added inclusive)</label>
+        <select id="bm3-gst" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--bg2);color:var(--text)">
+          <option value="5">5%</option><option value="12">12%</option>
+          <option value="18" selected>18%</option><option value="28">28%</option>
+        </select></div>
+    </div>
+
     <div style="display:flex;gap:8px">
-      <select id="bulk-gst" style="flex:1;padding:7px;border:1px solid var(--border);border-radius:6px;font-size:12px;background:var(--bg2);color:var(--text)">
-        <option value="">GST — keep as-is</option>
-        <option value="5">5%</option><option value="12">12%</option>
-        <option value="18">18%</option><option value="28">28%</option>
+      <select id="bulk-gst-override" style="flex:1;padding:8px;border:1px solid var(--border);border-radius:8px;font-size:12px;background:var(--bg2);color:var(--text)">
+        <option value="">GST — keep per item</option>
+        <option value="5">Override all → 5%</option>
+        <option value="12">Override all → 12%</option>
+        <option value="18">Override all → 18%</option>
+        <option value="28">Override all → 28%</option>
+        <option value="0">Override all → 0%</option>
       </select>
-      <button onclick="applyBulkPricingToAll()" class="btn-primary" style="flex:1;padding:7px;font-size:12px">Apply to All Pending</button>
-      <button onclick="makeAllLive()" style="flex:1;padding:7px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Make All Live</button>
+      <button onclick="applyBulkPricingFormula()" class="btn-primary" style="flex:2;padding:8px;font-size:13px">
+        ⚡ Calculate & Apply to All
+      </button>
+      <button onclick="makeAllLive()" style="flex:1;padding:8px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">
+        ✅ Make All Live
+      </button>
     </div>
   </div>
 
-  <!-- Pending general products -->
-  <div class="card-title" style="font-size:13px;font-weight:800;margin-bottom:8px">
-    📦 Pending Products (${(pending||[]).length})
-  </div>
-  ${(pending||[]).length === 0 ? '<div class="empty-state"><p>No pending products</p></div>' :
-    (pending||[]).map(p => _renderCatalogItemRow(p, false, canCost)).join('')}
-
-  <!-- Pending tiles -->
-  ${(tilePending||[]).length ? `
-  <div class="card-title" style="font-size:13px;font-weight:800;margin:14px 0 8px">
-    ⬜ Pending Tiles (${tilePending.length})
-  </div>
-  ${tilePending.map(t => _renderCatalogItemRow(t, true, canCost)).join('')}` : ''}`;
-}
-
-function _renderCatalogItemRow(item, isTile, canCost) {
-  const mrp    = isTile ? (item.mrp_per_sqft||0) : (item.mrp||0);
-  const unit   = isTile ? 'sqft' : (item.unit||'Pc');
-  const name   = isTile ? `${item.brand||''} ${item.design_name||''}` : item.product_name;
-  const sub    = isTile
-    ? [item.size_mm, item.finish, item.colour_family].filter(Boolean).join(' · ')
-    : [item.category, item.model_no].filter(Boolean).join(' · ');
-
-  const tierInputs = PRICE_TIERS.map(t => `
-    <div style="display:flex;flex-direction:column;gap:2px">
-      <label style="font-size:9px;color:var(--text3);text-transform:uppercase">${t.icon} ${t.label}</label>
-      <input type="number" value="${item[t.key]||''}" min="0" step="0.5"
-        onchange="updateCatalogItemPrice(${item.id},'${t.key}',this.value,${isTile})"
-        style="width:100%;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg2);color:var(--text)"
-        placeholder="₹//${unit}">
-    </div>`).join('');
-
-  const costInput = canCost ? `
-    <div style="display:flex;flex-direction:column;gap:2px">
-      <label style="font-size:9px;color:var(--red);text-transform:uppercase">🔒 Cost</label>
-      <input type="number" value="${item.trade_price||''}" min="0" step="0.5"
-        onchange="updateCatalogItemPrice(${item.id},'trade_price',this.value,${isTile})"
-        style="width:100%;padding:5px 6px;border:1px solid rgba(239,68,68,.3);border-radius:6px;font-size:12px;font-weight:700;background:var(--bg2);color:var(--red)"
-        placeholder="Cost">
-    </div>` : '';
-
-  return `
-  <div id="cat-item-${item.id}" style="border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700">${name}</div>
-        <div style="font-size:11px;color:var(--text3)">${sub}</div>
-        ${mrp > 0 ? `<div style="font-size:11px;color:var(--gold)">MRP: ₹${mrp}/${unit}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-        <select onchange="updateCatalogItemField(${item.id},'gst_pct',this.value,${isTile})"
-          style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg2);color:var(--text)">
-          <option value="5" ${item.gst_pct==5?'selected':''}>GST 5%</option>
-          <option value="12" ${item.gst_pct==12?'selected':''}>GST 12%</option>
-          <option value="18" ${(!item.gst_pct||item.gst_pct==18)?'selected':''}>GST 18%</option>
-          <option value="28" ${item.gst_pct==28?'selected':''}>GST 28%</option>
-          <option value="0" ${item.gst_pct==0?'selected':''}>GST 0%</option>
-        </select>
-        <button onclick="makeCatalogItemLive(${item.id},${isTile})"
-          style="padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">
-          ✅ Go Live
-        </button>
-        <button onclick="deleteCatalogItem(${item.id},${isTile})"
-          style="padding:5px 8px;background:none;color:var(--text3);border:1px solid var(--border);border-radius:7px;font-size:11px;cursor:pointer">🗑</button>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(${canCost?5:4},1fr);gap:6px">
-      ${tierInputs}
-      ${costInput}
+  <!-- Items list -->
+  <div id="catalog-items-list">
+    <div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">
+      Select a batch above or click All Pending to load items
     </div>
   </div>`;
 }
 
-async function updateCatalogItemPrice(id, field, value, isTile) {
-  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
-  const v = parseFloat(value)||null;
-  await VW_DB.client.from(table).update({ [field]: v, updated_at: new Date().toISOString() }).eq('id', id);
+// Toggle bulk model UI
+window._bulkModelChange = function(m) {
+  document.getElementById('bulk-m1').style.display = m===1 ? 'grid' : 'none';
+  document.getElementById('bulk-m2').style.display = m===2 ? 'grid' : 'none';
+  document.getElementById('bulk-m3').style.display = m===3 ? 'grid' : 'none';
+};
+
+async function loadBatchItems(batchId) {
+  const el = document.getElementById('catalog-items-list');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Loading...</div>';
+  const canCost = _canSeeCostPrice();
+
+  let qGen = VW_DB.client.from('brand_catalog_items').select('*').eq('show_in_shop',false).eq('is_active',false);
+  let qTile = VW_DB.client.from('non_inventory_tiles').select('*').eq('status','draft');
+  if (batchId !== 'all') {
+    qGen  = qGen.eq('catalog_batch_id', batchId);
+    qTile = qTile.eq('catalog_batch_id', batchId);
+  }
+  const [{ data: gen }, { data: tiles }] = await Promise.all([
+    qGen.order('created_at',{ascending:false}).limit(100),
+    qTile.order('created_at',{ascending:false}).limit(100),
+  ]);
+
+  const all = [...(gen||[]).map(i=>({...i,_isTile:false})), ...(tiles||[]).map(i=>({...i,_isTile:true}))];
+  if (!all.length) { el.innerHTML = '<div class="empty-state"><p>No pending items in this batch</p></div>'; return; }
+
+  el.innerHTML = `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">${all.length} items pending · prices shown inclusive of GST</div>` +
+    all.map(item => _renderPricingRow(item, item._isTile, canCost)).join('');
+}
+window.loadBatchItems = loadBatchItems;
+
+function _renderPricingRow(item, isTile, canCost) {
+  const mrp    = parseFloat(isTile ? (item.mrp_per_sqft||0) : (item.mrp||0)) || 0;
+  const unit   = isTile ? 'sqft' : (item.unit||'Pc');
+  const name   = isTile ? `${item.brand||''} ${item.design_name||''}` : item.product_name;
+  const sub    = isTile
+    ? [item.size_mm, item.finish, item.colour_family, item.surface_type].filter(Boolean).join(' · ')
+    : [item.category, item.subcategory, item.model_no].filter(Boolean).join(' · ');
+  const gst    = item.gst_pct||18;
+
+  const tierRow = (key, icon, label) => {
+    const val = item[key]||'';
+    const save = mrp > 0 && val ? Math.round((1 - val/mrp)*100) : null;
+    return `<div>
+      <label style="font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;display:block;margin-bottom:2px">${icon} ${label}</label>
+      <input type="number" value="${val}" min="0" step="0.5" data-field="${key}" data-id="${item.id}" data-tile="${isTile}"
+        onchange="onTierPriceChange(this,${mrp},'${unit}')"
+        style="width:100%;padding:6px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:700;background:var(--bg2);color:var(--text);box-sizing:border-box">
+      ${save !== null && save > 0 ? `<div style="font-size:9px;color:var(--green);margin-top:1px">Saves ${save}% off MRP</div>` : ''}
+    </div>`;
+  };
+
+  return `
+  <div id="cat-item-${item.id}" data-mrp="${mrp}" data-unit="${unit}" data-tile="${isTile}"
+    style="border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:800">${name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${sub}</div>
+        ${mrp > 0 ? `<div style="font-size:12px;font-weight:700;color:var(--gold);margin-top:3px">
+          MRP ₹${mrp.toLocaleString('en-IN')}/${unit}
+        </div>` : '<div style="font-size:11px;color:var(--text3)">No MRP — enter prices manually</div>'}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;margin-left:8px">
+        <select onchange="updateCatalogItemField(${item.id},'gst_pct',this.value,${isTile})"
+          style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;background:var(--bg2);color:var(--text)">
+          <option value="5"  ${gst==5 ?'selected':''}>5%</option>
+          <option value="12" ${gst==12?'selected':''}>12%</option>
+          <option value="18" ${gst==18||!gst?'selected':''}>18%</option>
+          <option value="28" ${gst==28?'selected':''}>28%</option>
+          <option value="0"  ${gst==0 ?'selected':''}>0%</option>
+        </select>
+        <button onclick="applyModel3Individual(${item.id},${mrp},${gst},${isTile})"
+          style="padding:4px 8px;border:1px solid var(--gold-border);border-radius:6px;font-size:10px;font-weight:700;color:var(--gold);background:rgba(245,200,66,0.08);cursor:pointer"
+          title="Apply Model 3 special scheme to this item">M3</button>
+        <button onclick="makeCatalogItemLive(${item.id},${isTile})"
+          style="padding:5px 10px;background:var(--green);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">✅ Live</button>
+        <button onclick="deleteCatalogItem(${item.id},${isTile})"
+          style="padding:5px 8px;background:none;color:var(--text3);border:1px solid var(--border);border-radius:7px;font-size:11px;cursor:pointer">🗑</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(${canCost?5:4},1fr);gap:8px">
+      ${tierRow('tier1_price','🛒','B2C Retail')}
+      ${tierRow('tier2_price','🏗','Contractor')}
+      ${tierRow('tier3_price','🏪','B2B Dealer')}
+      ${tierRow('tier4_price','📦','Project')}
+      ${canCost ? `<div>
+        <label style="font-size:9px;font-weight:700;color:var(--red);text-transform:uppercase;display:block;margin-bottom:2px">🔒 Cost</label>
+        <input type="number" value="${item.trade_price||''}" min="0" step="0.5" data-field="trade_price" data-id="${item.id}" data-tile="${isTile}"
+          onchange="onTierPriceChange(this,${mrp},'${unit}')"
+          style="width:100%;padding:6px;border:1px solid rgba(239,68,68,.3);border-radius:7px;font-size:13px;font-weight:700;background:var(--bg2);color:var(--red);box-sizing:border-box">
+        ${item.tier1_price && item.trade_price ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">Margin: ${Math.round((1-item.trade_price/item.tier1_price)*100)}% on T1</div>` : ''}
+      </div>` : ''}
+    </div>
+  </div>`;
 }
 
-async function updateCatalogItemField(id, field, value, isTile) {
-  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
-  await VW_DB.client.from(table).update({ [field]: parseFloat(value)||null, updated_at: new Date().toISOString() }).eq('id', id);
-}
+// Auto-save price when user types in a tier input
+async function onTierPriceChange(input, mrp, unit) {
+  const field  = input.dataset.field;
+  const id     = parseInt(input.dataset.id);
+  const isTile = input.dataset.tile === 'true';
+  const val    = parseFloat(input.value)||null;
 
-async function makeCatalogItemLive(id, isTile) {
-  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
-  const update = isTile
-    ? { status: 'approved', show_in_shop: true }
-    : { is_active: true, show_in_shop: true };
-  await VW_DB.client.from(table).update(update).eq('id', id);
-  const el = document.getElementById(`cat-item-${id}`);
-  if (el) { el.style.opacity='0.4'; el.innerHTML += '<div style="text-align:center;font-size:11px;color:var(--green);padding:4px">✅ Live on shop</div>'; }
-  showToast('Item is now live on B2C shop ✓','success');
-}
+  await updateCatalogItemPrice(id, field, val, isTile);
 
-async function deleteCatalogItem(id, isTile) {
-  if (!confirm('Delete this item?')) return;
-  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
-  await VW_DB.client.from(table).delete().eq('id', id);
-  document.getElementById(`cat-item-${id}`)?.remove();
-}
-
-async function applyBulkPricingToAll() {
-  const gst    = parseFloat(document.getElementById('bulk-gst')?.value)||null;
-  const tiers  = {};
-  PRICE_TIERS.forEach(t => {
-    const v = parseFloat(document.getElementById(`bulk-${t.key}`)?.value)||null;
-    if (v) tiers[t.key + '_pct'] = v;
-  });
-  if (!gst && !Object.keys(tiers).length) { showToast('Set at least one value to apply','warn'); return; }
-
-  showToast('Applying bulk pricing...','info');
-  // Apply to general products
-  const { data: items } = await VW_DB.client.from('brand_catalog_items')
-    .select('id,mrp').eq('show_in_shop',false).eq('is_active',false);
-  for (const item of (items||[])) {
-    const update = {};
-    if (gst) update.gst_pct = gst;
-    PRICE_TIERS.forEach(t => {
-      const pct = tiers[t.key+'_pct'];
-      if (pct && item.mrp > 0) update[t.key] = Math.round(item.mrp * (1-pct/100) * 100)/100;
-    });
-    if (Object.keys(update).length) {
-      await VW_DB.client.from('brand_catalog_items').update(update).eq('id', item.id);
+  // Update the "saves X%" label live
+  if (mrp > 0 && val && field !== 'trade_price') {
+    const save = Math.round((1 - val/mrp)*100);
+    const lbl  = input.nextElementSibling;
+    if (lbl && save > 0) {
+      lbl.textContent = `Saves ${save}% off MRP`;
+      lbl.style.color = 'var(--green)';
     }
   }
-  showToast('Bulk pricing applied ✓','success');
-  navigateTo('catalog_review');
-}
 
-async function makeAllLive() {
-  if (!confirm('Make ALL pending catalog items live on the B2C shop?')) return;
-  await VW_DB.client.from('brand_catalog_items')
-    .update({ is_active: true, show_in_shop: true })
-    .eq('show_in_shop', false).eq('is_active', false);
-  await VW_DB.client.from('non_inventory_tiles')
-    .update({ status: 'approved', show_in_shop: true })
-    .eq('status', 'draft');
-  showToast('All items now live on shop ✓','success');
-  navigateTo('catalog_review');
+  // If trade_price changed, update margin label on tier1
+  if (field === 'trade_price') {
+    const row = input.closest('[id^="cat-item-"]');
+    if (row) {
+      const t1 = row.querySelector('[data-field="tier1_price"]');
+      const cost = val;
+      const t1v  = parseFloat(t1?.value)||0;
+      const lbl  = input.nextElementSibling;
+      if (lbl && cost && t1v) {
+        lbl.textContent = `Margin: ${Math.round((1-cost/t1v)*100)}% on T1`;
+      }
+    }
+  }
 }
+window.onTierPriceChange = onTierPriceChange;
 
+// Apply Model 3 to a single item (special scheme override)
+async function applyModel3Individual(id, mrp, gst, isTile) {
+  const schemePct = parseFloat(prompt(`Model 3 — Special Scheme\nMRP: ₹${mrp}\n\nEnter scheme discount % (e.g. 25):`)||0);
+  if (!schemePct) return;
+  const prices = calcPricing(mrp, gst||18, 3, { schemePct });
+  const update = {
+    tier1_price: prices.tier1, tier2_price: prices.tier2,
+    tier3_price: prices.tier3, tier4_price: prices.tier4,
+    gst_pct: gst, pricing_model: 3,
+  };
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  await VW_DB.client.from(table).update(update).eq('id', id);
+  showToast(`Model 3 applied: ₹${prices.tier1}/${isTile?'sqft':'pc'} (incl. GST)`, 'success');
+  loadBatchItems('all');
+}
+window.applyModel3Individual = applyModel3Individual;
+
+// Apply bulk pricing formula to all pending items
+async function applyBulkPricingFormula() {
+  const model = parseInt(document.querySelector('[name="bulk-model"]:checked')?.value||1);
+  const gstOverride = parseFloat(document.getElementById('bulk-gst-override')?.value)||null;
+  const canCost = _canSeeCostPrice();
+
+  let params = {};
+  if (model === 1) {
+    params = {
+      tradePct: canCost ? parseFloat(document.getElementById('bm1-trade')?.value||0)||0 : 0,
+      t1Pct: parseFloat(document.getElementById('bm1-t1')?.value||0)||0,
+      t2Pct: parseFloat(document.getElementById('bm1-t2')?.value||0)||0,
+      t3Pct: parseFloat(document.getElementById('bm1-t3')?.value||0)||0,
+      t4Pct: parseFloat(document.getElementById('bm1-t4')?.value||0)||0,
+    };
+    if (!params.t1Pct && !params.t2Pct) { showToast('Enter at least Tier 1 % for Model 1','warn'); return; }
+  } else if (model === 2) {
+    const costBase = parseFloat(document.getElementById('bm2-cost')?.value||0)||0;
+    params = {
+      cost: costBase,
+      t1Pct: parseFloat(document.getElementById('bm2-t1')?.value||0)||0,
+      t2Pct: parseFloat(document.getElementById('bm2-t2')?.value||0)||0,
+      t3Pct: parseFloat(document.getElementById('bm2-t3')?.value||0)||0,
+      t4Pct: parseFloat(document.getElementById('bm2-t4')?.value||0)||0,
+    };
+    if (!params.cost) { showToast('Enter your cost price for Model 2','warn'); return; }
+  } else if (model === 3) {
+    params = {
+      schemePct: parseFloat(document.getElementById('bm3-scheme')?.value||0)||0,
+    };
+    const bm3gst = parseFloat(document.getElementById('bm3-gst')?.value||18);
+    if (!params.schemePct) { showToast('Enter scheme discount % for Model 3','warn'); return; }
+  }
+
+  showToast('Calculating prices...','info');
+
+  // Fetch all pending items
+  const [{ data: gen }, { data: tiles }] = await Promise.all([
+    VW_DB.client.from('brand_catalog_items').select('id,mrp,gst_pct').eq('show_in_shop',false).eq('is_active',false),
+    VW_DB.client.from('non_inventory_tiles').select('id,mrp_per_sqft,gst_pct').eq('status','draft'),
+  ]);
+
+  let updated = 0;
+  const applyToItems = async (items, isTile) => {
+    for (const item of (items||[])) {
+      const mrp  = parseFloat(isTile ? item.mrp_per_sqft : item.mrp)||0;
+      const gst  = gstOverride || parseFloat(item.gst_pct)||18;
+      if (!mrp && model !== 2) continue; // skip items with no MRP for models 1&3
+      const prices = calcPricing(mrp, gst, model, params);
+      const update = { gst_pct: gst };
+      if (prices.tier1) update.tier1_price = prices.tier1;
+      if (prices.tier2) update.tier2_price = prices.tier2;
+      if (prices.tier3) update.tier3_price = prices.tier3;
+      if (prices.tier4) update.tier4_price = prices.tier4;
+      if (prices.cost && canCost) update.trade_price = prices.cost;
+      const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+      await VW_DB.client.from(table).update(update).eq('id', item.id);
+      updated++;
+    }
+  };
+
+  await applyToItems(gen, false);
+  await applyToItems(tiles, true);
+
+  showToast(`✅ Prices calculated for ${updated} items`, 'success');
+  loadBatchItems('all');
+}
+window.applyBulkPricingFormula = applyBulkPricingFormula;
 window.processCatalogUploadNew  = processCatalogUploadNew;
 window.renderCatalogUploadPage  = renderCatalogUploadPage;
 window.renderCatalogReviewPage  = renderCatalogReviewPage;
