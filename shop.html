@@ -929,102 +929,119 @@ async function submitBestQuote() {
     </div>`;
 }
 
-function renderOTPSheet() {
+function renderOTPSheet(mode) {
+  const isNew = mode !== 'login';
   document.getElementById('bottom-sheet').innerHTML = `
     <div class="sheet-handle"></div>
     <div style="padding:0 0 4px">
       <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:42px;margin-bottom:10px">📱</div>
-        <div style="font-size:18px;font-weight:900;margin-bottom:4px">Enter OTP</div>
-        <div style="font-size:12px;color:var(--t3)">Sent to +91 ${_loginPhone}</div>
+        <div style="font-size:42px;margin-bottom:10px">${isNew ? '👋' : '🔑'}</div>
+        <div style="font-size:18px;font-weight:900;margin-bottom:4px">${isNew ? 'Create Account' : 'Welcome Back'}</div>
+        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 4-digit PIN to secure your account' : 'Enter your PIN for +91 ' + _loginPhone}</div>
       </div>
-      <div style="background:var(--glt);border:1px solid #C8E6D0;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:var(--g);font-weight:600">
-        ✅ OTP sent successfully
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Your 4-Digit PIN</label>
+        <input id="login-otp" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
+          style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
       </div>
-      <div style="margin-bottom:16px">
-        <input id="login-otp" type="tel" inputmode="numeric" maxlength="6"
-          placeholder="● ● ● ● ● ●"
-          style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:24px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)">
+      ${isNew ? `
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Confirm PIN</label>
+        <input id="login-otp2" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
+          style="width:100%;padding:16px;border:1.5px solid var(--bdr);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
       </div>
-      <button onclick="verifyCustomerOTP()"
+      <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Remember this PIN — you will use it every time you log in</div>
+      ` : ''}
+      <button onclick="verifyCustomerOTP(${isNew})"
         style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
-        Verify & Continue →
+        ${isNew ? 'Create Account →' : 'Login →'}
       </button>
-      <button onclick="renderLoginSheet()"
-        style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">
-        ← Change Number
-      </button>
+      <button onclick="renderLoginSheet()" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">← Back</button>
     </div>`;
 }
 
 async function sendCustomerOTP() {
-  const phone = document.getElementById('login-phone')?.value?.trim();
+  const phone = document.getElementById('login-phone')?.value?.replace(/\D/g,'').slice(-10);
   if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile number'); return; }
-  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending OTP...'; }
   _loginPhone = phone;
   window._loginName = document.getElementById('login-name')?.value?.trim() || '';
+  // Check if this phone already has an account by trying a dummy sign-in
+  // If 400 → no account → show signup (set PIN). If different error → show login (enter PIN).
+  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
+  if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
+    const probeRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ phone: '+91' + phone, create_user: true })
+      body: JSON.stringify({ email: phone + '@customer.vwholesale.app', password: 'probe' })
     });
-    if (res.ok) { renderOTPSheet(); return; }
-    // Email fallback
-    const emailRes = await fetch(`${SUPABASE_URL}/auth/v1/otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email: phone + '@vwholesale.app', create_user: true })
-    });
-    if (emailRes.ok) { renderOTPSheet(); }
-    else { toast('Could not send OTP. Call 8712697930'); if (btn) { btn.disabled=false; btn.textContent='Send OTP →'; } }
-  } catch(e) { toast('Network error.'); if (btn) { btn.disabled=false; btn.textContent='Send OTP →'; } }
+    const probeData = await probeRes.json();
+    // "Invalid login credentials" = account exists; "Email not confirmed" or 400 without that = new user
+    const accountExists = probeData.error_code === 'invalid_credentials' || probeData.msg?.includes('Invalid login');
+    renderOTPSheet(accountExists ? 'login' : 'signup');
+  } catch(e) {
+    renderOTPSheet('signup');
+  } finally {
+    if (btn) { btn.disabled=false; btn.textContent='Send OTP →'; }
+  }
 }
 
-async function verifyCustomerOTP() {
-  const otp = document.getElementById('login-otp')?.value?.trim();
-  if (!otp || otp.length < 6) { toast('Enter the 6-digit OTP'); return; }
-  const btn = document.querySelector('[onclick="verifyCustomerOTP()"]');
-  if (btn) { btn.disabled=true; btn.textContent='Verifying...'; }
+async function verifyCustomerOTP(isNew) {
+  const pin = document.getElementById('login-otp')?.value?.trim();
+  if (!pin || pin.length < 4) { toast('Enter your 4-digit PIN'); return; }
+  if (isNew) {
+    const pin2 = document.getElementById('login-otp2')?.value?.trim();
+    if (pin !== pin2) { toast('PINs do not match — try again'); return; }
+  }
+  const btn = document.querySelector('[onclick^="verifyCustomerOTP"]');
+  if (btn) { btn.disabled=true; btn.textContent='Please wait...'; }
+  const email = _loginPhone + '@customer.vwholesale.app';
   try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
-      method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-      body: JSON.stringify({ phone:'+91'+_loginPhone, token:otp, type:'sms' })
-    });
-    const data = await res.json();
-    if (res.ok && data.access_token) {
-      data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
-      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
-      if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
-      if (Object.keys(cart).length > 0) localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
-      closeSheet(); toast('Welcome to V Wholesale! 🎉');
-      setTimeout(() => window.location.replace('./index.html'), 1200); return;
+    if (isNew) {
+      // New customer — sign up with phone as email + PIN as password
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email, password: pin, data: { name: window._loginName || '', phone: _loginPhone } })
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
+        if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
+        localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
+        toast('Account created! Welcome to V Wholesale 🎉');
+        setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
+        return;
+      }
+      // Account may already exist — try login instead
+      if (data.msg?.includes('already') || data.code === 'user_already_exists') {
+        toast('Account exists — trying login...'); 
+        return verifyCustomerOTP(false);
+      }
+      toast(data.msg || data.error_description || 'Signup failed'); 
+    } else {
+      // Returning customer — sign in
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email, password: pin })
+      });
+      const data = await res.json();
+      if (data.access_token) {
+        data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
+        localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
+        toast('Welcome back! 👋');
+        setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
+        return;
+      }
+      toast('Wrong PIN. Try again or create a new account.');
     }
-    // Email fallback
-    const er = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {
-      method:'POST', headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-      body: JSON.stringify({ email:_loginPhone+'@vwholesale.app', token:otp, type:'email' })
-    });
-    const ed = await er.json();
-    if (er.ok && ed.access_token) {
-      ed.expires_at = Math.floor(Date.now()/1000) + (ed.expires_in || 3600);
-      localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(ed));
-      if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
-      if (Object.keys(cart).length > 0) localStorage.setItem('vw_pending_cart', JSON.stringify(cart));
-      closeSheet(); toast('Welcome to V Wholesale! 🎉');
-      setTimeout(() => window.location.replace('./index.html'), 1200);
-    } else { toast('Invalid OTP. Try again.'); if(btn){btn.disabled=false;btn.textContent='Verify & Continue →';} }
-  } catch(e) { toast('Verification failed.'); if(btn){btn.disabled=false;btn.textContent='Verify & Continue →';} }
+  } catch(e) { toast('Network error. Try again.'); }
+  if (btn) { btn.disabled=false; btn.textContent=isNew?'Create Account →':'Login →'; }
 }
 
-function closeSheet() {
-  document.getElementById('bottom-sheet').classList.remove('open');
-  document.getElementById('sheet-overlay').classList.remove('open');
-}
-
-// ── PRODUCT DETAIL PAGE (PDP SHEET) ──
-let _pdpProducts = [];
 
 async function openPDP(productId) {
   const pdpSheet = document.getElementById('pdp-sheet');
