@@ -1699,7 +1699,7 @@ window.VW_TILES = {
   _qqAssignSearch, _qqAssignFilter, _qqAssignTile, _qqAssignNext, _qqAssignBack,
   _qqAutoSave,
   _qqShowOutput, _qqUpdatePrice, _qqRecomputeTotals, _qqUpdateHints, _qqApplyHint,
-  _tqEditCustomerFromSummary,
+  _tqEditCustomerFromSummary, _tqSetCuttingNote,
   renderTileQuotesList, openTileQuote, tqPrintFromId,
   toggleAddon, setLaborRequired, postLaborFromQuotation,
   // Delivery + floor

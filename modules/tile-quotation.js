@@ -1401,7 +1401,22 @@ async function _renderStep2() {
     <strong>Done:</strong> ${doneSlots.map(s=>`${s.label} (${_tqState.tileSelections[s.id]?.sizeMm}mm)`).join(' · ')}
   </div>` : ''}
 
+  ${currentSlot ? `
+  <div class="card" style="margin-top:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">✂️ Cutting Notes — ${currentSlot.room?.label || currentSlot.label} (optional)</div>
+    <textarea rows="2" placeholder="e.g. L-shape cut around WC, diagonal laying, border cut 4 inch"
+      oninput="VW_TILES._tqSetCuttingNote('${(currentSlot.room?.id ?? currentSlot.id)}', this.value)"
+      style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:12px;line-height:1.5;box-sizing:border-box;resize:vertical">${((_tqState.cuttingNotes||{})[currentSlot.room?.id ?? currentSlot.id]||'').replace(/</g,'&lt;')}</textarea>
+    <div style="font-size:10px;color:var(--text3);margin-top:3px">Included on the customer PDF & seen by the fitting team</div>
+  </div>` : ''}
+
   <button class="btn-secondary full-width" style="margin-top:8px" onclick="VW_TILES.tqBack()">← Back to Rooms</button>`;
+}
+
+function _tqSetCuttingNote(roomId, text) {
+  if (!_tqState.cuttingNotes) _tqState.cuttingNotes = {};
+  if (text && text.trim()) _tqState.cuttingNotes[roomId] = text.trim();
+  else delete _tqState.cuttingNotes[roomId];
 }
 
 function _showAllSizesForSlot(slotId) {
@@ -4771,7 +4786,7 @@ async function _tqAutoSave() {
     const payload = {
       customer_name: st.customer.name, customer_phone: st.customer.phone || '',
       customer_id: st.customer.id || null, site_address: st.customer.site || '',
-      quoted_prices: st.quotedPrices || {}, wall_designs: st.wallDesigns || {},
+      quoted_prices: st.quotedPrices || {}, cutting_notes: st.cuttingNotes || {}, wall_designs: st.wallDesigns || {},
       design_tiles: Object.fromEntries(Object.entries(st.design||{}).map(([k,v])=>[k,v?.result?.tiles||[]])),
       rooms: st.rooms || [], tile_selections: st.tileSelections || {},
       spacer_selections: st.spacerSelections || {}, adhesive_selections: st.adhesiveSelections || {},
@@ -4971,6 +4986,7 @@ function _buildPrintHTML(overrideState) {
     const imgHtml = imgUrl
       ? '<img src="'+imgUrl+'" style="width:76px;height:76px;object-fit:cover;border-radius:6px;border:1px solid #ddd">'
       : '<div style="width:76px;height:76px;border-radius:6px;border:1px solid #ddd;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:26px">⬜</div>';
+    const cutNote = (st.cuttingNotes || st.cutting_notes || {})[slot.room?.id ?? slot.id] || '';
     return '<div class="room-sec">' +
       '<div class="room-hd">'+label+' <span style="font-weight:400;color:#666;font-size:11px">· '+roomSqft.toFixed(1)+' sqft · '+sz.mm+'mm</span></div>' +
       '<div style="display:flex;gap:10px;align-items:center;padding:8px 0">' + imgHtml +
@@ -4980,7 +4996,9 @@ function _buildPrintHTML(overrideState) {
           '<div style="font-size:11px;color:#666;margin-top:3px">'+boxes+' boxes · '+priceStr+'</div>' +
         '</div>' +
         '<div style="text-align:right;font-weight:800;font-size:14px">'+(lineTotal>0?'₹'+lineTotal.toLocaleString('en-IN'):'—')+'</div>' +
-      '</div></div>';
+      '</div>' +
+      (cutNote ? '<div style="font-size:11px;color:#92400E;background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:5px 9px;margin-top:2px">✂️ <strong>Cutting:</strong> '+cutNote+'</div>' : '') +
+      '</div>';
   }).filter(Boolean).join('');
   const slotRows = roomSections; // kept name for the fallback check below
 
@@ -6386,6 +6404,7 @@ async function tqSubmitForApproval() {
       site_address: st.customer.site,
       contractor_commission: contractorCommission,
       quoted_prices: st.quotedPrices || {},
+      cutting_notes: st.cuttingNotes || {},
       quoted_price_per_sqft: _quotedPricePerSqft,
       grand_total: _submitGrandTotal > 0 ? _submitGrandTotal : null,
       wall_designs: st.wallDesigns || {},
@@ -6520,7 +6539,7 @@ async function tqResumeDraft(id) {
     ...q,
     customer:{ name:q.customer_name||'', phone:q.customer_phone||'', site:q.site_address||'', id:q.customer_id||null },
     contractor: q.contractor_commission ? { name:q.contractor_commission.contractor_name, phone:q.contractor_commission.contractor_phone, id:q.contractor_commission.contractor_id, commissionPct:q.contractor_commission.commission_pct } : null,
-    rooms: _normRooms, currentFlat:'',
+    rooms: _normRooms, currentFlat:'', cuttingNotes: q.cutting_notes || {},
     tileSelections: q.tile_selections||{}, spacerSelections: q.spacer_selections||{},
     spacerType: q.spacer?.type||'plus', adhesiveSelections: q.adhesive_selections||{},
     beading: q.beading||[], groutSelections: q.grout_selections||{}, quotedPrices: q.quoted_prices||{},
@@ -6750,6 +6769,7 @@ async function tqPrintFromId(id) {
     adhesiveSelections: q.adhesive_selections||{},
     groutSelections: q.grout_selections||{},
     extraProducts: q.extra_products||[],
+    cuttingNotes: q.cutting_notes||{},
     delivery: q.delivery||{},
     contractor: q.contractor_commission ? { name:q.contractor_commission.contractor_name } : null,
     tqNo: q.tq_no,
