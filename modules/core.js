@@ -501,7 +501,7 @@ const ROLE_PAGES = {
   dispatch:     ['dashboard','tasks','feedback','training','dispatch'],
   pending:      [],
   customer:     ['shop','wallet','quotations','labor_requests','wishlist','feedback'],
-  contractor:   ['contractor_profile','labor_requests','wallet'],
+  contractor:   ['professional_home','contractor_profile','contractor_shop','labor_requests','wallet'],
 };
 
 // The toggleable permission set Admin can grant/revoke per person, and
@@ -721,9 +721,9 @@ async function showAuthScreen(mode) {
   if (mode === 'contractor') {
     overlay.innerHTML = `
     <div class="identity-card">
-      <div class="id-logo">👷</div>
-      <h2 style="margin-bottom:4px">Contractor Login</h2>
-      <p class="id-sub" style="margin-bottom:16px">V Wholesale Contractor Club</p>
+      <div class="id-logo">💼</div>
+      <h2 style="margin-bottom:4px">Professional Login</h2>
+      <p class="id-sub" style="margin-bottom:16px">Contractors · Plumbers · Electricians · Architects · Interior Designers</p>
       <div class="form-group">
         <label class="form-label">Phone Number</label>
         <div style="display:flex;align-items:center;border:1.5px solid var(--gold-border);border-radius:10px;overflow:hidden">
@@ -1058,10 +1058,10 @@ async function routeByRole() {
     return;
   }
 
-  // Contractor approved
+  // Professional (contractor role) approved → Professional dashboard
   if (role === 'contractor') {
     if (typeof init === 'function') await init();
-    navigateTo('contractor_profile');
+    navigateTo('professional_home');
     return;
   }
 
@@ -1079,7 +1079,7 @@ function showContractorPendingScreen() {
     <div class="identity-card" style="text-align:center">
       <div class="id-logo">👷</div>
       <h2>Application Submitted</h2>
-      <p class="id-sub">Hi ${currentProfile?.name||''}! Your contractor application is under review. Our team will verify your details and activate your account within 24 hours.</p>
+      <p class="id-sub">Hi ${currentProfile?.name||''}! Your Professional account application is under review. Our team will verify your details and activate your account within 24 hours.</p>
       <div style="background:var(--bg2);border-radius:10px;padding:12px;margin:12px 0;font-size:12px;color:var(--text3);text-align:left">
         <div style="margin-bottom:4px">📄 Upload KYC documents to speed up approval</div>
         <div>📞 Call us: 8712697930</div>

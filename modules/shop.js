@@ -9,7 +9,7 @@ async function renderContractorBidForm(requestId) {
 
   const prof = VW_AUTH.getCurrentProfile();
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('*').eq('profile_id', prof?.id).single().catch(() => ({ data: null }));
+    .select('*').eq('auth_uid', prof?.id).single().catch(() => ({ data: null }));
 
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
@@ -160,7 +160,7 @@ async function submitContractorBid(requestId) {
 
   const prof = VW_AUTH.getCurrentProfile();
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('id,name').eq('profile_id', prof?.id).single().catch(() => ({ data: null }));
+    .select('id,name').eq('auth_uid', prof?.id).single().catch(() => ({ data: null }));
 
   const { error } = await VW_DB.client.from('contractor_bids').insert({
     request_id: requestId,
@@ -650,7 +650,7 @@ async function renderContractorProfilePage() {
   let { data: cp } = await VW_DB.client
     .from('contractor_profiles')
     .select('*')
-    .eq('profile_id', prof?.id)
+    .eq('auth_uid', prof?.id)
     .single()
     .catch(() => ({ data: null }));
 
@@ -658,7 +658,7 @@ async function renderContractorProfilePage() {
   if (!cp) {
     const { data: newCp } = await VW_DB.client
       .from('contractor_profiles')
-      .insert({ profile_id: prof?.id, name: prof?.name || '', phone: prof?.phone || '' })
+      .insert({ auth_uid: prof?.id })
       .select('*').single().catch(() => ({ data: null }));
     cp = newCp;
   }
@@ -4119,3 +4119,105 @@ async function saveContractorPricingConfig() {
 window.VW_SHOP.renderContractorPricingSettings = renderContractorPricingSettings;
 window.VW_SHOP.getContractorNetPrice = getContractorNetPrice;
 window.saveContractorPricingConfig = saveContractorPricingConfig;
+
+
+// ═══════════════════════════════════════════════════════════
+// PROFESSIONAL HOME — dashboard for role=contractor
+// (Contractors, plumbers, electricians, architects, designers)
+// Tier · points · commissions · my-pricing shop · jobs · referrals
+// ═══════════════════════════════════════════════════════════
+async function renderProfessionalHome() {
+  const prof = VW_AUTH.getCurrentProfile();
+  const phone = (prof?.phone || '').replace(/\D/g,'').slice(-10);
+
+  // Link auth profile → contractor_profiles → contractors master record
+  let { data: cp } = await VW_DB.client.from('contractor_profiles')
+    .select('*').eq('auth_uid', prof?.id).maybeSingle();
+  let contractor = null;
+  if (cp?.contractor_id) {
+    ({ data: contractor } = await VW_DB.client.from('contractors')
+      .select('*').eq('id', cp.contractor_id).maybeSingle());
+  }
+  if (!contractor && phone) {
+    ({ data: contractor } = await VW_DB.client.from('contractors')
+      .select('*').eq('phone', phone).maybeSingle());
+    // Auto-link the contractor_profile row if we found the master by phone
+    if (contractor && !cp) {
+      ({ data: cp } = await VW_DB.client.from('contractor_profiles')
+        .insert({ auth_uid: prof?.id, contractor_id: contractor.id }).select('*').maybeSingle());
+    }
+  }
+
+  const name = contractor?.name || prof?.name || 'Professional';
+  const ptype = contractor?.professional_type || 'Contractor';
+  const lifetimePts = contractor?.lifetime_points || cp?.lifetime_points || 0;
+  const points = contractor?.loyalty_points || cp?.loyalty_points || 0;
+  const tier = lifetimePts >= 20000 ? 'Platinum' : lifetimePts >= 5000 ? 'Gold' : 'Silver';
+  const tierColor = tier === 'Platinum' ? '#A78BFA' : tier === 'Gold' ? '#F5C842' : '#9CA3AF';
+  const kyc = contractor?.approval_status === 'approved' || contractor?.status === 'active';
+
+  // Commission summary + recent points activity
+  let commTotal = 0, commPending = 0, recentTxns = [];
+  if (contractor?.id) {
+    const [{ data: comms }, { data: txns }] = await Promise.all([
+      VW_DB.client.from('contractor_commissions').select('pct,status,category').eq('contractor_id', contractor.id),
+      VW_DB.client.from('contractor_loyalty').select('description,points,created_at,transaction_type')
+        .eq('contractor_id', contractor.id).order('created_at',{ascending:false}).limit(5),
+    ]);
+    (comms||[]).forEach(c => { if (c.status==='approved') commTotal++; else commPending++; });
+    recentTxns = txns || [];
+  }
+
+  const refMsg = encodeURIComponent(`Hi! I recommend V Wholesale, Vijayawada for tiles, sanitary, electrical & all home building materials at wholesale prices. Tell them ${name} (${phone}) referred you — you get the best rates and I earn Club rewards! 📞 8712697930`);
+
+  return `
+  <div class="module-header"><h2>💼 My Professional Hub</h2></div>
+
+  <!-- Identity + tier card -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(245,200,66,0.08),rgba(245,200,66,0.02));border:1px solid var(--gold-border)">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:17px;font-weight:900">${name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${ptype}${contractor?.city?' · '+contractor.city:''}${contractor?.years_experience?' · '+contractor.years_experience+' yrs exp':''}</div>
+        <div style="font-size:11px;margin-top:6px;color:${kyc?'var(--green)':'var(--gold)'}">${kyc?'✅ Verified Professional':'⏳ Verification pending — visit store with ID'}</div>
+      </div>
+      <div style="text-align:center;padding:8px 14px;border-radius:12px;background:${tierColor}18;border:1px solid ${tierColor}55">
+        <div style="font-size:18px">${tier==='Platinum'?'💎':tier==='Gold'?'🏆':'🥈'}</div>
+        <div style="font-size:11px;font-weight:900;color:${tierColor}">${tier}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px">
+      <div style="text-align:center;padding:8px;background:var(--bg2);border-radius:10px"><div style="font-size:16px;font-weight:900;color:var(--gold)">${points.toLocaleString('en-IN')}</div><div style="font-size:9px;color:var(--text3)">Club Points</div></div>
+      <div style="text-align:center;padding:8px;background:var(--bg2);border-radius:10px"><div style="font-size:16px;font-weight:900">${commTotal}</div><div style="font-size:9px;color:var(--text3)">Commissions</div></div>
+      <div style="text-align:center;padding:8px;background:var(--bg2);border-radius:10px"><div style="font-size:16px;font-weight:900">${cp?.contractor_score ?? 50}</div><div style="font-size:9px;color:var(--text3)">Pro Score</div></div>
+    </div>
+  </div>
+
+  <!-- Quick actions -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+    <button onclick="navigateTo('contractor_shop')" style="padding:16px 12px;border-radius:12px;background:var(--gold);border:none;color:#000;font-size:13px;font-weight:800;cursor:pointer;text-align:left">🛒 Shop with<br>MY Pricing${contractor?.markup_pct?'<div style=\'font-size:10px;font-weight:600;margin-top:2px\'>Trade rates active</div>':''}</button>
+    <button onclick="navigateTo('contractor_profile')" style="padding:16px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:800;cursor:pointer;text-align:left">🏗 Labor Jobs<br>& Bids</button>
+    <a href="https://wa.me/?text=${refMsg}" target="_blank" style="padding:16px 12px;border-radius:12px;background:rgba(37,211,102,0.1);border:1px solid rgba(37,211,102,0.35);color:#25D366;font-size:13px;font-weight:800;cursor:pointer;text-align:left;text-decoration:none;display:block">📤 Refer a Customer<br><span style="font-size:10px;font-weight:600">2% first · 0.5% lifetime</span></a>
+    <a href="tel:8712697930" style="padding:16px 12px;border-radius:12px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-size:13px;font-weight:800;cursor:pointer;text-align:left;text-decoration:none;display:block">📞 Call Store<br><span style="font-size:10px;font-weight:600;color:var(--text3)">Mon–Sat 9–7:30</span></a>
+  </div>
+
+  <!-- Recent points activity -->
+  ${recentTxns.length ? `
+  <div class="card" style="margin-top:12px">
+    <div style="font-size:12px;font-weight:800;margin-bottom:8px">Recent Club Activity</div>
+    ${recentTxns.map(t => `
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <div><div style="font-size:12px;font-weight:600">${t.description||t.transaction_type}</div>
+      <div style="font-size:10px;color:var(--text3)">${new Date(t.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div></div>
+      <div style="font-size:13px;font-weight:800;color:${t.points>=0?'var(--green)':'var(--red)'}">${t.points>=0?'+':''}${t.points}</div>
+    </div>`).join('')}
+  </div>` : ''}
+
+  <div style="margin-top:14px;padding:12px;background:var(--bg2);border-radius:10px;font-size:11px;color:var(--text3);text-align:center">
+    V Wholesale Contractor Club · NH65 Bhavanipuram, Vijayawada<br>
+    Refer customers, earn on every purchase they make — for life.
+  </div>
+  <button onclick="VW_AUTH.signOut()" style="width:100%;margin-top:12px;padding:11px;border-radius:10px;background:none;border:1px solid var(--border);color:var(--text3);font-size:12px;cursor:pointer">Log Out</button>`;
+}
+window.VW_SHOP = window.VW_SHOP || {};
+window.VW_SHOP.renderProfessionalHome = renderProfessionalHome;

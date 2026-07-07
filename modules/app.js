@@ -70,6 +70,7 @@ function applyRolePermissions() {
   // Contractor gets a contractor nav
   if (role === 'contractor') {
     if (nav) nav.innerHTML = `
+      <button class="nav-btn" data-page="professional_home" onclick="navigateTo('professional_home')"><span class="nav-icon">🏠</span><span>Home</span></button>
       <button class="nav-btn" data-page="labor_requests" onclick="navigateTo('labor_requests')"><span class="nav-icon">🏗</span><span>Jobs</span></button>
       <button class="nav-btn" data-page="contractor_shop" onclick="navigateTo('contractor_shop')"><span class="nav-icon">🛍</span><span>Products</span></button>
       <button class="nav-btn" data-page="wallet" onclick="navigateTo('wallet')"><span class="nav-icon">👛</span><span>Wallet</span></button>
@@ -267,6 +268,7 @@ async function navigateToFresh(page, params, cacheKey) {
   else if (page === 'offers') html = await VW_SHOP.renderOffersPage();
   else if (page === 'customer_returns') html = await VW_SHOP.renderCustomerReturnRequest();
   else if (page === 'customer_profile') html = await VW_SHOP.renderCustomerProfilePage();
+  else if (page === 'professional_home') html = await VW_SHOP.renderProfessionalHome();
   else if (page === 'contractor_shop') html = await VW_SHOP.renderContractorShopPage();
   else if (page === 'contractor_profile') html = await VW_LABOR.renderContractorProfilePage();
   else if (page === 'tile_quotes') html = await VW_TILES.renderTileQuotesList();
@@ -907,7 +909,7 @@ function updateHeaderDropdownRoles() {
   const logo = document.querySelector('.header-logo-block');
   if (logo) {
     if (role === 'customer') logo.setAttribute('onclick', "navigateTo('shop')");
-    else if (role === 'contractor') logo.setAttribute('onclick', "navigateTo('labor_requests')");
+    else if (role === 'contractor') logo.setAttribute('onclick', "navigateTo('professional_home')");
     else logo.setAttribute('onclick', "navigateTo('dashboard')");
   }
 
