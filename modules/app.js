@@ -503,12 +503,15 @@ async function renderDashboard() {
 
   // Load sequentially to avoid ERR_INSUFFICIENT_RESOURCES from too many parallel requests
   const todayIST = today + 'T00:00:00+05:30'; // IST midnight for timestamptz columns
-  const invoicesRes   = await VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason').gte('date', todayIST).limit(100);
-  const visitsRes     = await VW_DB.client.from('visits').select('id,customer_name,visitor_type,date,status,executive_name').gte('date', todayIST).limit(100);
-  const tasksRes      = await VW_DB.client.from('tasks').select('id,title,status,assigned_to_name,due_date').in('status', ['pending','in_progress']).limit(30);
-  const leadsRes      = await VW_DB.client.from('leads').select('id,name,stage,assigned_to_name').not('stage','in','("won","lost")').limit(30);
-  const productsRes   = await VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit').eq('is_active', true).lte('stock', 20).limit(20);
-  const apiUsageRes   = await VW_DB.client.from('api_usage_log').select('call_type,cost_usd,created_at,called_by').gte('created_at', todayIST).limit(200).catch(() => ({ data: [] }));
+  // _safe wraps every query — Supabase client returns a thenable, not a Promise,
+  // so .catch() cannot be chained directly; must await first then handle error here
+  const _safe = async (q) => { try { return await q; } catch(e) { return { data: [] }; } };
+  const invoicesRes   = await _safe(VW_DB.client.from('invoices').select('id,invoice_no,date,total,payment_method,credit_sale,approval_status,payment_verified,customer_name,amount_received,approval_reason').gte('date', todayIST).limit(100));
+  const visitsRes     = await _safe(VW_DB.client.from('visits').select('id,customer_name,visitor_type,date,status,executive_name').gte('date', todayIST).limit(100));
+  const tasksRes      = await _safe(VW_DB.client.from('tasks').select('id,title,status,assigned_to_name,due_date').in('status', ['pending','in_progress']).limit(30));
+  const leadsRes      = await _safe(VW_DB.client.from('leads').select('id,name,stage,assigned_to_name').not('stage','in','("won","lost")').limit(30));
+  const productsRes   = await _safe(VW_DB.client.from('products').select('id,name,category,stock,low_stock_threshold,unit').eq('is_active', true).limit(200));
+  const apiUsageRes   = await _safe(VW_DB.client.from('api_usage_log').select('call_type,cost_usd,created_at,called_by').gte('created_at', todayIST).limit(200));
 
   const customers = [];
   const visits    = visitsRes.data || [];
