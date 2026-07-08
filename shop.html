@@ -944,22 +944,22 @@ function renderOTPSheet(mode) {
       <div style="text-align:center;margin-bottom:20px">
         <div style="font-size:42px;margin-bottom:10px">${isNew ? '👋' : '🔑'}</div>
         <div style="font-size:18px;font-weight:900;margin-bottom:4px">${isNew ? 'Create Your Account' : 'Welcome Back'}</div>
-        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 4-digit PIN — remember it for future logins' : 'Enter your 4-digit PIN for +91 ' + _loginPhone}</div>
+        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 6-digit PIN — remember it for future logins' : 'Enter your 6-digit PIN for +91 ' + _loginPhone}</div>
       </div>
 
       <div style="margin-bottom:14px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">4-Digit PIN</label>
-        <input id="login-otp" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">6-Digit PIN</label>
+        <input id="login-otp" type="password" inputmode="numeric" maxlength="6" placeholder="••••"
           style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
       </div>
 
       ${isNew ? `
       <div style="margin-bottom:14px">
         <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Confirm PIN</label>
-        <input id="login-otp2" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
+        <input id="login-otp2" type="password" inputmode="numeric" maxlength="6" placeholder="••••"
           style="width:100%;padding:16px;border:1.5px solid var(--bdr);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
       </div>
       <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">This PIN is different from staff login. 4 digits only.</div>
       ` : ''}
@@ -989,7 +989,7 @@ async function sendCustomerOTP() {
 
 async function verifyCustomerOTP(isNew) {
   const pin = document.getElementById('login-otp')?.value?.trim();
-  if (!pin || pin.length < 4) { toast('Enter your 4-digit PIN'); return; }
+  if (!pin || pin.length < 6) { toast('Enter your 6-digit PIN'); return; }
   if (isNew) {
     const pin2 = document.getElementById('login-otp2')?.value?.trim();
     if (pin !== pin2) { toast('PINs do not match — try again'); return; }
@@ -997,7 +997,7 @@ async function verifyCustomerOTP(isNew) {
   const btn = document.querySelector('[onclick^="verifyCustomerOTP"]');
   if (btn) { btn.disabled=true; btn.textContent='Please wait...'; }
   const email = _loginPhone + '@customer.vwholesale.app';
-  const _pin6 = pin + 'vw'; // pad to 6 chars to meet Supabase minimum
+  
   const storageKey = 'sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token';
 
   function _saveSession(data) {
@@ -1012,7 +1012,7 @@ async function verifyCustomerOTP(isNew) {
       const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: _pin6, data: { name: window._loginName||'', phone: _loginPhone } })
+        body: JSON.stringify({ email, password: pin, data: { name: window._loginName||'', phone: _loginPhone } })
       });
       const data = await res.json();
 
@@ -1040,7 +1040,7 @@ async function verifyCustomerOTP(isNew) {
       const sinRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: _pin6 })
+        body: JSON.stringify({ email, password: pin })
       });
       const sinData = await sinRes.json();
 
@@ -1059,7 +1059,7 @@ async function verifyCustomerOTP(isNew) {
       const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: _pin6 })
+        body: JSON.stringify({ email, password: pin })
       });
       const data = await res.json();
 
@@ -1082,7 +1082,7 @@ async function verifyCustomerOTP(isNew) {
           const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-            body: JSON.stringify({ email, password: _pin6 })
+            body: JSON.stringify({ email, password: pin })
           });
           const d2 = await r2.json();
           if (d2.access_token) {
