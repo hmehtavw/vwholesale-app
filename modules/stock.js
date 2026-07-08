@@ -776,7 +776,7 @@ async function deductStockLowestFirst(productId, qty){
   }
   return { plan, shortfall };
 }
-window.VW_STOCK = { getLocations:getProductStockLocations, pickLowestFirst:pickStockLowestFirst, addToLocation:addStockToLocation, deductLowestFirst:deductStockLowestFirst };
+window.VW_STOCK = { getLocations:getProductStockLocations, pickLowestFirst:pickStockLowestFirst, addToLocation:addStockToLocation, deductLowestFirst:deductStockLowestFirst, renderCatalogUploadPage, renderCatalogReviewPage };
 
 async function addProductLocation(productId){
   const zones = ((await VW_DB.client.from('warehouse_locations').select('code,name').eq('is_active',true).order('sort_order')).data)||[];
