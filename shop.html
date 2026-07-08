@@ -790,8 +790,8 @@ async function submitBestQuote() {
 
 // ── PRODUCTS ──
 function productCard(p, size) {
-  const price = p.vwp||p.price||p.tier1_price||0;
-  const mrp = p.mrp||0;
+  const price = parseFloat(p.vwp||p.price||p.tier1_price||0)||0;
+  const mrp = parseFloat(p.mrp||0)||0;
   const disc = mrp>price&&price>0 ? Math.round((mrp-price)/mrp*100) : 0;
   const img = p.image_url || (Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'') || '';
   const qty = _cart[p.id]||0;
@@ -822,7 +822,19 @@ function productCard(p, size) {
 }
 
 function _catIcon(cat) {
-  const icons = {Tiles:'⬜',Sanitary:'🚽',Faucets:'🚰',Showers:'🚿',Basins:'🪠',Wires:'🔌',Switches:'💡',LED:'💡',Fans:'🌀',Pipes:'🔧',Plywood:'🪵',Paints:'🎨',Cement:'🏗',Steel:'🔩',Doors:'🚪'};
+  const icons = {
+    'Tiles':'⬜','Sanitary':'🚽','Faucets':'🚰','Showers':'🚿','Basins':'🫙',
+    'Wires':'🔌','Switches':'💡','LED Lights':'💡','Fans':'🌀','Pipes':'🔧',
+    'Plywood':'🪵','Paints':'🎨','Cement':'🏗','Steel':'🔩','Doors':'🚪',
+    'Door Hardware':'🔑','Cabinet Hardware':'🗄','Kitchen Sinks':'🚿',
+    'Kitchen Acc':'🍳','Laminates':'📋','Power Tools':'🔨',
+    'Construction Tools':'🛠','Construction Chem':'🧪',
+    'Water Storage':'🪣','Waterproofing':'🛡','False Ceiling':'🏠',
+    'Profiles':'📐','Smart Home':'📱','Appliances':'📺',
+    'Large Appliances':'🏠','Electronics':'🔋','Windows':'🪟',
+    'Tile Chemicals':'🧴','Blocks':'🧱','Boards':'📋','Protection':'🛡',
+    'Accessories':'🔩','Profiles & Trims':'📐'
+  };
   return icons[cat] || '📦';
 }
 
@@ -832,8 +844,8 @@ async function openPDP(id) {
   const p = res?.data;
   if (!p) return;
 
-  const price = p.vwp||p.price||0;
-  const mrp = p.mrp||0;
+  const price = parseFloat(p.vwp||p.price||0)||0;
+  const mrp = parseFloat(p.mrp||0)||0;
   const disc = mrp>price&&price>0?Math.round((mrp-price)/mrp*100):0;
   const img = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
   const qty = _cart[p.id]||0;
@@ -1023,13 +1035,15 @@ function handleSearch(q) {
 
 async function doSearch(q) {
   showPage('search');
-  document.getElementById('search-title').textContent = `Results for "${q}"`;
+  document.getElementById('search-title').textContent = `Searching…`;
   document.getElementById('search-results').innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Searching…</div>';
   const res = await api('customer-shop', { action:'get_products', search:q, limit:40 });
   const prods = res?.data || [];
+  const st = document.getElementById('search-title');
+  if (st) st.textContent = prods.length ? `${prods.length} results for "${q}"` : `No results for "${q}"`;
   document.getElementById('search-results').innerHTML = prods.length
     ? prods.map(p=>productCard(p)).join('')
-    : '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-msg">No results found</div></div>';
+    : '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-msg">No results found</div><div style="font-size:13px;color:var(--t3);margin-top:6px">Try: Tiles, Jaquar, Cement, Paints</div></div>';
 }
 
 // ── ORDERS ──
@@ -1241,18 +1255,22 @@ async function init() {
   // Load categories
   const catRes = await api('customer-shop', { action:'get_categories' });
   _cats = catRes?.data || [
-    {key:'Tiles',label:'Tiles',icon:'⬜',color:'#8B5CF6'},
-    {key:'Sanitary',label:'Sanitaryware',icon:'🚽',color:'#3B82F6'},
-    {key:'Faucets',label:'Faucets',icon:'🚰',color:'#0369A1'},
-    {key:'Wires',label:'Electricals',icon:'🔌',color:'#F59E0B'},
-    {key:'Pipes',label:'Plumbing',icon:'🔧',color:'#06B6D4'},
-    {key:'Paints',label:'Paints',icon:'🎨',color:'#EC4899'},
-    {key:'Plywood',label:'Plywood',icon:'🪵',color:'#92400E'},
-    {key:'Cement',label:'Construction',icon:'🏗',color:'#57534E'},
-    {key:'Fans',label:'Fans',icon:'🌀',color:'#0D9488'},
-    {key:'LED Lights',label:'Lighting',icon:'💡',color:'#EAB308'},
-    {key:'Doors',label:'Doors',icon:'🚪',color:'#7C2D12'},
-    {key:'Appliances',label:'Appliances',icon:'🏠',color:'#10B981'},
+    {key:'Tiles',        label:'Tiles',        icon:'⬜', color:'#8B5CF6'},
+    {key:'Sanitary',     label:'Sanitaryware', icon:'🚽', color:'#3B82F6'},
+    {key:'Faucets',      label:'Faucets',      icon:'🚰', color:'#0369A1'},
+    {key:'Wires',        label:'Electricals',  icon:'🔌', color:'#F59E0B'},
+    {key:'Pipes',        label:'Plumbing',     icon:'🔧', color:'#06B6D4'},
+    {key:'Paints',       label:'Paints',       icon:'🎨', color:'#EC4899'},
+    {key:'Plywood',      label:'Plywood',      icon:'🪵', color:'#92400E'},
+    {key:'Cement',       label:'Cement',       icon:'🏗', color:'#57534E'},
+    {key:'Fans',         label:'Fans',         icon:'🌀', color:'#0D9488'},
+    {key:'LED Lights',   label:'Lighting',     icon:'💡', color:'#EAB308'},
+    {key:'Doors',        label:'Doors',        icon:'🚪', color:'#7C2D12'},
+    {key:'Switches',     label:'Switches',     icon:'💡', color:'#F59E0B'},
+    {key:'Steel',        label:'Steel',        icon:'🔩', color:'#6B7280'},
+    {key:'Waterproofing',label:'Waterproofing',icon:'🛡', color:'#0369A1'},
+    {key:'Basins',       label:'Basins',       icon:'🫙', color:'#3B82F6'},
+    {key:'Showers',      label:'Showers',      icon:'🚿', color:'#06B6D4'},
   ];
 
   // Render category grid
