@@ -376,6 +376,16 @@ async function navigateToFresh(page, params, cacheKey) {
     content.innerHTML = finalHtml;
     content.scrollTop = 0;
     applyRolePermissions();
+    // Re-apply customer nav styling after applyRolePermissions rebuilds nav.innerHTML
+    if (document.body.classList.contains('customer-mode')) {
+      const _nav = document.getElementById('bottom-nav');
+      if (_nav) {
+        _nav.style.cssText = 'background:#fff!important;border-top:1px solid #E5E5E5!important;box-shadow:0 -2px 10px rgba(0,0,0,.06)!important;position:fixed;bottom:0;left:0;right:0;height:62px;display:flex;align-items:center;justify-content:space-around;z-index:100;padding-bottom:env(safe-area-inset-bottom)';
+        _nav.querySelectorAll('.nav-btn').forEach(b => {
+          b.style.color = b.classList.contains('active') ? '#16783A' : '#777';
+        });
+      }
+    }
     if (_currentLang !== 'en') translatePageChrome(content);
 
   } catch(err) {
@@ -393,6 +403,15 @@ async function navigateToFresh(page, params, cacheKey) {
   document.getElementById('app-content')?.scrollTo(0, 0);
   content.scrollTo(0, 0);
   applyRolePermissions();
+  if (document.body.classList.contains('customer-mode')) {
+    const _nav = document.getElementById('bottom-nav');
+    if (_nav) {
+      _nav.style.cssText = 'background:#fff!important;border-top:1px solid #E5E5E5!important;box-shadow:0 -2px 10px rgba(0,0,0,.06)!important;position:fixed;bottom:0;left:0;right:0;height:62px;display:flex;align-items:center;justify-content:space-around;z-index:100;padding-bottom:env(safe-area-inset-bottom)';
+      _nav.querySelectorAll('.nav-btn').forEach(b => {
+        b.style.color = b.classList.contains('active') ? '#16783A' : '#777';
+      });
+    }
+  }
 }
 
 let billingTab = 'bill';

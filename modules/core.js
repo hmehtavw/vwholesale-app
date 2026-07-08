@@ -598,7 +598,11 @@ async function loadCurrentProfile() {
   // Auto-create customer profile for new shop.html OTP signups
   if (!currentProfile) {
     const u = sessionData.session.user;
-    const phone = (u.phone || u.email || '').replace('+91','').replace('@vwholesale.app','').replace(/\D/g,'').slice(-10);
+    const phone = (u.phone || u.email || '')
+      .replace('+91','')
+      .replace('@customer.vwholesale.app','')
+      .replace('@vwholesale.app','')
+      .replace(/\D/g,'').slice(-10);
     const name = u.user_metadata?.name || localStorage.getItem('vw_pending_name') || ('Customer ' + phone.slice(-4));
     try {
       await sb.from('profiles').insert({

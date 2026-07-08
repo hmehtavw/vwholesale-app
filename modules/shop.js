@@ -949,7 +949,7 @@ async function renderShopPage() {
     <!-- STICKY HEADER -->
     <div class="hr-header">
       <div class="hr-topbar">
-        <button class="hr-hamburger">☰</button>
+        <button class="hr-hamburger" onclick="window._shopDrawer()">☰</button>
 
         <!-- 90 MINS BADGE -->
         <div class="hr-delivery-badge">
@@ -4221,3 +4221,34 @@ async function renderProfessionalHome() {
 }
 window.VW_SHOP = window.VW_SHOP || {};
 window.VW_SHOP.renderProfessionalHome = renderProfessionalHome;
+
+// ── Shop drawer (hamburger menu) ──
+window._shopDrawer = function() {
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  if (!sheet) return;
+  const prof = VW_AUTH.getCurrentProfile();
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:4px 0 16px;border-bottom:1px solid #E5E5E5;margin-bottom:14px">
+      <div style="width:44px;height:44px;background:#16783A;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;color:#fff;font-weight:900">
+        ${prof ? prof.name?.charAt(0)?.toUpperCase() : '👤'}
+      </div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:#111">${prof ? prof.name : 'Guest'}</div>
+        <div style="font-size:11px;color:#777">${prof ? prof.phone || '' : 'Sign in to track orders'}</div>
+      </div>
+    </div>
+    <div style="display:grid;gap:4px">
+      <button onclick="closeSheet();navigateTo('shop')" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#111">🏠 Home</button>
+      <button onclick="closeSheet();navigateTo('my_orders')" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#111">📦 My Orders</button>
+      <button onclick="closeSheet();navigateTo('wallet')" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#111">👛 Wallet & Points</button>
+      <button onclick="closeSheet();navigateTo('offers')" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#111">🎁 Offers</button>
+      <button onclick="closeSheet();navigateTo('customer_profile')" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#111">👤 My Account</button>
+      <div style="border-top:1px solid #E5E5E5;margin:8px 0"></div>
+      <a href="tel:8712697930" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;color:#111">📞 Call Store — 8712697930</a>
+      ${prof ? `<button onclick="closeSheet();if(confirm('Log out?'))VW_AUTH.signOut().then(()=>window.location.replace('./shop.html'))" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:#E53E3E">🚪 Logout</button>` : `<button onclick="closeSheet();window._customerLogin()" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:10px;background:#16783A;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:900;color:#fff">👤 Sign In / Create Account</button>`}
+    </div>`;
+  sheet.classList.add('open');
+  overlay?.classList.add('open');
+};
