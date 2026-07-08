@@ -810,56 +810,43 @@ function openLoginSheet(context) {
 
 function renderLoginSheet(context) {
   const sheet = document.getElementById('bottom-sheet');
-  const icon = context === 'cart' ? '🛍' : context === 'orders' ? '📦' : context === 'offers' ? '🎁' : '👤';
-  const title = context === 'cart' ? 'Login to place order'
-    : context === 'orders' ? 'Login to view orders'
-    : context === 'offers' ? 'Login to view offers'
-    : 'Login to V Wholesale';
-
+  document.getElementById('sheet-overlay')?.classList.add('open');
+  sheet.classList.add('open');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div style="padding:0 0 4px">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:42px;margin-bottom:10px">${icon}</div>
-        <div style="font-size:18px;font-weight:900;margin-bottom:4px">${title}</div>
-        <div style="font-size:12px;color:var(--t3)">Earn loyalty points · Track orders · Get exclusive offers</div>
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:38px;margin-bottom:8px">🛍</div>
+      <div style="font-size:18px;font-weight:900;margin-bottom:4px">Sign in to V Wholesale</div>
+      <div style="font-size:12px;color:var(--t3)">Earn points · Track orders · Get exclusive prices</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
+      <div style="display:flex;gap:8px">
+        <div style="padding:12px 14px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);white-space:nowrap">+91</div>
+        <input id="login-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"
+          autofocus
+          style="flex:1;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:16px;font-weight:700;outline:none;box-sizing:border-box;color:var(--t1)"
+          oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"
+          onkeydown="if(event.key==='Enter')sendCustomerOTP()">
       </div>
-      <div style="margin-bottom:12px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
-        <div style="display:flex;align-items:center;border:1.5px solid var(--g);border-radius:10px;overflow:hidden">
-          <span style="padding:12px 10px;background:var(--bg);font-size:13px;font-weight:700;color:var(--t2);border-right:1px solid var(--bdr)">+91</span>
-          <input id="login-phone" type="tel" inputmode="numeric" maxlength="10"
-            placeholder="10-digit mobile"
-            style="flex:1;padding:12px;border:none;outline:none;font-size:16px;font-weight:700;color:var(--t1)"
-            oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
-        </div>
-      </div>
-      <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Full Name</label>
-        <input id="login-name" type="text" placeholder="Your full name"
-          style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;color:var(--t1);box-sizing:border-box">
-      </div>
-      <button onclick="sendCustomerOTP()"
-        style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
-        Send OTP →
-      </button>
-      ${context === 'cart' ? `
-      <div style="display:flex;align-items:center;gap:10px;margin:2px 0 10px">
-        <div style="flex:1;height:1px;background:var(--bdr)"></div>
-        <span style="font-size:10px;color:var(--t3);font-weight:700">OR</span>
-        <div style="flex:1;height:1px;background:var(--bdr)"></div>
-      </div>
-      <button onclick="openBestQuoteSheet()"
-        style="width:100%;padding:13px;border-radius:12px;background:#fff;border:1.5px solid var(--g);font-size:14px;font-weight:800;color:var(--g);cursor:pointer;margin-bottom:10px">
-        💬 Get Best Quote — no login needed
-      </button>
-      <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Our team calls you back with wholesale pricing within 30 minutes</div>
-      ` : ''}
-      <button onclick="closeSheet()"
-        style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">
-        Continue Browsing
-      </button>
-    </div>`;
+    </div>
+    <button onclick="sendCustomerOTP()"
+      style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
+      Continue →
+    </button>
+    ${context==='cart' ? `
+    <div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px">
+      <div style="flex:1;height:1px;background:var(--bdr)"></div>
+      <span style="font-size:11px;color:var(--t3);font-weight:700">OR</span>
+      <div style="flex:1;height:1px;background:var(--bdr)"></div>
+    </div>
+    <button onclick="openBestQuoteSheet()"
+      style="width:100%;padding:13px;border-radius:12px;background:#fff;border:1.5px solid var(--g);font-size:14px;font-weight:800;color:var(--g);cursor:pointer;margin-bottom:10px">
+      💬 Get Best Quote — no login needed
+    </button>
+    <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Our team calls you back within 30 minutes</div>
+    ` : ''}
+    <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:none;border:none;font-size:13px;color:var(--t2);cursor:pointer">← Continue browsing</button>`;
 }
 
 // ── GET BEST QUOTE — send cart as a quotation request, no login required ──
@@ -938,53 +925,79 @@ async function submitBestQuote() {
 
 function renderOTPSheet(mode) {
   const isNew = mode !== 'login';
-  document.getElementById('bottom-sheet').innerHTML = `
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div style="padding:0 0 4px">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:42px;margin-bottom:10px">${isNew ? '👋' : '🔑'}</div>
-        <div style="font-size:18px;font-weight:900;margin-bottom:4px">${isNew ? 'Create Your Account' : 'Welcome Back'}</div>
-        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 6-digit PIN — remember it for future logins' : 'Enter your 6-digit PIN for +91 ' + _loginPhone}</div>
-      </div>
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:38px;margin-bottom:8px">${isNew ? '👋' : '🔑'}</div>
+      <div style="font-size:18px;font-weight:900;margin-bottom:3px">${isNew ? 'Create Account' : 'Welcome Back'}</div>
+      <div style="font-size:12px;color:var(--t3)">+91 ${_loginPhone}</div>
+    </div>
 
-      <div style="margin-bottom:14px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">6-Digit PIN</label>
-        <input id="login-otp" type="password" inputmode="numeric" maxlength="6" placeholder="••••"
-          style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
-      </div>
+    ${isNew ? `
+    <div style="margin-bottom:12px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Your Name</label>
+      <input id="login-name" type="text" placeholder="Full name"
+        style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;color:var(--t1)">
+    </div>` : ''}
 
-      ${isNew ? `
-      <div style="margin-bottom:14px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Confirm PIN</label>
-        <input id="login-otp2" type="password" inputmode="numeric" maxlength="6" placeholder="••••"
-          style="width:100%;padding:16px;border:1.5px solid var(--bdr);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
-      </div>
-      <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Set a 6-digit PIN — you will use it every time you log in.</div>
-      ` : ''}
+    <div style="margin-bottom:${isNew ? 12 : 16}px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">
+        ${isNew ? 'Set a 6-digit PIN' : 'Enter your PIN'}
+      </label>
+      <input id="login-otp" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"
+        autofocus
+        style="width:100%;padding:14px;border:1.5px solid var(--g);border-radius:10px;font-size:26px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)"
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')verifyCustomerOTP(${isNew})">
+    </div>
 
-      <button onclick="verifyCustomerOTP(${isNew})"
-        style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
-        ${isNew ? 'Create Account →' : 'Login →'}
-      </button>
+    ${isNew ? `
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Confirm PIN</label>
+      <input id="login-otp2" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"
+        style="width:100%;padding:14px;border:1.5px solid var(--bdr);border-radius:10px;font-size:26px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)"
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')verifyCustomerOTP(true)">
+    </div>` : ''}
 
-      ${isNew
-        ? `<button onclick="renderOTPSheet('login')" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:1px solid var(--bdr);font-size:13px;color:var(--t2);cursor:pointer;margin-bottom:6px">Already have an account? Login →</button>`
-        : `<button onclick="renderOTPSheet('signup')" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:1px solid var(--bdr);font-size:13px;color:var(--t2);cursor:pointer;margin-bottom:6px">New here? Create account →</button>`}
+    <button onclick="verifyCustomerOTP(${isNew})" id="verify-btn"
+      style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
+      ${isNew ? 'Create Account →' : 'Login →'}
+    </button>
 
-      <button onclick="renderLoginSheet()" style="width:100%;padding:10px;border-radius:10px;background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer">← Change number</button>
-    </div>`;
+    <button onclick="renderLoginSheet()" style="width:100%;padding:11px;border-radius:10px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">
+      ← Change number
+    </button>`;
 }
 
 async function sendCustomerOTP() {
   const phone = document.getElementById('login-phone')?.value?.replace(/\D/g,'').slice(-10);
   if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile number'); return; }
   _loginPhone = phone;
-  window._loginName = document.getElementById('login-name')?.value?.trim() || '';
-  // Always show signup first — if account exists, verifyCustomerOTP detects it
-  // and switches to login automatically. No probe needed (probe was unreliable).
-  renderOTPSheet('signup');
+
+  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
+  if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
+
+  // Try signing in with a dummy password to determine if account exists.
+  // "invalid_credentials" → account exists → show Login (enter PIN)
+  // anything else → new user → show Create Account (name + PIN)
+  try {
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
+      body:JSON.stringify({email: phone+'@customer.vwholesale.app', password:'__probe__'})
+    });
+    const data = await res.json();
+    // These error codes mean the account EXISTS (wrong password):
+    const exists = data.error_code === 'invalid_credentials'
+      || data.msg === 'Invalid login credentials'
+      || data.error_description === 'Invalid login credentials';
+    renderOTPSheet(exists ? 'login' : 'signup');
+  } catch(e) {
+    renderOTPSheet('signup');
+  }
+  if (btn) { btn.disabled=false; btn.textContent='Continue →'; }
 }
 
 async function verifyCustomerOTP(isNew) {

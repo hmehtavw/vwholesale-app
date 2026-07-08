@@ -3146,61 +3146,25 @@ window.rejectInvoiceStep = rejectInvoiceStep;
 function _applyCustomerTheme() {
   const root = document.documentElement;
   const vars = {
-    '--bg':           '#F4F4F4',
-    '--bg1':          '#F4F4F4',
-    '--bg2':          '#FFFFFF',
-    '--bg3':          '#F0F0F0',
-    '--bg4':          '#E8E8E8',
-    '--sheet-bg':     '#FFFFFF',
-    '--border':       '#E5E5E5',
-    '--border2':      '#D0D0D0',
-    '--text':         '#111111',
-    '--text1':        '#111111',
-    '--text2':        '#444444',
-    '--text3':        '#777777',
-    '--gold':         '#16783A',
-    '--gold-light':   '#EBF7EF',
-    '--gold-dark':    '#0D5C2C',
-    '--gold-muted':   'rgba(22,120,58,0.10)',
-    '--gold-border':  'rgba(22,120,58,0.25)',
-    '--header-bg':    '#16783A',
-    '--green':        '#16783A',
-    '--nav-text':     '#FFFFFF',
+    '--bg':'#F4F4F4','--bg1':'#F4F4F4','--bg2':'#FFFFFF','--bg3':'#F0F0F0',
+    '--bg4':'#E8E8E8','--sheet-bg':'#FFFFFF','--border':'#E5E5E5','--border2':'#D0D0D0',
+    '--text':'#111111','--text1':'#111111','--text2':'#444444','--text3':'#777777',
+    '--gold':'#16783A','--gold-light':'#EBF7EF','--gold-dark':'#0D5C2C',
+    '--gold-muted':'rgba(22,120,58,0.10)','--gold-border':'rgba(22,120,58,0.25)',
+    '--header-bg':'#16783A','--green':'#16783A',
   };
   Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
-
   document.body.style.background = '#F4F4F4';
   document.body.style.color = '#111111';
   document.body.classList.add('customer-mode');
 
-  // ── Rebuild header for customer — clean, no staff tools ──
+  // shop.js renders its own complete header (Deliver To / logo / cart / account)
+  // Hide index.html's app-header entirely to avoid double header
   const hdr = document.getElementById('app-header');
-  if (hdr) {
-    hdr.style.cssText = 'background:#16783A!important;border-bottom:none!important;box-shadow:0 2px 8px rgba(0,0,0,.15)!important';
-    // Replace header content entirely
-    hdr.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="navigateTo('shop')">
-        <div style="width:34px;height:34px;background:rgba(255,255,255,0.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#fff">VW</div>
-        <div>
-          <div style="font-size:14px;font-weight:900;color:#fff;line-height:1.2">V Wholesale</div>
-          <div style="font-size:10px;color:rgba(255,255,255,0.7)">Vijayawada's Store</div>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-size:12px;font-weight:700;color:#fff;background:rgba(255,255,255,0.15);padding:6px 12px;border-radius:20px">
-          👤 ${currentProfile?.name?.split(' ')[0] || 'Account'}
-        </div>
-        <button onclick="if(confirm('Log out?'))VW_AUTH.signOut().then(()=>location.reload())"
-          style="background:rgba(255,255,255,0.15);border:none;padding:7px 10px;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">
-          Logout
-        </button>
-      </div>`;
-  }
+  if (hdr) hdr.style.display = 'none';
 
-  // ── Style bottom nav white ──
+  // Bottom nav white with green active
   const nav = document.getElementById('bottom-nav');
-  if (nav) {
-    nav.style.cssText = 'background:#fff!important;border-top:1px solid #E5E5E5!important;box-shadow:0 -2px 10px rgba(0,0,0,.06)!important';
-  }
+  if (nav) nav.style.cssText = 'background:#fff!important;border-top:1px solid #E5E5E5!important;box-shadow:0 -2px 10px rgba(0,0,0,.06)!important';
 }
 window._applyCustomerTheme = _applyCustomerTheme;
