@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <style id="customer-critical">
-    /* Applied immediately — hides staff chrome for customer/shop route */
-    body.customer-mode #app-header,
-    body.customer-mode #more-menu { display:none !important; }
+    /* Hide staff header by default — only shown when staff is confirmed */
+    #app-header { display:none !important; }
+    /* Staff mode re-enables it */
+    body.staff-mode #app-header { display:flex !important; }
+    /* Customer/guest mode */
     body.customer-mode { background:#F4F4F4 !important; }
     body.customer-mode #app-content { padding-top:0 !important; }
+    body.customer-mode #more-menu { display:none !important; }
   </style>
   <script>
     // Force clear service worker and caches on every load
@@ -45,22 +48,24 @@
           if (session && session.access_token) {
             try {
               const email = session.user?.email || '';
-              // Customer accounts — hide staff chrome immediately
               if (email.endsWith('@customer.vwholesale.app')) {
                 document.body.classList.add('customer-mode');
-              }
-              // Staff accounts — check for ?staff param not required, they have session
-              else if (!email.endsWith('@vwholesale.app') && !email.endsWith('@contractor.vwholesale.app')) {
+              } else if (email.endsWith('@vwholesale.app')) {
+                // Staff account — show the header
+                document.body.classList.add('staff-mode');
+              } else {
                 document.body.classList.add('customer-mode');
               }
-            } catch(e) {}
+            } catch(e) { document.body.classList.add('staff-mode'); }
             return;
           }
         }
         // No session — check if staff/contractor link
         const params = new URLSearchParams(window.location.search);
         if (params.has('staff') || params.has('contractor')) return;
-        // Guest with no session — redirect to shop.html
+        // Guest with no session — hide all staff chrome immediately
+        // (redirect to shop.html happens but may be slow; hide first)
+        document.body.classList.add('customer-mode');
         if (!window.location.pathname.endsWith('shop.html')) {
           window.location.replace('./shop.html');
         }

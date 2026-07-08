@@ -1066,7 +1066,9 @@ async function routeByRole() {
     return;
   }
 
-  // Staff — existing flow
+  // Staff — add staff-mode class to show the header
+  document.body.classList.add('staff-mode');
+  document.body.classList.remove('customer-mode');
   if (status === 'pending') { showPendingScreen(); return; }
   if (typeof init === 'function') await init();
 }
