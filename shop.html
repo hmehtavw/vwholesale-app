@@ -450,7 +450,7 @@ async function authContinue() {
 }
 
 function showPINScreen(mode) {
-  const isNew = mode === 'signup';
+  const isNew = mode !== 'login';
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
@@ -459,7 +459,8 @@ function showPINScreen(mode) {
       <div style="font-size:18px;font-weight:900;margin-bottom:3px">${isNew ? 'Create Account' : 'Welcome Back'}</div>
       <div style="font-size:12px;color:var(--t3)">+91 ${window._authPhone}</div>
     </div>
-    ${isNew ? `<div style="margin-bottom:12px">
+    ${isNew ? `
+    <div style="margin-bottom:12px">
       <label class="form-lbl">Your Name</label>
       <input type="text" id="auth-name" placeholder="Full name" class="form-inp" style="margin-top:4px">
     </div>` : ''}
@@ -467,22 +468,21 @@ function showPINScreen(mode) {
       <label class="form-lbl">${isNew ? 'Set a 6-digit PIN' : 'Enter your PIN'}</label>
       <input type="password" inputmode="numeric" maxlength="6" id="auth-pin" placeholder="••••••"
         class="pin-input" style="margin-top:4px"
-        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6)"
-        onkeydown="if(event.key==='Enter')authSubmit(${isNew})">
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
     </div>
-    ${isNew ? `<div style="margin-bottom:14px">
+    ${isNew ? `
+    <div style="margin-bottom:14px">
       <label class="form-lbl">Confirm PIN</label>
       <input type="password" inputmode="numeric" maxlength="6" id="auth-pin2" placeholder="••••••"
         class="pin-input" style="margin-top:4px"
-        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6)"
-        onkeydown="if(event.key==='Enter')authSubmit(true)">
+        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
     </div>` : ''}
     <button class="btn-g" id="auth-submit-btn" onclick="authSubmit(${isNew})">${isNew ? 'Create Account →' : 'Login →'}</button>
-    <button onclick="${isNew ? 'showPINScreen(\'login\')' : 'showPINScreen(\'signup\')'}"
-      style="width:100%;padding:11px;margin-top:8px;background:#fff;border:1px solid var(--bdr);border-radius:10px;font-size:13px;color:var(--t2);cursor:pointer">
-      ${isNew ? 'Already have account? Login →' : 'New here? Create account →'}
-    </button>
+    <button class="btn-out" style="margin-top:8px" id="auth-toggle-btn">${isNew ? 'Already have account? Login →' : 'New here? Create account →'}</button>
     <button onclick="openAuth()" style="width:100%;padding:10px;margin-top:4px;background:none;border:none;font-size:12px;color:var(--t3);cursor:pointer">← Change number</button>`;
+  // Wire toggle button after render
+  const toggleBtn = document.getElementById('auth-toggle-btn');
+  if (toggleBtn) toggleBtn.onclick = () => showPINScreen(isNew ? 'login' : 'signup');
   setTimeout(() => (isNew ? document.getElementById('auth-name') : document.getElementById('auth-pin'))?.focus(), 100);
 }
 
