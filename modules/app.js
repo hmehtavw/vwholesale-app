@@ -203,10 +203,7 @@ async function navigateToFresh(page, params, cacheKey) {
   } else {
     content.classList.remove('shop-mode');
     content.style.padding = '';
-    // Restore header for staff pages
-    if (!document.body.classList.contains('customer-mode')) {
-      document.getElementById('app-header')?.style.removeProperty('display');
-    }
+    // Header visibility is controlled by CSS staff-mode class only
   }
 
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));

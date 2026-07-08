@@ -3,11 +3,21 @@
 <head>
   <meta charset="UTF-8">
   <style id="customer-critical">
-    /* Hide staff header by default — only shown when staff is confirmed */
-    #app-header { display:none !important; }
-    /* Staff mode re-enables it */
-    body.staff-mode #app-header { display:flex !important; }
-    /* Customer/guest mode */
+    /* Hide staff header completely — shown ONLY for confirmed staff */
+    #app-header {
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
+      overflow: hidden !important;
+      pointer-events: none !important;
+    }
+    body.staff-mode #app-header {
+      display: flex !important;
+      visibility: visible !important;
+      height: auto !important;
+      overflow: visible !important;
+      pointer-events: auto !important;
+    }
     body.customer-mode { background:#F4F4F4 !important; }
     body.customer-mode #app-content { padding-top:0 !important; }
     body.customer-mode #more-menu { display:none !important; }
