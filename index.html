@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <style id="customer-critical">
-    /* Hide staff header completely — shown ONLY for confirmed staff */
+    /* Hide staff header by default — sidebar layout takes over in staff-mode */
     #app-header {
       display: none !important;
       visibility: hidden !important;
@@ -11,17 +11,85 @@
       overflow: hidden !important;
       pointer-events: none !important;
     }
+    /* Staff mode: header hidden (sidebar replaces it) */
     body.staff-mode #app-header {
-      display: flex !important;
-      visibility: visible !important;
-      height: auto !important;
-      overflow: visible !important;
-      pointer-events: auto !important;
+      display: none !important;
+      visibility: hidden !important;
+      height: 0 !important;
     }
+    /* Customer mode overrides */
     body.customer-mode { background:#F4F4F4 !important; }
     body.customer-mode #app-content { padding-top:0 !important; }
     body.customer-mode #more-menu { display:none !important; }
-    body.customer-mode #bottom-nav { display:none !important; }
+    /* (moved to critical CSS) */
+  </style>
+  <script>
+    // Force clear service worker and caches on every load
+    // This ensures fresh JS is always served after deploys
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(reg) { reg.unregister(); });
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+      }
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="app-version" content="s8-modular">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <script>
+    // Redirect guests to shop.html — staff/admin stay on index.html
+    (function() {
+      try {
+        const SUPA_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
+        // Check if a Supabase session exists in localStorage
+        const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+        if (storageKey) {
+          const session = JSON.parse(localStorage.getItem(storageKey) || 'null');
+          if (session && session.access_token) {
+            try {
+              const email = session.user?.email || '';
+              if (email.endsWith('@customer.vwholesale.app')) {
+                document.body.classList.add('customer-mode');
+                document.getElementById('bottom-nav').style.cssText = 'display:none';
+              } else {
+                // All @vwholesale.app accounts (staff/admin/contractor) get staff-mode
+                document.body.classList.add('staff-mode');
+              }
+            } catch(e) { document.body.classList.add('staff-mode'); }
+            return;
+          }
+        }
+        // No session — default to staff-mode (login page will show)
+        document.body.classList.add('staff-mode');
+        // No session — check if staff/contractor link
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('staff') || params.has('contractor')) return;
+        // Guest with no session — hide all staff chrome immediately
+        // (redirect to shop.html happens but may be slow; hide first)
+        document.body.classList.add('customer-mode');
+        if (!window.location.pathname.endsWith('shop.html')) {
+          window.location.replace('./shop.html');
+        }
+      } catch(e) {
+        // Error reading storage — allow normal load
+      }
+    })();
+  </script>
+  <meta name="theme-color" content="#060D45">
+  <title>V Wholesale</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
   </style>
   <script>
     // Force clear service worker and caches on every load
@@ -327,13 +395,13 @@ html, body {
 
 /* ===== CARDS ===== */
 /* ── CUSTOMER MODE — light green/white theme (role=customer) ── */
-body.customer-mode { background:#F4F4F4!important; color:#111!important; }
-body.customer-mode #app-header { display:none!important; }
+/* (moved to critical CSS) */
+/* (moved to critical CSS) */
 body.customer-mode #bottom-nav { background:#fff!important; border-top:1px solid #E5E5E5!important; box-shadow:0 -2px 10px rgba(0,0,0,.06)!important; }
 body.customer-mode .card { background:#fff!important; border-color:#E5E5E5!important; color:#111!important; }
 body.customer-mode .card-title, body.customer-mode h2, body.customer-mode h3 { color:#111!important; }
 body.customer-mode .module-header { background:#F4F4F4!important; }
-body.customer-mode #app-content { background:#F4F4F4!important; padding-top:0!important; }
+/* (moved to critical CSS) */
 body.customer-mode .nav-btn { color:#777!important; }
 body.customer-mode .nav-btn.active { color:#16783A!important; }
 body.customer-mode .nav-btn.active .nav-icon { color:#16783A!important; }
@@ -344,7 +412,7 @@ body.customer-mode .sheet * { color:#111!important; }
 body.customer-mode #bottom-sheet { background:#fff!important; }
 body.customer-mode .overlay { background:rgba(0,0,0,0.4)!important; }
 body.customer-mode .empty-state { background:#fff!important; color:#444!important; }
-body.customer-mode #more-menu { display:none!important; }
+/* (moved to critical CSS) */
 
 .card {
   background: var(--bg2);
