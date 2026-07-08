@@ -36,23 +36,24 @@
         if (storageKey) {
           const session = JSON.parse(localStorage.getItem(storageKey) || 'null');
           if (session && session.access_token) {
-            // Decode JWT to check role without any DB call
             try {
-              const payload = JSON.parse(atob(session.access_token.split('.')[1]));
-              const email = session.user?.email || payload?.email || '';
-              // Customer accounts use @customer.vwholesale.app domain
+              const email = session.user?.email || '';
+              // Customer accounts — hide staff chrome immediately
               if (email.endsWith('@customer.vwholesale.app')) {
                 document.body.classList.add('customer-mode');
               }
+              // Staff accounts — check for ?staff param not required, they have session
+              else if (!email.endsWith('@vwholesale.app') && !email.endsWith('@contractor.vwholesale.app')) {
+                document.body.classList.add('customer-mode');
+              }
             } catch(e) {}
-            return; // Has a session — stay on index.html
+            return;
           }
         }
         // No session — check if staff/contractor link
         const params = new URLSearchParams(window.location.search);
-        // ?staff=1 or ?contractor=1 — always stay on index.html (show login screen)
         if (params.has('staff') || params.has('contractor')) return;
-        // Otherwise redirect guests to shop
+        // Guest with no session — redirect to shop.html
         if (!window.location.pathname.endsWith('shop.html')) {
           window.location.replace('./shop.html');
         }

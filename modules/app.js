@@ -194,14 +194,19 @@ async function navigateToFresh(page, params, cacheKey) {
   if (shopPages.includes(page)) {
     content.classList.add('shop-mode');
     content.style.padding = '0';
-    // Ensure customer theme applied on every nav (handles page refreshes)
-    const _r = VW_AUTH?.getCurrentProfile?.()?.role;
-    if (_r === 'customer' && !document.body.classList.contains('customer-mode')) {
-      window._applyCustomerTheme?.();
+    // Hide staff header — shop.js has its own header
+    const _role = VW_AUTH?.getCurrentProfile?.()?.role || VW_AUTH?.getRole?.() || '';
+    if (_role === 'customer' || _role === '') {
+      document.getElementById('app-header')?.style.setProperty('display','none','important');
+      document.body.classList.add('customer-mode');
     }
   } else {
     content.classList.remove('shop-mode');
     content.style.padding = '';
+    // Restore header for staff pages
+    if (!document.body.classList.contains('customer-mode')) {
+      document.getElementById('app-header')?.style.removeProperty('display');
+    }
   }
 
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
