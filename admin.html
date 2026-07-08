@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0D3B7A">
+<title>V Wholesale — Admin Portal</title>
+<link rel="icon" href="./icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{
+  --b:#3B82F6;--bdk:#1D4ED8;--blt:#1E3A5F;
+  --gold:#F5C842;--red:#EF4444;--green:#22C55E;
+  --bg:#0F172A;--card:#1E293B;--card2:#263449;--bdr:#334155;
+  --t1:#F1F5F9;--t2:#CBD5E1;--t3:#64748B;
+  --nav-w:220px;--nav-h:60px;
+}
+
+/* LAYOUT */
+.layout{display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:var(--nav-w);background:#0A1628;border-right:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:50}
+.sb-logo{padding:16px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:10px}
+.sb-logo-box{width:36px;height:36px;background:var(--bdk);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;flex-shrink:0}
+.sb-logo-text{font-size:14px;font-weight:900;color:var(--t1)}
+.sb-logo-sub{font-size:9px;color:var(--t3)}
+.sb-nav{flex:1;padding:12px 8px;overflow-y:auto}
+.sb-section{font-size:9px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;padding:8px 10px 4px;margin-top:4px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;border:none;background:none;width:100%;text-align:left;font-family:inherit;margin-bottom:1px}
+.sb-item:hover{background:var(--card);color:var(--t1)}
+.sb-item.active{background:var(--blt);color:var(--b);font-weight:800}
+.sb-icon{font-size:16px;flex-shrink:0;width:20px;text-align:center}
+.sb-footer{padding:12px;border-top:1px solid var(--bdr)}
+.sb-user{font-size:11px;color:var(--t3);margin-bottom:8px}
+.sb-user strong{color:var(--t1);display:block;font-size:13px}
+
+/* MAIN */
+.main{margin-left:var(--nav-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:#0A1628;border-bottom:1px solid var(--bdr);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:0;z-index:40}
+.topbar-title{font-size:16px;font-weight:900;color:var(--t1)}
+.topbar-acts{display:flex;gap:8px;align-items:center}
+.content{padding:20px;flex:1}
+
+/* CARDS */
+.card{background:var(--card);border-radius:14px;border:1px solid var(--bdr);padding:16px;margin-bottom:14px}
+.card-title{font-size:13px;font-weight:800;color:var(--t1);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.stat-card{background:var(--card);border-radius:12px;border:1px solid var(--bdr);padding:14px}
+.stat-val{font-size:24px;font-weight:900;color:var(--t1)}
+.stat-lbl{font-size:11px;color:var(--t3);margin-top:4px;font-weight:600}
+.stat-change{font-size:10px;font-weight:700;margin-top:4px}
+.stat-up{color:var(--green)}
+.stat-dn{color:var(--red)}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--bdr);text-align:left;white-space:nowrap}
+.tbl td{padding:10px 12px;font-size:13px;color:var(--t2);border-bottom:1px solid var(--bdr)}
+.tbl tr:hover td{background:var(--card2)}
+.tbl tr:last-child td{border-bottom:none}
+
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:10px;font-weight:800;white-space:nowrap}
+.badge-green{background:#14532D;color:#4ADE80}
+.badge-amber{background:#451A03;color:#FCD34D}
+.badge-red{background:#450A0A;color:#FCA5A5}
+.badge-blue{background:var(--blt);color:var(--b)}
+.badge-grey{background:var(--card2);color:var(--t3)}
+
+/* FORMS */
+.form-lbl{font-size:10px;font-weight:700;color:var(--t3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.form-inp{width:100%;padding:9px 12px;background:var(--card2);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1);font-family:inherit;outline:none}
+.form-inp:focus{border-color:var(--b)}
+.form-sel{width:100%;padding:9px 12px;background:var(--card2);border:1px solid var(--bdr);border-radius:8px;font-size:13px;color:var(--t1);font-family:inherit;cursor:pointer;outline:none}
+
+/* BUTTONS */
+.btn{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border:none;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--b);color:#fff}
+.btn-success{background:var(--green);color:#fff}
+.btn-danger{background:var(--red);color:#fff}
+.btn-ghost{background:none;border:1px solid var(--bdr);color:var(--t2)}
+.btn:hover{opacity:.85}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal{background:var(--card);border-radius:16px;border:1px solid var(--bdr);padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto}
+.modal-title{font-size:15px;font-weight:900;color:var(--t1);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+
+/* TOAST */
+#toast{position:fixed;top:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-msg{background:#1E293B;color:#F1F5F9;border:1px solid var(--bdr);padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;animation:ti .25s ease;min-width:200px}
+@keyframes ti{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+
+/* MOBILE */
+#mob-menu-btn{display:none}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .3s}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .topbar{padding:10px 14px}
+  #mob-menu-btn{display:flex}
+}
+
+/* LOGIN */
+#login-page{position:fixed;inset:0;background:#0A1628;display:flex;align-items:center;justify-content:center;z-index:500}
+.login-card{background:var(--card);border-radius:20px;border:1px solid var(--bdr);padding:28px;width:100%;max-width:380px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-page">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="width:52px;height:52px;background:var(--bdk);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#fff;margin:0 auto 10px">VW</div>
+      <div style="font-size:18px;font-weight:900;color:var(--t1)">Admin Portal</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:4px">V Wholesale · Vijayawada</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="form-lbl">Mobile</label>
+      <input type="tel" inputmode="numeric" maxlength="10" id="admin-phone" class="form-inp" placeholder="10-digit mobile" onkeydown="if(event.key==='Enter')document.getElementById('admin-pin').focus()">
+    </div>
+    <div style="margin-bottom:16px">
+      <label class="form-lbl">PIN</label>
+      <input type="password" inputmode="numeric" maxlength="6" id="admin-pin" class="form-inp" placeholder="6-digit PIN" style="letter-spacing:6px;font-size:18px" onkeydown="if(event.key==='Enter')adminLogin()">
+    </div>
+    <button onclick="adminLogin()" style="width:100%;padding:11px;background:var(--bdk);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer" id="admin-login-btn">Login to Admin</button>
+    <div id="admin-login-err" style="color:var(--red);font-size:12px;text-align:center;margin-top:8px;display:none"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="layout" id="admin-app" style="display:none">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-box">VW</div>
+      <div>
+        <div class="sb-logo-text">V Wholesale</div>
+        <div class="sb-logo-sub">Admin Portal</div>
+      </div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-section">Overview</div>
+      <button class="sb-item active" onclick="loadPage('dashboard')" id="nav-dashboard"><span class="sb-icon">📊</span>Dashboard</button>
+      <div class="sb-section">Operations</div>
+      <button class="sb-item" onclick="loadPage('orders')" id="nav-orders"><span class="sb-icon">📦</span>Orders</button>
+      <button class="sb-item" onclick="loadPage('customers')" id="nav-customers"><span class="sb-icon">👥</span>Customers</button>
+      <button class="sb-item" onclick="loadPage('professionals')" id="nav-professionals"><span class="sb-icon">🏗</span>Professionals</button>
+      <button class="sb-item" onclick="loadPage('briefs')" id="nav-briefs"><span class="sb-icon">📋</span>Project Briefs</button>
+      <div class="sb-section">Catalog</div>
+      <button class="sb-item" onclick="loadPage('products')" id="nav-products"><span class="sb-icon">🛒</span>Products</button>
+      <button class="sb-item" onclick="loadPage('categories')" id="nav-categories"><span class="sb-icon">🗂</span>Categories</button>
+      <button class="sb-item" onclick="loadPage('promos')" id="nav-promos"><span class="sb-icon">🎁</span>Promos</button>
+      <div class="sb-section">Settings</div>
+      <button class="sb-item" onclick="loadPage('staff')" id="nav-staff"><span class="sb-icon">👤</span>Staff</button>
+      <button class="sb-item" onclick="loadPage('settings')" id="nav-settings"><span class="sb-icon">⚙️</span>Settings</button>
+    </nav>
+    <div class="sb-footer">
+      <div class="sb-user"><strong id="admin-name">Admin</strong><span id="admin-role">Loading…</span></div>
+      <button onclick="adminLogout()" style="width:100%;padding:7px;background:none;border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t3);cursor:pointer">Logout</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+    <div class="topbar">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button id="mob-menu-btn" onclick="document.getElementById('sidebar').classList.toggle('open')" style="background:none;border:none;font-size:20px;color:var(--t1);cursor:pointer">☰</button>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+      </div>
+      <div class="topbar-acts">
+        <span style="font-size:11px;color:var(--t3)" id="topbar-time"></span>
+        <a href="./index.html" style="padding:7px 12px;background:var(--card);border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t2);text-decoration:none">Staff App →</a>
+        <a href="./shop.html" target="_blank" style="padding:7px 12px;background:var(--card);border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t2);text-decoration:none">Shop →</a>
+      </div>
+    </div>
+    <div class="content" id="page-content"></div>
+  </main>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+const SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
+let _adminSession = null;
+let _adminProfile = null;
+let _currentPage = 'dashboard';
+
+// ── HELPERS ──
+async function sbFetch(path, opts={}) {
+  const r = await fetch(`${SB_URL}/rest/v1/${path}`, {
+    headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':`Bearer ${_adminSession?.access_token||ANON}`,...(opts.headers||{})},
+    ...opts
+  });
+  if (!r.ok) { const e = await r.text(); throw new Error(e); }
+  return r.json().catch(()=>null);
+}
+
+async function proFn(body) {
+  const r = await fetch(`${SB_URL}/functions/v1/professional-api`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':ANON,'x-admin-token':_adminSession?.access_token||''},
+    body:JSON.stringify(body)
+  });
+  return r.json();
+}
+
+function toast(msg, type='info') {
+  const el = document.createElement('div');
+  el.className = 'toast-msg';
+  el.style.borderLeft = `3px solid ${type==='ok'?'#22C55E':type==='err'?'#EF4444':'#3B82F6'}`;
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300)},3000);
+}
+
+function openModal(html) {
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+
+function setPageTitle(t) { document.getElementById('page-title').textContent = t; document.getElementById('topbar-time').textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); }
+
+function setNav(page) {
+  document.querySelectorAll('.sb-item').forEach(b=>b.classList.remove('active'));
+  document.getElementById(`nav-${page}`)?.classList.add('active');
+}
+
+// ── AUTH ──
+async function adminLogin() {
+  const phone = document.getElementById('admin-phone').value.trim();
+  const pin = document.getElementById('admin-pin').value.trim();
+  if (!phone||phone.length<10) { showLoginErr('Enter valid mobile'); return; }
+  if (!pin||pin.length<6) { showLoginErr('Enter 6-digit PIN'); return; }
+  const btn = document.getElementById('admin-login-btn');
+  btn.disabled = true; btn.textContent = 'Logging in…';
+  try {
+    const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':ANON},
+      body:JSON.stringify({email:phone+'@vwholesale.app', password:pin})
+    });
+    const data = await res.json();
+    if (data.error||!data.access_token) throw new Error(data.error_description||data.error||'Login failed');
+    // Verify admin/manager role
+    const profile = await sbFetch(`profiles?phone=eq.${phone}&select=id,name,role,status`).then(d=>d?.[0]);
+    if (!profile) throw new Error('Profile not found');
+    if (!['admin','manager','owner'].includes(profile.role)) throw new Error('Admin access required');
+    _adminSession = data; _adminProfile = profile;
+    localStorage.setItem('vw_admin_session', JSON.stringify(data));
+    localStorage.setItem('vw_admin_profile', JSON.stringify(profile));
+    startAdminApp();
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Login to Admin';
+    showLoginErr(e.message);
+  }
+}
+
+function showLoginErr(msg) { const el = document.getElementById('admin-login-err'); el.textContent = msg; el.style.display = 'block'; }
+
+function adminLogout() {
+  if (!confirm('Log out of Admin?')) return;
+  localStorage.removeItem('vw_admin_session');
+  localStorage.removeItem('vw_admin_profile');
+  location.reload();
+}
+
+function startAdminApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('admin-app').style.display = 'flex';
+  document.getElementById('admin-name').textContent = _adminProfile.name||'Admin';
+  document.getElementById('admin-role').textContent = _adminProfile.role;
+  loadPage('dashboard');
+}
+
+// ── PAGES ──
+async function loadPage(page) {
+  _currentPage = page;
+  setNav(page);
+  const content = document.getElementById('page-content');
+  content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Loading…</div>';
+  document.getElementById('sidebar').classList.remove('open');
+  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, promos:loadPromos, staff:loadStaff, settings:loadSettings};
+  if (pages[page]) await pages[page]();
+}
+
+// ── DASHBOARD ──
+async function loadDashboard() {
+  setPageTitle('Dashboard');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString();
+  const [orders, customers, professionals, briefs, products] = await Promise.all([
+    sbFetch(`orders?select=id,grand_total,order_status,created_at&created_at=gte.${todayStr}&order=created_at.desc`).catch(()=>[]),
+    sbFetch(`profiles?select=id,created_at&role=eq.customer&created_at=gte.${todayStr}`).catch(()=>[]),
+    sbFetch(`contractors?select=id,status&approval_status=eq.approved`).catch(()=>[]),
+    sbFetch(`project_briefs?select=id,status&status=eq.pending`).catch(()=>[]),
+    sbFetch(`products?select=id,stock,name&is_active=eq.true&stock=lte.5&stock=gte.0`).catch(()=>[]),
+  ]);
+  const todayRevenue = (orders||[]).filter(o=>o.order_status!=='cancelled').reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  const recentOrders = await sbFetch(`orders?select=id,order_no,customer_name,grand_total,order_status,created_at&order=created_at.desc&limit=10`).catch(()=>[]);
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">₹${todayRevenue.toLocaleString('en-IN')}</div><div class="stat-lbl">Today's Revenue</div><div class="stat-change stat-up">${(orders||[]).length} orders today</div></div>
+      <div class="stat-card"><div class="stat-val">${(customers||[]).length}</div><div class="stat-lbl">New Customers Today</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--gold)">${(briefs||[]).length}</div><div class="stat-lbl">Pending Project Briefs</div><div class="stat-change"><button class="btn btn-primary" onclick="loadPage('briefs')" style="padding:4px 10px;font-size:10px;margin-top:4px">Review →</button></div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--red)">${(products||[]).length}</div><div class="stat-lbl">Low Stock Items</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Recent Orders <span style="font-size:11px;color:var(--t3);font-weight:600">${(recentOrders||[]).length} latest</span></div>
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Order No</th><th>Customer</th><th>Amount</th><th>Status</th><th>Time</th><th>Action</th></tr>
+        ${(recentOrders||[]).map(o=>`<tr>
+          <td style="font-weight:700;color:var(--b)">${o.order_no}</td>
+          <td>${o.customer_name||'—'}</td>
+          <td style="font-weight:800">₹${parseFloat(o.grand_total||0).toLocaleString('en-IN')}</td>
+          <td><span class="badge ${o.order_status==='delivered'?'badge-green':o.order_status==='cancelled'?'badge-red':o.order_status==='confirmed'?'badge-blue':'badge-amber'}">${o.order_status}</span></td>
+          <td style="color:var(--t3)">${new Date(o.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
+          <td><button class="btn btn-ghost" onclick="viewOrder('${o.id}')" style="padding:4px 10px;font-size:11px">View</button></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>
+    ${(products||[]).length ? `<div class="card">
+      <div class="card-title" style="color:var(--red)">⚠️ Low Stock Alert</div>
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Product</th><th>Stock</th></tr>
+        ${(products||[]).slice(0,10).map(p=>`<tr><td>${p.name}</td><td style="color:var(--red);font-weight:800">${p.stock}</td></tr>`).join('')}
+      </table></div>
+    </div>` : ''}`;
+}
+
+// ── ORDERS ──
+async function loadOrders() {
+  setPageTitle('Orders');
+  const orders = await sbFetch(`orders?select=id,order_no,customer_name,customer_phone,grand_total,order_status,payment_status,source,created_at&order=created_at.desc&limit=50`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      ${['all','confirmed','processing','delivered','cancelled'].map(s=>`<button class="btn btn-ghost" onclick="filterOrders('${s}')" style="font-size:11px">${s}</button>`).join('')}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl" id="orders-tbl">
+        <tr><th>Order No</th><th>Customer</th><th>Amount</th><th>Status</th><th>Source</th><th>Date</th><th>Action</th></tr>
+        ${(orders||[]).map(o=>`<tr>
+          <td style="font-weight:700;color:var(--b)">${o.order_no}</td>
+          <td><div style="font-weight:700">${o.customer_name||'—'}</div><div style="font-size:10px;color:var(--t3)">${o.customer_phone||''}</div></td>
+          <td style="font-weight:800">₹${parseFloat(o.grand_total||0).toLocaleString('en-IN')}</td>
+          <td><select onchange="updateOrderStatus('${o.id}',this.value)" style="background:var(--card2);border:1px solid var(--bdr);border-radius:6px;padding:3px 6px;font-size:11px;color:var(--t1);cursor:pointer">
+            ${['confirmed','processing','shipped','delivered','cancelled'].map(s=>`<option value="${s}" ${o.order_status===s?'selected':''}>${s}</option>`).join('')}
+          </select></td>
+          <td><span class="badge badge-grey">${o.source||'store'}</span></td>
+          <td style="color:var(--t3);font-size:11px">${new Date(o.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+          <td><button class="btn btn-ghost" onclick="viewOrder('${o.id}')" style="padding:4px 10px;font-size:11px">View</button></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+async function updateOrderStatus(id, status) {
+  try {
+    await sbFetch(`orders?id=eq.${id}`, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({order_status:status, updated_at:new Date().toISOString()})});
+    toast(`Order updated to ${status}`, 'ok');
+  } catch(e) { toast('Update failed: '+e.message, 'err'); }
+}
+
+async function viewOrder(id) {
+  const [order] = await sbFetch(`orders?id=eq.${id}&select=*`).catch(()=>[]);
+  if (!order) return;
+  openModal(`
+    <div class="modal-title">${order.order_no} <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:12px">${new Date(order.created_at).toLocaleString('en-IN')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div><div class="form-lbl">Customer</div><div style="font-size:13px;font-weight:700;color:var(--t1)">${order.customer_name||'—'}</div></div>
+      <div><div class="form-lbl">Phone</div><div style="font-size:13px;color:var(--t1)">${order.customer_phone||'—'}</div></div>
+      <div><div class="form-lbl">Payment</div><div style="font-size:13px;color:var(--t1)">${order.payment_method||'COD'}</div></div>
+      <div><div class="form-lbl">Total</div><div style="font-size:15px;font-weight:900;color:var(--b)">₹${parseFloat(order.grand_total||0).toLocaleString('en-IN')}</div></div>
+    </div>
+    <div class="form-lbl" style="margin-bottom:6px">Items</div>
+    <div style="background:var(--card2);border-radius:8px;padding:10px;margin-bottom:12px">
+      ${(order.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px"><span>${i.name||'Item #'+i.product_id} × ${i.qty}</span><span style="font-weight:700">₹${((i.price||0)*i.qty).toLocaleString('en-IN')}</span></div>`).join('')}
+    </div>
+    ${order.delivery_address?`<div class="form-lbl" style="margin-bottom:4px">Delivery Address</div><div style="font-size:12px;color:var(--t2)">${typeof order.delivery_address==='string'?order.delivery_address:JSON.stringify(order.delivery_address)}</div>`:''}
+  `);
+}
+
+// ── CUSTOMERS ──
+async function loadCustomers() {
+  setPageTitle('Customers');
+  const customers = await sbFetch(`profiles?role=eq.customer&select=id,name,phone,created_at,status&order=created_at.desc&limit=50`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Name</th><th>Phone</th><th>Status</th><th>Joined</th></tr>
+        ${(customers||[]).map(c=>`<tr>
+          <td style="font-weight:700;color:var(--t1)">${c.name||'—'}</td>
+          <td>${c.phone||'—'}</td>
+          <td><span class="badge ${c.status==='approved'?'badge-green':'badge-amber'}">${c.status||'active'}</span></td>
+          <td style="color:var(--t3);font-size:11px">${new Date(c.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── PROFESSIONALS ──
+async function loadProfessionals() {
+  setPageTitle('Professionals');
+  const pros = await sbFetch(`contractors?select=id,name,phone,professional_type,city,loyalty_points,approval_status,status&order=created_at.desc&limit=50`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Name</th><th>Phone</th><th>Type</th><th>City</th><th>Points</th><th>Status</th></tr>
+        ${(pros||[]).map(p=>`<tr>
+          <td style="font-weight:700;color:var(--t1)">${p.name||'—'}</td>
+          <td>${p.phone||'—'}</td>
+          <td style="color:var(--t3);font-size:11px">${p.professional_type||'—'}</td>
+          <td style="color:var(--t3)">${p.city||'—'}</td>
+          <td style="font-weight:700;color:var(--gold)">${(p.loyalty_points||0).toLocaleString('en-IN')}</td>
+          <td><span class="badge ${p.approval_status==='approved'?'badge-green':p.approval_status==='rejected'?'badge-red':'badge-amber'}">${p.approval_status||p.status||'pending'}</span></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── PROJECT BRIEFS (key feature) ──
+async function loadBriefs() {
+  setPageTitle('Project Briefs');
+  const briefs = await sbFetch(`project_briefs?select=*&order=created_at.desc&limit=50`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div style="background:var(--blt);border-radius:10px;padding:12px;margin-bottom:14px;border:1px solid var(--b);font-size:12px;color:var(--b)">
+      💡 <strong>Verify project briefs</strong> to award 500 Club points to the contractor. Points are only credited after your verification.
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Brief No</th><th>Contractor</th><th>Project</th><th>Type</th><th>Budget</th><th>Status</th><th>Date</th><th>Action</th></tr>
+        ${(briefs||[]).map(b=>`<tr>
+          <td style="font-weight:700;font-size:11px;color:var(--b)">${b.brief_no||'—'}</td>
+          <td><div style="font-weight:700">${b.contractor_name||'—'}</div><div style="font-size:10px;color:var(--t3)">${b.contractor_phone||''}</div></td>
+          <td style="font-weight:700;color:var(--t1)">${b.project_name}</td>
+          <td style="color:var(--t3);font-size:11px">${b.project_type}</td>
+          <td style="font-weight:700">${b.estimated_budget?'₹'+parseFloat(b.estimated_budget).toLocaleString('en-IN'):'—'}</td>
+          <td><span class="badge ${b.status==='verified'?'badge-green':b.status==='rejected'?'badge-red':b.status==='converted'?'badge-blue':'badge-amber'}">${b.status}</span>${b.points_awarded?'<br><span style="font-size:9px;color:#4ADE80">500pts ✓</span>':''}</td>
+          <td style="color:var(--t3);font-size:11px">${new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+          <td>
+            ${b.status==='pending'?`
+              <div style="display:flex;gap:4px">
+                <button class="btn btn-success" onclick="verifyBrief('${b.id}','${b.contractor_id}','${b.contractor_name||''}')" style="padding:4px 8px;font-size:10px">Verify</button>
+                <button class="btn btn-danger" onclick="rejectBrief('${b.id}')" style="padding:4px 8px;font-size:10px">Reject</button>
+              </div>` : `<button class="btn btn-ghost" onclick="viewBrief('${b.id}')" style="padding:4px 8px;font-size:10px">View</button>`}
+          </td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+async function verifyBrief(briefId, contractorId, contractorName) {
+  if (!confirm(`Verify brief for ${contractorName}?\n\nThis will award 500 Club points to the contractor.`)) return;
+  try {
+    await sbFetch(`project_briefs?id=eq.${briefId}`, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({status:'verified', verified_by:_adminProfile.name, verified_at:new Date().toISOString()})});
+    if (contractorId) {
+      // Award 500 points
+      await sbFetch(`contractor_loyalty`, {method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({contractor_id:contractorId, transaction_type:'bonus', points:500, reference_type:'project_brief', reference_id:briefId, description:'Project brief verified — 500 pts bonus'})});
+      await sbFetch(`project_briefs?id=eq.${briefId}`, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({points_awarded:true})});
+    }
+    toast(`✅ Brief verified — 500 pts awarded to ${contractorName}`, 'ok');
+    loadBriefs();
+  } catch(e) { toast('Failed: '+e.message, 'err'); }
+}
+
+async function rejectBrief(briefId) {
+  const reason = prompt('Rejection reason (optional):');
+  try {
+    await sbFetch(`project_briefs?id=eq.${briefId}`, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({status:'rejected', rejection_reason:reason||null, verified_by:_adminProfile.name, verified_at:new Date().toISOString()})});
+    toast('Brief rejected', 'ok');
+    loadBriefs();
+  } catch(e) { toast('Failed: '+e.message, 'err'); }
+}
+
+async function viewBrief(briefId) {
+  const [b] = await sbFetch(`project_briefs?id=eq.${briefId}&select=*`).catch(()=>[]);
+  if (!b) return;
+  openModal(`
+    <div class="modal-title">${b.brief_no} <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="display:grid;gap:8px">
+      <div><div class="form-lbl">Project</div><div style="font-weight:700;color:var(--t1)">${b.project_name}</div></div>
+      <div><div class="form-lbl">Contractor</div><div style="color:var(--t1)">${b.contractor_name} · ${b.contractor_phone}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><div class="form-lbl">Type</div><div style="color:var(--t1)">${b.project_type}</div></div>
+        <div><div class="form-lbl">Location</div><div style="color:var(--t1)">${b.location}</div></div>
+        <div><div class="form-lbl">Budget</div><div style="font-weight:700;color:var(--b)">${b.estimated_budget?'₹'+parseFloat(b.estimated_budget).toLocaleString('en-IN'):'—'}</div></div>
+        <div><div class="form-lbl">Area</div><div style="color:var(--t1)">${b.total_area_sqft?b.total_area_sqft+' sqft':'—'}</div></div>
+        <div><div class="form-lbl">Start Date</div><div style="color:var(--t1)">${b.start_date||'—'}</div></div>
+        <div><div class="form-lbl">Floors</div><div style="color:var(--t1)">${b.floors||'—'}</div></div>
+      </div>
+      ${b.materials_needed?.length?`<div><div class="form-lbl">Materials</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${b.materials_needed.map(m=>`<span class="badge badge-blue">${m}</span>`).join('')}</div></div>`:''}
+      ${b.description?`<div><div class="form-lbl">Notes</div><div style="font-size:12px;color:var(--t2)">${b.description}</div></div>`:''}
+    </div>
+  `);
+}
+
+// ── PRODUCTS ──
+async function loadProducts() {
+  setPageTitle('Products');
+  const products = await sbFetch(`products?select=id,name,brand,category,vwp,mrp,stock,is_active&order=created_at.desc&limit=60`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <input type="text" class="form-inp" placeholder="Search products…" oninput="filterProductsTable(this.value)" style="max-width:300px">
+      <a href="./index.html#inventory" class="btn btn-primary">Open Full Catalog →</a>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl" id="products-tbl">
+        <tr><th>Name</th><th>Brand</th><th>Category</th><th>VW Price</th><th>MRP</th><th>Stock</th><th>Active</th></tr>
+        ${(products||[]).map(p=>`<tr>
+          <td style="font-weight:700;color:var(--t1);max-width:200px">${p.name}</td>
+          <td style="color:var(--t3)">${p.brand||'—'}</td>
+          <td style="color:var(--t3);font-size:11px">${p.category}</td>
+          <td style="font-weight:700;color:var(--b)">₹${parseFloat(p.vwp||p.price||0).toLocaleString('en-IN')}</td>
+          <td style="color:var(--t3)">₹${parseFloat(p.mrp||0).toLocaleString('en-IN')}</td>
+          <td style="color:${parseFloat(p.stock||0)<=5?'var(--red)':parseFloat(p.stock||0)<=15?'var(--gold)':'var(--green)'};font-weight:700">${p.stock||0}</td>
+          <td><span class="badge ${p.is_active?'badge-green':'badge-grey'}">${p.is_active?'Active':'Off'}</span></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+function filterProductsTable(q) {
+  const rows = document.querySelectorAll('#products-tbl tr:not(:first-child)');
+  rows.forEach(r=>{ r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none'; });
+}
+
+// ── CATEGORIES ──
+async function loadCategories() {
+  setPageTitle('Shop Categories');
+  const cats = await sbFetch(`shop_categories?select=*&order=sort_order`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Icon</th><th>Key</th><th>Label</th><th>Sort</th><th>Active</th></tr>
+        ${(cats||[]).map(c=>`<tr>
+          <td style="font-size:20px">${c.icon||'📦'}</td>
+          <td style="font-family:monospace;font-size:11px;color:var(--b)">${c.key}</td>
+          <td style="font-weight:700;color:var(--t1)">${c.label}</td>
+          <td style="color:var(--t3)">${c.sort_order}</td>
+          <td><span class="badge ${c.is_active?'badge-green':'badge-grey'}">${c.is_active?'Active':'Hidden'}</span></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── PROMOS ──
+async function loadPromos() {
+  setPageTitle('Promo Codes');
+  const promos = await sbFetch(`promo_codes?select=*&order=created_at.desc`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div style="text-align:right;margin-bottom:12px">
+      <button class="btn btn-primary" onclick="openAddPromo()">+ Add Promo Code</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Max Disc</th><th>Active</th><th>Action</th></tr>
+        ${(promos||[]).map(p=>`<tr>
+          <td style="font-weight:900;font-family:monospace;color:var(--gold)">${p.code}</td>
+          <td style="color:var(--t3)">${p.discount_type}</td>
+          <td style="font-weight:700;color:var(--b)">${p.discount_type==='percentage'?p.discount_value+'%':'₹'+p.discount_value}</td>
+          <td style="color:var(--t3)">${p.min_order_amount?'₹'+p.min_order_amount:'—'}</td>
+          <td style="color:var(--t3)">${p.max_discount_amount?'₹'+p.max_discount_amount:'—'}</td>
+          <td><span class="badge ${p.is_active?'badge-green':'badge-grey'}">${p.is_active?'Active':'Off'}</span></td>
+          <td><button class="btn btn-ghost" onclick="togglePromo('${p.id}',${p.is_active})" style="padding:4px 8px;font-size:10px">${p.is_active?'Disable':'Enable'}</button></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+function openAddPromo() {
+  openModal(`
+    <div class="modal-title">Add Promo Code <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="display:grid;gap:10px">
+      <div><label class="form-lbl">Code *</label><input id="promo-code" class="form-inp" placeholder="SAVE20" style="text-transform:uppercase"></div>
+      <div><label class="form-lbl">Type</label><select id="promo-type" class="form-sel"><option value="percentage">Percentage %</option><option value="fixed">Fixed ₹</option></select></div>
+      <div><label class="form-lbl">Value *</label><input type="number" id="promo-val" class="form-inp" placeholder="e.g. 10 for 10% or 500 for ₹500"></div>
+      <div><label class="form-lbl">Min Order Amount (₹)</label><input type="number" id="promo-min" class="form-inp" placeholder="e.g. 2000"></div>
+      <div><label class="form-lbl">Max Discount (₹, for % type)</label><input type="number" id="promo-max" class="form-inp" placeholder="e.g. 500"></div>
+      <div><label class="form-lbl">Description</label><input id="promo-desc" class="form-inp" placeholder="e.g. Get 10% off on orders above ₹2000"></div>
+      <button class="btn btn-primary" onclick="savePromo()">Save Promo Code</button>
+    </div>`);
+}
+
+async function savePromo() {
+  const code = document.getElementById('promo-code')?.value?.trim()?.toUpperCase();
+  const val = parseFloat(document.getElementById('promo-val')?.value||0);
+  if (!code||!val) { toast('Code and value required','err'); return; }
+  try {
+    await sbFetch(`promo_codes`, {method:'POST', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({
+      code, discount_type:document.getElementById('promo-type').value,
+      discount_value:val, min_order_amount:parseFloat(document.getElementById('promo-min')?.value||0)||null,
+      max_discount_amount:parseFloat(document.getElementById('promo-max')?.value||0)||null,
+      description:document.getElementById('promo-desc')?.value?.trim()||null, is_active:true
+    })});
+    toast('Promo code created','ok'); closeModal(); loadPromos();
+  } catch(e) { toast('Failed: '+e.message,'err'); }
+}
+
+async function togglePromo(id, isActive) {
+  try {
+    await sbFetch(`promo_codes?id=eq.${id}`, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({is_active:!isActive})});
+    toast(`Promo ${isActive?'disabled':'enabled'}`,'ok'); loadPromos();
+  } catch(e) { toast('Failed','err'); }
+}
+
+// ── STAFF ──
+async function loadStaff() {
+  setPageTitle('Staff Management');
+  const staff = await sbFetch(`profiles?role=in.(admin,manager,owner,staff,executive)&select=id,name,phone,role,status,created_at&order=created_at.desc`).catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th></tr>
+        ${(staff||[]).map(s=>`<tr>
+          <td style="font-weight:700;color:var(--t1)">${s.name||'—'}</td>
+          <td>${s.phone||'—'}</td>
+          <td><span class="badge badge-blue">${s.role}</span></td>
+          <td><span class="badge ${s.status==='approved'||s.status==='active'?'badge-green':'badge-amber'}">${s.status||'active'}</span></td>
+          <td style="color:var(--t3);font-size:11px">${new Date(s.created_at).toLocaleDateString('en-IN')}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── SETTINGS ──
+async function loadSettings() {
+  setPageTitle('Settings');
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card">
+        <div class="card-title">🏪 Store Info</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.8">
+          <div><strong style="color:var(--t1)">Store:</strong> V Wholesale (Vassure Wholesale Pvt. Ltd.)</div>
+          <div><strong style="color:var(--t1)">Address:</strong> NH65, Bhavanipuram, Vijayawada 520012</div>
+          <div><strong style="color:var(--t1)">Phone:</strong> 8712697930</div>
+          <div><strong style="color:var(--t1)">Email:</strong> hello@vwholesale.in</div>
+          <div><strong style="color:var(--t1)">GSTIN:</strong> 37AAJCV5725H1ZZ</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔗 Portal Links</div>
+        <div style="display:grid;gap:8px">
+          ${[['Customer Shop','./shop.html','🛒'],['Staff App','./index.html','🏪'],['Professional','./professional.html','🏗']].map(([label,url,icon])=>`
+          <a href="${url}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--card2);border-radius:8px;text-decoration:none;color:var(--t1)">
+            <span style="font-size:16px">${icon}</span>
+            <div style="flex:1;font-size:12px;font-weight:700">${label}</div>
+            <span style="font-size:11px;color:var(--b)">Open →</span>
+          </a>`).join('')}
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Quick Stats</div>
+        <div id="settings-stats"><div style="color:var(--t3);font-size:12px">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🎛 Actions</div>
+        <div style="display:grid;gap:8px">
+          <a href="./index.html?staff=1" class="btn btn-primary" style="justify-content:center;text-decoration:none">Open Staff Dashboard</a>
+          <button onclick="loadPage('briefs')" class="btn btn-ghost" style="width:100%;justify-content:center">Review Project Briefs</button>
+          <button onclick="loadPage('promos')" class="btn btn-ghost" style="width:100%;justify-content:center">Manage Promo Codes</button>
+        </div>
+      </div>
+    </div>`;
+  // Load quick stats
+  const [products, customers, orders] = await Promise.all([
+    sbFetch(`products?select=id&is_active=eq.true`).then(d=>d?.length||0).catch(()=>0),
+    sbFetch(`profiles?select=id&role=eq.customer`).then(d=>d?.length||0).catch(()=>0),
+    sbFetch(`orders?select=id&order_status=neq.cancelled`).then(d=>d?.length||0).catch(()=>0),
+  ]);
+  const el = document.getElementById('settings-stats');
+  if (el) el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="text-align:center;padding:10px;background:var(--card2);border-radius:8px"><div style="font-size:20px;font-weight:900;color:var(--b)">${products}</div><div style="font-size:10px;color:var(--t3)">Active Products</div></div>
+      <div style="text-align:center;padding:10px;background:var(--card2);border-radius:8px"><div style="font-size:20px;font-weight:900;color:var(--green)">${customers}</div><div style="font-size:10px;color:var(--t3)">Customers</div></div>
+      <div style="text-align:center;padding:10px;background:var(--card2);border-radius:8px;grid-column:1/-1"><div style="font-size:20px;font-weight:900;color:var(--gold)">${orders}</div><div style="font-size:10px;color:var(--t3)">Total Orders</div></div>
+    </div>`;
+}
+
+// ── INIT ──
+const savedSession = localStorage.getItem('vw_admin_session');
+const savedProfile = localStorage.getItem('vw_admin_profile');
+if (savedSession && savedProfile) {
+  try {
+    _adminSession = JSON.parse(savedSession);
+    _adminProfile = JSON.parse(savedProfile);
+    startAdminApp();
+  } catch(e) { /* show login */ }
+}
+</script>
+</body>
+</html>

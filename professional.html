@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1B4F8A">
+<title>V Wholesale — Professional Portal</title>
+<link rel="icon" href="./icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#F0F4FA;color:#111;font-family:'DM Sans',system-ui,sans-serif;-webkit-tap-highlight-color:transparent}
+:root{
+  --b:#1565C0;--bdk:#0D3B7A;--blt:#E8F2FF;--bbdr:#A8C8F0;
+  --gold:#F5C842;--red:#D92D20;--green:#16A34A;
+  --bg:#F0F4FA;--card:#fff;--bdr:#E2E8F0;
+  --t1:#0F172A;--t2:#334155;--t3:#64748B;
+  --nav-h:64px;
+}
+body{padding-bottom:var(--nav-h)}
+
+/* HEADER */
+.hdr{background:linear-gradient(135deg,var(--bdk),var(--b));padding:16px 16px 20px;position:relative}
+.hdr-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.hdr-logo{display:flex;align-items:center;gap:10px}
+.hdr-logo-box{width:36px;height:36px;background:rgba(255,255,255,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff}
+.hdr-logo-name{font-size:15px;font-weight:900;color:#fff}
+.hdr-logo-sub{font-size:10px;color:rgba(255,255,255,.6)}
+.hdr-acts{display:flex;gap:8px}
+.hdr-act-btn{background:rgba(255,255,255,.15);border:none;border-radius:8px;padding:7px 10px;color:#fff;font-size:12px;font-weight:700;cursor:pointer}
+
+/* TIER CARD */
+.tier-card{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px;display:flex;justify-content:space-between;align-items:center}
+.tier-name{font-size:22px;font-weight:900;color:#fff}
+.tier-sub{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px}
+.tier-badge{text-align:center}
+.tier-icon{font-size:28px}
+.tier-label{font-size:11px;font-weight:800;margin-top:2px}
+.pts-row{display:flex;gap:12px;margin-top:12px}
+.pts-item{flex:1;background:rgba(255,255,255,.1);border-radius:10px;padding:10px;text-align:center}
+.pts-val{font-size:18px;font-weight:900;color:#fff}
+.pts-lbl{font-size:9px;color:rgba(255,255,255,.6);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
+
+/* NAV */
+#bnav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:#fff;border-top:1.5px solid var(--bdr);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:9px;font-weight:700;color:var(--t3);border:none;background:none;cursor:pointer;text-decoration:none;padding:6px 0}
+.nav-item.active{color:var(--b)}
+.nav-icon{font-size:20px;line-height:1}
+
+/* PAGES */
+.page{display:none;padding:14px;padding-bottom:20px}
+.page.active{display:block}
+
+/* CARDS */
+.card{background:#fff;border-radius:14px;border:1px solid var(--bdr);padding:14px;margin-bottom:12px}
+.card-title{font-size:14px;font-weight:800;color:var(--t1);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.card-title-txt{display:flex;align-items:center;gap:6px}
+
+/* STATS GRID */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat{background:#fff;border-radius:12px;border:1px solid var(--bdr);padding:12px;text-align:center}
+.stat-val{font-size:20px;font-weight:900;color:var(--t1)}
+.stat-lbl{font-size:10px;color:var(--t3);margin-top:2px;font-weight:600}
+
+/* QUICK ACTIONS */
+.qa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.qa-btn{background:#fff;border:1px solid var(--bdr);border-radius:12px;padding:14px 12px;text-align:left;cursor:pointer;font-family:inherit}
+.qa-icon{font-size:22px;margin-bottom:6px;display:block}
+.qa-label{font-size:12px;font-weight:800;color:var(--t1);display:block}
+.qa-sub{font-size:10px;color:var(--t3);margin-top:2px;display:block}
+
+/* JOB CARDS */
+.job-card{background:#fff;border-radius:12px;border:1px solid var(--bdr);padding:12px;margin-bottom:8px;cursor:pointer}
+.job-title{font-size:13px;font-weight:800;color:var(--t1);margin-bottom:4px}
+.job-meta{font-size:11px;color:var(--t3);margin-bottom:8px}
+.job-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.job-tag{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--blt);color:var(--b)}
+.bid-btn{width:100%;padding:8px;background:var(--b);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer}
+
+/* PRODUCT CARDS */
+.pcard{background:#fff;border-radius:12px;border:1px solid var(--bdr);padding:10px;display:flex;gap:10px;margin-bottom:8px;cursor:pointer}
+.pcard-img{width:60px;height:60px;background:#f5f5f5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;overflow:hidden}
+.pcard-img img{width:100%;height:100%;object-fit:contain}
+.pcard-body{flex:1;min-width:0}
+.pcard-brand{font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase}
+.pcard-name{font-size:12px;font-weight:700;color:var(--t1);line-height:1.3;margin:2px 0 4px}
+.pcard-price{font-size:15px;font-weight:900;color:var(--b)}
+.pcard-mrp{font-size:10px;color:var(--t3);text-decoration:line-through;margin-left:4px}
+.pcard-save{font-size:10px;color:var(--red);font-weight:800;margin-left:4px}
+.pcard-add{padding:6px 14px;background:var(--b);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;align-self:center}
+
+/* FORMS */
+.form-group{margin-bottom:12px}
+.form-lbl{font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
+.form-inp{width:100%;padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;color:var(--t1);font-family:inherit;background:#fff}
+.form-inp:focus{border-color:var(--b)}
+.form-sel{width:100%;padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;color:var(--t1);font-family:inherit;background:#fff;cursor:pointer}
+.form-ta{width:100%;padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:13px;outline:none;color:var(--t1);font-family:inherit;resize:vertical;min-height:80px}
+
+/* BUTTONS */
+.btn-p{width:100%;padding:13px;background:var(--b);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:900;cursor:pointer;font-family:inherit}
+.btn-p:disabled{opacity:.6;cursor:not-allowed}
+.btn-out{width:100%;padding:12px;background:#fff;color:var(--b);border:1.5px solid var(--b);border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit}
+.btn-sm{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:none}
+
+/* STATUS BADGES */
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800}
+.badge-pending{background:#FEF3C7;color:#92400E}
+.badge-verified{background:#D1FAE5;color:#065F46}
+.badge-rejected{background:#FEE2E2;color:#991B1B}
+.badge-open{background:var(--blt);color:var(--b)}
+.badge-won{background:#D1FAE5;color:#065F46}
+
+/* TOAST */
+#toast{position:fixed;bottom:calc(var(--nav-h)+14px);left:14px;right:14px;z-index:999;pointer-events:none}
+.toast-msg{background:#1a1a1a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:8px;animation:ti .25s ease}
+@keyframes ti{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* OVERLAY */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150}
+.overlay.open{display:block}
+.sheet{position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s;max-height:90vh;overflow-y:auto;padding:0 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet.open{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:#E0E0E0;border-radius:2px;margin:12px auto 18px}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,var(--bdk),var(--b))}
+.login-card{background:#fff;border-radius:20px;padding:24px;width:100%;max-width:380px}
+.login-logo{text-align:center;margin-bottom:20px}
+.login-logo-box{width:56px;height:56px;background:var(--b);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:900;color:#fff;margin:0 auto 10px}
+.login-title{font-size:20px;font-weight:900;color:var(--t1);text-align:center;margin-bottom:4px}
+.login-sub{font-size:12px;color:var(--t3);text-align:center;margin-bottom:20px}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-box">VW</div>
+      <div class="login-title">Professional Portal</div>
+      <div class="login-sub">Contractors · Plumbers · Electricians · Architects</div>
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Mobile Number</label>
+      <div style="display:flex;gap:8px">
+        <div style="padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);white-space:nowrap">+91</div>
+        <input type="tel" inputmode="numeric" maxlength="10" id="login-phone" class="form-inp" placeholder="10-digit mobile" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" onkeydown="if(event.key==='Enter')loginStep2()">
+      </div>
+    </div>
+    <div class="form-group" id="pin-group" style="display:none">
+      <label class="form-lbl">Your 6-digit PIN</label>
+      <input type="password" inputmode="numeric" maxlength="6" id="login-pin" class="form-inp" placeholder="••••••" style="font-size:22px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-p" id="login-btn" onclick="loginStep2()">Continue →</button>
+    <div id="login-err" style="color:var(--red);font-size:12px;font-weight:700;text-align:center;margin-top:8px;display:none"></div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--t3)">
+      V Wholesale Contractor Club<br>NH65 Bhavanipuram, Vijayawada · 8712697930
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" style="display:none">
+  <!-- HEADER -->
+  <header class="hdr" id="app-header">
+    <div class="hdr-top">
+      <div class="hdr-logo">
+        <div class="hdr-logo-box">VW</div>
+        <div>
+          <div class="hdr-logo-name">V Wholesale</div>
+          <div class="hdr-logo-sub">Professional Portal</div>
+        </div>
+      </div>
+      <div class="hdr-acts">
+        <button class="hdr-act-btn" onclick="showPage('profile')">👤 Profile</button>
+        <button class="hdr-act-btn" onclick="doLogout()">Logout</button>
+      </div>
+    </div>
+    <!-- Tier card -->
+    <div class="tier-card" id="tier-card">
+      <div>
+        <div class="tier-name" id="pro-name">Loading…</div>
+        <div class="tier-sub" id="pro-type"></div>
+        <div class="pts-row">
+          <div class="pts-item"><div class="pts-val" id="pro-pts">—</div><div class="pts-lbl">Club Points</div></div>
+          <div class="pts-item"><div class="pts-val" id="pro-score">—</div><div class="pts-lbl">Pro Score</div></div>
+          <div class="pts-item"><div class="pts-val" id="pro-briefs">—</div><div class="pts-lbl">Projects</div></div>
+        </div>
+      </div>
+      <div class="tier-badge">
+        <div class="tier-icon" id="tier-icon">🥈</div>
+        <div class="tier-label" id="tier-name" style="color:var(--gold)">Silver</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- HOME PAGE -->
+  <div id="pg-home" class="page active">
+    <!-- Quick Actions -->
+    <div class="qa-grid" style="margin-top:14px">
+      <button class="qa-btn" onclick="showPage('shop')">
+        <span class="qa-icon">🛒</span>
+        <span class="qa-label">Shop Products</span>
+        <span class="qa-sub">B2B pricing for you</span>
+      </button>
+      <button class="qa-btn" onclick="showPage('jobs')">
+        <span class="qa-icon">🔨</span>
+        <span class="qa-label">Labor Jobs</span>
+        <span class="qa-sub">Browse & bid on jobs</span>
+      </button>
+      <button class="qa-btn" onclick="showPage('briefs')">
+        <span class="qa-icon">📋</span>
+        <span class="qa-label">Project Brief</span>
+        <span class="qa-sub">Submit & earn 500 pts</span>
+      </button>
+      <button class="qa-btn" onclick="shareReferral()">
+        <span class="qa-icon">📤</span>
+        <span class="qa-label">Refer Customer</span>
+        <span class="qa-sub">2% first · 0.5% lifetime</span>
+      </button>
+      <button class="qa-btn" onclick="showPage('orders')">
+        <span class="qa-icon">📦</span>
+        <span class="qa-label">My Orders</span>
+        <span class="qa-sub">Track & manage</span>
+      </button>
+      <button class="qa-btn" onclick="downloadStatement()">
+        <span class="qa-icon">📄</span>
+        <span class="qa-label">Commission PDF</span>
+        <span class="qa-sub">Download statement</span>
+      </button>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="card">
+      <div class="card-title"><span class="card-title-txt">⚡ Recent Activity</span></div>
+      <div id="recent-activity"><div style="text-align:center;padding:20px;color:var(--t3);font-size:13px">Loading…</div></div>
+    </div>
+
+    <!-- Contractor Club Banner -->
+    <div style="background:linear-gradient(135deg,var(--bdk),var(--b));border-radius:14px;padding:16px;margin-bottom:12px;color:#fff">
+      <div style="font-size:11px;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🏆 Contractor Club</div>
+      <div style="font-size:16px;font-weight:900;margin-bottom:4px">Earn on Every Customer You Bring</div>
+      <div style="font-size:11px;opacity:.7;margin-bottom:12px">2% on first order · 0.5% lifetime · No cap on referrals</div>
+      <button onclick="shareReferral()" style="background:var(--gold);color:#000;border:none;border-radius:10px;padding:9px 18px;font-size:12px;font-weight:900;cursor:pointer">📤 Share Your Referral Link</button>
+    </div>
+  </div>
+
+  <!-- SHOP PAGE -->
+  <div id="pg-shop" class="page">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+      <div style="font-size:16px;font-weight:900;flex:1">Shop — Your B2B Pricing</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <input type="text" class="form-inp" placeholder="Search products…" oninput="searchProProducts(this.value)">
+    </div>
+    <div id="pro-product-list"><div style="text-align:center;padding:30px;color:var(--t3)">Loading products…</div></div>
+  </div>
+
+  <!-- JOBS PAGE -->
+  <div id="pg-jobs" class="page">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+      <div style="font-size:16px;font-weight:900;flex:1">Labor Jobs</div>
+      <button onclick="showPage('my-bids')" class="btn-sm" style="background:var(--blt);color:var(--b)">My Bids</button>
+    </div>
+    <div id="jobs-list"><div style="text-align:center;padding:30px;color:var(--t3)">Loading jobs…</div></div>
+  </div>
+
+  <!-- MY BIDS -->
+  <div id="pg-my-bids" class="page">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button onclick="showPage('jobs')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+      <div style="font-size:16px;font-weight:900">My Bids</div>
+    </div>
+    <div id="my-bids-list"></div>
+  </div>
+
+  <!-- PROJECT BRIEFS -->
+  <div id="pg-briefs" class="page">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+      <div style="font-size:16px;font-weight:900;flex:1">Project Briefs</div>
+      <button onclick="openSubmitBrief()" class="btn-sm" style="background:var(--b);color:#fff">+ New Brief</button>
+    </div>
+    <div style="background:var(--blt);border-radius:12px;padding:12px;margin-bottom:14px;border:1px solid var(--bbdr)">
+      <div style="font-size:12px;font-weight:800;color:var(--b);margin-bottom:3px">🎁 Earn 500 Club Points</div>
+      <div style="font-size:11px;color:var(--t2)">Submit your project details. After our team verifies, 500 points are added to your Club account — redeemable on your next purchase.</div>
+    </div>
+    <div id="briefs-list"></div>
+  </div>
+
+  <!-- ORDERS -->
+  <div id="pg-orders" class="page">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+      <div style="font-size:16px;font-weight:900">My Orders</div>
+    </div>
+    <div id="orders-list"></div>
+  </div>
+
+  <!-- PROFILE -->
+  <div id="pg-profile" class="page">
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px">My Profile</div>
+    <div id="profile-content"></div>
+  </div>
+</div>
+
+<!-- SHEET -->
+<div class="overlay" id="overlay" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet"></div>
+<div id="toast"></div>
+
+<!-- BOTTOM NAV -->
+<nav id="bnav" style="display:none">
+  <button class="nav-item active" id="nav-home" onclick="showPage('home')"><span class="nav-icon">🏠</span><span>Home</span></button>
+  <button class="nav-item" id="nav-shop" onclick="showPage('shop')"><span class="nav-icon">🛒</span><span>Shop</span></button>
+  <button class="nav-item" id="nav-jobs" onclick="showPage('jobs')"><span class="nav-icon">🔨</span><span>Jobs</span></button>
+  <button class="nav-item" id="nav-briefs" onclick="showPage('briefs')"><span class="nav-icon">📋</span><span>Projects</span></button>
+  <button class="nav-item" id="nav-profile" onclick="showPage('profile')"><span class="nav-icon">👤</span><span>Profile</span></button>
+</nav>
+
+<script>
+const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/professional-api';
+const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
+let _token = localStorage.getItem('vw_pro_token');
+let _profile = JSON.parse(localStorage.getItem('vw_pro_profile')||'null');
+let _cart = {};
+let _loginStep = 1;
+
+async function proApi(body) {
+  const h = {'Content-Type':'application/json','apikey':ANON};
+  if (_token) h['x-pro-token'] = _token;
+  const r = await fetch(API, {method:'POST', headers:h, body:JSON.stringify(body)});
+  return r.json();
+}
+
+function toast(msg, dur=2500) {
+  const el = document.createElement('div');
+  el.className = 'toast-msg';
+  el.textContent = msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300)}, dur);
+}
+
+function openSheet(html) {
+  document.getElementById('sheet').innerHTML = html;
+  document.getElementById('sheet').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+// ── LOGIN ──
+async function loginStep2() {
+  const phone = document.getElementById('login-phone').value.trim();
+  if (phone.length < 10) { showLoginErr('Enter a valid 10-digit mobile number'); return; }
+  const pinGroup = document.getElementById('pin-group');
+  const btn = document.getElementById('login-btn');
+  if (_loginStep === 1) {
+    _loginStep = 2;
+    pinGroup.style.display = 'block';
+    btn.textContent = 'Login →';
+    btn.onclick = doLogin;
+    document.getElementById('login-pin').focus();
+  } else {
+    doLogin();
+  }
+}
+
+async function doLogin() {
+  const phone = document.getElementById('login-phone').value.trim();
+  const pin = document.getElementById('login-pin').value.trim();
+  if (!pin || pin.length < 6) { showLoginErr('Enter your 6-digit PIN'); return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Logging in…';
+  const res = await proApi({action:'login', phone, pin}).catch(()=>({ok:false,error:'Network error'}));
+  if (!res.ok) {
+    btn.disabled = false; btn.textContent = 'Login →';
+    const msgs = {wrong_pin:'Wrong PIN. Try again.', no_account:'No professional account found. Contact store: 8712697930', pending_approval:'Your account is pending approval. Contact: 8712697930'};
+    showLoginErr(msgs[res.error]||res.error||'Login failed');
+    return;
+  }
+  _token = res.data.token;
+  _profile = res.data.profile;
+  localStorage.setItem('vw_pro_token', _token);
+  localStorage.setItem('vw_pro_profile', JSON.stringify(_profile));
+  startApp();
+}
+
+function showLoginErr(msg) {
+  const el = document.getElementById('login-err');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function doLogout() {
+  if (!confirm('Log out?')) return;
+  localStorage.removeItem('vw_pro_token');
+  localStorage.removeItem('vw_pro_profile');
+  _token = null; _profile = null;
+  location.reload();
+}
+
+// ── APP START ──
+function startApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('bnav').style.display = 'flex';
+  loadDashboard();
+}
+
+async function loadDashboard() {
+  const res = await proApi({action:'get_dashboard'});
+  const {contractor, loyalty, bids, briefs} = res.data||{};
+  
+  // Update header
+  const name = contractor?.name || _profile?.name || 'Professional';
+  const pts = contractor?.loyalty_points||0;
+  const lifetime = contractor?.lifetime_points||0;
+  const tier = lifetime>=20000?'Platinum':lifetime>=5000?'Gold':'Silver';
+  const tierColors = {Platinum:'#A78BFA',Gold:'#F5C842',Silver:'#9CA3AF'};
+  const tierIcons = {Platinum:'💎',Gold:'🏆',Silver:'🥈'};
+
+  document.getElementById('pro-name').textContent = name;
+  document.getElementById('pro-type').textContent = contractor?.professional_type||contractor?.entity_type||'Professional';
+  document.getElementById('pro-pts').textContent = pts.toLocaleString('en-IN');
+  document.getElementById('pro-score').textContent = contractor?.contractor_score||'—';
+  document.getElementById('pro-briefs').textContent = briefs?.length||'0';
+  document.getElementById('tier-icon').textContent = tierIcons[tier];
+  document.getElementById('tier-name').textContent = tier;
+  document.getElementById('tier-name').style.color = tierColors[tier];
+
+  // Recent activity
+  const actEl = document.getElementById('recent-activity');
+  const allActivity = [
+    ...(loyalty||[]).map(t=>({...t, icon:'⭐', label:t.description||t.transaction_type, sub:new Date(t.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}), val:(t.points>=0?'+':'')+t.points+' pts', color:t.points>=0?'var(--green)':'var(--red)'})),
+    ...(bids||[]).map(b=>({icon:'🔨', label:'Bid submitted', sub:new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}), val:'₹'+parseFloat(b.bid_amount||0).toLocaleString('en-IN'), color:'var(--b)'})),
+    ...(briefs||[]).map(b=>({icon:'📋', label:b.project_name, sub:b.status, val:b.points_awarded?'500 pts ✓':'Pending', color:b.points_awarded?'var(--green)':'var(--t3)'})),
+  ].slice(0,8);
+
+  if (!allActivity.length) { actEl.innerHTML = '<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">No recent activity</div>'; return; }
+  actEl.innerHTML = allActivity.map(a=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr)">
+      <div style="font-size:18px;flex-shrink:0">${a.icon}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:700;color:var(--t1)">${a.label}</div><div style="font-size:10px;color:var(--t3)">${a.sub}</div></div>
+      <div style="font-size:12px;font-weight:800;color:${a.color};flex-shrink:0">${a.val}</div>
+    </div>`).join('');
+}
+
+// ── NAVIGATION ──
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));
+  const pg = document.getElementById(`pg-${page}`);
+  if (pg) pg.classList.add('active');
+  const nb = document.getElementById(`nav-${page}`);
+  if (nb) nb.classList.add('active');
+  window.scrollTo(0,0);
+  if (page==='shop') loadProProducts();
+  if (page==='jobs') loadJobs();
+  if (page==='my-bids') loadMyBids();
+  if (page==='briefs') loadBriefs();
+  if (page==='orders') loadOrders();
+  if (page==='profile') loadProfile();
+}
+
+// ── SHOP ──
+let _searchTimer;
+function searchProProducts(q) {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(()=>loadProProducts(q), 400);
+}
+
+async function loadProProducts(search='') {
+  const el = document.getElementById('pro-product-list');
+  el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_products', search, limit:40});
+  const prods = res.data||[];
+  if (!prods.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">No products found</div>'; return; }
+  el.innerHTML = prods.map(p=>{
+    const price = parseFloat(p.pro_price||p.vwp||p.price||0)||0;
+    const mrp = parseFloat(p.mrp||0)||0;
+    const disc = mrp>price&&price>0?Math.round((mrp-price)/mrp*100):0;
+    const img = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
+    const nm = (p.name||'').replace(/'/g,"\\'");
+    return `<div class="pcard" onclick="openProPDP(${p.id})">
+      <div class="pcard-img">${img?`<img src="${img}" alt="${p.name}">`:'📦'}</div>
+      <div class="pcard-body">
+        ${p.brand?`<div class="pcard-brand">${p.brand}</div>`:''}
+        <div class="pcard-name">${p.name}</div>
+        <div style="display:flex;align-items:baseline;gap:4px">
+          <span class="pcard-price">₹${price.toLocaleString('en-IN')}</span>
+          <span style="font-size:9px;color:var(--t3)">/${p.unit||'pc'}</span>
+          ${mrp>price?`<span class="pcard-mrp">₹${mrp.toLocaleString('en-IN')}</span><span class="pcard-save">${disc}% off</span>`:''}
+        </div>
+        ${price>0?`<div style="font-size:9px;color:var(--b);font-weight:700;margin-top:2px">Your B2B rate · ${disc>0?disc+'% below MRP':'Best price'}</div>`:''}
+      </div>
+      <button class="pcard-add" onclick="event.stopPropagation();addToProCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">ADD</button>
+    </div>`;
+  }).join('');
+}
+
+function addToProCart(id, name, price, unit, img) {
+  _cart[id] = (_cart[id]||0)+1;
+  toast(`Added: ${name.slice(0,28)}`);
+  if (Object.values(_cart).reduce((s,q)=>s+q,0)>0) {
+    document.getElementById('cart-fab')?.remove();
+    const fab = document.createElement('button');
+    fab.id = 'cart-fab';
+    fab.onclick = openProCart;
+    const total = Object.values(_cart).reduce((s,q)=>s+q,0);
+    fab.style.cssText = 'position:fixed;bottom:calc(var(--nav-h)+14px);right:14px;background:var(--b);color:#fff;border:none;border-radius:50px;padding:11px 18px;font-size:13px;font-weight:900;cursor:pointer;z-index:90;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+    fab.textContent = `🛒 Cart (${total})`;
+    document.body.appendChild(fab);
+  }
+}
+
+function openProCart() {
+  const items = Object.entries(_cart).filter(([,q])=>q>0);
+  if (!items.length) { toast('Cart is empty'); return; }
+  openSheet(`
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px">Your Cart</div>
+    ${items.map(([id,qty])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font-size:13px;font-weight:600">Item #${id} × ${qty}</span>
+      <button onclick="_cart[${id}]=Math.max(0,_cart[${id}]-1);if(!_cart[${id}])delete _cart[${id}];closeSheet();openProCart()" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 8px;cursor:pointer">−</button>
+    </div>`).join('')}
+    <div style="margin-top:14px">
+      <div style="margin-bottom:10px">
+        <label class="form-lbl">Delivery Address</label>
+        <textarea id="pro-addr" class="form-ta" placeholder="Site address / office address"></textarea>
+      </div>
+      <button class="btn-p" onclick="placeProOrder()">Place Order (Credit)</button>
+      <button onclick="closeSheet()" class="btn-out" style="margin-top:8px">Continue Shopping</button>
+    </div>`);
+}
+
+async function placeProOrder() {
+  const addr = document.getElementById('pro-addr')?.value?.trim();
+  if (!addr) { toast('Enter delivery address'); return; }
+  const items = Object.entries(_cart).map(([id,qty])=>({product_id:parseInt(id),qty}));
+  const res = await proApi({action:'place_order', items, address:addr, grand_total:0});
+  if (res.ok) {
+    _cart = {}; document.getElementById('cart-fab')?.remove();
+    closeSheet(); toast(`✅ Order ${res.data.order_no} placed!`);
+  } else toast(res.error||'Failed to place order');
+}
+
+async function openProPDP(id) {
+  const res = await proApi({action:'get_product', id});
+  const p = res.data;
+  if (!p) return;
+  const price = parseFloat(p.tier2_price||p.vwp||p.price||0)||0;
+  const mrp = parseFloat(p.mrp||0)||0;
+  const disc = mrp>price&&price>0?Math.round((mrp-price)/mrp*100):0;
+  const img = p.image_url||'';
+  const nm = (p.name||'').replace(/'/g,"\\'");
+  openSheet(`
+    <div class="sheet-handle"></div>
+    <div style="height:200px;background:#f8f8f8;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;overflow:hidden">
+      ${img?`<img src="${img}" style="max-height:100%;max-width:100%;object-fit:contain;padding:12px">`:'<span style="font-size:60px">📦</span>'}
+    </div>
+    ${p.brand?`<div style="font-size:10px;font-weight:800;color:var(--b);text-transform:uppercase;margin-bottom:4px">${p.brand}</div>`:''}
+    <div style="font-size:16px;font-weight:900;margin-bottom:8px">${p.name}</div>
+    <div style="background:var(--blt);border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--b);margin-bottom:4px">Your B2B Price</div>
+      <div style="font-size:24px;font-weight:900">₹${price.toLocaleString('en-IN')}<span style="font-size:12px;font-weight:600;color:var(--t3)"> /${p.unit||'pc'}</span></div>
+      ${mrp>price?`<div style="font-size:12px;color:var(--t3);margin-top:3px">MRP ₹${mrp.toLocaleString('en-IN')} · You save ${disc}%</div>`:''}
+    </div>
+    ${p.description?`<div style="font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:12px">${p.description}</div>`:''}
+    <button class="btn-p" onclick="addToProCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');closeSheet()">Add to Cart</button>
+    <button onclick="closeSheet()" class="btn-out" style="margin-top:8px">Close</button>`);
+}
+
+// ── JOBS ──
+async function loadJobs() {
+  const el = document.getElementById('jobs-list');
+  el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_jobs'});
+  const jobs = res.data||[];
+  if (!jobs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)"><div style="font-size:40px;margin-bottom:10px">🔨</div><div style="font-weight:700">No jobs posted yet</div><div style="font-size:12px;margin-top:4px">Check back soon</div></div>'; return; }
+  el.innerHTML = jobs.map(j=>`
+    <div class="job-card">
+      <div class="job-title">${j.request_no||'Job'} · ${j.work_type||'Labour Work'}</div>
+      <div class="job-meta">📍 ${j.site_address||'Vijayawada'} · ${j.total_sqft?j.total_sqft+' sqft':'—'}</div>
+      <div class="job-tags">
+        ${j.work_type?`<span class="job-tag">${j.work_type}</span>`:''}
+        ${j.material_status?`<span class="job-tag">${j.material_status}</span>`:''}
+        <span class="job-tag">📅 ${j.preferred_start_date?new Date(j.preferred_start_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):new Date(j.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>
+      </div>
+      <button class="bid-btn" onclick="openBidSheet(${j.id},'${(j.customer_name||'').replace(/'/g,"\\'")}','${j.work_type||''}',${j.total_sqft||0})">Submit Bid</button>
+    </div>`).join('');
+}
+
+function openBidSheet(jobId, customerName, workType, sqft) {
+  openSheet(`
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:4px">Submit Your Bid</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:16px">${workType} · ${sqft} sqft</div>
+    <div class="form-group">
+      <label class="form-lbl">Your Total Bid Amount (₹) *</label>
+      <input type="number" id="bid-amount" class="form-inp" placeholder="e.g. 45000">
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Rate per Sqft (₹)</label>
+      <input type="number" id="bid-rate" class="form-inp" placeholder="e.g. 35">
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Timeline (days)</label>
+      <input type="number" id="bid-days" class="form-inp" placeholder="e.g. 7">
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Notes / Scope</label>
+      <textarea id="bid-desc" class="form-ta" placeholder="What's included in your bid? Any special notes?"></textarea>
+    </div>
+    <button class="btn-p" onclick="submitBid(${jobId})">Submit Bid →</button>
+    <button onclick="closeSheet()" class="btn-out" style="margin-top:8px">Cancel</button>`);
+}
+
+async function submitBid(jobId) {
+  const amount = parseFloat(document.getElementById('bid-amount')?.value||0);
+  const rate = parseFloat(document.getElementById('bid-rate')?.value||0);
+  const days = parseInt(document.getElementById('bid-days')?.value||0);
+  const desc = document.getElementById('bid-desc')?.value?.trim();
+  if (!amount) { toast('Enter bid amount'); return; }
+  const res = await proApi({action:'submit_bid', job_id:jobId, bid_amount:amount, rate_per_sqft:rate, timeline_days:days, description:desc});
+  if (res.ok) { closeSheet(); toast('✅ Bid submitted successfully!'); loadJobs(); }
+  else toast(res.error||'Failed to submit bid');
+}
+
+async function loadMyBids() {
+  const el = document.getElementById('my-bids-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_my_bids'});
+  const bids = res.data||[];
+  if (!bids.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">No bids submitted yet</div>'; return; }
+  el.innerHTML = bids.map(b=>`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:13px;font-weight:800">Job #${b.requirement_id}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px">${new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+          <div style="font-size:15px;font-weight:900;color:var(--b);margin-top:6px">₹${parseFloat(b.bid_amount||0).toLocaleString('en-IN')}</div>
+        </div>
+        <span class="badge badge-${b.status}">${b.status}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ── PROJECT BRIEFS ──
+async function loadBriefs() {
+  const el = document.getElementById('briefs-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_briefs'});
+  const briefs = res.data||[];
+  if (!briefs.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)"><div style="font-size:40px;margin-bottom:10px">📋</div><div style="font-weight:700">No briefs yet</div><div style="font-size:12px;margin-top:4px">Submit your first project to earn 500 points</div></div>'; return; }
+  el.innerHTML = briefs.map(b=>`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:800">${b.project_name}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">${b.project_type} · ${new Date(b.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          ${b.estimated_budget?`<div style="font-size:12px;font-weight:700;color:var(--b);margin-top:4px">Budget: ₹${parseFloat(b.estimated_budget).toLocaleString('en-IN')}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
+          <span class="badge badge-${b.status}">${b.status}</span>
+          ${b.points_awarded?'<div style="font-size:10px;font-weight:700;color:var(--green);margin-top:4px">✅ 500 pts awarded</div>':b.status==='verified'?'<div style="font-size:10px;color:var(--t3);margin-top:4px">Points pending</div>':''}
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function openSubmitBrief() {
+  openSheet(`
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:4px">Submit Project Brief</div>
+    <div style="font-size:11px;color:var(--t3);margin-bottom:16px">After our team verifies, you earn 500 Club points</div>
+    <div class="form-group">
+      <label class="form-lbl">Project Name *</label>
+      <input id="brief-name" class="form-inp" placeholder="e.g. Sharma Residence 3BHK Renovation">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-lbl">Type *</label>
+        <select id="brief-type" class="form-sel">
+          <option value="">Select</option>
+          <option value="residential">Residential</option>
+          <option value="commercial">Commercial</option>
+          <option value="industrial">Industrial</option>
+          <option value="renovation">Renovation</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Floors</label>
+        <input type="number" id="brief-floors" class="form-inp" placeholder="e.g. 2">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Location / Area *</label>
+      <input id="brief-loc" class="form-inp" placeholder="e.g. Bhavanipuram, Vijayawada">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div class="form-group">
+        <label class="form-lbl">Est. Budget (₹)</label>
+        <input type="number" id="brief-budget" class="form-inp" placeholder="e.g. 500000">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Total Area (sqft)</label>
+        <input type="number" id="brief-area" class="form-inp" placeholder="e.g. 1200">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Start Date</label>
+      <input type="date" id="brief-date" class="form-inp">
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Materials Needed</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+        ${['Tiles','Sanitary','Electrical','Plumbing','Paints','Hardware','All'].map(m=>`<button type="button" onclick="this.classList.toggle('active');this.style.background=this.classList.contains('active')?'var(--b)':'#fff';this.style.color=this.classList.contains('active')?'#fff':'var(--t2)'" data-mat="${m}" style="padding:6px 12px;border:1.5px solid var(--bdr);border-radius:20px;font-size:11px;font-weight:700;cursor:pointer;background:#fff;color:var(--t2)">${m}</button>`).join('')}
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-lbl">Additional Notes</label>
+      <textarea id="brief-notes" class="form-ta" placeholder="Any special requirements, timeline constraints…"></textarea>
+    </div>
+    <button class="btn-p" onclick="submitBrief()">Submit Brief →</button>
+    <button onclick="closeSheet()" class="btn-out" style="margin-top:8px">Cancel</button>`);
+}
+
+async function submitBrief() {
+  const name = document.getElementById('brief-name')?.value?.trim();
+  const type = document.getElementById('brief-type')?.value;
+  const loc = document.getElementById('brief-loc')?.value?.trim();
+  if (!name||!type||!loc) { toast('Fill project name, type and location'); return; }
+  const materials = [...document.querySelectorAll('[data-mat].active')].map(b=>b.dataset.mat);
+  const res = await proApi({
+    action:'submit_brief',
+    project_name:name, project_type:type, location:loc,
+    estimated_budget:parseFloat(document.getElementById('brief-budget')?.value||0)||null,
+    total_area_sqft:parseFloat(document.getElementById('brief-area')?.value||0)||null,
+    floors:parseInt(document.getElementById('brief-floors')?.value||0)||null,
+    start_date:document.getElementById('brief-date')?.value||null,
+    materials_needed:materials,
+    description:document.getElementById('brief-notes')?.value?.trim()||null,
+  });
+  if (res.ok) {
+    closeSheet();
+    toast('✅ Brief submitted! 500 points after staff verification.');
+    loadBriefs();
+  } else toast(res.error||'Failed to submit brief');
+}
+
+// ── ORDERS ──
+async function loadOrders() {
+  const el = document.getElementById('orders-list');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_orders'});
+  const orders = res.data||[];
+  if (!orders.length) { el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)"><div style="font-size:40px;margin-bottom:10px">📦</div><div style="font-weight:700">No orders yet</div></div>'; return; }
+  el.innerHTML = orders.map(o=>`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><div style="font-size:12px;color:var(--t3)">${o.order_no}</div>
+        <div style="font-size:15px;font-weight:900;margin-top:3px">₹${parseFloat(o.grand_total||0).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">${(o.items||[]).length} items · ${new Date(o.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div></div>
+        <span class="badge badge-${o.order_status==='confirmed'?'verified':o.order_status==='cancelled'?'rejected':'pending'}">${o.order_status}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ── PROFILE ──
+async function loadProfile() {
+  const el = document.getElementById('profile-content');
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
+  const res = await proApi({action:'get_profile'});
+  const p = res.data||{};
+  el.innerHTML = `
+    <div class="card" style="text-align:center;margin-bottom:12px">
+      <div style="width:64px;height:64px;background:var(--b);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;font-weight:900;margin:0 auto 10px">${(p.name||'P').charAt(0).toUpperCase()}</div>
+      <div style="font-size:17px;font-weight:900">${p.name||'—'}</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:2px">${p.professional_type||p.entity_type||'Professional'} · ${p.city||'Vijayawada'}</div>
+      <div style="font-size:11px;color:var(--t3);margin-top:2px">📞 ${p.phone||'—'}</div>
+      ${p.years_experience?`<div style="font-size:11px;color:var(--t3);margin-top:2px">⏳ ${p.years_experience} years experience</div>`:''}
+      <div style="margin-top:10px"><span class="badge ${p.approval_status==='approved'||p.status==='active'?'badge-verified':'badge-pending'}">${p.approval_status==='approved'||p.status==='active'?'✅ Verified Professional':'⏳ Verification Pending'}</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Change PIN</div>
+      <div class="form-group"><label class="form-lbl">Current PIN</label><input type="password" inputmode="numeric" maxlength="6" id="old-pin" class="form-inp" placeholder="••••••"></div>
+      <div class="form-group"><label class="form-lbl">New PIN</label><input type="password" inputmode="numeric" maxlength="6" id="new-pin" class="form-inp" placeholder="••••••"></div>
+      <div class="form-group"><label class="form-lbl">Confirm PIN</label><input type="password" inputmode="numeric" maxlength="6" id="new-pin2" class="form-inp" placeholder="••••••"></div>
+      <button class="btn-p" onclick="changePIN()">Update PIN</button>
+    </div>
+    <button onclick="doLogout()" style="width:100%;padding:12px;background:#fff;border:1px solid #FFD0D0;border-radius:12px;font-size:13px;font-weight:700;color:var(--red);cursor:pointer;margin-top:4px">🚪 Logout</button>`;
+}
+
+async function changePIN() {
+  const old_pin = document.getElementById('old-pin')?.value;
+  const new_pin = document.getElementById('new-pin')?.value;
+  const new_pin2 = document.getElementById('new-pin2')?.value;
+  if (!old_pin||old_pin.length<6) { toast('Enter current PIN'); return; }
+  if (!new_pin||new_pin.length<6) { toast('New PIN must be 6 digits'); return; }
+  if (new_pin!==new_pin2) { toast('PINs do not match'); return; }
+  const res = await proApi({action:'change_pin', old_pin, new_pin});
+  if (res.ok) toast('✅ PIN updated successfully');
+  else toast(res.error||'Failed to update PIN');
+}
+
+// ── REFERRAL ──
+function shareReferral() {
+  const name = _profile?.name||'';
+  const phone = _profile?.phone||'';
+  const msg = `Hi! I recommend V Wholesale, Vijayawada for tiles, sanitary, electrical & all home building materials at wholesale prices.\n\nTell them ${name} (${phone}) referred you — you get the best rates!\n\n📞 Store: 8712697930\n📍 NH65, Bhavanipuram, Vijayawada`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// ── COMMISSION PDF ──
+async function downloadStatement() {
+  toast('Generating statement…');
+  const res = await proApi({action:'get_commission_statement'});
+  const {transactions, total_points} = res.data||{};
+  if (!transactions?.length) { toast('No transactions found'); return; }
+  // Generate simple HTML → print
+  const html = `<html><head><title>Commission Statement</title><style>body{font-family:sans-serif;padding:20px;color:#111}h1{color:#1565C0;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1565C0;color:#fff;padding:8px;text-align:left;font-size:12px}td{padding:8px;border-bottom:1px solid #eee;font-size:12px}.total{font-weight:900;font-size:14px}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}</style></head><body><div class="header"><div><h1>V Wholesale</h1><div style="font-size:12px;color:#666">NH65, Bhavanipuram, Vijayawada · 8712697930</div></div><div style="text-align:right"><div style="font-size:12px;font-weight:700">Commission Statement</div><div style="font-size:11px;color:#666">Generated ${new Date().toLocaleDateString('en-IN')}</div></div></div><table><tr><th>Date</th><th>Description</th><th>Type</th><th>Points</th></tr>${transactions.map(t=>`<tr><td>${new Date(t.created_at).toLocaleDateString('en-IN')}</td><td>${t.description||t.transaction_type}</td><td>${t.transaction_type}</td><td style="color:${t.points>=0?'green':'red'}">${t.points>=0?'+':''}${t.points}</td></tr>`).join('')}<tr class="total"><td colspan="3">Total Points</td><td>${total_points}</td></tr></table></body></html>`;
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.print();
+}
+
+// ── INIT ──
+if (_token && _profile) {
+  startApp();
+}
+</script>
+</body>
+</html>
