@@ -6,6 +6,8 @@ on:
     paths:
       - 'index.html'
       - 'shop.html'
+      - 'professional.html'
+      - 'admin.html'
       - 'modules/**'
       - 'sw.js'
       - 'manifest.json'
