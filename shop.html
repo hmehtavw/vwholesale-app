@@ -286,6 +286,52 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
       </div>
       <!-- Offers strip -->
       <div class="sec" style="padding-top:0" id="offers-strip"></div>
+    </div><!-- /pg-home -->
+
+    <!-- CATEGORY PAGE -->
+    <div id="pg-cat" style="display:none;padding-bottom:80px">
+      <div style="position:sticky;top:57px;background:#F4F4F4;z-index:10;padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bdr)">
+        <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1);padding:0;line-height:1">←</button>
+        <div id="cat-title" style="font-size:16px;font-weight:900;color:var(--t1)">Products</div>
+      </div>
+      <div id="cat-grid-products" style="padding:14px;gap:12px;display:grid;grid-template-columns:1fr 1fr"></div>
+      <div id="cat-load-more" style="padding:10px 14px;display:none">
+        <button class="btn-out" onclick="loadMoreProducts()">Load more</button>
+      </div>
+    </div>
+
+    <!-- SEARCH RESULTS -->
+    <div id="pg-search" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button onclick="goHome()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1)">←</button>
+        <div id="search-title" style="font-size:15px;font-weight:800;color:var(--t1)">Search Results</div>
+      </div>
+      <div id="search-results" style="display:grid;grid-template-columns:1fr 1fr;gap:12px"></div>
+    </div>
+
+    <!-- ORDERS PAGE -->
+    <div id="pg-orders" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px;color:var(--t1)">📦 My Orders</div>
+      <div id="orders-list"></div>
+    </div>
+
+    <!-- ACCOUNT PAGE -->
+    <div id="pg-account" style="display:none;padding:14px;padding-bottom:80px">
+      <div id="account-content"></div>
+    </div>
+
+    <!-- OFFERS PAGE -->
+    <div id="pg-offers" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px;color:var(--t1)">🎁 Offers & Promos</div>
+      <div id="offers-list"></div>
+    </div>
+
+    <!-- WISHLIST PAGE -->
+    <div id="pg-wishlist" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px;color:var(--t1)">🤍 My Wishlist</div>
+      <div id="wishlist-list"></div>
+    </div>
+
       <!-- Footer -->
       <footer style="background:#0D1F0F;padding:20px 16px 90px">
   <div style="max-width:480px;margin:0 auto">
