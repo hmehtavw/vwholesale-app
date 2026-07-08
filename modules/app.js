@@ -194,6 +194,11 @@ async function navigateToFresh(page, params, cacheKey) {
   if (shopPages.includes(page)) {
     content.classList.add('shop-mode');
     content.style.padding = '0';
+    // Ensure customer theme applied on every nav (handles page refreshes)
+    const _r = VW_AUTH?.getCurrentProfile?.()?.role;
+    if (_r === 'customer' && !document.body.classList.contains('customer-mode')) {
+      window._applyCustomerTheme?.();
+    }
   } else {
     content.classList.remove('shop-mode');
     content.style.padding = '';

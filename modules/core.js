@@ -1051,10 +1051,11 @@ async function routeByRole() {
     showContractorPendingScreen(); return;
   }
 
-  // Customer
+  // Customer — apply light shop theme so it feels like the shop, not the staff app
   if (role === 'customer') {
+    _applyCustomerTheme();
     if (typeof init === 'function') await init();
-    navigateTo('shop'); // B2C home
+    navigateTo('shop');
     return;
   }
 
@@ -3138,3 +3139,58 @@ window.rejectInvoiceStep = rejectInvoiceStep;
 
 
 
+
+// ── CUSTOMER THEME (light, shop-branded green/white) ──────────────
+// Applied when role=customer logs into index.html so the experience
+// matches shop.html — no dark charcoal, no gold staff palette.
+function _applyCustomerTheme() {
+  const root = document.documentElement;
+  // Override CSS variables to match shop.html palette
+  const vars = {
+    '--bg':           '#F4F4F4',
+    '--bg1':          '#F4F4F4',
+    '--bg2':          '#FFFFFF',
+    '--bg3':          '#F0F0F0',
+    '--bg4':          '#E8E8E8',
+    '--sheet-bg':     '#FFFFFF',
+    '--border':       '#E5E5E5',
+    '--border2':      '#D0D0D0',
+    '--text':         '#111111',
+    '--text1':        '#111111',
+    '--text2':        '#444444',
+    '--text3':        '#777777',
+    '--gold':         '#16783A',   // green replaces gold
+    '--gold-light':   '#EBF7EF',
+    '--gold-dark':    '#0D5C2C',
+    '--gold-muted':   'rgba(22,120,58,0.10)',
+    '--gold-border':  'rgba(22,120,58,0.25)',
+    '--header-bg':    '#16783A',   // green header
+    '--green':        '#16783A',
+    '--nav-text':     '#FFFFFF',
+  };
+  Object.entries(vars).forEach(([k,v]) => root.style.setProperty(k, v));
+
+  // White page background
+  document.body.style.background = '#F4F4F4';
+  document.body.style.color = '#111111';
+
+  // Style the header green
+  const hdr = document.getElementById('app-header');
+  if (hdr) {
+    hdr.style.background = '#16783A';
+    hdr.style.borderBottom = 'none';
+    hdr.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+  }
+
+  // Style the bottom nav white with green active
+  const nav = document.getElementById('bottom-nav');
+  if (nav) {
+    nav.style.background = '#FFFFFF';
+    nav.style.borderTop = '1px solid #E5E5E5';
+    nav.style.boxShadow = '0 -2px 10px rgba(0,0,0,0.06)';
+  }
+
+  // Mark body so CSS can target customer-mode
+  document.body.classList.add('customer-mode');
+}
+window._applyCustomerTheme = _applyCustomerTheme;
