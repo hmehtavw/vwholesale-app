@@ -978,9 +978,12 @@ async function sendCustomerOTP() {
       body: JSON.stringify({ email: phone + '@customer.vwholesale.app', password: 'probe' })
     });
     const probeData = await probeRes.json();
-    // "Invalid login credentials" = account exists; "Email not confirmed" or 400 without that = new user
-    const accountExists = probeData.error_code === 'invalid_credentials' || probeData.msg?.includes('Invalid login');
-    renderOTPSheet(accountExists ? 'login' : 'signup');
+    // Account exists if we get an auth error (wrong password) vs user-not-found
+    const notFound = probeData.error_description?.includes('not found') ||
+                     probeData.msg?.includes('not found') ||
+                     probeData.code === 'user_not_found' ||
+                     probeRes.status === 400 && !probeData.error_code;
+    renderOTPSheet(notFound ? 'signup' : 'login');
   } catch(e) {
     renderOTPSheet('signup');
   } finally {
@@ -998,47 +1001,109 @@ async function verifyCustomerOTP(isNew) {
   const btn = document.querySelector('[onclick^="verifyCustomerOTP"]');
   if (btn) { btn.disabled=true; btn.textContent='Please wait...'; }
   const email = _loginPhone + '@customer.vwholesale.app';
+  const storageKey = 'sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token';
+
+  function _saveSession(data) {
+    data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
+    localStorage.setItem(storageKey, JSON.stringify(data));
+    if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
+  }
+
   try {
     if (isNew) {
-      // New customer — sign up with phone as email + PIN as password
+      // Step 1: Sign up
       const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: pin, data: { name: window._loginName || '', phone: _loginPhone } })
+        body: JSON.stringify({ email, password: pin, data: { name: window._loginName||'', phone: _loginPhone } })
       });
       const data = await res.json();
-      if (data.access_token) {
-        data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
-        if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
-        localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
+
+      // Already exists → go to login
+      if (data.code === 'user_already_exists' || data.msg?.includes('already registered')) {
+        if (btn) { btn.disabled=false; btn.textContent='Login →'; }
+        renderOTPSheet('login');
+        toast('Account already exists — enter your PIN to login');
+        return;
+      }
+
+      const userId = data.user?.id || data.id;
+      if (!userId) { toast(data.msg || data.error_description || 'Signup failed — try again'); if(btn){btn.disabled=false;btn.textContent='Create Account →';} return; }
+
+      // Step 2: Auto-confirm via admin-confirm edge function (bypasses email confirmation requirement)
+      try {
+        await fetch(`${SUPABASE_URL}/functions/v1/confirm-customer`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+          body: JSON.stringify({ userId })
+        });
+      } catch(e) { /* best effort — continue to sign in */ }
+
+      // Step 3: Sign in immediately with the PIN
+      const sinRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+        body: JSON.stringify({ email, password: pin })
+      });
+      const sinData = await sinRes.json();
+
+      if (sinData.access_token) {
+        _saveSession(sinData);
         toast('Account created! Welcome to V Wholesale 🎉');
         setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
         return;
       }
-      // Account may already exist — try login instead
-      if (data.msg?.includes('already') || data.code === 'user_already_exists') {
-        toast('Account exists — trying login...'); 
-        return verifyCustomerOTP(false);
-      }
-      toast(data.msg || data.error_description || 'Signup failed'); 
+
+      // Email confirmation still required — tell user
+      toast('Check your WhatsApp/call us at 8712697930 to activate your account');
+
     } else {
-      // Returning customer — sign in
+      // Returning customer — sign in with PIN
       const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
         body: JSON.stringify({ email, password: pin })
       });
       const data = await res.json();
+
       if (data.access_token) {
-        data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
-        localStorage.setItem('sb-'+SUPABASE_URL.split('.')[0].split('//')[1]+'-auth-token', JSON.stringify(data));
+        _saveSession(data);
         toast('Welcome back! 👋');
         setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
         return;
       }
-      toast('Wrong PIN. Try again or create a new account.');
+
+      if (data.error_code === 'email_not_confirmed') {
+        // Try to auto-confirm and retry
+        try {
+          await fetch(`${SUPABASE_URL}/functions/v1/confirm-customer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+            body: JSON.stringify({ email })
+          });
+          // Retry sign in
+          const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+            body: JSON.stringify({ email, password: pin })
+          });
+          const d2 = await r2.json();
+          if (d2.access_token) {
+            _saveSession(d2);
+            toast('Welcome back! 👋');
+            setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
+            return;
+          }
+        } catch(e) {}
+      }
+
+      if (data.error_code === 'invalid_credentials') {
+        toast('Wrong PIN. Please try again.'); 
+      } else {
+        toast(data.msg || data.error_description || 'Login failed — try again');
+      }
     }
-  } catch(e) { toast('Network error. Try again.'); }
+  } catch(e) { toast('Network error. Please try again.'); }
   if (btn) { btn.disabled=false; btn.textContent=isNew?'Create Account →':'Login →'; }
 }
 
