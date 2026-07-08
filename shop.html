@@ -5,1867 +5,1280 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#16783A">
-  <title>V Wholesale — Tiles, Sanitaryware & Home Building Materials | Vijayawada</title>
-  <meta name="description" content="Vijayawada's home building store. Tiles, sanitaryware, plumbing, electricals and more. 2-4 hr delivery in Vijayawada, AP & Telangana.">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" type="image/png" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="V Wholesale">
-  <script>if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});</script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    html,body{-webkit-tap-highlight-color:transparent}
-    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#F4F4F4;color:#111}
-    a{text-decoration:none;color:inherit}
-    button{cursor:pointer;font-family:inherit;border:none;background:none}
-    input{font-family:inherit}
-    img{display:block;max-width:100%}
-    :root{
-      --g:#16783A;--gdk:#0D5C2C;--glt:#EBF7EF;--gbdr:#B7DFC4;
-      --gold:#E8901A;--goldlt:#FFF3E0;
-      --red:#D92D20;
-      --bg:#F4F4F4;--card:#fff;--bdr:#E5E5E5;
-      --t1:#111;--t2:#444;--t3:#777;--t4:#BBB;
-      --r6:6px;--r10:10px;--r14:14px;--r20:20px;--rfull:100px;
-      --wrap:1200px;
-    }
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>V Wholesale — Vijayawada's Home Building Store</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" href="./icon-192.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system-ui,sans-serif;-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+:root{
+  --g:#16783A;--gdk:#0D5C2C;--glt:#EBF7EF;--gbdr:#B7DFC4;
+  --gold:#E8901A;--red:#D92D20;
+  --bg:#F4F4F4;--card:#fff;--bdr:#E5E5E5;--bdr2:#D0E8D8;
+  --t1:#111;--t2:#444;--t3:#777;--t4:#BBB;
+  --r6:6px;--r10:10px;--r14:14px;--r20:20px;
+  --wrap:1200px;--nav-h:62px;
+}
 
-    /* ─── LAYOUT WRAPPER ─── */
-    .w{width:100%;max-width:var(--wrap);margin:0 auto;padding:0 16px}
+/* ── LAYOUT ── */
+#app{display:flex;flex-direction:column;min-height:100vh;padding-bottom:var(--nav-h)}
+#page-content{flex:1;background:#F4F4F4}
 
-    /* ─── DESKTOP HEADER ─── */
-    #hdr{background:#fff;border-bottom:1.5px solid var(--bdr);position:sticky;top:0;z-index:100}
-    .hdr-inner{display:flex;align-items:center;gap:16px;padding:12px 24px;max-width:var(--wrap);margin:0 auto}
-    .logo{display:flex;align-items:center;gap:8px;flex-shrink:0;text-decoration:none}
-    .lbox{width:36px;height:36px;background:var(--g);border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;color:#fff}
-    .ltext{line-height:1}
-    .lname{font-size:15px;font-weight:900;color:var(--t1)}
-    .lcity{font-size:9px;color:var(--g);font-weight:600;display:block;margin-top:1px}
-    .hdr-del{display:flex;align-items:center;gap:5px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--rfull);padding:5px 12px;font-size:11px;font-weight:700;color:var(--g);white-space:nowrap;flex-shrink:0}
-    .hdr-search{flex:1;max-width:540px}
-    .sbox{display:flex;align-items:center;gap:8px;background:var(--bg);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:9px 14px;transition:border-color .15s}
-    .sbox:focus-within{border-color:var(--g)}
-    .sbox svg{flex-shrink:0;color:var(--t3)}
-    .sbox input{flex:1;background:none;border:none;outline:none;font-size:13px;color:var(--t1)}
-    .sbox input::placeholder{color:var(--t3)}
-    #search-clear{color:var(--t3);font-size:14px;display:none}
-    .hdr-spacer{flex:1}
-    .hdr-btns{display:flex;align-items:center;gap:8px;flex-shrink:0}
-    .hcart{position:relative;display:flex;align-items:center;gap:6px;padding:8px 14px;border:1.5px solid var(--bdr);border-radius:var(--rfull);font-size:13px;font-weight:700;color:var(--t2);cursor:pointer;background:var(--bg)}
-    .hcart span.ctxt{display:none}
-    .cbadge{background:var(--red);color:#fff;border-radius:var(--rfull);min-width:18px;height:18px;font-size:9px;font-weight:900;display:none;align-items:center;justify-content:center;padding:0 4px}
-    .hsignin{height:38px;padding:0 20px;background:var(--g);border-radius:var(--rfull);font-size:13px;font-weight:800;color:#fff}
+/* ── HEADER ── */
+.hdr{background:#fff;border-bottom:1px solid var(--bdr);position:sticky;top:0;z-index:50}
+.hdr-top{display:flex;align-items:center;gap:10px;padding:10px 14px;max-width:var(--wrap);margin:0 auto}
+.hdr-logo{display:flex;align-items:center;gap:8px;cursor:pointer;flex:0 0 auto}
+.hdr-logo-icon{width:32px;height:32px;background:var(--g);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff}
+.hdr-logo-text{font-size:15px;font-weight:900;color:var(--t1);line-height:1.2}
+.hdr-logo-sub{font-size:9px;color:var(--t3);font-weight:600}
+.hdr-search{flex:1;position:relative}
+.hdr-search input{width:100%;padding:9px 12px 9px 34px;border:1.5px solid var(--bdr);border-radius:22px;font-size:13px;outline:none;background:#F8F8F8;color:var(--t1);font-family:inherit}
+.hdr-search input:focus{border-color:var(--g);background:#fff}
+.hdr-search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--t3)}
+.hdr-acts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.hdr-btn{background:none;border:none;cursor:pointer;font-size:20px;padding:4px;position:relative;display:flex;align-items:center}
+.cart-badge{position:absolute;top:-2px;right:-4px;background:var(--g);color:#fff;font-size:9px;font-weight:900;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.signin-btn{background:var(--g);color:#fff;border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
 
-    /* ─── CATEGORY NAV BAR (desktop only) ─── */
-    #cat-nav{background:#fff;border-bottom:1px solid var(--bdr);display:none}
-    .cat-nav-inner{display:flex;align-items:center;gap:0;max-width:var(--wrap);margin:0 auto;overflow-x:auto;scrollbar-width:none;padding:0 24px}
-    .cat-nav-inner::-webkit-scrollbar{display:none}
-    .cat-nav-item{flex:0 0 auto;padding:10px 14px;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;transition:color .15s,border-color .15s}
-    .cat-nav-item:hover{color:var(--g);border-bottom-color:var(--g)}
+/* ── TRUST BAR ── */
+.tbar{background:#EBF7EF;border-bottom:1px solid var(--gbdr);overflow-x:auto;scrollbar-width:none;padding:0 14px}
+.tbar::-webkit-scrollbar{display:none}
+.tbar-inner{display:flex;gap:20px;padding:8px 0;white-space:nowrap;max-width:var(--wrap);margin:0 auto}
+.ti{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--gdk)}
+.ti-icon{font-size:14px}
 
-    /* ─── TRUST BAR ─── */
-    .tbar{background:#fff;border-bottom:1px solid var(--bdr);overflow-x:auto;scrollbar-width:none}
-    .tbar::-webkit-scrollbar{display:none}
-    .tbar-inner{display:flex;align-items:center;max-width:var(--wrap);margin:0 auto;padding:0 24px}
-    .ti{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding:8px 16px 8px 0;border-right:1px solid var(--bdr);margin-right:16px;white-space:nowrap}
-    .ti:last-child{border-right:none}
-    .ti-icon{font-size:15px}
-    .ti-lbl{font-size:11px;font-weight:700;color:var(--t2)}
+/* ── HERO ── */
+.hero{background:linear-gradient(135deg,#0D5C2C,#16783A);padding:20px 16px;margin:0}
+.hero-tag{font-size:10px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.hero-h{font-size:28px;font-weight:900;color:#fff;line-height:1.2;margin-bottom:4px}
+.hero-h span{color:#F5C842}
+.hero-sub{font-size:12px;color:rgba(255,255,255,.7);margin-bottom:16px}
+.hero-btns{display:flex;gap:10px}
+.hero-btn-p{background:#fff;color:var(--gdk);border:none;border-radius:22px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer}
+.hero-btn-s{background:rgba(255,255,255,.15);color:#fff;border:1.5px solid rgba(255,255,255,.4);border-radius:22px;padding:10px 20px;font-size:13px;font-weight:700;cursor:pointer}
+.hero-badge{position:absolute;top:12px;right:12px;background:var(--gold);color:#fff;font-size:9px;font-weight:900;padding:4px 10px;border-radius:20px;text-align:center;line-height:1.3}
 
-    /* ─── MOBILE SEARCH (hidden on desktop) ─── */
-    .mob-search{padding:8px 14px 10px;display:none;background:#fff;border-bottom:1px solid var(--bdr)}
-    .mob-search .sbox{background:var(--bg)}
+/* ── SECTIONS ── */
+.sec{padding:16px 14px;max-width:var(--wrap);margin:0 auto}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sec-t{font-size:17px;font-weight:900;color:var(--t1)}
+.sec-link{font-size:12px;font-weight:700;color:var(--g);text-decoration:none}
 
-    /* ─── PAGE WRAPPER ─── */
-    #pg-home{padding-bottom:20px}
-    #pg-home.mob-pad{padding-bottom:76px}
+/* ── CATEGORY GRID ── */
+.cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.ccard{background:#fff;border-radius:14px;padding:12px 8px 10px;text-align:center;cursor:pointer;border:1px solid var(--bdr);transition:transform .15s}
+.ccard:active{transform:scale(.96)}
+.cimg{height:60px;display:flex;align-items:center;justify-content:center;font-size:32px;margin-bottom:6px;border-radius:10px}
+.clabel{font-size:10px;font-weight:700;color:var(--t1);line-height:1.3}
 
-    /* ─── HERO ─── */
-    .hero-wrap{padding:20px 24px 0;max-width:var(--wrap);margin:0 auto}
-    .hero{border-radius:var(--r14);overflow:hidden;background:linear-gradient(130deg,#0D5C2C 0%,#16783A 60%,#1E9248 100%);position:relative;min-height:160px}
-    .hero-inner{padding:28px 32px 26px;color:#fff;position:relative;z-index:1}
-    .hero-tag{position:absolute;top:0;right:0;background:var(--gold);color:#fff;font-size:9px;font-weight:900;padding:6px 12px;border-radius:0 var(--r14) 0 var(--r10);line-height:1.4;text-align:center}
-    .hero-kicker{font-size:11px;font-weight:700;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;gap:6px}
-    .hero-kicker::before{content:'';width:18px;height:1.5px;background:rgba(255,255,255,.5)}
-    .hero-h{font-size:34px;font-weight:900;line-height:1.05;letter-spacing:-.7px;margin-bottom:8px}
-    .hero-h b{color:var(--gold)}
-    .hero-sub{font-size:13px;color:rgba(255,255,255,.6);margin-bottom:22px}
-    .hero-btns{display:flex;gap:10px;flex-wrap:wrap}
-    .hbtn-pri{display:inline-flex;align-items:center;gap:5px;background:#fff;color:var(--g);font-size:13px;font-weight:800;padding:11px 22px;border-radius:var(--rfull)}
-    .hbtn-sec{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;padding:11px 18px;border-radius:var(--rfull);border:1px solid rgba(255,255,255,.3)}
+/* ── PRODUCT CARDS ── */
+.hscroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.hscroll::-webkit-scrollbar{display:none}
+.pcard{flex:0 0 160px;background:#fff;border-radius:14px;overflow:hidden;border:1px solid var(--bdr);cursor:pointer;transition:transform .15s}
+.pcard:active{transform:scale(.97)}
+.pimg{height:120px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:40px;overflow:hidden;position:relative}
+.pimg img{width:100%;height:100%;object-fit:cover}
+.pdiscount{position:absolute;top:6px;left:6px;background:var(--g);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:20px}
+.pbody{padding:8px 10px 10px}
+.pbrand{font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
+.pname{font-size:12px;font-weight:700;color:var(--t1);line-height:1.3;margin-bottom:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pprice{font-size:15px;font-weight:900;color:var(--t1)}
+.pmrp{font-size:10px;color:var(--t3);text-decoration:line-through;margin-left:4px}
+.psave{font-size:10px;color:var(--g);font-weight:800;margin-left:4px}
+.padd{width:100%;margin-top:7px;padding:8px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer}
+.pqty{display:flex;align-items:center;border:2px solid var(--g);border-radius:8px;overflow:hidden;margin-top:7px}
+.pqty-btn{flex:0 0 32px;height:32px;background:none;border:none;color:var(--g);font-size:18px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pqty-n{flex:1;text-align:center;font-size:13px;font-weight:800;color:var(--t1)}
 
-    /* ─── SECTION ─── */
-    .sec-wrap{max-width:var(--wrap);margin:0 auto;padding:0 24px}
-    .sec-hdr{display:flex;justify-content:space-between;align-items:flex-end;padding:22px 0 14px}
-    .sec-t{font-size:18px;font-weight:900;color:var(--t1)}
-    .sec-sub{font-size:11px;color:var(--t3);margin-top:2px}
-    .sec-all{font-size:12px;font-weight:700;color:var(--g);background:var(--glt);border:1px solid var(--gbdr);padding:6px 14px;border-radius:var(--rfull)}
+/* ── CATEGORY PAGE ── */
+#cat-page{display:none;padding:0 14px 80px}
+.cat-hdr{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--bdr);margin-bottom:14px;position:sticky;top:57px;background:var(--bg);z-index:10}
+.cat-back{background:none;border:none;font-size:20px;cursor:pointer;color:var(--t1);padding:0}
+.cat-title{font-size:16px;font-weight:900;color:var(--t1)}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pgrid .pcard{flex:none}
 
-    /* ─── CATEGORY GRID ─── */
-    .cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-    .ccard{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
-    .ccard:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);transform:translateY(-2px)}
-    .ccard:active{transform:scale(.97)}
-    .cimg{height:90px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:42px;overflow:hidden}
-    .cimg img{width:100%;height:100%;object-fit:cover}
-    .clabel{font-size:11px;font-weight:800;text-align:center;color:var(--t1);padding:8px 6px 10px;line-height:1.3;background:#fff}
+/* ── PDP SHEET ── */
+.pdp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200}
+.pdp-overlay.open{display:block}
+.pdp-sheet{position:fixed;inset:0;background:#fff;z-index:201;transform:translateX(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);overflow-y:auto;padding-bottom:80px}
+.pdp-sheet.open{transform:translateX(0)}
+.pdp-close{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border-bottom:1px solid var(--bdr);z-index:5}
+.pdp-close button{background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1);padding:0;line-height:1}
+.pdp-close-title{font-size:14px;font-weight:700;color:var(--t1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdp-img{width:100%;height:260px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;font-size:80px;overflow:hidden}
+.pdp-img img{width:100%;height:100%;object-fit:contain;padding:16px}
+.pdp-body{padding:16px 14px}
+.pdp-brand{font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.pdp-name{font-size:18px;font-weight:900;color:var(--t1);line-height:1.3;margin-bottom:8px}
+.pdp-price-row{display:flex;align-items:baseline;gap:8px;margin-bottom:4px}
+.pdp-price{font-size:24px;font-weight:900;color:var(--t1)}
+.pdp-unit{font-size:12px;color:var(--t3);font-weight:600}
+.pdp-mrp{font-size:14px;color:var(--t3);text-decoration:line-through}
+.pdp-save{font-size:13px;color:var(--g);font-weight:800}
+.pdp-gst{font-size:11px;color:var(--t3);margin-bottom:14px}
+.trust-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin-bottom:14px}
+.trust-item{text-align:center}
+.trust-icon{font-size:18px;margin-bottom:3px}
+.trust-txt{font-size:9px;color:var(--t3);font-weight:600;line-height:1.3}
+.pdp-spec{border-radius:10px;overflow:hidden;border:1px solid var(--bdr);margin-bottom:14px}
+.pdp-spec-row{display:flex;padding:9px 12px;border-bottom:1px solid var(--bdr)}
+.pdp-spec-row:last-child{border-bottom:none}
+.pdp-spec-k{flex:0 0 40%;font-size:12px;color:var(--t3);font-weight:600}
+.pdp-spec-v{flex:1;font-size:12px;font-weight:700;color:var(--t1)}
+.pdp-store{background:linear-gradient(120deg,var(--gdk),var(--g));border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.pdp-bar{position:fixed;bottom:var(--nav-h);left:0;right:0;background:#fff;border-top:1px solid var(--bdr);padding:10px 14px;display:flex;gap:10px;z-index:205;box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+.pdp-bar-wish{flex:0 0 46px;height:46px;border:1.5px solid var(--bdr);border-radius:10px;background:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pdp-bar-add{flex:1;height:46px;background:var(--g);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:900;cursor:pointer}
+.pdp-bar-qty{flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:10px;overflow:hidden;height:46px}
 
-    /* ─── HSCROLL ─── */
-    .hscroll{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-    .hscroll::-webkit-scrollbar{display:none}
+/* ── SHEET ── */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;backdrop-filter:blur(1px)}
+.overlay.open{display:block}
+.sheet{position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;overflow-y:auto;padding:0 16px calc(20px + env(safe-area-inset-bottom))}
+.sheet.open{transform:translateY(0)}
+.sheet-handle{width:36px;height:4px;background:#E0E0E0;border-radius:2px;margin:12px auto 18px}
 
-    /* ─── DEAL CARD ─── */
-    .dcard{flex:0 0 180px;background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
-    .dcard:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px)}
-    .dimg{height:130px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:48px;position:relative;overflow:hidden}
-    .dimg img{width:100%;height:100%;object-fit:cover}
-    .dpct{position:absolute;top:7px;left:7px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:var(--rfull)}
-    .dspd{position:absolute;bottom:6px;right:7px;background:var(--g);color:#fff;font-size:8px;font-weight:800;padding:2px 7px;border-radius:var(--rfull)}
-    .dbody{padding:10px 11px 11px}
-    .dbr{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px}
-    .dnm{font-size:12px;font-weight:700;color:var(--t1);line-height:1.35;min-height:30px;margin-bottom:8px}
-    .drow{display:flex;align-items:center;justify-content:space-between;gap:4px}
-    .dpr{font-size:15px;font-weight:900}
-    .dmrp{font-size:9px;color:var(--t4);text-decoration:line-through}
-    .btn-add{background:var(--g);color:#fff;font-size:12px;font-weight:800;padding:6px 14px;border-radius:var(--r6)}
-    .qrow{display:flex;align-items:center;border:1.5px solid var(--g);border-radius:var(--r6);overflow:hidden}
-    .qbtn{background:none;color:var(--g);font-size:18px;font-weight:700;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
-    .qfill{background:var(--g);color:#fff}
-    .qn{font-size:13px;font-weight:800;min-width:22px;text-align:center}
+/* ── BOTTOM NAV ── */
+#bnav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:#fff;border-top:1.5px solid var(--bdr);display:flex;z-index:100;padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -2px 10px rgba(0,0,0,.06)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:8px 0 6px;font-size:9px;font-weight:700;color:var(--t3);border:none;background:none;cursor:pointer;text-decoration:none;-webkit-tap-highlight-color:transparent}
+.nav-item.active,.nav-item:active{color:var(--g)}
+.nav-icon{font-size:22px;line-height:1}
 
-    /* ─── PROMO CARDS ─── */
-    .pcard{flex:0 0 200px;border-radius:var(--r14);padding:18px 16px;cursor:pointer;transition:transform .1s}
-    .pcard:hover{transform:translateY(-2px)}
-    .pkick{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;opacity:.75;margin-bottom:5px}
-    .ph{font-size:20px;font-weight:900;margin-bottom:3px}
-    .psub{font-size:10px;opacity:.7;line-height:1.5;margin-bottom:10px}
-    .pcode{display:inline-block;font-size:10px;font-weight:800;padding:4px 9px;border-radius:var(--r6);border:1.5px dashed currentColor;opacity:.85}
+/* ── TOAST ── */
+#toast{position:fixed;bottom:calc(var(--nav-h) + 14px);left:14px;right:14px;z-index:999;pointer-events:none}
+.toast-msg{background:#1a1a1a;color:#fff;padding:12px 16px;border-radius:12px;font-size:13px;font-weight:600;margin-bottom:8px;animation:toastIn .25s ease;box-shadow:0 4px 16px rgba(0,0,0,.3)}
+@keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
-    /* ─── WHY US ─── */
-    .why-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
-    .why-card{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:16px 14px;display:flex;align-items:flex-start;gap:12px}
-    .why-icon{font-size:26px;flex-shrink:0}
-    .why-title{font-size:12px;font-weight:800;color:var(--t1);margin-bottom:3px}
-    .why-sub{font-size:10px;color:var(--t3);line-height:1.4}
+/* ── FOOTER ── */
+.footer{background:#EBF7EF;border-top:2px solid var(--gbdr);padding:28px 14px 80px}
+.ft-logo{font-size:18px;font-weight:900;color:var(--gdk);margin-bottom:4px}
+.ft-tagline{font-size:11px;color:var(--t3);margin-bottom:10px}
+.ft-contact{font-size:12px;color:var(--t2);margin-bottom:16px}
+.ft-contact a{color:var(--g);text-decoration:none;font-weight:700}
+.ft-head{font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;margin-top:16px}
+.ft-head:first-child{margin-top:0}
+.ft-link{display:block;font-size:12px;color:var(--t2);margin-bottom:6px;cursor:pointer;text-decoration:none}
+.ft-link:hover{color:var(--g)}
+.ft-divider{border:none;border-top:1px solid var(--bdr2);margin:16px 0}
+.ft-copy{font-size:10px;color:var(--t3)}
+.ft-access{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.ft-abtn{padding:8px 14px;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;display:inline-block}
 
-    /* ─── CONTRACTOR BANNER ─── */
-    .cc-banner{background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:var(--r14);padding:24px 28px;display:flex;align-items:center;gap:20px;cursor:pointer}
-    .cc-emoji{font-size:48px;flex-shrink:0}
-    .cc-kicker{font-size:9px;font-weight:800;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-bottom:5px}
-    .cc-h{font-size:20px;font-weight:900;color:#fff;margin-bottom:4px}
-    .cc-sub{font-size:12px;color:rgba(255,255,255,.55);margin-bottom:14px;line-height:1.4}
-    .cc-pills{display:flex;gap:8px;flex-wrap:wrap}
-    .cc-pill{padding:5px 12px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:var(--rfull);font-size:11px;font-weight:700;color:#fff}
-    .cc-btn{margin-left:auto;flex-shrink:0;padding:12px 20px;background:var(--gold);border-radius:var(--r10);font-size:13px;font-weight:900;color:#fff;text-align:center;white-space:nowrap}
+/* ── OFFERS / PROMO ── */
+.promo-card{background:linear-gradient(135deg,var(--gdk),var(--g));border-radius:14px;padding:16px;color:#fff;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.promo-code{background:rgba(255,255,255,.15);border:1.5px dashed rgba(255,255,255,.4);border-radius:8px;padding:4px 12px;font-size:13px;font-weight:900;letter-spacing:.05em}
 
-    /* ─── DELIVERY ZONE ─── */
-    .pzrow{display:flex;gap:10px;margin-bottom:10px}
-    .pzfield{flex:1;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid var(--bdr);border-radius:var(--r10);padding:0 14px;height:48px}
-    .pzfield:focus-within{border-color:var(--g)}
-    .pzfield input{flex:1;border:none;background:none;outline:none;font-size:14px;font-weight:700;color:var(--t1)}
-    .pzfield input::placeholder{color:var(--t3);font-weight:400}
-    .pzbtn{height:48px;padding:0 22px;background:var(--g);color:#fff;font-size:13px;font-weight:800;border-radius:var(--r10)}
-    #pz-result{font-size:12px}
-    .pz-ok{background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r10);padding:10px 14px;color:var(--g)}
-    .pz-ap{background:#FFF7ED;border:1px solid #FED7AA;border-radius:var(--r10);padding:10px 14px;color:#C2410C}
-    .pz-tg{background:#F5F3FF;border:1px solid #C4B5FD;border-radius:var(--r10);padding:10px 14px;color:#6D28D9}
-    .pz-no{background:#FEF2F2;border:1px solid #FECACA;border-radius:var(--r10);padding:10px 14px;color:var(--red)}
-    .pz-lbl{font-weight:800;font-size:12px;margin-bottom:2px}
-    .pz-txt{font-size:11px;opacity:.8}
+/* ── LOGIN ── */
+.pin-input{width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;color:var(--t1);font-family:inherit}
 
-    /* ─── STORES MAP ─── */
-    .mapwrap{background:#1A2B1A;border-radius:var(--r14);overflow:hidden}
-    .maphdr{padding:18px 20px 0}
-    .mkick{font-size:9px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
-    .mt{font-size:17px;font-weight:900;color:#fff;margin-bottom:2px}
-    .msub{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:6px}
-    .mleg{display:flex;gap:16px;justify-content:center;padding:4px 20px 14px}
-    .mleg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:rgba(255,255,255,.5)}
-    .mleg-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-    .sopen{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r10);padding:14px;display:flex;align-items:center;gap:10px;margin-bottom:10px}
-    .sopen-dot{width:8px;height:8px;border-radius:50%;background:#22C55E;box-shadow:0 0 0 3px rgba(34,197,94,.2);flex-shrink:0}
-    .sopen-name{font-size:13px;font-weight:800}
-    .sopen-addr{font-size:10px;color:var(--t3);margin-top:1px}
-    .sbtns{display:flex;gap:6px;margin-left:auto}
-    .sbtn-call{padding:8px 14px;background:var(--glt);border:1px solid var(--gbdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--g)}
-    .sbtn-pk{padding:8px 14px;background:var(--bg);border:1px solid var(--bdr);border-radius:var(--r6);font-size:11px;font-weight:700;color:var(--t2);cursor:pointer}
-    .cities{display:flex;flex-wrap:wrap;gap:6px;padding-top:4px}
-    .cpill{padding:4px 12px;border-radius:var(--rfull);border:1px solid var(--bdr);font-size:10px;font-weight:600;color:var(--t2);background:var(--card)}
-    .cpill-tg{border-color:#C4B5FD;color:#7C3AED;background:#F5F3FF}
+/* ── ORDERS ── */
+.order-card{background:#fff;border-radius:14px;border:1px solid var(--bdr);padding:14px;margin-bottom:10px}
+.order-no{font-size:11px;color:var(--t3);font-weight:700;margin-bottom:4px}
+.order-status{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800}
+.status-confirmed{background:#EBF7EF;color:var(--g)}
+.status-processing{background:#FFF3E0;color:var(--gold)}
+.status-delivered{background:#EBF7EF;color:var(--gdk)}
+.status-cancelled{background:#FFF0F0;color:var(--red)}
 
-    /* ─── CAT PAGE ─── */
-    #pg-cat{display:none;min-height:100vh;padding-bottom:20px}
-    #pg-cat.open{display:block}
-    .cathdr{background:var(--card);border-bottom:1px solid var(--bdr);padding:12px 24px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;max-width:100%}
-    .catback{font-size:22px;color:var(--t1);padding:0 4px}
-    .caticon{width:34px;height:34px;border-radius:var(--r6);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-    .cattitle{font-size:16px;font-weight:900;flex:1}
-    .sfbar{display:flex;border-bottom:1px solid var(--bdr);background:var(--card);position:sticky;top:54px;z-index:49;max-width:100%}
-    .sfbtn{flex:0 0 auto;display:flex;align-items:center;gap:5px;padding:10px 18px;font-size:12px;font-weight:700;color:var(--t2);border-right:1px solid var(--bdr)}
-    .sfbtn:last-child{border-right:none}
-    .pgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:16px 24px 40px;max-width:var(--wrap);margin:0 auto}
-    .pc{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r14);overflow:hidden;cursor:pointer;transition:box-shadow .15s,transform .1s}
-    .pc:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px)}
-    .pc-img{height:140px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:42px;position:relative;overflow:hidden}
-    .pc-img img{width:100%;height:100%;object-fit:cover}
-    .pc-pct{position:absolute;top:7px;left:7px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 7px;border-radius:var(--rfull)}
-    .pc-body{padding:10px}
-    .pc-br{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;margin-bottom:2px}
-    .pc-nm{font-size:12px;font-weight:700;line-height:1.35;min-height:30px;margin-bottom:6px}
-    .pc-price{font-size:15px;font-weight:900}
-    .pc-unit{font-size:9px;color:var(--t3);margin-left:2px}
-    .pc-mrp{font-size:9px;color:var(--t4);text-decoration:line-through;margin-left:4px}
-    .pc-add{display:block;width:100%;margin-top:8px;padding:9px;background:var(--g);color:#fff;border-radius:var(--r6);font-size:13px;font-weight:800;text-align:center;cursor:pointer}
-    .pc-qrow{display:flex;align-items:center;border:1.5px solid var(--g);border-radius:var(--r6);overflow:hidden;margin-top:8px}
-    .pc-qbtn{flex:0 0 38px;height:38px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:var(--g)}
-    .pc-qfill{background:var(--g);color:#fff}
-    .pc-qn{flex:1;text-align:center;font-size:14px;font-weight:800}
+/* ── WALLET ── */
+.wallet-card{background:linear-gradient(135deg,var(--gdk),var(--g));border-radius:16px;padding:20px;color:#fff;margin-bottom:16px}
+.wallet-bal{font-size:32px;font-weight:900;margin-bottom:4px}
+.points-card{background:#FFF8E1;border-radius:14px;padding:14px;border:1px solid #FFD9A0;margin-bottom:12px}
 
-    /* ─── PDP SHEET ─── */
-    .pdp{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;z-index:200;max-height:92vh;overflow-y:auto;transform:translateY(105%);transition:transform .32s cubic-bezier(.32,.72,0,1)}
-    .pdp.open{transform:translateY(0)}
-    .pdp-imgwrap{height:240px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:80px;position:relative;overflow:hidden}
-    .pdp-imgwrap img{width:100%;height:100%;object-fit:contain;padding:16px}
-    .pdp-pct{position:absolute;top:12px;left:12px;background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:4px 10px;border-radius:var(--rfull)}
-    .pdp-close{position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);border:none;color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-    .pdp-wish{position:absolute;top:10px;right:48px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.3);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-    .pdp-body{padding:16px 20px 120px}
-    .pdp-br{font-size:10px;font-weight:800;color:var(--g);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
-    .pdp-nm{font-size:20px;font-weight:900;line-height:1.25;letter-spacing:-.3px;margin-bottom:8px}
-    .pdp-prow{display:flex;align-items:baseline;gap:8px;margin-bottom:2px}
-    .pdp-price{font-size:28px;font-weight:900}
-    .pdp-unit{font-size:12px;color:var(--t3)}
-    .pdp-omrp{font-size:13px;color:var(--t4);text-decoration:line-through}
-    .pdp-gst{font-size:11px;color:var(--t3);margin-bottom:14px}
-    .pdp-trust{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin-bottom:16px}
-    .pdp-ti{text-align:center}
-    .pdp-ti-icon{font-size:20px;margin-bottom:3px}
-    .pdp-ti-lbl{font-size:9px;color:var(--t3);font-weight:600;line-height:1.3}
-    .pdp-spec-h{font-size:14px;font-weight:800;margin-bottom:8px}
-    .pdp-spec{border:1px solid var(--bdr);border-radius:var(--r10);overflow:hidden;margin-bottom:18px}
-    .pdp-spec-row{display:flex;border-bottom:1px solid var(--bdr);font-size:12px}
-    .pdp-spec-row:last-child{border-bottom:none}
-    .pdp-spec-k{width:45%;padding:9px 12px;background:var(--bg);color:var(--t2);font-weight:600}
-    .pdp-spec-v{flex:1;padding:9px 12px;color:var(--t1)}
-    .pdp-more-from{margin-top:20px}
-    .pdp-more-h{font-size:14px;font-weight:800;margin-bottom:10px}
-    .pdp-more-scr{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px}
-    .pdp-more-scr::-webkit-scrollbar{display:none}
-    .pdp-mcard{flex:0 0 120px;border:1px solid var(--bdr);border-radius:var(--r10);overflow:hidden;cursor:pointer}
-    .pdp-mi{height:80px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:28px}
-    .pdp-mi img{width:100%;height:100%;object-fit:cover}
-    .pdp-mb{padding:7px 8px}
-    .pdp-mn{font-size:10px;font-weight:700;line-height:1.3;min-height:26px}
-    .pdp-mp{font-size:12px;font-weight:900;margin-top:3px}
-    .pdp-bar{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--bdr);padding:12px 20px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;z-index:201}
-    .pdp-bar.off{display:none}
-    .pdp-bar-call{width:50px;height:50px;border-radius:var(--r10);background:var(--glt);border:1.5px solid var(--gbdr);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;text-decoration:none}
-    .pdp-bar-atc{flex:1;padding:14px;background:var(--g);border-radius:var(--r10);color:#fff;font-size:15px;font-weight:900;border:none;cursor:pointer}
+/* ── PROFILE ── */
+.profile-avatar{width:72px;height:72px;background:var(--g);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff;font-weight:900;margin:0 auto 12px}
 
-    /* ─── SHEETS / OVERLAY ─── */
-    .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;backdrop-filter:blur(1px)}
-    .overlay.open{display:block}
-    .sheet{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:88vh;overflow-y:auto;padding:0 20px calc(24px + env(safe-area-inset-bottom))}
-    .sheet.open{transform:translateY(0)}
-    .sheet-handle{width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:10px auto 18px}
-    .pdp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:199}
-    .pdp-overlay.open{display:block}
+/* ── UTILITIES ── */
+.btn-g{width:100%;padding:14px;background:var(--g);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit}
+.btn-g:disabled{opacity:.6;cursor:not-allowed}
+.btn-out{width:100%;padding:13px;background:#fff;color:var(--g);border:1.5px solid var(--g);border-radius:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
+.form-lbl{font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em}
+.form-inp{width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;color:var(--t1);font-family:inherit;background:#fff}
+.form-inp:focus{border-color:var(--g)}
+.empty{text-align:center;padding:40px 20px;color:var(--t3)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-msg{font-size:14px;font-weight:700;color:var(--t2);margin-bottom:4px}
 
-    /* ─── TOAST ─── */
-    #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111;color:#fff;padding:10px 22px;border-radius:var(--rfull);font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;z-index:300;pointer-events:none;white-space:nowrap}
-    #toast.show{opacity:1}
-
-    /* ─── MOBILE BOTTOM NAV ─── */
-    #bnav{position:fixed;bottom:0;left:0;right:0;background:#ffffff;border-top:1.5px solid #E5E5E5;display:none;z-index:100;padding-bottom:env(safe-area-inset-bottom)}
-    .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 0 6px;font-size:9px;font-weight:600;color:var(--t3);border:none;background:none;cursor:pointer}
-    .nav-item.active{color:var(--g)}
-    .nav-icon{font-size:20px;line-height:1}
-
-    /* ─── FOOTER ─── */
-    .footer{background:#F0F7F2;padding:36px 24px 32px;margin-top:20px;border-top:2px solid #16783A}
-    .footer-inner{max-width:var(--wrap);margin:0 auto}
-    .ft-top{display:flex;gap:40px;margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid #D0E8D8}
-    .ft-brand{min-width:200px}
-    .ft-logo{font-size:18px;font-weight:900;color:var(--gold)}
-    .ft-tagline{font-size:12px;color:rgba(255,255,255,.4);margin-top:4px;line-height:1.5}
-    .ft-contact{margin-top:12px;font-size:12px;color:rgba(255,255,255,.5)}
-    .ft-contact a{color:var(--gold)}
-    .ft-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;flex:1}
-    .ft-head{font-size:10px;font-weight:800;color:var(--gold);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px}
-    .ft-link{display:block;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:8px;cursor:pointer}
-    .ft-link:hover{color:rgba(255,255,255,.8)}
-    .ft-bottom{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
-    .ft-copy{font-size:11px;color:rgba(255,255,255,.25)}
-    .ft-access{display:flex;gap:8px}
-    .ft-abtn{padding:8px 16px;border-radius:var(--r6);font-size:11px;font-weight:700}
-
-    /* ─── DIVIDER ─── */
-    .div-line{height:1px;background:var(--bdr);margin:4px 0}
-
-    /* ══════════════════════════════════════
-       MOBILE OVERRIDES  (≤ 767px)
-    ══════════════════════════════════════ */
-    @media(max-width:767px){
-      :root{--wrap:100%}
-      .hdr-inner{padding:10px 14px 0;gap:10px}
-      .hdr-del{display:none}
-      .hdr-search{display:none}
-      .mob-search{display:block}
-      #cat-nav{display:none!important}
-      .hero-wrap{padding:10px 14px 0}
-      .hero-inner{padding:20px 18px 18px}
-      .hero-h{font-size:26px}
-      .sec-wrap{padding:0 14px}
-      .sec-hdr{padding:16px 0 10px}
-      .sec-t{font-size:16px}
-      .cgrid{grid-template-columns:repeat(3,1fr);gap:8px}
-      .cimg{height:80px;font-size:36px}
-      .clabel{font-size:10px;padding:6px 4px 8px}
-      .dcard{flex:0 0 150px}
-      .dimg{height:118px}
-      .pcard{flex:0 0 188px}
-      .why-grid{grid-template-columns:1fr 1fr}
-      .cc-banner{padding:16px 16px}
-      .cc-h{font-size:16px}
-      .cc-btn{padding:10px 14px;font-size:12px}
-      .pgrid{grid-template-columns:1fr 1fr;gap:10px;padding:12px 14px 80px}
-      .cathdr{padding:10px 14px}
-      .sfbar{top:52px}
-      .footer{padding:28px 14px 80px;background:#F0F7F2}
-      .ft-top{flex-direction:column;gap:20px}
-      .ft-cols{grid-template-columns:1fr 1fr;gap:16px}
-      .ft-bottom{flex-direction:column;align-items:flex-start}
-      #bnav{display:flex}
-      #pg-home{padding-bottom:76px}
-      #pg-cat{padding-bottom:80px}
-      .pdp-bar,.sheet,.pdp{left:0;right:0;transform:translateY(105%)}
-      .pdp.open,.sheet.open{transform:translateY(0)}
-      #toast{bottom:76px}
-      .sopen{flex-wrap:wrap}
-    }
-
-    /* ══════════════════════════════════════
-       DESKTOP OVERRIDES  (≥ 768px)
-    ══════════════════════════════════════ */
-    @media(min-width:768px){
-      #cat-nav{display:block}
-      .hcart span.ctxt{display:inline}
-      .cgrid{grid-template-columns:repeat(6,1fr)}
-      .cimg{height:100px}
-      .dcard{flex:0 0 200px}
-      .why-grid{grid-template-columns:repeat(4,1fr)}
-      /* PDP and sheets centered on desktop */
-      .pdp,.sheet{max-width:600px;left:50%;right:auto;transform:translateX(-50%) translateY(105%);border-radius:16px 16px 0 0}
-      .pdp.open,.sheet.open{transform:translateX(-50%) translateY(0)}
-      .pdp-bar{max-width:600px;left:50%;right:auto;transform:translateX(-50%);border-radius:0 0 0 0}
-    }
-  </style>
+@media(min-width:768px){
+  .cgrid{grid-template-columns:repeat(6,1fr)}
+  .pgrid{grid-template-columns:repeat(3,1fr)}
+}
+</style>
 </head>
-<body style="background:#F4F4F4">
-
-<!-- ══ HEADER ══ -->
-<div id="hdr">
-  <div class="hdr-inner">
-    <a class="logo" href="./shop.html">
-      <div class="lbox">VW</div>
-      <div class="ltext">
-        <div class="lname">V Wholesale</div>
-        <span class="lcity">Vijayawada's Store</span>
+<body>
+<div id="app">
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-top">
+      <div class="hdr-logo" onclick="goHome()">
+        <div class="hdr-logo-icon">VW</div>
+        <div>
+          <div class="hdr-logo-text">V Wholesale</div>
+          <div class="hdr-logo-sub">Vijayawada's Store</div>
+        </div>
       </div>
-    </a>
-    <div class="hdr-del">📍 Vijayawada · 2–4 hrs</div>
-    <div class="hdr-search">
-      <div class="sbox">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        <input id="search-input" type="text" placeholder="Search tiles, cement, paints, brands…" oninput="handleSearch(this.value)">
-        <button id="search-clear" onclick="clearSearch()">✕</button>
+      <div class="hdr-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="search-input" placeholder="Search tiles, cement, paints…" oninput="handleSearch(this.value)" autocomplete="off">
+      </div>
+      <div class="hdr-acts">
+        <button class="hdr-btn" onclick="openWishlist()" title="Wishlist">🤍</button>
+        <button class="hdr-btn" onclick="openCartSheet()" title="Cart">
+          🛍
+          <span class="cart-badge" id="cart-badge" style="display:none">0</span>
+        </button>
+        <button class="signin-btn" id="auth-btn" onclick="openAuth()">Sign in</button>
       </div>
     </div>
-    <div class="hdr-spacer"></div>
-    <div class="hdr-btns">
-      <button class="hcart" onclick="openCart()">
-        🛍 <span class="ctxt">Cart</span>
-        <span class="cbadge" id="cart-badge">0</span>
-      </button>
-      <button class="hsignin" onclick="openLoginSheet()">Sign in</button>
+  </header>
+
+  <!-- TRUST BAR -->
+  <div class="tbar">
+    <div class="tbar-inner">
+      <div class="ti"><span class="ti-icon">⚡</span>2–4 Hr Delivery</div>
+      <div class="ti"><span class="ti-icon">✅</span>100% Genuine</div>
+      <div class="ti"><span class="ti-icon">💳</span>Pay on Delivery</div>
+      <div class="ti"><span class="ti-icon">🔄</span>7 Day Returns</div>
+      <div class="ti"><span class="ti-icon">🏷</span>Wholesale Prices</div>
+      <div class="ti"><span class="ti-icon">🏪</span>Self Pickup</div>
     </div>
   </div>
-  <!-- Mobile search -->
-  <div class="mob-search">
-    <div class="sbox">
-      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input id="search-input-mob" type="text" placeholder="Search tiles, cement, paints…" oninput="handleSearch(this.value)">
-      <button onclick="clearSearch()">✕</button>
-    </div>
-  </div>
-</div>
 
-<!-- ══ CATEGORY NAV BAR (desktop) ══ -->
-<div id="cat-nav">
-  <div class="cat-nav-inner" id="cat-nav-items"></div>
-</div>
-
-<!-- ══ TRUST BAR ══ -->
-<div class="tbar">
-  <div class="tbar-inner">
-    <div class="ti"><span class="ti-icon">🚚</span><span class="ti-lbl">2–4 Hr Delivery in Vijayawada</span></div>
-    <div class="ti"><span class="ti-icon">💳</span><span class="ti-lbl">Pay on Delivery</span></div>
-    <div class="ti"><span class="ti-icon">🔄</span><span class="ti-lbl">7 Day Easy Returns</span></div>
-    <div class="ti"><span class="ti-icon">✅</span><span class="ti-lbl">100% Genuine Products</span></div>
-    <div class="ti"><span class="ti-icon">💰</span><span class="ti-lbl">Wholesale Pricing</span></div>
-    <div class="ti"><span class="ti-icon">🏪</span><span class="ti-lbl">Self Pickup Available</span></div>
-  </div>
-</div>
-
-<!-- ══ HOME PAGE ══ -->
-<div id="pg-home">
-
-  <!-- HERO -->
-  <div class="hero-wrap">
-    <div class="hero">
-      <div class="hero-tag">⚡ 2–4 hr<br>Delivery</div>
-      <div class="hero-inner">
-        <div class="hero-kicker">Vijayawada's #1 Home Building Store</div>
-        <h1 class="hero-h">Build Better.<br><b>Pay Less.</b></h1>
-        <p class="hero-sub">Tiles · Sanitaryware · Plumbing · Electricals · Paints & More</p>
+  <!-- PAGE CONTENT -->
+  <div id="page-content">
+    <!-- HOME PAGE -->
+    <div id="pg-home">
+      <!-- Hero -->
+      <div class="hero" style="position:relative">
+        <div class="hero-tag">— Vijayawada's #1 Home Building Store</div>
+        <div class="hero-h">Build Better.<br><span>Pay Less.</span></div>
+        <div class="hero-sub">Tiles · Sanitaryware · Plumbing · Electricals · Paints & More</div>
         <div class="hero-btns">
-          <button class="hbtn-pri" onclick="showCategory(null);setNav('shop')">Shop Now →</button>
-          <button class="hbtn-sec" onclick="showCategory('Tiles');setNav('shop')">Browse Tiles</button>
+          <button class="hero-btn-p" onclick="document.getElementById('search-input').focus()">Shop Now →</button>
+          <button class="hero-btn-s" onclick="showCategoryPage('Tiles')">Browse Tiles</button>
         </div>
+        <div class="hero-badge">2–4 hr<br>Delivery</div>
       </div>
-    </div>
-  </div>
-
-  <!-- CATEGORIES -->
-  <div class="sec-wrap">
-    <div class="sec-hdr">
-      <div><div class="sec-t">Shop by Category</div></div>
-      <button class="sec-all" onclick="showCategory(null);setNav('shop')">View All →</button>
-    </div>
-    <div class="cgrid" id="cat-grid"></div>
-  </div>
-
-  <!-- DEALS -->
-  <div class="sec-wrap">
-    <div class="sec-hdr">
-      <div>
-        <div class="sec-t">Best Deals</div>
-        <div class="sec-sub">Lowest prices right now</div>
-      </div>
-      <button class="sec-all" onclick="showCategory(null);setNav('shop')">View All →</button>
-    </div>
-    <div class="hscroll" id="deals-scroll">
-      <div style="padding:24px;color:var(--t3);font-size:13px">Loading…</div>
-    </div>
-  </div>
-
-  <!-- OFFERS -->
-  <div class="sec-wrap">
-    <div class="sec-hdr"><div class="sec-t">Offers for You</div></div>
-    <div class="hscroll">
-      <div class="pcard" style="background:linear-gradient(135deg,#0D5C2C,#16783A);color:#fff" onclick="openLoginSheet('offers')">
-        <div class="pkick">🎁 New Customer</div>
-        <div class="ph">10% Off</div>
-        <div class="psub">Free delivery on orders above ₹2,000</div>
-        <div class="pcode">WELCOME10</div>
-      </div>
-      <div class="pcard" style="background:linear-gradient(135deg,#1C1035,#2D1B6B);color:#fff" onclick="showCategory('Tiles');setNav('shop')">
-        <div class="pkick">🏆 Tile Specialist</div>
-        <div class="ph">600+ Designs</div>
-        <div class="psub">All sizes · All finishes in stock</div>
-        <div class="pcode" style="color:#A78BFA;border-color:#A78BFA">Free quote →</div>
-      </div>
-      <div class="pcard" style="background:linear-gradient(135deg,#C8700A,#E8901A);color:#fff" onclick="openLoginSheet()">
-        <div class="pkick">⭐ Loyalty Rewards</div>
-        <div class="ph">Earn Points</div>
-        <div class="psub">10 pts per ₹100 · Redeem anytime</div>
-        <div class="pcode">Join free →</div>
-      </div>
-      <div class="pcard" style="background:linear-gradient(135deg,#1e3a5f,#2563EB);color:#fff" onclick="openLoginSheet()">
-        <div class="pkick">💳 V Wallet</div>
-        <div class="ph">₹200 Bonus</div>
-        <div class="psub">Add ₹1,000 to wallet · Get ₹200 extra</div>
-        <div class="pcode">FLAT200</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- WHY US -->
-  <div class="sec-wrap">
-    <div class="sec-hdr"><div class="sec-t">Why V Wholesale?</div></div>
-    <div class="why-grid">
-      <div class="why-card"><div class="why-icon">🚚</div><div><div class="why-title">2–4 Hr Delivery</div><div class="why-sub">Fastest in Vijayawada. Same-day guaranteed.</div></div></div>
-      <div class="why-card"><div class="why-icon">💰</div><div><div class="why-title">Wholesale Pricing</div><div class="why-sub">Trade rates for everyone. No hidden costs.</div></div></div>
-      <div class="why-card"><div class="why-icon">✅</div><div><div class="why-title">100% Genuine</div><div class="why-sub">Direct from brands. Always authentic.</div></div></div>
-      <div class="why-card"><div class="why-icon">🔄</div><div><div class="why-title">Easy 7-Day Returns</div><div class="why-sub">Free pickup. Instant refund.</div></div></div>
-    </div>
-  </div>
-
-  <!-- CONTRACTOR CLUB -->
-  <div class="sec-wrap" style="padding-top:16px;padding-bottom:4px">
-    <div class="cc-banner" onclick="openLoginSheet()">
-      <div class="cc-emoji">👷</div>
-      <div style="flex:1;min-width:0">
-        <div class="cc-kicker">Contractor Club</div>
-        <div class="cc-h">B2B Pricing + Referral Rewards</div>
-        <div class="cc-sub">Exclusive rates for trade professionals across AP & Telangana</div>
-        <div class="cc-pills">
-          <span class="cc-pill">Plumbers</span>
-          <span class="cc-pill">Electricians</span>
-          <span class="cc-pill">Painters</span>
-          <span class="cc-pill">Tilers</span>
-          <span class="cc-pill">Contractors</span>
+      <!-- Categories -->
+      <div class="sec">
+        <div class="sec-hdr">
+          <div class="sec-t">Shop by Category</div>
+          <a class="sec-link" onclick="showAllCategories()">View all →</a>
         </div>
+        <div class="cgrid" id="cat-grid"></div>
       </div>
-      <div class="cc-btn">Join Free →</div>
-    </div>
-  </div>
-
-  <!-- DELIVERY ZONE + MAP -->
-  <div class="sec-wrap">
-    <div class="sec-hdr">
-      <div><div class="sec-t">Check Delivery to Your Area</div><div class="sec-sub">AP & Telangana covered · Same-day in Vijayawada</div></div>
-    </div>
-    <div class="pzrow">
-      <div class="pzfield">
-        <span style="font-size:16px">📍</span>
-        <input id="pincode-check-input" type="tel" inputmode="numeric" maxlength="6" placeholder="Enter 6-digit pincode" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
-      </div>
-      <button class="pzbtn" onclick="checkDeliveryPincode()">Check</button>
-    </div>
-    <div id="pz-result" style="margin-bottom:16px"></div>
-
-    <div class="mapwrap">
-      <div class="maphdr">
-        <div class="mkick">Our Stores</div>
-        <div class="mt">AP & Telangana</div>
-        <div class="msub">1 store open · 13 cities coming soon</div>
-      </div>
-      <svg viewBox="0 0 320 340" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-height:220px;display:block">
-        <path d="M62,165 L52,130 L72,92 L112,72 L162,62 L212,77 L252,102 L270,140 L260,188 L240,236 L212,284 L182,322 L152,340 L122,330 L92,302 L72,264 L57,226 Z" fill="#1A2E1A" stroke="#2E7D4F" stroke-width="1"/>
-        <path d="M112,72 L162,62 L212,77 L252,102 L240,150 L220,178 L192,188 L162,183 L132,173 L112,153 L107,118 Z" fill="#1A1530" stroke="#5B3FA6" stroke-width="1"/>
-        <text x="158" y="248" fill="rgba(255,255,255,.15)" font-size="8.5" font-weight="700" text-anchor="middle" font-family="system-ui">ANDHRA PRADESH</text>
-        <text x="178" y="128" fill="rgba(255,255,255,.15)" font-size="7.5" font-weight="700" text-anchor="middle" font-family="system-ui">TELANGANA</text>
-        <circle cx="168" cy="197" r="11" fill="rgba(232,144,26,.15)" stroke="rgba(232,144,26,.4)" stroke-width="1"/>
-        <circle cx="168" cy="197" r="6" fill="#E8901A"/><circle cx="168" cy="197" r="3" fill="#fff"/>
-        <text x="168" y="215" fill="#E8901A" font-size="7" font-weight="800" text-anchor="middle" font-family="system-ui">VIJAYAWADA</text>
-        <text x="168" y="223" fill="rgba(232,144,26,.5)" font-size="5.5" text-anchor="middle" font-family="system-ui">OPEN NOW</text>
-        <circle cx="155" cy="218" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="155" y="232" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Guntur</text>
-        <circle cx="148" cy="280" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="148" y="293" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Nellore</text>
-        <circle cx="152" cy="256" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="152" y="269" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Ongole</text>
-        <circle cx="140" cy="312" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="140" y="324" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Tirupati</text>
-        <circle cx="128" cy="293" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="116" y="300" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Kadapa</text>
-        <circle cx="108" cy="254" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="96" y="261" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Kurnool</text>
-        <circle cx="93" cy="278" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="81" y="285" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Anantapur</text>
-        <circle cx="200" cy="173" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="214" y="177" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Rajamundry</text>
-        <circle cx="220" cy="153" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="234" y="157" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Anakapalle</text>
-        <circle cx="235" cy="136" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="249" y="140" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Vizag</text>
-        <circle cx="248" cy="116" r="3.5" fill="rgba(255,255,255,.2)" stroke="rgba(255,255,255,.35)" stroke-width=".8"/><text x="262" y="120" fill="rgba(255,255,255,.38)" font-size="5.5" text-anchor="middle" font-family="system-ui">Srikakulam</text>
-        <circle cx="155" cy="158" r="3.5" fill="rgba(139,92,246,.6)" stroke="rgba(139,92,246,.9)" stroke-width=".8"/><text x="143" y="153" fill="rgba(139,92,246,.8)" font-size="5.5" text-anchor="middle" font-family="system-ui">Khammam</text>
-        <circle cx="178" cy="136" r="3.5" fill="rgba(139,92,246,.6)" stroke="rgba(139,92,246,.9)" stroke-width=".8"/><text x="178" y="129" fill="rgba(139,92,246,.8)" font-size="5.5" text-anchor="middle" font-family="system-ui">Warangal</text>
-      </svg>
-      <div class="mleg">
-        <div class="mleg-item"><span class="mleg-dot" style="background:#E8901A"></span>Open</div>
-        <div class="mleg-item"><span class="mleg-dot" style="background:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.5)"></span>AP — Soon</div>
-        <div class="mleg-item"><span class="mleg-dot" style="background:rgba(139,92,246,.6)"></span>Telangana — Soon</div>
-      </div>
-    </div>
-    <div style="margin-top:10px">
-      <div class="sopen">
-        <div class="sopen-dot"></div>
-        <div><div class="sopen-name">V Wholesale · Vijayawada</div><div class="sopen-addr">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
-        <div class="sbtns">
-          <a href="tel:8712697930" class="sbtn-call">📞 Call</a>
-          <button class="sbtn-pk" onclick="showPickupOption()">Pickup Info</button>
+      <!-- Deals -->
+      <div class="sec" style="padding-top:0">
+        <div class="sec-hdr">
+          <div class="sec-t">⚡ Best Deals</div>
+          <a class="sec-link" onclick="showCategoryPage(null)">View all →</a>
         </div>
+        <div class="hscroll" id="deals-scroll"></div>
       </div>
-      <div class="cities">
-        <span class="cpill">Guntur</span><span class="cpill">Nellore</span><span class="cpill">Ongole</span><span class="cpill">Tirupati</span><span class="cpill">Kadapa</span><span class="cpill">Kurnool</span><span class="cpill">Anantapur</span><span class="cpill">Rajamundry</span><span class="cpill">Anakapalle</span><span class="cpill">Vizag</span><span class="cpill">Srikakulam</span><span class="cpill cpill-tg">Khammam</span><span class="cpill cpill-tg">Warangal</span>
-      </div>
-    </div>
-  </div>
-
-</div><!-- /pg-home -->
-
-<!-- ══ CATEGORY PAGE ══ -->
-<div id="pg-cat">
-  <div class="cathdr">
-    <button class="catback" onclick="closeCategoryPage()">←</button>
-    <div class="caticon" id="cat-icon"></div>
-    <span class="cattitle" id="cat-title">Products</span>
-    <button class="hcart" onclick="openCart()" style="position:relative">🛍 <span class="cbadge" id="cat-cart-badge" style="display:none">0</span></button>
-  </div>
-  <div class="sfbar">
-    <button class="sfbtn" onclick="toggleSort()">↕ Sort</button>
-    <button class="sfbtn" onclick="toggleFilter()">⚙ Filter</button>
-  </div>
-  <div class="pgrid" id="product-grid">
-    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">Loading…</div>
-  </div>
-</div>
-
-<!-- ══ FOOTER ══ -->
-<div class="footer">
-  <div class="footer-inner">
-    <div class="ft-top">
-      <div class="ft-brand">
+      <!-- Offers strip -->
+      <div class="sec" style="padding-top:0" id="offers-strip"></div>
+      <!-- Footer -->
+      <div class="footer">
         <div class="ft-logo">V Wholesale</div>
         <div class="ft-tagline">Vijayawada's home building store<br>NH65, Bhavanipuram · 520012</div>
         <div class="ft-contact">📞 <a href="tel:8712697930">87126 97930</a><br>📧 <a href="mailto:hello@vwholesale.in">hello@vwholesale.in</a></div>
-      </div>
-      <div class="ft-cols">
-        <div>
-          <div class="ft-head">Shop</div>
-          <a class="ft-link" onclick="showCategory('Tiles');setNav('shop')">Tiles</a>
-          <a class="ft-link" onclick="showCategory('Sanitary');setNav('shop')">Sanitaryware</a>
-          <a class="ft-link" onclick="showCategory('Plumbing');setNav('shop')">Plumbing</a>
-          <a class="ft-link" onclick="showCategory('Electricals');setNav('shop')">Electricals</a>
-          <a class="ft-link" onclick="showCategory('Paints');setNav('shop')">Paints</a>
-          <a class="ft-link" onclick="showCategory('Hardware');setNav('shop')">Hardware</a>
-        </div>
-        <div>
-          <div class="ft-head">Company</div>
-          <a class="ft-link" href="./about.html">About Us</a>
-          <a class="ft-link" href="./contact.html">Contact Us</a>
-          <a class="ft-link" href="./privacy.html">Privacy Policy</a>
-          <a class="ft-link" href="./terms.html">Terms of Service</a>
-          <a class="ft-link" href="./refund.html">Refund Policy</a>
-          <a class="ft-link" href="./shipping.html">Shipping Policy</a>
-        </div>
-        <div>
-          <div class="ft-head">Partner Access</div>
-          <a class="ft-link" href="./index.html?staff=1">🏪 Staff Login</a>
-          <a class="ft-link" href="./index.html?contractor=1">💼 Professional Login</a>
-          <div class="ft-head" style="margin-top:16px">Store Hours</div>
-          <div class="ft-link" style="cursor:default">Mon – Sat</div>
-          <div class="ft-link" style="cursor:default">9:00 AM – 7:30 PM</div>
+        <div class="ft-head">Shop</div>
+        <a class="ft-link" onclick="showCategoryPage('Tiles')">Tiles & Flooring</a>
+        <a class="ft-link" onclick="showCategoryPage('Sanitary')">Sanitaryware</a>
+        <a class="ft-link" onclick="showCategoryPage('Faucets')">Faucets & Showers</a>
+        <a class="ft-link" onclick="showCategoryPage('Paints')">Paints</a>
+        <a class="ft-link" onclick="showCategoryPage('Wires')">Electricals</a>
+        <a class="ft-link" onclick="showCategoryPage('Cement')">Construction</a>
+        <div class="ft-head">Company</div>
+        <a class="ft-link" href="./about.html">About Us</a>
+        <a class="ft-link" href="./contact.html">Contact</a>
+        <a class="ft-link" href="./privacy.html">Privacy Policy</a>
+        <a class="ft-link" href="./terms.html">Terms</a>
+        <hr class="ft-divider">
+        <div class="ft-copy">© 2026 Vassure Wholesale Pvt. Ltd. · GSTIN 37AAJCV5725H1ZZ</div>
+        <div class="ft-access">
+          <a href="./index.html?staff=1" class="ft-abtn" style="background:#E8F5EC;color:#0D5C2C;border:1px solid #B7DFC4">🏪 Staff Login</a>
+          <a href="./index.html?contractor=1" class="ft-abtn" style="background:#FFF3E0;color:#E8901A;border:1px solid #FFD9A0">💼 Professional</a>
         </div>
       </div>
     </div>
-    <div class="ft-bottom">
-      <div class="ft-copy">© 2026 Vassure Wholesale Pvt. Ltd. · GSTIN 37AAJCV5725H1ZZ</div>
-      <div class="ft-access">
-        <a href="./index.html?staff=1" class="ft-abtn" style="background:#E8F5EC;color:#0D5C2C;border:1px solid #B7DFC4">Staff Login</a>
-        <a href="./index.html?contractor=1" class="ft-abtn" style="background:#FFF3E0;color:#E8901A;border:1px solid #FFD9A0">Professional Login</a>
+
+    <!-- CATEGORY PAGE -->
+    <div id="pg-cat" style="display:none;padding-bottom:80px">
+      <div class="cat-hdr" style="position:sticky;top:57px;background:#F4F4F4;z-index:10;padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bdr)">
+        <button class="cat-back" onclick="goHome()">←</button>
+        <div class="cat-title" id="cat-title">Products</div>
       </div>
+      <div class="pgrid" id="cat-grid-products" style="padding:14px;gap:12px;display:grid;grid-template-columns:1fr 1fr"></div>
+      <div id="cat-load-more" style="padding:10px 14px;display:none">
+        <button class="btn-out" onclick="loadMoreProducts()">Load more</button>
+      </div>
+    </div>
+
+    <!-- SEARCH RESULTS -->
+    <div id="pg-search" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <button onclick="goHome()" style="background:none;border:none;font-size:20px;cursor:pointer">←</button>
+        <div id="search-title" style="font-size:15px;font-weight:800">Search Results</div>
+      </div>
+      <div class="pgrid" id="search-results"></div>
+    </div>
+
+    <!-- ORDERS PAGE -->
+    <div id="pg-orders" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px">📦 My Orders</div>
+      <div id="orders-list"></div>
+    </div>
+
+    <!-- ACCOUNT PAGE -->
+    <div id="pg-account" style="display:none;padding:14px;padding-bottom:80px">
+      <div id="account-content"></div>
+    </div>
+
+    <!-- OFFERS PAGE -->
+    <div id="pg-offers" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px">🎁 Offers & Promos</div>
+      <div id="offers-list"></div>
+    </div>
+
+    <!-- WISHLIST PAGE -->
+    <div id="pg-wishlist" style="display:none;padding:14px;padding-bottom:80px">
+      <div style="font-size:17px;font-weight:900;margin-bottom:14px">🤍 My Wishlist</div>
+      <div id="wishlist-list"></div>
     </div>
   </div>
 </div>
 
-<!-- ══ MOBILE BOTTOM NAV ══ -->
-<nav id="bnav">
-  <button class="nav-item active" id="nav-home" onclick="goHome();setNav('home')"><span class="nav-icon">🏠</span><span>Home</span></button>
-  <button class="nav-item" id="nav-shop" onclick="showCategory(null);setNav('shop')"><span class="nav-icon">🛒</span><span>Shop</span></button>
-  <button class="nav-item" id="nav-offers" onclick="openLoginSheet('offers')"><span class="nav-icon">🎁</span><span>Offers</span></button>
-  <button class="nav-item" id="nav-orders" onclick="openLoginSheet('orders')"><span class="nav-icon">📦</span><span>Orders</span></button>
-  <button class="nav-item" id="nav-account" onclick="openLoginSheet()"><span class="nav-icon">👤</span><span>Account</span></button>
-</nav>
+<!-- PDP OVERLAY -->
+<div class="pdp-overlay" id="pdp-overlay" onclick="closePDP()"></div>
+<div class="pdp-sheet" id="pdp-sheet"></div>
+<div class="pdp-bar" id="pdp-bar" style="display:none"></div>
 
-<!-- ══ OVERLAYS ══ -->
+<!-- SHEET OVERLAY -->
 <div class="overlay" id="sheet-overlay" onclick="closeSheet()"></div>
 <div class="sheet" id="bottom-sheet"></div>
-<div class="pdp-overlay" id="pdp-overlay" onclick="closePDP()"></div>
-<div class="pdp" id="pdp-sheet"></div>
-<div class="pdp-bar off" id="pdp-action-bar"></div>
+
+<!-- BOTTOM NAV -->
+<nav id="bnav">
+  <button class="nav-item active" id="nav-home" onclick="showPage('home')"><span class="nav-icon">🏠</span><span>Home</span></button>
+  <button class="nav-item" id="nav-cat" onclick="showCategoryPage(null)"><span class="nav-icon">🛒</span><span>Shop</span></button>
+  <button class="nav-item" id="nav-offers" onclick="showPage('offers')"><span class="nav-icon">🎁</span><span>Offers</span></button>
+  <button class="nav-item" id="nav-orders" onclick="requireAuth(()=>showPage('orders'))"><span class="nav-icon">📦</span><span>Orders</span></button>
+  <button class="nav-item" id="nav-account" onclick="requireAuth(()=>showPage('account'))"><span class="nav-icon">👤</span><span>Account</span></button>
+</nav>
+
+<!-- TOAST -->
 <div id="toast"></div>
 
 <script>
-// ── CONFIG ──
-const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+// ══════════════════════════════════════════════════════
+// V WHOLESALE CUSTOMER PORTAL — shop.html
+// All data via secure Edge Functions (no anon key exposed)
+// customer-auth / customer-shop / customer-orders / customer-account
+// ══════════════════════════════════════════════════════
 
-let CATS = [
-  { key:'Tiles',            icon:'⬜', label:'Tiles',              color:'#8B5CF6' },
-  { key:'Sanitary',         icon:'🚽', label:'Sanitaryware',       color:'#3B82F6' },
-  { key:'Faucets',          icon:'🚰', label:'Faucets & Taps',     color:'#0369A1' },
-  { key:'Showers',          icon:'🚿', label:'Showers',            color:'#0284C7' },
-  { key:'Basins',           icon:'🪠', label:'Wash Basins',        color:'#2563EB' },
-  { key:'Kitchen Sinks',    icon:'🫧', label:'Kitchen Sinks',      color:'#065F46' },
-  { key:'Wires',            icon:'🔌', label:'Wires & Cables',     color:'#F59E0B' },
-  { key:'Switches',         icon:'💡', label:'Switches & Sockets', color:'#D97706' },
-  { key:'Protection',       icon:'⚡', label:'MCB & DB Boxes',     color:'#B45309' },
-  { key:'LED Lights',       icon:'💡', label:'LED Lights',         color:'#EAB308' },
-  { key:'Fans',             icon:'🌀', label:'Fans',               color:'#0D9488' },
-  { key:'Pipes',            icon:'🔧', label:'Pipes & CPVC',       color:'#06B6D4' },
-  { key:'Plywood',          icon:'🪵', label:'Plywood',            color:'#92400E' },
-  { key:'Boards',           icon:'📋', label:'MDF & Boards',       color:'#78350F' },
-  { key:'Laminates',        icon:'🗂', label:'Laminates',          color:'#6B21A8' },
-  { key:'Door Hardware',    icon:'🔑', label:'Door Hardware',      color:'#6B7280' },
-  { key:'Cabinet Hardware', icon:'🗄', label:'Cabinet Hardware',   color:'#4B5563' },
-  { key:'Doors',            icon:'🚪', label:'Doors',              color:'#7C2D12' },
-  { key:'Windows',          icon:'🪟', label:'Windows',            color:'#A16207' },
-  { key:'Paints',           icon:'🎨', label:'Paints',             color:'#EC4899' },
-  { key:'Waterproofing',    icon:'💧', label:'Waterproofing',      color:'#BE185D' },
-  { key:'Tile Chemicals',   icon:'🧪', label:'Tile Chemicals',     color:'#9D174D' },
-  { key:'Power Tools',      icon:'🔨', label:'Power Tools',        color:'#EF4444' },
-  { key:'Hand Tools',       icon:'🛠', label:'Hand Tools',         color:'#DC2626' },
-  { key:'Large Appliances', icon:'🏠', label:'Large Appliances',   color:'#10B981' },
-  { key:'Plumbing',         icon:'⚙', label:'Plumbing Acc',        color:'#0C4A6E' },
-  { key:'Cement',           icon:'🏗', label:'Cement',             color:'#57534E' },
-  { key:'Steel',            icon:'🔩', label:'Steel & Metal',      color:'#44403C' },
-  { key:'Blocks',           icon:'🧱', label:'Bricks & Blocks',    color:'#292524' },
-  { key:'Profiles',         icon:'📐', label:'Profiles & Trims',   color:'#7C3AED' },
-];
+const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1';
+const GA4_ID = ''; // set in admin settings
 
-// Try to load live categories from DB in background
-async function loadCategories() {
-  try {
-    const data = await sbFetch('shop_categories', '?is_active=eq.true&order=sort_order.asc&limit=100');
-    if (Array.isArray(data) && data.length) {
-      CATS = data;
-      renderCatGrid();
-      renderCatNav();
-    }
-  } catch(e) {
-    console.warn('Using default categories:', e.message);
+// ── STATE ──
+let _token = localStorage.getItem('vw_ctoken') || null;
+let _user = JSON.parse(localStorage.getItem('vw_cuser') || 'null');
+let _cart = JSON.parse(localStorage.getItem('vw_cart') || '{}'); // {id: qty}
+let _cartItems = JSON.parse(localStorage.getItem('vw_cart_items') || '{}'); // {id: {name,price,unit,image}}
+let _wishlist = new Set(JSON.parse(localStorage.getItem('vw_wishlist') || '[]'));
+let _cats = [];
+let _currentPage = 'home';
+let _currentCat = null;
+let _catOffset = 0;
+let _searchQ = '';
+
+// ── API HELPER ──
+async function api(fn, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (_token) headers['x-customer-token'] = _token;
+  const r = await fetch(`${API}/${fn}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  const data = await r.json();
+  if (!data.ok && data.error === 'Authentication required') { _logout(); return null; }
+  return data;
+}
+
+// ── AUTH ──
+function _logout() {
+  _token = null; _user = null;
+  localStorage.removeItem('vw_ctoken');
+  localStorage.removeItem('vw_cuser');
+  _updateAuthUI();
+}
+
+function _setSession(token, user) {
+  _token = token; _user = user;
+  localStorage.setItem('vw_ctoken', token);
+  localStorage.setItem('vw_cuser', JSON.stringify(user));
+  _updateAuthUI();
+}
+
+function _updateAuthUI() {
+  const btn = document.getElementById('auth-btn');
+  if (_user) {
+    btn.textContent = _user.name?.split(' ')[0] || 'Account';
+    btn.onclick = () => showPage('account');
+  } else {
+    btn.textContent = 'Sign in';
+    btn.onclick = openAuth;
   }
 }
 
-
-let cart = {};
-
-// ── SUPABASE FETCH ──
-async function sbFetch(table, params = '') {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${params}`, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-  });
-  if (!r.ok) {
-    const err = await r.text();
-    console.error('sbFetch error:', r.status, err);
-    throw new Error('API error ' + r.status);
-  }
-  return r.json();
+function requireAuth(cb) {
+  if (_user) { cb(); return; }
+  openAuth(() => cb());
 }
 
-// ── TOAST ──
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), 2500);
-}
-
-// ── NAV ──
-function setNav(id) {
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  const el = document.getElementById('nav-' + id);
-  if (el) el.classList.add('active');
-}
-
-// ── CART ──
-function updateCartBadge() {
-  const total = Object.values(cart).reduce((a,b) => a+b, 0);
-  ['cart-badge','cat-cart-badge'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.textContent = total;
-    el.style.display = total > 0 ? 'flex' : 'none';
-  });
-}
-
-function addToCart(id, name, price) {
-  cart[id] = (cart[id] || 0) + 1;
-  window._cartNames = window._cartNames || {}; window._cartNames[id] = name;
-  window._cartPrices = window._cartPrices || {}; window._cartPrices[id] = price || 0;
-  updateCartBadge();
-  toast('Added: ' + name.slice(0,28));
-  refreshProductCards();
-  trackAddToCart(id, name, price);
-}
-
-function removeFromCart(id) {
-  if (cart[id] > 1) cart[id]--;
-  else delete cart[id];
-  updateCartBadge();
-  refreshProductCards();
-}
-
-function openCart() {
-  if (Object.keys(cart).length === 0) { toast('Your cart is empty'); return; }
-  openLoginSheet('cart');
-}
-
-// ── QTY CONTROLS (inline in cards) ──
-function refreshProductCards() {
-  Object.keys(cart).forEach(id => {
-    const el = document.getElementById('qty-' + id);
-    if (el) el.textContent = cart[id];
-  });
-}
-
-// ── LOGIN SHEET ──
-let _loginPhone = '';
-
-function closeSheet() {
-  document.getElementById('bottom-sheet')?.classList.remove('open');
-  document.getElementById('sheet-overlay')?.classList.remove('open');
-}
-
-// Customer login — opens the shop.html login sheet (not the staff auth screen)
-window._customerLogin = function() {
-  openLoginSheet();
-};
-
-// Hamburger drawer for shop.html
-window._shopDrawer = function() {
+function openAuth(onSuccess) {
+  window._authCallback = onSuccess || null;
   const sheet = document.getElementById('bottom-sheet');
   const overlay = document.getElementById('sheet-overlay');
-  if (!sheet) return;
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
-    <div style="display:flex;align-items:center;gap:12px;padding:4px 0 16px;border-bottom:1px solid var(--bdr);margin-bottom:10px">
-      <div style="width:44px;height:44px;background:var(--g);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff">👤</div>
-      <div>
-        <div style="font-size:15px;font-weight:800;color:var(--t1)">Welcome!</div>
-        <div style="font-size:12px;color:var(--t3)">Sign in to track orders & earn points</div>
-      </div>
-    </div>
-    <div style="display:grid;gap:2px;margin-bottom:12px">
-      <button onclick="closeSheet();goHome()" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">🏠 Home</button>
-      <button onclick="closeSheet();showCategory(null)" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">🛒 Browse All Products</button>
-      <button onclick="closeSheet();showCategory('Tiles')" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">⬜ Tiles</button>
-      <button onclick="closeSheet();showCategory('Sanitary')" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">🚽 Sanitaryware</button>
-      <button onclick="closeSheet();showCategory('Paints')" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;background:none;border:none;width:100%;text-align:left;cursor:pointer;font-size:14px;font-weight:700;color:var(--t1)">🎨 Paints</button>
-    </div>
-    <div style="border-top:1px solid var(--bdr);padding-top:10px;display:grid;gap:2px">
-      <a href="tel:8712697930" style="display:flex;align-items:center;gap:12px;padding:13px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:700;color:var(--t1)">📞 Call Store — 8712697930</a>
-    </div>
-    <button onclick="closeSheet();openLoginSheet()"
-      style="width:100%;margin-top:12px;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer">
-      👤 Sign In / Create Account
-    </button>
-    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">✕ Close</button>`;
-  sheet.classList.add('open');
-  overlay?.classList.add('open');
-};
-
-function openLoginSheet(context) {
-  _loginPhone = '';
-  renderLoginSheet(context);
-  document.getElementById('sheet-overlay').classList.add('open');
-  document.getElementById('bottom-sheet').classList.add('open');
-}
-
-function renderLoginSheet(context) {
-  const sheet = document.getElementById('bottom-sheet');
-  document.getElementById('sheet-overlay')?.classList.add('open');
-  sheet.classList.add('open');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="text-align:center;margin-bottom:18px">
+    <div style="text-align:center;margin-bottom:20px">
       <div style="font-size:38px;margin-bottom:8px">🛍</div>
       <div style="font-size:18px;font-weight:900;margin-bottom:4px">Sign in to V Wholesale</div>
       <div style="font-size:12px;color:var(--t3)">Earn points · Track orders · Get exclusive prices</div>
     </div>
     <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Mobile Number</label>
+      <label class="form-lbl">Mobile Number</label>
       <div style="display:flex;gap:8px">
-        <div style="padding:12px 14px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);white-space:nowrap">+91</div>
-        <input id="login-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"
-          autofocus
-          style="flex:1;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:16px;font-weight:700;outline:none;box-sizing:border-box;color:var(--t1)"
-          oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"
-          onkeydown="if(event.key==='Enter')sendCustomerOTP()">
+        <div style="padding:12px 14px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);flex-shrink:0">+91</div>
+        <input type="tel" inputmode="numeric" maxlength="10" id="auth-phone" placeholder="10-digit mobile"
+          style="flex:1;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:16px;font-weight:700;outline:none;color:var(--t1)"
+          oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)"
+          onkeydown="if(event.key==='Enter')authContinue()">
       </div>
     </div>
-    <button onclick="sendCustomerOTP()"
-      style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
-      Continue →
-    </button>
-    ${context==='cart' ? `
-    <div style="display:flex;align-items:center;gap:10px;margin:4px 0 10px">
-      <div style="flex:1;height:1px;background:var(--bdr)"></div>
-      <span style="font-size:11px;color:var(--t3);font-weight:700">OR</span>
-      <div style="flex:1;height:1px;background:var(--bdr)"></div>
-    </div>
-    <button onclick="openBestQuoteSheet()"
-      style="width:100%;padding:13px;border-radius:12px;background:#fff;border:1.5px solid var(--g);font-size:14px;font-weight:800;color:var(--g);cursor:pointer;margin-bottom:10px">
-      💬 Get Best Quote — no login needed
-    </button>
-    <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Our team calls you back within 30 minutes</div>
-    ` : ''}
-    <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:none;border:none;font-size:13px;color:var(--t2);cursor:pointer">← Continue browsing</button>`;
-}
-
-// ── GET BEST QUOTE — send cart as a quotation request, no login required ──
-function openBestQuoteSheet() {
-  const sheet = document.getElementById('bottom-sheet');
-  const items = Object.entries(cart);
-  const names = window._cartNames || {};
-  const prices = window._cartPrices || {};
-  const total = items.reduce((s,[id,qty]) => s + (prices[id]||0)*qty, 0);
-  document.getElementById('sheet-overlay')?.classList.add('open');
+    <button class="btn-g" onclick="authContinue()">Continue →</button>
+    <button onclick="closeSheet()" style="width:100%;padding:12px;margin-top:8px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">← Continue browsing</button>`;
   sheet.classList.add('open');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="text-align:center;margin-bottom:16px">
-      <div style="font-size:38px;margin-bottom:8px">💬</div>
-      <div style="font-size:17px;font-weight:900">Get Best Quote</div>
-      <div style="font-size:12px;color:var(--t3);margin-top:3px">${items.length} item${items.length>1?'s':''}${total>0?` · est. ₹${total.toLocaleString('en-IN')}`:''} — we'll beat it with wholesale pricing</div>
-    </div>
-    <div style="background:var(--bg);border-radius:10px;padding:10px 12px;margin-bottom:14px;max-height:120px;overflow-y:auto">
-      ${items.map(([id,qty]) => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span style="color:var(--t2)">${names[id]||('Item #'+id)} × ${qty}</span><span style="font-weight:700">${prices[id]?'₹'+(prices[id]*qty).toLocaleString('en-IN'):''}</span></div>`).join('')}
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Your Name</label>
-      <input id="bq-name" type="text" placeholder="Full name" style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box">
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Mobile Number</label>
-      <input id="bq-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile" style="width:100%;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:15px;font-weight:700;outline:none;box-sizing:border-box" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
-    </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Note (optional)</label>
-      <input id="bq-note" type="text" placeholder="e.g. Need delivery by Sunday" style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
-    </div>
-    <button id="bq-submit" onclick="submitBestQuote()" style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:8px">Request Best Quote →</button>
-    <button onclick="renderLoginSheet('cart')" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:none;font-size:12px;color:var(--t2);cursor:pointer">← Back</button>`;
+  overlay.classList.add('open');
+  setTimeout(() => document.getElementById('auth-phone')?.focus(), 300);
 }
 
-async function submitBestQuote() {
-  const name  = document.getElementById('bq-name')?.value?.trim();
-  const phone = document.getElementById('bq-phone')?.value?.trim();
-  const note  = document.getElementById('bq-note')?.value?.trim() || null;
-  if (!name)  { toast('Enter your name'); return; }
-  if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile'); return; }
-  const btn = document.getElementById('bq-submit');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
-  const names = window._cartNames || {}, prices = window._cartPrices || {};
-  const items = Object.entries(cart).map(([id,qty]) => ({ id: Number(id), name: names[id]||('Item #'+id), qty, price: prices[id]||0 }));
-  const total = items.reduce((s,i) => s + i.price*i.qty, 0);
-  const pin = document.getElementById('pincode-check-input')?.value?.trim() || null;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/quote_requests`, {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer '+SUPABASE_KEY, 'Prefer': 'return=minimal' },
-      body: JSON.stringify({ name, phone, pincode: pin, items, total_estimate: total, note })
-    });
-    if (!r.ok) throw new Error('HTTP '+r.status);
-  } catch(e) { console.warn('quote_requests insert failed', e); }
-  trackEvent('generate_lead', { currency:'INR', value: total });
-  // WhatsApp to the store — guaranteed instant notification + customer keeps a copy
-  const lines = items.map(i => `• ${i.name} × ${i.qty}${i.price?` — ₹${(i.price*i.qty).toLocaleString('en-IN')}`:''}`).join('\n');
-  const msg = `Hi V Wholesale! I'd like your best quote:\n\n${lines}\n\nEst. total: ₹${total.toLocaleString('en-IN')}\nName: ${name}\nPhone: ${phone}${note?`\nNote: ${note}`:''}${pin?`\nPincode: ${pin}`:''}`;
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="text-align:center;padding:10px 0 20px">
-      <div style="font-size:48px;margin-bottom:10px">✅</div>
-      <div style="font-size:17px;font-weight:900;margin-bottom:4px">Request Received!</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:18px">Our team will call <b>${phone}</b> within 30 minutes<br>(Mon–Sat, 9 AM – 7:30 PM)</div>
-      <a href="https://wa.me/918712697930?text=${encodeURIComponent(msg)}" target="_blank"
-        style="display:block;padding:14px;background:#25D366;border-radius:12px;color:#fff;font-size:14px;font-weight:900;text-decoration:none;margin-bottom:10px">
-        💬 Send on WhatsApp for faster response
-      </a>
-      <button onclick="closeSheet()" style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">Done</button>
-    </div>`;
+async function authContinue() {
+  const phone = document.getElementById('auth-phone')?.value?.trim();
+  if (!phone || phone.length < 10) { toast('Enter a valid 10-digit number'); return; }
+  window._authPhone = phone;
+  // Try login first — if no_account, switch to signup
+  showPINScreen('login');
 }
 
-function renderOTPSheet(mode) {
-  const isNew = mode !== 'login';
+function showPINScreen(mode) {
+  const isNew = mode === 'signup';
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:38px;margin-bottom:8px">${isNew ? '👋' : '🔑'}</div>
       <div style="font-size:18px;font-weight:900;margin-bottom:3px">${isNew ? 'Create Account' : 'Welcome Back'}</div>
-      <div style="font-size:12px;color:var(--t3)">+91 ${_loginPhone}</div>
+      <div style="font-size:12px;color:var(--t3)">+91 ${window._authPhone}</div>
     </div>
-
-    ${isNew ? `
-    <div style="margin-bottom:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Your Name</label>
-      <input id="login-name" type="text" placeholder="Full name"
-        style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;color:var(--t1)">
+    ${isNew ? `<div style="margin-bottom:12px">
+      <label class="form-lbl">Your Name</label>
+      <input type="text" id="auth-name" placeholder="Full name" class="form-inp" style="margin-top:4px">
     </div>` : ''}
-
     <div style="margin-bottom:${isNew ? 12 : 16}px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">
-        ${isNew ? 'Set a 6-digit PIN' : 'Enter your PIN'}
-      </label>
-      <input id="login-otp" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"
-        autofocus
-        style="width:100%;padding:14px;border:1.5px solid var(--g);border-radius:10px;font-size:26px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)"
-        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)"
-        onkeydown="if(event.key==='Enter')verifyCustomerOTP(${isNew})">
+      <label class="form-lbl">${isNew ? 'Set a 6-digit PIN' : 'Enter your PIN'}</label>
+      <input type="password" inputmode="numeric" maxlength="6" id="auth-pin" placeholder="••••••"
+        class="pin-input" style="margin-top:4px"
+        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')authSubmit(${isNew})">
     </div>
-
-    ${isNew ? `
-    <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Confirm PIN</label>
-      <input id="login-otp2" type="password" inputmode="numeric" maxlength="6" placeholder="••••••"
-        style="width:100%;padding:14px;border:1.5px solid var(--bdr);border-radius:10px;font-size:26px;font-weight:900;text-align:center;letter-spacing:10px;outline:none;box-sizing:border-box;color:var(--t1)"
-        oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)"
-        onkeydown="if(event.key==='Enter')verifyCustomerOTP(true)">
+    ${isNew ? `<div style="margin-bottom:14px">
+      <label class="form-lbl">Confirm PIN</label>
+      <input type="password" inputmode="numeric" maxlength="6" id="auth-pin2" placeholder="••••••"
+        class="pin-input" style="margin-top:4px"
+        oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6)"
+        onkeydown="if(event.key==='Enter')authSubmit(true)">
     </div>` : ''}
-
-    <button onclick="verifyCustomerOTP(${isNew})" id="verify-btn"
-      style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
-      ${isNew ? 'Create Account →' : 'Login →'}
+    <button class="btn-g" id="auth-submit-btn" onclick="authSubmit(${isNew})">${isNew ? 'Create Account →' : 'Login →'}</button>
+    <button onclick="${isNew ? 'showPINScreen(\'login\')' : 'showPINScreen(\'signup\')'}"
+      style="width:100%;padding:11px;margin-top:8px;background:#fff;border:1px solid var(--bdr);border-radius:10px;font-size:13px;color:var(--t2);cursor:pointer">
+      ${isNew ? 'Already have account? Login →' : 'New here? Create account →'}
     </button>
-
-    <button onclick="renderLoginSheet()" style="width:100%;padding:11px;border-radius:10px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">
-      ← Change number
-    </button>`;
+    <button onclick="openAuth()" style="width:100%;padding:10px;margin-top:4px;background:none;border:none;font-size:12px;color:var(--t3);cursor:pointer">← Change number</button>`;
+  setTimeout(() => (isNew ? document.getElementById('auth-name') : document.getElementById('auth-pin'))?.focus(), 100);
 }
 
-async function sendCustomerOTP() {
-  const phone = document.getElementById('login-phone')?.value?.replace(/\D/g,'').slice(-10);
-  if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile number'); return; }
-  _loginPhone = phone;
-
-  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
-  if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
-
-  // Try signing in with a dummy password to determine if account exists.
-  // "invalid_credentials" → account exists → show Login (enter PIN)
-  // anything else → new user → show Create Account (name + PIN)
-  try {
-    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_KEY},
-      body:JSON.stringify({email: phone+'@customer.vwholesale.app', password:'__probe__'})
-    });
-    const data = await res.json();
-    // These error codes mean the account EXISTS (wrong password):
-    const exists = data.error_code === 'invalid_credentials'
-      || data.msg === 'Invalid login credentials'
-      || data.error_description === 'Invalid login credentials';
-    renderOTPSheet(exists ? 'login' : 'signup');
-  } catch(e) {
-    renderOTPSheet('signup');
-  }
-  if (btn) { btn.disabled=false; btn.textContent='Continue →'; }
-}
-
-async function verifyCustomerOTP(isNew) {
-  const pin = document.getElementById('login-otp')?.value?.trim();
+async function authSubmit(isNew) {
+  const pin = document.getElementById('auth-pin')?.value;
   if (!pin || pin.length < 6) { toast('Enter your 6-digit PIN'); return; }
+  const btn = document.getElementById('auth-submit-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Please wait…'; }
+
   if (isNew) {
-    const pin2 = document.getElementById('login-otp2')?.value?.trim();
-    if (pin !== pin2) { toast('PINs do not match — try again'); return; }
-  }
-  const btn = document.querySelector('[onclick^="verifyCustomerOTP"]');
-  if (btn) { btn.disabled=true; btn.textContent='Please wait...'; }
-  const email = _loginPhone + '@customer.vwholesale.app';
-  
-  const storageKey = 'sb-' + SUPABASE_URL.split('.')[0].split('//')[1] + '-auth-token';
-
-  function _saveSession(data) {
-    data.expires_at = Math.floor(Date.now()/1000) + (data.expires_in || 3600);
-    localStorage.setItem(storageKey, JSON.stringify(data));
-    if (window._loginName) localStorage.setItem('vw_pending_name', window._loginName);
-  }
-
-  try {
-    if (isNew) {
-      // Step 1: Sign up
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: pin, data: { name: window._loginName||'', phone: _loginPhone } })
-      });
-      const data = await res.json();
-
-      // Already exists → go to login
-      if (data.code === 'user_already_exists' || data.msg?.includes('already registered')) {
-        if (btn) { btn.disabled=false; btn.textContent='Login →'; }
-        renderOTPSheet('login');
-        toast('Account already exists — enter your PIN to login');
-        return;
-      }
-
-      const userId = data.user?.id || data.id;
-      if (!userId) { toast(data.msg || data.error_description || 'Signup failed — try again'); if(btn){btn.disabled=false;btn.textContent='Create Account →';} return; }
-
-      // Step 2: Auto-confirm via admin-confirm edge function (bypasses email confirmation requirement)
-      try {
-        await fetch(`${SUPABASE_URL}/functions/v1/confirm-customer`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-          body: JSON.stringify({ userId })
-        });
-      } catch(e) { /* best effort — continue to sign in */ }
-
-      // Step 3: Sign in immediately with the PIN
-      const sinRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: pin })
-      });
-      const sinData = await sinRes.json();
-
-      if (sinData.access_token) {
-        _saveSession(sinData);
-        toast('Account created! Welcome to V Wholesale 🎉');
-        setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
-        return;
-      }
-
-      // Email confirmation still required — tell user
-      toast('Check your WhatsApp/call us at 8712697930 to activate your account');
-
-    } else {
-      // Returning customer — sign in with PIN
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-        body: JSON.stringify({ email, password: pin })
-      });
-      const data = await res.json();
-
-      if (data.access_token) {
-        _saveSession(data);
-        toast('Welcome back! 👋');
-        setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
-        return;
-      }
-
-      if (data.error_code === 'email_not_confirmed') {
-        // Try to auto-confirm and retry
-        try {
-          await fetch(`${SUPABASE_URL}/functions/v1/confirm-customer`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-            body: JSON.stringify({ email })
-          });
-          // Retry sign in
-          const r2 = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-            body: JSON.stringify({ email, password: pin })
-          });
-          const d2 = await r2.json();
-          if (d2.access_token) {
-            _saveSession(d2);
-            toast('Welcome back! 👋');
-            setTimeout(() => { closeSheet(); window.location.href = './index.html'; }, 800);
-            return;
-          }
-        } catch(e) {}
-      }
-
-      if (data.error_code === 'invalid_credentials') {
-        toast('Wrong PIN. Please try again.'); 
-      } else {
-        toast(data.msg || data.error_description || 'Login failed — try again');
-      }
+    const name = document.getElementById('auth-name')?.value?.trim();
+    const pin2 = document.getElementById('auth-pin2')?.value;
+    if (!name) { toast('Enter your name'); if(btn){btn.disabled=false;btn.textContent='Create Account →';} return; }
+    if (pin !== pin2) { toast('PINs do not match'); if(btn){btn.disabled=false;btn.textContent='Create Account →';} return; }
+    const res = await api('customer-auth', { action:'signup', phone:window._authPhone, pin, name });
+    if (!res) { if(btn){btn.disabled=false;btn.textContent='Create Account →';} return; }
+    if (!res.ok) {
+      if (res.error === 'already_exists') { toast('Account exists — try Login'); showPINScreen('login'); return; }
+      toast(res.error || 'Signup failed'); if(btn){btn.disabled=false;btn.textContent='Create Account →';} return;
     }
-  } catch(e) { toast('Network error. Please try again.'); }
-  if (btn) { btn.disabled=false; btn.textContent=isNew?'Create Account →':'Login →'; }
+    _setSession(res.token, { userId:res.userId, name:res.name, phone:res.phone });
+    closeSheet(); toast(`Welcome, ${res.name}! 🎉`);
+    if (window._authCallback) { window._authCallback(); window._authCallback=null; }
+    // Sync cart
+    if (Object.keys(_cart).length) syncCart();
+  } else {
+    const res = await api('customer-auth', { action:'login', phone:window._authPhone, pin });
+    if (!res) { if(btn){btn.disabled=false;btn.textContent='Login →';} return; }
+    if (!res.ok) {
+      if (res.error === 'no_account') { toast('No account found — create one below'); showPINScreen('signup'); return; }
+      if (res.error === 'wrong_pin') { toast('Wrong PIN. Try again.'); if(btn){btn.disabled=false;btn.textContent='Login →';} return; }
+      toast(res.error || 'Login failed'); if(btn){btn.disabled=false;btn.textContent='Login →';} return;
+    }
+    _setSession(res.token, { userId:res.userId, name:res.name, phone:res.phone });
+    closeSheet(); toast(`Welcome back, ${res.name}! 👋`);
+    if (window._authCallback) { window._authCallback(); window._authCallback=null; }
+    if (Object.keys(_cart).length) syncCart();
+  }
 }
 
+// ── CART ──
+function _saveCart() {
+  localStorage.setItem('vw_cart', JSON.stringify(_cart));
+  localStorage.setItem('vw_cart_items', JSON.stringify(_cartItems));
+  const total = Object.values(_cart).reduce((s,q)=>s+q,0);
+  const badge = document.getElementById('cart-badge');
+  if (badge) { badge.textContent = total; badge.style.display = total ? 'flex' : 'none'; }
+}
 
-async function openPDP(productId) {
-  const pdpSheet = document.getElementById('pdp-sheet');
-  const pdpOverlay = document.getElementById('pdp-overlay');
-  const actionBar = document.getElementById('pdp-action-bar');
+function addToCart(id, name, price, unit, image) {
+  _cart[id] = (_cart[id] || 0) + 1;
+  _cartItems[id] = { name, price, unit: unit||'pc', image: image||'' };
+  _saveCart();
+  toast('Added: ' + name.slice(0,28));
+  // Refresh any visible product cards
+  document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => _refreshCard(el, id));
+}
 
-  let p = _pdpProducts.find(x => x.id === productId);
-  try {
-    const data = await sbFetch('products', `?id=eq.${productId}&select=id,name,brand,model,category,subcategory,price,vwp,mrp,unit,stock,photos,image_url,description,warranty_months,tile_size_mm,tile_size_label,tile_finish,tile_type,tiles_per_box,coverage_per_box,box_weight_kg,tile_thickness_mm,colour_family,surface_type,gst,hsn`);
-    if (Array.isArray(data) && data[0]) p = data[0];
-  } catch(e) { if (!p) return; }
+function removeFromCart(id) {
+  if ((_cart[id]||0) > 1) _cart[id]--;
+  else delete _cart[id];
+  _saveCart();
+  document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => _refreshCard(el, id));
+}
+
+function _refreshCard(el, id) {
+  const qty = _cart[id] || 0;
+  const addBtn = el.querySelector('.padd');
+  const qtyEl = el.querySelector('.pqty');
+  if (addBtn) addBtn.style.display = qty ? 'none' : 'block';
+  if (qtyEl) {
+    qtyEl.style.display = qty ? 'flex' : 'none';
+    const n = qtyEl.querySelector('.pqty-n');
+    if (n) n.textContent = qty;
+  }
+}
+
+async function syncCart() {
+  if (!_token || !Object.keys(_cart).length) return;
+  const items = Object.entries(_cart).map(([id, qty]) => ({
+    product_id: parseInt(id), qty, ...(_cartItems[id]||{})
+  }));
+  await api('customer-shop', { action:'save_cart', items });
+}
+
+function openCartSheet() {
+  const items = Object.entries(_cart);
+  if (!items.length) { toast('Your cart is empty'); return; }
+  const total = items.reduce((s,[id,q])=>s+(_cartItems[id]?.price||0)*q, 0);
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:17px;font-weight:900;margin-bottom:14px">🛍 Your Cart (${items.length} item${items.length>1?'s':''})</div>
+    ${items.map(([id,qty])=>{
+      const item = _cartItems[id]||{};
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bdr)">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${item.name||'Item #'+id}</div>
+          <div style="font-size:12px;color:var(--t3)">₹${(item.price||0).toLocaleString('en-IN')}/${item.unit||'pc'}</div>
+        </div>
+        <div style="display:flex;align-items:center;border:1.5px solid var(--g);border-radius:8px;overflow:hidden">
+          <button onclick="removeFromCart(${id});openCartSheet()" style="width:30px;height:30px;background:none;border:none;color:var(--g);font-size:18px;font-weight:900;cursor:pointer">−</button>
+          <span style="min-width:24px;text-align:center;font-size:13px;font-weight:800">${qty}</span>
+          <button onclick="addToCart(${id},'${(item.name||'').replace(/'/g,"\\'")}',${item.price||0},'${item.unit||'pc'}','');openCartSheet()" style="width:30px;height:30px;background:none;border:none;color:var(--g);font-size:18px;font-weight:900;cursor:pointer">+</button>
+        </div>
+        <div style="font-size:13px;font-weight:900;min-width:60px;text-align:right">₹${((item.price||0)*qty).toLocaleString('en-IN')}</div>
+      </div>`;
+    }).join('')}
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:2px solid var(--bdr);margin-top:4px">
+      <div style="font-size:14px;font-weight:900">Total</div>
+      <div style="font-size:18px;font-weight:900">₹${total.toLocaleString('en-IN')}</div>
+    </div>
+    <button class="btn-g" onclick="closeSheet();requireAuth(()=>openCheckout())">Proceed to Checkout →</button>
+    <div style="display:flex;align-items:center;gap:10px;margin:10px 0">
+      <div style="flex:1;height:1px;background:var(--bdr)"></div>
+      <span style="font-size:11px;color:var(--t3);font-weight:700">OR</span>
+      <div style="flex:1;height:1px;background:var(--bdr)"></div>
+    </div>
+    <button onclick="closeSheet();openBestQuote()" class="btn-out">💬 Get Best Quote — no login needed</button>
+    <button onclick="closeSheet()" style="width:100%;padding:10px;margin-top:8px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">← Continue Shopping</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+// ── CHECKOUT ──
+async function openCheckout() {
+  const items = Object.entries(_cart);
+  if (!items.length) { toast('Cart is empty'); return; }
+
+  // Load addresses
+  const addrRes = await api('customer-orders', { action:'get_addresses' });
+  const addresses = addrRes?.data || [];
+  const total = items.reduce((s,[id,q])=>s+(_cartItems[id]?.price||0)*q, 0);
+
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:17px;font-weight:900;margin-bottom:14px">Checkout</div>
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">📍 Delivery Address</div>
+    ${addresses.length ? addresses.map(a=>`
+      <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;border:1.5px solid ${a.is_default?'var(--g)':'var(--bdr)'};border-radius:10px;margin-bottom:8px;cursor:pointer">
+        <input type="radio" name="addr" value="${a.id}" ${a.is_default?'checked':''} style="margin-top:2px;accent-color:var(--g)">
+        <div><div style="font-size:13px;font-weight:700">${a.label||a.name||'Home'}</div>
+        <div style="font-size:12px;color:var(--t3)">${a.address_line1||''}, ${a.city||''} ${a.pincode||''}</div></div>
+      </label>`).join('') : ''}
+    <button onclick="addNewAddressSheet()" class="btn-out" style="margin-bottom:14px">+ Add New Address</button>
+    <div style="font-size:13px;font-weight:800;margin-bottom:8px">💳 Payment</div>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--g);border-radius:10px;margin-bottom:8px;cursor:pointer">
+      <input type="radio" name="pay" value="cod" checked style="accent-color:var(--g)">
+      <div><div style="font-size:13px;font-weight:700">Cash / Pay on Delivery</div>
+      <div style="font-size:11px;color:var(--t3)">Pay when you receive and verify</div></div>
+    </label>
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;margin-bottom:14px;cursor:pointer">
+      <input type="radio" name="pay" value="online" style="accent-color:var(--g)">
+      <div><div style="font-size:13px;font-weight:700">Pay Online (UPI / Card)</div>
+      <div style="font-size:11px;color:var(--t3)">Secure payment via Cashfree</div></div>
+    </label>
+    <div style="background:var(--glt);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span>Subtotal</span><span>₹${total.toLocaleString('en-IN')}</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;color:var(--g)"><span>Delivery</span><span>FREE</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:15px;font-weight:900;border-top:1px solid var(--gbdr);padding-top:8px;margin-top:4px"><span>Total</span><span>₹${total.toLocaleString('en-IN')}</span></div>
+    </div>
+    <button class="btn-g" onclick="placeOrderNow(${total})">Place Order →</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+async function placeOrderNow(total) {
+  const addrId = document.querySelector('input[name="addr"]:checked')?.value;
+  const payMethod = document.querySelector('input[name="pay"]:checked')?.value || 'cod';
+
+  const items = Object.entries(_cart).map(([id,qty])=>({
+    product_id:parseInt(id), qty,
+    name: _cartItems[id]?.name||'',
+    price: _cartItems[id]?.price||0,
+    unit: _cartItems[id]?.unit||'pc'
+  }));
+
+  const btn = document.querySelector('#bottom-sheet .btn-g');
+  if(btn){btn.disabled=true;btn.textContent='Placing order…';}
+
+  const res = await api('customer-orders', {
+    action:'place_order', items, address_id:addrId,
+    payment_method:payMethod, grand_total:total
+  });
+
+  if (!res?.ok) { toast(res?.error||'Order failed'); if(btn){btn.disabled=false;btn.textContent='Place Order →';} return; }
+
+  _cart = {}; _cartItems = {};
+  localStorage.removeItem('vw_cart'); localStorage.removeItem('vw_cart_items');
+  _saveCart();
+
+  closeSheet();
+  toast(`✅ Order ${res.data.order_no} placed!`);
+  if (res.data.points_earned) toast(`🌟 Earned ${res.data.points_earned} loyalty points!`);
+  showPage('orders');
+}
+
+function addNewAddressSheet() {
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px">Add Address</div>
+    <div style="display:grid;gap:10px">
+      <div><label class="form-lbl">Label (Home / Office)</label><input id="addr-label" class="form-inp" placeholder="Home" style="margin-top:4px"></div>
+      <div><label class="form-lbl">Full Address *</label><input id="addr-line1" class="form-inp" placeholder="Flat, House no, Building, Street" style="margin-top:4px"></div>
+      <div><label class="form-lbl">Area / Locality</label><input id="addr-area" class="form-inp" placeholder="Area, Colony, Landmark" style="margin-top:4px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="form-lbl">City</label><input id="addr-city" class="form-inp" value="Vijayawada" style="margin-top:4px"></div>
+        <div><label class="form-lbl">Pincode</label><input id="addr-pin" class="form-inp" placeholder="520001" inputmode="numeric" style="margin-top:4px"></div>
+      </div>
+    </div>
+    <button class="btn-g" style="margin-top:14px" onclick="saveNewAddress()">Save Address</button>
+    <button onclick="openCheckout()" style="width:100%;padding:11px;margin-top:8px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">← Back</button>`;
+}
+
+async function saveNewAddress() {
+  const addr = {
+    label: document.getElementById('addr-label')?.value||'Home',
+    address_line1: document.getElementById('addr-line1')?.value?.trim(),
+    address_line2: document.getElementById('addr-area')?.value?.trim(),
+    city: document.getElementById('addr-city')?.value||'Vijayawada',
+    pincode: document.getElementById('addr-pin')?.value?.trim(),
+    is_default: true
+  };
+  if (!addr.address_line1) { toast('Enter full address'); return; }
+  const res = await api('customer-orders', { action:'save_address', address:addr });
+  if (res?.ok) { toast('Address saved'); openCheckout(); }
+  else toast(res?.error||'Failed to save address');
+}
+
+// ── BEST QUOTE (no login) ──
+function openBestQuote() {
+  const items = Object.entries(_cart);
+  const total = items.reduce((s,[id,q])=>s+(_cartItems[id]?.price||0)*q, 0);
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:38px;margin-bottom:8px">💬</div>
+      <div style="font-size:17px;font-weight:900">Get Best Quote</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:3px">${items.length} item${items.length>1?'s':''} · est. ₹${total.toLocaleString('en-IN')}</div>
+    </div>
+    <div style="display:grid;gap:10px;margin-bottom:14px">
+      <div><label class="form-lbl">Your Name</label><input id="bq-name" class="form-inp" placeholder="Full name" style="margin-top:4px"></div>
+      <div><label class="form-lbl">Mobile *</label><input id="bq-phone" type="tel" inputmode="numeric" maxlength="10" class="form-inp" placeholder="10-digit" style="margin-top:4px" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)"></div>
+      <div><label class="form-lbl">Note (optional)</label><input id="bq-note" class="form-inp" placeholder="e.g. Need by Sunday" style="margin-top:4px"></div>
+    </div>
+    <button class="btn-g" id="bq-btn" onclick="submitBestQuote()">Request Best Quote →</button>
+    <a id="bq-wa" href="#" target="_blank" style="display:none;width:100%;margin-top:10px;padding:14px;background:#25D366;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;text-align:center;text-decoration:none;display:block">💬 Also Send on WhatsApp</a>
+    <button onclick="closeSheet()" style="width:100%;padding:10px;margin-top:8px;background:none;border:none;font-size:12px;color:var(--t3);cursor:pointer">← Back</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+async function submitBestQuote() {
+  const name = document.getElementById('bq-name')?.value?.trim();
+  const phone = document.getElementById('bq-phone')?.value?.trim();
+  const note = document.getElementById('bq-note')?.value?.trim();
+  if (!phone||phone.length<10) { toast('Enter a valid mobile number'); return; }
+  const btn = document.getElementById('bq-btn');
+  if (btn) { btn.disabled=true; btn.textContent='Sending…'; }
+  const items = Object.entries(_cart).map(([id,q])=>({id:parseInt(id),qty:q,...(_cartItems[id]||{})}));
+  const total = items.reduce((s,i)=>s+(i.price||0)*(i.qty||1),0);
+  const res = await api('customer-shop', { action:'request_quote', name, phone, items, total_estimate:total, note });
+  const waLines = items.map(i=>`• ${i.name||'Item #'+i.id} × ${i.qty}`).join('\n');
+  const waMsg = `Hi V Wholesale! Best quote request:\n\n${waLines}\n\nEst: ₹${total.toLocaleString('en-IN')}\nName: ${name||'—'}\nPhone: ${phone}${note?'\nNote: '+note:''}`;
+  const waEl = document.getElementById('bq-wa');
+  if (waEl) { waEl.href=`https://wa.me/918712697930?text=${encodeURIComponent(waMsg)}`; }
+  if (btn) { btn.textContent='✅ Request Sent!'; }
+  toast('Our team will call you within 30 minutes');
+}
+
+// ── PRODUCTS ──
+function productCard(p, size) {
+  const price = p.vwp||p.price||p.tier1_price||0;
+  const mrp = p.mrp||0;
+  const disc = mrp>price&&price>0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const img = p.image_url || (Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'') || '';
+  const qty = _cart[p.id]||0;
+  const inWish = _wishlist.has(String(p.id));
+  const nm = (p.name||'').replace(/'/g,"\\'");
+  const w = size==='wide' ? 'flex:0 0 160px;min-width:160px' : 'width:100%';
+  return `<div class="pcard" data-pid="${p.id}" style="${w}" onclick="openPDP(${p.id})">
+    <div class="pimg">
+      ${img?`<img src="${img}" alt="${p.name}" loading="lazy">`:`<span>${_catIcon(p.category)}</span>`}
+      ${disc>0?`<div class="pdiscount">${disc}% OFF</div>`:''}
+    </div>
+    <div class="pbody">
+      ${p.brand?`<div class="pbrand">${p.brand}</div>`:''}
+      <div class="pname">${p.name}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap">
+        <span class="pprice">₹${price.toLocaleString('en-IN')}</span>
+        <span style="font-size:10px;color:var(--t3)">/${p.unit||'pc'}</span>
+        ${mrp>price?`<span class="pmrp">₹${mrp.toLocaleString('en-IN')}</span><span class="psave">${disc}%off</span>`:''}
+      </div>
+      <button class="padd" onclick="event.stopPropagation();addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')" ${qty?'style="display:none"':''}>ADD</button>
+      <div class="pqty" ${qty?'':'style="display:none"'}>
+        <button class="pqty-btn" onclick="event.stopPropagation();removeFromCart(${p.id})">−</button>
+        <span class="pqty-n">${qty}</span>
+        <button class="pqty-btn" onclick="event.stopPropagation();addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">+</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function _catIcon(cat) {
+  const icons = {Tiles:'⬜',Sanitary:'🚽',Faucets:'🚰',Showers:'🚿',Basins:'🪠',Wires:'🔌',Switches:'💡',LED:'💡',Fans:'🌀',Pipes:'🔧',Plywood:'🪵',Paints:'🎨',Cement:'🏗',Steel:'🔩',Doors:'🚪'};
+  return icons[cat] || '📦';
+}
+
+// ── PDP ──
+async function openPDP(id) {
+  const res = await api('customer-shop', { action:'get_product', id });
+  const p = res?.data;
   if (!p) return;
 
-  const price = p.vwp || p.price || 0;
-  const mrp = p.mrp || 0;
-  const disc = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const qty = cart[p.id] || 0;
-  const oos = !p.stock || p.stock <= 0;
-  const photos = Array.isArray(p.photos) ? p.photos : [];
-  const imgSrc = p.image_url || photos[0]?.url || photos[0] || null;
-  const cat = CATS.find(c => c.key === p.category);
-  const icon = cat?.icon || '📦';
-  const color = cat?.color || '#6B7280';
-  const safeName = p.name.replace(/'/g, "\\'");
-  const isWishlisted = _wishlist.has(productId);
+  const price = p.vwp||p.price||0;
+  const mrp = p.mrp||0;
+  const disc = mrp>price&&price>0?Math.round((mrp-price)/mrp*100):0;
+  const img = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
+  const qty = _cart[p.id]||0;
+  const inWish = _wishlist.has(String(p.id));
+  const nm = p.name.replace(/'/g,"\\'");
 
-  function specRow(k, v) {
-    if (v === null || v === undefined || v === '' || v === 0) return '';
-    return `<div class="pdp-spec-row"><div class="pdp-spec-k">${k}</div><div class="pdp-spec-v">${v}</div></div>`;
-  }
-  const specRows = [
-    specRow('Brand', p.brand),
-    specRow('Model', p.model),
-    specRow('Category', p.category),
-    specRow('Sub-category', p.subcategory),
-    specRow('Colour', p.colour_family),
-    specRow('Surface', p.surface_type),
-    specRow('Finish', p.tile_finish),
-    specRow('Type', p.tile_type),
-    specRow('Size', p.tile_size_label || p.tile_size_mm),
-    specRow('Tiles / Box', p.tiles_per_box),
-    specRow('Coverage / Box', p.coverage_per_box ? p.coverage_per_box + ' sq.ft' : null),
-    specRow('Box Weight', p.box_weight_kg ? p.box_weight_kg + ' kg' : null),
-    specRow('Thickness', p.tile_thickness_mm ? p.tile_thickness_mm + ' mm' : null),
-    specRow('Unit', p.unit || 'Each'),
-    specRow('GST', p.gst ? p.gst + '%' : null),
-    specRow('HSN', p.hsn),
-    specRow('Warranty', p.warranty_months ? (p.warranty_months >= 12 ? Math.floor(p.warranty_months/12)+' Year'+(p.warranty_months>=24?'s':'') : p.warranty_months+' Months') : null),
-    specRow('Availability', `<span style="color:${oos?'var(--red)':'var(--g)'};font-weight:800">${oos?'Out of Stock':'✓ In Stock'}</span>`)
-  ].filter(Boolean).join('');
+  const specs = [
+    ['Brand',p.brand],['Model',p.model],['Category',p.category],
+    ['Colour',p.colour_family],['Finish',p.tile_finish],['Size',p.tile_size_label||p.tile_size_mm],
+    ['Unit',p.unit||'Each'],['GST',p.gst?p.gst+'%':null],['HSN',p.hsn],
+    ['Warranty',p.warranty_months?(p.warranty_months>=12?Math.floor(p.warranty_months/12)+' Year'+( p.warranty_months>=24?'s':''):p.warranty_months+' Months'):null],
+    ['Stock',p.stock&&parseFloat(p.stock)>0?'✓ In Stock':'⚠️ Limited']
+  ].filter(([,v])=>v).map(([k,v])=>`<div class="pdp-spec-row"><div class="pdp-spec-k">${k}</div><div class="pdp-spec-v">${v}</div></div>`).join('');
 
-  let moreProducts = [];
-  try {
-    const md = await sbFetch('products', `?select=id,name,price,vwp,mrp,photos,image_url,category&is_active=eq.true&category=eq.${encodeURIComponent(p.category)}&id=neq.${p.id}&limit=8`);
-    moreProducts = Array.isArray(md) ? md : [];
-  } catch(e) {}
-
-  trackViewProduct(p.id, p.name, p.category, price);
-
-  pdpSheet.innerHTML = `
-    <div style="position:relative">
-      <div class="pdp-imgwrap" style="background:${imgSrc?'#f8f8f8':color+'18'}">
-        ${imgSrc ? `<img src="${imgSrc}" alt="${p.name}" style="width:100%;height:100%;object-fit:contain;padding:16px">` : `<span style="font-size:80px">${icon}</span>`}
-        ${disc > 0 ? `<div class="pdp-pct">${disc}% OFF</div>` : ''}
-        <button class="pdp-close" onclick="closePDP()">✕</button>
-        <button onclick="toggleWishlist(${p.id},'${safeName}',this)" style="position:absolute;top:10px;right:48px;background:rgba(0,0,0,.3);border:none;border-radius:50%;width:32px;height:32px;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:${isWishlisted?'#e11d48':'#fff'}">${isWishlisted?'♥':'♡'}</button>
-      </div>
+  document.getElementById('pdp-sheet').innerHTML = `
+    <div class="pdp-close">
+      <button onclick="closePDP()">←</button>
+      <div class="pdp-close-title">${p.name}</div>
+      <button onclick="toggleWishlist(${p.id},'${nm}')" style="background:none;border:none;font-size:22px;cursor:pointer">${inWish?'❤️':'🤍'}</button>
     </div>
+    <div class="pdp-img">${img?`<img src="${img}" alt="${p.name}">`:`<span style="font-size:80px">${_catIcon(p.category)}</span>`}</div>
     <div class="pdp-body">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        ${p.brand ? `<div class="pdp-br">${p.brand}</div>` : '<div></div>'}
-        <span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:800;padding:3px 10px;border-radius:20px;border:1px solid #86efac">⚡ 2–4 hr delivery</span>
-      </div>
-      <div class="pdp-nm">${p.name}</div>
-      <div class="pdp-prow">
+      ${p.brand?`<div class="pdp-brand">${p.brand}</div>`:''}
+      <div class="pdp-name">${p.name}</div>
+      <div class="pdp-price-row">
         <span class="pdp-price">₹${price.toLocaleString('en-IN')}</span>
-        <span class="pdp-unit">/ ${p.unit||'pc'}</span>
-        ${mrp > price ? `<span class="pdp-omrp">₹${mrp.toLocaleString('en-IN')}</span><span style="color:var(--g);font-size:11px;font-weight:800;margin-left:4px">${disc}% off</span>` : ''}
+        <span class="pdp-unit">/${p.unit||'pc'}</span>
+        ${mrp>price?`<span class="pdp-mrp">₹${mrp.toLocaleString('en-IN')}</span><span class="pdp-save">${disc}% off</span>`:''}
       </div>
-      <div class="pdp-gst">Inclusive of all taxes${p.gst ? ` · GST ${p.gst}%` : ''}</div>
-
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 0;border-top:1px solid var(--bdr);border-bottom:1px solid var(--bdr);margin:14px 0">
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🚚</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">2–4 Hr<br>Delivery</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">✅</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">100%<br>Genuine</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🔄</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">7 Day<br>Returns</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">💳</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Pay on<br>Delivery</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">🏷</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Wholesale<br>Price</div></div>
-        <div style="text-align:center"><div style="font-size:18px;margin-bottom:3px">📞</div><div style="font-size:9px;color:var(--t3);font-weight:600;line-height:1.3">Call<br>Support</div></div>
+      <div class="pdp-gst">Price inclusive of all taxes${p.gst?' · GST '+p.gst+'%':''}</div>
+      <div class="trust-row">
+        <div class="trust-item"><div class="trust-icon">🚚</div><div class="trust-txt">2–4 Hr<br>Delivery</div></div>
+        <div class="trust-item"><div class="trust-icon">✅</div><div class="trust-txt">100%<br>Genuine</div></div>
+        <div class="trust-item"><div class="trust-icon">🔄</div><div class="trust-txt">7 Day<br>Returns</div></div>
+        <div class="trust-item"><div class="trust-icon">💳</div><div class="trust-txt">Pay on<br>Delivery</div></div>
+        <div class="trust-item"><div class="trust-icon">🏷</div><div class="trust-txt">Wholesale<br>Price</div></div>
+        <div class="trust-item"><div class="trust-icon">📞</div><div class="trust-txt">Call<br>Support</div></div>
       </div>
-
-      ${p.description ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Product Description</div><div style="font-size:13px;color:var(--t2);line-height:1.65;background:var(--bg);border-radius:10px;padding:12px 14px">${p.description}</div></div>` : ''}
-
-      ${specRows ? `<div style="margin-bottom:18px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Specifications</div><div class="pdp-spec">${specRows}</div></div>` : ''}
-
-      <div style="background:linear-gradient(120deg,#0D5C2C,#16783A);border-radius:12px;padding:14px 16px;margin-bottom:18px;display:flex;align-items:center;gap:12px">
+      ${p.description?`<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Description</div><div style="font-size:13px;color:var(--t2);line-height:1.6;background:#F8F8F8;border-radius:10px;padding:12px">${p.description}</div></div>`:''}
+      ${specs?`<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Specifications</div><div class="pdp-spec">${specs}</div></div>`:''}
+      <div class="pdp-store">
         <div style="font-size:28px">🏪</div>
-        <div style="flex:1"><div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:2px">Visit V Wholesale Store</div><div style="font-size:10px;color:rgba(255,255,255,.6)">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
-        <a href="tel:8712697930" style="flex-shrink:0;padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:11px;font-weight:700;color:#fff;border:1px solid rgba(255,255,255,.25);text-decoration:none">📞 Call</a>
+        <div style="flex:1"><div style="font-size:12px;font-weight:800;color:#fff">Visit V Wholesale Store</div><div style="font-size:10px;color:rgba(255,255,255,.6)">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
+        <a href="tel:8712697930" style="padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:11px;font-weight:700;color:#fff;text-decoration:none">📞 Call</a>
       </div>
-
-      ${moreProducts.length ? `<div style="margin-bottom:8px"><div style="font-size:14px;font-weight:800;margin-bottom:10px">More from ${p.category}</div><div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;margin:0 -20px;padding:0 20px 4px">${moreProducts.map(mp=>{const mP=mp.vwp||mp.price||0;const mI=mp.image_url||(Array.isArray(mp.photos)?mp.photos[0]?.url||mp.photos[0]:null);const mC=CATS.find(c=>c.key===mp.category);return `<div onclick="closePDP();setTimeout(()=>openPDP(${mp.id}),200)" style="flex:0 0 120px;border:1px solid var(--bdr);border-radius:10px;overflow:hidden;cursor:pointer"><div style="height:80px;background:${mI?'#f8f8f8':(mC?.color||'#6B7280')+'18'};display:flex;align-items:center;justify-content:center;font-size:28px;overflow:hidden">${mI?`<img src="${mI}" style="width:100%;height:100%;object-fit:cover">`:(mC?.icon||'📦')}</div><div style="padding:6px 8px"><div style="font-size:10px;font-weight:700;line-height:1.3;margin-bottom:3px">${mp.name.slice(0,42)}</div><div style="font-size:12px;font-weight:900">₹${mP.toLocaleString('en-IN')}</div></div></div>`;}).join('')}</div></div>` : ''}
-      <div style="height:20px"></div>
     </div>`;
 
-  actionBar.className = 'pdp-bar';
-  updatePDPBar(p.id, safeName, price, oos);
-  pdpOverlay.classList.add('open');
-  pdpSheet.classList.add('open');
-}
-function updatePDPBar(id, name, price) {
-  const actionBar = document.getElementById('pdp-action-bar');
-  const qty = cart[id] || 0;
-  const safeName = name.replace(/'/g, "\\'");
-  actionBar.innerHTML = `
-    <a href="tel:8712697930" class="pdp-bar-call">📞</a>
-    ${qty === 0
-      ? `<button class="pdp-bar-atc" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">Add to Cart</button>`
-      : `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:12px;overflow:hidden">
-          <button class="qbtn" style="width:44px;height:46px" onclick="removeFromCart(${id});updatePDPBar(${id},'${safeName}',${price})">−</button>
-          <span style="flex:1;text-align:center;font-size:16px;font-weight:900">${qty}</span>
-          <button class="qbtn" style="width:44px;height:46px;background:var(--g);color:#fff" onclick="addToCart(${id},'${safeName}',${price});updatePDPBar(${id},'${safeName}',${price})">+</button>
-         </div>`}`;
+  // Action bar
+  const bar = document.getElementById('pdp-bar');
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <button class="pdp-bar-wish" onclick="toggleWishlist(${p.id},'${nm}')">${inWish?'❤️':'🤍'}</button>
+    ${qty ? `<div class="pdp-bar-qty">
+      <button class="pqty-btn" style="height:100%" onclick="removeFromCart(${p.id});openPDP(${p.id})">−</button>
+      <span class="pqty-n">${qty}</span>
+      <button class="pqty-btn" style="height:100%" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})">+</button>
+    </div>` : `<button class="pdp-bar-add" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})">Add to Cart</button>`}`;
+
+  document.getElementById('pdp-sheet').classList.add('open');
+  document.getElementById('pdp-overlay').classList.add('open');
 }
 
 function closePDP() {
   document.getElementById('pdp-sheet').classList.remove('open');
-  document.getElementById('pdp-overlay').style.display = 'none';
-  document.getElementById('pdp-action-bar').className = 'pdp-bar off';
-}
-
-// ── SEARCH ──
-let searchTimer;
-function handleSearch(val) {
-  document.getElementById('search-clear').style.display = val ? 'block' : 'none';
-  clearTimeout(searchTimer);
-  if (val.length < 2) return;
-  searchTimer = setTimeout(() => { showCategory(null, val); trackSearch(val); }, 400);
-}
-function clearSearch() {
-  document.getElementById('search-input').value = '';
-  document.getElementById('search-clear').style.display = 'none';
-  goHome();
-}
-
-// ── CATEGORY GRID ──
-function renderCatGrid() {
-  document.getElementById('cat-grid').innerHTML = CATS.map(c => `
-    <div class="ccard" onclick="showCategory('${c.key}');setNav('shop')">
-      <div class="cimg" style="background:${c.color}15;border-color:${c.color}30">${c.icon}</div>
-      <div class="clabel">${c.label}</div>
-    </div>
-  `).join('') + `
-    <div class="ccard" onclick="showCategory(null);setNav('shop')">
-      <div class="cimg" style="background:var(--bg);border-color:var(--bdr);font-size:16px;font-weight:800;color:var(--t3)">+4</div>
-      <div class="clabel" style="color:var(--t3)">More</div>
-    </div>`;
-}
-
-
-// ── CATEGORY NAV BAR (desktop) ──
-function renderCatNav() {
-  const el = document.getElementById('cat-nav-items');
-  if (!el) return;
-  el.innerHTML = CATS.filter(c => c.show_in_nav !== false).map(c =>
-    `<div class="cat-nav-item" onclick="showCategory('${c.key}');setNav('shop')">${c.icon} ${c.label}</div>`
-  ).join('') + `<div class="cat-nav-item" onclick="showCategory(null);setNav('shop')">All Products →</div>`;
-}
-
-// ── LOAD DEALS ──
-async function loadCatalogItems(categoryKey) {
-  // Load live catalog items for a category (brand_catalog_items + non_inventory_tiles)
-  // Tier pricing applied based on logged-in customer type (future: from session)
-  try {
-    const priceField = 'tier1_price'; // B2C default; contractor gets tier2 etc.
-    let q = VW_DB ? VW_DB.client.from('brand_catalog_items')
-      .select('id,brand,product_name,model_no,category,mrp,tier1_price,tier2_price,gst_pct,image_url,availability,lead_time_days,unit')
-      .eq('show_in_shop', true).eq('is_active', true) : null;
-    if (!q) return [];
-    if (categoryKey) q = q.eq('category_key', categoryKey);
-    const { data } = await q.limit(40);
-    return data || [];
-  } catch(e) { return []; }
-}
-
-function catalogCard(item, tierKey) {
-  // tierKey: tier1_price (B2C default), tier2_price (contractor), tier3_price (B2B), tier4_price (project)
-  tierKey = tierKey || 'tier1_price';
-  const price  = item[tierKey] || item.tier1_price || 0;
-  const mrp    = item.mrp || 0;
-  const save   = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const img    = item.image_url || '';
-  const avail  = item.availability === 'in_stock' ? '✓ In Stock' : `🕐 ${item.lead_time_days||7} days`;
-  const aColor = item.availability === 'in_stock' ? 'var(--g)' : 'var(--t3)';
-  const nm     = (item.product_name||'').slice(0,42);
-  const safeNm = (item.product_name||'').replace(/'/g,"\\'");
-  return `<div class="pcard" style="min-width:160px;flex:0 0 160px;cursor:pointer" onclick="openCatalogRequestSheet(${item.id},'${safeNm}')">
-    <div style="height:120px;background:${img?'#f8f8f8':'#eef2f7'};border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
-      ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover">` : '<span style="font-size:36px">📦</span>'}
-      ${save > 0 ? `<div style="position:absolute;top:6px;left:6px;background:var(--g);color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px">${save}% OFF</div>` : ''}
-    </div>
-    <div style="font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em;margin-bottom:2px">${item.brand||''}</div>
-    <div style="font-size:12px;font-weight:700;line-height:1.3;margin-bottom:5px">${nm}</div>
-    ${price > 0 ? `
-    <div style="font-size:16px;font-weight:900;color:var(--t1)">₹${price.toLocaleString('en-IN')}<span style="font-size:10px;font-weight:600;color:var(--t3)"> /${item.unit||'pc'}</span></div>
-    ${mrp > price ? `
-    <div style="display:flex;align-items:center;gap:5px;margin-top:1px">
-      <span style="font-size:10px;color:var(--t3);text-decoration:line-through">MRP ₹${mrp.toLocaleString('en-IN')}</span>
-      <span style="font-size:10px;color:var(--g);font-weight:800">You save ${save}%</span>
-    </div>` : ''}
-    <div style="font-size:10px;color:${aColor};margin-top:3px">${avail}</div>
-    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${safeNm}')"
-      style="width:100%;margin-top:7px;padding:8px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
-      ${item.availability==='in_stock' ? '🛒 Add to Cart' : '💬 Request Order'}
-    </button>` : `
-    <div style="font-size:11px;color:var(--t3);margin-bottom:6px">Price on request</div>
-    <button onclick="event.stopPropagation();openCatalogRequestSheet(${item.id},'${safeNm}')"
-      style="width:100%;padding:8px;background:var(--g);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer">
-      💬 Get Best Price
-    </button>`}
-  </div>`;
-}
-
-function openCatalogRequestSheet(itemId, itemName) {
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="text-align:center;margin-bottom:16px">
-      <div style="font-size:32px;margin-bottom:8px">📦</div>
-      <div style="font-size:16px;font-weight:900">Request Order</div>
-      <div style="font-size:12px;color:var(--t3);margin-top:4px">${itemName}</div>
-    </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Your Mobile</label>
-      <input id="cr-phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile"
-        style="width:100%;padding:12px;border:1.5px solid var(--g);border-radius:10px;font-size:15px;font-weight:700;outline:none;box-sizing:border-box"
-        oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
-    </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase">Quantity Needed</label>
-      <input id="cr-qty" type="number" placeholder="e.g. 10" min="1"
-        style="width:100%;padding:12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:15px;outline:none;box-sizing:border-box">
-    </div>
-    <a id="cr-wa-btn" href="#" target="_blank"
-      onclick="window._buildCatalogWA('${itemName}',${itemId})"
-      style="display:block;width:100%;padding:14px;background:#25D366;border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;text-align:center;text-decoration:none;box-sizing:border-box;margin-bottom:8px">
-      💬 Request via WhatsApp
-    </a>
-    <button onclick="closeSheet()" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:none;font-size:12px;color:var(--t2);cursor:pointer">Cancel</button>`;
-  document.getElementById('sheet-overlay')?.classList.add('open');
-  sheet.classList.add('open');
-}
-window._buildCatalogWA = function(name, id) {
-  const phone = document.getElementById('cr-phone')?.value?.trim();
-  const qty   = document.getElementById('cr-qty')?.value?.trim();
-  const msg   = `Hi V Wholesale! I want to order:\n\n*${name}*${qty?' (Qty: '+qty+')':''}\nMy number: ${phone||'—'}\n\nPlease confirm availability and price.`;
-  document.getElementById('cr-wa-btn').href = `https://wa.me/918712697930?text=${encodeURIComponent(msg)}`;
-};
-window.openCatalogRequestSheet = openCatalogRequestSheet;
-
-async function loadDeals() {
-  try {
-    const products = await sbFetch('products', '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=20');
-    if (!Array.isArray(products) || !products.length) {
-      document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">Products coming soon — visit us at NH65, Bhavanipuram</div>';
-      return;
-    }
-    // Sort by discount % descending for best deals
-    products.sort((a,b) => {
-      const da = a.mrp > (a.vwp||a.price||0) ? (a.mrp-(a.vwp||a.price||0))/a.mrp : 0;
-      const db = b.mrp > (b.vwp||b.price||0) ? (b.mrp-(b.vwp||b.price||0))/b.mrp : 0;
-      return db - da;
-    });
-    _pdpProducts = [...products];
-    renderDeals(products);
-  } catch(e) {
-    console.error('loadDeals error:', e);
-    document.getElementById('deals-scroll').innerHTML = '<div style="padding:20px;color:var(--t3);font-size:13px">📞 Call us at 8712697930 · Catalogue available in-store</div>';
-  }
-}
-
-// ── PRODUCT CARD (deal style) ──
-function dealCard(p) {
-  const price = p.vwp || p.price || 0;
-  const mrp = p.mrp || 0;
-  const disc = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const qty = cart[p.id] || 0;
-  const oos = !p.stock || p.stock <= 0;
-  const photos = Array.isArray(p.photos) ? p.photos : [];
-  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
-  const cat = CATS.find(c => c.key === p.category);
-  const icon = cat?.icon || '📦';
-  const color = cat?.color || '#6B7280';
-  const safeName = p.name.replace(/'/g, "\\'");
-
-  return `
-  <div class="dcard" onclick="openPDP(${p.id})">
-    <div class="dimg" style="background:${img?'#f5f5f5':color+'18'}">
-      ${img ? `<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : icon}
-      ${disc > 0 ? `<div class="dpct">${disc}% OFF</div>` : ''}
-      <div class="dspd">⚡ 2–4 hrs</div>
-    </div>
-    <div class="dbody">
-      ${p.brand ? `<div class="dbr">${p.brand}</div>` : ''}
-      <div class="dnm">${p.name}</div>
-      <div class="drow" onclick="event.stopPropagation()">
-        <div>
-          <span class="dpr">₹${price.toLocaleString('en-IN')}</span>
-          ${mrp > price ? `<span class="dmrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
-        </div>
-        ${oos ? `<span style="font-size:10px;color:var(--t3)">Out of stock</span>`
-          : qty === 0
-            ? `<button class="btn-add" onclick="addToCart(${p.id},'${safeName}',${price})">ADD</button>`
-            : `<div class="qrow">
-                <button class="qbtn" onclick="removeFromCart(${p.id})">−</button>
-                <span class="qn" id="qty-${p.id}">${qty}</span>
-                <button class="qbtn" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
-               </div>`}
-      </div>
-    </div>
-  </div>`;
-}
-
-// ── GRID PRODUCT CARD ──
-function gridCard(p) {
-  const price = p.vwp || p.price || 0;
-  const mrp = p.mrp || 0;
-  const disc = mrp > price && price > 0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const qty = cart[p.id] || 0;
-  const oos = !p.stock || p.stock <= 0;
-  const photos = Array.isArray(p.photos) ? p.photos : [];
-  const img = p.images?.[0] || photos[0]?.url || photos[0] || null;
-  const cat = CATS.find(c => c.key === p.category);
-  const icon = cat?.icon || '📦';
-  const color = cat?.color || '#6B7280';
-  const safeName = p.name.replace(/'/g, "\\'");
-
-  return `
-  <div class="pc" onclick="openPDP(${p.id})">
-    <div class="pc-img" style="background:${img?'#f5f5f5':color+'18'}">
-      ${img ? `<img src="${img}" loading="lazy" style="width:100%;height:100%;object-fit:cover">` : icon}
-      ${disc > 0 ? `<div style="position:absolute;top:6px;left:6px;background:var(--red);color:#fff;font-size:9px;font-weight:900;padding:2px 6px;border-radius:4px">${disc}% OFF</div>` : ''}
-    </div>
-    <div class="pc-body">
-      ${p.brand ? `<div class="pc-br">${p.brand}</div>` : ''}
-      <div class="pc-nm">${p.name}</div>
-      <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:7px">
-        <span class="pc-price">₹${price.toLocaleString('en-IN')}</span>
-        <span class="pc-unit">${p.unit||'pc'}</span>
-        ${mrp > price ? `<span class="pc-mrp">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
-      </div>
-      <div onclick="event.stopPropagation()">
-        ${oos
-          ? `<div style="text-align:center;padding:7px;background:var(--bg);border-radius:6px;font-size:10px;color:var(--t3)">Out of Stock</div>`
-          : qty === 0
-            ? `<div onclick="addToCart(${p.id},'${safeName}',${price})"
-                style="border:2px solid var(--g);border-radius:8px;padding:7px;text-align:center;font-size:12px;font-weight:800;color:var(--g);cursor:pointer">
-                + Add
-               </div>`
-            : `<div class="qrow" style="width:100%;justify-content:space-between">
-                <button class="qbtn" onclick="removeFromCart(${p.id})">−</button>
-                <span class="qn" id="qty-${p.id}">${qty}</span>
-                <button class="qbtn" style="background:var(--g);color:#fff" onclick="addToCart(${p.id},'${safeName}',${price})">+</button>
-               </div>`}
-      </div>
-    </div>
-  </div>`;
-}
-
-function renderDeals(products) {
-  document.getElementById('deals-scroll').innerHTML = products.map(dealCard).join('');
-}
-
-// ── SORT / FILTER ──
-let _sortMode = 'default';
-let _currentProducts = [];
-
-function toggleSort() {
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="font-size:15px;font-weight:800;margin-bottom:16px">Sort By</div>
-    ${[
-      ['default','Relevance'],
-      ['price_asc','Price: Low to High'],
-      ['price_desc','Price: High to Low'],
-      ['disc_desc','Biggest Discount'],
-    ].map(([val,label]) => `
-    <div onclick="applySort('${val}')" style="padding:13px 0;border-bottom:1px solid var(--bdr);font-size:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer">
-      ${label}
-      ${_sortMode===val ? '<span style="color:var(--g);font-weight:900">✓</span>' : ''}
-    </div>`).join('')}`;
-  document.getElementById('sheet-overlay').classList.add('open');
-  sheet.classList.add('open');
-}
-
-function applySort(mode) {
-  _sortMode = mode;
-  closeSheet();
-  let sorted = [..._currentProducts];
-  if (mode === 'price_asc') sorted.sort((a,b) => (a.vwp||a.price||0) - (b.vwp||b.price||0));
-  else if (mode === 'price_desc') sorted.sort((a,b) => (b.vwp||b.price||0) - (a.vwp||a.price||0));
-  else if (mode === 'disc_desc') sorted.sort((a,b) => {
-    const da = a.mrp > (a.vwp||a.price) ? Math.round((a.mrp-(a.vwp||a.price))/a.mrp*100) : 0;
-    const db = b.mrp > (b.vwp||b.price) ? Math.round((b.mrp-(b.vwp||b.price))/b.mrp*100) : 0;
-    return db - da;
-  });
-  document.getElementById('product-grid').innerHTML = sorted.map(gridCard).join('');
-}
-
-function toggleFilter() {
-  // Get unique brands from current products
-  const brands = [...new Set(_currentProducts.map(p => p.brand).filter(Boolean))];
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="font-size:15px;font-weight:800;margin-bottom:16px">Filter</div>
-    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Brand</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-      ${brands.map(b => `
-      <button onclick="applyBrandFilter('${b}',this)"
-        style="padding:7px 14px;border-radius:20px;border:1.5px solid var(--bdr);background:#fff;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer">
-        ${b}
-      </button>`).join('')}
-    </div>
-    <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Price Range</div>
-    <div style="display:flex;gap:8px;margin-bottom:20px">
-      ${[['0-500','₹0–₹500'],['500-2000','₹500–₹2K'],['2000-10000','₹2K–₹10K'],['10000+','₹10K+']].map(([val,label]) => `
-      <button onclick="applyPriceFilter('${val}',this)"
-        style="flex:1;padding:7px;border-radius:8px;border:1.5px solid var(--bdr);background:#fff;font-size:11px;font-weight:700;color:var(--t2);cursor:pointer">
-        ${label}
-      </button>`).join('')}
-    </div>
-    <button onclick="clearFilters()" style="width:100%;padding:12px;border-radius:10px;background:var(--bg);border:none;font-size:13px;font-weight:700;cursor:pointer">Clear All Filters</button>`;
-  document.getElementById('sheet-overlay').classList.add('open');
-  sheet.classList.add('open');
-}
-
-let _activeBrand = null, _activePriceRange = null;
-
-function applyBrandFilter(brand, btn) {
-  document.querySelectorAll('#bottom-sheet button').forEach(b => {
-    if (b.textContent.trim() === brand) { b.style.background='var(--t1)'; b.style.color='var(--gold)'; b.style.borderColor='var(--t1)'; }
-  });
-  _activeBrand = brand;
-}
-
-function applyPriceFilter(range, btn) {
-  _activePriceRange = range;
-  closeSheet();
-  let filtered = [..._currentProducts];
-  if (_activeBrand) filtered = filtered.filter(p => p.brand === _activeBrand);
-  const [min, max] = range.includes('+') ? [parseInt(range),Infinity] : range.split('-').map(Number);
-  filtered = filtered.filter(p => { const pr = p.vwp||p.price||0; return pr >= min && pr <= max; });
-  document.getElementById('product-grid').innerHTML = filtered.length
-    ? filtered.map(gridCard).join('')
-    : `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">
-        <div style="font-size:36px;margin-bottom:8px">🔍</div>
-        <div style="font-size:14px;font-weight:700">No products match this filter</div>
-       </div>`;
-}
-
-function clearFilters() {
-  _activeBrand = null; _activePriceRange = null; closeSheet();
-  document.getElementById('product-grid').innerHTML = _currentProducts.map(gridCard).join('');
-}
-
-// ── CATEGORY PAGE ──
-async function showCategory(catKey, searchTerm) {
-  document.getElementById('pg-home').style.display = 'none';
-  document.getElementById('pg-cat').classList.add('open');
-
-  const cat = CATS.find(c => c.key === catKey);
-  const catIconEl = document.getElementById('cat-icon');
-  catIconEl.textContent = cat?.icon || '🔍';
-  catIconEl.style.background = (cat?.color || '#666') + '18';
-  document.getElementById('cat-title').textContent = searchTerm ? `"${searchTerm}"` : (cat?.label || 'All Products');
-
-  const grid = document.getElementById('product-grid');
-  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--t3)">Loading...</div>';
-
-  _sortMode = 'default';
-  _activeBrand = null;
-  _activePriceRange = null;
-  trackCategoryView(catKey || 'All');
-
-  try {
-    let url = '?select=id,name,brand,category,price,vwp,mrp,unit,stock,photos&is_active=eq.true&limit=40';
-    if (catKey) url += `&category=eq.${encodeURIComponent(catKey)}`;
-    if (searchTerm) url += `&name=ilike.*${encodeURIComponent(searchTerm)}*`;
-
-    const products = await sbFetch('products', url);
-    if (!Array.isArray(products) || !products.length) {
-      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
-        <div style="font-size:48px;margin-bottom:12px">📦</div>
-        <div style="font-size:15px;font-weight:800;color:var(--t2);margin-bottom:6px">No products found</div>
-        <div style="font-size:13px">Call us: <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
-      </div>`;
-      return;
-    }
-    _currentProducts = products;
-    _pdpProducts = [...products, ..._pdpProducts.filter(p => !products.find(x => x.id===p.id))];
-    grid.innerHTML = products.map(gridCard).join('');
-  } catch(e) {
-    console.error('showCategory error:', e);
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:50px;color:var(--t3)">
-      <div style="font-size:40px;margin-bottom:12px">📦</div>
-      <div style="font-size:14px;font-weight:800;color:var(--t2);margin-bottom:6px">Unable to load products</div>
-      <div style="font-size:12px;margin-bottom:16px">${e.message||'Check your connection'}</div>
-      <button onclick="showCategory(currentCatKey)" style="padding:10px 22px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">↺ Retry</button>
-    </div>`;
-  }
-}
-
-function closeCategoryPage() {
-  document.getElementById('pg-cat').classList.remove('open');
-  document.getElementById('pg-home').style.display = '';
-  setNav('home');
-}
-
-function goHome() {
-  closeCategoryPage();
-  clearSearch();
-  setNav('home');
-}
-
-// ── CASHFREE RETURN HANDLER ──
-(function() {
-  const p = new URLSearchParams(window.location.search);
-  const vwOrder = p.get('vw_order');
-  const cfOrder = p.get('cf_order');
-  if (vwOrder && cfOrder) {
-    window.history.replaceState({}, '', './shop.html');
-    setTimeout(() => {
-      const sheet = document.getElementById('bottom-sheet');
-      const overlay = document.getElementById('sheet-overlay');
-      sheet.innerHTML = `
-        <div class="sheet-handle"></div>
-        <div style="text-align:center;padding:20px 0 10px">
-          <div style="font-size:52px;margin-bottom:14px">⏳</div>
-          <div style="font-size:18px;font-weight:900;margin-bottom:6px">Payment Processing</div>
-          <div style="font-size:13px;color:var(--t3);margin-bottom:16px">Your order is placed. We're confirming your payment — you'll get an SMS once confirmed.</div>
-          <div style="background:var(--bg);border-radius:10px;padding:10px;font-size:12px;color:var(--t2);margin-bottom:16px">Order Ref: #${vwOrder}</div>
-          <button onclick="closeSheet()" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">Continue Shopping</button>
-          <div style="font-size:11px;color:var(--t3);margin-top:10px">Questions? Call <a href="tel:8712697930" style="color:var(--g);font-weight:700">8712697930</a></div>
-        </div>`;
-      sheet.classList.add('open');
-      overlay.classList.add('open');
-    }, 500);
-  }
-})();
-
-// ── DELIVERY ZONES ──
-// Vijayawada pincodes — 2-4 hr delivery
-const VJ_PINCODES = new Set([
-  '520001','520002','520003','520004','520007','520008','520010',
-  '520011','520012','520013','520015','520019','520021','520022',
-  '520023','520024','520025','520026','520027','520028',
-  '521001','521002','521101','521108','521126','521150',
-  '521156','521157','521163','521164','521165'
-]);
-
-// AP pincodes prefix ranges (500-535 = AP/Telangana)
-// Telangana: 500xxx-509xxx, AP: 515xxx-535xxx + 502-504
-const AP_PREFIXES = ['50','51','52','53'];
-const TG_PREFIXES = ['500','501','502','503','504','505','506','507','508','509'];
-
-function getPincodeZone(pin) {
-  if (!pin || pin.length !== 6) return null;
-  if (VJ_PINCODES.has(pin)) return 'vijayawada';
-  const p3 = pin.slice(0,3);
-  const p2 = pin.slice(0,2);
-  if (TG_PREFIXES.includes(p3)) return 'telangana';
-  if (AP_PREFIXES.includes(p2) && parseInt(pin) >= 500000 && parseInt(pin) <= 535999) return 'ap';
-  return 'outside';
-}
-
-function checkDeliveryPincode() {
-  const pin = document.getElementById('pincode-check-input')?.value?.trim();
-  const el = document.getElementById('pz-result');
-  if (!pin || pin.length < 6) { el.innerHTML = '<div style="font-size:12px;color:var(--red)">Enter a valid 6-digit pincode</div>'; return; }
-  const zone = getPincodeZone(pin);
-  const msgs = {
-    vijayawada: `<div style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:10px 12px">
-      <div style="font-size:13px;font-weight:800;color:var(--g);margin-bottom:2px">✅ Deliverable — Vijayawada</div>
-      <div style="font-size:12px;color:#166534">⚡ 2–4 hour delivery · Self pickup available at NH65 Bhavanipuram</div>
-    </div>`,
-    ap: `<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 12px">
-      <div style="font-size:13px;font-weight:800;color:#c2410c;margin-bottom:2px">🚚 Andhra Pradesh — Deliverable</div>
-      <div style="font-size:12px;color:#9a3412">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
-    </div>`,
-    telangana: `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 12px">
-      <div style="font-size:13px;font-weight:800;color:#6d28d9;margin-bottom:2px">🚚 Telangana — Deliverable</div>
-      <div style="font-size:12px;color:#5b21b6">Estimated 3–4 business days · Our team will call to confirm logistics & charges</div>
-    </div>`,
-    outside: `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px">
-      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:2px">❌ Outside Service Area</div>
-      <div style="font-size:12px;color:#991b1b">We currently serve Andhra Pradesh & Telangana only. Call us for special arrangements.</div>
-    </div>`
-  };
-  el.innerHTML = msgs[zone] || msgs.outside;
-  trackEvent('pincode_check', { pincode: pin, zone });
-}
-
-function showPickupOption() {
-  const sheet = document.getElementById('bottom-sheet');
-  sheet.innerHTML = `
-    <div class="sheet-handle"></div>
-    <div style="text-align:center;padding:4px 0 8px">
-      <div style="font-size:36px;margin-bottom:10px">🏪</div>
-      <div style="font-size:17px;font-weight:900;margin-bottom:4px">Self Pickup — Free</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:20px">Collect from our store — no delivery charge</div>
-    </div>
-    <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:16px">
-      <div style="font-size:13px;font-weight:800;margin-bottom:4px">📍 V Wholesale Store</div>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:6px">NH65, Bhavanipuram, Vijayawada — 520012</div>
-      <div style="font-size:11px;color:var(--t3)">Mon–Sat · 9:00 AM – 7:30 PM · <a href="tel:8712697930" style="color:var(--g);font-weight:700">87126 97930</a></div>
-    </div>
-    <div style="font-size:12px;color:var(--t2);margin-bottom:16px;line-height:1.6">
-      ✅ Order online and select "Store Pickup" at checkout<br>
-      ✅ Ready within 30–45 minutes for in-stock items<br>
-      ✅ No delivery charge · Pay at pickup or online
-    </div>
-    <button onclick="openLoginSheet('cart')" style="width:100%;padding:13px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:900;cursor:pointer">
-      Shop & Pickup →
-    </button>
-    <button onclick="closeSheet()" style="width:100%;margin-top:8px;padding:11px;border-radius:12px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">Close</button>`;
-  document.getElementById('sheet-overlay').classList.add('open');
-  sheet.classList.add('open');
+  document.getElementById('pdp-overlay').classList.remove('open');
+  document.getElementById('pdp-bar').style.display = 'none';
 }
 
 // ── WISHLIST ──
-let _wishlist = new Set();
-
-function toggleWishlist(productId, productName, btn) {
-  if (_wishlist.has(productId)) {
-    _wishlist.delete(productId);
-    if (btn) { btn.textContent = '♡'; btn.style.color = 'var(--t3)'; }
+function toggleWishlist(id, name) {
+  const sid = String(id);
+  if (_wishlist.has(sid)) {
+    _wishlist.delete(sid);
     toast('Removed from wishlist');
   } else {
-    _wishlist.add(productId);
-    if (btn) { btn.textContent = '♥'; btn.style.color = '#e11d48'; }
-    toast('Added to wishlist ♥');
+    _wishlist.add(sid);
+    toast('Added to wishlist ❤️');
+    if (_token) api('customer-shop', { action:'toggle_wishlist', product_id:id, product_name:name });
   }
-  trackEvent('wishlist_toggle', { product_id: productId, action: _wishlist.has(productId) ? 'add' : 'remove' });
-  // Persist to localStorage
   localStorage.setItem('vw_wishlist', JSON.stringify([..._wishlist]));
+  // Refresh PDP wishlist buttons
+  document.querySelectorAll(`[data-wish="${id}"]`).forEach(el => { el.textContent = _wishlist.has(sid)?'❤️':'🤍'; });
 }
 
-function loadWishlist() {
-  try {
-    const saved = localStorage.getItem('vw_wishlist');
-    if (saved) _wishlist = new Set(JSON.parse(saved));
-  } catch(e) {}
+function openWishlist() {
+  showPage('wishlist');
+  const list = document.getElementById('wishlist-list');
+  if (!_wishlist.size) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">🤍</div><div class="empty-msg">Wishlist is empty</div><button class="btn-g" style="margin-top:14px;max-width:200px;margin-left:auto;margin-right:auto" onclick="showPage('home')">Browse Products</button></div>`;
+    return;
+  }
+  list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
+  // Fetch product details for wishlisted items
+  Promise.all([..._wishlist].map(id => api('customer-shop', { action:'get_product', id:parseInt(id) })))
+    .then(results => {
+      const prods = results.filter(r=>r?.ok).map(r=>r.data);
+      list.innerHTML = `<div class="pgrid">${prods.map(p=>productCard(p)).join('')}</div>`;
+    });
 }
 
-// ── ANALYTICS ──
-// Events are always pushed to dataLayer, so anything fired before GA4
-// finishes loading is buffered and delivered once gtag initialises.
-window.dataLayer = window.dataLayer || [];
-function trackEvent(eventName, params = {}) {
-  try {
-    if (typeof window.gtag === 'function') window.gtag('event', eventName, params);
-    else window.dataLayer.push({ event: eventName, ...params });
-  } catch(e) {}
+// ── PAGES ──
+function showPage(page) {
+  _currentPage = page;
+  const pages = ['home','cat','search','orders','account','offers','wishlist'];
+  pages.forEach(p => {
+    const el = document.getElementById(`pg-${p}`);
+    if (el) el.style.display = p===page ? 'block' : 'none';
+  });
+  // Update nav
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  const navMap = { home:'nav-home', cat:'nav-cat', orders:'nav-orders', account:'nav-account', offers:'nav-offers' };
+  const nb = document.getElementById(navMap[page]);
+  if (nb) nb.classList.add('active');
+  window.scrollTo(0,0);
+  // Load page content
+  if (page === 'orders') loadOrders();
+  if (page === 'account') loadAccount();
+  if (page === 'offers') loadOffers();
 }
 
-// Track key events
-function trackAddToCart(id, name, price) {
-  trackEvent('add_to_cart', { currency:'INR', value: price, items:[{item_id:id, item_name:name, price}] });
-}
-function trackViewProduct(id, name, category, price) {
-  trackEvent('view_item', { currency:'INR', value:price, items:[{item_id:id, item_name:name, item_category:category, price}] });
-}
-function trackSearch(term) {
-  trackEvent('search', { search_term: term });
-}
-function trackCategoryView(category) {
-  trackEvent('view_item_list', { item_list_name: category || 'All Products' });
+function goHome() {
+  _searchQ = '';
+  const si = document.getElementById('search-input');
+  if (si) si.value = '';
+  showPage('home');
 }
 
-// ── GA4 INIT — Measurement ID is read from the settings table (key:
-// 'ga4_measurement_id'), so it can be activated from the staff admin
-// panel with zero code deploys. Nothing loads while the ID is empty:
-// no script requests, no console noise. Early events buffer in dataLayer.
-(async function initGA4() {
-  let gaId = '';
-  try {
-    const rows = await sbFetch('settings', '?key=eq.ga4_measurement_id&select=value');
-    gaId = (Array.isArray(rows) && rows[0]) ? String(rows[0].value || '').replace(/"/g,'').trim() : '';
-  } catch(e) {}
-  if (!/^G-[A-Z0-9]{6,}$/i.test(gaId)) return; // no valid ID configured yet
-  const gaScript = document.createElement('script');
-  gaScript.async = true;
-  gaScript.src = `https://www.googletagmanager.com/gtag/js?id=${gaId}`;
-  document.head.appendChild(gaScript);
-  function gtag(){ window.dataLayer.push(arguments); }
-  window.gtag = gtag;
-  gtag('js', new Date());
-  gtag('config', gaId, { page_title: 'V Wholesale Shop', page_location: window.location.href });
-})();
+function showCategoryPage(cat) {
+  _currentCat = cat;
+  _catOffset = 0;
+  document.getElementById('cat-title').textContent = cat || 'All Products';
+  document.getElementById('cat-grid-products').innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  showPage('cat');
+  loadCategoryProducts();
+}
+
+async function loadCategoryProducts() {
+  const res = await api('customer-shop', { action:'get_products', category:_currentCat, limit:20, offset:_catOffset });
+  const products = res?.data || [];
+  const grid = document.getElementById('cat-grid-products');
+  if (_catOffset === 0) grid.innerHTML = '';
+  if (!products.length && _catOffset === 0) {
+    grid.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-msg">No products here yet</div></div>';
+    return;
+  }
+  grid.insertAdjacentHTML('beforeend', products.map(p=>productCard(p)).join(''));
+  document.getElementById('cat-load-more').style.display = products.length===20 ? 'block' : 'none';
+}
+
+function loadMoreProducts() {
+  _catOffset += 20;
+  loadCategoryProducts();
+}
+
+function showAllCategories() {
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `<div class="sheet-handle"></div>
+    <div style="font-size:17px;font-weight:900;margin-bottom:14px">All Categories</div>
+    <div class="cgrid" style="grid-template-columns:repeat(3,1fr)">
+      ${_cats.map(c=>`<div class="ccard" onclick="closeSheet();showCategoryPage('${c.key}')">
+        <div class="cimg" style="background:${c.color}18">${c.icon}</div>
+        <div class="clabel">${c.label}</div>
+      </div>`).join('')}
+    </div>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+// ── SEARCH ──
+let _searchTimer;
+function handleSearch(q) {
+  _searchQ = q;
+  clearTimeout(_searchTimer);
+  if (!q.trim()) { goHome(); return; }
+  _searchTimer = setTimeout(() => doSearch(q), 400);
+}
+
+async function doSearch(q) {
+  showPage('search');
+  document.getElementById('search-title').textContent = `Results for "${q}"`;
+  document.getElementById('search-results').innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Searching…</div>';
+  const res = await api('customer-shop', { action:'get_products', search:q, limit:40 });
+  const prods = res?.data || [];
+  document.getElementById('search-results').innerHTML = prods.length
+    ? prods.map(p=>productCard(p)).join('')
+    : '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-msg">No results found</div></div>';
+}
+
+// ── ORDERS ──
+async function loadOrders() {
+  const list = document.getElementById('orders-list');
+  list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  const res = await api('customer-orders', { action:'get_orders' });
+  const orders = res?.data || [];
+  if (!orders.length) {
+    list.innerHTML = `<div class="empty"><div class="empty-icon">📦</div><div class="empty-msg">No orders yet</div><button class="btn-g" style="margin-top:14px;max-width:200px;margin-left:auto;margin-right:auto" onclick="showPage('home')">Start Shopping</button></div>`;
+    return;
+  }
+  list.innerHTML = orders.map(o => `
+    <div class="order-card" onclick="openOrderDetail('${o.id}')">
+      <div class="order-no">${o.order_no} · ${new Date(o.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:6px 0">
+        <span class="order-status status-${o.order_status}">${_orderStatusLabel(o.order_status)}</span>
+        <span style="font-size:15px;font-weight:900">₹${(o.grand_total||0).toLocaleString('en-IN')}</span>
+      </div>
+      <div style="font-size:12px;color:var(--t3)">${(o.items||[]).length} item${(o.items||[]).length>1?'s':''} · ${o.delivery_type==='pickup'?'Self Pickup':'Home Delivery'}</div>
+    </div>`).join('');
+}
+
+function _orderStatusLabel(s) {
+  return {confirmed:'✅ Confirmed',processing:'🔄 Processing',shipped:'🚚 Shipped',delivered:'✅ Delivered',cancelled:'❌ Cancelled'}[s]||s;
+}
+
+async function openOrderDetail(id) {
+  const res = await api('customer-orders', { action:'get_order', order_id:id });
+  const o = res?.data;
+  if (!o) return;
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:4px">${o.order_no}</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:14px">${new Date(o.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+    <span class="order-status status-${o.order_status}" style="margin-bottom:14px;display:inline-flex">${_orderStatusLabel(o.order_status)}</span>
+    <div style="background:#F8F8F8;border-radius:10px;padding:12px;margin:10px 0">
+      ${(o.items||[]).map(i=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:13px">
+        <span>${i.name} × ${i.qty}</span><span style="font-weight:700">₹${((i.price||0)*i.qty).toLocaleString('en-IN')}</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding-top:8px;font-weight:900">
+        <span>Total</span><span>₹${(o.grand_total||0).toLocaleString('en-IN')}</span></div>
+    </div>
+    ${['confirmed','processing'].includes(o.order_status) ? `<button onclick="cancelOrderConfirm('${o.id}')" class="btn-out" style="border-color:var(--red);color:var(--red);margin-bottom:8px">Cancel Order</button>` : ''}
+    <button onclick="closeSheet()" class="btn-out">Close</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+async function cancelOrderConfirm(id) {
+  if (!confirm('Cancel this order?')) return;
+  const res = await api('customer-orders', { action:'cancel_order', order_id:id, reason:'Customer requested' });
+  if (res?.ok) { closeSheet(); toast('Order cancelled'); loadOrders(); }
+  else toast(res?.error||'Could not cancel');
+}
+
+// ── ACCOUNT ──
+async function loadAccount() {
+  const content = document.getElementById('account-content');
+  content.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+
+  const [profRes, walletRes, loyaltyRes] = await Promise.all([
+    api('customer-account', { action:'get_profile' }),
+    api('customer-account', { action:'get_wallet' }),
+    api('customer-account', { action:'get_loyalty' }),
+  ]);
+
+  const prof = profRes?.data || {};
+  const wallet = walletRes?.data?.wallet || {};
+  const loyalty = loyaltyRes?.data || {};
+
+  content.innerHTML = `
+    <div style="text-align:center;margin-bottom:20px;padding-top:10px">
+      <div class="profile-avatar">${(prof.name||'?').charAt(0).toUpperCase()}</div>
+      <div style="font-size:18px;font-weight:900">${prof.name||''}</div>
+      <div style="font-size:13px;color:var(--t3)">+91 ${prof.phone||''}</div>
+      ${prof.construction_stage?`<div style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;padding:4px 12px;background:var(--glt);border-radius:20px;font-size:12px;font-weight:700;color:var(--gdk)">🏗 ${prof.construction_stage}</div>`:''}
+    </div>
+
+    <!-- Wallet -->
+    <div class="wallet-card">
+      <div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:4px">V WALLET</div>
+      <div class="wallet-bal">₹${(wallet.balance||0).toLocaleString('en-IN')}</div>
+      <div style="font-size:12px;opacity:.7">${wallet.kyc_status==='verified'?'✅ KYC Verified':'Tap to top up'}</div>
+    </div>
+
+    <!-- Loyalty Points -->
+    <div class="points-card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase">Club Points</div>
+          <div style="font-size:28px;font-weight:900;color:var(--t1)">${(loyalty.points||0).toLocaleString('en-IN')}</div>
+          <div style="font-size:11px;color:var(--t3)">≈ ₹${Math.floor((loyalty.points||0)/10)} off on next order</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:24px">${loyalty.tier==='Platinum'?'💎':loyalty.tier==='Gold'?'🏆':'🥈'}</div>
+          <div style="font-size:11px;font-weight:900;color:${loyalty.tier==='Platinum'?'#A78BFA':loyalty.tier==='Gold'?'#F5C842':'#9CA3AF'}">${loyalty.tier||'Silver'}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <button onclick="showPage('orders')" style="padding:14px;background:#fff;border:1px solid var(--bdr);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📦 My Orders</button>
+      <button onclick="openWishlist()" style="padding:14px;background:#fff;border:1px solid var(--bdr);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">❤️ Wishlist</button>
+      <button onclick="showAddresses()" style="padding:14px;background:#fff;border:1px solid var(--bdr);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📍 Addresses</button>
+      <button onclick="showChangePIN()" style="padding:14px;background:#fff;border:1px solid var(--bdr);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">🔒 Change PIN</button>
+    </div>
+
+    <a href="tel:8712697930" style="display:flex;align-items:center;gap:10px;padding:14px;background:#fff;border:1px solid var(--bdr);border-radius:12px;text-decoration:none;color:var(--t1);margin-bottom:10px">
+      <span style="font-size:20px">📞</span><div><div style="font-size:13px;font-weight:700">Call Store</div><div style="font-size:11px;color:var(--t3)">8712697930 · Mon–Sat 9AM–7:30PM</div></div>
+    </a>
+
+    <button onclick="_logout();showPage('home');toast('Logged out')" style="width:100%;padding:12px;background:#fff;border:1px solid #FFD0D0;border-radius:12px;font-size:13px;font-weight:700;color:var(--red);cursor:pointer;margin-top:4px">🚪 Logout</button>`;
+}
+
+async function showAddresses() {
+  const res = await api('customer-orders', { action:'get_addresses' });
+  const addrs = res?.data || [];
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px">📍 My Addresses</div>
+    ${addrs.map(a=>`<div style="padding:12px;background:#F8F8F8;border-radius:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:13px;font-weight:700">${a.label||'Home'}${a.is_default?' <span style="font-size:10px;color:var(--g);font-weight:800">DEFAULT</span>':''}</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:2px">${[a.address_line1,a.address_line2,a.city,a.pincode].filter(Boolean).join(', ')}</div></div>
+    </div>`).join('')}
+    <button onclick="addNewAddressSheet();showPage('account')" class="btn-out">+ Add Address</button>
+    <button onclick="closeSheet()" style="width:100%;padding:11px;margin-top:8px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">Close</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+function showChangePIN() {
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="font-size:16px;font-weight:900;margin-bottom:14px">🔒 Change PIN</div>
+    <div style="display:grid;gap:12px;margin-bottom:14px">
+      <div><label class="form-lbl">Current PIN</label><input type="password" inputmode="numeric" maxlength="6" id="pin-old" class="pin-input" style="margin-top:4px" placeholder="••••••"></div>
+      <div><label class="form-lbl">New PIN</label><input type="password" inputmode="numeric" maxlength="6" id="pin-new" class="pin-input" style="margin-top:4px" placeholder="••••••"></div>
+      <div><label class="form-lbl">Confirm New PIN</label><input type="password" inputmode="numeric" maxlength="6" id="pin-new2" class="pin-input" style="margin-top:4px" placeholder="••••••"></div>
+    </div>
+    <button class="btn-g" onclick="submitChangePIN()">Update PIN</button>
+    <button onclick="closeSheet()" style="width:100%;padding:11px;margin-top:8px;background:none;border:none;font-size:13px;color:var(--t3);cursor:pointer">Cancel</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+
+async function submitChangePIN() {
+  const old_pin = document.getElementById('pin-old')?.value;
+  const new_pin = document.getElementById('pin-new')?.value;
+  const new_pin2 = document.getElementById('pin-new2')?.value;
+  if (!old_pin||old_pin.length<6) { toast('Enter current PIN'); return; }
+  if (!new_pin||new_pin.length<6) { toast('New PIN must be 6 digits'); return; }
+  if (new_pin!==new_pin2) { toast('PINs do not match'); return; }
+  const res = await api('customer-account', { action:'change_pin', old_pin, new_pin });
+  if (res?.ok) { closeSheet(); toast('PIN changed successfully'); }
+  else toast(res?.error||'Failed to change PIN');
+}
+
+// ── OFFERS ──
+async function loadOffers() {
+  const list = document.getElementById('offers-list');
+  list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  const res = await api('customer-shop', { action:'get_promos' });
+  const promos = res?.data || [];
+  if (!promos.length) { list.innerHTML = '<div class="empty"><div class="empty-icon">🎁</div><div class="empty-msg">No offers right now</div></div>'; return; }
+  list.innerHTML = promos.map(p=>`
+    <div class="promo-card">
+      <div>
+        <div style="font-size:11px;font-weight:700;opacity:.7;margin-bottom:4px;text-transform:uppercase">Promo Code</div>
+        <div style="font-size:18px;font-weight:900;margin-bottom:6px">${p.description||p.discount_type}</div>
+        ${p.min_order_amount?`<div style="font-size:11px;opacity:.7">Min order ₹${p.min_order_amount}</div>`:''}
+      </div>
+      <div>
+        <div class="promo-code" onclick="navigator.clipboard?.writeText('${p.code}');toast('Code copied!')">
+          ${p.code}
+        </div>
+        <div style="font-size:10px;opacity:.7;text-align:center;margin-top:4px">Tap to copy</div>
+      </div>
+    </div>`).join('');
+}
+
+// ── SHEET UTILS ──
+function closeSheet() {
+  document.getElementById('bottom-sheet')?.classList.remove('open');
+  document.getElementById('sheet-overlay')?.classList.remove('open');
+}
+
+// ── TOAST ──
+function toast(msg, duration=2500) {
+  const container = document.getElementById('toast');
+  const el = document.createElement('div');
+  el.className = 'toast-msg';
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, duration);
+}
 
 // ── INIT ──
-loadWishlist();
-renderCatGrid();
-renderCatNav();
-loadCategories();
-loadDeals();
-</script>
+async function init() {
+  _saveCart(); // init badge
+  _updateAuthUI();
 
+  // Load categories
+  const catRes = await api('customer-shop', { action:'get_categories' });
+  _cats = catRes?.data || [
+    {key:'Tiles',label:'Tiles',icon:'⬜',color:'#8B5CF6'},
+    {key:'Sanitary',label:'Sanitaryware',icon:'🚽',color:'#3B82F6'},
+    {key:'Faucets',label:'Faucets',icon:'🚰',color:'#0369A1'},
+    {key:'Wires',label:'Electricals',icon:'🔌',color:'#F59E0B'},
+    {key:'Pipes',label:'Plumbing',icon:'🔧',color:'#06B6D4'},
+    {key:'Paints',label:'Paints',icon:'🎨',color:'#EC4899'},
+    {key:'Plywood',label:'Plywood',icon:'🪵',color:'#92400E'},
+    {key:'Cement',label:'Construction',icon:'🏗',color:'#57534E'},
+    {key:'Fans',label:'Fans',icon:'🌀',color:'#0D9488'},
+    {key:'LED Lights',label:'Lighting',icon:'💡',color:'#EAB308'},
+    {key:'Doors',label:'Doors',icon:'🚪',color:'#7C2D12'},
+    {key:'Appliances',label:'Appliances',icon:'🏠',color:'#10B981'},
+  ];
+
+  // Render category grid
+  const grid = document.getElementById('cat-grid');
+  if (grid) grid.innerHTML = _cats.slice(0,12).map(c=>`
+    <div class="ccard" onclick="showCategoryPage('${c.key}')">
+      <div class="cimg" style="background:${c.color}18">${c.icon}</div>
+      <div class="clabel">${c.label}</div>
+    </div>`).join('');
+
+  // Load deals
+  const dealsRes = await api('customer-shop', { action:'get_deals' });
+  const deals = dealsRes?.data || [];
+  const dealsEl = document.getElementById('deals-scroll');
+  if (dealsEl) dealsEl.innerHTML = deals.length
+    ? deals.map(p=>productCard(p,'wide')).join('')
+    : '<div style="padding:20px;color:var(--t3);font-size:13px">Loading deals…</div>';
+
+  // Offers strip
+  const promoRes = await api('customer-shop', { action:'get_promos' });
+  const promos = promoRes?.data || [];
+  const strip = document.getElementById('offers-strip');
+  if (strip && promos.length) {
+    strip.innerHTML = promos.slice(0,1).map(p=>`
+      <div style="background:linear-gradient(135deg,var(--gdk),var(--g));border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;margin-bottom:3px">🎁 First Order Offer</div>
+        <div style="font-size:15px;font-weight:900;color:#fff">${p.description||'Save with '+p.code}</div></div>
+        <button onclick="showPage('offers')" style="background:var(--gold);color:#fff;border:none;border-radius:10px;padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer">View Offers</button>
+      </div>`).join('');
+  }
+
+  // SW
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+init();
+</script>
 </body>
 </html>
