@@ -879,20 +879,36 @@ async function openPDP(id) {
   const inWish = _wishlist.has(String(p.id));
   const nm    = p.name.replace(/'/g,"\'");
 
-  // Build specs from all available fields
+  // Build specs from ALL available fields — comprehensive like IBO
   const specFields = [
     ['Brand', p.brand],
+    ['Model No.', p.model],
     ['Category', p.category],
-    ['Model', p.model],
-    ['Size / Dimensions', p.tile_size_label||p.tile_size_mm],
-    ['Finish', p.tile_finish],
-    ['Colour', p.colour_family],
+    ['Subcategory', p.subcategory],
     ['Unit', p.unit||'Each'],
+    // Tile-specific
+    ['Size', p.tile_size_label||p.tile_size_mm],
+    ['Finish', p.tile_finish],
+    ['Tile Type', p.tile_type],
+    ['Surface', p.surface_type],
+    ['Colour Family', p.colour_family],
+    ['Thickness', p.tile_thickness_mm ? p.tile_thickness_mm+'mm' : null],
+    ['Tiles per Box', p.tiles_per_box ? p.tiles_per_box+' pcs' : null],
+    ['Coverage per Box', p.coverage_per_box ? p.coverage_per_box+' sqft' : null],
+    ['Box Weight', p.box_weight_kg ? p.box_weight_kg+' kg' : null],
+    ['Current Lot', p.current_lot_no],
+    ['Shade No.', p.current_shade_no],
+    ['Recommended Adhesive', p.recommended_adhesive],
+    ['Recommended Grout', p.recommended_grout],
+    // General
     ['HSN Code', p.hsn],
     ['GST', p.gst ? p.gst+'%' : null],
-    ['Warranty', p.warranty_months ? (p.warranty_months>=12 ? Math.floor(p.warranty_months/12)+' Year'+(p.warranty_months>=24?'s':'') : p.warranty_months+' Months') : null],
-    ['Stock', parseFloat(p.stock||0)>0 ? '✓ In Stock' : '⚠️ Limited Stock'],
-  ].filter(([,v])=>v);
+    ['Warranty', p.warranty_months ? (p.warranty_months>=12 ? Math.floor(p.warranty_months/12)+' Year'+(p.warranty_months>=24?'s':'') : p.warranty_months+' Months') : 'Not Applicable'],
+    ['Barcode / SKU', p.barcode],
+    ['Stock Status', parseFloat(p.stock||0)>0 ? '✓ In Stock' : '⚠️ Limited Stock'],
+    // Custom fields (any additional product-specific specs added in admin)
+    ...Object.entries(p.custom_fields||{}).map(([k,v])=>[k,v]),
+  ].filter(([,v])=>v!=null&&v!=='');
 
   // Photos carousel
   const photos = Array.isArray(p.photos) ? p.photos.map(ph=>ph?.url||ph).filter(Boolean) : [];
