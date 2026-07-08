@@ -859,73 +859,147 @@ function _catIcon(cat) {
 
 // ── PDP ──
 async function openPDP(id) {
+  // Show skeleton immediately
+  const pdpEl = document.getElementById('pdp-sheet');
+  const pdpOv = document.getElementById('pdp-overlay');
+  const pdpBar = document.getElementById('pdp-bar');
+  pdpEl.innerHTML = `<div style="padding:60px 20px;text-align:center;color:var(--t3)">Loading…</div>`;
+  pdpEl.classList.add('open');
+  pdpOv.classList.add('open');
+
   const res = await api('customer-shop', { action:'get_product', id });
   const p = res?.data;
-  if (!p) return;
+  if (!p) { pdpEl.innerHTML = '<div style="padding:40px;text-align:center;color:var(--t3)">Product not found</div>'; return; }
 
   const price = parseFloat(p.vwp||p.price||0)||0;
-  const mrp = parseFloat(p.mrp||0)||0;
-  const disc = mrp>price&&price>0?Math.round((mrp-price)/mrp*100):0;
-  const img = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
-  const qty = _cart[p.id]||0;
+  const mrp   = parseFloat(p.mrp||0)||0;
+  const disc  = mrp>price&&price>0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const img   = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
+  const qty   = _cart[p.id]||0;
   const inWish = _wishlist.has(String(p.id));
-  const nm = p.name.replace(/'/g,"\\'");
+  const nm    = p.name.replace(/'/g,"\'");
 
-  const specs = [
-    ['Brand',p.brand],['Model',p.model],['Category',p.category],
-    ['Colour',p.colour_family],['Finish',p.tile_finish],['Size',p.tile_size_label||p.tile_size_mm],
-    ['Unit',p.unit||'Each'],['GST',p.gst?p.gst+'%':null],['HSN',p.hsn],
-    ['Warranty',p.warranty_months?(p.warranty_months>=12?Math.floor(p.warranty_months/12)+' Year'+( p.warranty_months>=24?'s':''):p.warranty_months+' Months'):null],
-    ['Stock',p.stock&&parseFloat(p.stock)>0?'✓ In Stock':'⚠️ Limited']
-  ].filter(([,v])=>v).map(([k,v])=>`<div class="pdp-spec-row"><div class="pdp-spec-k">${k}</div><div class="pdp-spec-v">${v}</div></div>`).join('');
+  // Build specs from all available fields
+  const specFields = [
+    ['Brand', p.brand],
+    ['Category', p.category],
+    ['Model', p.model],
+    ['Size / Dimensions', p.tile_size_label||p.tile_size_mm],
+    ['Finish', p.tile_finish],
+    ['Colour', p.colour_family],
+    ['Unit', p.unit||'Each'],
+    ['HSN Code', p.hsn],
+    ['GST', p.gst ? p.gst+'%' : null],
+    ['Warranty', p.warranty_months ? (p.warranty_months>=12 ? Math.floor(p.warranty_months/12)+' Year'+(p.warranty_months>=24?'s':'') : p.warranty_months+' Months') : null],
+    ['Stock', parseFloat(p.stock||0)>0 ? '✓ In Stock' : '⚠️ Limited Stock'],
+  ].filter(([,v])=>v);
 
-  document.getElementById('pdp-sheet').innerHTML = `
-    <div class="pdp-close">
-      <button onclick="closePDP()">←</button>
-      <div class="pdp-close-title">${p.name}</div>
-      <button onclick="toggleWishlist(${p.id},'${nm}')" style="background:none;border:none;font-size:22px;cursor:pointer">${inWish?'❤️':'🤍'}</button>
+  // Photos carousel
+  const photos = Array.isArray(p.photos) ? p.photos.map(ph=>ph?.url||ph).filter(Boolean) : [];
+  if (img && !photos.includes(img)) photos.unshift(img);
+  let activePhoto = photos[0]||'';
+
+  pdpEl.innerHTML = `
+    <!-- Close bar -->
+    <div style="position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--bdr);z-index:5">
+      <button onclick="closePDP()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1);padding:0;line-height:1;flex-shrink:0">←</button>
+      <div style="flex:1;font-size:13px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+      <button onclick="toggleWishlist(${p.id},'${nm}')" style="background:none;border:none;font-size:22px;cursor:pointer;padding:0;flex-shrink:0">${inWish?'❤️':'🤍'}</button>
     </div>
-    <div class="pdp-img">${img?`<img src="${img}" alt="${p.name}">`:`<span style="font-size:80px">${_catIcon(p.category)}</span>`}</div>
-    <div class="pdp-body">
-      ${p.brand?`<div class="pdp-brand">${p.brand}</div>`:''}
-      <div class="pdp-name">${p.name}</div>
-      <div class="pdp-price-row">
-        <span class="pdp-price">₹${price.toLocaleString('en-IN')}</span>
-        <span class="pdp-unit">/${p.unit||'pc'}</span>
-        ${mrp>price?`<span class="pdp-mrp">₹${mrp.toLocaleString('en-IN')}</span><span class="pdp-save">${disc}% off</span>`:''}
+
+    <!-- Image -->
+    <div id="pdp-main-img" style="background:#f8f8f8;height:280px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+      ${activePhoto ? `<img src="${activePhoto}" alt="${p.name}" style="max-height:100%;max-width:100%;object-fit:contain;padding:16px">` : `<span style="font-size:80px">${_catIcon(p.category)}</span>`}
+      ${disc>0 ? `<div style="position:absolute;top:12px;left:12px;background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:4px 10px;border-radius:20px">${disc}% OFF</div>` : ''}
+    </div>
+
+    <!-- Photo thumbnails -->
+    ${photos.length>1 ? `<div style="display:flex;gap:8px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid var(--bdr);scrollbar-width:none">
+      ${photos.map((ph,i)=>`<div onclick="document.getElementById('pdp-main-img').querySelector('img').src='${ph}'" style="width:60px;height:60px;flex-shrink:0;border:2px solid ${i===0?'var(--g)':'var(--bdr)'};border-radius:8px;overflow:hidden;cursor:pointer;background:#f8f8f8;display:flex;align-items:center;justify-content:center">
+        <img src="${ph}" style="width:100%;height:100%;object-fit:contain">
+      </div>`).join('')}
+    </div>` : ''}
+
+    <div style="padding:14px">
+      <!-- Brand + Name -->
+      ${p.brand ? `<div style="font-size:11px;font-weight:800;color:var(--g);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">${p.brand}</div>` : ''}
+      <div style="font-size:18px;font-weight:900;color:var(--t1);line-height:1.3;margin-bottom:10px">${p.name}</div>
+
+      <!-- Price block -->
+      <div style="background:var(--glt);border-radius:12px;padding:12px 14px;margin-bottom:12px">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-size:26px;font-weight:900;color:var(--t1)">₹${price.toLocaleString('en-IN')}</span>
+          <span style="font-size:13px;color:var(--t3);font-weight:600">/${p.unit||'pc'}</span>
+          ${mrp>price ? `
+          <span style="font-size:14px;color:var(--t3);text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>
+          <span style="background:var(--g);color:#fff;font-size:11px;font-weight:900;padding:2px 8px;border-radius:12px">${disc}% OFF</span>` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-top:4px">Price inclusive of all taxes${p.gst?' · GST '+p.gst+'%':''}</div>
+        ${mrp>price ? `<div style="font-size:12px;color:var(--g);font-weight:700;margin-top:4px">You save ₹${(mrp-price).toLocaleString('en-IN')} on this order</div>` : ''}
       </div>
-      <div class="pdp-gst">Price inclusive of all taxes${p.gst?' · GST '+p.gst+'%':''}</div>
-      <div class="trust-row">
-        <div class="trust-item"><div class="trust-icon">🚚</div><div class="trust-txt">2–4 Hr<br>Delivery</div></div>
-        <div class="trust-item"><div class="trust-icon">✅</div><div class="trust-txt">100%<br>Genuine</div></div>
-        <div class="trust-item"><div class="trust-icon">🔄</div><div class="trust-txt">7 Day<br>Returns</div></div>
-        <div class="trust-item"><div class="trust-icon">💳</div><div class="trust-txt">Pay on<br>Delivery</div></div>
-        <div class="trust-item"><div class="trust-icon">🏷</div><div class="trust-txt">Wholesale<br>Price</div></div>
-        <div class="trust-item"><div class="trust-icon">📞</div><div class="trust-txt">Call<br>Support</div></div>
+
+      <!-- Delivery promise -->
+      <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fff;border:1px solid var(--bdr);border-radius:10px;margin-bottom:12px">
+        <span style="font-size:20px">🚚</span>
+        <div>
+          <div style="font-size:13px;font-weight:800;color:var(--t1)">Delivery within 2–4 hours</div>
+          <div style="font-size:11px;color:var(--t3)">Vijayawada · NH65, Bhavanipuram</div>
+        </div>
       </div>
-      ${p.description?`<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Description</div><div style="font-size:13px;color:var(--t2);line-height:1.6;background:#F8F8F8;border-radius:10px;padding:12px">${p.description}</div></div>`:''}
-      ${specs?`<div style="margin-bottom:14px"><div style="font-size:14px;font-weight:800;margin-bottom:8px">Specifications</div><div class="pdp-spec">${specs}</div></div>`:''}
-      <div class="pdp-store">
-        <div style="font-size:28px">🏪</div>
-        <div style="flex:1"><div style="font-size:12px;font-weight:800;color:#fff">Visit V Wholesale Store</div><div style="font-size:10px;color:rgba(255,255,255,.6)">NH65, Bhavanipuram · Mon–Sat 9AM–7:30PM</div></div>
-        <a href="tel:8712697930" style="padding:8px 12px;background:rgba(255,255,255,.15);border-radius:8px;font-size:11px;font-weight:700;color:#fff;text-decoration:none">📞 Call</a>
+
+      <!-- Trust icons -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
+        ${[['✅','100% Genuine','Verified products'],['🔄','7 Day Returns','Quality guarantee'],['💳','Pay on Delivery','Pay after verify'],['🏷','Wholesale Price','Best rates'],['📞','Call Support','8712697930'],['🏪','Store Pickup','NH65 Bhavan.']].map(([icon,title,sub])=>`
+        <div style="text-align:center;padding:10px 6px;background:#fff;border:1px solid var(--bdr);border-radius:10px">
+          <div style="font-size:18px;margin-bottom:3px">${icon}</div>
+          <div style="font-size:10px;font-weight:800;color:var(--t1);line-height:1.3">${title}</div>
+          <div style="font-size:9px;color:var(--t3);margin-top:1px">${sub}</div>
+        </div>`).join('')}
+      </div>
+
+      <!-- Description -->
+      ${p.description ? `
+      <div style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:900;color:var(--t1);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--g)">Product Description</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.7">${p.description}</div>
+      </div>` : ''}
+
+      <!-- Specifications -->
+      ${specFields.length ? `
+      <div style="margin-bottom:16px">
+        <div style="font-size:14px;font-weight:900;color:var(--t1);margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--g)">Specifications</div>
+        <div style="border:1px solid var(--bdr);border-radius:10px;overflow:hidden">
+          ${specFields.map(([k,v],i)=>`
+          <div style="display:flex;padding:10px 12px;${i<specFields.length-1?'border-bottom:1px solid var(--bdr)':''}${i%2===0?'background:#fafafa':'background:#fff'}">
+            <div style="flex:0 0 42%;font-size:12px;color:var(--t3);font-weight:600">${k}</div>
+            <div style="flex:1;font-size:12px;font-weight:700;color:var(--t1)">${v}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+
+      <!-- Store CTA -->
+      <div style="background:linear-gradient(120deg,var(--gdk),var(--g));border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;margin-bottom:80px">
+        <div style="width:44px;height:44px;background:rgba(255,255,255,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏪</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800;color:#fff">Visit V Wholesale Store</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.7);margin-top:2px">NH65, Bhavanipuram, Vijayawada · Mon–Sat 9AM–7:30PM</div>
+        </div>
+        <a href="tel:8712697930" style="padding:8px 12px;background:rgba(255,255,255,.2);border-radius:8px;font-size:11px;font-weight:700;color:#fff;text-decoration:none;flex-shrink:0">📞 Call</a>
       </div>
     </div>`;
 
   // Action bar
-  const bar = document.getElementById('pdp-bar');
-  bar.style.display = 'flex';
-  bar.innerHTML = `
-    <button class="pdp-bar-wish" onclick="toggleWishlist(${p.id},'${nm}')">${inWish?'❤️':'🤍'}</button>
-    ${qty ? `<div class="pdp-bar-qty">
-      <button class="pqty-btn" style="height:100%" onclick="removeFromCart(${p.id});openPDP(${p.id})">−</button>
-      <span class="pqty-n">${qty}</span>
-      <button class="pqty-btn" style="height:100%" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})">+</button>
-    </div>` : `<button class="pdp-bar-add" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})">Add to Cart</button>`}`;
-
-  document.getElementById('pdp-sheet').classList.add('open');
-  document.getElementById('pdp-overlay').classList.add('open');
+  pdpBar.style.display = 'flex';
+  pdpBar.innerHTML = `
+    <button onclick="toggleWishlist(${p.id},'${nm}')" style="flex:0 0 46px;height:46px;border:1.5px solid var(--bdr);border-radius:10px;background:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">${inWish?'❤️':'🤍'}</button>
+    ${qty ? `<div style="flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:10px;overflow:hidden;height:46px">
+      <button onclick="removeFromCart(${p.id});openPDP(${p.id})" style="flex:0 0 40px;height:100%;background:none;border:none;color:var(--g);font-size:22px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center">−</button>
+      <span style="flex:1;text-align:center;font-size:16px;font-weight:900;color:var(--t1)">${qty}</span>
+      <button onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})" style="flex:0 0 40px;height:100%;background:none;border:none;color:var(--g);font-size:22px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center">+</button>
+    </div>` : `<button onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}');openPDP(${p.id})" style="flex:1;height:46px;background:var(--g);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:900;cursor:pointer">Add to Cart</button>`}`;
 }
+
+
 
 function closePDP() {
   document.getElementById('pdp-sheet').classList.remove('open');
