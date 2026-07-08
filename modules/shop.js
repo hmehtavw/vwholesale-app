@@ -971,7 +971,7 @@ async function renderShopPage() {
         <!-- ACCOUNT + CART -->
         <div class="hr-icons">
           ${isGuest ? `
-          <button class="hr-icon-btn" onclick="VW_AUTH.showAuthScreen()" title="Login">👤</button>` : `
+          <button class="hr-icon-btn" onclick="window._customerLogin()" title="Login">👤</button>` : `
           <button class="hr-icon-btn" onclick="navigateTo('customer_profile')" title="Account">👤</button>`}
           <button class="hr-icon-btn" onclick="VW_SHOP.openCart()" title="Cart">
             🛍
@@ -1356,7 +1356,7 @@ async function openCart() {
       <div style="font-size:48px;margin-bottom:12px">🔒</div>
       <h3 style="margin-bottom:6px">Login to view cart</h3>
       <p style="font-size:13px;color:var(--text3);margin-bottom:20px">Create a free account to place orders, track deliveries, and earn loyalty points</p>
-      <button onclick="closeSheet();VW_AUTH.showAuthScreen()"
+      <button onclick="closeSheet();window._customerLogin()"
         style="width:100%;padding:13px;border-radius:12px;background:var(--gold);border:none;color:#000;font-size:14px;font-weight:800;cursor:pointer">
         Login / Sign Up — Free
       </button>

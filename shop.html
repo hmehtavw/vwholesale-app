@@ -801,6 +801,11 @@ function closeSheet() {
   document.getElementById('sheet-overlay')?.classList.remove('open');
 }
 
+// Customer login — opens the shop.html login sheet (not the staff auth screen)
+window._customerLogin = function() {
+  openLoginSheet();
+};
+
 function openLoginSheet(context) {
   _loginPhone = '';
   renderLoginSheet(context);

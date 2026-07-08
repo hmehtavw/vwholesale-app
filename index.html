@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <style id="customer-critical">
+    /* Applied immediately — hides staff chrome for customer/shop route */
+    body.customer-mode #app-header,
+    body.customer-mode #more-menu { display:none !important; }
+    body.customer-mode { background:#F4F4F4 !important; }
+    body.customer-mode #app-content { padding-top:0 !important; }
+  </style>
   <script>
     // Force clear service worker and caches on every load
     // This ensures fresh JS is always served after deploys
