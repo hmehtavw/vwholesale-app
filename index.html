@@ -21,6 +21,7 @@
     body.customer-mode { background:#F4F4F4 !important; }
     body.customer-mode #app-content { padding-top:0 !important; }
     body.customer-mode #more-menu { display:none !important; }
+    body.customer-mode #bottom-nav { display:none !important; }
   </style>
   <script>
     // Force clear service worker and caches on every load
@@ -60,11 +61,13 @@
               const email = session.user?.email || '';
               if (email.endsWith('@customer.vwholesale.app')) {
                 document.body.classList.add('customer-mode');
+                // Hide staff nav buttons immediately
+                document.getElementById('bottom-nav').style.cssText = 'display:none';
               } else if (email.endsWith('@vwholesale.app')) {
-                // Staff account — show the header
                 document.body.classList.add('staff-mode');
               } else {
                 document.body.classList.add('customer-mode');
+                document.getElementById('bottom-nav').style.cssText = 'display:none';
               }
             } catch(e) { document.body.classList.add('staff-mode'); }
             return;
@@ -1115,6 +1118,11 @@ td strong { color: var(--text); }
       <div class="loading-state"><div class="spinner"></div></div>
     </main>
     <nav id="bottom-nav" role="navigation">
+      <button class="nav-btn active" data-page="dashboard" onclick="navigateTo('dashboard')"><span class="nav-icon">🏠</span><span>Home</span></button>
+      <button class="nav-btn" data-page="checkin" onclick="navigateTo('checkin')"><span class="nav-icon">🚶</span><span>Check-in</span></button>
+      <button class="nav-btn" data-page="cart" onclick="openBillingEntry()"><span class="nav-icon">🧾</span><span>Billing</span></button>
+      <button class="nav-btn" data-page="tasks" onclick="navigateTo('tasks')"><span class="nav-icon">📋</span><span>Tasks</span></button>
+      <button class="nav-btn" data-page="more" onclick="toggleMoreMenu()"><span class="nav-icon">···</span><span>More</span></button>
     </nav>
     <div id="more-menu" class="more-menu" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
