@@ -646,23 +646,191 @@ async function togglePromo(id, isActive) {
   } catch(e) { toast('Failed','err'); }
 }
 
-// ── STAFF ──
+// ── STAFF PERMISSION MANAGER ──
+const MODULE_PERMISSIONS = {
+  'Billing & Sales': {
+    billing: 'Billing, Quotations & Cart',
+    crm: 'CRM & Customer Management',
+  },
+  'Inventory & Products': {
+    inventory: 'Inventory Management',
+    tile_inventory: 'Tile Stock Management',
+    grn: 'GRN & Receiving',
+    vendors: 'Vendors & Purchase',
+  },
+  'Tile & Quotation': {
+    tiles: 'Tile Quotation Creator',
+    granite: 'Granite Quotation',
+    tile_quotes: 'TQ List & Management',
+    visualizer: 'Room Visualizer',
+  },
+  'Customer Service': {
+    returns: 'Returns & Complaints',
+    dispatch: 'Dispatch & Delivery',
+    wishlist: 'Customer Wishlists',
+    follow_ups: 'Follow-up Manager',
+  },
+  'Contractors & B2B': {
+    club: 'Contractor Club',
+    labor: 'Labor Job Management',
+    commissions: 'Commission Tracking',
+    contractor_portal: 'Contractor Portal',
+  },
+  'Team & HR': {
+    hr: 'HR & Staff Management',
+    field: 'Field Team Tracking',
+    training: 'Training Module',
+    incentives: 'Incentives & Targets',
+  },
+  'Analytics & Finance': {
+    analytics: 'Analytics & Reports',
+    accounts: 'Accounts & Finance',
+    ledger: 'Customer Ledger',
+    eod: 'End of Day Report',
+    gst: 'GST Reports',
+  },
+  'Catalog & Marketing': {
+    catalogs: 'Catalog Management',
+    catalog_upload: 'Upload Catalog (AI)',
+    category_manager: 'Category Manager',
+    marketing: 'Marketing Tools',
+    promotions: 'Promotions & Offers',
+  },
+};
+
+const STAFF_ROLES = ['executive','sr_executive','sr_sales','tl','asm','floor_manager','store_manager','sales_head','management','reception','accounts','dispatch','staff'];
+
 async function loadStaff() {
-  setPageTitle('Staff Management');
-  const staff = await sbFetch(`profiles?role=in.(admin,manager,owner,staff,executive)&select=id,name,phone,role,status,created_at&order=created_at.desc`).catch(()=>[]);
+  setPageTitle('Staff & Permissions');
+  const staff = await sbFetch(`profiles?role=in.(${STAFF_ROLES.join(',')})&select=id,name,phone,role,status,permissions,created_at&order=created_at.desc`).catch(()=>[]);
+
   document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;color:var(--t2)">${(staff||[]).length} staff members · Click any row to manage their module access</div>
+      <button class="btn btn-primary" onclick="openAddStaff()">+ Add Staff</button>
+    </div>
     <div class="card" style="padding:0;overflow:hidden">
-      <div style="overflow-x:auto"><table class="tbl">
-        <tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th></tr>
-        ${(staff||[]).map(s=>`<tr>
-          <td style="font-weight:700;color:var(--t1)">${s.name||'—'}</td>
-          <td>${s.phone||'—'}</td>
-          <td><span class="badge badge-blue">${s.role}</span></td>
-          <td><span class="badge ${s.status==='approved'||s.status==='active'?'badge-green':'badge-amber'}">${s.status||'active'}</span></td>
-          <td style="color:var(--t3);font-size:11px">${new Date(s.created_at).toLocaleDateString('en-IN')}</td>
-        </tr>`).join('')}
+      <div style="overflow-x:auto"><table class="tbl" id="staff-tbl">
+        <tr><th>Name</th><th>Phone</th><th>Role</th><th>Modules Assigned</th><th>Status</th><th>Action</th></tr>
+        ${(staff||[]).map(m=>{
+          const perms = Array.isArray(m.permissions) ? m.permissions : [];
+          return `<tr>
+            <td style="font-weight:700;color:var(--t1)">${m.name||'—'}</td>
+            <td style="color:var(--t2)">${m.phone||'—'}</td>
+            <td><span class="badge badge-blue">${m.role}</span></td>
+            <td>
+              ${perms.length ? perms.map(p=>`<span class="badge badge-grey" style="margin:1px">${p}</span>`).join('') : '<span style="color:var(--t3);font-size:11px">Role defaults only</span>'}
+            </td>
+            <td><span class="badge ${m.status==='approved'?'badge-green':m.status==='pending'?'badge-amber':'badge-red'}">${m.status}</span></td>
+            <td>
+              <button class="btn btn-primary" onclick="openPermissionManager('${m.id}','${(m.name||'').replace(/'/g,"\'")}','${m.role}',${JSON.stringify(perms).replace(/'/g,"\'")})" style="padding:4px 10px;font-size:11px">Manage Access</button>
+            </td>
+          </tr>`;
+        }).join('')}
       </table></div>
     </div>`;
+}
+
+function openPermissionManager(uid, name, role, currentPerms) {
+  const perms = Array.isArray(currentPerms) ? currentPerms : [];
+  
+  const moduleHtml = Object.entries(MODULE_PERMISSIONS).map(([section, modules])=>`
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--bdr)">${section}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        ${Object.entries(modules).map(([key, label])=>`
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border-radius:8px;cursor:pointer;border:1px solid ${perms.includes(key)?'var(--b)':'var(--bdr)'}">
+            <input type="checkbox" id="perm-${key}" value="${key}" ${perms.includes(key)?'checked':''} 
+              onchange="this.closest('label').style.borderColor=this.checked?'var(--b)':'var(--bdr)'"
+              style="accent-color:var(--b);width:14px;height:14px;flex-shrink:0">
+            <span style="font-size:12px;font-weight:600;color:var(--t1)">${label}</span>
+          </label>`).join('')}
+      </div>
+    </div>`).join('');
+
+  openModal(`
+    <div class="modal-title">
+      <div>
+        <div style="font-size:15px;font-weight:900;color:var(--t1)">Module Access — ${name}</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px">Role: ${role} · Changes take effect on next login</div>
+      </div>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:20px;cursor:pointer;flex-shrink:0">✕</button>
+    </div>
+    <div style="background:var(--blt);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px;color:var(--b);border:1px solid var(--b)">
+      💡 These are <strong>additional modules</strong> on top of the role defaults. 
+      Dashboard, Check-in, Tasks and Feedback are always available.
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <button onclick="document.querySelectorAll('#perm-modal input[type=checkbox]').forEach(c=>{c.checked=true;c.closest('label').style.borderColor='var(--b)'})" class="btn btn-ghost" style="font-size:11px">Select All</button>
+      <button onclick="document.querySelectorAll('#perm-modal input[type=checkbox]').forEach(c=>{c.checked=false;c.closest('label').style.borderColor='var(--bdr)'})" class="btn btn-ghost" style="font-size:11px">Clear All</button>
+    </div>
+    <div id="perm-modal" style="max-height:50vh;overflow-y:auto;padding-right:4px">${moduleHtml}</div>
+    <div style="position:sticky;bottom:0;background:var(--card);padding-top:12px;margin-top:12px;border-top:1px solid var(--bdr);display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="savePermissions('${uid}','${name}')">Save & Apply Access →</button>
+      <button onclick="closeModal()" class="btn btn-ghost">Cancel</button>
+    </div>`);
+}
+
+async function savePermissions(uid, name) {
+  const checked = [...document.querySelectorAll('#perm-modal input[type=checkbox]:checked')].map(c=>c.value);
+  try {
+    await sbFetch(`profiles?id=eq.${uid}`, {
+      method:'PATCH', 
+      headers:{'Prefer':'return=minimal'},
+      body:JSON.stringify({permissions: checked})
+    });
+    toast(`✅ Access updated for ${name} — ${checked.length} modules assigned`, 'ok');
+    closeModal();
+    loadStaff();
+  } catch(e) { toast('Failed to save: '+e.message, 'err'); }
+}
+
+function openAddStaff() {
+  openModal(`
+    <div class="modal-title">Add Staff Member <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="display:grid;gap:10px">
+      <div><label class="form-lbl">Full Name *</label><input id="new-name" class="form-inp" placeholder="Full name"></div>
+      <div><label class="form-lbl">Mobile Number *</label><input type="tel" inputmode="numeric" maxlength="10" id="new-phone" class="form-inp" placeholder="10-digit" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div>
+      <div><label class="form-lbl">Role *</label>
+        <select id="new-role" class="form-sel">
+          ${STAFF_ROLES.map(r=>`<option value="${r}">${r}</option>`).join('')}
+        </select>
+      </div>
+      <div><label class="form-lbl">Default PIN (staff will change on first login)</label><input type="text" id="new-pin" class="form-inp" placeholder="6-digit PIN" value="123456"></div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="btn btn-primary" style="flex:1" onclick="createStaffMember()">Create Staff Account →</button>
+      <button onclick="closeModal()" class="btn btn-ghost">Cancel</button>
+    </div>`);
+}
+
+async function createStaffMember() {
+  const name = document.getElementById('new-name')?.value?.trim();
+  const phone = document.getElementById('new-phone')?.value?.trim();
+  const role = document.getElementById('new-role')?.value;
+  const pin = document.getElementById('new-pin')?.value?.trim();
+  if (!name||!phone||phone.length<10) { toast('Name and valid phone required','err'); return; }
+  if (!pin||pin.length<6) { toast('Enter a 6-digit default PIN','err'); return; }
+
+  try {
+    // Create Supabase auth user
+    const res = await fetch(`${SB_URL}/auth/v1/admin/users`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':`Bearer ${_adminSession?.access_token}`},
+      body:JSON.stringify({email:phone+'@vwholesale.app',password:pin,email_confirm:true,user_metadata:{name,phone,role}})
+    });
+    const user = await res.json();
+    if (user.error||!user.id) throw new Error(user.message||user.error||'Failed to create user');
+
+    // Create profile
+    await sbFetch('profiles',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({
+      id:user.id,name,phone,role,status:'approved',permissions:[]
+    })});
+
+    toast(`✅ Staff account created for ${name}. PIN: ${pin}`,'ok');
+    closeModal();
+    loadStaff();
+  } catch(e) { toast('Error: '+e.message,'err'); }
 }
 
 // ── SETTINGS ──

@@ -595,6 +595,16 @@ async function loadCurrentProfile() {
   const userId = sessionData.session.user.id;
   currentProfile = await VW_DB.getById(VW_DB.STORES.profiles, userId);
 
+  // Always fetch fresh profile from Supabase to get latest permissions set by admin
+  try {
+    const { data: freshProfile } = await sb.from('profiles').select('*').eq('id', userId).single();
+    if (freshProfile) {
+      currentProfile = freshProfile;
+      // Update local cache with fresh data
+      await VW_DB.put(VW_DB.STORES.profiles, freshProfile).catch(() => {});
+    }
+  } catch(e) { /* use cached profile if network fails */ }
+
   // Auto-create customer profile for new shop.html OTP signups
   if (!currentProfile) {
     const u = sessionData.session.user;
