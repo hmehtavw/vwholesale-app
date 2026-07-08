@@ -61,18 +61,17 @@
               const email = session.user?.email || '';
               if (email.endsWith('@customer.vwholesale.app')) {
                 document.body.classList.add('customer-mode');
-                // Hide staff nav buttons immediately
                 document.getElementById('bottom-nav').style.cssText = 'display:none';
-              } else if (email.endsWith('@vwholesale.app')) {
-                document.body.classList.add('staff-mode');
               } else {
-                document.body.classList.add('customer-mode');
-                document.getElementById('bottom-nav').style.cssText = 'display:none';
+                // All @vwholesale.app accounts (staff/admin/contractor) get staff-mode
+                document.body.classList.add('staff-mode');
               }
             } catch(e) { document.body.classList.add('staff-mode'); }
             return;
           }
         }
+        // No session — default to staff-mode (login page will show)
+        document.body.classList.add('staff-mode');
         // No session — check if staff/contractor link
         const params = new URLSearchParams(window.location.search);
         if (params.has('staff') || params.has('contractor')) return;

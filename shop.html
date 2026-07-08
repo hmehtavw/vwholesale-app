@@ -422,7 +422,7 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
       <div style="font-size:9px;color:rgba(255,255,255,.7);font-weight:600;line-height:1.6">© 2026 Vassure Wholesale Pvt. Ltd. · GSTIN 37AAJCV5725H1ZZ</div>
       <div style="display:flex;gap:6px">
         <a href="./index.html?staff=1" style="padding:5px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:12px;font-size:10px;font-weight:700;color:#fff;font-weight:800;text-decoration:none">Staff</a>
-        <a href="./index.html?contractor=1" style="padding:5px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:12px;font-size:10px;font-weight:700;color:#fff;font-weight:800;text-decoration:none">Professional</a>
+        <a href="./professional.html" style="padding:5px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:12px;font-size:10px;font-weight:700;color:#fff;font-weight:800;text-decoration:none">Professional</a>
       </div>
     </div>
   </div>
@@ -641,7 +641,7 @@ function addToCart(id, name, price, unit, image) {
   _cart[id] = (_cart[id] || 0) + 1;
   _cartItems[id] = { name, price, unit: unit||'pc', image: image||'' };
   _saveCart();
-  toast('Added: ' + name.slice(0,28));
+  const badge = document.getElementById('cart-badge'); if(badge){badge.style.transform='scale(1.5)';setTimeout(()=>badge.style.transform='',200);}
   // Refresh any visible product cards
   document.querySelectorAll(`[data-pid="${id}"]`).forEach(el => _refreshCard(el, id));
 }
