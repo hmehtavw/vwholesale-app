@@ -5,7 +5,20 @@ const _pageCache = {}; // Simple in-memory cache keyed by page name
 const _pageCacheTTL = {}; // TTL timestamps
 const CACHE_TTL_MS = 30000; // 30 seconds cache per page
 
+const ADMIN_ONLY_PAGES = new Set(['settings','hr','analytics','accounts','eod','gst',
+  'dedup','vendors','promotions','catalogs','catalog_upload','catalog_review','brand_catalog',
+  'category_manager','commissions','incentives','contractor_portal','contractor_kyc',
+  'referrals','stock_valuation','vendor_payments','sales_targets','bulk_wa','broadcast',
+  'marketing','autotest','daily_report','quick_approve','bulk_photos','service','kiosk','employeeapp']);
+
 async function navigateTo(page, params) {
+  // Redirect non-admin trying to access admin-only pages
+  const _role = VW_AUTH.getRole();
+  if (ADMIN_ONLY_PAGES.has(page) && _role !== 'admin') {
+    if (confirm(`"${page}" is admin-only. Open Admin Portal?`)) window.open('./admin.html','_blank');
+    return;
+  }
+
   // Close more menu IMMEDIATELY — synchronous, no delay
   const menu = document.getElementById('more-menu');
   if (menu) menu.style.display = 'none';
@@ -45,6 +58,17 @@ function applyRolePermissions() {
   const role = VW_AUTH.getRole();
   const allowed = VW_AUTH.getAllowedPages();
   const nav = document.getElementById('bottom-nav');
+
+  // Hide admin-only more-menu tiles from non-admin staff
+  if (role !== 'admin') {
+    document.querySelectorAll('.more-tile[data-admin-only],.more-tile[onclick*="admin.html"]').forEach(()=>{});
+    document.querySelectorAll('[data-page]').forEach(el => {
+      const page = el.dataset.page;
+      if (page && ADMIN_ONLY_PAGES.has(page) && role !== 'admin') {
+        el.style.display = 'none';
+      }
+    });
+  }
 
   // GUEST — no profile, show minimal browse nav
   if (!role) {
@@ -1054,12 +1078,12 @@ async function renderDashboard() {
     <button class="qa-btn" onclick="navigateTo('crm')"><span class="qa-icon">👥</span><span>CRM</span></button>
     <button class="qa-btn" onclick="navigateTo('inventory')"><span class="qa-icon">📦</span><span>Inventory</span></button>
     <button class="qa-btn" onclick="navigateTo('dispatch')"><span class="qa-icon">🚚</span><span>Dispatch</span></button>
-    <button class="qa-btn" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
-    <button class="qa-btn" onclick="navigateTo('accounts')"><span class="qa-icon">💳</span><span>Accounts</span></button>
-    <button class="qa-btn" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
-    <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">🗂</span><span>Catalog</span></button>
-      <button class="qa-btn" onclick="navigateTo('category_manager')"><span class="qa-icon">🏷</span><span>Categories</span></button>
-      <button class="qa-btn" onclick="navigateTo('catalog_upload')" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon">📤</span><span style="color:var(--gold);font-weight:700">Upload Catalog</span></button>
+    <button class="qa-btn" onclick="navigateTo('hr')" data-admin-only><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
+    <button class="qa-btn" onclick="navigateTo('accounts')" data-admin-only><span class="qa-icon">💳</span><span>Accounts</span></button>
+    <button class="qa-btn" onclick="navigateTo('vendors')" data-admin-only><span class="qa-icon">🏭</span><span>Vendors</span></button>
+    <button class="qa-btn" onclick="window.open('./admin.html','_blank')" style="background:linear-gradient(135deg,#1B4F8A,#2272B6);border-color:#2272B6"><span class="qa-icon">⚙️</span><span style="color:#fff;font-weight:800">Admin Portal</span></button>
+      <button class="qa-btn" onclick="navigateTo('brand_catalog')" data-admin-only><span class="qa-icon">🗂</span><span>Catalog</span></button>
+      <button class="qa-btn" onclick="navigateTo('catalog_upload')" style="background:var(--gold-muted);border-color:var(--gold-border)" data-admin-only><span class="qa-icon">📤</span><span style="color:var(--gold);font-weight:700">Upload Catalog</span></button>
       <button class="qa-btn" onclick="navigateTo('catalog_review')" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon">✅</span><span style="color:var(--gold);font-weight:700">Review & Price</span></button>
   </div>
 

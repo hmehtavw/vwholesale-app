@@ -485,23 +485,23 @@ const ROLE_DISPLAY = {
 const PUBLIC_PAGES = ['shop','offers','mood_board','tile_visualizer'];  // accessible without login
 
 const ROLE_PAGES = {
-  admin:        ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal','commissions'],
-  executive:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist'],
-  sr_executive: ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics'],
-  sr_sales:     ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','contractor_portal','commissions'],
-  asm:          ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports','contractor_portal','commissions'],
-  sales_head:   ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal','commissions'],
-  tl:           ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports'],
+  admin: ['dashboard','checkin','cart','tasks','crm','inventory','hr','analytics','club','feedback','settings','training','accounts','dispatch','promotions','catalogs','eod','referrals','incentives','dedup','ledger','vendors','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','autotest','returns','visualizer','field','gst','wishlist','grn','contractor_portal','commissions'],
+  executive: ['dashboard','checkin','cart','tasks','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist'],
+  sr_executive: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist'],
+  sr_sales: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist'],
+  asm: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','reports'],
+  sales_head: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','reports','dispatch'],
+  tl: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','reports'],
   floor_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','contractor_portal'],
   store_manager:['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','contractor_portal'],
-  management:   ['dashboard','checkin','cart','tasks','crm','feedback','training','catalogs','incentives','ledger','marketing','service','employeeapp','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','analytics','reports','dispatch','vendors','accounts','hr','gst','eod','contractor_portal','commissions'],
-  staff:        ['dashboard','checkin','tasks','feedback','training','catalogs'],
-  reception:    ['dashboard','checkin','cart','tasks','feedback','training','catalogs','ledger','employeeapp','contractor','quotations','returns','visualizer','wishlist'],
-  accounts:     ['dashboard','tasks','feedback','training','accounts','eod','ledger','returns','gst','tile_quotes'],
-  dispatch:     ['dashboard','tasks','feedback','training','dispatch'],
+  management: ['dashboard','checkin','cart','tasks','crm','feedback','training','ledger','contractor','quotations','tiles','granite','tile_quotes','tile_inventory','returns','visualizer','field','wishlist','reports','dispatch'],
+  staff: ['dashboard','checkin','tasks','feedback','training'],
+  reception: ['dashboard','checkin','cart','tasks','feedback','training','ledger','contractor','quotations','returns','visualizer','wishlist'],
+  accounts: ['dashboard','tasks','feedback','training','ledger','returns','tile_quotes'],
+  dispatch: ['dashboard','tasks','feedback','training','dispatch'],
   pending:      [],
-  customer:     ['shop','wallet','quotations','labor_requests','wishlist','feedback'],
-  contractor:   ['professional_home','contractor_profile','contractor_shop','labor_requests','wallet'],
+  customer: ['shop','wallet','quotations','labor_requests','wishlist','feedback'],
+  contractor: ['professional_home','contractor_profile','contractor_shop','labor_requests','wallet'],
 };
 
 // The toggleable permission set Admin can grant/revoke per person, and

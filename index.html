@@ -1137,16 +1137,16 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="sample_requests" onclick="closeMoreMenu();navigateTo('sample_requests')"><span>🏠</span><span>Samples</span></button>
         <button class="more-tile" data-page="staff_returns" onclick="closeMoreMenu();navigateTo('staff_returns')"><span>↩</span><span>Returns</span></button>
         <button class="more-tile" data-page="contractor_kyc" onclick="closeMoreMenu();navigateTo('contractor_kyc')"><span>👷</span><span>KYC</span></button>
-        <button class="more-tile" data-page="bulk_photos" onclick="closeMoreMenu();navigateTo('bulk_photos')"><span>📷</span><span>Add Photos</span></button>
+        <button class="more-tile" data-page="bulk_photos" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📷</span><span style="opacity:.5">🔒 Add Photos</span></button>
         <button class="more-tile" data-page="follow_ups" onclick="closeMoreMenu();navigateTo('follow_ups')"><span>💬</span><span>Follow-ups</span></button>
-        <button class="more-tile" data-page="bulk_wa" onclick="closeMoreMenu();navigateTo('bulk_wa')"><span>📲</span><span>Bulk WA</span></button>
+        <button class="more-tile" data-page="bulk_wa" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📲</span><span style="opacity:.5">🔒 Bulk WA</span></button>
         <button class="more-tile" data-page="statement" onclick="closeMoreMenu();navigateTo('statement')"><span>📄</span><span>Statement</span></button>
-        <button class="more-tile" data-page="quick_approve" onclick="closeMoreMenu();navigateTo('quick_approve')"><span>⚡</span><span>Quick Approve</span></button>
-        <button class="more-tile" data-page="daily_report" onclick="closeMoreMenu();navigateTo('daily_report')"><span>📊</span><span>Daily Report</span></button>
-        <button class="more-tile" data-page="stock_valuation" onclick="closeMoreMenu();navigateTo('stock_valuation')"><span>📦</span><span>Stock Value</span></button>
-        <button class="more-tile" data-page="vendor_payments" onclick="closeMoreMenu();navigateTo('vendor_payments')"><span>💸</span><span>Vendor Pay</span></button>
-        <button class="more-tile" data-page="sales_targets" onclick="closeMoreMenu();navigateTo('sales_targets')"><span>🎯</span><span>Targets</span></button>
-        <button class="more-tile" data-page="broadcast" onclick="closeMoreMenu();navigateTo('broadcast')"><span>📢</span><span>Broadcast</span></button>
+        <button class="more-tile" data-page="quick_approve" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>⚡</span><span style="opacity:.5">🔒 Quick Approve</span></button>
+        <button class="more-tile" data-page="daily_report" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📊</span><span style="opacity:.5">🔒 Daily Report</span></button>
+        <button class="more-tile" data-page="stock_valuation" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📦</span><span style="opacity:.5">🔒 Stock Value</span></button>
+        <button class="more-tile" data-page="vendor_payments" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>💸</span><span style="opacity:.5">🔒 Vendor Pay</span></button>
+        <button class="more-tile" data-page="sales_targets" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🎯</span><span style="opacity:.5">🔒 Targets</span></button>
+        <button class="more-tile" data-page="broadcast" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📢</span><span style="opacity:.5">🔒 Broadcast</span></button>
         <button class="more-tile" data-page="crm" onclick="closeMoreMenu();navigateTo('crm')"><span>👥</span><span>CRM</span></button>
         <button class="more-tile" data-page="quotations" onclick="closeMoreMenu();navigateTo('quotations')"><span>📋</span><span>Quotes</span></button>
         <button class="more-tile" data-page="club" onclick="closeMoreMenu();navigateTo('club')"><span>🏅</span><span>CC Club</span></button>
@@ -1157,12 +1157,20 @@ td strong { color: var(--text); }
         <button class="more-tile" data-page="feedback" onclick="closeMoreMenu();navigateTo('feedback')"><span>⭐</span><span>Feedback</span></button>
       </div>
 
+      <!-- ADMIN PORTAL -->
+      <div class="more-section-label">Admin & Management</div>
+      <div class="more-grid">
+        <button class="more-tile" onclick="closeMoreMenu();window.open('./admin.html','_blank')" style="background:linear-gradient(135deg,#1B4F8A,#2272B6);color:#fff;border-color:#2272B6"><span>⚙️</span><span style="color:#fff">Admin Portal</span></button>
+        <button class="more-tile" onclick="closeMoreMenu();window.open('./shop.html','_blank')"><span>🛒</span><span>Shop Preview</span></button>
+        <button class="more-tile" onclick="closeMoreMenu();window.open('./professional.html','_blank')"><span>🏗</span><span>Pro Portal</span></button>
+      </div>
+
       <!-- OPERATIONS -->
       <div class="more-section-label">Operations</div>
       <div class="more-grid">
         <button class="more-tile" data-page="inventory" onclick="closeMoreMenu();navigateTo('inventory')"><span>📦</span><span>Inventory</span></button>
         <button class="more-tile" data-page="tile_inventory" onclick="closeMoreMenu();navigateTo('tile_inventory')"><span>🔲</span><span>Tile Stock</span></button>
-        <button class="more-tile" data-page="vendors" onclick="closeMoreMenu();navigateTo('vendors')"><span>🏭</span><span>Vendors</span></button>
+        <button class="more-tile" data-page="vendors" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🏭</span><span style="opacity:.5">🔒 Vendors</span></button>
         <button class="more-tile" data-page="dispatch" onclick="closeMoreMenu();navigateTo('dispatch')"><span>🚚</span><span>Dispatch</span></button>
         <button class="more-tile" data-page="grn" onclick="closeMoreMenu();navigateTo('grn')"><span>🧾</span><span>GRN</span></button>
         <button class="more-tile" data-page="returns" onclick="closeMoreMenu();navigateTo('returns')"><span>↩️</span><span>Returns</span></button>
@@ -1174,29 +1182,29 @@ td strong { color: var(--text); }
       <!-- FINANCE -->
       <div class="more-section-label">Finance</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="accounts" onclick="closeMoreMenu();navigateTo('accounts')"><span>💰</span><span>Accounts</span></button>
+        <button class="more-tile" data-page="accounts" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>💰</span><span style="opacity:.5">🔒 Accounts</span></button>
         <button class="more-tile" data-page="wallet_topup" onclick="closeMoreMenu();navigateTo('wallet_topup')"><span>👛</span><span>Wallet Top-Up</span></button>
         <button class="more-tile" data-page="ledger" onclick="closeMoreMenu();navigateTo('ledger')"><span>📒</span><span>Ledger</span></button>
-        <button class="more-tile" data-page="eod" onclick="closeMoreMenu();navigateTo('eod')"><span>📅</span><span>End of Day</span></button>
-        <button class="more-tile" data-page="gst" onclick="closeMoreMenu();navigateTo('gst')"><span>📊</span><span>GST</span></button>
+        <button class="more-tile" data-page="eod" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📅</span><span style="opacity:.5">🔒 End of Day</span></button>
+        <button class="more-tile" data-page="gst" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📊</span><span style="opacity:.5">🔒 GST</span></button>
       </div>
 
       <!-- TEAM -->
       <div class="more-section-label">Team</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="hr" onclick="closeMoreMenu();navigateTo('hr')"><span>👤</span><span>HR</span></button>
+        <button class="more-tile" data-page="hr" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>👤</span><span style="opacity:.5">🔒 HR</span></button>
         <button class="more-tile" data-page="field" onclick="closeMoreMenu();navigateTo('field')"><span>🚗</span><span>Field Team</span></button>
-        <button class="more-tile" data-page="analytics" onclick="closeMoreMenu();navigateTo('analytics')"><span>📈</span><span>Analytics</span></button>
+        <button class="more-tile" data-page="analytics" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📈</span><span style="opacity:.5">🔒 Analytics</span></button>
         <button class="more-tile" data-page="training" onclick="closeMoreMenu();navigateTo('training')"><span>🎓</span><span>Training</span></button>
-        <button class="more-tile" data-page="incentives" onclick="closeMoreMenu();navigateTo('incentives')"><span>🏆</span><span>Incentives</span></button>
-        <button class="more-tile" data-page="referrals" onclick="closeMoreMenu();navigateTo('referrals')"><span>🤝</span><span>Referrals</span></button>
+        <button class="more-tile" data-page="incentives" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🏆</span><span style="opacity:.5">🔒 Incentives</span></button>
+        <button class="more-tile" data-page="referrals" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🤝</span><span style="opacity:.5">🔒 Referrals</span></button>
       </div>
 
       <!-- B2B & CONTRACTOR -->
       <div class="more-section-label">B2B & Contractors</div>
       <div class="more-grid">
-        <button class="more-tile" data-page="contractor_portal" onclick="closeMoreMenu();navigateTo('contractor_portal')"><span>🤝</span><span>Contractors</span></button>
-        <button class="more-tile" data-page="commissions" onclick="closeMoreMenu();navigateTo('commissions')"><span>💰</span><span>Commissions</span></button>
+        <button class="more-tile" data-page="contractor_portal" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🤝</span><span style="opacity:.5">🔒 Contractors</span></button>
+        <button class="more-tile" data-page="commissions" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>💰</span><span style="opacity:.5">🔒 Commissions</span></button>
         <button class="more-tile" data-page="labor" onclick="closeMoreMenu();navigateTo('labor')"><span>🔨</span><span>Labor Work</span></button>
         <button class="more-tile" data-page="rewards" onclick="closeMoreMenu();navigateTo('rewards')"><span>🎁</span><span>Rewards Store</span></button>
       </div>
@@ -1205,9 +1213,9 @@ td strong { color: var(--text); }
       <div class="more-section-label">Tools & More</div>
       <div class="more-grid">
         <button class="more-tile" data-page="visualizer" onclick="closeMoreMenu();navigateTo('visualizer')"><span>🎨</span><span>Visualizer</span></button>
-        <button class="more-tile" data-page="marketing" onclick="closeMoreMenu();navigateTo('marketing')"><span>📣</span><span>Marketing</span></button>
-        <button class="more-tile" data-page="promotions" onclick="closeMoreMenu();navigateTo('promotions')"><span>🎁</span><span>Promos</span></button>
-        <button class="more-tile" data-page="catalogs" onclick="closeMoreMenu();navigateTo('catalogs')"><span>📚</span><span>Catalogs</span></button>
+        <button class="more-tile" data-page="marketing" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📣</span><span style="opacity:.5">🔒 Marketing</span></button>
+        <button class="more-tile" data-page="promotions" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🎁</span><span style="opacity:.5">🔒 Promos</span></button>
+        <button class="more-tile" data-page="catalogs" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📚</span><span style="opacity:.5">🔒 Catalogs</span></button>
         <button class="more-tile" onclick="closeMoreMenu();window.open(location.origin+location.pathname+'?kiosk=security','_blank')"><span>🛡️</span><span>Security</span></button>
         <button class="more-tile" onclick="closeMoreMenu();VW_AUTH.signOut().then(()=>location.reload())" style="color:var(--red)"><span>🚪</span><span style="color:var(--red)">Log Out</span></button>
       </div>
