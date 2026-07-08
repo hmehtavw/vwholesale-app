@@ -386,6 +386,7 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 // ══════════════════════════════════════════════════════
 
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1';
+const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 const GA4_ID = ''; // set in admin settings
 
 // ── STATE ──
@@ -402,7 +403,7 @@ let _searchQ = '';
 
 // ── API HELPER ──
 async function api(fn, body) {
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'apikey': ANON };
   if (_token) headers['x-customer-token'] = _token;
   const r = await fetch(`${API}/${fn}`, { method: 'POST', headers, body: JSON.stringify(body) });
   const data = await r.json();
@@ -917,20 +918,29 @@ function toggleWishlist(id, name) {
   document.querySelectorAll(`[data-wish="${id}"]`).forEach(el => { el.textContent = _wishlist.has(sid)?'❤️':'🤍'; });
 }
 
-function openWishlist() {
+async function openWishlist() {
   showPage('wishlist');
   const list = document.getElementById('wishlist-list');
+
+  // Sync from DB when logged in
+  if (_token) {
+    const res = await api('customer-shop', { action:'get_wishlist' });
+    if (res?.data?.length) {
+      _wishlist = new Set(res.data.map(w => String(w.product_id)));
+      localStorage.setItem('vw_wishlist', JSON.stringify([..._wishlist]));
+    }
+  }
+
   if (!_wishlist.size) {
     list.innerHTML = `<div class="empty"><div class="empty-icon">🤍</div><div class="empty-msg">Wishlist is empty</div><button class="btn-g" style="margin-top:14px;max-width:200px;margin-left:auto;margin-right:auto" onclick="showPage('home')">Browse Products</button></div>`;
     return;
   }
   list.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div>';
-  // Fetch product details for wishlisted items
-  Promise.all([..._wishlist].map(id => api('customer-shop', { action:'get_product', id:parseInt(id) })))
-    .then(results => {
-      const prods = results.filter(r=>r?.ok).map(r=>r.data);
-      list.innerHTML = `<div class="pgrid">${prods.map(p=>productCard(p)).join('')}</div>`;
-    });
+  const results = await Promise.all([..._wishlist].map(id => api('customer-shop', { action:'get_product', id:parseInt(id) })));
+  const prods = results.filter(r=>r?.ok).map(r=>r.data).filter(Boolean);
+  list.innerHTML = prods.length
+    ? `<div class="pgrid">${prods.map(p=>productCard(p)).join('')}</div>`
+    : `<div class="empty"><div class="empty-icon">🤍</div><div class="empty-msg">Wishlist is empty</div></div>`;
 }
 
 // ── PAGES ──
