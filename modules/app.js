@@ -1057,10 +1057,10 @@ async function renderDashboard() {
     <button class="qa-btn" onclick="navigateTo('hr')"><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
     <button class="qa-btn" onclick="navigateTo('accounts')"><span class="qa-icon">💳</span><span>Accounts</span></button>
     <button class="qa-btn" onclick="navigateTo('vendors')"><span class="qa-icon">🏭</span><span>Vendors</span></button>
-    <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">📦</span><span>Catalog</span></button>
-      <button class="qa-btn" onclick="navigateTo('category_manager')"><span class="qa-icon">🗂</span><span>Categories</span></button>
-      <button class="qa-btn" onclick="navigateTo('catalog_upload')"><span class="qa-icon">📦</span><span>Upload Catalog</span></button>
-      <button class="qa-btn" onclick="navigateTo('catalog_review')"><span class="qa-icon">🔍</span><span>Review Catalog</span></button>
+    <button class="qa-btn" onclick="navigateTo('brand_catalog')"><span class="qa-icon">🗂</span><span>Catalog</span></button>
+      <button class="qa-btn" onclick="navigateTo('category_manager')"><span class="qa-icon">🏷</span><span>Categories</span></button>
+      <button class="qa-btn" onclick="navigateTo('catalog_upload')" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon">📤</span><span style="color:var(--gold);font-weight:700">Upload Catalog</span></button>
+      <button class="qa-btn" onclick="navigateTo('catalog_review')" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon">✅</span><span style="color:var(--gold);font-weight:700">Review & Price</span></button>
   </div>
 
   <!-- EXECUTIVE LEADERBOARD -->
