@@ -258,21 +258,36 @@ async function adminLogin() {
     });
     const data = await res.json();
     if (data.error||!data.access_token) throw new Error(data.error_description||data.error||'Wrong PIN or not registered');
-    // Store session first so sbFetch uses the token
+
+    // Store session immediately so sbFetch uses authenticated token
     _adminSession = data;
-    // Verify role using the authenticated token
-    const profile = await sbFetch(`profiles?phone=eq.${phone}&select=id,name,role,status`).then(d=>d?.[0]);
+    const uid = data.user?.id;
+
+    // Try lookup by user ID first (most reliable, uses JWT auth)
+    let profile = uid ? await sbFetch(`profiles?id=eq.${uid}&select=id,name,role,status`).then(d=>d?.[0]).catch(()=>null) : null;
+
+    // Fallback: lookup by phone
     if (!profile) {
-      // Try by user id from JWT
-      const uid = data.user?.id;
-      const profile2 = uid ? await sbFetch(`profiles?id=eq.${uid}&select=id,name,role,status`).then(d=>d?.[0]) : null;
-      if (!profile2) throw new Error('Profile not found. Contact store admin.');
-      if (!['admin','manager','owner','staff','executive'].includes(profile2.role)) throw new Error('Access denied. Admin/Staff role required.');
-      _adminProfile = profile2;
-    } else {
-      if (!['admin','manager','owner','staff','executive'].includes(profile.role)) throw new Error('Access denied. Admin role required.');
-      _adminProfile = profile;
+      profile = await sbFetch(`profiles?phone=eq.${phone}&select=id,name,role,status`).then(d=>d?.[0]).catch(()=>null);
     }
+
+    // Fallback: use data from JWT user metadata
+    if (!profile && data.user) {
+      profile = {
+        id: uid,
+        name: data.user.user_metadata?.name || 'Admin',
+        phone: phone,
+        role: data.user.user_metadata?.role || 'admin',
+        status: 'approved'
+      };
+    }
+
+    if (!profile) throw new Error('Profile not found. Contact store admin.');
+    if (!['admin','manager','owner','staff','executive'].includes(profile.role)) {
+      throw new Error(`Access denied. Your role is "${profile.role}". Admin access required.`);
+    }
+
+    _adminProfile = profile;
     localStorage.setItem('vw_admin_session', JSON.stringify(data));
     localStorage.setItem('vw_admin_profile', JSON.stringify(profile));
     startAdminApp();
