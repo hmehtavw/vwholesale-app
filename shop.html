@@ -197,6 +197,38 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 /* ── PROFILE ── */
 .profile-avatar{width:72px;height:72px;background:var(--g);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;color:#fff;font-weight:900;margin:0 auto 12px}
 
+/* ── CATEGORY NAV BAR ── */
+#cat-nav-bar::-webkit-scrollbar{display:none}
+.cnav-item{display:inline-flex;align-items:center;padding:9px 14px;font-size:12px;font-weight:700;color:var(--t2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s;gap:5px;text-decoration:none;background:none;border-top:none;border-left:none;border-right:none}
+.cnav-item:hover,.cnav-item.active{color:var(--g);border-bottom-color:var(--g)}
+.cnav-item-icon{font-size:14px}
+
+/* ── PRODUCT CARD — IBO STYLE ── */
+.pcard{flex:0 0 160px;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--bdr);cursor:pointer;transition:transform .15s,box-shadow .15s;display:flex;flex-direction:column}
+.pcard:active,.pcard:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.pimg{height:130px;background:#f8f8f8;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;flex-shrink:0}
+.pimg img{width:100%;height:100%;object-fit:contain;padding:8px}
+.pdiscount{position:absolute;top:8px;left:8px;background:var(--red);color:#fff;font-size:10px;font-weight:900;padding:3px 8px;border-radius:20px;line-height:1.3}
+.pbody{padding:8px 10px 10px;display:flex;flex-direction:column;flex:1}
+.pbrand{font-size:9px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.pname{font-size:12px;font-weight:700;color:var(--t1);line-height:1.4;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px}
+.pprice-row{display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;margin-bottom:2px}
+.pprice{font-size:15px;font-weight:900;color:var(--t1)}
+.punit{font-size:9px;color:var(--t3);font-weight:600}
+.pmrp-row{display:flex;align-items:center;gap:4px;margin-bottom:2px}
+.pmrp{font-size:10px;color:var(--t3);text-decoration:line-through}
+.psave{font-size:10px;color:var(--red);font-weight:800}
+.pdelivery{font-size:9px;color:var(--g);font-weight:600;margin-bottom:6px}
+.padd-wrap{margin-top:auto}
+.padd-btn{width:100%;padding:9px;background:var(--g);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:900;cursor:pointer;letter-spacing:.03em}
+.pqty-row{display:flex;align-items:center;border:2px solid var(--g);border-radius:8px;overflow:hidden;height:36px}
+.pqty-btn{flex:0 0 36px;height:100%;background:none;border:none;color:var(--g);font-size:20px;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.pqty-n{flex:1;text-align:center;font-size:14px;font-weight:900;color:var(--t1)}
+
+/* ── FILTER SHEET ── */
+.filter-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid var(--bdr);background:#fff;cursor:pointer;white-space:nowrap;color:var(--t2);margin-right:6px}
+.filter-chip.active{border-color:var(--g);background:var(--glt);color:var(--g)}
+
 /* ── UTILITIES ── */
 .btn-g{width:100%;padding:14px;background:var(--g);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit}
 .btn-g:disabled{opacity:.6;cursor:not-allowed}
@@ -240,6 +272,11 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
       </div>
     </div>
   </header>
+
+  <!-- CATEGORY NAV BAR (scrollable, below header) -->
+  <div id="cat-nav-bar" style="background:#fff;border-bottom:1px solid var(--bdr);overflow-x:auto;scrollbar-width:none;white-space:nowrap;-webkit-overflow-scrolling:touch">
+    <div id="cat-nav-inner" style="display:inline-flex;gap:0;padding:0 8px;min-width:100%"></div>
+  </div>
 
   <!-- TRUST BAR -->
   <div class="tbar">
@@ -290,11 +327,30 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 
     <!-- CATEGORY PAGE -->
     <div id="pg-cat" style="display:none;padding-bottom:80px">
-      <div style="position:sticky;top:57px;background:#F4F4F4;z-index:10;padding:12px 14px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--bdr)">
-        <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1);padding:0;line-height:1">←</button>
-        <div id="cat-title" style="font-size:16px;font-weight:900;color:var(--t1)">Products</div>
+      <!-- Sticky header -->
+      <div style="position:sticky;top:0;background:#fff;z-index:20;border-bottom:1px solid var(--bdr)">
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px">
+          <button onclick="showPage('home')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t1);padding:0;line-height:1;flex-shrink:0">←</button>
+          <div id="cat-title" style="font-size:15px;font-weight:900;color:var(--t1);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Products</div>
+          <div id="cat-count" style="font-size:11px;color:var(--t3);flex-shrink:0"></div>
+          <button onclick="openFilterSheet()" style="background:none;border:1px solid var(--bdr);border-radius:8px;padding:5px 10px;font-size:11px;font-weight:700;color:var(--t1);cursor:pointer;display:flex;align-items:center;gap:4px;flex-shrink:0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            Filter
+            <span id="filter-badge" style="display:none;background:var(--g);color:#fff;font-size:9px;font-weight:900;padding:1px 5px;border-radius:8px;margin-left:2px">0</span>
+          </button>
+          <select id="sort-select" onchange="applyCatSort()" style="border:1px solid var(--bdr);border-radius:8px;padding:5px 8px;font-size:11px;font-weight:700;color:var(--t1);background:#fff;cursor:pointer;flex-shrink:0">
+            <option value="">Sort</option>
+            <option value="price_asc">Price ↑</option>
+            <option value="price_desc">Price ↓</option>
+            <option value="disc">Discount</option>
+            <option value="name">A–Z</option>
+          </select>
+        </div>
+        <!-- Active filters row -->
+        <div id="active-filters" style="display:none;padding:0 14px 8px;overflow-x:auto;white-space:nowrap;scrollbar-width:none"></div>
       </div>
-      <div id="cat-grid-products" style="padding:14px;gap:12px;display:grid;grid-template-columns:1fr 1fr"></div>
+      <!-- Product grid -->
+      <div id="cat-grid-products" style="padding:12px 10px;gap:10px;display:grid;grid-template-columns:1fr 1fr"></div>
       <div id="cat-load-more" style="padding:10px 14px;display:none">
         <button class="btn-out" onclick="loadMoreProducts()">Load more</button>
       </div>
@@ -417,6 +473,9 @@ let _currentPage = 'home';
 let _currentCat = null;
 let _catOffset = 0;
 let _searchQ = '';
+let _catFilters = { brands: new Set(), maxPrice: null, minDiscount: 0 };
+let _catSort = '';
+let _allCatProducts = []; // cache for client-side filter/sort
 
 // ── API HELPER ──
 async function api(fn, body) {
@@ -595,15 +654,20 @@ function removeFromCart(id) {
 }
 
 function _refreshCard(el, id) {
+  // Re-render the add-to-cart section only
   const qty = _cart[id] || 0;
-  const addDiv = el.querySelector('.padd');
-  const qtyEl = el.querySelector('.pqty');
-  if (addDiv) addDiv.style.display = qty ? 'none' : 'block';
-  if (qtyEl) {
-    qtyEl.style.display = qty ? 'flex' : 'none';
-    const n = qtyEl.querySelector('.pqty-n');
-    if (n) n.textContent = qty;
-  }
+  const wrap = el.querySelector('.padd-wrap');
+  if (!wrap) return;
+  const p_id = id;
+  const nm = (el.querySelector('.pname')?.textContent||'').replace(/'/g,"\'");
+  const price = parseFloat(el.dataset.price||0);
+  const unit = el.dataset.unit||'pc';
+  const img = el.dataset.img||'';
+  wrap.innerHTML = qty ? `<div class="pqty-row">
+    <button class="pqty-btn" onclick="removeFromCart(${p_id})">−</button>
+    <span class="pqty-n">${qty}</span>
+    <button class="pqty-btn" onclick="addToCart(${p_id},'${nm}',${price},'${unit}','${img}')">+</button>
+  </div>` : `<button class="padd-btn" onclick="addToCart(${p_id},'${nm}',${price},'${unit}','${img}')">ADD</button>`;
 }
 
 async function syncCart() {
@@ -808,37 +872,44 @@ async function submitBestQuote() {
 // ── PRODUCTS ──
 function productCard(p, size) {
   const price = parseFloat(p.vwp||p.price||p.tier1_price||0)||0;
-  const mrp = parseFloat(p.mrp||0)||0;
-  const disc = mrp>price&&price>0 ? Math.round((mrp-price)/mrp*100) : 0;
-  const img = p.image_url || (Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'') || '';
-  const qty = _cart[p.id]||0;
-  const inWish = _wishlist.has(String(p.id));
-  const nm = (p.name||'').replace(/'/g,"\\'");
-  const w = size==='wide' ? 'flex:0 0 160px;min-width:160px' : 'width:100%';
-  return `<div class="pcard" data-pid="${p.id}" style="${w}" onclick="openPDP(${p.id})">
+  const mrp   = parseFloat(p.mrp||0)||0;
+  const disc  = mrp>price&&price>0 ? Math.round((mrp-price)/mrp*100) : 0;
+  const img   = p.image_url||(Array.isArray(p.photos)?p.photos[0]?.url||p.photos[0]:'')||'';
+  const qty   = _cart[p.id]||0;
+  const nm    = (p.name||'').replace(/'/g,"\'");
+  const w     = size==='wide' ? 'flex:0 0 170px;min-width:170px' : 'width:100%';
+
+  // Placeholder — brand initial in category color
+  const catColors = {Tiles:'#8B5CF6',Sanitary:'#3B82F6',Faucets:'#0369A1',Wires:'#F59E0B',Paints:'#EC4899',Pipes:'#06B6D4',Plywood:'#92400E',Cement:'#57534E',Fans:'#0D9488'};
+  const bgColor = catColors[p.category]||'#16783A';
+  const placeholder = img ? '' : `<div style="width:100%;height:100%;background:${bgColor}15;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:32px">${_catIcon(p.category)}</span><span style="font-size:9px;font-weight:700;color:${bgColor};text-align:center;padding:0 8px;line-height:1.3">${(p.brand||p.name||'').slice(0,20)}</span></div>`;
+
+  return `<div class="pcard" data-pid="${p.id}" data-price="${price}" data-unit="${p.unit||'pc'}" data-img="${img}" style="${w}" onclick="openPDP(${p.id})">
     <div class="pimg">
-      ${img?`<img src="${img}" alt="${p.name}" loading="lazy">`:`<span>${_catIcon(p.category)}</span>`}
-      ${disc>0?`<div class="pdiscount">${disc}% OFF</div>`:''}
+      ${img ? `<img src="${img}" alt="${p.name}" loading="lazy">` : placeholder}
+      ${disc>0 ? `<div class="pdiscount">${disc}% OFF</div>` : ''}
     </div>
     <div class="pbody">
-      ${p.brand?`<div class="pbrand">${p.brand}</div>`:''}
-      <div class="pname">${p.name}</div>
-      <div style="display:flex;align-items:baseline;gap:4px;flex-wrap:wrap;margin-bottom:4px">
+      ${p.brand ? `<div class="pbrand">${p.brand}</div>` : ''}
+      <div class="pname">${p.name||''}</div>
+      <div class="pprice-row">
         <span class="pprice">₹${price.toLocaleString('en-IN')}</span>
-        <span style="font-size:10px;color:var(--t3)">/${p.unit||'pc'}</span>
-        ${mrp>price?`<span class="pmrp">₹${mrp.toLocaleString('en-IN')}</span><span class="psave">${disc}%off</span>`:''}
+        <span class="punit">/${p.unit||'pc'}</span>
       </div>
-      <div class="padd" onclick="event.stopPropagation()" ${qty?'style="display:none;padding-top:8px"':''}>
-        <button onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">ADD</button>
-      </div>
-      <div class="pqty" ${qty?'':'style="display:none"'}>
-        <button class="pqty-btn" onclick="event.stopPropagation();removeFromCart(${p.id})">−</button>
-        <span class="pqty-n">${qty}</span>
-        <button class="pqty-btn" onclick="event.stopPropagation();addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">+</button>
+      ${mrp>price ? `<div class="pmrp-row"><span class="pmrp">₹${mrp.toLocaleString('en-IN')}</span><span class="psave">${disc}% off</span></div>` : ''}
+      <div class="pdelivery">🚚 2–4 hr delivery · Vijayawada</div>
+      <div class="padd-wrap" onclick="event.stopPropagation()">
+        ${qty ? `<div class="pqty-row">
+          <button class="pqty-btn" onclick="removeFromCart(${p.id})">−</button>
+          <span class="pqty-n">${qty}</span>
+          <button class="pqty-btn" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">+</button>
+        </div>` : `<button class="padd-btn" onclick="addToCart(${p.id},'${nm}',${price},'${p.unit||'pc'}','${img}')">ADD</button>`}
       </div>
     </div>
   </div>`;
 }
+
+
 
 function _catIcon(cat) {
   const icons = {
@@ -1094,24 +1165,168 @@ function goHome() {
 function showCategoryPage(cat) {
   _currentCat = cat;
   _catOffset = 0;
+  _catFilters = { brands: new Set(), maxPrice: null, minDiscount: 0 };
+  _catSort = '';
+  _allCatProducts = [];
+  const sortEl = document.getElementById('sort-select');
+  if (sortEl) sortEl.value = '';
   document.getElementById('cat-title').textContent = cat || 'All Products';
-  document.getElementById('cat-grid-products').innerHTML = '<div style="text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+  document.getElementById('cat-count').textContent = '';
+  document.getElementById('active-filters').style.display = 'none';
+  // Update nav bar active state
+  document.querySelectorAll('.cnav-item').forEach(b => b.classList.toggle('active', b.dataset.cat === (cat||'')));
   showPage('cat');
   loadCategoryProducts();
 }
 
-async function loadCategoryProducts() {
-  const res = await api('customer-shop', { action:'get_products', category:_currentCat, limit:20, offset:_catOffset });
-  const products = res?.data || [];
-  const grid = document.getElementById('cat-grid-products');
-  if (_catOffset === 0) grid.innerHTML = '';
-  if (!products.length && _catOffset === 0) {
-    grid.innerHTML = '<div class="empty"><div class="empty-icon">📦</div><div class="empty-msg">No products here yet</div></div>';
-    return;
-  }
-  grid.insertAdjacentHTML('beforeend', products.map(p=>productCard(p)).join(''));
-  document.getElementById('cat-load-more').style.display = products.length===20 ? 'block' : 'none';
+function renderCatNavBar() {
+  const inner = document.getElementById('cat-nav-inner');
+  if (!inner || !_cats.length) return;
+  inner.innerHTML = [
+    {key:'', label:'All', icon:'🏪'},
+    ..._cats.slice(0, 16)
+  ].map(c => `<button class="cnav-item ${_currentCat===(c.key||null)?'active':''}" data-cat="${c.key}" onclick="showCategoryPage(${c.key?`'${c.key}'`:'null'})">
+    <span class="cnav-item-icon">${c.icon||'📦'}</span>${c.label}
+  </button>`).join('');
 }
+window.renderCatNavBar = renderCatNavBar;
+
+async function loadCategoryProducts() {
+  const grid = document.getElementById('cat-grid-products');
+  if (_catOffset === 0) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--t3)">Loading…</div>';
+    _allCatProducts = [];
+  }
+  const res = await api('customer-shop', { action:'get_products', category:_currentCat, limit:60, offset:_catOffset });
+  const products = res?.data || [];
+  _allCatProducts = [..._allCatProducts, ...products];
+  renderFilteredProducts();
+  document.getElementById('cat-load-more').style.display = products.length===60 ? 'block' : 'none';
+}
+
+function renderFilteredProducts() {
+  let prods = [..._allCatProducts];
+  // Apply brand filter
+  if (_catFilters.brands.size > 0) prods = prods.filter(p => _catFilters.brands.has(p.brand));
+  // Apply min discount filter
+  if (_catFilters.minDiscount > 0) prods = prods.filter(p => {
+    const pr = parseFloat(p.vwp||p.price||0); const mr = parseFloat(p.mrp||0);
+    return mr>pr && Math.round((mr-pr)/mr*100) >= _catFilters.minDiscount;
+  });
+  // Apply max price filter
+  if (_catFilters.maxPrice) prods = prods.filter(p => parseFloat(p.vwp||p.price||0) <= _catFilters.maxPrice);
+  // Apply sort
+  if (_catSort === 'price_asc') prods.sort((a,b) => parseFloat(a.vwp||a.price||0) - parseFloat(b.vwp||b.price||0));
+  else if (_catSort === 'price_desc') prods.sort((a,b) => parseFloat(b.vwp||b.price||0) - parseFloat(a.vwp||a.price||0));
+  else if (_catSort === 'disc') prods.sort((a,b) => {
+    const da = parseFloat(a.mrp||0)>0 ? (parseFloat(a.mrp||0)-parseFloat(a.vwp||a.price||0))/parseFloat(a.mrp||1)*100 : 0;
+    const db = parseFloat(b.mrp||0)>0 ? (parseFloat(b.mrp||0)-parseFloat(b.vwp||b.price||0))/parseFloat(b.mrp||1)*100 : 0;
+    return db-da;
+  });
+  else if (_catSort === 'name') prods.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+
+  const grid = document.getElementById('cat-grid-products');
+  const countEl = document.getElementById('cat-count');
+  if (countEl) countEl.textContent = prods.length ? prods.length+' products' : '';
+  if (!prods.length) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🔍</div><div class="empty-msg">No products match filters</div><button class="btn-out" style="margin-top:12px;max-width:180px" onclick="clearCatFilters()">Clear Filters</button></div>'; return; }
+  grid.innerHTML = prods.map(p=>productCard(p)).join('');
+  updateFilterBadge();
+}
+
+function updateFilterBadge() {
+  const count = _catFilters.brands.size + (_catFilters.minDiscount>0?1:0) + (_catFilters.maxPrice?1:0);
+  const badge = document.getElementById('filter-badge');
+  if (badge) { badge.textContent = count; badge.style.display = count?'inline':'none'; }
+  // Active filters row
+  const row = document.getElementById('active-filters');
+  if (!row) return;
+  const chips = [];
+  _catFilters.brands.forEach(b => chips.push(`<span class="filter-chip active" onclick="removeBrandFilter('${b}')">✕ ${b}</span>`));
+  if (_catFilters.minDiscount>0) chips.push(`<span class="filter-chip active" onclick="_catFilters.minDiscount=0;renderFilteredProducts()">✕ ${_catFilters.minDiscount}%+ OFF</span>`);
+  if (_catFilters.maxPrice) chips.push(`<span class="filter-chip active" onclick="_catFilters.maxPrice=null;renderFilteredProducts()">✕ Under ₹${_catFilters.maxPrice}</span>`);
+  row.style.display = chips.length ? 'block' : 'none';
+  row.innerHTML = chips.join('');
+}
+
+function applyCatSort() {
+  _catSort = document.getElementById('sort-select')?.value || '';
+  renderFilteredProducts();
+}
+window.applyCatSort = applyCatSort;
+
+function clearCatFilters() {
+  _catFilters = { brands: new Set(), maxPrice: null, minDiscount: 0 };
+  document.getElementById('sort-select').value = '';
+  _catSort = '';
+  renderFilteredProducts();
+}
+window.clearCatFilters = clearCatFilters;
+
+function removeBrandFilter(brand) {
+  _catFilters.brands.delete(brand);
+  renderFilteredProducts();
+}
+window.removeBrandFilter = removeBrandFilter;
+
+function openFilterSheet() {
+  const brands = [...new Set(_allCatProducts.map(p=>p.brand).filter(Boolean))].sort();
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:16px;font-weight:900">Filter & Sort</div>
+      <button onclick="clearCatFilters();closeSheet()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--g);cursor:pointer">Clear All</button>
+    </div>
+    ${brands.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Brand</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px">
+        ${brands.map(b=>`<button class="filter-chip ${_catFilters.brands.has(b)?'active':''}" onclick="toggleBrandFilter('${b}')">${b}</button>`).join('')}
+      </div>
+    </div>` : ''}
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Minimum Discount</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px">
+        ${[0,10,20,30,40].map(d=>`<button class="filter-chip ${_catFilters.minDiscount===d && d>0?'active':''}" onclick="_catFilters.minDiscount=${d};renderFilteredProducts();updateFilterSheet()">${d===0?'Any':d+'%+ OFF'}</button>`).join('')}
+      </div>
+    </div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Max Price</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px">
+        ${[null,500,1000,2000,5000,10000].map(p=>`<button class="filter-chip ${_catFilters.maxPrice===p&&p?'active':''}" onclick="_catFilters.maxPrice=${p};renderFilteredProducts();updateFilterSheet()">${p?'Under ₹'+p.toLocaleString('en-IN'):'Any'}</button>`).join('')}
+      </div>
+    </div>
+    <button class="btn-g" onclick="closeSheet()">Show Results</button>`;
+  sheet.classList.add('open');
+  overlay.classList.add('open');
+}
+window.openFilterSheet = openFilterSheet;
+
+function updateFilterSheet() {
+  // Refresh chip active states without closing sheet
+  document.querySelectorAll('#bottom-sheet .filter-chip').forEach(chip => {
+    const txt = chip.textContent.replace('✕ ','').trim();
+    const brand = txt;
+    const disc = parseInt(txt);
+    const price = parseInt(txt.replace('Under ₹','').replace(',',''));
+    if (_catFilters.brands.has(brand)) chip.classList.add('active');
+    else if (!isNaN(disc) && _catFilters.minDiscount===disc) chip.classList.add('active');
+    else if (!isNaN(price) && _catFilters.maxPrice===price) chip.classList.add('active');
+    else chip.classList.remove('active');
+  });
+}
+
+function toggleBrandFilter(brand) {
+  if (_catFilters.brands.has(brand)) _catFilters.brands.delete(brand);
+  else _catFilters.brands.add(brand);
+  renderFilteredProducts();
+  // Update chips in sheet
+  document.querySelectorAll('#bottom-sheet .filter-chip').forEach(c => {
+    if (c.textContent === brand) c.classList.toggle('active', _catFilters.brands.has(brand));
+  });
+}
+window.toggleBrandFilter = toggleBrandFilter;
 
 function loadMoreProducts() {
   _catOffset += 20;
@@ -1360,6 +1575,7 @@ function toast(msg, duration=2500) {
 async function init() {
   _saveCart(); // init badge
   _updateAuthUI();
+  renderCatNavBar();
 
   // Load categories
   const catRes = await api('customer-shop', { action:'get_categories' });
@@ -1383,6 +1599,7 @@ async function init() {
   ];
 
   // Render category grid
+  renderCatNavBar(); // refresh now that cats are loaded
   const grid = document.getElementById('cat-grid');
   if (grid) grid.innerHTML = _cats.slice(0,12).map(c=>`
     <div class="ccard" onclick="showCategoryPage('${c.key}')">
