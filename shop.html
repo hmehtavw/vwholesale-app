@@ -936,15 +936,17 @@ function renderOTPSheet(mode) {
     <div style="padding:0 0 4px">
       <div style="text-align:center;margin-bottom:20px">
         <div style="font-size:42px;margin-bottom:10px">${isNew ? '👋' : '🔑'}</div>
-        <div style="font-size:18px;font-weight:900;margin-bottom:4px">${isNew ? 'Create Account' : 'Welcome Back'}</div>
-        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 4-digit PIN to secure your account' : 'Enter your PIN for +91 ' + _loginPhone}</div>
+        <div style="font-size:18px;font-weight:900;margin-bottom:4px">${isNew ? 'Create Your Account' : 'Welcome Back'}</div>
+        <div style="font-size:12px;color:var(--t3)">${isNew ? 'Set a 4-digit PIN — remember it for future logins' : 'Enter your 4-digit PIN for +91 ' + _loginPhone}</div>
       </div>
+
       <div style="margin-bottom:14px">
-        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Your 4-Digit PIN</label>
+        <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">4-Digit PIN</label>
         <input id="login-otp" type="password" inputmode="numeric" maxlength="4" placeholder="••••"
           style="width:100%;padding:16px;border:1.5px solid var(--g);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
           oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
       </div>
+
       ${isNew ? `
       <div style="margin-bottom:14px">
         <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Confirm PIN</label>
@@ -952,13 +954,19 @@ function renderOTPSheet(mode) {
           style="width:100%;padding:16px;border:1.5px solid var(--bdr);border-radius:10px;font-size:28px;font-weight:900;text-align:center;letter-spacing:12px;outline:none;box-sizing:border-box;color:var(--t1)"
           oninput="this.value=this.value.replace(/\D/g,'').slice(0,4)">
       </div>
-      <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">Remember this PIN — you will use it every time you log in</div>
+      <div style="font-size:10px;color:var(--t3);text-align:center;margin-bottom:10px">This PIN is different from staff login. 4 digits only.</div>
       ` : ''}
+
       <button onclick="verifyCustomerOTP(${isNew})"
         style="width:100%;padding:14px;background:var(--g);border:none;border-radius:12px;color:#fff;font-size:15px;font-weight:900;cursor:pointer;margin-bottom:10px">
         ${isNew ? 'Create Account →' : 'Login →'}
       </button>
-      <button onclick="renderLoginSheet()" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:none;font-size:13px;color:var(--t2);cursor:pointer">← Back</button>
+
+      ${isNew
+        ? `<button onclick="renderOTPSheet('login')" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:1px solid var(--bdr);font-size:13px;color:var(--t2);cursor:pointer;margin-bottom:6px">Already have an account? Login →</button>`
+        : `<button onclick="renderOTPSheet('signup')" style="width:100%;padding:11px;border-radius:10px;background:var(--bg);border:1px solid var(--bdr);font-size:13px;color:var(--t2);cursor:pointer;margin-bottom:6px">New here? Create account →</button>`}
+
+      <button onclick="renderLoginSheet()" style="width:100%;padding:10px;border-radius:10px;background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer">← Change number</button>
     </div>`;
 }
 
@@ -967,28 +975,9 @@ async function sendCustomerOTP() {
   if (!phone || phone.length < 10) { toast('Enter a valid 10-digit mobile number'); return; }
   _loginPhone = phone;
   window._loginName = document.getElementById('login-name')?.value?.trim() || '';
-  // Check if this phone already has an account by trying a dummy sign-in
-  // If 400 → no account → show signup (set PIN). If different error → show login (enter PIN).
-  const btn = document.querySelector('[onclick="sendCustomerOTP()"]');
-  if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
-  try {
-    const probeRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email: phone + '@customer.vwholesale.app', password: 'probe' })
-    });
-    const probeData = await probeRes.json();
-    // Account exists if we get an auth error (wrong password) vs user-not-found
-    const notFound = probeData.error_description?.includes('not found') ||
-                     probeData.msg?.includes('not found') ||
-                     probeData.code === 'user_not_found' ||
-                     probeRes.status === 400 && !probeData.error_code;
-    renderOTPSheet(notFound ? 'signup' : 'login');
-  } catch(e) {
-    renderOTPSheet('signup');
-  } finally {
-    if (btn) { btn.disabled=false; btn.textContent='Send OTP →'; }
-  }
+  // Always show signup first — if account exists, verifyCustomerOTP detects it
+  // and switches to login automatically. No probe needed (probe was unreliable).
+  renderOTPSheet('signup');
 }
 
 async function verifyCustomerOTP(isNew) {
