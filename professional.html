@@ -143,21 +143,109 @@ body{padding-bottom:var(--nav-h)}
       <div class="login-title">Professional Portal</div>
       <div class="login-sub">Contractors · Plumbers · Electricians · Architects</div>
     </div>
-    <div class="form-group">
-      <label class="form-lbl">Mobile Number</label>
-      <div style="display:flex;gap:8px">
-        <div style="padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);white-space:nowrap">+91</div>
-        <input type="tel" inputmode="numeric" maxlength="10" id="login-phone" class="form-inp" placeholder="10-digit mobile" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" onkeydown="if(event.key==='Enter')loginStep2()">
+
+    <!-- TABS -->
+    <div style="display:flex;background:#F0F4FA;border-radius:10px;padding:3px;margin-bottom:18px;gap:2px">
+      <button id="tab-login" onclick="switchTab('login')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;background:var(--b);color:#fff;font-family:inherit">Login</button>
+      <button id="tab-signup" onclick="switchTab('signup')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--t3);font-family:inherit">New Registration</button>
+      <button id="tab-forgot" onclick="switchTab('forgot')" style="flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--t3);font-family:inherit">Forgot PIN</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="form-login">
+      <div class="form-group">
+        <label class="form-lbl">Mobile Number</label>
+        <div style="display:flex;gap:8px">
+          <div style="padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2);white-space:nowrap">+91</div>
+          <input type="tel" inputmode="numeric" maxlength="10" id="login-phone" class="form-inp" placeholder="10-digit mobile" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)" onkeydown="if(event.key==='Enter')loginStep2()">
+        </div>
       </div>
+      <div class="form-group" id="pin-group" style="display:none">
+        <label class="form-lbl">Your 6-digit PIN</label>
+        <input type="password" inputmode="numeric" maxlength="6" id="login-pin" class="form-inp" placeholder="••••••" style="font-size:22px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn-p" id="login-btn" onclick="loginStep2()">Continue →</button>
+      <div id="login-err" style="color:var(--red);font-size:12px;font-weight:700;text-align:center;margin-top:8px;display:none"></div>
     </div>
-    <div class="form-group" id="pin-group" style="display:none">
-      <label class="form-lbl">Your 6-digit PIN</label>
-      <input type="password" inputmode="numeric" maxlength="6" id="login-pin" class="form-inp" placeholder="••••••" style="font-size:22px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" onkeydown="if(event.key==='Enter')doLogin()">
+
+    <!-- SIGNUP FORM -->
+    <div id="form-signup" style="display:none">
+      <div class="form-group">
+        <label class="form-lbl">Full Name *</label>
+        <input id="reg-name" class="form-inp" placeholder="Your full name">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Mobile Number *</label>
+        <div style="display:flex;gap:8px">
+          <div style="padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2)">+91</div>
+          <input type="tel" inputmode="numeric" maxlength="10" id="reg-phone" class="form-inp" placeholder="10-digit mobile" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Profession *</label>
+        <select id="reg-type" class="form-sel">
+          <option value="">Select your profession</option>
+          <option value="Contractor">Contractor (Civil)</option>
+          <option value="Tile Contractor">Tile Contractor</option>
+          <option value="Plumber">Plumber</option>
+          <option value="Electrician">Electrician</option>
+          <option value="Painter">Painter</option>
+          <option value="Interior Designer">Interior Designer</option>
+          <option value="Architect">Architect</option>
+          <option value="Builder">Builder / Developer</option>
+          <option value="Hardware Shop">Hardware Shop Owner</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-group">
+          <label class="form-lbl">City</label>
+          <input id="reg-city" class="form-inp" placeholder="Vijayawada" value="Vijayawada">
+        </div>
+        <div class="form-group">
+          <label class="form-lbl">Years Experience</label>
+          <input type="number" id="reg-exp" class="form-inp" placeholder="e.g. 5">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Set 6-digit PIN *</label>
+        <input type="password" inputmode="numeric" maxlength="6" id="reg-pin" class="form-inp" placeholder="••••••" style="font-size:20px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Confirm PIN *</label>
+        <input type="password" inputmode="numeric" maxlength="6" id="reg-pin2" class="form-inp" placeholder="••••••" style="font-size:20px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+      </div>
+      <button class="btn-p" id="reg-btn" onclick="doSignup()">Register for Free →</button>
+      <div id="reg-err" style="color:var(--red);font-size:12px;font-weight:700;text-align:center;margin-top:8px;display:none"></div>
+      <div style="font-size:10px;color:var(--t3);text-align:center;margin-top:10px;line-height:1.5">Your account will be reviewed by our team within 24 hours.<br>You'll be notified on WhatsApp once approved.</div>
     </div>
-    <button class="btn-p" id="login-btn" onclick="loginStep2()">Continue →</button>
-    <div id="login-err" style="color:var(--red);font-size:12px;font-weight:700;text-align:center;margin-top:8px;display:none"></div>
+
+    <!-- FORGOT PIN FORM -->
+    <div id="form-forgot" style="display:none">
+      <div style="background:#FFF3E0;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#92400E;line-height:1.5">
+        📞 To reset your PIN, call the store at <strong>8712697930</strong> and get today's verification code, then enter it below.
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Registered Mobile *</label>
+        <div style="display:flex;gap:8px">
+          <div style="padding:11px 12px;border:1.5px solid var(--bdr);border-radius:10px;font-size:14px;font-weight:700;color:var(--t2)">+91</div>
+          <input type="tel" inputmode="numeric" maxlength="10" id="forgot-phone" class="form-inp" placeholder="Your registered number" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">Store Verification Code *</label>
+        <input type="text" inputmode="numeric" maxlength="4" id="forgot-otp" class="form-inp" placeholder="4-digit code from store" style="font-size:20px;letter-spacing:8px;text-align:center">
+      </div>
+      <div class="form-group">
+        <label class="form-lbl">New PIN *</label>
+        <input type="password" inputmode="numeric" maxlength="6" id="forgot-pin" class="form-inp" placeholder="••••••" style="font-size:20px;letter-spacing:8px;text-align:center" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+      </div>
+      <button class="btn-p" id="forgot-btn" onclick="doResetPIN()">Reset PIN →</button>
+      <div id="forgot-err" style="color:var(--red);font-size:12px;font-weight:700;text-align:center;margin-top:8px;display:none"></div>
+    </div>
+
     <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--t3)">
-      V Wholesale Contractor Club<br>NH65 Bhavanipuram, Vijayawada · 8712697930
+      V Wholesale Contractor Club · <a href="tel:8712697930" style="color:var(--b);text-decoration:none">8712697930</a><br>NH65 Bhavanipuram, Vijayawada
     </div>
   </div>
 </div>
@@ -357,6 +445,92 @@ function closeSheet() {
   document.getElementById('overlay').classList.remove('open');
 }
 
+// ── TAB SWITCHING ──
+function switchTab(tab) {
+  ['login','signup','forgot'].forEach(t => {
+    const form = document.getElementById(`form-${t}`);
+    const btn = document.getElementById(`tab-${t}`);
+    if (form) form.style.display = t===tab ? 'block' : 'none';
+    if (btn) { btn.style.background = t===tab ? 'var(--b)' : 'none'; btn.style.color = t===tab ? '#fff' : 'var(--t3)'; btn.style.fontWeight = t===tab ? '800' : '700'; }
+  });
+  // Reset error messages
+  ['login-err','reg-err','forgot-err'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; });
+}
+
+// ── SIGNUP ──
+async function doSignup() {
+  const name = document.getElementById('reg-name')?.value?.trim();
+  const phone = document.getElementById('reg-phone')?.value?.trim();
+  const type = document.getElementById('reg-type')?.value;
+  const city = document.getElementById('reg-city')?.value?.trim();
+  const exp = document.getElementById('reg-exp')?.value;
+  const pin = document.getElementById('reg-pin')?.value;
+  const pin2 = document.getElementById('reg-pin2')?.value;
+  const errEl = document.getElementById('reg-err');
+
+  if (!name) { errEl.textContent='Enter your full name'; errEl.style.display='block'; return; }
+  if (!phone||phone.length<10) { errEl.textContent='Enter valid 10-digit mobile'; errEl.style.display='block'; return; }
+  if (!type) { errEl.textContent='Select your profession'; errEl.style.display='block'; return; }
+  if (!pin||pin.length<6) { errEl.textContent='Set a 6-digit PIN'; errEl.style.display='block'; return; }
+  if (pin!==pin2) { errEl.textContent='PINs do not match'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled=true; btn.textContent='Registering…';
+
+  const res = await proApi({action:'signup', phone, pin, name, professional_type:type, city:city||'Vijayawada', years_experience:parseInt(exp)||null}).catch(()=>({ok:false,error:'Network error'}));
+
+  if (!res.ok) {
+    btn.disabled=false; btn.textContent='Register for Free →';
+    if (res.error==='already_exists') { errEl.textContent='Account already exists. Please login.'; errEl.style.display='block'; setTimeout(()=>switchTab('login'),2000); }
+    else { errEl.textContent=res.error||'Registration failed'; errEl.style.display='block'; }
+    return;
+  }
+
+  // Success — show pending message
+  document.getElementById('form-signup').innerHTML = `
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:48px;margin-bottom:12px">⏳</div>
+      <div style="font-size:16px;font-weight:900;margin-bottom:8px">Registration Submitted!</div>
+      <div style="font-size:13px;color:var(--t3);line-height:1.6;margin-bottom:16px">Hi ${res.data.name}! Your account is under review.<br>Our team will contact you on WhatsApp within 24 hours.</div>
+      <div style="background:var(--blt);border-radius:10px;padding:12px;font-size:12px;color:var(--b);margin-bottom:14px">
+        📞 For faster approval call:<br><strong>8712697930</strong>
+      </div>
+    </div>`;
+}
+
+// ── FORGOT PIN ──
+async function doResetPIN() {
+  const phone = document.getElementById('forgot-phone')?.value?.trim();
+  const otp = document.getElementById('forgot-otp')?.value?.trim();
+  const new_pin = document.getElementById('forgot-pin')?.value;
+  const errEl = document.getElementById('forgot-err');
+
+  if (!phone||phone.length<10) { errEl.textContent='Enter your registered mobile number'; errEl.style.display='block'; return; }
+  if (!otp||otp.length<4) { errEl.textContent='Enter the 4-digit verification code from store'; errEl.style.display='block'; return; }
+  if (!new_pin||new_pin.length<6) { errEl.textContent='Enter new 6-digit PIN'; errEl.style.display='block'; return; }
+
+  const btn = document.getElementById('forgot-btn');
+  btn.disabled=true; btn.textContent='Resetting…';
+
+  const res = await proApi({action:'reset_pin', phone, staff_otp:otp, new_pin}).catch(()=>({ok:false,error:'Network error'}));
+
+  if (!res.ok) {
+    btn.disabled=false; btn.textContent='Reset PIN →';
+    errEl.textContent=res.error||'Reset failed';
+    errEl.style.display='block';
+    return;
+  }
+
+  document.getElementById('forgot-err').style.display='none';
+  document.getElementById('form-forgot').innerHTML = `
+    <div style="text-align:center;padding:20px 0">
+      <div style="font-size:48px;margin-bottom:12px">✅</div>
+      <div style="font-size:16px;font-weight:900;margin-bottom:8px">PIN Reset Successfully!</div>
+      <div style="font-size:13px;color:var(--t3);margin-bottom:16px">Your new PIN is set. Please login now.</div>
+      <button class="btn-p" onclick="switchTab('login')">Go to Login →</button>
+    </div>`;
+}
+
 // ── LOGIN ──
 async function loginStep2() {
   const phone = document.getElementById('login-phone').value.trim();
@@ -383,7 +557,11 @@ async function doLogin() {
   const res = await proApi({action:'login', phone, pin}).catch(()=>({ok:false,error:'Network error'}));
   if (!res.ok) {
     btn.disabled = false; btn.textContent = 'Login →';
-    const msgs = {wrong_pin:'Wrong PIN. Try again.', no_account:'No professional account found. Contact store: 8712697930', pending_approval:'Your account is pending approval. Contact: 8712697930'};
+    const msgs = {
+    wrong_pin: 'Wrong PIN. Try again or use Forgot PIN tab.',
+    no_account: 'No account found. Please register using the New Registration tab.',
+    pending_approval: 'Your account is pending approval. Our team will contact you within 24 hours. Call 8712697930 to expedite.'
+  };
     showLoginErr(msgs[res.error]||res.error||'Login failed');
     return;
   }
