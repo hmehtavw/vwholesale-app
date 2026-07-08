@@ -1,5 +1,5 @@
 // V Wholesale Service Worker — Offline PWA Support
-const CACHE_NAME = 'vwholesale-v18';
+const CACHE_NAME = 'vwholesale-v19';
 const OFFLINE_URLS = [
   '/vwholesale-app/',
   '/vwholesale-app/index.html',

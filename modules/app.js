@@ -1069,7 +1069,7 @@ async function renderDashboard() {
     </div>`;
   })()}
 
-  <!-- QUICK ACTIONS -->
+  <!-- QUICK ACTIONS — role filtered -->
   <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Quick Actions</div>
   <div class="quick-actions" style="margin-bottom:16px">
     <button class="qa-btn" onclick="navigateTo('checkin')"><span class="qa-icon">🚶</span><span>Check In</span></button>
@@ -1077,14 +1077,10 @@ async function renderDashboard() {
     <button class="qa-btn" onclick="showQuotationPicker()" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon" style="color:var(--gold)">📋</span><span style="color:var(--gold);font-weight:700">Quotation</span></button>
     <button class="qa-btn" onclick="navigateTo('crm')"><span class="qa-icon">👥</span><span>CRM</span></button>
     <button class="qa-btn" onclick="navigateTo('inventory')"><span class="qa-icon">📦</span><span>Inventory</span></button>
+    <button class="qa-btn" onclick="navigateTo('tiles')"><span class="qa-icon">⬜</span><span>Tile Quote</span></button>
     <button class="qa-btn" onclick="navigateTo('dispatch')"><span class="qa-icon">🚚</span><span>Dispatch</span></button>
-    <button class="qa-btn" onclick="navigateTo('hr')" data-admin-only><span class="qa-icon">🧑‍💼</span><span>HR</span></button>
-    <button class="qa-btn" onclick="navigateTo('accounts')" data-admin-only><span class="qa-icon">💳</span><span>Accounts</span></button>
-    <button class="qa-btn" onclick="navigateTo('vendors')" data-admin-only><span class="qa-icon">🏭</span><span>Vendors</span></button>
-    <button class="qa-btn" onclick="window.open('./admin.html','_blank')" style="background:linear-gradient(135deg,#1B4F8A,#2272B6);border-color:#2272B6"><span class="qa-icon">⚙️</span><span style="color:#fff;font-weight:800">Admin Portal</span></button>
-      <button class="qa-btn" onclick="navigateTo('brand_catalog')" data-admin-only><span class="qa-icon">🗂</span><span>Catalog</span></button>
-      <button class="qa-btn" onclick="navigateTo('catalog_upload')" style="background:var(--gold-muted);border-color:var(--gold-border)" data-admin-only><span class="qa-icon">📤</span><span style="color:var(--gold);font-weight:700">Upload Catalog</span></button>
-      <button class="qa-btn" onclick="navigateTo('catalog_review')" style="background:var(--gold-muted);border-color:var(--gold-border)"><span class="qa-icon">✅</span><span style="color:var(--gold);font-weight:700">Review & Price</span></button>
+    <button class="qa-btn" onclick="navigateTo('club')"><span class="qa-icon">🏆</span><span>CC Club</span></button>
+    <button class="qa-btn" onclick="window.open('./admin.html','_blank')" style="background:linear-gradient(135deg,#1B4F8A,#2272B6);border-color:#2272B6"><span class="qa-icon">⚙️</span><span style="color:#fff;font-weight:800">Admin</span></button>
   </div>
 
   <!-- EXECUTIVE LEADERBOARD -->
