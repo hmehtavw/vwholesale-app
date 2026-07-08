@@ -47,12 +47,18 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 .cart-badge{position:absolute;top:-2px;right:-4px;background:var(--g);color:#fff;font-size:9px;font-weight:900;min-width:16px;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .signin-btn{background:var(--g);color:#fff;border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap}
 
-/* ── TRUST BAR ── */
-.tbar{background:#E8F2FF;border-bottom:1px solid var(--gbdr);overflow-x:auto;scrollbar-width:none;padding:0 14px}
-.tbar::-webkit-scrollbar{display:none}
-.tbar-inner{display:flex;gap:20px;padding:8px 0;white-space:nowrap;max-width:var(--wrap);margin:0 auto}
-.ti{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--gdk)}
-.ti-icon{font-size:14px}
+/* ── TRUST BAR — marquee ── */
+.tbar{background:#E8F2FF;border-bottom:1px solid var(--gbdr);overflow:hidden;position:relative}
+.tbar::before,.tbar::after{content:'';position:absolute;top:0;bottom:0;width:32px;z-index:2;pointer-events:none}
+.tbar::before{left:0;background:linear-gradient(to right,#E8F2FF,transparent)}
+.tbar::after{right:0;background:linear-gradient(to left,#E8F2FF,transparent)}
+.tbar-track{display:flex;width:max-content;animation:marquee 24s linear infinite}
+.tbar-track:hover{animation-play-state:paused}
+.tbar-inner{display:inline-flex;align-items:center;padding:9px 0;white-space:nowrap}
+.ti{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--gdk);padding:0 14px}
+.ti-icon{font-size:13px}
+.ti-sep{color:var(--gbdr);font-size:12px;flex-shrink:0}
+@keyframes marquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
 
 /* ── HERO ── */
 .hero{background:linear-gradient(135deg,#0D3B7A,#0D3B7A);padding:20px 16px;margin:0}
@@ -278,15 +284,43 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
     <div id="cat-nav-inner" style="display:inline-flex;gap:0;padding:0 8px;min-width:100%"></div>
   </div>
 
-  <!-- TRUST BAR -->
+  <!-- TRUST BAR — auto-scroll marquee -->
   <div class="tbar">
-    <div class="tbar-inner">
-      <div class="ti"><span class="ti-icon">⚡</span>2–4 Hr Delivery</div>
-      <div class="ti"><span class="ti-icon">✅</span>100% Genuine</div>
-      <div class="ti"><span class="ti-icon">💳</span>Pay on Delivery</div>
-      <div class="ti"><span class="ti-icon">🔄</span>7 Day Returns</div>
-      <div class="ti"><span class="ti-icon">🏷</span>Wholesale Prices</div>
-      <div class="ti"><span class="ti-icon">🏪</span>Self Pickup</div>
+    <div class="tbar-track">
+      <!-- Duplicated for seamless loop -->
+      <div class="tbar-inner">
+        <div class="ti"><span class="ti-icon">⚡</span>2–4 Hr Delivery</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">✅</span>100% Genuine</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">💳</span>Pay on Delivery</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🔄</span>7 Day Returns</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🏷</span>Wholesale Prices</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🏪</span>Self Pickup</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">📞</span>Expert Help</div>
+        <div class="ti-sep">•</div>
+      </div>
+      <!-- Duplicate for seamless infinite loop -->
+      <div class="tbar-inner" aria-hidden="true">
+        <div class="ti"><span class="ti-icon">⚡</span>2–4 Hr Delivery</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">✅</span>100% Genuine</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">💳</span>Pay on Delivery</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🔄</span>7 Day Returns</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🏷</span>Wholesale Prices</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">🏪</span>Self Pickup</div>
+        <div class="ti-sep">•</div>
+        <div class="ti"><span class="ti-icon">📞</span>Expert Help</div>
+        <div class="ti-sep">•</div>
+      </div>
     </div>
   </div>
 
