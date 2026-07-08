@@ -2363,7 +2363,7 @@ window.showApplyLeave = () => VW_HR.showApplyLeave();
 window.submitLeave = () => VW_HR.submitLeave();
 window.approveLeave = (id,s) => VW_HR.approveLeave(id,s);
 
-document.addEventListener('DOMContentLoaded', init);
+document.addEventListener('DOMContentLoaded', async () => { await init(); buildSidebar(); });
 
 // Register service worker for offline support
 if ('serviceWorker' in navigator) {
@@ -3471,3 +3471,95 @@ window.viewLaborBids = viewLaborBids;
 window.awardContractorBid = awardContractorBid;
 window.renderRewardsStorePage = renderRewardsStorePage;
 window.renderLaborMarketplacePage = renderLaborMarketplacePage;
+
+// ═══ STAFF SIDEBAR ═══
+const SIDEBAR_NAV = [
+  { section: 'Main' },
+  { page: 'dashboard',     icon: '📊', label: 'Dashboard',    always: true },
+  { page: 'checkin',       icon: '🚶', label: 'Check-in',     always: true },
+  { page: 'tasks',         icon: '📋', label: 'Tasks',        always: true },
+  { section: 'Sales' },
+  { page: 'cart',          icon: '🧾', label: 'Billing',      perm: 'billing' },
+  { page: 'tiles',         icon: '⬜', label: 'Tile Quote',   perm: 'billing' },
+  { page: 'quotations',    icon: '📄', label: 'Quotations',   perm: 'billing' },
+  { page: 'granite',       icon: '🪨', label: 'Granite',      perm: 'billing' },
+  { page: 'crm',           icon: '👥', label: 'CRM',          perm: 'crm' },
+  { page: 'follow_ups',    icon: '📞', label: 'Follow Ups',   perm: 'crm' },
+  { section: 'Inventory' },
+  { page: 'inventory',     icon: '📦', label: 'Inventory',    perm: 'inventory' },
+  { page: 'tile_inventory',icon: '🔲', label: 'Tile Stock',   perm: 'tile_inventory' },
+  { page: 'grn',           icon: '🧾', label: 'GRN',          perm: 'inventory' },
+  { page: 'dispatch',      icon: '🚚', label: 'Dispatch',     perm: 'dispatch' },
+  { page: 'returns',       icon: '↩️', label: 'Returns',      perm: 'billing' },
+  { section: 'B2B & Club' },
+  { page: 'club',          icon: '🏆', label: 'Contractor Club', perm: 'club' },
+  { page: 'labor',         icon: '🔨', label: 'Labor Jobs',   perm: 'club' },
+  { page: 'ledger',        icon: '📒', label: 'Ledger',       perm: 'billing' },
+  { section: 'Tools' },
+  { page: 'visualizer',   icon: '🎨', label: 'Visualizer',   perm: 'billing' },
+  { page: 'wishlist',     icon: '❤️', label: 'Wishlists',    always: true },
+  { page: 'training',     icon: '🎓', label: 'Training',     always: true },
+  { page: 'feedback',     icon: '⭐', label: 'Feedback',     always: true },
+];
+
+function buildSidebar() {
+  const role = VW_AUTH.getRole();
+  if (!role || ['customer','contractor','pending'].includes(role)) return;
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const allowed = new Set(VW_AUTH.getAllowedPages());
+
+  const nameEl = document.getElementById('sb-user-name');
+  const roleEl = document.getElementById('sb-user-role');
+  if (nameEl) nameEl.textContent = profile?.name || 'Staff';
+  if (roleEl) roleEl.textContent = (profile?.role || role).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+
+  const timeEl = document.getElementById('st-time');
+  if (timeEl) {
+    const tick = () => { timeEl.textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); };
+    tick(); setInterval(tick, 30000);
+  }
+
+  const nav = document.getElementById('sb-nav');
+  if (!nav) return;
+
+  let html = '';
+  for (const item of SIDEBAR_NAV) {
+    if (item.section) { html += `<div class="sb-section-lbl">${item.section}</div>`; continue; }
+    const hasAccess = item.always || role === 'admin' || allowed.has(item.page) ||
+      (item.perm && allowed.has(item.perm));
+    if (!hasAccess) continue;
+    html += `<button class="sb-nav-item" data-sb-page="${item.page}" onclick="sbNavigate('${item.page}')">
+      <span class="sb-nav-icon">${item.icon}</span><span>${item.label}</span>
+    </button>`;
+  }
+
+  if (role === 'admin') {
+    html += `<div class="sb-section-lbl">Management</div>
+    <button class="sb-nav-item" onclick="window.open('./admin.html','_blank')">
+      <span class="sb-nav-icon">⚙️</span><span>Admin Portal</span>
+    </button>`;
+  }
+  nav.innerHTML = html;
+}
+
+function sbNavigate(page) {
+  navigateTo(page);
+  document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.toggle('active', b.dataset.sbPage === page));
+  const titleEl = document.getElementById('st-page-title');
+  const item = SIDEBAR_NAV.find(i => i.page === page);
+  if (titleEl && item) titleEl.textContent = item.label;
+  if (window.innerWidth < 769) closeSidebar();
+}
+window.sbNavigate = sbNavigate;
+
+function toggleSidebar() {
+  document.getElementById('staff-sidebar')?.classList.toggle('open');
+  document.getElementById('sb-overlay')?.classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('staff-sidebar')?.classList.remove('open');
+  document.getElementById('sb-overlay')?.classList.remove('show');
+}
+window.toggleSidebar = toggleSidebar;
+window.closeSidebar = closeSidebar;
