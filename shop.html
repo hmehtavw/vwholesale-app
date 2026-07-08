@@ -796,6 +796,11 @@ function refreshProductCards() {
 // ── LOGIN SHEET ──
 let _loginPhone = '';
 
+function closeSheet() {
+  document.getElementById('bottom-sheet')?.classList.remove('open');
+  document.getElementById('sheet-overlay')?.classList.remove('open');
+}
+
 function openLoginSheet(context) {
   _loginPhone = '';
   renderLoginSheet(context);
@@ -864,6 +869,8 @@ function openBestQuoteSheet() {
   const names = window._cartNames || {};
   const prices = window._cartPrices || {};
   const total = items.reduce((s,[id,qty]) => s + (prices[id]||0)*qty, 0);
+  document.getElementById('sheet-overlay')?.classList.add('open');
+  sheet.classList.add('open');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>
     <div style="text-align:center;margin-bottom:16px">
