@@ -3,13 +3,6 @@ name: Deploy V Wholesale Customer OS
 on:
   push:
     branches: [main]
-    paths:
-      - '**.html'
-      - 'modules/**'
-      - 'sw.js'
-      - 'manifest.json'
-      - 'icon-*.png'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -17,25 +10,15 @@ permissions:
   pages: write
   id-token: write
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Push to gh-pages branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push origin main:gh-pages --force
-          echo "✅ gh-pages updated to $(git rev-parse --short HEAD)"
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
