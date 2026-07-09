@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <script>
+    // Force SW update on every load
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.update());
+      });
+    }
+  </script>
   <style id="customer-critical">
     /* Hide staff header by default — sidebar layout takes over in staff-mode */
     #app-header {
