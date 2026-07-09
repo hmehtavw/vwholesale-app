@@ -267,7 +267,7 @@
 }
 
 html, body {
-  height: 100%; overflow: hidden;
+  height: 100%;
   background: var(--header-bg);
   color: var(--text);
   font-family: 'DM Sans', sans-serif;
@@ -276,7 +276,7 @@ html, body {
   line-height: 1.5;
 }
 
-#app { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+#app { display: flex; flex-direction: column; min-height: 100vh; }
 
 /* ===== HEADER ===== */
 #app-header {
@@ -1241,6 +1241,7 @@ body.staff-mode .sb-overlay { display: none; }
 /* Main content area */
 #app-wrapper {
   min-height: 100vh;
+  overflow-y: auto;
   transition: margin-left .25s;
 }
 body.staff-mode #app-wrapper {
