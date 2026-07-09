@@ -1052,27 +1052,29 @@ async function routeByRole() {
   await loadCurrentProfile();
   const role = currentProfile?.role;
   const status = currentProfile?.status;
-  const params = new URLSearchParams(window.location.search);
 
   if (!role) {
-    // No role — show staff login (index.html is staff portal only)
     await showAuthScreen('staff');
     return;
   }
 
-  // Customer logged into staff portal — redirect to shop
+  // Customer or contractor on staff portal — sign out and redirect
   if (role === 'customer') {
+    await sb.auth.signOut();
+    // Clear all supabase storage keys
+    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
     window.location.replace('./shop.html');
     return;
   }
 
-  // Contractor logged into staff portal — redirect to professional portal
   if (role === 'contractor') {
+    await sb.auth.signOut();
+    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
     window.location.replace('./professional.html');
     return;
   }
 
-  // Staff/Admin — proceed normally
+  // Staff/Admin — show staff portal
   document.body.classList.add('staff-mode');
   document.body.classList.remove('customer-mode');
   if (status === 'pending') { showPendingScreen(); return; }

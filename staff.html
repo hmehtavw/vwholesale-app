@@ -92,6 +92,116 @@
         const SUPA_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
         const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
+        // STAFF PORTAL — aggressively redirect non-staff sessions
+        const _sbKeys = Object.keys(localStorage).filter(k => k.startsWith('sb-'));
+        let _done = false;
+        for (const _k of _sbKeys) {
+          try {
+            const _s = JSON.parse(localStorage.getItem(_k) || 'null');
+            if (!_s?.user) continue;
+            const _email = (_s.user.email || '').toLowerCase();
+            const _role = _s.user.user_metadata?.role || _s.user.app_metadata?.role || '';
+            if (_email.includes('customer.vwholesale') || _role === 'customer') {
+              _sbKeys.forEach(_j => localStorage.removeItem(_j));
+              window.location.replace('./shop.html');
+              _done = true; break;
+            }
+            if (_role === 'contractor') {
+              _sbKeys.forEach(_j => localStorage.removeItem(_j));
+              window.location.replace('./professional.html');
+              _done = true; break;
+            }
+          } catch(_e) {}
+        }
+        if (!_done) document.body.classList.add('staff-mode');ACHE CLEAR — runs before anything else
+  (async function() {
+    try {
+      // Kill all service workers
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      // Clear ALL caches
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch(e) {}
+  })();
+</script>
+  <script>
+    // Force SW update on every load
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.update());
+      });
+    }
+  </script>
+  <style id="staff-critical">
+    /* Staff portal — header/bottom-nav replaced by sidebar */
+    #app-header { display:none !important; visibility:hidden !important; height:0 !important; overflow:hidden !important; pointer-events:none !important; }
+    #bottom-nav { display:none !important; }
+    #more-menu  { display:none !important; }
+  </style>
+  <script>
+    // Force clear service worker and caches on every load
+    // This ensures fresh JS is always served after deploys
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(reg) { reg.unregister(); });
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+      }
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="app-version" content="s8-modular">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <script>
+    // Redirect guests to shop.html — staff/admin stay on index.html
+      </script>
+  <meta name="theme-color" content="#0A1628"><!-- staff -->
+  <title>V Wholesale — Staff Portal</title>
+  <link rel="manifest" href="manifest.json">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Syne:wght@600;700&display=swap" rel="stylesheet">
+  </style>
+  <script>
+    // Force clear service worker and caches on every load
+    // This ensures fresh JS is always served after deploys
+    (function() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          regs.forEach(function(reg) { reg.unregister(); });
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(function(keys) {
+          keys.forEach(function(k) { caches.delete(k); });
+        });
+      }
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="app-version" content="s8-modular">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="V Wholesale">
+  <script>
+    // Redirect guests to shop.html — staff/admin stay on index.html
+    (function() {
+      try {
+        const SUPA_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+        const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
         // Check if a Supabase session exists in localStorage
         const storageKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
         if (storageKey) {
