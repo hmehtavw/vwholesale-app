@@ -677,6 +677,254 @@ async function renderDashboard() {
     </div>`;
   }
 
+  // ===== STORE MANAGER DASHBOARD =====
+  if (profile && ['store_manager','management'].includes(profile.role)) {
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+    const monthRevenue = invoices
+      .filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved')
+      .reduce((s,i) => s + (i.total||0), 0);
+    const monthTarget = 25000000; // ₹2.5Cr — from incentive slab
+    const targetPct = Math.min(100, Math.round((monthRevenue/monthTarget)*100));
+    const openPipeline = invoices.filter(i => i.approvalStatus === 'pending_approval').length;
+    const todayVisitCount = todayVisits.length;
+    const convRate2 = todayVisitCount > 0 ? Math.round((todayInvoices.length/todayVisitCount)*100) : 0;
+    const pendingTQCount = (await _safe(VW_DB.client.from('tile_quotations').select('id',{count:'exact',head:true}).eq('approval_status','pending_approval'))).count || 0;
+
+    return `
+    <div class="module-header">
+      <div>
+        <h2 style="margin:0">Welcome back, ${(profile.name||'').split(' ')[0]} 👋</h2>
+        <p style="font-size:12px;color:var(--text3);margin:2px 0">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</p>
+      </div>
+    </div>
+
+    <!-- Monthly Revenue vs Target -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.04em">Store Revenue — ${new Date().toLocaleDateString('en-IN',{month:'long'})}</div>
+          <div style="font-size:26px;font-weight:900;color:${targetPct>=100?'var(--green)':targetPct>=70?'var(--gold)':'var(--text)'}">₹${monthRevenue>=10000000?Math.round(monthRevenue/10000000)+'Cr':monthRevenue>=100000?Math.round(monthRevenue/100000)+'L':'₹'+Math.round(monthRevenue).toLocaleString('en-IN')}</div>
+          <div style="font-size:11px;color:var(--text3)">Target: ₹2.5 Cr · ${targetPct}% achieved</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--text3)">Incentive at this pace</div>
+          <div style="font-size:18px;font-weight:800;color:var(--gold)">₹${monthRevenue>=25000000?'1,00,000+':monthRevenue>=35000000?Math.round(100000+((monthRevenue-25000000)*0.0025)).toLocaleString('en-IN'):'—'}</div>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">
+        <div style="height:100%;border-radius:4px;background:${targetPct>=100?'var(--green)':targetPct>=70?'var(--gold)':'var(--blue)'};width:${targetPct}%;transition:width .5s"></div>
+      </div>
+    </div>
+
+    <!-- 4 stat cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--blue)">${todayVisitCount}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Walk-ins Today</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--green)">${convRate2}%</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Conversion</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">${pendingTQCount}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">TQs Pending</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--red)">${openPipeline}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Approvals Needed</div>
+      </div>
+    </div>
+
+    <!-- Today billing summary -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header-row">
+        <h3 class="card-title">📊 Today's Billing</h3>
+        <span style="font-size:12px;color:var(--text3)">${todayInvoices.length} invoices</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:8px;background:var(--bg2);border-radius:8px;margin-bottom:6px">
+        <span style="font-size:13px">Total Billed</span>
+        <span style="font-weight:800;color:var(--green)">₹${todayBilling.toLocaleString('en-IN')}</span>
+      </div>
+      ${lowStock.slice(0,3).length ? `
+      <div style="margin-top:8px">
+        <div style="font-size:11px;color:var(--red);font-weight:700;margin-bottom:4px">⚠️ ${lowStock.length} Low Stock Items</div>
+        ${lowStock.slice(0,3).map(p=>`<div style="font-size:11px;color:var(--text3);padding:3px 0">${p.name} — ${p.stock} ${p.unit} left</div>`).join('')}
+        ${lowStock.length>3?`<div style="font-size:11px;color:var(--text3)">+${lowStock.length-3} more</div>`:''}
+      </div>` : ''}
+    </div>
+
+    <!-- TQ Pipeline -->
+    ${pendingTQCount > 0 ? `
+    <div class="card" style="border-left:4px solid var(--gold)">
+      <div class="card-header-row">
+        <h3 class="card-title">⏳ TQ Pipeline</h3>
+        <button class="btn-sm" style="background:var(--gold);color:#000;font-weight:700" onclick="navigateTo('tile_quotes')">View All</button>
+      </div>
+      <p style="font-size:12px;color:var(--text3)">${pendingTQCount} quotations awaiting approval</p>
+      <button class="btn-primary full-width" onclick="navigateTo('quick_approve')" style="margin-top:8px">⚡ Quick Approve</button>
+    </div>` : ''}`;
+  }
+
+  // ===== FLOOR MANAGER DASHBOARD =====
+  if (profile && profile.role === 'floor_manager') {
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+    const floorCategories = profile.floor_category || [];
+    const monthRevenue = invoices
+      .filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved')
+      .reduce((s,i) => s + (i.total||0), 0);
+    const floorTarget = 5000000; // ₹50L
+    const targetPct = Math.min(100, Math.round((monthRevenue/floorTarget)*100));
+    const pendingTQCount = (await _safe(VW_DB.client.from('tile_quotations').select('id',{count:'exact',head:true}).eq('approval_status','pending_approval'))).count || 0;
+    const myLowStock = products.filter(p => p.stock <= (p.lowStockThreshold||20) && (floorCategories.length===0 || floorCategories.includes(p.category)));
+
+    return `
+    <div class="module-header">
+      <h2>Welcome, ${(profile.name||'').split(' ')[0]} 👋</h2>
+      <p style="font-size:12px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</p>
+    </div>
+
+    <!-- Floor Revenue vs Target -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text3);font-weight:700;text-transform:uppercase;margin-bottom:6px">Floor Revenue — ${new Date().toLocaleDateString('en-IN',{month:'long'})}</div>
+      <div style="font-size:26px;font-weight:900;color:${targetPct>=100?'var(--green)':targetPct>=70?'var(--gold)':'var(--text)'}">
+        ₹${monthRevenue>=100000?Math.round(monthRevenue/100000)+'L':monthRevenue.toLocaleString('en-IN')}
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Target ₹50L · ${targetPct}% · ${100-targetPct}% to go</div>
+      <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">
+        <div style="height:100%;border-radius:4px;background:${targetPct>=100?'var(--green)':'var(--blue)'};width:${targetPct}%"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">${pendingTQCount}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">TQs Pending Approval</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:20px;font-weight:900;color:var(--red)">${myLowStock.length}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">Low Stock Items</div>
+      </div>
+    </div>
+
+    ${myLowStock.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <h3 class="card-title">📦 Low Stock — My Floor</h3>
+      ${myLowStock.slice(0,6).map(p=>`
+        <div class="followup-row">
+          <div class="fu-info"><div class="fu-name">${p.name}</div><div class="fu-dept">${p.category} · ${p.stock} ${p.unit} left</div></div>
+          <button class="btn-sm" onclick="navigateTo('inventory')">View</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    ${pendingTQCount ? `
+    <div class="card" style="border-left:4px solid var(--gold)">
+      <div class="card-header-row">
+        <h3 class="card-title">⏳ TQ Pipeline</h3>
+        <button class="btn-sm" style="background:var(--gold);color:#000" onclick="navigateTo('quick_approve')">Quick Approve</button>
+      </div>
+      <p style="font-size:12px;color:var(--text3)">${pendingTQCount} tiles quotations pending your approval</p>
+    </div>` : ''}
+
+    <div class="card">
+      <h3 class="card-title">Quick Actions</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn-secondary" onclick="navigateTo('tile_quotes')">📋 TQ List</button>
+        <button class="btn-secondary" onclick="navigateTo('inventory')">📦 Inventory</button>
+        <button class="btn-secondary" onclick="navigateTo('crm')">👥 CRM</button>
+        <button class="btn-secondary" onclick="navigateTo('checkin')">🚶 Check-in</button>
+      </div>
+    </div>`;
+  }
+
+  // ===== TL / SR SALES DASHBOARD =====
+  if (profile && ['tl','sr_sales','sr_executive','asm'].includes(profile.role)) {
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0,0,0,0);
+    const myInvoices = invoices.filter(i =>
+      i.createdByProfileId === profile.id ||
+      (i.salespersonCredits||[]).some(c => c.staffId === profile.id)
+    );
+    const myMonthSales = myInvoices
+      .filter(i => new Date(i.date) >= monthStart && i.approvalStatus === 'approved')
+      .reduce((s,i) => s + (i.total||0), 0);
+    const tlTarget = 1000000; // ₹10L
+    const targetPct = Math.min(100, Math.round((myMonthSales/tlTarget)*100));
+    const excess = Math.max(0, myMonthSales - tlTarget);
+    const incentive = myMonthSales >= tlTarget
+      ? 2500 + (excess <= 400000 ? excess*0.0025 : excess <= 1000000 ? excess*0.004 : excess*0.005)
+      : 0;
+    const myPendingTQs = await _safe(VW_DB.client.from('tile_quotations')
+      .select('id,tq_no,customer_name,grand_total')
+      .eq('approval_status','pending_approval')
+      .eq('created_by', profile.id).limit(5));
+    const myLeads = leads.filter(l => l.assignedToName === profile.name || l.assignedTo === profile.id);
+
+    return `
+    <div class="module-header">
+      <div>
+        <h2>Hi ${(profile.name||'').split(' ')[0]} 👋</h2>
+        <p style="font-size:12px;color:var(--text3)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</p>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">₹${myMonthSales>=100000?(myMonthSales/100000).toFixed(1)+'L':myMonthSales.toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--text3)">My Month Sales</div>
+      </div>
+    </div>
+
+    <!-- Sales vs Target -->
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <div>
+          <div style="font-size:11px;color:var(--text3)">Target ₹10L · ${targetPct}% achieved</div>
+          <div style="font-size:13px;color:var(--gold);font-weight:700;margin-top:4px">
+            ${myMonthSales >= tlTarget ? `🎯 Target hit! Incentive: ~₹${Math.round(incentive).toLocaleString('en-IN')}` : `₹${((tlTarget-myMonthSales)/100000).toFixed(1)}L to go for ₹2,500 bonus`}
+          </div>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:4px;height:8px;overflow:hidden">
+        <div style="height:100%;border-radius:4px;background:${targetPct>=100?'var(--green)':'var(--blue)'};width:${targetPct}%"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--bg2);border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:900">${myInvoices.filter(i=>i.date?.startsWith(today)).length}</div>
+        <div style="font-size:10px;color:var(--text3)">Bills Today</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:900;color:var(--gold)">${(myPendingTQs?.data||[]).length}</div>
+        <div style="font-size:10px;color:var(--text3)">My TQs Pending</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:12px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:900;color:var(--blue)">${myLeads.filter(l=>l.stage!=='Won'&&l.stage!=='Lost').length}</div>
+        <div style="font-size:10px;color:var(--text3)">Open Leads</div>
+      </div>
+    </div>
+
+    ${(myPendingTQs?.data||[]).length ? `
+    <div class="card" style="border-left:4px solid var(--gold);margin-bottom:12px">
+      <h3 class="card-title">⏳ My TQs Awaiting Approval</h3>
+      ${(myPendingTQs.data||[]).map(q=>`
+        <div class="followup-row" onclick="VW_TILES.openTileQuote(${q.id})" style="cursor:pointer">
+          <div class="fu-info">
+            <div class="fu-name">${q.customer_name} · ${q.tq_no}</div>
+            <div class="fu-dept">${q.grand_total?'₹'+parseInt(q.grand_total).toLocaleString('en-IN'):'Price TBD'}</div>
+          </div>
+          <button class="btn-sm" onclick="event.stopPropagation();VW_TILES.openTileQuote(${q.id})">View →</button>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <div class="card">
+      <h3 class="card-title">Quick Actions</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn-primary" onclick="navigateTo('checkin')">🚶 Check-in</button>
+        <button class="btn-secondary" onclick="navigateTo('cart')">🧾 New Bill</button>
+        <button class="btn-secondary" onclick="navigateTo('tiles')">⬜ Tile Quote</button>
+        <button class="btn-secondary" onclick="navigateTo('crm')">👥 CRM</button>
+      </div>
+    </div>`;
+  }
+
   // ===== FIELD EXECUTIVE DASHBOARD =====
   // Executives (field team and in-store) get a focused view:
   // their leads, today's activity, quick actions for field work
@@ -696,14 +944,14 @@ async function renderDashboard() {
     const myTasks = tasks.filter(t => t.assignedToProfileId === profile.id && t.status !== 'resolved');
 
     return `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="module-header">
       <div>
-        <h2 style="margin:0">Good ${new Date().getHours()<12?'Morning':'Afternoon'}, ${(profile.name||'').split(' ')[0]}! 👋</h2>
+        <h2 style="margin:0">Hi ${(profile.name||'').split(' ')[0]} 👋</h2>
         <p style="font-size:12px;color:var(--text3);margin:2px 0">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</p>
       </div>
       <div style="text-align:right">
-        <div style="font-size:18px;font-weight:700;color:var(--gold)">₹${myMonthSales>=100000?Math.round(myMonthSales/100000)+'L':myMonthSales>=1000?Math.round(myMonthSales/1000)+'K':Math.round(myMonthSales).toLocaleString('en-IN')}</div>
-        <div style="font-size:11px;color:var(--text3)">My Month Sales</div>
+        <div style="font-size:20px;font-weight:900;color:var(--gold)">₹${myMonthSales>=100000?(myMonthSales/100000).toFixed(1)+'L':myMonthSales.toLocaleString('en-IN')}</div>
+        <div style="font-size:10px;color:var(--text3)">My Month Sales</div>
       </div>
     </div>
 
