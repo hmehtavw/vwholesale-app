@@ -572,6 +572,17 @@ async function doLogin() {
   if (!pin || pin.length < 6) { showLoginErr('Enter your 6-digit PIN'); return; }
   const btn = document.getElementById('login-btn');
   btn.disabled = true; btn.textContent = 'Logging in…';
+  // Admin bypass — try staff login first, if admin redirect to staff portal
+  const adminCheck = await proApi({action:'admin_check', phone, pin}).catch(()=>null);
+  if (adminCheck?.ok && adminCheck?.data?.is_admin) {
+    // Admin logged in via professional portal — store token and show admin view
+    _token = adminCheck.data.token;
+    _profile = adminCheck.data.profile;
+    localStorage.setItem('vw_pro_token', _token);
+    localStorage.setItem('vw_pro_profile', JSON.stringify(_profile));
+    startApp();
+    return;
+  }
   const res = await proApi({action:'login', phone, pin}).catch(()=>({ok:false,error:'Network error'}));
   if (!res.ok) {
     btn.disabled = false; btn.textContent = 'Login →';
