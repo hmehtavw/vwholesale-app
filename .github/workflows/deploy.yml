@@ -4,40 +4,41 @@ on:
   push:
     branches: [main]
     paths:
-      - 'index.html'
-      - 'staff.html'
-      - 'shop.html'
-      - 'professional.html'
-      - 'admin.html'
+      - '**.html'
       - 'modules/**'
       - 'sw.js'
       - 'manifest.json'
-      - 'about.html'
-      - 'contact.html'
-      - 'privacy.html'
-      - 'terms.html'
-      - 'refund.html'
-      - 'shipping.html'
-      - 'icon-192.png'
-      - 'icon-512.png'
+      - 'icon-*.png'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Push main to gh-pages
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git push origin main:gh-pages --force
-          echo "✅ gh-pages updated to $(git rev-parse --short HEAD)"
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
