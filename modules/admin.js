@@ -1747,7 +1747,25 @@ function hideAppShellForCandidate() {
 async function renderCandidateEntry(offerId) {
   hideAppShellForCandidate();
   const content = document.getElementById('app-content');
-  const offer = await VW_DB.getById(VW_DB.STORES.staffOffers, parseInt(offerId));
+
+  // Fetch from Supabase
+  let offer = null;
+  try {
+    const res = await sb.from('staff_offers').select('*').eq('id', parseInt(offerId)).single();
+    offer = res.data;
+  } catch(e) {}
+
+  // Fallback: map snake_case to camelCase for compatibility
+  if (offer) {
+    offer.candidateName = offer.candidate_name;
+    offer.candidatePhone = offer.candidate_phone;
+    offer.startDate = offer.start_date;
+    offer.probationMonths = offer.probation_months;
+    offer.reportingManager = offer.reporting_manager;
+    offer.customClauses = offer.custom_clauses;
+    offer.createdByName = offer.created_by_name;
+    offer.createdAt = offer.created_at;
+  }
 
   if (!offer) {
     content.innerHTML = candidateWrapper(`<p style="text-align:center;color:var(--text3)">This link is no longer valid. Please contact HR for a new one.</p>`);
@@ -1983,7 +2001,13 @@ async function submitCandidateForm() {
     candidateState.offer.status = 'submitted';
     candidateState.offer.submittedData = submittedData;
     candidateState.offer.submittedAt = new Date().toISOString();
-    await VW_DB.put(VW_DB.STORES.staffOffers, candidateState.offer);
+
+    // Save to Supabase
+    await sb.from('staff_offers').update({
+      status: 'submitted',
+      submitted_data: submittedData,
+      submitted_at: new Date().toISOString()
+    }).eq('id', candidateState.offer.id);
 
     // Show induction checklist before final confirmation
     renderInductionChecklist();

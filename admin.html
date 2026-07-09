@@ -816,52 +816,195 @@ async function savePermissions(uid, name) {
 }
 
 function openAddStaff() {
+  // Use the onboarding flow — create offer → WhatsApp link → candidate fills form → HR approves → account created
+  const depts = ['Tiles','Sanitaryware','Granite','Electricals','Paints','Plumbing','Appliances','HR','Purchase','Inventory','Management','Accounts','Reception','Dispatch'];
   openModal(`
-    <div class="modal-title">Add Staff Member <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div class="modal-title">Add New Staff Member <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.2);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--t2)">
+      <strong>How it works:</strong> Fill details below → Generate offer letter → Share WhatsApp link with candidate → They fill their profile, upload documents, sign → You activate account.
+    </div>
     <div style="display:grid;gap:10px">
-      <div><label class="form-lbl">Full Name *</label><input id="new-name" class="form-inp" placeholder="Full name"></div>
-      <div><label class="form-lbl">Mobile Number *</label><input type="tel" inputmode="numeric" maxlength="10" id="new-phone" class="form-inp" placeholder="10-digit" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div>
-      <div><label class="form-lbl">Role *</label>
-        <select id="new-role" class="form-sel">
-          ${STAFF_ROLES.map(r=>`<option value="${r}">${r}</option>`).join('')}
-        </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="form-lbl">Candidate Name *</label><input id="new-name" class="form-inp" placeholder="Full name"></div>
+        <div><label class="form-lbl">Mobile Number *</label><input type="tel" inputmode="numeric" maxlength="10" id="new-phone" class="form-inp" placeholder="10-digit" oninput="this.value=this.value.replace(/\D/g,'').slice(0,10)"></div>
       </div>
-      <div><label class="form-lbl">Default PIN (staff will change on first login)</label><input type="text" id="new-pin" class="form-inp" placeholder="6-digit PIN" value="123456"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="form-lbl">Role / Designation *</label><input id="new-role" class="form-inp" placeholder="e.g. Sales Executive"></div>
+        <div><label class="form-lbl">Department</label>
+          <select id="new-dept" class="form-sel">${depts.map(d=>`<option>${d}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label class="form-lbl">Monthly Salary (₹) *</label><input type="number" id="new-salary" class="form-inp" placeholder="0"></div>
+        <div><label class="form-lbl">Start Date *</label><input type="date" id="new-startdate" class="form-inp"></div>
+        <div><label class="form-lbl">Probation (months)</label><input type="number" id="new-probation" class="form-inp" value="6"></div>
+      </div>
+      <div><label class="form-lbl">Reporting Manager</label><input id="new-manager" class="form-inp" placeholder="Name of reporting manager"></div>
+      <div><label class="form-lbl">Additional Clauses (optional)</label>
+        <textarea id="new-clauses" class="form-inp" rows="2" style="resize:vertical" placeholder="Any specific terms for this role…"></textarea></div>
     </div>
     <div style="margin-top:14px;display:flex;gap:8px">
-      <button class="btn btn-primary" style="flex:1" onclick="createStaffMember()">Create Staff Account →</button>
+      <button class="btn btn-primary" style="flex:1" onclick="createStaffOffer()">Generate Offer & Get WhatsApp Link →</button>
       <button onclick="closeModal()" class="btn btn-ghost">Cancel</button>
     </div>`);
 }
 
-async function createStaffMember() {
+async function createStaffOffer() {
   const name = document.getElementById('new-name')?.value?.trim();
   const phone = document.getElementById('new-phone')?.value?.trim();
-  const role = document.getElementById('new-role')?.value;
-  const pin = document.getElementById('new-pin')?.value?.trim();
-  if (!name||!phone||phone.length<10) { toast('Name and valid phone required','err'); return; }
-  if (!pin||pin.length<6) { toast('Enter a 6-digit default PIN','err'); return; }
+  const role = document.getElementById('new-role')?.value?.trim();
+  const salary = parseFloat(document.getElementById('new-salary')?.value||0);
+  const startDate = document.getElementById('new-startdate')?.value;
+  if (!name) { toast('Enter candidate name','err'); return; }
+  if (!phone||phone.length<10) { toast('Enter valid 10-digit phone','err'); return; }
+  if (!role) { toast('Enter role/designation','err'); return; }
+  if (!salary) { toast('Enter monthly salary','err'); return; }
+  if (!startDate) { toast('Select start date','err'); return; }
+
+  const pin = Math.floor(1000+Math.random()*9000).toString();
+  const offer = {
+    candidate_name: name, candidate_phone: phone, role,
+    department: document.getElementById('new-dept')?.value||'',
+    salary, start_date: startDate,
+    probation_months: parseInt(document.getElementById('new-probation')?.value||6),
+    reporting_manager: document.getElementById('new-manager')?.value?.trim()||'',
+    custom_clauses: document.getElementById('new-clauses')?.value?.trim()||'',
+    pin, status: 'sent',
+    created_by_name: _currentProfile?.name||'HR',
+    created_at: new Date().toISOString(),
+    auth_account_created: false
+  };
 
   try {
-    // Create Supabase auth user
-    const res = await fetch(`${SB_URL}/auth/v1/admin/users`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':`Bearer ${_adminSession?.access_token}`},
-      body:JSON.stringify({email:phone+'@vwholesale.app',password:pin,email_confirm:true,user_metadata:{name,phone,role}})
-    });
-    const user = await res.json();
-    if (user.error||!user.id) throw new Error(user.message||user.error||'Failed to create user');
-
-    // Create profile
-    await sbFetch('profiles',{method:'POST',headers:{'Prefer':'return=minimal'},body:JSON.stringify({
-      id:user.id,name,phone,role,status:'approved',permissions:[]
-    })});
-
-    toast(`✅ Staff account created for ${name}. PIN: ${pin}`,'ok');
+    const res = await sbFetch('staff_offers', {method:'POST', headers:{'Prefer':'return=representation'}, body:JSON.stringify(offer)});
+    const saved = Array.isArray(res) ? res[0] : res;
+    if (!saved?.id) throw new Error('Failed to save offer');
     closeModal();
-    loadStaff();
+    showOfferWhatsApp(saved);
+    if (typeof loadHR === 'function') setTimeout(loadHR, 500);
   } catch(e) { toast('Error: '+e.message,'err'); }
 }
+window.createStaffOffer = createStaffOffer;
+
+function showOfferWhatsApp(offer) {
+  const baseUrl = window.location.origin + window.location.pathname.replace('admin.html','staff.html');
+  const link = `${baseUrl}?onboard=${offer.id}`;
+  const msg = `Hi ${offer.candidate_name}! 🎉\n\nWelcome to V Wholesale!\n\nYou have received an offer for *${offer.role}* position.\n\nPlease complete your onboarding using this link:\n${link}\n\nYour one-time PIN: *${offer.pin}*\n\nThis link lets you:\n✅ Review & accept your offer letter\n✅ Fill your personal details\n✅ Upload documents (Aadhaar, PAN, Photo etc.)\n\nKeep the PIN private. Call 8712697930 if you need help.\n\n– HR Team, V Wholesale`;
+
+  openModal(`
+    <div class="modal-title">Offer Ready 🎉 <button onclick="closeModal()" style="background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer">✕</button></div>
+    <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:800;color:var(--t2);margin-bottom:6px">ONBOARDING LINK</div>
+      <div style="font-size:11px;word-break:break-all;color:var(--b);margin-bottom:8px">${link}</div>
+      <div style="font-size:12px;font-weight:800;color:var(--t2);margin-bottom:4px">ONE-TIME PIN</div>
+      <div style="font-size:24px;font-weight:900;letter-spacing:6px;color:var(--green)">${offer.pin}</div>
+    </div>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:12px">Share both the link and PIN with ${offer.candidate_name}. They'll use the PIN to verify their identity before filling the form.</p>
+    <div style="display:grid;gap:8px">
+      <a href="https://wa.me/91${(offer.candidate_phone||'').replace(/\D/g,'')}?text=${encodeURIComponent(msg)}" target="_blank"
+        class="btn btn-primary" style="text-align:center;text-decoration:none;display:block">
+        💬 Send via WhatsApp to ${offer.candidate_name}
+      </a>
+      <button onclick="printAdminOfferLetter(${JSON.stringify(offer).replace(/"/g,'&quot;')})" class="btn btn-ghost" style="width:100%">
+        📄 Preview Offer Letter
+      </button>
+      <button onclick="closeModal()" class="btn btn-ghost" style="width:100%">Done</button>
+    </div>`);
+}
+window.showOfferWhatsApp = showOfferWhatsApp;
+
+function printAdminOfferLetter(offer) {
+  const w = window.open('','_blank','width=700,height=900');
+  w.document.write(`<!DOCTYPE html><html><head><title>Offer Letter — ${offer.candidate_name}</title>
+  <style>body{font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:0 auto;color:#111;font-size:13px;line-height:1.7}
+  .logo{font-size:22px;font-weight:900;color:#1B4F8A;margin-bottom:4px}.sub{font-size:11px;color:#666}
+  h2{font-size:16px;margin:24px 0 8px}p{margin:8px 0}ul{margin:8px 0;padding-left:20px}li{margin:4px 0}
+  .footer{margin-top:40px;border-top:1px solid #eee;padding-top:16px}
+  @media print{button{display:none}}</style></head><body>
+  <div class="logo">V Wholesale</div>
+  <div class="sub">Vassure Wholesale Pvt. Ltd. · NH65, Bhavanipuram, Vijayawada 520012</div>
+  <br>
+  <div style="text-align:right;font-size:12px;color:#666">${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+  <h2>OFFER LETTER</h2>
+  <p>Dear <strong>${offer.candidate_name}</strong>,</p>
+  <p>We are pleased to offer you the position of <strong>${offer.role}</strong>${offer.department?' in the '+offer.department+' department':''} at Vassure Wholesale Pvt Ltd ("V Wholesale").</p>
+  <h2>Terms of Employment</h2>
+  <ul>
+    <li><strong>Position:</strong> ${offer.role}</li>
+    <li><strong>Department:</strong> ${offer.department||'V Wholesale'}</li>
+    <li><strong>Monthly Salary:</strong> ₹${Number(offer.salary).toLocaleString('en-IN')}</li>
+    <li><strong>Start Date:</strong> ${offer.start_date?new Date(offer.start_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}):''}</li>
+    <li><strong>Probation Period:</strong> ${offer.probation_months||6} months</li>
+    ${offer.reporting_manager?`<li><strong>Reporting Manager:</strong> ${offer.reporting_manager}</li>`:''}
+  </ul>
+  ${offer.custom_clauses?`<h2>Additional Terms</h2><p>${offer.custom_clauses.replace(/\n/g,'<br>')}</p>`:''}
+  <p>This offer is contingent upon successful completion of onboarding, including verification of documents you provide.</p>
+  <div class="footer">
+    <p>Warm regards,</p>
+    <p><strong>${offer.created_by_name||'HR Team'}</strong><br>Vassure Wholesale Pvt. Ltd.</p>
+  </div>
+  <button onclick="window.print()" style="margin-top:20px;padding:10px 20px;background:#1B4F8A;color:#fff;border:none;border-radius:8px;cursor:pointer">🖨️ Print</button>
+  </body></html>`);
+  w.document.close();
+}
+window.printAdminOfferLetter = printAdminOfferLetter;
+
+async function reshareOffer(offerId, phone, name, pin) {
+  const baseUrl = window.location.origin + window.location.pathname.replace('admin.html','staff.html');
+  const link = `${baseUrl}?onboard=${offerId}`;
+  const msg = `Hi ${name}! 👋\n\nReminder: Please complete your V Wholesale onboarding:\n${link}\n\nYour PIN: *${pin}*\n\nCall 8712697930 if you need help.`;
+  window.open(`https://wa.me/91${phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+window.reshareOffer = reshareOffer;
+
+async function activateStaffFromOffer(offerId) {
+  const res = await sbFetch('staff_offers?id=eq.'+offerId+'&select=*').catch(()=>[]);
+  const offer = Array.isArray(res) ? res[0] : res;
+  if (!offer) { toast('Offer not found','err'); return; }
+  const data = offer.submitted_data || {};
+
+  const pin = offer.pin || '123456';
+  const name = offer.candidate_name;
+  const phone = offer.candidate_phone;
+  const role = data.role || offer.role || 'staff';
+
+  if (!confirm(`Activate account for ${name} (${phone})? This will create their login with PIN ${pin}.`)) return;
+
+  try {
+    // Create Supabase auth user via edge function
+    const fnUrl = `${SB_URL}/functions/v1/create-staff-user`;
+    const fnRes = await fetch(fnUrl, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'Authorization':'Bearer '+ANON, 'apikey':ANON },
+      body: JSON.stringify({ phone, pin, name, role })
+    });
+    const fnData = await fnRes.json().catch(()=>({}));
+
+    if (!fnData.ok) {
+      // Fallback — create profile directly (requires service role, won't work here)
+      // Show manual instruction instead
+      toast('⚠️ Auto-create not available. Create account manually in Supabase Auth.','warn');
+      openModal(`<div class="modal-title">Manual Account Creation</div>
+        <div style="font-size:13px;color:var(--t2);line-height:1.8">
+          <div><strong>Name:</strong> ${name}</div>
+          <div><strong>Email:</strong> ${phone}@vwholesale.app</div>
+          <div><strong>PIN (password):</strong> ${pin}</div>
+          <div><strong>Role:</strong> ${role}</div>
+        </div>
+        <p style="font-size:12px;color:var(--t3);margin-top:10px">Go to Supabase → Authentication → Users → Add User with above credentials. Then update profiles table to set status=approved.</p>
+        <button onclick="closeModal()" class="btn btn-primary" style="width:100%;margin-top:12px">Got it</button>`);
+      return;
+    }
+
+    // Mark offer as approved
+    await sbFetch('staff_offers?id=eq.'+offerId, {method:'PATCH', headers:{'Prefer':'return=minimal'}, body:JSON.stringify({status:'approved',auth_account_created:true,reviewed_by_name:_currentProfile?.name,reviewed_at:new Date().toISOString()})});
+
+    toast(`✅ Account created for ${name}. PIN: ${pin}`,'ok');
+    loadHR();
+  } catch(e) {
+    toast('Error: '+e.message,'err');
+  }
+}
+window.activateStaffFromOffer = activateStaffFromOffer;
 
 // ── SETTINGS ──
 async function loadSettings() {
@@ -1098,6 +1241,7 @@ async function loadHR() {
   // Load all data in sequence
   const staff = await sbFetch('profiles?role=in.(admin,manager,owner,staff,executive,sr_executive,sr_sales,tl,asm,floor_manager,store_manager,sales_head,management,reception,accounts,dispatch,training,hr)&select=id,name,phone,role,status,created_at&order=name.asc').catch(()=>[]);
   const hrProfiles = await sbFetch('staff_hr?select=*').catch(()=>[]);
+  const offers = await sbFetch('staff_offers?status=in.(sent,accepted,submitted)&select=id,candidate_name,candidate_phone,role,department,salary,start_date,status,pin,created_at&order=created_at.desc').catch(()=>[]);
   const advances = await sbFetch('staff_advances?status=eq.pending&select=*&order=requested_at.desc').catch(()=>[]);
   const docs = await sbFetch('staff_documents?status=eq.pending&select=*&order=uploaded_at.desc').catch(()=>[]);
   const payrolls = await sbFetch('payroll_runs?status=eq.draft&select=profile_id,month,net_salary&order=month.desc&limit=50').catch(()=>[]);
@@ -1112,6 +1256,7 @@ async function loadHR() {
     <button class="btn btn-ghost"   id="hr-tab-payroll" onclick="hrTab('payroll')" style="font-size:12px">💰 Payroll</button>
     <button class="btn btn-ghost"   id="hr-tab-advances" onclick="hrTab('advances')" style="font-size:12px">💸 Advances ${(advances||[]).length?'<span class="badge badge-amber">'+advances.length+'</span>':''}</button>
     <button class="btn btn-ghost"   id="hr-tab-docs" onclick="hrTab('docs')" style="font-size:12px">📁 Documents ${(docs||[]).length?'<span class="badge badge-amber">'+docs.length+'</span>':''}</button>
+    <button class="btn btn-ghost"   id="hr-tab-onboard" onclick="hrTab('onboard')" style="font-size:12px">📋 Onboarding ${(offers||[]).length?'<span style=\"background:#F5C842;color:#000;padding:1px 5px;border-radius:8px;font-size:10px\">'+offers.length+'</span>':''}</button>
     <button class="btn btn-ghost"   id="hr-tab-slabs" onclick="hrTab('slabs')" style="font-size:12px">📊 Incentive Slabs</button>
     <button class="btn btn-primary" onclick="openAddStaff()" style="margin-left:auto;font-size:12px">+ Add Staff</button>
   </div>
@@ -1221,6 +1366,32 @@ async function loadHR() {
     </div>` : '<div class="card"><div style="padding:30px;text-align:center;color:var(--t3)">No documents pending verification</div></div>'}
   </div>
 
+  <!-- ONBOARDING TAB -->
+  <div id="hr-panel-onboard" style="display:none">
+    ${(offers||[]).length ? `
+    <div style="display:grid;gap:10px">
+      ${(offers||[]).map(o => `
+      <div class="card" style="padding:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+          <div>
+            <div style="font-weight:800">${o.candidate_name}</div>
+            <div style="font-size:12px;color:var(--t2)">${o.role}${o.department?' · '+o.department:''} · ₹${parseInt(o.salary||0).toLocaleString('en-IN')}/mo</div>
+            <div style="font-size:11px;color:var(--t3)">Start: ${o.start_date?new Date(o.start_date).toLocaleDateString('en-IN'):'—'}</div>
+          </div>
+          <span style="padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;
+            background:${o.status==='submitted'?'rgba(34,197,94,.15)':o.status==='accepted'?'rgba(96,165,250,.15)':'rgba(245,200,66,.15)'};
+            color:${o.status==='submitted'?'var(--green)':o.status==='accepted'?'var(--b)':'var(--gold)'}">
+            ${o.status==='submitted'?'✅ Submitted':o.status==='accepted'?'📝 Filling Form':'🔗 Link Sent'}
+          </span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" style="flex:1;font-size:11px" onclick="reshareOffer(${o.id},'${(o.candidate_phone||'').replace(/'/g,"\\'")}','${(o.candidate_name||'').replace(/'/g,"\\'")}','${o.pin||''}')">💬 Resend Link</button>
+          ${o.status==='submitted'?`<button class="btn btn-primary" style="flex:1;font-size:11px" onclick="activateStaffFromOffer(${o.id})">✅ Activate Account</button>`:''}
+        </div>
+      </div>`).join('')}
+    </div>` : '<div class="card"><div style="padding:30px;text-align:center;color:var(--t3)">No pending onboarding. Click + Add Staff to start.</div></div>'}
+  </div>
+
   <!-- INCENTIVE SLABS TAB -->
   <div id="hr-panel-slabs" style="display:none">
     <div id="slabs-content"><div style="padding:20px;text-align:center;color:var(--t3)">Loading slabs…</div></div>
@@ -1231,7 +1402,7 @@ async function loadHR() {
 }
 
 function hrTab(tab) {
-  ['team','payroll','advances','docs','slabs'].forEach(t => {
+  ['team','payroll','advances','docs','onboard','slabs'].forEach(t => {
     document.getElementById('hr-panel-'+t).style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('hr-tab-'+t);
     if (btn) { btn.className = t===tab ? 'btn btn-primary' : 'btn btn-ghost'; btn.style.fontSize='12px'; }
