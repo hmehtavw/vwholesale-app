@@ -99,13 +99,21 @@
           if (session && session.access_token) {
             try {
               const email = session.user?.email || '';
-              if (email.endsWith('@customer.vwholesale.app')) {
-                document.body.classList.add('customer-mode');
-                document.getElementById('bottom-nav').style.cssText = 'display:none';
-              } else {
-                // All @vwholesale.app accounts (staff/admin/contractor) get staff-mode
-                document.body.classList.add('staff-mode');
+              const meta = session.user?.user_metadata || {};
+              // Customer session — kill it and redirect to shop
+              if (email.endsWith('@customer.vwholesale.app') || meta.role === 'customer') {
+                Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+                window.location.replace('./shop.html');
+                return;
               }
+              // Contractor session — kill it and redirect to professional portal
+              if (meta.role === 'contractor') {
+                Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+                window.location.replace('./professional.html');
+                return;
+              }
+              // Staff/admin — show staff portal
+              document.body.classList.add('staff-mode');
             } catch(e) { document.body.classList.add('staff-mode'); }
             return;
           }
