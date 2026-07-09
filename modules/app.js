@@ -3753,36 +3753,47 @@ window.renderLaborMarketplacePage = renderLaborMarketplacePage;
 
 // ═══ STAFF SIDEBAR ═══
 const SIDEBAR_NAV = [
+  // ── MAIN ─────────────────────────────────────────────
   { section: 'Main' },
-  { page: 'dashboard',     icon: '📊', label: 'Dashboard',    always: true },
-  { page: 'checkin',       icon: '🚶', label: 'Check-in',     always: true },
-  { page: 'tasks',         icon: '📋', label: 'Tasks',        always: true },
+  { page: 'dashboard',      icon: '📊', label: 'Dashboard',       always: true },
+  { page: 'checkin',        icon: '🚶', label: 'Check-in',        always: true },
+  { page: 'tasks',          icon: '📋', label: 'Tasks',           always: true },
+
+  // ── SALES ────────────────────────────────────────────
   { section: 'Sales' },
-  { page: 'cart',          icon: '🧾', label: 'Billing',      perm: 'billing' },
-  { page: 'tiles',         icon: '⬜', label: 'Tile Quote',   perm: 'billing' },
-  { page: 'quotations',    icon: '📄', label: 'Quotations',   perm: 'billing' },
-  { page: 'granite',       icon: '🪨', label: 'Granite',      perm: 'billing' },
-  { page: 'crm',           icon: '👥', label: 'CRM',          perm: 'crm' },
-  { page: 'follow_ups',    icon: '📞', label: 'Follow Ups',   perm: 'crm' },
+  { page: 'cart',           icon: '🧾', label: 'Billing',         perm: 'billing' },
+  { page: 'tiles',          icon: '⬜', label: 'Tile Quotation',  perm: 'billing' },
+  { page: 'granite',        icon: '🪨', label: 'Granite Quote',   perm: 'billing' },
+  { page: 'quick_quote',    icon: '⚡', label: 'Quick Quote',     perm: 'billing' },
+  { page: 'crm',            icon: '👥', label: 'CRM / Leads',     perm: 'crm' },
+  { page: 'follow_ups',     icon: '📞', label: 'Follow Ups',      perm: 'crm' },
+
+  // ── INVENTORY ────────────────────────────────────────
   { section: 'Inventory' },
-  { page: 'inventory',     icon: '📦', label: 'Inventory',    perm: 'inventory' },
-  { page: 'tile_inventory',icon: '🔲', label: 'Tile Stock',   perm: 'tile_inventory' },
-  { page: 'grn',           icon: '🧾', label: 'GRN',          perm: 'inventory' },
-  { page: 'dispatch',      icon: '🚚', label: 'Dispatch',     perm: 'dispatch' },
-  { page: 'returns',       icon: '↩️', label: 'Returns',      perm: 'billing' },
+  { page: 'inventory',      icon: '📦', label: 'Inventory',       perm: 'inventory' },
+  { page: 'tile_inventory', icon: '🔲', label: 'Tile Stock',      perm: 'tile_inventory' },
+  { page: 'grn',            icon: '📥', label: 'GRN',             perm: 'inventory' },
+  { page: 'dispatch',       icon: '🚚', label: 'Dispatch',        perm: 'dispatch' },
+  { page: 'returns',        icon: '↩️', label: 'Returns',         perm: 'billing' },
+
+  // ── B2B & CONTRACTOR CLUB ────────────────────────────
   { section: 'B2B & Club' },
-  { page: 'club',          icon: '🏆', label: 'Contractor Club', perm: 'club' },
-  { page: 'labor',         icon: '🔨', label: 'Labor Jobs',   perm: 'club' },
-  { page: 'ledger',        icon: '📒', label: 'Ledger',       perm: 'billing' },
+  { page: 'club',           icon: '🏆', label: 'Contractor Club', perm: 'club' },
+  { page: 'labor',          icon: '🔨', label: 'Labor Jobs',      perm: 'club' },
+  { page: 'ledger',         icon: '📒', label: 'B2B Ledger',      perm: 'billing' },
+
+  // ── TOOLS ────────────────────────────────────────────
   { section: 'Tools' },
-  { page: 'visualizer',   icon: '🎨', label: 'Visualizer',   perm: 'billing' },
-  { page: 'wishlist',     icon: '❤️', label: 'Wishlists',    always: true },
-  { page: 'training',     icon: '🎓', label: 'Training',     always: true },
-  { page: 'feedback',     icon: '⭐', label: 'Feedback',     always: true },
+  { page: 'visualizer',     icon: '🎨', label: 'Room Visualizer', perm: 'billing' },
+  { page: 'training',       icon: '🎓', label: 'Training',        always: true },
+  { page: 'feedback',       icon: '⭐', label: 'Feedback',        always: true },
+
+  // ── MY HR (self-service, always visible) ─────────────
   { section: 'My HR' },
-  { page: 'my_hr',        icon: '👤', label: 'My HR Portal',  always: true },
-  { page: 'my_leaves',    icon: '🏖', label: 'My Leaves',     always: true },
-  { page: 'my_salary',    icon: '💰', label: 'My Salary',     always: true },
+  { page: 'my_hr',          icon: '👤', label: 'My HR',           always: true },
+  { page: 'my_attendance',  icon: '📅', label: 'Attendance',      always: true },
+  { page: 'my_leaves',      icon: '🏖', label: 'My Leaves',       always: true },
+  { page: 'my_salary',      icon: '💰', label: 'My Salary',       always: true },
 ];
 
 function buildSidebar() {
@@ -3794,8 +3805,11 @@ function buildSidebar() {
 
   const nameEl = document.getElementById('sb-user-name');
   const roleEl = document.getElementById('sb-user-role');
-  if (nameEl) nameEl.textContent = profile?.name || 'Staff';
+  const avatarEl = document.getElementById('sb-user-avatar');
+  const displayName = profile?.name || 'Staff';
+  if (nameEl) nameEl.textContent = displayName;
   if (roleEl) roleEl.textContent = (profile?.role || role).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  if (avatarEl) avatarEl.textContent = displayName.charAt(0).toUpperCase();
 
   const timeEl = document.getElementById('st-time');
   if (timeEl && !timeEl._tick) {
@@ -3817,12 +3831,7 @@ function buildSidebar() {
     </button>`;
   }
 
-  if (role === 'admin') {
-    html += `<div class="sb-section-lbl">Management</div>
-    <button class="sb-nav-item" onclick="window.open('./admin.html','_blank')">
-      <span class="sb-nav-icon">⚙️</span><span>Admin Portal</span>
-    </button>`;
-  }
+  // Admin Portal link removed — admin accesses admin.html directly
   nav.innerHTML = html;
 }
 
@@ -3832,7 +3841,8 @@ function sbNavigate(page) {
   const titleEl = document.getElementById('st-page-title');
   const item = SIDEBAR_NAV.find(i => i.page === page);
   if (titleEl && item) titleEl.textContent = item.label;
-  if (window.innerWidth < 769) closeSidebar();
+  // Auto-close sidebar on mobile/tablet; stay open on desktop
+  if (window.innerWidth <= 900) closeSidebar();
 }
 window.sbNavigate = sbNavigate;
 

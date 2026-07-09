@@ -1282,12 +1282,21 @@ body.staff-mode #bottom-nav { display: none !important; }
 body.staff-mode #more-menu { display: none !important; }
 body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !important; }
 
-/* Mobile */
+/* ─── DESKTOP (>900px): sidebar always visible, no hamburger ─── */
+@media (min-width: 901px) {
+  #staff-sidebar { transform: translateX(0) !important; }
+  #app-wrapper { margin-left: var(--sidebar-w) !important; }
+  .st-menu-btn { display: none !important; }
+  .sb-overlay { display: none !important; }
+}
+
+/* ─── MOBILE/TABLET (≤900px): sidebar hidden, hamburger shown ─── */
 @media (max-width: 900px) {
-  body.staff-mode #staff-sidebar { transform: translateX(-100%) !important; }
-  body.staff-mode #staff-sidebar.open { transform: translateX(0) !important; }
+  body.staff-mode #staff-sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+  body.staff-mode #staff-sidebar.open { transform: translateX(0); }
   body.staff-mode #app-wrapper { margin-left: 0 !important; }
   .st-menu-btn { display: flex !important; }
+  .sb-overlay.show { display: block !important; }
 }
 </style>
 </head>
@@ -2829,12 +2838,21 @@ body.staff-mode #bottom-nav { display: none !important; }
 body.staff-mode #more-menu { display: none !important; }
 body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !important; }
 
-/* Mobile */
+/* ─── DESKTOP (>900px): sidebar always visible, no hamburger ─── */
+@media (min-width: 901px) {
+  #staff-sidebar { transform: translateX(0) !important; }
+  #app-wrapper { margin-left: var(--sidebar-w) !important; }
+  .st-menu-btn { display: none !important; }
+  .sb-overlay { display: none !important; }
+}
+
+/* ─── MOBILE/TABLET (≤900px): sidebar hidden, hamburger shown ─── */
 @media (max-width: 900px) {
-  body.staff-mode #staff-sidebar { transform: translateX(-100%) !important; }
-  body.staff-mode #staff-sidebar.open { transform: translateX(0) !important; }
+  body.staff-mode #staff-sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+  body.staff-mode #staff-sidebar.open { transform: translateX(0); }
   body.staff-mode #app-wrapper { margin-left: 0 !important; }
   .st-menu-btn { display: flex !important; }
+  .sb-overlay.show { display: block !important; }
 }
 </style>
 </head>
@@ -3128,14 +3146,16 @@ window.addEventListener('load', async function() {
     <div style="padding:20px;text-align:center;color:#475569;font-size:12px">Loading…</div>
   </nav>
   <div class="sb-footer">
-    <div class="sb-user-name" id="sb-user-name">—</div>
-    <div class="sb-user-role" id="sb-user-role">—</div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <a href="./shop.html" target="_blank" style="flex:1;padding:5px;background:none;border:1px solid #334155;border-radius:8px;font-size:10px;font-weight:700;color:#64748B;text-align:center;text-decoration:none">🛒 Staff Shop</a>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:32px;height:32px;background:#1E3A5F;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#60A5FA;flex-shrink:0" id="sb-user-avatar">—</div>
+      <div style="min-width:0">
+        <div class="sb-user-name" id="sb-user-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">—</div>
+        <div class="sb-user-role" id="sb-user-role">—</div>
+      </div>
     </div>
-    <button onclick="VW_AUTH.signOut().then(()=>location.reload())"
-      style="width:100%;margin-top:6px;padding:6px;background:none;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:700;color:#64748B;cursor:pointer">
-      Logout
+    <button onclick="VW_AUTH.signOut().then(()=>window.location.replace('./staff.html'))"
+      style="width:100%;padding:7px;background:none;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:700;color:#64748B;cursor:pointer;font-family:inherit">
+      🚪 Sign Out
     </button>
   </div>
 </aside>
@@ -3143,12 +3163,13 @@ window.addEventListener('load', async function() {
 <!-- ═══ STAFF TOP BAR ═══ -->
 <div id="staff-topbar">
   <div style="display:flex;align-items:center;gap:10px">
-    <button class="st-menu-btn" id="sb-toggle" onclick="toggleSidebar()">☰</button>
+    <!-- Hamburger: only shows on mobile (hidden on desktop via CSS) -->
+    <button class="st-menu-btn" id="sb-toggle" onclick="toggleSidebar()" aria-label="Menu">☰</button>
     <div class="st-page-title" id="st-page-title">Dashboard</div>
   </div>
-  <div class="st-acts">
-    <span style="font-size:11px;color:#64748B" id="st-time"></span>
-    <button onclick="showLangPicker()" class="st-act-btn" title="Language">🌐</button>
+  <div class="st-acts" style="display:flex;align-items:center;gap:8px">
+    <span style="font-size:11px;color:#64748B;min-width:48px;text-align:right" id="st-time"></span>
+    <button onclick="showLangPicker()" class="st-act-btn" title="Switch language" style="font-size:16px;padding:4px 8px">🌐</button>
   </div>
 </div>
 
