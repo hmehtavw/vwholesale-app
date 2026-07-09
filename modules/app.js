@@ -248,6 +248,15 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'crm') html = await VW_CRM.renderCRM();
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
+    else if (page === 'my_hr')     html = await VW_HR_SELF.renderMyHRPage();
+    else if (page === 'my_leaves') { VW_HR_SELF.renderMyLeaves(); return; }
+    else if (page === 'my_salary') { VW_HR_SELF.renderMySalary(); return; }
+    else if (page === 'my_kpis')   { VW_HR_SELF.renderMyKPIs(); return; }
+    else if (page === 'my_achievements') { VW_HR_SELF.renderMyAchievements(); return; }
+    else if (page === 'my_advances') { VW_HR_SELF.renderMyAdvances(); return; }
+    else if (page === 'my_documents') { VW_HR_SELF.renderMyDocuments(); return; }
+    else if (page === 'my_profile') { VW_HR_SELF.renderMyProfile(); return; }
+    else if (page === 'my_attendance') { VW_HR_SELF.renderMyAttendance(); return; }
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
     else if (page === 'settings') html = await VW_SETTINGS.renderSettingsPage();
@@ -3496,6 +3505,10 @@ const SIDEBAR_NAV = [
   { page: 'wishlist',     icon: '❤️', label: 'Wishlists',    always: true },
   { page: 'training',     icon: '🎓', label: 'Training',     always: true },
   { page: 'feedback',     icon: '⭐', label: 'Feedback',     always: true },
+  { section: 'My HR' },
+  { page: 'my_hr',        icon: '👤', label: 'My HR Portal',  always: true },
+  { page: 'my_leaves',    icon: '🏖', label: 'My Leaves',     always: true },
+  { page: 'my_salary',    icon: '💰', label: 'My Salary',     always: true },
 ];
 
 function buildSidebar() {
