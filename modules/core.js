@@ -1079,6 +1079,11 @@ async function routeByRole() {
   document.body.classList.remove('customer-mode');
   if (status === 'pending') { showPendingScreen(); return; }
   if (typeof init === 'function') await init();
+  // Build sidebar after init completes (profile & auth ready)
+  if (typeof buildSidebar === 'function') {
+    buildSidebar();
+    setTimeout(() => buildSidebar(), 300);
+  }
 }
 window.routeByRole = routeByRole;
 
