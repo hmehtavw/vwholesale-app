@@ -3092,7 +3092,8 @@ window.addEventListener('load', async function() {
   }
 });
 </script>
-  // Tile quotation wizard — all 5 languages
+<script>
+// Tile quotation wizard — all 5 languages
   'Rooms & Areas':{te:'గదులు & ప్రాంతాలు',hi:'कमरे और क्षेत्र',bn:'কক্ষ ও এলাকা',or:'କୋଠରି ଓ କ୍ଷେତ୍ର'},
   'Tile Size':{te:'టైల్ సైజు',hi:'ताइल का आकार',bn:'টাইলের মাপ',or:'ଟାଇଲ ଆକାର'},
   'Floor':{te:'నేల',hi:'फर्श',bn:'মেঝে',or:'ତଳ'},'Wall':{te:'గోడ',hi:'दीवार',bn:'দেয়াল',or:'କାନ୍ଥ'},'Both':{te:'రెండూ',hi:'दोनों',bn:'উভয়',or:'ଉଭୟ'},
@@ -3105,6 +3106,7 @@ window.addEventListener('load', async function() {
   'Cross / Plus':{te:'క్రాస్ / ప్లస్',hi:'क्रॉस / प्लस',bn:'ক্রস / প্লাস',or:'କ୍ରସ / ପ୍ଲସ'},
   'Clip + Plug':{te:'క్లిప్ + ప్లగ్',hi:'क्लिप + प्लग',bn:'ক্লিপ + প্লাগ',or:'କ୍ଲିପ + ପ୍ଲଗ'},
   'Tiles':{te:'టైల్లు',hi:'ताइल',bn:'টাইল',or:'ଟାଇଲ'},'Granite':{te:'గ్రానైట్',hi:'ग्रेनाइट',bn:'গ্রানাইট',or:'ଗ୍ରାନାଇଟ'}
+</script>
 
 
 
@@ -3128,8 +3130,12 @@ window.addEventListener('load', async function() {
   <div class="sb-footer">
     <div class="sb-user-name" id="sb-user-name">—</div>
     <div class="sb-user-role" id="sb-user-role">—</div>
-    <button onclick="VW_AUTH.signOut().then(()=>location.reload())" 
-      style="width:100%;margin-top:8px;padding:6px;background:none;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:700;color:#64748B;cursor:pointer">
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <a href="./shop.html" target="_blank" style="flex:1;padding:5px;background:none;border:1px solid #334155;border-radius:8px;font-size:10px;font-weight:700;color:#64748B;text-align:center;text-decoration:none">🛒 Shop</a>
+      <a href="./admin.html" target="_blank" style="flex:1;padding:5px;background:none;border:1px solid #334155;border-radius:8px;font-size:10px;font-weight:700;color:#64748B;text-align:center;text-decoration:none">⚙️ Admin</a>
+    </div>
+    <button onclick="VW_AUTH.signOut().then(()=>location.reload())"
+      style="width:100%;margin-top:6px;padding:6px;background:none;border:1px solid #334155;border-radius:8px;font-size:11px;font-weight:700;color:#64748B;cursor:pointer">
       Logout
     </button>
   </div>
@@ -3143,9 +3149,7 @@ window.addEventListener('load', async function() {
   </div>
   <div class="st-acts">
     <span style="font-size:11px;color:#64748B" id="st-time"></span>
-    <a href="./shop.html" target="_blank" class="st-act-btn">🛒 Shop</a>
-    <a href="./admin.html" target="_blank" class="st-act-btn">⚙️ Admin</a>
-    <button onclick="VW_AUTH.signOut().then(()=>location.reload())" class="st-act-btn">Logout</button>
+    <button onclick="showLangPicker()" class="st-act-btn" title="Language">🌐</button>
   </div>
 </div>
 
