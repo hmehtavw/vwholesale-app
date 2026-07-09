@@ -1094,25 +1094,402 @@ async function loadEOD() {
 // ── HR ──
 async function loadHR() {
   setPageTitle('HR & Team');
-  const staff = await sbFetch('profiles?role=in.(admin,manager,owner,staff,executive,sr_executive,sr_sales,tl,asm,floor_manager,store_manager,sales_head,management,reception,accounts,dispatch)&select=id,name,phone,role,status,created_at&order=created_at.desc').catch(()=>[]);
+  
+  // Load all data in sequence
+  const staff = await sbFetch('profiles?role=in.(admin,manager,owner,staff,executive,sr_executive,sr_sales,tl,asm,floor_manager,store_manager,sales_head,management,reception,accounts,dispatch,training,hr)&select=id,name,phone,role,status,created_at&order=name.asc').catch(()=>[]);
+  const hrProfiles = await sbFetch('staff_hr?select=*').catch(()=>[]);
+  const advances = await sbFetch('staff_advances?status=eq.pending&select=*&order=requested_at.desc').catch(()=>[]);
+  const docs = await sbFetch('staff_documents?status=eq.pending&select=*&order=uploaded_at.desc').catch(()=>[]);
+  const payrolls = await sbFetch('payroll_runs?status=eq.draft&select=profile_id,month,net_salary&order=month.desc&limit=50').catch(()=>[]);
+
+  const hrMap = {};
+  (hrProfiles||[]).forEach(h => { hrMap[h.profile_id] = h; });
+
   document.getElementById('page-content').innerHTML = `
-    <div style="display:flex;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:13px;color:var(--t2)">${(staff||[]).length} team members</div>
-      <button class="btn btn-primary" onclick="loadPage('staff')">+ Add Staff Member</button>
+  <!-- TAB BAR -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn btn-primary" id="hr-tab-team" onclick="hrTab('team')" style="font-size:12px">👥 Team (${(staff||[]).length})</button>
+    <button class="btn btn-ghost"   id="hr-tab-payroll" onclick="hrTab('payroll')" style="font-size:12px">💰 Payroll</button>
+    <button class="btn btn-ghost"   id="hr-tab-advances" onclick="hrTab('advances')" style="font-size:12px">💸 Advances ${(advances||[]).length?'<span class="badge badge-amber">'+advances.length+'</span>':''}</button>
+    <button class="btn btn-ghost"   id="hr-tab-docs" onclick="hrTab('docs')" style="font-size:12px">📁 Documents ${(docs||[]).length?'<span class="badge badge-amber">'+docs.length+'</span>':''}</button>
+    <button class="btn btn-ghost"   id="hr-tab-slabs" onclick="hrTab('slabs')" style="font-size:12px">📊 Incentive Slabs</button>
+    <button class="btn btn-primary" onclick="showAddStaff()" style="margin-left:auto;font-size:12px">+ Add Staff</button>
+  </div>
+
+  <!-- TEAM TAB -->
+  <div id="hr-panel-team">
+    <div style="display:grid;gap:10px">
+      ${(staff||[]).map(m => {
+        const hr = hrMap[m.id];
+        const onProbation = hr?.joining_date ? (new Date() < new Date(new Date(hr.joining_date).setMonth(new Date(hr.joining_date).getMonth()+6))) : false;
+        return `<div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="showStaffHR('${m.id}','${(m.name||'').replace(/'/g,"\'")}')">
+          <div style="width:40px;height:40px;background:#1E3A5F;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#60A5FA;flex-shrink:0">${(m.name||'?').charAt(0).toUpperCase()}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:800;color:var(--t1)">${m.name||'—'}</div>
+            <div style="font-size:11px;color:var(--t2)">${m.phone||'—'} · <span style="text-transform:capitalize">${(m.role||'').replace(/_/g,' ')}</span>${hr?.designation?' · '+hr.designation:''}</div>
+            <div style="font-size:10px;margin-top:2px">
+              ${onProbation ? '<span style="color:#F5C842">⏳ Probation</span>' : '<span style="color:#22c55e">✅ Confirmed</span>'}
+              ${hr?.gross_salary ? ' · ₹'+parseInt(hr.gross_salary).toLocaleString('en-IN')+'/mo' : ' · <span style="color:#F87171">Salary not set</span>'}
+              ${hr?.employee_code ? ' · '+hr.employee_code : ''}
+            </div>
+          </div>
+          <div style="flex-shrink:0;display:flex;gap:6px">
+            <span class="badge ${m.status==='approved'?'badge-green':'badge-amber'}">${m.status||'pending'}</span>
+          </div>
+        </div>`;
+      }).join('')}
     </div>
+  </div>
+
+  <!-- PAYROLL TAB -->
+  <div id="hr-panel-payroll" style="display:none">
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="card-title">Monthly Payroll Run</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="month" id="payroll-month" value="${new Date().toISOString().slice(0,7)}" style="padding:6px 10px;background:var(--bg2);border:1px solid var(--bdr);border-radius:8px;color:var(--t1);font-family:inherit;font-size:12px">
+          <button class="btn btn-primary" onclick="runPayroll()" style="font-size:12px">⚡ Run Payroll</button>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--t3)">Calculates salary based on attendance, deducts PT, PF, and pending advances. Generates draft slips for review before approval.</div>
+    </div>
+    ${(payrolls||[]).length ? `
     <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:12px;font-weight:700;color:var(--t2);border-bottom:1px solid var(--bdr)">Draft Payroll Runs</div>
       <div style="overflow-x:auto"><table class="tbl">
-        <tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th><th>Action</th></tr>
-        ${(staff||[]).map(m=>`<tr>
-          <td style="font-weight:700;color:var(--t1)">${m.name||'—'}</td>
-          <td>${m.phone||'—'}</td>
-          <td><span class="badge badge-blue">${m.role}</span></td>
-          <td><span class="badge ${m.status==='approved'?'badge-green':'badge-amber'}">${m.status||'active'}</span></td>
-          <td style="color:var(--t3);font-size:11px">${new Date(m.created_at).toLocaleDateString('en-IN')}</td>
-          <td><button class="btn btn-ghost" onclick="loadPage('staff')" style="padding:4px 8px;font-size:10px">Manage Access</button></td>
-        </tr>`).join('')}
+        <tr><th>Staff</th><th>Month</th><th>Net Salary</th><th>Action</th></tr>
+        ${(payrolls||[]).map(p => {
+          const staffMember = (staff||[]).find(s => s.id === p.profile_id);
+          return `<tr>
+            <td style="font-weight:700">${staffMember?.name||'—'}</td>
+            <td>${new Date(p.month+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</td>
+            <td style="color:var(--green);font-weight:700">₹${parseInt(p.net_salary||0).toLocaleString('en-IN')}</td>
+            <td>
+              <button class="btn btn-ghost" onclick="approvePayslip('${p.profile_id}','${p.month}')" style="padding:3px 8px;font-size:10px">✅ Approve</button>
+            </td>
+          </tr>`;
+        }).join('')}
       </table></div>
-    </div>`;
+    </div>` : '<div class="card"><div style="padding:20px;text-align:center;color:var(--t3)">No draft payroll runs. Click Run Payroll to generate.</div></div>'}
+  </div>
+
+  <!-- ADVANCES TAB -->
+  <div id="hr-panel-advances" style="display:none">
+    ${(advances||[]).length ? `
+    <div style="display:grid;gap:10px">
+      ${(advances||[]).map(a => {
+        const staffMember = (staff||[]).find(s => s.id === a.profile_id);
+        return `<div class="card" style="padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-weight:800">${staffMember?.name||a.profile_id}</div>
+              <div style="font-size:12px;color:var(--t2)">${staffMember?.role||'—'} · Requested ${new Date(a.requested_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:20px;font-weight:900;color:var(--gold)">₹${parseInt(a.amount).toLocaleString('en-IN')}</div>
+              <div style="font-size:10px;color:var(--t3)">${a.deduction_type==='monthly'?'₹'+a.monthly_deduct+'/month × '+a.months_remaining+'m':'Full next salary'}</div>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:10px;padding:8px;background:var(--bg2);border-radius:6px">${a.reason||'—'}</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="flex:1;font-size:12px" onclick="approveAdvance('${a.id}','${staffMember?.name||''}')">✅ Approve</button>
+            <button class="btn btn-ghost" style="flex:1;font-size:12px;color:var(--red)" onclick="rejectAdvance('${a.id}','${staffMember?.name||''}')">❌ Reject</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '<div class="card"><div style="padding:30px;text-align:center;color:var(--t3)">No pending advance requests</div></div>'}
+  </div>
+
+  <!-- DOCUMENTS TAB -->
+  <div id="hr-panel-docs" style="display:none">
+    ${(docs||[]).length ? `
+    <div style="display:grid;gap:10px">
+      ${(docs||[]).map(d => {
+        const staffMember = (staff||[]).find(s => s.id === d.profile_id);
+        return `<div class="card" style="padding:12px;display:flex;align-items:center;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700">${staffMember?.name||'Staff'}</div>
+            <div style="font-size:12px;color:var(--t2)">${d.doc_name||d.doc_type} · Uploaded ${new Date(d.uploaded_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+            ${d.file_url?`<a href="${d.file_url}" target="_blank" class="btn btn-ghost" style="padding:4px 8px;font-size:11px">👁 View</a>`:''}
+            <button class="btn btn-primary" onclick="verifyDoc('${d.id}')" style="padding:4px 8px;font-size:11px">✅ Verify</button>
+            <button class="btn btn-ghost" onclick="rejectDoc('${d.id}')" style="padding:4px 8px;font-size:11px;color:var(--red)">❌</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '<div class="card"><div style="padding:30px;text-align:center;color:var(--t3)">No documents pending verification</div></div>'}
+  </div>
+
+  <!-- INCENTIVE SLABS TAB -->
+  <div id="hr-panel-slabs" style="display:none">
+    <div id="slabs-content"><div style="padding:20px;text-align:center;color:var(--t3)">Loading slabs…</div></div>
+  </div>`;
+
+  // Load slabs when that tab is clicked
+  window._hrStaff = staff||[];
+}
+
+function hrTab(tab) {
+  ['team','payroll','advances','docs','slabs'].forEach(t => {
+    document.getElementById('hr-panel-'+t).style.display = t===tab ? 'block' : 'none';
+    const btn = document.getElementById('hr-tab-'+t);
+    if (btn) { btn.className = t===tab ? 'btn btn-primary' : 'btn btn-ghost'; btn.style.fontSize='12px'; }
+  });
+  if (tab==='slabs') loadIncentiveSlabs();
+}
+
+async function loadIncentiveSlabs() {
+  const slabs = await sbFetch('incentive_slabs?select=*&order=min_target.desc').catch(()=>[]);
+  document.getElementById('slabs-content').innerHTML = `
+  <div style="margin-bottom:10px;font-size:12px;color:var(--t3)">Incentive slabs auto-calculate in payroll. Click Edit to adjust targets or %.</div>
+  <div style="display:grid;gap:8px">
+    ${(slabs||[]).map(sl=>`
+    <div class="card" style="padding:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-weight:800;text-transform:capitalize">${sl.designation.replace(/_/g,' ')}</div>
+        <button class="btn btn-ghost" onclick="editSlab('${sl.id}')" style="padding:3px 8px;font-size:10px">Edit</button>
+      </div>
+      <div style="font-size:11px;color:var(--t2)">
+        Target: ₹${parseInt(sl.min_target).toLocaleString('en-IN')} · Flat bonus: ₹${parseInt(sl.flat_bonus||0).toLocaleString('en-IN')}
+        ${sl.slabs?.length ? ' · Slabs: '+sl.slabs.map(s=>'₹'+(s.from/100000).toFixed(0)+'L→'+s.pct+'%').join(', ') : ''}
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+async function showStaffHR(profileId, name) {
+  const [hr, lb, payrolls, advances, docs] = await Promise.all([
+    sbFetch('staff_hr?profile_id=eq.'+profileId).then(r=>(r||[])[0]||null).catch(()=>null),
+    sbFetch('leave_balances?profile_id=eq.'+profileId+'&year=eq.'+new Date().getFullYear()).then(r=>(r||[])[0]||null).catch(()=>null),
+    sbFetch('payroll_runs?profile_id=eq.'+profileId+'&order=month.desc&limit=6').catch(()=>[]),
+    sbFetch('staff_advances?profile_id=eq.'+profileId+'&order=requested_at.desc&limit=5').catch(()=>[]),
+    sbFetch('staff_documents?profile_id=eq.'+profileId).catch(()=>[]),
+  ]);
+
+  const modal = document.createElement('div');
+  modal.id = 'hr-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;overflow-y:auto;padding:20px';
+  modal.innerHTML = `
+  <div style="max-width:600px;margin:0 auto;background:var(--bg1);border-radius:16px;overflow:hidden">
+    <div style="background:#0A1628;padding:16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:16px;font-weight:900;color:#fff">${name}</div>
+        <div style="font-size:11px;color:#64748B">${hr?.designation||'—'} · ${hr?.employee_code||'No code set'}</div>
+      </div>
+      <button onclick="document.getElementById('hr-modal').remove()" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+
+      <!-- Profile Form -->
+      <div class="card" style="padding:14px">
+        <div style="font-weight:800;margin-bottom:10px;color:var(--t2)">📋 HR PROFILE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">EMP CODE</label>
+            <input id="hrp-code" value="${hr?.employee_code||''}" placeholder="VW001" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-family:inherit;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">JOINING DATE</label>
+            <input id="hrp-join" type="date" value="${hr?.joining_date||''}" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">DESIGNATION</label>
+            <input id="hrp-desig" value="${hr?.designation||''}" placeholder="Sales Executive" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-family:inherit;font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">DEPARTMENT</label>
+            <input id="hrp-dept" value="${hr?.department||''}" placeholder="Sales" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-family:inherit;font-size:12px"></div>
+        </div>
+        <div style="font-weight:700;margin:10px 0 6px;font-size:11px;color:var(--t2)">SALARY STRUCTURE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">BASIC (₹)</label>
+            <input id="hrp-basic" type="number" value="${hr?.basic||''}" placeholder="0" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">HRA (₹)</label>
+            <input id="hrp-hra" type="number" value="${hr?.hra||''}" placeholder="0" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">ALLOWANCE (₹)</label>
+            <input id="hrp-allow" type="number" value="${hr?.allowance||''}" placeholder="0" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-size:12px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">GROSS MONTHLY (₹)</label>
+            <input id="hrp-gross" type="number" value="${hr?.gross_salary||''}" placeholder="Auto-calculated" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-size:12px"></div>
+          <div><label style="font-size:10px;color:var(--t3);font-weight:700;display:block;margin-bottom:3px">BANK ACCOUNT</label>
+            <input id="hrp-bank" value="${hr?.bank_account||''}" placeholder="Account number" style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t1);font-family:inherit;font-size:12px"></div>
+        </div>
+        <button onclick="saveStaffHR('${profileId}')" class="btn btn-primary" style="width:100%;margin-top:12px;font-size:12px">💾 Save HR Profile</button>
+      </div>
+
+      <!-- Leave Balances -->
+      <div class="card" style="padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-weight:800;color:var(--t2)">🏖 LEAVE BALANCES ${new Date().getFullYear()}</div>
+          <button onclick="adjustLeaves('${profileId}')" class="btn btn-ghost" style="font-size:11px;padding:4px 8px">Adjust</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:var(--green)">${parseFloat(lb?.cl_balance||0).toFixed(1)}</div>
+            <div style="font-size:10px;color:var(--t3)">CL Available · ${parseFloat(lb?.cl_used||0).toFixed(1)} used</div>
+          </div>
+          <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:var(--blue)">${parseFloat(lb?.sl_balance||0).toFixed(1)}</div>
+            <div style="font-size:10px;color:var(--t3)">SL Available · ${parseFloat(lb?.sl_used||0).toFixed(1)} used</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Payslips -->
+      ${(payrolls||[]).length ? `
+      <div class="card" style="padding:14px">
+        <div style="font-weight:800;color:var(--t2);margin-bottom:10px">💰 RECENT PAYSLIPS</div>
+        ${(payrolls||[]).map(p=>`
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr)">
+          <span style="font-size:12px">${new Date(p.month+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'})}</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-weight:700;color:var(--green)">₹${parseInt(p.net_salary||0).toLocaleString('en-IN')}</span>
+            <span style="font-size:10px;padding:2px 6px;background:${p.status==='paid'?'rgba(34,197,94,.15)':'rgba(245,200,66,.15)'};color:${p.status==='paid'?'var(--green)':'var(--gold)'};border-radius:10px">${p.status}</span>
+          </div>
+        </div>`).join('')}
+      </div>` : ''}
+
+      <!-- Documents -->
+      <div class="card" style="padding:14px">
+        <div style="font-weight:800;color:var(--t2);margin-bottom:10px">📁 DOCUMENTS</div>
+        ${(docs||[]).length ? docs.map(d=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bdr)">
+          <div>
+            <div style="font-size:12px;font-weight:600">${d.doc_name||d.doc_type}</div>
+            <div style="font-size:10px;color:var(--t3)">${new Date(d.uploaded_at).toLocaleDateString('en-IN')}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            ${d.file_url?`<a href="${d.file_url}" target="_blank" class="btn btn-ghost" style="padding:3px 8px;font-size:10px">View</a>`:''}
+            ${d.status==='pending'?`<button onclick="verifyDoc('${d.id}')" class="btn btn-primary" style="padding:3px 8px;font-size:10px">Verify</button>`:`<span style="font-size:10px;color:${d.status==='verified'?'var(--green)':'var(--red)'}">● ${d.status}</span>`}
+          </div>
+        </div>`).join('') : '<div style="font-size:12px;color:var(--t3);text-align:center;padding:10px">No documents uploaded yet</div>'}
+      </div>
+
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveStaffHR(profileId) {
+  const basic = parseFloat(document.getElementById('hrp-basic')?.value||0);
+  const hra = parseFloat(document.getElementById('hrp-hra')?.value||0);
+  const allow = parseFloat(document.getElementById('hrp-allow')?.value||0);
+  const gross = parseFloat(document.getElementById('hrp-gross')?.value||0) || (basic+hra+allow);
+  const join = document.getElementById('hrp-join')?.value;
+  const probEnd = join ? new Date(new Date(join).setMonth(new Date(join).getMonth()+6)).toISOString().split('T')[0] : null;
+
+  const payload = {
+    profile_id: profileId,
+    employee_code: document.getElementById('hrp-code')?.value?.trim()||null,
+    designation: document.getElementById('hrp-desig')?.value?.trim()||null,
+    department: document.getElementById('hrp-dept')?.value?.trim()||null,
+    joining_date: join||null,
+    probation_end: probEnd,
+    basic, hra, allowance: allow, gross_salary: gross,
+    bank_account: document.getElementById('hrp-bank')?.value?.trim()||null,
+    updated_at: new Date().toISOString()
+  };
+
+  // Upsert staff_hr
+  const res = await fetch(supabaseUrl+'/rest/v1/staff_hr?profile_id=eq.'+profileId, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify(payload)
+  });
+  if (res.status === 404 || res.status === 0) {
+    // Row doesn't exist — insert
+    await fetch(supabaseUrl+'/rest/v1/staff_hr', {
+      method: 'POST',
+      headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify(payload)
+    });
+  }
+  showToast('✅ HR profile saved');
+  document.getElementById('hr-modal')?.remove();
+  loadHR();
+}
+
+async function approveAdvance(advId, staffName) {
+  if (!confirm('Approve advance for '+staffName+'?')) return;
+  await fetch(supabaseUrl+'/rest/v1/staff_advances?id=eq.'+advId, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({status:'approved',approved_at:new Date().toISOString()})
+  });
+  showToast('✅ Advance approved');
+  loadHR();
+}
+
+async function rejectAdvance(advId, staffName) {
+  const reason = prompt('Reason for rejection:');
+  if (!reason) return;
+  await fetch(supabaseUrl+'/rest/v1/staff_advances?id=eq.'+advId, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({status:'rejected',rejection_reason:reason})
+  });
+  showToast('Advance rejected');
+  loadHR();
+}
+
+async function verifyDoc(docId) {
+  await fetch(supabaseUrl+'/rest/v1/staff_documents?id=eq.'+docId, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({status:'verified',verified_at:new Date().toISOString()})
+  });
+  showToast('✅ Document verified');
+  loadHR();
+}
+
+async function rejectDoc(docId) {
+  const notes = prompt('Reason for rejection:');
+  if (notes === null) return;
+  await fetch(supabaseUrl+'/rest/v1/staff_documents?id=eq.'+docId, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({status:'rejected',notes})
+  });
+  showToast('Document rejected');
+  loadHR();
+}
+
+async function runPayroll() {
+  const month = document.getElementById('payroll-month')?.value;
+  if (!month) { showToast('Select a month'); return; }
+  if (!confirm('Run payroll for '+new Date(month+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'})+'? This will calculate salaries for all staff.')) return;
+  showToast('Running payroll…');
+  try {
+    // Use the VW_HR_SELF utility if available
+    if (typeof VW_HR_SELF !== 'undefined') {
+      const results = await VW_HR_SELF.runMonthlyPayroll(month);
+      showToast('✅ Payroll run complete — '+results.length+' staff processed');
+    } else {
+      showToast('Payroll engine not loaded — open Staff Portal first');
+    }
+    setTimeout(()=>loadHR(), 500);
+  } catch(e) { showToast('Error: '+e.message); }
+}
+
+async function approvePayslip(profileId, month) {
+  await fetch(supabaseUrl+'/rest/v1/payroll_runs?profile_id=eq.'+profileId+'&month=eq.'+month, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({status:'approved'})
+  });
+  showToast('✅ Payslip approved');
+  loadHR();
+}
+
+async function adjustLeaves(profileId) {
+  const year = new Date().getFullYear();
+  const cl = prompt('Adjust CL balance (current shown above):');
+  if (cl === null) return;
+  const sl = prompt('Adjust SL balance:');
+  if (sl === null) return;
+  await fetch(supabaseUrl+'/rest/v1/leave_balances?profile_id=eq.'+profileId+'&year=eq.'+year, {
+    method: 'PATCH',
+    headers: {'apikey':supabaseKey,'Authorization':'Bearer '+supabaseKey,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({cl_balance:parseFloat(cl)||0,sl_balance:parseFloat(sl)||0,updated_at:new Date().toISOString()})
+  });
+  showToast('✅ Leave balance updated');
+  document.getElementById('hr-modal')?.remove();
+  loadHR();
 }
 
 // ── VENDORS ──
