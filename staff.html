@@ -1546,13 +1546,32 @@ c("Image load error"):b()};a.addEventListener("load",d);a.addEventListener("erro
 <script src="./modules/operations.js"></script>
 <script src="./modules/admin.js"></script>
 <script src="./modules/extras.js"></script>
-<script src="./modules/shop.js"></script>
 <script src="./modules/granite.js"></script>
 <script src="./modules/tile-quotation.js"></script>
 <script src="./modules/quick-quote.js"></script>
 <script src="./modules/autotest.js"></script>
 <script src="./modules/app.js"></script>
 <script src="./modules/hr.js"></script>
+<script>
+// POST-LOAD SAFETY CHECK: if customer shop rendered, force signout and reload
+window.addEventListener('load', async function() {
+  // Check if customer shop rendered (look for shop-specific elements)
+  const isCustomerShop = document.querySelector('.header-delivery') || 
+    document.querySelector('[data-page="shop"].active') ||
+    document.title.includes('90 Mins') ||
+    document.body.classList.contains('customer-mode');
+  
+  if (isCustomerShop) {
+    // Force signout via Supabase if available
+    try { if (window.sb) await window.sb.auth.signOut(); } catch(e) {}
+    // Clear all storage
+    localStorage.clear();
+    sessionStorage.clear();
+    // Hard reload
+    window.location.replace('./staff.html?_r=' + Date.now());
+  }
+});
+</script>
   // Tile quotation wizard — all 5 languages
   'Rooms & Areas':{te:'గదులు & ప్రాంతాలు',hi:'कमरे और क्षेत्र',bn:'কক্ষ ও এলাকা',or:'କୋଠରି ଓ କ୍ଷେତ୍ର'},
   'Tile Size':{te:'టైల్ సైజు',hi:'ताइल का आकार',bn:'টাইলের মাপ',or:'ଟାଇଲ ଆକାର'},
