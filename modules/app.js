@@ -207,7 +207,7 @@ async function navigateToFresh(page, params, cacheKey) {
   if (!allowed.includes(page) && !(isStaffPage && profile)) {
     showToast("You don't have access to this section.", 'warn');
     if (currentPage !== page) return;
-    page = 'shop';
+    page = VW_AUTH.getRole() === 'customer' ? 'shop' : 'dashboard';
   }
   currentPage = page;
   const content = document.getElementById('app-content');

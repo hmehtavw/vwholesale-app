@@ -1274,14 +1274,9 @@ async function onAuthReady() {
 
   // If no profile
   if (!currentProfile) {
-    // ?staff=1 or ?contractor=1 — show login screen, not shop
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('staff') || params.has('contractor')) {
-      await showAuthScreen(params.has('contractor') ? 'contractor' : 'staff');
-      return false;
-    }
-    // Normal guest — allow shop to load publicly
-    return true;
+    // staff.html / index.html — always show staff login, never public shop
+    await showAuthScreen('staff');
+    return false;
   }
 
   const role = currentProfile.role;
