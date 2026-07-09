@@ -287,6 +287,15 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'catalog_upload') { html = await VW_STOCK.renderCatalogUploadPage(); }
     else if (page === 'catalog_review') { html = await VW_STOCK.renderCatalogReviewPage(); }
     else if (page === 'shop') {
+    // Block shop page on staff portal — redirect customers to shop.html
+    const _role = VW_AUTH.getRole();
+    if (_role === 'customer' || _role === 'contractor') {
+      const _dest = _role === 'customer' ? './shop.html' : './professional.html';
+      try { await sb.auth.signOut(); } catch(e) {}
+      localStorage.clear();
+      window.location.href = _dest;
+      return;
+    }
     html = await VW_SHOP.renderShopPage();
     // Load products after render
     setTimeout(() => VW_SHOP.loadShopProducts(null, ''), 100);

@@ -1058,19 +1058,19 @@ async function routeByRole() {
     return;
   }
 
-  // Customer or contractor on staff portal — sign out and redirect
-  if (role === 'customer') {
-    await sb.auth.signOut();
-    // Clear all supabase storage keys
-    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
-    window.location.replace('./shop.html');
-    return;
-  }
-
-  if (role === 'contractor') {
-    await sb.auth.signOut();
-    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
-    window.location.replace('./professional.html');
+  // Customer or contractor on staff portal — sign out and hard redirect
+  if (role === 'customer' || role === 'contractor') {
+    const dest = role === 'customer' ? './shop.html' : './professional.html';
+    try { await sb.auth.signOut(); } catch(e) {}
+    // Clear ALL storage
+    try { localStorage.clear(); } catch(e) {}
+    try { sessionStorage.clear(); } catch(e) {}
+    // Clear indexedDB supabase entries
+    try {
+      const dbs = await indexedDB.databases();
+      dbs.forEach(db => indexedDB.deleteDatabase(db.name));
+    } catch(e) {}
+    window.location.href = dest;
     return;
   }
 
