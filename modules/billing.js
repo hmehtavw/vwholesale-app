@@ -87,6 +87,20 @@ async function renderCart(customerId = null, visitId = null) {
         <button class="entry-type-btn ${(activeCart.saleType||'cash')==='cash'?'active':''}" id="sale-type-cash-btn" onclick="setSaleType('cash')"><span class="et-icon">💵</span>Cash Sale</button>
         <button class="entry-type-btn ${activeCart.saleType==='credit'?'active':''}" id="sale-type-credit-btn" onclick="setSaleType('credit')"><span class="et-icon">📝</span>Credit Sale</button>
       </div>
+      <!-- Staff Purchase toggle — always visible, requires SM approval -->
+      <div style="margin-top:8px;padding:8px 10px;background:rgba(245,200,66,0.08);border:1px solid var(--gold-border);border-radius:8px;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--gold)">👤 Staff Purchase</div>
+          <div style="font-size:10px;color:var(--text3)">Bill for self · VWP price · SM approval required</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:38px;height:22px;cursor:pointer">
+          <input type="checkbox" id="staff-purchase-toggle" onchange="toggleStaffPurchase(this.checked)"
+            style="opacity:0;width:0;height:0;position:absolute" ${activeCart.isStaffPurchase?'checked':''}>
+          <span style="position:absolute;inset:0;background:${activeCart.isStaffPurchase?'var(--gold)':'var(--bg3)'};border-radius:22px;transition:.2s">
+            <span style="position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;top:3px;left:${activeCart.isStaffPurchase?'19':'3'}px;transition:.2s"></span>
+          </span>
+        </label>
+      </div>
     </div>
     <div class="cart-totals" id="cart-totals">
       ${renderTotals()}
@@ -540,8 +554,9 @@ async function generateInvoiceInner() {
   // Cash discount requires Accounts approval — it directly reduces the
   // amount collected vs the invoice total, so Accounts must sign off
   // that the shortfall is authorised before the invoice is finalised.
-  const needsApproval = hasPriceOverride || hasDiscount || saleType === 'credit' || hasCashDiscount;
-  const approvalReason = hasPriceOverride ? 'price_override' : saleType === 'credit' ? 'credit' : hasCashDiscount ? 'cash_discount' : 'discount';
+  const isStaffPurchase = activeCart.isStaffPurchase || false;
+  const needsApproval = hasPriceOverride || hasDiscount || saleType === 'credit' || hasCashDiscount || isStaffPurchase;
+  const approvalReason = isStaffPurchase ? 'staff_purchase' : hasPriceOverride ? 'price_override' : saleType === 'credit' ? 'credit' : hasCashDiscount ? 'cash_discount' : 'discount';
 
   const invoiceCreator = VW_AUTH.getCurrentProfile();
   const salesExecName = document.getElementById('inv-sales-exec-name')?.value?.trim() || '';
@@ -565,6 +580,7 @@ async function generateInvoiceInner() {
     packingCharges: Math.round(computePackingCharges()),
     vehicleNumber, fulfillmentMethod, date: new Date().toISOString(), status: needsApproval ? 'pending_approval' : 'paid',
     creditSale: saleType === 'credit', creditDueDate,
+    isStaffPurchase: isStaffPurchase || false,
     paymentMethod: saleType === 'credit' ? 'pending' : paymentMethod,
     paymentSplits: paymentSplits.length ? paymentSplits : [],
     amountReceived: saleType === 'credit' ? 0 : amountReceived,
@@ -637,6 +653,7 @@ async function generateInvoiceInner() {
   activeCart.quotationId = null;
   activeCart.quotationAdvance = 0;
   activeCart.saleType = 'cash';
+  activeCart.isStaffPurchase = false;
   _splitRows = [];
   // Reset applied discounts so they don't leak to the next customer
   _appliedLedgerBalance = 0;
@@ -674,7 +691,7 @@ async function generateInvoiceInner() {
 }
 
 function showInvoicePendingApprovalPopup(invoiceNo, reason) {
-  const reasonText = reason === 'price_override' ? 'a price override on one or more items'
+  const reasonText = reason === 'staff_purchase' ? 'a staff self-purchase (requires SM/Admin approval)' : reason === 'price_override' ? 'a price override on one or more items'
     : reason === 'credit' ? 'it being a Credit Sale'
     : reason === 'cash_discount' ? 'a cash discount being applied'
     : 'the discount applied';
@@ -950,6 +967,7 @@ async function cancelInvoiceConfirmed(invId) {
 window.cancelInvoiceConfirmed = cancelInvoiceConfirmed;
 
 function setSaleType(type) {
+  activeCart.isStaffPurchase = false; // reset staff purchase on sale type change
   activeCart.saleType = type;
   document.getElementById('sale-type-cash-btn').classList.toggle('active', type==='cash');
   document.getElementById('sale-type-credit-btn').classList.toggle('active', type==='credit');
@@ -960,6 +978,19 @@ function setSaleType(type) {
   }
 }
 window.setSaleType = setSaleType;
+
+function toggleStaffPurchase(checked) {
+  activeCart.isStaffPurchase = checked;
+  if (checked) {
+    // Staff purchase: auto-set to cash, apply VWP pricing (no extra discount)
+    setSaleType('cash');
+    // Clear any manual discount
+    const discEl = document.getElementById('discount-pct');
+    if (discEl) { discEl.value = '0'; updateTotals(); }
+    showToast('Staff purchase flagged — SM/Admin approval required after billing', 'info');
+  }
+}
+window.toggleStaffPurchase = toggleStaffPurchase;
 
 // Vehicle number only makes sense when something's actually being driven
 // out — Self Pickup means the customer carries it themselves, so the
@@ -1421,6 +1452,7 @@ async function openInvoiceFromTab(invId) {
       ${inv.salesExecutiveName ? `<div style="font-size:12px;margin-top:4px">👤 Sales: <strong>${inv.salesExecutiveName}</strong></div>` : ''}
       ${inv.createdByName && inv.createdByName !== inv.salesExecutiveName ? `<div style="font-size:12px;color:var(--text3);margin-top:2px">💳 Billed by: ${inv.createdByName}</div>` : ''}
       ${inv.creditSale ? `<div style="font-size:12px;color:var(--gold);margin-top:4px">📝 Credit Sale</div>` : ''}
+      ${inv.isStaffPurchase ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">👤 Staff Purchase — Pending SM Approval</div>` : ''}
       ${inv.advanceAmount ? `<div style="font-size:12px;margin-top:2px">Advance: ₹${inv.advanceAmount.toLocaleString('en-IN')}</div>` : ''}
       ${inv.paymentMethod && inv.paymentMethod !== 'pending' ? `<div style="font-size:12px;margin-top:2px">Paid via ${inv.paymentMethod}</div>` : ''}
       ${inv.cashDiscountAmt ? `<div style="font-size:12px;color:var(--green);margin-top:2px">Cash discount: −₹${inv.cashDiscountAmt.toLocaleString('en-IN')}</div>` : ''}
