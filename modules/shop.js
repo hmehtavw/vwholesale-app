@@ -9,7 +9,7 @@ async function renderContractorBidForm(requestId) {
 
   const prof = VW_AUTH.getCurrentProfile();
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('*').eq('auth_uid', prof?.id).single().catch(() => ({ data: null }));
+    .select('*').eq('auth_uid', prof?.id).single().then(r=>r, ()=>({data:null}));
 
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
@@ -160,7 +160,7 @@ async function submitContractorBid(requestId) {
 
   const prof = VW_AUTH.getCurrentProfile();
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('id,name').eq('auth_uid', prof?.id).single().catch(() => ({ data: null }));
+    .select('id,name').eq('auth_uid', prof?.id).single().then(r=>r, ()=>({data:null}));
 
   const { error } = await VW_DB.client.from('contractor_bids').insert({
     request_id: requestId,
@@ -194,7 +194,7 @@ async function renderDailyLogUpload(jobId) {
   const today = new Date().toISOString().split('T')[0];
   const { data: existing } = await VW_DB.client.from('labor_daily_logs')
     .select('id,contractor_confirmed_sqft,payment_status')
-    .eq('job_id', jobId).eq('log_date', today).single().catch(() => ({ data: null }));
+    .eq('job_id', jobId).eq('log_date', today).single().then(r=>r, ()=>({data:null}));
 
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
@@ -331,7 +331,7 @@ async function analyseDailyPhotos(jobId) {
   const btn = document.getElementById('analyse-btn');
   if (btn) { btn.disabled = true; btn.textContent = '🤖 Analysing...'; }
 
-  const { data: job } = await VW_DB.client.from('labor_jobs').select('total_sqft').eq('id', jobId).single().catch(() => ({ data: null }));
+  const { data: job } = await VW_DB.client.from('labor_jobs').select('total_sqft').eq('id', jobId).single().then(r=>r, ()=>({data:null}));
 
   try {
     const res = await fetch(`https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/labor-photo-analysis`, {
@@ -652,14 +652,14 @@ async function renderContractorProfilePage() {
     .select('*')
     .eq('auth_uid', prof?.id)
     .single()
-    .catch(() => ({ data: null }));
+    .then(r=>r, ()=>({data:null}));
 
   // Auto-create if not exists
   if (!cp) {
     const { data: newCp } = await VW_DB.client
       .from('contractor_profiles')
       .insert({ auth_uid: prof?.id })
-      .select('*').single().catch(() => ({ data: null }));
+      .select('*').single().then(r=>r, ()=>({data:null}));
     cp = newCp;
   }
 
@@ -921,7 +921,7 @@ async function renderShopPage() {
 
   if (prof?.id) {
     const { data: cart } = await VW_DB.client.from('carts')
-      .select('items').eq('profile_id', prof.id).single().catch(() => ({ data: null }));
+      .select('items').eq('profile_id', prof.id).single().then(r=>r, ()=>({data:null}));
     if (cart?.items) {
       _shopCart = {};
       (cart.items || []).forEach(i => { _shopCart[i.product_id] = i.qty; });
@@ -1676,7 +1676,7 @@ async function renderCheckoutPage() {
   <!-- LOYALTY POINTS -->
   ${await (async () => {
     const { data: cust } = await VW_DB.client.from('customers')
-      .select('loyalty_points').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+      .select('loyalty_points').eq('phone', prof?.phone || '').single().then(r=>r, ()=>({data:null}));
     const points = cust?.loyalty_points || 0;
     const cfg = await VW_DB.getSetting('loyalty_config', { earnRate:10, pointValue:0.1, maxRedeemPct:100 });
     const maxRedeem = Math.min(points, Math.floor(_checkoutState.subtotal * (cfg.maxRedeemPct||100) / 100 / (cfg.pointValue||0.1)));
@@ -1983,9 +1983,9 @@ async function placeOrder() {
     // For wallet payment — check balance first
     if (payMethod === 'wallet') {
       const { data: custRow } = await VW_DB.client.from('customers')
-        .select('id').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+        .select('id').eq('phone', prof?.phone || '').single().then(r=>r, ()=>({data:null}));
       const { data: wallet } = custRow
-        ? await VW_DB.client.from('customer_wallets').select('balance').eq('customer_id', custRow.id).single().catch(() => ({ data: null }))
+        ? await VW_DB.client.from('customer_wallets').select('balance').eq('customer_id', custRow.id).single().then(r=>r, ()=>({data:null}))
         : { data: null };
       const bal = parseFloat(wallet?.balance || 0);
       if (bal < orderTotal) {
@@ -2019,9 +2019,9 @@ async function placeOrder() {
     // Deduct from wallet if wallet payment
     if (payMethod === 'wallet') {
       const { data: _wCust } = await VW_DB.client.from('customers')
-        .select('id').eq('phone', prof?.phone || '').single().catch(() => ({ data: null }));
+        .select('id').eq('phone', prof?.phone || '').single().then(r=>r, ()=>({data:null}));
       const { data: wallet } = _wCust
-        ? await VW_DB.client.from('customer_wallets').select('id,balance,total_spent').eq('customer_id', _wCust.id).single().catch(() => ({ data: null }))
+        ? await VW_DB.client.from('customer_wallets').select('id,balance,total_spent').eq('customer_id', _wCust.id).single().then(r=>r, ()=>({data:null}))
         : { data: null };
       if (wallet) {
         const newBal = parseFloat(wallet.balance) - orderTotal;
@@ -2055,7 +2055,7 @@ async function placeOrder() {
     if (pointsEarned > 0 && prof?.phone) {
       // Fetch current points then increment directly (rpc-as-value doesn't work in Supabase JS)
       const { data: _custRow } = await VW_DB.client.from('customers')
-        .select('id,loyalty_points').eq('phone', prof.phone).single().catch(() => ({ data: null }));
+        .select('id,loyalty_points').eq('phone', prof.phone).single().then(r=>r, ()=>({data:null}));
       if (_custRow) {
         await VW_DB.client.from('customers')
           .update({ loyalty_points: (_custRow.loyalty_points || 0) + pointsEarned })
@@ -2066,7 +2066,7 @@ async function placeOrder() {
     // Increment promo code used_count if one was applied
     if (_checkoutState.promoCode) {
       const { data: _pc } = await VW_DB.client.from('promo_codes')
-        .select('used_count').eq('code', _checkoutState.promoCode).single().catch(() => ({ data: null }));
+        .select('used_count').eq('code', _checkoutState.promoCode).single().then(r=>r, ()=>({data:null}));
       if (_pc) {
         await VW_DB.client.from('promo_codes')
           .update({ used_count: (_pc.used_count || 0) + 1 })
@@ -2413,9 +2413,9 @@ async function cancelOrder(orderId) {
   // Refund to wallet if paid by wallet
   if (o?.payment_method === 'wallet' && o?.customer_phone) {
     const { data: _rCust } = await VW_DB.client.from('customers')
-      .select('id').eq('phone', o.customer_phone).single().catch(() => ({ data: null }));
+      .select('id').eq('phone', o.customer_phone).single().then(r=>r, ()=>({data:null}));
     const { data: wallet } = _rCust
-      ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _rCust.id).single().catch(() => ({ data: null }))
+      ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _rCust.id).single().then(r=>r, ()=>({data:null}))
       : { data: null };
     if (wallet) {
       const newBal = parseFloat(wallet.balance) + parseFloat(o.total || 0);
@@ -2852,7 +2852,7 @@ async function renderCustomerProfilePage() {
   // Fetch loyalty points from customers table
   const { data: cust } = await VW_DB.client.from('customers')
     .select('id,name,phone,email,loyalty_points,cc_enrolled_at,cc_tier')
-    .eq('phone', prof.phone).single().catch(() => ({ data: null }));
+    .eq('phone', prof.phone).single().then(r=>r, ()=>({data:null}));
 
   const points = cust?.loyalty_points || 0;
   const cfg = await VW_DB.getSetting('loyalty_config', { earnRate:10, pointValue:0.1, maxRedeemPct:100 });
@@ -3145,7 +3145,7 @@ async function approveContractorKYC(cpId) {
 
   // Get contractor profile_id to notify them
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('profile_id,name').eq('id', cpId).single().catch(() => ({ data: null }));
+    .select('profile_id,name').eq('id', cpId).single().then(r=>r, ()=>({data:null}));
 
   if (cp?.profile_id) {
     await createPersistedNotification({
@@ -3173,7 +3173,7 @@ async function rejectContractorKYC(cpId) {
   }).eq('id', cpId);
 
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('profile_id').eq('id', cpId).single().catch(() => ({ data: null }));
+    .select('profile_id').eq('id', cpId).single().then(r=>r, ()=>({data:null}));
 
   if (cp?.profile_id) {
     await createPersistedNotification({
@@ -3607,7 +3607,7 @@ async function applyPromoCode() {
   if (resultEl) resultEl.innerHTML = '<span style="color:var(--text3)">Checking...</span>';
 
   const { data: promo } = await VW_DB.client.from('promo_codes')
-    .select('*').eq('code', code).eq('is_active', true).single().catch(() => ({ data: null }));
+    .select('*').eq('code', code).eq('is_active', true).single().then(r=>r, ()=>({data:null}));
 
   if (!promo) {
     if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ Invalid or expired code</span>';
@@ -3879,7 +3879,7 @@ async function recalculateContractorScore(cpId) {
   // 10 pts: purchase value bonus (total_purchase_value > 50000 = 10, > 10000 = 5)
 
   const { data: cp } = await VW_DB.client.from('contractor_profiles')
-    .select('*').eq('id', cpId).single().catch(() => ({ data: null }));
+    .select('*').eq('id', cpId).single().then(r=>r, ()=>({data:null}));
   if (!cp) return;
 
   const completionRate = cp.total_jobs_completed > 0 ? Math.min(1, cp.total_jobs_completed / Math.max(1, cp.total_jobs_completed)) : 0;
@@ -3965,7 +3965,7 @@ async function scheduleReturnPickup(id) {
 
   // Notify customer
   const { data: ret } = await VW_DB.client.from('customer_returns')
-    .select('profile_id,customer_name').eq('id', id).single().catch(() => ({ data: null }));
+    .select('profile_id,customer_name').eq('id', id).single().then(r=>r, ()=>({data:null}));
   if (ret?.profile_id) {
     await createPersistedNotification({
       category: 'return_scheduled',
@@ -3981,7 +3981,7 @@ async function scheduleReturnPickup(id) {
 
 async function markReturnPickedUp(id) {
   const { data: ret } = await VW_DB.client.from('customer_returns')
-    .select('profile_id,order_id').eq('id', id).single().catch(() => ({ data: null }));
+    .select('profile_id,order_id').eq('id', id).single().then(r=>r, ()=>({data:null}));
 
   await VW_DB.client.from('customer_returns').update({
     status: 'picked_up',
@@ -3991,14 +3991,14 @@ async function markReturnPickedUp(id) {
   // Refund based on payment method
   if (ret?.order_id) {
     const { data: order } = await VW_DB.client.from('orders')
-      .select('id,total,payment_method,order_no').eq('id', ret.order_id).single().catch(() => ({ data: null }));
+      .select('id,total,payment_method,order_no').eq('id', ret.order_id).single().then(r=>r, ()=>({data:null}));
 
     if (order?.payment_method === 'wallet' && ret?.profile_id) {
       // Wallet payment — auto-refund to wallet
       const { data: _retCust } = await VW_DB.client.from('customers')
-        .select('id').eq('phone', order.customer_phone || '').single().catch(() => ({ data: null }));
+        .select('id').eq('phone', order.customer_phone || '').single().then(r=>r, ()=>({data:null}));
       const { data: wallet } = _retCust
-        ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _retCust.id).single().catch(() => ({ data: null }))
+        ? await VW_DB.client.from('customer_wallets').select('id,balance').eq('customer_id', _retCust.id).single().then(r=>r, ()=>({data:null}))
         : { data: null };
       if (wallet) {
         const newBal = parseFloat(wallet.balance) + parseFloat(order.total);

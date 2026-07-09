@@ -74,8 +74,8 @@ async function renderMyHRPage() {
   if (!profile) return '<div class="empty-state">Please login first</div>';
 
   const [hrRes, lbRes] = await Promise.all([
-    sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().catch(() => ({ data: null })),
-    sb.from('leave_balances').select('*').eq('profile_id', profile.id).eq('year', new Date().getFullYear()).single().catch(() => ({ data: null }))
+    sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:null})),
+    sb.from('leave_balances').select('*').eq('profile_id', profile.id).eq('year', new Date().getFullYear()).single().then(r=>r, ()=>({data:null}))
   ]);
 
   const hr = hrRes?.data;
@@ -155,7 +155,7 @@ async function renderMyAttendance() {
     .select('*').eq('staffId', profile.id)
     .gte('date', monthStart.toISOString().split('T')[0])
     .lte('date', monthEnd.toISOString().split('T')[0])
-    .order('date').catch(() => ({ data: [] }));
+    .order('date').then(r=>r, ()=>({data:[]}));
 
   const attMap = {};
   (att||[]).forEach(a => { attMap[a.date?.split('T')[0]] = a; });
@@ -210,9 +210,9 @@ async function renderMyLeaves() {
   const year = new Date().getFullYear();
 
   const [lbRes, leavesRes, hrRes] = await Promise.all([
-    sb.from('leave_balances').select('*').eq('profile_id', profile.id).eq('year', year).single().catch(() => ({ data: null })),
-    sb.from('leaves').select('*').eq('staffId', profile.id).order('startDate', {ascending:false}).limit(20).catch(() => ({ data: [] })),
-    sb.from('staff_hr').select('joining_date').eq('profile_id', profile.id).single().catch(() => ({ data: null }))
+    sb.from('leave_balances').select('*').eq('profile_id', profile.id).eq('year', year).single().then(r=>r, ()=>({data:null})),
+    sb.from('leaves').select('*').eq('staffId', profile.id).order('startDate', {ascending:false}).limit(20).then(r=>r, ()=>({data:[]})),
+    sb.from('staff_hr').select('joining_date').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:null}))
   ]);
 
   const lb = lbRes?.data || { cl_balance:0, sl_balance:0, cl_used:0, sl_used:0 };
@@ -328,7 +328,7 @@ async function renderMySalary() {
   const profile = VW_AUTH.getCurrentProfile();
   const { data: slips } = await sb.from('payroll_runs')
     .select('*').eq('profile_id', profile.id)
-    .order('month', {ascending:false}).limit(12).catch(() => ({ data: [] }));
+    .order('month', {ascending:false}).limit(12).then(r=>r, ()=>({data:[]}));
 
   const content = document.getElementById('app-content');
   content.innerHTML = `
@@ -360,10 +360,10 @@ async function renderMySalary() {
 }
 
 async function printPayslip(payrollId) {
-  const { data: s } = await sb.from('payroll_runs').select('*').eq('id', payrollId).single().catch(() => ({ data: null }));
+  const { data: s } = await sb.from('payroll_runs').select('*').eq('id', payrollId).single().then(r=>r, ()=>({data:null}));
   if (!s) { showToast('Payslip not found'); return; }
   const profile = VW_AUTH.getCurrentProfile();
-  const { data: hr } = await sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().catch(() => ({ data: null }));
+  const { data: hr } = await sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:null}));
   const monthLabel = new Date(s.month+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
 
   const html = `<!DOCTYPE html><html><head><title>Payslip ${monthLabel}</title><meta charset="UTF-8">
@@ -428,7 +428,7 @@ async function renderMyKPIs() {
   const profile = VW_AUTH.getCurrentProfile();
   const { data: scores } = await sb.from('kpi_scores')
     .select('*').eq('profile_id', profile.id)
-    .order('month', {ascending:false}).limit(6).catch(() => ({ data: [] }));
+    .order('month', {ascending:false}).limit(6).then(r=>r, ()=>({data:[]}));
 
   const content = document.getElementById('app-content');
   content.innerHTML = `
@@ -477,7 +477,7 @@ async function renderMyAchievements() {
 
   const { data: achievements } = await sb.from('staff_achievements')
     .select('*').eq('profile_id', profile.id).eq('year', year)
-    .order('quarter').catch(() => ({ data: [] }));
+    .order('quarter').then(r=>r, ()=>({data:[]}));
 
   const quartersHit = (achievements||[]).filter(a => a.target_hit).length;
   const tripElig = calcTripEligibility(quartersHit);
@@ -539,8 +539,8 @@ async function renderMyAchievements() {
 async function renderMyAdvances() {
   const profile = VW_AUTH.getCurrentProfile();
   const [hrRes, advRes] = await Promise.all([
-    sb.from('staff_hr').select('joining_date,gross_salary').eq('profile_id', profile.id).single().catch(() => ({ data: null })),
-    sb.from('staff_advances').select('*').eq('profile_id', profile.id).order('requested_at',{ascending:false}).limit(10).catch(() => ({ data: [] }))
+    sb.from('staff_hr').select('joining_date,gross_salary').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:null})),
+    sb.from('staff_advances').select('*').eq('profile_id', profile.id).order('requested_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}))
   ]);
   const onProb = hrRes?.data ? isOnProbation(hrRes.data.joining_date) : true;
   const advances = advRes?.data || [];
@@ -577,7 +577,7 @@ async function renderMyAdvances() {
 
 async function showRequestAdvance() {
   const profile = VW_AUTH.getCurrentProfile();
-  const { data: hr } = await sb.from('staff_hr').select('gross_salary').eq('profile_id', profile.id).single().catch(() => ({ data: null }));
+  const { data: hr } = await sb.from('staff_hr').select('gross_salary').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:null}));
   const maxAdv = Math.round((hr?.gross_salary||0) * 2);
   const sheet = document.getElementById('bottom-sheet');
   const overlay = document.getElementById('sheet-overlay');
@@ -649,7 +649,7 @@ const DOC_TYPES = [
 
 async function renderMyDocuments() {
   const profile = VW_AUTH.getCurrentProfile();
-  const { data: docs } = await sb.from('staff_documents').select('*').eq('profile_id', profile.id).catch(() => ({ data: [] }));
+  const { data: docs } = await sb.from('staff_documents').select('*').eq('profile_id', profile.id).then(r=>r, ()=>({data:[]}));
   const docMap = {};
   (docs||[]).forEach(d => { docMap[d.doc_type] = d; });
   const totalRequired = DOC_TYPES.filter(d=>d.required).length;
@@ -718,7 +718,7 @@ async function uploadDocument(docType, docLabel, input) {
 // ─────────────────────────────────────────────────────────
 async function renderMyProfile() {
   const profile = VW_AUTH.getCurrentProfile();
-  const { data: hr } = await sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().catch(() => ({ data: {} }));
+  const { data: hr } = await sb.from('staff_hr').select('*').eq('profile_id', profile.id).single().then(r=>r, ()=>({data:{}}));
   const content = document.getElementById('app-content');
   content.innerHTML = `
   <div class="module-header"><h2>✏️ My Profile</h2></div>
@@ -801,7 +801,7 @@ async function runMonthlyPayroll(month) {
     // Pending advance deduction
     const { data: advance } = await sb.from('staff_advances')
       .select('*').eq('profile_id', hr.profile_id).eq('status','approved')
-      .gt('months_remaining',0).limit(1).single().catch(() => ({ data: null }));
+      .gt('months_remaining',0).limit(1).single().then(r=>r, ()=>({data:null}));
     const advDeduct = advance ? Math.min(advance.monthly_deduct || advance.amount, advance.amount - (advance.total_deducted||0)) : 0;
 
     const totalDed = pt + pf + advDeduct;

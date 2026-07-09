@@ -1781,7 +1781,7 @@ async function mergeWithExisting() {
 
   // Add stock at this location for existing product
   const { data: existingLoc } = await VW_DB.client.from('tile_stock_locations')
-    .select('*').eq('product_id', matchedId).eq('warehouse_code', warehouse).eq('rack_no', rack).eq('shelf_no', shelf).single().catch(()=>({data:null}));
+    .select('*').eq('product_id', matchedId).eq('warehouse_code', warehouse).eq('rack_no', rack).eq('shelf_no', shelf).single().then(r=>r, ()=>({data:null}));
 
   if (existingLoc) {
     await VW_DB.client.from('tile_stock_locations').update({
@@ -1954,7 +1954,7 @@ async function saveStockAdjustment(productId) {
 
   const { data: existing } = await VW_DB.client.from('tile_stock_locations')
     .select('*').eq('product_id',productId).eq('warehouse_code',wh).eq('rack_no',rack).eq('shelf_no',shelf||'')
-    .single().catch(()=>({data:null}));
+    .single().then(r=>r, ()=>({data:null}));
 
   if (existing) {
     await VW_DB.client.from('tile_stock_locations').update({
@@ -2145,7 +2145,7 @@ async function addToWishlistFromQR(productId) {
   // Prompt for phone to link to customer account
   const phone = prompt('Enter your phone number to save to wishlist:');
   if (!phone || phone.length < 10) return;
-  const { data: cust } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone.replace(/\D/g,'')+'%').single().catch(()=>({data:null}));
+  const { data: cust } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone.replace(/\D/g,'')+'%').single().then(r=>r, ()=>({data:null}));
   if (!cust) { showToast('Phone not found — ask executive to add you first','warn'); return; }
   await VW_DB.client.from('wishlists').upsert({ customer_id:cust.id, product_id:productId, created_at:new Date().toISOString() });
   showToast(`Added to wishlist for ${cust.name} ✓`,'success');

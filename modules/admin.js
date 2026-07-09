@@ -4151,8 +4151,8 @@ async function renderDailyReportPage() {
     VW_DB.client.from('invoices').select('total,payment_method,amount_received,credit_sale').gte('date', todayStr),
     VW_DB.client.from('tile_quotations').select('id,approval_status,grand_total,created_by').gte('created_at', todayStr + 'T00:00:00'),
     VW_DB.client.from('tile_quotations').select('id,tq_no,customer_name,grand_total').eq('approval_status','pending_approval').order('created_at'),
-    VW_DB.client.from('visits').select('id,customer_name,executive_name,status').gte('created_at', todayStr + 'T00:00:00').catch(() => ({ data: [] })),
-    VW_DB.client.from('tasks').select('id,status,assigned_to_name').gte('created_at', todayStr + 'T00:00:00').catch(() => ({ data: [] })),
+    VW_DB.client.from('visits').select('id,customer_name,executive_name,status').gte('created_at', todayStr + 'T00:00:00').then(r=>r, ()=>({data:[]})),
+    VW_DB.client.from('tasks').select('id,status,assigned_to_name').gte('created_at', todayStr + 'T00:00:00').then(r=>r, ()=>({data:[]})),
   ]);
 
   const invoices   = invRes.data || [];
@@ -4317,13 +4317,13 @@ async function renderVendorPaymentsPage() {
     .select('id,name,phone,outstanding_amount,total_purchased,last_payment_date')
     .gt('outstanding_amount', 0)
     .order('outstanding_amount', { ascending: false })
-    .limit(30).catch(() => ({ data: [] }));
+    .limit(30).then(r=>r, ()=>({data:[]}));
 
   const { data: allVendors } = await VW_DB.client
     .from('vendors')
     .select('id,name,outstanding_amount,total_purchased')
     .order('outstanding_amount', { ascending: false })
-    .limit(50).catch(() => ({ data: [] }));
+    .limit(50).then(r=>r, ()=>({data:[]}));
 
   const totalOutstanding = (allVendors||[]).reduce((s,v) => s + (v.outstanding_amount||0), 0);
 
@@ -4367,7 +4367,7 @@ async function recordVendorPayment(vendorId, vendorName) {
 
   // Update vendor outstanding
   const { data: v } = await VW_DB.client.from('vendors')
-    .select('outstanding_amount').eq('id', vendorId).single().catch(() => ({ data: null }));
+    .select('outstanding_amount').eq('id', vendorId).single().then(r=>r, ()=>({data:null}));
 
   if (v) {
     const newOutstanding = Math.max(0, (v.outstanding_amount||0) - amount);
@@ -4491,7 +4491,7 @@ async function createTestCustomerAccount() {
 
   // Check if profile exists
   const { data: existing } = await VW_DB.client.from('profiles')
-    .select('id,role,name').eq('phone', phone).single().catch(() => ({ data: null }));
+    .select('id,role,name').eq('phone', phone).single().then(r=>r, ()=>({data:null}));
 
   if (existing) {
     if (existing.role === 'customer') {
@@ -4693,7 +4693,7 @@ function openAddCatalogItem(prefill) {
 }
 
 async function editCatalogItem(id) {
-  const { data: item } = await VW_DB.client.from('brand_catalog_items').select('*').eq('id', id).single().catch(()=>({data:null}));
+  const { data: item } = await VW_DB.client.from('brand_catalog_items').select('*').eq('id', id).single().then(r=>r, ()=>({data:null}));
   if (!item) { showToast('Item not found','error'); return; }
   openAddCatalogItem(item);
 }
@@ -4730,7 +4730,7 @@ async function saveCatalogItem(editId) {
 }
 
 async function pushCatalogToInventory(id) {
-  const {data:item} = await VW_DB.client.from('brand_catalog_items').select('*').eq('id',id).single().catch(()=>({data:null}));
+  const {data:item} = await VW_DB.client.from('brand_catalog_items').select('*').eq('id',id).single().then(r=>r, ()=>({data:null}));
   if (!item) { showToast('Item not found','error'); return; }
   if (!item.is_active) { showToast('Activate this item before pushing to inventory','warn'); return; }
   const {data:newProd, error} = await VW_DB.client.from('products').insert({

@@ -3162,7 +3162,7 @@ async function savePO(status) {
     created_by_name: prof?.name||'',
     date: new Date().toISOString().split('T')[0],
     status: 'pending_approval',
-  }).select('id').single().catch(() => ({ data: null }));
+  }).select('id').single().then(r=>r, ()=>({data:null}));
 
   record.supabaseId = sbPO?.id;
   await VW_DB.put(VW_DB.STORES.purchaseOrders, record);
@@ -3553,7 +3553,7 @@ async function confirmReceivePO(poId) {
     shortage_note: notes,
     total_received_value: Math.round(totalActual),
     has_shade_variation: grnItems.some(i => i.shade_no),
-  }).select('id').single().catch(()=>({ data: null }));
+  }).select('id').single().then(r=>r, ()=>({data:null}));
 
   // Create product_lots records for items with lot/shade info
   const lotInserts = grnItems

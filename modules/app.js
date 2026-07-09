@@ -357,7 +357,7 @@ async function navigateToFresh(page, params, cacheKey) {
     async function cashierFindWallet() {
       const phone = document.getElementById('wt-phone')?.value?.trim();
       if (!phone || phone.length < 10) { showToast('Enter 10-digit phone', 'warn'); return; }
-      const { data: cust } = await VW_DB.client.from('customers').select('id,name').eq('phone', phone).single().catch(()=>({data:null}));
+      const { data: cust } = await VW_DB.client.from('customers').select('id,name').eq('phone', phone).single().then(r=>r, ()=>({data:null}));
       if (!cust) { document.getElementById('wt-result').innerHTML='<div style="color:var(--red);font-size:13px">Customer not found</div>'; return; }
       const wallet = await VW_WALLET.getOrCreateWallet(cust.id, cust.name, phone);
       document.getElementById('wt-result').innerHTML=
@@ -1489,7 +1489,7 @@ async function loadDashboardData(today) {
 
     const invoicesRes = await VW_DB.client.from('invoices')
       .select('id,total,payment_method,credit_sale,approval_status,payment_verified,amount_received')
-      .gte('date', todayStart).limit(100).catch(() => ({ data: [] }));
+      .gte('date', todayStart).limit(100).then(r=>r, ()=>({data:[]}));
     const invoices = invoicesRes.data || [];
     const revenue = invoices.filter(i => i.approval_status === 'approved')
       .reduce((s,i) => s + (i.amount_received || i.total || 0), 0);
@@ -1498,7 +1498,7 @@ async function loadDashboardData(today) {
     if (el) el.textContent = revenue > 0 ? '₹' + Math.round(revenue).toLocaleString('en-IN') : '₹0';
 
     const visitsRes = await VW_DB.client.from('visits')
-      .select('id,visitor_type').gte('date', todayStart).limit(100).catch(() => ({ data: [] }));
+      .select('id,visitor_type').gte('date', todayStart).limit(100).then(r=>r, ()=>({data:[]}));
     const visits = visitsRes.data || [];
     const visEl = document.getElementById('dash-visits');
     if (visEl) visEl.textContent = visits.length;
@@ -1510,7 +1510,7 @@ async function loadDashboardData(today) {
     if (['admin','management','store_manager'].includes(role)) {
       const { data: pendingTQs } = await VW_DB.client.from('tile_quotations')
         .select('id,tq_no,customer_name,grand_total').eq('approval_status','pending_approval')
-        .order('created_at').limit(10).catch(() => ({ data: [] }));
+        .order('created_at').limit(10).then(r=>r, ()=>({data:[]}));
 
       const tqEl = document.getElementById('dash-pending-tqs');
       if (tqEl && pendingTQs?.length) {
@@ -1537,7 +1537,7 @@ async function loadDashboardData(today) {
     // Tasks
     const tasksRes = await VW_DB.client.from('tasks')
       .select('id,title,status,assigned_to_name,due_date')
-      .in('status',['pending','in_progress']).limit(10).catch(() => ({ data: [] }));
+      .in('status',['pending','in_progress']).limit(10).then(r=>r, ()=>({data:[]}));
     const tasks = tasksRes.data || [];
     const taskEl = document.getElementById('dash-tasks');
     if (taskEl) {
@@ -1557,7 +1557,7 @@ async function loadDashboardData(today) {
     // Low stock — stock column is TEXT so filter in JS after fetch
     const stockRes = await VW_DB.client.from('products')
       .select('id,name,stock,low_stock_threshold,unit')
-      .eq('is_active',true).limit(200).catch(() => ({ data: [] }));
+      .eq('is_active',true).limit(200).then(r=>r, ()=>({data:[]}));
     const lowStock = (stockRes.data || []).filter(p => (parseFloat(p.stock) || 0) <= (p.low_stock_threshold || 10)).slice(0, 5);
     const stockEl = document.getElementById('dash-low-stock');
     if (stockEl) {

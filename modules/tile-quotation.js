@@ -3726,7 +3726,7 @@ async function postLaborFromQuotation() {
   const st = _tqState;
   if (!st.laborRequired) return;
   const fy = getFinancialYearLabel();
-  const { data: seq } = await VW_DB.client.from('settings').select('value').eq('key','labor_seq_'+fy).single().catch(()=>({data:null}));
+  const { data: seq } = await VW_DB.client.from('settings').select('value').eq('key','labor_seq_'+fy).single().then(r=>r, ()=>({data:null}));
   const next = ((seq?.value)||0)+1;
   const reqNo = `LAB/${fy}/${String(next).padStart(4,'0')}`;
   await VW_DB.client.from('settings').upsert({ key:'labor_seq_'+fy, value:next });
@@ -4728,12 +4728,12 @@ async function _uploadTQReferenceImage(input) {
 // ── Revision history: snapshot the current DB row as vN before any edit ──
 async function _tqSnapshotRevision(id, reason, prof) {
   const { data: current } = await VW_DB.client.from('tile_quotations')
-    .select('*').eq('id', id).single().catch(()=>({ data: null }));
+    .select('*').eq('id', id).single().then(r=>r, ()=>({data:null}));
   if (!current) return null;
   const { data: lastRev } = await VW_DB.client
     .from('tq_revisions').select('version').eq('tq_id', id)
     .order('version', { ascending: false }).limit(1).single()
-    .catch(()=>({ data: null }));
+    .then(r=>r, ()=>({data:null}));
   const nextVersion = (lastRev?.version ? lastRev.version + 1 : (current.version || 1));
   await VW_DB.client.from('tq_revisions').insert({
     tq_id: id,
@@ -6677,7 +6677,7 @@ async function openTileQuote(id) {
       const { data: revs } = await VW_DB.client.from('tq_revisions')
         .select('version,changed_by_name,change_reason,created_at')
         .eq('tq_id', q.id).order('version', { ascending: false }).limit(10)
-        .catch(()=>({ data: [] }));
+        .then(r=>r, ()=>({data:[]}));
       if (!revs?.length) return '';
       return '<div style="margin-bottom:12px">' +
         '<div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">📋 Revision History</div>' +

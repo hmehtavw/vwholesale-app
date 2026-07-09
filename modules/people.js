@@ -938,7 +938,7 @@ async function _renderPortalLaborBids(c, lang) {
   // Own bids via token-scoped RPC — anon can't read contractor_bids directly (keeps rival
   // bid amounts private); the RPC returns only this contractor's bids.
   const { data: myBids } = await VW_DB.client.rpc('get_contractor_bids', { p_token: c.portal_token })
-    .then(r => ({ data: r.data || [] })).catch(() => ({ data: [] }));
+    .then(r => ({ data: r.data || [] })).then(r=>r, ()=>({data:[]}));
 
   return `
   <div style="margin-bottom:12px">

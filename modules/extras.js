@@ -2932,7 +2932,7 @@ window.PAINT_SWATCHES = PAINT_SWATCHES;
 async function generateCustomerPortalLink(customerId, customerPhone, createdBy) {
   // Check if token already exists
   const { data: existing } = await VW_DB.client.from('customer_portal_tokens')
-    .select('token').eq('customer_id', customerId).eq('is_active', true).single().catch(()=>({data:null}));
+    .select('token').eq('customer_id', customerId).eq('is_active', true).single().then(r=>r, ()=>({data:null}));
   if (existing?.token) return existing.token;
 
   const token = Math.random().toString(36).slice(2) + Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -2967,7 +2967,7 @@ async function renderCustomerPortal(token) {
   // Load portal bundle via token-scoped SECURITY DEFINER RPC. This works for the anon
   // portal key without exposing customers/invoices/quotations/wishlists to the public,
   // and bumps last_active server-side. Returns null only for an invalid/inactive token.
-  const { data: bundle } = await VW_DB.client.rpc('get_customer_portal', { p_token: token }).catch(()=>({ data: null }));
+  const { data: bundle } = await VW_DB.client.rpc('get_customer_portal', { p_token: token }).then(r=>r, ()=>({data:null}));
 
   if (!bundle) return `
   <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center">
@@ -3190,7 +3190,7 @@ async function submitCustomerRegistration() {
 
   // Check if customer exists
   let customerId;
-  const { data: existing } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone+'%').single().catch(()=>({data:null}));
+  const { data: existing } = await VW_DB.client.from('customers').select('id,name').ilike('phone','%'+phone+'%').single().then(r=>r, ()=>({data:null}));
   if (existing) {
     customerId = existing.id;
   } else {
@@ -3201,7 +3201,7 @@ async function submitCustomerRegistration() {
       source: document.getElementById('cr-heard')?.value||'self_register',
       project_type: document.getElementById('cr-project')?.value||'',
       created_at: new Date().toISOString(),
-    }).select().single().catch(()=>({data:null}));
+    }).select().single().then(r=>r, ()=>({data:null}));
     customerId = newCust?.id;
   }
 
@@ -4108,7 +4108,7 @@ async function earnLoyaltyPoints(customerId, invoiceId, invoiceTotal) {
 // the Rewards Store. _adjustStaffPoints is the shared ledger writer.
 async function _adjustStaffPoints(staffId, delta) {
   if (!staffId || !delta) return;
-  const { data: row } = await VW_DB.client.from('loyalty_points').select('*').eq('staff_id', staffId).single().catch(()=>({data:null}));
+  const { data: row } = await VW_DB.client.from('loyalty_points').select('*').eq('staff_id', staffId).single().then(r=>r, ()=>({data:null}));
   if (row) {
     const update = { points: Math.max(0, (row.points||0) + delta), updated_at: new Date().toISOString() };
     if (delta > 0) update.lifetime_earned = (row.lifetime_earned||0) + delta;
@@ -6415,7 +6415,7 @@ async function getOrCreateWallet(customerId, customerName, customerPhone) {
     .select('*')
     .eq('customer_id', customerId)
     .single()
-    .catch(() => ({ data: null }));
+    .then(r=>r, ()=>({data:null}));
 
   if (!wallet) {
     const { data: newWallet } = await VW_DB.client
@@ -6448,7 +6448,7 @@ async function renderCustomerWallet(customerId) {
     .order('created_at', { ascending: false })
     .limit(1)
     .then(r => ({ data: r.data?.[0] || null }))
-    .catch(() => ({ data: null }));
+    .then(r=>r, ()=>({data:null}));
 
   const bal = parseFloat(wallet.balance || 0);
   const kycBadge = wallet.kyc_status === 'approved'
@@ -6755,7 +6755,7 @@ async function renderCreateLaborRequest(tqId) {
   let tq = null;
   if (tqId) {
     const { data } = await VW_DB.client.from('tile_quotations')
-      .select('*').eq('id', tqId).single().catch(() => ({ data: null }));
+      .select('*').eq('id', tqId).single().then(r=>r, ()=>({data:null}));
     tq = data;
   }
 
@@ -7321,7 +7321,7 @@ async function renderCustomerStatement(customerId) {
   }
 
   const { data: cust } = await VW_DB.client.from('customers')
-    .select('*').eq('id', customerId).single().catch(() => ({ data: null }));
+    .select('*').eq('id', customerId).single().then(r=>r, ()=>({data:null}));
   if (!cust) return '<div class="empty-msg">Customer not found</div>';
 
   // Fetch all TQs for this customer
@@ -7336,7 +7336,7 @@ async function renderCustomerStatement(customerId) {
     .select('invoice_no,date,total,amount_received,payment_method,credit_sale')
     .eq('customer_id', customerId)
     .order('date', { ascending: false })
-    .limit(20).catch(() => ({ data: [] }));
+    .limit(20).then(r=>r, ()=>({data:[]}));
 
   const totalInvoiced = (invs||[]).reduce((s,i) => s + (i.total||0), 0);
   const totalReceived = (invs||[]).reduce((s,i) => s + (i.amount_received||i.total||0), 0);
