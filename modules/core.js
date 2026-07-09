@@ -1055,32 +1055,24 @@ async function routeByRole() {
   const params = new URLSearchParams(window.location.search);
 
   if (!role) {
-    const mode = params.has('contractor') ? 'contractor' : params.has('staff') ? 'staff' : undefined;
-    await showAuthScreen(mode);
+    // No role — show staff login (index.html is staff portal only)
+    await showAuthScreen('staff');
     return;
   }
 
-  // Contractor pending approval
-  if (role === 'contractor' && status === 'pending') {
-    showContractorPendingScreen(); return;
-  }
-
-  // Customer — apply light shop theme so it feels like the shop, not the staff app
+  // Customer logged into staff portal — redirect to shop
   if (role === 'customer') {
-    _applyCustomerTheme();
-    if (typeof init === 'function') await init();
-    navigateTo('shop');
+    window.location.replace('./shop.html');
     return;
   }
 
-  // Professional (contractor role) approved → Professional dashboard
+  // Contractor logged into staff portal — redirect to professional portal
   if (role === 'contractor') {
-    if (typeof init === 'function') await init();
-    navigateTo('professional_home');
+    window.location.replace('./professional.html');
     return;
   }
 
-  // Staff — add staff-mode class to show the header
+  // Staff/Admin — proceed normally
   document.body.classList.add('staff-mode');
   document.body.classList.remove('customer-mode');
   if (status === 'pending') { showPendingScreen(); return; }
