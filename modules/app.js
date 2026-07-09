@@ -248,16 +248,16 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'crm') html = await VW_CRM.renderCRM();
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
-    else if (page === 'quick_quote') { VW_QUICK_QUOTE?.openQuickQuote?.() || navigateTo('tiles'); return; }
-    else if (page === 'my_hr')     html = await VW_HR_SELF.renderMyHRPage();
-    else if (page === 'my_leaves') { VW_HR_SELF.renderMyLeaves(); return; }
-    else if (page === 'my_salary') { VW_HR_SELF.renderMySalary(); return; }
-    else if (page === 'my_kpis')   { VW_HR_SELF.renderMyKPIs(); return; }
-    else if (page === 'my_achievements') { VW_HR_SELF.renderMyAchievements(); return; }
-    else if (page === 'my_advances') { VW_HR_SELF.renderMyAdvances(); return; }
-    else if (page === 'my_documents') { VW_HR_SELF.renderMyDocuments(); return; }
-    else if (page === 'my_profile') { VW_HR_SELF.renderMyProfile(); return; }
-    else if (page === 'my_attendance') { VW_HR_SELF.renderMyAttendance(); return; }
+    else if (page === 'quick_quote') { if (window.VW_TILES?.openQuickQuote) { VW_TILES.openQuickQuote(); } else if (typeof openQuickQuote === 'function') { openQuickQuote(); } else { navigateTo('tiles'); } return; }
+    else if (page === 'my_hr')     { if (window.VW_HR_SELF) { html = await VW_HR_SELF.renderMyHRPage(); } else { html = '<div class="empty-state">HR module loading… please try again</div>'; } }
+    else if (page === 'my_leaves') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyLeaves(); } return; }
+    else if (page === 'my_salary') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMySalary(); } return; }
+    else if (page === 'my_kpis')   { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyKPIs(); } return; }
+    else if (page === 'my_achievements') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAchievements(); } return; }
+    else if (page === 'my_advances') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAdvances(); } return; }
+    else if (page === 'my_documents') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyDocuments(); } return; }
+    else if (page === 'my_profile') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyProfile(); } return; }
+    else if (page === 'my_attendance') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAttendance(); } return; }
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
     else if (page === 'settings') html = await VW_SETTINGS.renderSettingsPage();
@@ -1357,7 +1357,7 @@ async function renderDashboard() {
     <button class="qa-btn" onclick="navigateTo('tiles')"><span class="qa-icon">⬜</span><span>Tile Quote</span></button>
     <button class="qa-btn" onclick="navigateTo('dispatch')"><span class="qa-icon">🚚</span><span>Dispatch</span></button>
     <button class="qa-btn" onclick="navigateTo('club')"><span class="qa-icon">🏆</span><span>CC Club</span></button>
-    <button class="qa-btn" onclick="window.open('./admin.html','_blank')" style="background:linear-gradient(135deg,#1B4F8A,#2272B6);border-color:#2272B6"><span class="qa-icon">⚙️</span><span style="color:#fff;font-weight:800">Admin</span></button>
+    <button class="qa-btn" onclick="navigateTo('my_profile')"><span class="qa-icon">🧑</span><span>My Profile</span></button>
   </div>
 
   <!-- EXECUTIVE LEADERBOARD -->
@@ -3791,6 +3791,7 @@ const SIDEBAR_NAV = [
 
   // ── MY HR (self-service, always visible) ─────────────
   { section: 'My HR' },
+  { page: 'my_profile',     icon: '🧑', label: 'My Profile',      always: true },
   { page: 'my_hr',          icon: '👤', label: 'My HR',           always: true },
   { page: 'my_attendance',  icon: '📅', label: 'Attendance',      always: true },
   { page: 'my_leaves',      icon: '🏖', label: 'My Leaves',       always: true },
