@@ -158,7 +158,19 @@ html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',sys
       <div class="sb-section">Catalog</div>
       <button class="sb-item" onclick="loadPage('products')" id="nav-products"><span class="sb-icon">🛒</span>Products</button>
       <button class="sb-item" onclick="loadPage('categories')" id="nav-categories"><span class="sb-icon">🗂</span>Categories</button>
+      <button class="sb-item" onclick="loadPage('catalog')" id="nav-catalog"><span class="sb-icon">📤</span>Upload Catalog</button>
       <button class="sb-item" onclick="loadPage('promos')" id="nav-promos"><span class="sb-icon">🎁</span>Promos</button>
+      <div class="sb-section">Finance & Reports</div>
+      <button class="sb-item" onclick="loadPage('analytics')" id="nav-analytics"><span class="sb-icon">📈</span>Analytics</button>
+      <button class="sb-item" onclick="loadPage('accounts')" id="nav-accounts"><span class="sb-icon">💰</span>Accounts</button>
+      <button class="sb-item" onclick="loadPage('gst')" id="nav-gst"><span class="sb-icon">🧾</span>GST Reports</button>
+      <button class="sb-item" onclick="loadPage('eod')" id="nav-eod"><span class="sb-icon">📊</span>EOD Report</button>
+      <div class="sb-section">Operations</div>
+      <button class="sb-item" onclick="loadPage('hr')" id="nav-hr"><span class="sb-icon">👥</span>HR & Team</button>
+      <button class="sb-item" onclick="loadPage('vendors')" id="nav-vendors"><span class="sb-icon">🏭</span>Vendors</button>
+      <button class="sb-item" onclick="loadPage('commissions')" id="nav-commissions"><span class="sb-icon">💸</span>Commissions</button>
+      <button class="sb-item" onclick="loadPage('referrals')" id="nav-referrals"><span class="sb-icon">🔗</span>Referrals</button>
+      <button class="sb-item" onclick="loadPage('marketing')" id="nav-marketing"><span class="sb-icon">📣</span>Marketing</button>
       <div class="sb-section">Settings</div>
       <button class="sb-item" onclick="loadPage('staff')" id="nav-staff"><span class="sb-icon">👤</span>Staff</button>
       <button class="sb-item" onclick="loadPage('settings')" id="nav-settings"><span class="sb-icon">⚙️</span>Settings</button>
@@ -178,7 +190,7 @@ html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',sys
       </div>
       <div class="topbar-acts">
         <span style="font-size:11px;color:var(--t3)" id="topbar-time"></span>
-        <a href="./index.html" style="padding:7px 12px;background:var(--card);border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t2);text-decoration:none">Staff App →</a>
+        <a href="./staff.html" style="padding:7px 12px;background:var(--card);border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t2);text-decoration:none">Staff App →</a>
         <a href="./shop.html" target="_blank" style="padding:7px 12px;background:var(--card);border:1px solid var(--bdr);border-radius:8px;font-size:11px;font-weight:700;color:var(--t2);text-decoration:none">Shop →</a>
       </div>
     </div>
@@ -321,7 +333,7 @@ async function loadPage(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Loading…</div>';
   document.getElementById('sidebar').classList.remove('open');
-  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, promos:loadPromos, staff:loadStaff, settings:loadSettings};
+  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing};
   if (pages[page]) await pages[page]();
 }
 
@@ -851,7 +863,7 @@ async function loadSettings() {
       <div class="card">
         <div class="card-title">🔗 Portal Links</div>
         <div style="display:grid;gap:8px">
-          ${[['Customer Shop','./shop.html','🛒'],['Staff App','./index.html','🏪'],['Professional','./professional.html','🏗']].map(([label,url,icon])=>`
+          ${[['Customer Shop','./shop.html','🛒'],['Staff App','./staff.html','🏪'],['Professional','./professional.html','🏗']].map(([label,url,icon])=>`
           <a href="${url}" target="_blank" style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--card2);border-radius:8px;text-decoration:none;color:var(--t1)">
             <span style="font-size:16px">${icon}</span>
             <div style="flex:1;font-size:12px;font-weight:700">${label}</div>
@@ -886,6 +898,286 @@ async function loadSettings() {
       <div style="text-align:center;padding:10px;background:var(--card2);border-radius:8px;grid-column:1/-1"><div style="font-size:20px;font-weight:900;color:var(--gold)">${orders}</div><div style="font-size:10px;color:var(--t3)">Total Orders</div></div>
     </div>`;
 }
+
+
+// ── CATALOG UPLOAD ──
+async function loadCatalog() {
+  setPageTitle('Catalog Upload');
+  document.getElementById('page-content').innerHTML = `
+    <div class="card">
+      <div class="card-title">📤 Catalog Management</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer" onclick="window.open('./staff.html','_blank')">
+          <div style="font-size:32px;margin-bottom:8px">📤</div>
+          <div style="font-weight:800;color:var(--t1)">Upload Brand Catalog</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:4px">AI extracts products from PDF</div>
+          <div style="margin-top:10px;font-size:11px;color:var(--b)">Open in Staff App → Catalog Upload</div>
+        </div>
+        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer" onclick="window.open('./staff.html','_blank')">
+          <div style="font-size:32px;margin-bottom:8px">✅</div>
+          <div style="font-weight:800;color:var(--t1)">Review & Price</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:4px">Set tier pricing, approve items</div>
+          <div style="margin-top:10px;font-size:11px;color:var(--b)">Open in Staff App → Catalog Review</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Brand Catalog Items</div>
+      <div id="catalog-items-list"><div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div></div>
+    </div>`;
+  const items = await sbFetch('brand_catalog_items?select=id,brand,product_name,category,tier1_price,is_active&order=created_at.desc&limit=50').catch(()=>[]);
+  document.getElementById('catalog-items-list').innerHTML = items?.length ? `
+    <div style="overflow-x:auto"><table class="tbl">
+      <tr><th>Brand</th><th>Product</th><th>Category</th><th>Price</th><th>Active</th></tr>
+      ${items.map(i=>`<tr>
+        <td style="font-weight:700">${i.brand||'—'}</td>
+        <td>${i.product_name}</td>
+        <td style="color:var(--t3)">${i.category||'—'}</td>
+        <td style="color:var(--b);font-weight:700">₹${parseFloat(i.tier1_price||0).toLocaleString('en-IN')}</td>
+        <td><span class="badge ${i.is_active?'badge-green':'badge-grey'}">${i.is_active?'Active':'Off'}</span></td>
+      </tr>`).join('')}
+    </table></div>` : '<div style="text-align:center;padding:20px;color:var(--t3)">No catalog items yet</div>';
+}
+
+// ── ANALYTICS ──
+async function loadAnalytics() {
+  setPageTitle('Analytics');
+  const [orders, customers, products] = await Promise.all([
+    sbFetch('orders?select=grand_total,order_status,created_at&order=created_at.desc&limit=500').catch(()=>[]),
+    sbFetch('profiles?select=id,created_at&role=eq.customer').catch(()=>[]),
+    sbFetch('products?select=id,category&is_active=eq.true').catch(()=>[]),
+  ]);
+  const totalRev = (orders||[]).filter(o=>o.order_status!=='cancelled').reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  const catCounts = {};
+  (products||[]).forEach(p=>{ catCounts[p.category]=(catCounts[p.category]||0)+1; });
+  const topCats = Object.entries(catCounts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">₹${totalRev.toLocaleString('en-IN')}</div><div class="stat-lbl">Total Revenue</div></div>
+      <div class="stat-card"><div class="stat-val">${(orders||[]).length}</div><div class="stat-lbl">Total Orders</div></div>
+      <div class="stat-card"><div class="stat-val">${(customers||[]).length}</div><div class="stat-lbl">Total Customers</div></div>
+      <div class="stat-card"><div class="stat-val">₹${(orders||[]).length?(totalRev/(orders||[]).filter(o=>o.order_status!=='cancelled').length||0).toFixed(0):0}</div><div class="stat-lbl">Avg Order Value</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top Categories by Products</div>
+      ${topCats.map(([cat,count])=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr)">
+          <div style="flex:1;font-weight:700;color:var(--t1)">${cat}</div>
+          <div style="font-size:13px;color:var(--b);font-weight:800">${count} products</div>
+          <div style="width:80px;height:6px;background:var(--bdr);border-radius:3px;overflow:hidden">
+            <div style="height:100%;background:var(--b);width:${Math.round(count/topCats[0][1]*100)}%"></div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── ACCOUNTS ──
+async function loadAccounts() {
+  setPageTitle('Accounts & Finance');
+  const orders = await sbFetch('orders?select=order_no,customer_name,grand_total,payment_method,payment_status,order_status,created_at&order=created_at.desc&limit=100').catch(()=>[]);
+  const totalPaid = (orders||[]).filter(o=>o.payment_status==='paid').reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  const totalPending = (orders||[]).filter(o=>o.payment_status==='pending'&&o.order_status!=='cancelled').reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val stat-up">₹${totalPaid.toLocaleString('en-IN')}</div><div class="stat-lbl">Total Collected</div></div>
+      <div class="stat-card"><div class="stat-val stat-dn">₹${totalPending.toLocaleString('en-IN')}</div><div class="stat-lbl">Pending Collection</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Order</th><th>Customer</th><th>Amount</th><th>Method</th><th>Payment</th><th>Date</th></tr>
+        ${(orders||[]).map(o=>`<tr>
+          <td style="font-size:11px;color:var(--b);font-weight:700">${o.order_no}</td>
+          <td>${o.customer_name||'—'}</td>
+          <td style="font-weight:800">₹${parseFloat(o.grand_total||0).toLocaleString('en-IN')}</td>
+          <td style="color:var(--t3)">${o.payment_method||'COD'}</td>
+          <td><span class="badge ${o.payment_status==='paid'?'badge-green':o.payment_status==='cancelled'?'badge-red':'badge-amber'}">${o.payment_status}</span></td>
+          <td style="color:var(--t3);font-size:11px">${new Date(o.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── GST ──
+async function loadGST() {
+  setPageTitle('GST Reports');
+  document.getElementById('page-content').innerHTML = `
+    <div class="card">
+      <div class="card-title">GST Summary</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label class="form-lbl">From Date</label><input type="date" id="gst-from" class="form-inp"></div>
+        <div><label class="form-lbl">To Date</label><input type="date" id="gst-to" class="form-inp"></div>
+      </div>
+      <button class="btn btn-primary" onclick="generateGSTReport()">Generate Report</button>
+    </div>
+    <div id="gst-report"></div>`;
+}
+async function generateGSTReport() {
+  const from = document.getElementById('gst-from')?.value;
+  const to = document.getElementById('gst-to')?.value;
+  if (!from||!to) { toast('Select date range','err'); return; }
+  let q = `orders?select=order_no,grand_total,items,created_at&order_status=neq.cancelled`;
+  if (from) q += `&created_at=gte.${from}`;
+  if (to) q += `&created_at=lte.${to}T23:59:59`;
+  const orders = await sbFetch(q).catch(()=>[]);
+  const total = (orders||[]).reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  const gst18 = total * 0.18 / 1.18;
+  document.getElementById('gst-report').innerHTML = `
+    <div class="card">
+      <div class="card-title">GST Report: ${from} to ${to}</div>
+      <div style="display:grid;gap:8px">
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--card2);border-radius:8px">
+          <span>Total Sales (incl. GST)</span><strong>₹${total.toLocaleString('en-IN')}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--card2);border-radius:8px">
+          <span>Taxable Value</span><strong>₹${(total-gst18).toLocaleString('en-IN')}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:10px;background:var(--blt);border-radius:8px;border:1px solid var(--b)">
+          <span>GST Collected (approx 18%)</span><strong style="color:var(--b)">₹${gst18.toLocaleString('en-IN')}</strong>
+        </div>
+        <div style="font-size:11px;color:var(--t3);padding:8px">Note: For exact GSTR-1/GSTR-3B, export from AlignBooks ERP</div>
+      </div>
+    </div>`;
+}
+window.generateGSTReport = generateGSTReport;
+
+// ── EOD ──
+async function loadEOD() {
+  setPageTitle('End of Day Report');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const orders = await sbFetch(`orders?select=order_no,customer_name,grand_total,payment_method,order_status,created_at&created_at=gte.${today.toISOString()}&order=created_at.desc`).catch(()=>[]);
+  const checkins = await sbFetch(`checkins?select=id,customer_name,purpose,created_at&created_at=gte.${today.toISOString()}&order=created_at.desc`).catch(()=>[]);
+  const revenue = (orders||[]).filter(o=>o.order_status!=='cancelled').reduce((s,o)=>s+parseFloat(o.grand_total||0),0);
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:13px;color:var(--t2)">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ Print EOD</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val">₹${revenue.toLocaleString('en-IN')}</div><div class="stat-lbl">Today's Revenue</div></div>
+      <div class="stat-card"><div class="stat-val">${(orders||[]).length}</div><div class="stat-lbl">Orders Today</div></div>
+      <div class="stat-card"><div class="stat-val">${(checkins||[]).length}</div><div class="stat-lbl">Walk-ins Today</div></div>
+      <div class="stat-card"><div class="stat-val">${(orders||[]).filter(o=>o.order_status==='cancelled').length}</div><div class="stat-lbl">Cancellations</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Today's Orders</div>
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Order</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th></tr>
+        ${(orders||[]).map(o=>`<tr>
+          <td style="font-size:11px;font-weight:700;color:var(--b)">${o.order_no}</td>
+          <td>${o.customer_name||'—'}</td>
+          <td style="font-weight:800">₹${parseFloat(o.grand_total||0).toLocaleString('en-IN')}</td>
+          <td style="color:var(--t3)">${o.payment_method||'COD'}</td>
+          <td><span class="badge ${o.order_status==='delivered'?'badge-green':o.order_status==='cancelled'?'badge-red':'badge-blue'}">${o.order_status}</span></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── HR ──
+async function loadHR() {
+  setPageTitle('HR & Team');
+  const staff = await sbFetch('profiles?role=in.(admin,manager,owner,staff,executive,sr_executive,sr_sales,tl,asm,floor_manager,store_manager,sales_head,management,reception,accounts,dispatch)&select=id,name,phone,role,status,created_at&order=created_at.desc').catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:13px;color:var(--t2)">${(staff||[]).length} team members</div>
+      <button class="btn btn-primary" onclick="loadPage('staff')">+ Add Staff Member</button>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Name</th><th>Phone</th><th>Role</th><th>Status</th><th>Joined</th><th>Action</th></tr>
+        ${(staff||[]).map(m=>`<tr>
+          <td style="font-weight:700;color:var(--t1)">${m.name||'—'}</td>
+          <td>${m.phone||'—'}</td>
+          <td><span class="badge badge-blue">${m.role}</span></td>
+          <td><span class="badge ${m.status==='approved'?'badge-green':'badge-amber'}">${m.status||'active'}</span></td>
+          <td style="color:var(--t3);font-size:11px">${new Date(m.created_at).toLocaleDateString('en-IN')}</td>
+          <td><button class="btn btn-ghost" onclick="loadPage('staff')" style="padding:4px 8px;font-size:10px">Manage Access</button></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── VENDORS ──
+async function loadVendors() {
+  setPageTitle('Vendors & Purchase');
+  const vendors = await sbFetch('vendors?select=*&order=created_at.desc&limit=50').catch(()=>[]);
+  document.getElementById('page-content').innerHTML = vendors?.length ? `
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Vendor</th><th>Phone</th><th>Category</th><th>City</th><th>Status</th></tr>
+        ${vendors.map(v=>`<tr>
+          <td style="font-weight:700;color:var(--t1)">${v.name||'—'}</td>
+          <td>${v.phone||'—'}</td>
+          <td style="color:var(--t3)">${v.category||'—'}</td>
+          <td style="color:var(--t3)">${v.city||'—'}</td>
+          <td><span class="badge ${v.status==='active'?'badge-green':'badge-grey'}">${v.status||'active'}</span></td>
+        </tr>`).join('')}
+      </table></div>
+    </div>` : `<div class="card"><div style="text-align:center;padding:30px;color:var(--t3)">No vendors yet. Add vendors in the Staff App.</div></div>`;
+}
+
+// ── COMMISSIONS ──
+async function loadCommissions() {
+  setPageTitle('Commissions');
+  const commissions = await sbFetch('contractor_loyalty?select=contractor_id,transaction_type,points,description,created_at&order=created_at.desc&limit=100').catch(()=>[]);
+  const total = (commissions||[]).reduce((s,c)=>s+(c.points||0),0);
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:1fr 1fr">
+      <div class="stat-card"><div class="stat-val">${total.toLocaleString('en-IN')}</div><div class="stat-lbl">Total Points Awarded</div></div>
+      <div class="stat-card"><div class="stat-val">${(commissions||[]).length}</div><div class="stat-lbl">Transactions</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Contractor ID</th><th>Type</th><th>Points</th><th>Description</th><th>Date</th></tr>
+        ${(commissions||[]).map(c=>`<tr>
+          <td style="font-weight:700;color:var(--b)">#${c.contractor_id}</td>
+          <td><span class="badge ${c.transaction_type==='earned'?'badge-green':'badge-blue'}">${c.transaction_type}</span></td>
+          <td style="font-weight:800;color:${c.points>=0?'var(--green)':'var(--red)'}">${c.points>=0?'+':''}${c.points}</td>
+          <td style="color:var(--t2)">${c.description||'—'}</td>
+          <td style="color:var(--t3);font-size:11px">${new Date(c.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── REFERRALS ──
+async function loadReferrals() {
+  setPageTitle('Referrals');
+  const referrals = await sbFetch('contractor_loyalty?select=contractor_id,points,description,created_at&transaction_type=eq.referral&order=created_at.desc&limit=50').catch(()=>[]);
+  document.getElementById('page-content').innerHTML = `
+    <div class="card">
+      <div class="card-title">Referral Transactions</div>
+      ${referrals?.length ? `<div style="overflow-x:auto"><table class="tbl">
+        <tr><th>Contractor</th><th>Points</th><th>Description</th><th>Date</th></tr>
+        ${referrals.map(r=>`<tr>
+          <td style="font-weight:700">#${r.contractor_id}</td>
+          <td style="color:var(--green);font-weight:800">+${r.points}</td>
+          <td>${r.description||'—'}</td>
+          <td style="color:var(--t3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
+        </tr>`).join('')}
+      </table></div>` : '<div style="padding:20px;text-align:center;color:var(--t3)">No referral transactions yet</div>'}
+    </div>`;
+}
+
+// ── MARKETING ──
+async function loadMarketing() {
+  setPageTitle('Marketing');
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="card">
+        <div class="card-title">📱 WhatsApp Broadcast</div>
+        <div style="font-size:13px;color:var(--t2);margin-bottom:12px">Send bulk messages to customers</div>
+        <textarea class="form-inp" style="min-height:80px;resize:vertical;margin-bottom:10px" placeholder="Type your message here…" id="wa-msg"></textarea>
+        <button class="btn btn-primary" onclick="alert('WhatsApp integration coming soon — connect BSP first')">Send Broadcast</button>
+      </div>
+      <div class="card">
+        <div class="card-title">🎁 Active Promos</div>
+        <button class="btn btn-ghost" style="width:100%;margin-bottom:8px" onclick="loadPage('promos')">Manage Promo Codes →</button>
+        <button class="btn btn-ghost" style="width:100%" onclick="loadPage('promos')">Add New Promo →</button>
+      </div>
+    </div>`;
+}
+
 
 // ── INIT ──
 const savedSession = localStorage.getItem('vw_admin_session');

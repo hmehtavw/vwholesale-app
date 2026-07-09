@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'index.html'
+      - 'staff.html'
       - 'shop.html'
       - 'professional.html'
       - 'admin.html'

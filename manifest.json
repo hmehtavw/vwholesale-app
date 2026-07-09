@@ -37,7 +37,7 @@
       "name": "Staff Login",
       "short_name": "Staff",
       "description": "Staff dashboard login",
-      "url": "/vwholesale-app/index.html?staff=1",
+      "url": "/vwholesale-app/staff.html?staff=1",
       "icons": [{ "src": "/vwholesale-app/icon-192.png", "sizes": "192x192" }]
     }
   ]
