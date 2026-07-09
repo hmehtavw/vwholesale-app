@@ -547,9 +547,14 @@ window.goToQuotations = goToQuotations;
 async function currentUserCanSeeDailyReport() {
   if (VW_AUTH.isAdmin()) return true;
   const profile = VW_AUTH.getCurrentProfile();
-  if (!profile || !profile.staffId) return false;
-  const staff = await VW_DB.getById(VW_DB.STORES.staff, profile.staffId);
-  return !!(staff && staff.team === 'management');
+  if (!profile) return false;
+  // Roles that need daily cash report
+  const allowedRoles = ['manager','owner','store_manager','floor_manager','management','accounts','tl','sr_sales','sr_executive'];
+  if (allowedRoles.includes(profile.role)) return true;
+  // Check if billing or accounts permission is granted
+  const perms = profile.permissions || [];
+  if (perms.includes('billing') || perms.includes('accounts') || perms.includes('analytics')) return true;
+  return false;
 }
 window.currentUserCanSeeDailyReport = currentUserCanSeeDailyReport;
 
@@ -859,17 +864,21 @@ async function renderDashboard() {
     }
   }
 
-  // Low-stock products (Admin only)
-  const lowStock = (profile && profile.role === 'admin')
+  // Low-stock products — for inventory/billing/management roles
+  const _lowStockRoles = ['admin','manager','owner','store_manager','floor_manager','management','accounts'];
+  const _haInvPerm = (profile?.permissions||[]).includes('inventory');
+  const lowStock = (profile && (_lowStockRoles.includes(profile.role) || _haInvPerm))
     ? products.filter(p => p.stock <= (p.lowStockThreshold || 20))
     : [];
   let lowStockBanner = '';
   // Stock hold alerts for SM/Management
   let holdAlertBanner = '';
-  if (profile && ['admin','store_manager','management'].includes(profile.role)) {
+  const _tqRoles = ['admin','manager','owner','store_manager','floor_manager','management','tl','sr_sales','sr_executive'];
+  const _hasBillingPerm = (profile?.permissions||[]).includes('billing');
+  if (profile && (_tqRoles.includes(profile.role) || _hasBillingPerm)) {
     try { holdAlertBanner = await VW_TILES.renderHoldAlerts(); } catch(e) {}
 
-    // Fetch pending TQs for management pipeline view
+    // Fetch pending TQs for all billing-access staff
     try {
       const { data: pendingTQs } = await VW_DB.client
         .from('tile_quotations')
@@ -900,7 +909,8 @@ async function renderDashboard() {
       }
     } catch(e) {}
   }
-  if (profile && profile.role === 'admin') {
+  const _canSeeLowStock = ['admin','manager','owner','store_manager','floor_manager','management','accounts'].includes(profile?.role) || VW_AUTH.getAllowedPages().includes('inventory');
+  if (_canSeeLowStock) {
     if (lowStock.length) {
       lowStockBanner = `
       <div class="alert-card">
@@ -1119,6 +1129,7 @@ async function renderDashboard() {
     <button class="btn-secondary" style="flex:1" onclick="navigateTo('analytics')">📈 Analytics</button>
   </div>` : ''}
 
+  ${(['admin','manager','owner','store_manager','floor_manager','management','tl','sr_sales','sr_executive'].includes(VW_AUTH.getRole())) ? `
   <div class="card">
     <h3 class="card-title">Business Snapshot</h3>
     <div class="snapshot-grid">
@@ -1127,7 +1138,7 @@ async function renderDashboard() {
       <div class="snap-item"><div class="snap-val">${convRate}%</div><div class="snap-label">Conversion</div></div>
       <div class="snap-item"><div class="snap-val">${leads.filter(l=>l.stage!=='Won'&&l.stage!=='Lost').length}</div><div class="snap-label">Open Leads</div></div>
     </div>
-  </div>
+  </div>` : ''}
 
   <div class="card">
     <div class="card-header-row">
