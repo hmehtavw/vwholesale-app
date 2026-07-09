@@ -248,6 +248,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'crm') html = await VW_CRM.renderCRM();
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
+    else if (page === 'quick_quote') { VW_QUICK_QUOTE?.openQuickQuote?.() || navigateTo('tiles'); return; }
     else if (page === 'my_hr')     html = await VW_HR_SELF.renderMyHRPage();
     else if (page === 'my_leaves') { VW_HR_SELF.renderMyLeaves(); return; }
     else if (page === 'my_salary') { VW_HR_SELF.renderMySalary(); return; }
