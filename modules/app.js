@@ -2377,7 +2377,13 @@ window.showApplyLeave = () => VW_HR.showApplyLeave();
 window.submitLeave = () => VW_HR.submitLeave();
 window.approveLeave = (id,s) => VW_HR.approveLeave(id,s);
 
-document.addEventListener('DOMContentLoaded', async () => { await init(); buildSidebar(); });
+document.addEventListener('DOMContentLoaded', async () => {
+  await init();
+  // Build sidebar after init — retry if sb-nav not ready yet
+  buildSidebar();
+  setTimeout(() => buildSidebar(), 500);
+  setTimeout(() => buildSidebar(), 1500);
+});
 
 // Register service worker for offline support
 if ('serviceWorker' in navigator) {
@@ -3533,13 +3539,13 @@ function buildSidebar() {
   if (roleEl) roleEl.textContent = (profile?.role || role).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
 
   const timeEl = document.getElementById('st-time');
-  if (timeEl) {
+  if (timeEl && !timeEl._tick) {
     const tick = () => { timeEl.textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}); };
-    tick(); setInterval(tick, 30000);
+    tick(); timeEl._tick = setInterval(tick, 30000);
   }
 
   const nav = document.getElementById('sb-nav');
-  if (!nav) return;
+  if (!nav) return; // Not ready yet — retry called by setTimeout
 
   let html = '';
   for (const item of SIDEBAR_NAV) {
