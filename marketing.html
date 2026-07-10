@@ -246,7 +246,7 @@
         <label class="login-label">6-Digit PIN</label>
         <input type="password" id="mkt-pin" class="login-input" placeholder="••••••" maxlength="6" inputmode="numeric">
       </div>
-      <div class="login-err" id="mkt-login-err">Invalid credentials</div>
+      <div class="login-err" id="mkt-login-err" style="margin-top:4px;padding:8px;background:rgba(239,68,68,.1);border-radius:6px;border:1px solid rgba(239,68,68,.3)"></div>
       <button class="login-btn" onclick="mktLogin()">Sign In to Marketing →</button>
     </div>
     <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3)">
@@ -396,35 +396,69 @@ async function mktLogin() {
   const phone = document.getElementById('mkt-phone').value.trim();
   const pin = document.getElementById('mkt-pin').value.trim();
   const errEl = document.getElementById('mkt-login-err');
+  const btn = document.querySelector('.login-btn');
   errEl.style.display = 'none';
 
-  if (!phone || phone.length < 10) { errEl.textContent = 'Enter valid phone number'; errEl.style.display = 'block'; return; }
+  if (!phone || phone.length < 10) { errEl.textContent = 'Enter valid 10-digit phone number'; errEl.style.display = 'block'; return; }
   if (!pin || pin.length < 6) { errEl.textContent = 'Enter 6-digit PIN'; errEl.style.display = 'block'; return; }
 
-  const { error } = await sb.auth.signInWithPassword({ email: phone + '@vwholesale.app', password: pin });
-  if (error) { errEl.textContent = 'Invalid credentials — ' + (error.message||'check phone and PIN'); errEl.style.display = 'block'; return; }
+  btn.textContent = 'Signing in…'; btn.disabled = true;
 
-  // Fix: use .then() not .catch() on Supabase thenable
-  const profileRes = await sb.from('profiles').select('*').eq('phone', phone).single().then(r=>r, ()=>({data:null}));
-  const profile = profileRes?.data;
+  try {
+    // Step 1: Supabase auth
+    const { data: authData, error: authErr } = await sb.auth.signInWithPassword({
+      email: phone + '@vwholesale.app',
+      password: pin
+    });
 
-  // Allow admin, owner, manager, marketing roles
-  const ALLOWED = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
-  if (!profile) {
-    await sb.auth.signOut();
-    errEl.textContent = 'Profile not found. Contact admin.';
+    if (authErr) {
+      errEl.textContent = 'Login failed: ' + authErr.message;
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In to Marketing →'; btn.disabled = false;
+      return;
+    }
+
+    // Step 2: Get profile using user ID (more reliable than phone lookup)
+    const userId = authData.user?.id;
+    if (!userId) {
+      errEl.textContent = 'Auth succeeded but no user ID returned';
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In to Marketing →'; btn.disabled = false;
+      return;
+    }
+
+    const { data: profile, error: profErr } = await sb
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+      .then(r => r, e => ({ data: null, error: e }));
+
+    if (profErr || !profile) {
+      errEl.textContent = 'Profile not found — contact admin';
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In to Marketing →'; btn.disabled = false;
+      return;
+    }
+
+    // Step 3: Role check — admin always has access
+    const ALLOWED = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
+    if (!ALLOWED.includes(profile.role)) {
+      await sb.auth.signOut();
+      errEl.textContent = 'Access denied for role: ' + profile.role;
+      errEl.style.display = 'block';
+      btn.textContent = 'Sign In to Marketing →'; btn.disabled = false;
+      return;
+    }
+
+    mktProfile = profile;
+    showMktApp();
+
+  } catch(e) {
+    errEl.textContent = 'Unexpected error: ' + e.message;
     errEl.style.display = 'block';
-    return;
+    btn.textContent = 'Sign In to Marketing →'; btn.disabled = false;
   }
-  if (!ALLOWED.includes(profile.role)) {
-    await sb.auth.signOut();
-    errEl.textContent = 'No marketing access for role: ' + profile.role;
-    errEl.style.display = 'block';
-    return;
-  }
-
-  mktProfile = profile;
-  showMktApp();
 }
 
 function showMktApp() {
@@ -2457,15 +2491,19 @@ function showMktToast(msg) {
 
 // ── INIT ──
 window.addEventListener('load', async () => {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    const profileRes = await sb.from('profiles').select('*').eq('id', session.user.id).single().then(r=>r, ()=>({data:null}));
-    const profile = profileRes?.data;
-    const ALLOWED = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
-    if (profile && ALLOWED.includes(profile.role)) {
-      mktProfile = profile;
-      showMktApp();
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session?.user?.id) {
+      const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single().then(r=>r, ()=>({data:null}));
+      const ALLOWED = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
+      if (profile && ALLOWED.includes(profile.role)) {
+        mktProfile = profile;
+        showMktApp();
+        return;
+      }
     }
+  } catch(e) {
+    console.log('Auto-login check failed:', e.message);
   }
 });
 </script>
