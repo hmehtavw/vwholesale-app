@@ -121,13 +121,16 @@ const PAGE_TITLES = {
 function mktNav(page) {
   document.querySelectorAll('.mkt-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
+  // Map page keys to render functions — all must be function declarations not const
+  // Direct function lookup — all render functions are in scope
   const renderers = {
-    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO, campaigns: renderCampaigns,
-    content: renderContentStudio, calendar: renderCalendar, approvals: renderApprovals,
-    social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
-    ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
-    reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
-    segments: renderSegments, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
+    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO,
+    campaigns: renderCampaigns, content: renderContentStudio, calendar: renderCalendar,
+    approvals: renderApprovals, social: renderSocial, gbp: renderGBP,
+    whatsapp: renderWhatsApp, ads: renderAds, 'local-seo': renderLocalSEO,
+    'website-seo': renderWebsiteSEO, reviews: renderReviews, analytics: renderAnalytics,
+    competitors: renderCompetitors, segments: renderSegments, agents: renderAgents,
+    'brand-profile': renderBrandProfile, brand: renderBrand,
     integrations: renderIntegrations, audit: renderAudit, settings: renderSettings
   };
   if (renderers[page]) renderers[page]();
@@ -2682,15 +2685,15 @@ async function deletePosterHistory(id) {
 }
 
 // ── REMAINING STUBS ──
-const renderCampaigns = () => renderComingSoon('Campaigns — coming next session');
-const renderSocial = () => renderComingSoon('Social Media — connect Meta Business first');
-const renderWhatsApp = () => renderComingSoon('WhatsApp — complete Interakt setup first');
-const renderAds = () => renderComingSoon('Advertising — connect Google Ads & Meta Ads first');
-const renderLocalSEO = () => renderComingSoon('Local SEO — connecting Search Console data');
-const renderWebsiteSEO = () => renderComingSoon('Website SEO — analysing vwholesale.in');
-const renderReviews = () => renderComingSoon('Reviews — connecting GBP API');
-const renderCompetitors = () => renderComingSoon('Competitor Intelligence — coming next session');
-const renderSegments = () => renderComingSoon('Customer Segments — coming next session');
+function renderCampaigns() { renderComingSoon('Campaigns — coming next session'); }
+function renderSocial() { renderComingSoon('Social Media — connect Meta Business first'); }
+function renderWhatsApp() { renderComingSoon('WhatsApp — complete Interakt setup first'); }
+function renderAds() { renderComingSoon('Advertising — connect Google Ads & Meta Ads first'); }
+function renderLocalSEO() { renderComingSoon('Local SEO — connecting Search Console data'); }
+function renderWebsiteSEO() { renderComingSoon('Website SEO — analysing vwholesale.in'); }
+function renderReviews() { renderComingSoon('Reviews & Reputation — connecting GBP API'); }
+function renderCompetitors() { renderComingSoon('Competitor Intelligence — coming next session'); }
+function renderSegments() { renderComingSoon('Customer Segments — coming next session'); }
 
 // ── TOAST ──
 function showMktToast(msg) {
