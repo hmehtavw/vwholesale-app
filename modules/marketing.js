@@ -1698,11 +1698,27 @@ async function generateFullPoster() {
     const pubCard = document.getElementById('ps-publish-card');
     if (pubCard) pubCard.style.display = 'block';
 
-    // Save to history
+    // Upload image to Supabase Storage and save URL
+    let image_url = null;
+    try {
+      const byteArr = Uint8Array.from(atob(data.image_b64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'image/png' });
+      const filename = `posters/${Date.now()}-${topic.replace(/[^a-z0-9]/gi,'_').slice(0,30)}.png`;
+      const { data: upData, error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: false });
+      if (!upErr) {
+        const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(filename);
+        image_url = urlData?.publicUrl || null;
+      }
+    } catch(uploadErr) {
+      console.warn('Image upload failed (will still save metadata):', uploadErr.message);
+    }
+
+    // Save to history with image URL
     await sb.from('poster_history').insert({
       topic, template, language: lang,
       headline: data.content?.headline,
       caption: currentCaption,
+      image_url,
       status: 'draft',
       created_by: mktProfile?.name
     });
@@ -1752,17 +1768,24 @@ async function viewPosterHistory(id) {
   const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
   if (!h) { showMktToast('Not found'); return; }
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
-  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;overflow:hidden;margin-top:20px">
     <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div><div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
       <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div></div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
-    <div style="padding:16px;display:grid;gap:10px">
-      ${h.headline?`<div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">HEADLINE</div><div style="font-size:14px;font-weight:700">${h.headline}</div></div>`:''}
-      ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div><div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:150px;overflow-y:auto">${h.caption}</div></div>`:''}
-      <div style="display:flex;gap:8px">
+    <div style="padding:16px;display:grid;gap:12px">
+      ${h.image_url
+        ? `<img src="${h.image_url}" style="width:100%;border-radius:10px;display:block" loading="lazy" onerror="this.parentElement.innerHTML='<div style=padding:20px;text-align:center;color:var(--text3)>Image unavailable — regenerate</div>'">`
+        : `<div style="background:var(--bg3);border-radius:10px;padding:40px;text-align:center;color:var(--text3);font-size:13px">
+            <div style="font-size:32px;margin-bottom:8px">🖼</div>
+            This poster was created before image saving was enabled.<br>Click Regenerate to recreate it.
+          </div>`
+      }
+      ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div><div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto">${h.caption}</div></div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${h.image_url?`<a href="${h.image_url}" download="vwholesale-poster.png" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">⬇ Download</a>`:''}
         <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="this.closest('[style*=fixed]').remove();document.getElementById('ps-topic').value='${(h.topic||'').replace(/'/g,"\'")}';document.getElementById('ps-template').value='${h.template||'product'}';document.getElementById('ps-lang').value='${h.language||'en'}';mktNav('poster')">🔄 Regenerate</button>
         <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)" onclick="if(confirm('Delete?')){deletePosterHistory(${h.id});this.closest('[style*=fixed]').remove();}">🗑 Delete</button>
         ${h.caption?`<button class="mkt-btn mkt-btn-ghost" onclick="copyPosterCaption(${h.id})">📋 Copy</button>`:''}
