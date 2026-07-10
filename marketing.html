@@ -452,6 +452,26 @@ async function mktLogin() {
 }
 
 
+function showMktApp() {
+  document.getElementById('mkt-login').style.display = 'none';
+  document.getElementById('mkt-layout').style.display = 'flex';
+  const infoEl = document.getElementById('mkt-user-info');
+  if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (mktProfile?.role||'');
+  startClock();
+  loadAIPauseStatus();
+  mktNav('command');
+}
+
+function startClock() {
+  const el = document.getElementById('mkt-time');
+  if (!el) return;
+  const tick = () => {
+    el.textContent = new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit', hour12:true});
+  };
+  tick();
+  setInterval(tick, 30000);
+}
+
 async function mktSignOut() {
   await sb.auth.signOut();
   window.location.reload();
