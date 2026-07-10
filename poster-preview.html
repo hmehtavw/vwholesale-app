@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700;900&family=Noto+Sans+Telugu:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111; display: flex; flex-direction: column; align-items: center; padding: 20px; font-family: 'DM Sans', sans-serif; }
+.controls { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 16px; margin-bottom: 16px; width: 500px; display: grid; gap: 10px; }
+.controls label { font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 3px; }
+.controls input, .controls select, .controls textarea { width: 100%; padding: 8px; background: #222; border: 1px solid #444; border-radius: 6px; color: #fff; font-family: inherit; font-size: 13px; }
+.controls textarea { height: 80px; resize: vertical; }
+.controls button { padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; }
+.btn-primary { background: #8B5CF6; color: #fff; }
+.btn-secondary { background: #333; color: #fff; }
+#poster-container { position: relative; }
+canvas { border-radius: 12px; display: block; }
+.download-btn { margin-top: 12px; padding: 10px 24px; background: #10B981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit; }
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <div>
+    <label>Template</label>
+    <select id="template" onchange="generatePoster()">
+      <option value="product">Product Showcase</option>
+      <option value="offer">Offer/Sale</option>
+      <option value="contractor">Contractor Club</option>
+      <option value="store">Store Promo</option>
+      <option value="festival">Festival Special</option>
+    </select>
+  </div>
+  <div>
+    <label>Headline (Telugu or English)</label>
+    <input type="text" id="headline" value="మీ ఇంటిని అందంగా మార్చుకోండి!" placeholder="Main headline">
+  </div>
+  <div>
+    <label>Sub-headline</label>
+    <input type="text" id="subheadline" value="Premium Tiles • Sanitaryware • Paints" placeholder="Sub-text">
+  </div>
+  <div>
+    <label>Offer/Tag Line (optional)</label>
+    <input type="text" id="tagline" value="🏠 Vijayawada's #1 Home Store" placeholder="Optional tag">
+  </div>
+  <div>
+    <label>Color Theme</label>
+    <select id="theme" onchange="generatePoster()">
+      <option value="royal">Royal Blue + Gold</option>
+      <option value="dark">Dark + Purple</option>
+      <option value="warm">Warm Orange + Cream</option>
+      <option value="green">Forest Green + White</option>
+      <option value="red">Festive Red + Gold</option>
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <button class="btn-primary" onclick="generatePoster()">🎨 Generate Poster</button>
+    <button class="btn-secondary" onclick="downloadPoster()">⬇ Download PNG</button>
+  </div>
+</div>
+
+<div id="poster-container">
+  <canvas id="poster" width="1080" height="1080" style="width:500px;height:500px"></canvas>
+</div>
+<button class="download-btn" onclick="downloadPoster()">⬇ Download 1080×1080 PNG</button>
+
+<script>
+const THEMES = {
+  royal:   { bg: ['#0A1628','#1B4F8A'], accent: '#F5C842', text: '#FFFFFF', sub: '#CBD5E1', badge_bg: '#F5C842', badge_text: '#0A1628' },
+  dark:    { bg: ['#0F0F1A','#1E1040'], accent: '#8B5CF6', text: '#FFFFFF', sub: '#A78BFA', badge_bg: '#8B5CF6', badge_text: '#FFFFFF' },
+  warm:    { bg: ['#7C2D12','#EA580C'], accent: '#FEF08A', text: '#FFFFFF', sub: '#FED7AA', badge_bg: '#FEF08A', badge_text: '#7C2D12' },
+  green:   { bg: ['#14532D','#15803D'], accent: '#BBF7D0', text: '#FFFFFF', sub: '#D1FAE5', badge_bg: '#BBF7D0', badge_text: '#14532D' },
+  red:     { bg: ['#7F1D1D','#DC2626'], accent: '#FDE68A', text: '#FFFFFF', sub: '#FECACA', badge_bg: '#FDE68A', badge_text: '#7F1D1D' },
+};
+
+function generatePoster() {
+  const canvas = document.getElementById('poster');
+  const ctx = canvas.getContext('2d');
+  const W = 1080, H = 1080;
+  const theme = THEMES[document.getElementById('theme').value] || THEMES.royal;
+  const template = document.getElementById('template').value;
+  const headline = document.getElementById('headline').value || 'V Wholesale';
+  const sub = document.getElementById('subheadline').value || '';
+  const tagline = document.getElementById('tagline').value || '';
+
+  // Background gradient
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, theme.bg[0]);
+  grad.addColorStop(1, theme.bg[1]);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Decorative circles
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.fillStyle = theme.accent;
+  ctx.beginPath(); ctx.arc(W*0.85, H*0.15, 280, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W*0.1, H*0.8, 200, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // Top accent line
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(80, 80, 160, 6);
+  ctx.fillRect(80, 80, 6, 160);
+
+  // Bottom accent line
+  ctx.fillRect(W-240, H-86, 160, 6);
+  ctx.fillRect(W-86, H-240, 6, 160);
+
+  // Logo area
+  const logoSize = 90;
+  const logoX = 80, logoY = 130;
+  ctx.fillStyle = theme.accent;
+  roundRect(ctx, logoX, logoY, logoSize, logoSize, 16);
+  ctx.fillStyle = theme.bg[0];
+  ctx.font = 'bold 42px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('VW', logoX + logoSize/2, logoY + 58);
+
+  // Brand name
+  ctx.fillStyle = theme.text;
+  ctx.font = 'bold 36px DM Sans, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('V Wholesale', logoX + logoSize + 20, logoY + 42);
+  ctx.fillStyle = theme.sub;
+  ctx.font = '22px DM Sans, sans-serif';
+  ctx.fillText('Vijayawada', logoX + logoSize + 20, logoY + 72);
+
+  // Main headline
+  ctx.fillStyle = theme.text;
+  ctx.textAlign = 'center';
+  const headlineY = template === 'offer' ? 480 : 520;
+  wrapText(ctx, headline, W/2, headlineY, W - 160, 74, 'bold 900');
+
+  // Accent divider
+  ctx.fillStyle = theme.accent;
+  ctx.fillRect(W/2 - 60, headlineY + 80, 120, 5);
+
+  // Sub headline
+  if (sub) {
+    ctx.fillStyle = theme.sub;
+    ctx.font = '32px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    wrapText(ctx, sub, W/2, headlineY + 130, W - 200, 42, 'normal');
+  }
+
+  // Tagline badge
+  if (tagline) {
+    ctx.font = 'bold 28px DM Sans, sans-serif';
+    const tw = ctx.measureText(tagline).width;
+    const bx = W/2 - tw/2 - 24, by = H - 260, bw = tw + 48, bh = 56;
+    ctx.fillStyle = theme.badge_bg;
+    roundRect(ctx, bx, by, bw, bh, 28);
+    ctx.fillStyle = theme.badge_text;
+    ctx.textAlign = 'center';
+    ctx.fillText(tagline, W/2, by + 38);
+  }
+
+  // Bottom info strip
+  const stripY = H - 170;
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.fillRect(0, stripY, W, 170);
+
+  ctx.fillStyle = theme.accent;
+  ctx.font = 'bold 26px DM Sans, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('📍 NH65, Bhavanipuram, Vijayawada', W/2, stripY + 44);
+
+  ctx.fillStyle = theme.text;
+  ctx.font = '24px DM Sans, sans-serif';
+  ctx.fillText('📞 8712697930   🌐 vwholesale.in', W/2, stripY + 86);
+
+  // Template-specific elements
+  if (template === 'offer') {
+    // Burst
+    drawBurst(ctx, W - 180, 220, 140, theme.accent, theme.bg[0]);
+    ctx.fillStyle = theme.bg[0];
+    ctx.font = 'bold 28px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('SPECIAL', W - 180, 208);
+    ctx.fillText('OFFER', W - 180, 244);
+  }
+
+  if (template === 'contractor') {
+    ctx.fillStyle = theme.accent;
+    ctx.font = 'bold 34px DM Sans, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏆 Contractor Club', W/2, 200);
+    ctx.fillStyle = theme.sub;
+    ctx.font = '26px DM Sans, sans-serif';
+    ctx.fillText('Join. Earn. Grow.', W/2, 246);
+  }
+
+  // Category pills for product template
+  if (template === 'product' || template === 'store') {
+    const cats = ['Tiles', 'Sanitaryware', 'Granite', 'Paints', 'Electricals'];
+    const pillY = H - 310;
+    const totalW = cats.reduce((s,c)=>s+ctx.measureText(c).width+40,0) + (cats.length-1)*12;
+    let px = W/2 - totalW/2;
+    ctx.font = 'bold 22px DM Sans, sans-serif';
+    cats.forEach(cat => {
+      const tw = ctx.measureText(cat).width + 40;
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      roundRect(ctx, px, pillY, tw, 44, 22);
+      ctx.fillStyle = theme.text;
+      ctx.textAlign = 'center';
+      ctx.fillText(cat, px + tw/2, pillY + 29);
+      px += tw + 12;
+    });
+  }
+
+  // Watermark
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.font = '18px DM Sans, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('vwholesale.in', W - 80, H - 30);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function wrapText(ctx, text, x, y, maxW, lineH, weight) {
+  ctx.font = `${weight} ${lineH}px 'Noto Sans Telugu', 'DM Sans', sans-serif`;
+  const words = text.split(' ');
+  let line = '';
+  let lines = [];
+  for (let w of words) {
+    const test = line + (line??' ') + w;
+    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  const startY = y - ((lines.length-1)*lineH*0.6);
+  lines.forEach((l,i) => {
+    ctx.textAlign = 'center';
+    ctx.fillText(l, x, startY + i*lineH*1.1);
+  });
+}
+
+function drawBurst(ctx, cx, cy, r, fillColor, textColor) {
+  const spikes = 12;
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.beginPath();
+  for (let i=0; i<spikes*2; i++) {
+    const angle = (i*Math.PI)/spikes - Math.PI/2;
+    const rad = i%2===0 ? r : r*0.75;
+    i===0 ? ctx.moveTo(cx+Math.cos(angle)*rad, cy+Math.sin(angle)*rad)
+          : ctx.lineTo(cx+Math.cos(angle)*rad, cy+Math.sin(angle)*rad);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function downloadPoster() {
+  const canvas = document.getElementById('poster');
+  const a = document.createElement('a');
+  a.download = 'vwholesale-post-' + Date.now() + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+// Generate on load and on input changes
+window.onload = () => { generatePoster(); };
+['headline','subheadline','tagline'].forEach(id => {
+  document.getElementById(id).addEventListener('input', generatePoster);
+});
+</script>
+</body>
+</html>
