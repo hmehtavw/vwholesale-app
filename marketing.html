@@ -382,7 +382,18 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// Inline Supabase loader — avoids Edge tracking prevention on jsdelivr
+(async function() {
+  if (window.supabase) return;
+  const s = document.createElement('script');
+  s.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+  s.crossOrigin = 'anonymous';
+  document.head.appendChild(s);
+  await new Promise(r => s.onload = r);
+})();
+</script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous"></script>
 <script>
 // ── CONFIG ──
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
@@ -2302,7 +2313,7 @@ async function buildPosterCanvas(bp, content, heroUrl, template) {
   ctx.font='16px "DM Sans",Arial,sans-serif'; ctx.textAlign='left';
   ctx.fillText('@vwholesale.in',32,1050);
   ctx.textAlign='right';
-  ctx.fillText('Vijayawada's Home Building Store',W-32,1050);
+  ctx.fillText("Vijayawada's Home Building Store",W-32,1050);
 
   return canvas;
 }
