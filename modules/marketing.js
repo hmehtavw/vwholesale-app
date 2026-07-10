@@ -1303,69 +1303,211 @@ async function rejectAction(id) {
 
 // ── CONTENT CALENDAR ──
 async function renderCalendar() {
-  const { data: content } = await sb.from('marketing_content').select('*').order('created_at',{ascending:false}).limit(30).then(r=>r,()=>({data:[]}));
-  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const { data: posts } = await sb.from('poster_history')
+    .select('*').order('created_at',{ascending:false}).limit(20)
+    .then(r=>r,()=>({data:[]}));
+
   const today = new Date();
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - today.getDay() + 1);
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const monday = new Date(today); monday.setDate(today.getDate() - (dayOfWeek===0?6:dayOfWeek-1));
+  const weekLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+
+  // Scheduled slots for this week
+  const slots = [
+    { day:'Monday',    date: new Date(monday), type:'Project Proof',    icon:'🏠', hint:'Before/after tile installation photo from a recent job. Tag the customer (with permission).', lang:'te' },
+    { day:'Wednesday', date: new Date(monday), type:'Product / Offer',  icon:'📦', hint:'Spotlight a brand or product. Mention price range or any current offer.', lang:'en' },
+    { day:'Friday',    date: new Date(monday), type:'Contractor Club',  icon:'🏆', hint:'Recruit contractors. Mention 2% commission, Silver/Gold/Platinum tiers, WhatsApp to join.', lang:'te+en' },
+    { day:'Saturday',  date: new Date(monday), type:'Customer Story',   icon:'⭐', hint:'Happy customer quote or photo. Ask them to Google review V Wholesale.', lang:'te' },
+  ];
+  slots[0].date.setDate(monday.getDate() + 0);
+  slots[1].date.setDate(monday.getDate() + 2);
+  slots[2].date.setDate(monday.getDate() + 4);
+  slots[3].date.setDate(monday.getDate() + 5);
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">Content Calendar</h3>
-      <div style="font-size:12px;color:var(--text3)">Week of ${weekStart.toLocaleDateString('en-IN',{day:'numeric',month:'long'})}</div>
+      <h3 style="font-size:16px;font-weight:900">📅 Weekly Content Planner</h3>
+      <div style="font-size:12px;color:var(--text3)">Week of ${weekLabel} · Write copy → upload poster → copy & post manually</div>
     </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="mktNav('content')">+ Create Content</button>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:16px">
-    ${days.map((day,i) => {
-      const d = new Date(weekStart);
-      d.setDate(weekStart.getDate() + i);
-      const isToday = d.toDateString() === today.toDateString();
-      return `<div style="background:${isToday?'rgba(139,92,246,.15)':'var(--bg2)'};border:1px solid ${isToday?'var(--purple)':'var(--border)'};border-radius:10px;padding:10px;min-height:120px">
-        <div style="font-size:10px;font-weight:800;color:${isToday?'var(--purple)':'var(--text3)'};margin-bottom:4px">${day}</div>
-        <div style="font-size:14px;font-weight:900;color:${isToday?'var(--purple)':'var(--text2)'};margin-bottom:8px">${d.getDate()}</div>
-        <div style="font-size:10px;color:var(--text3)">
-          ${i===0?'📝 Project proof':i===2?'📦 Product/Offer':i===4?'🏆 CC Club':i===5?'👤 Customer story':''}
+  <!-- WEEKLY SLOTS -->
+  <div style="display:grid;gap:12px;margin-bottom:16px" id="cal-slots">
+    ${slots.map((s,i) => {
+      const dateStr = s.date.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+      const isToday = s.date.toDateString() === today.toDateString();
+      const isPast  = s.date < today && !isToday;
+      return `
+      <div style="background:var(--bg2);border:1px solid ${isToday?'var(--gold)':'var(--border)'};border-radius:12px;overflow:hidden">
+        <!-- Slot header -->
+        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:${isToday?'rgba(201,168,76,0.08)':'var(--bg3)'}">
+          <div style="font-size:22px">${s.icon}</div>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:900;color:${isToday?'var(--gold)':'var(--text)'}">${s.day} · ${dateStr}</div>
+            <div style="font-size:11px;color:var(--text3)">${s.type} · ${s.lang==='te'?'Telugu':s.lang==='en'?'English':'Telugu + English'}</div>
+          </div>
+          ${isPast?`<span style="font-size:10px;color:var(--text3);font-weight:600">PAST</span>`:''}
+          ${isToday?`<span style="background:var(--gold);color:#000;font-size:10px;font-weight:900;padding:2px 8px;border-radius:10px">TODAY</span>`:''}
+        </div>
+        <!-- Slot body -->
+        <div style="padding:14px 16px;display:grid;gap:10px">
+          <div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:8px 10px;border-radius:6px;line-height:1.5">
+            💡 ${s.hint}
+          </div>
+          <!-- Caption input -->
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">CAPTION / COPY</label>
+            <textarea id="cal-caption-${i}" rows="3" class="mkt-form-input" style="resize:vertical;font-size:12px;line-height:1.6"
+              placeholder="Write your post caption here... include emojis, call to action, and hashtags"></textarea>
+          </div>
+          <!-- Poster upload -->
+          <div style="display:flex;gap:8px;align-items:flex-start">
+            <div style="flex:1">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">POSTER IMAGE</label>
+              <input type="file" id="cal-img-${i}" accept="image/*" style="display:none" onchange="calPreviewImg(${i})">
+              <div id="cal-img-preview-${i}" onclick="document.getElementById('cal-img-${i}').click()"
+                style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--text3);min-height:60px;display:flex;align-items:center;justify-content:center;gap:8px"
+                onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
+                📎 Click to upload poster (JPG/PNG)
+              </div>
+            </div>
+          </div>
+          <!-- Action buttons -->
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="calCopyCaption(${i})">📋 Copy Caption</button>
+            <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="calDownloadImg(${i})">⬇ Download Poster</button>
+            <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="calSaveDraft(${i},'${s.type}','${s.lang}','${s.date.toISOString().slice(0,10)}')">💾 Save Draft</button>
+          </div>
         </div>
       </div>`;
     }).join('')}
   </div>
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">Recommended Weekly Rhythm</div>
-    <div style="display:grid;gap:6px">
-      ${[
-        {day:'Monday', type:'Project Proof', desc:'Real completed project photo — before/after tile/sanitary installation', platform:'Instagram + GBP', lang:'Telugu'},
-        {day:'Wednesday', type:'Product/Offer', desc:'Featured product or weekly deal — category highlight', platform:'Instagram + Facebook', lang:'English'},
-        {day:'Friday', type:'Contractor Club', desc:'Contractor recruitment — benefits, earnings, how to join', platform:'Instagram + WhatsApp', lang:'Telugu + English'},
-        {day:'Saturday', type:'Customer Story', desc:'Happy customer testimonial or journey', platform:'GBP + Instagram', lang:'Telugu'},
-      ].map(r=>`<div style="display:grid;grid-template-columns:80px 1fr 120px 100px;gap:12px;align-items:center;padding:10px;background:var(--bg3);border-radius:8px;font-size:12px">
-        <div style="font-weight:800;color:var(--purple)">${r.day}</div>
-        <div><div style="font-weight:700">${r.type}</div><div style="color:var(--text3);font-size:11px">${r.desc}</div></div>
-        <div style="color:var(--text3)">${r.platform}</div>
-        <button class="mkt-btn mkt-btn-ghost" onclick="draftContent('post','Instagram','${r.type.replace(/'/g,"\\'")}: ${r.desc.replace(/'/g,"\\'").replace(/,/g,'')}','${r.lang==='Telugu'?'te':'en'}')" style="font-size:10px;padding:4px 8px">Draft →</button>
-      </div>`).join('')}
+  <!-- SAVED DRAFTS -->
+  <div class="mkt-card" id="cal-drafts-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="mkt-card-title" style="margin:0">Saved Drafts & Posts</div>
+      <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="renderCalendar()">↺ Refresh</button>
+    </div>
+    <div id="cal-drafts">
+      ${(posts||[]).length === 0
+        ? `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No drafts yet — save your first post above</div>`
+        : (posts||[]).map(p=>`
+          <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
+            ${p.image_url
+              ? `<img src="${p.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
+              : `<div style="width:48px;height:48px;background:var(--bg3);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">🖼</div>`
+            }
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.topic||p.headline||'Draft'}</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${p.template||'post'} · ${new Date(p.created_at).toLocaleDateString('en-IN')}</div>
+              ${p.caption?`<div style="font-size:11px;color:var(--text2);line-height:1.4">${p.caption.slice(0,90)}${p.caption.length>90?'…':''}</div>`:''}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+              ${p.caption?`<button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" onclick="navigator.clipboard.writeText(${JSON.stringify(p.caption)}).then(()=>showMktToast('📋 Copied!'))">📋 Copy</button>`:''}
+              ${p.image_url?`<a class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none" href="${p.image_url}" download="poster.png">⬇ Save</a>`:''}
+              <button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;color:var(--red)" onclick="calDeleteDraft(${p.id})">🗑</button>
+            </div>
+          </div>`).join('')
+      }
     </div>
   </div>
 
-  ${(content||[]).length > 0 ? `
+  <!-- QUICK POSTING GUIDE -->
   <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">Content Drafts (${content.length})</div>
+    <div class="mkt-card-title">📲 How to Post (Manual Flow)</div>
     <div style="display:grid;gap:6px">
-      ${(content||[]).map(c=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:8px">
-        <span class="badge badge-purple">${c.platform||c.type}</span>
-        <span class="badge badge-gold">${c.language}</span>
-        <div style="flex:1;font-size:12px;font-weight:700">${c.title||c.type}</div>
-        <span class="badge ${c.status==='approved'?'badge-green':c.status==='draft'?'badge-blue':'badge-gray'}">${c.status}</span>
-        <div style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('en-IN')}</div>
+      ${[
+        ['1','Download the poster image using ⬇ Download Poster'],
+        ['2','Copy the caption using 📋 Copy Caption'],
+        ['3','Open Instagram → + New Post → select the poster image'],
+        ['4','Paste the caption, add location: V Wholesale Vijayawada'],
+        ['5','For GBP: Google Business → Add Update → paste caption + image'],
+        ['6','For WhatsApp: Open Broadcast list → paste caption + image'],
+      ].map(([n,t])=>`
+      <div style="display:flex;gap:10px;align-items:center;padding:8px;background:var(--bg3);border-radius:6px">
+        <span style="width:20px;height:20px;border-radius:50%;background:var(--gold);color:#000;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">${n}</span>
+        <span style="font-size:12px;color:var(--text2)">${t}</span>
       </div>`).join('')}
     </div>
-  </div>` : ''}
+  </div>
   `);
 }
+
+// ── Calendar helpers ──
+function calPreviewImg(i) {
+  const file = document.getElementById(`cal-img-${i}`)?.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const el = document.getElementById(`cal-img-preview-${i}`);
+    if (el) el.innerHTML = `<img src="${e.target.result}" style="max-height:80px;border-radius:6px;object-fit:contain">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function calCopyCaption(i) {
+  const txt = document.getElementById(`cal-caption-${i}`)?.value?.trim();
+  if (!txt) { showMktToast('Write a caption first'); return; }
+  navigator.clipboard.writeText(txt).then(() => showMktToast('📋 Caption copied!'));
+}
+
+function calDownloadImg(i) {
+  const file = document.getElementById(`cal-img-${i}`)?.files?.[0];
+  if (!file) { showMktToast('Upload a poster image first'); return; }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = `vwholesale-poster-${Date.now()}.png`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function calSaveDraft(i, type, lang, dateStr) {
+  const caption = document.getElementById(`cal-caption-${i}`)?.value?.trim();
+  const file    = document.getElementById(`cal-img-${i}`)?.files?.[0];
+  if (!caption && !file) { showMktToast('Add a caption or image first'); return; }
+
+  let image_url = null;
+  if (file) {
+    try {
+      await sb.storage.createBucket('brand-assets', { public: true }).catch(()=>{});
+      const fname = `posters/${Date.now()}-${type.replace(/\W/g,'_').slice(0,20)}.png`;
+      const { error } = await sb.storage.from('brand-assets').upload(fname, file, { contentType: file.type, upsert: true });
+      if (!error) {
+        const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(fname);
+        image_url = urlData?.publicUrl || null;
+      }
+    } catch(e) { console.warn('Upload failed:', e.message); }
+  }
+
+  const { error } = await sb.from('poster_history').insert({
+    topic: type,
+    template: type.toLowerCase().replace(/\W/g,'_').slice(0,20),
+    language: lang,
+    caption,
+    image_url,
+    status: 'draft',
+    created_by: mktProfile?.name,
+    created_at: new Date(dateStr).toISOString()
+  });
+
+  if (error) { showMktToast('Save failed: ' + error.message); return; }
+  showMktToast('✅ Draft saved!');
+  // Clear the slot
+  const capEl = document.getElementById(`cal-caption-${i}`);
+  if (capEl) capEl.value = '';
+  const prevEl = document.getElementById(`cal-img-preview-${i}`);
+  if (prevEl) prevEl.innerHTML = '📎 Click to upload poster (JPG/PNG)';
+  renderCalendar();
+}
+
+async function calDeleteDraft(id) {
+  if (!confirm('Delete this draft?')) return;
+  await sb.from('poster_history').delete().eq('id', id);
+  showMktToast('Deleted');
+  renderCalendar();
+}
+
 
 // ── ANALYTICS ──
 async function renderAnalytics() {
