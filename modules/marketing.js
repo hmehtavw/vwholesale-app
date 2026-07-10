@@ -1804,3 +1804,14 @@ async function loadPosterHistory() {
 }
 
 // ── DRAFT VIEWER ──// ── DRAFT VIEWER ──
+
+// ── STUB PAGES ──
+function renderCampaigns() { renderComingSoon('Campaigns — coming next session'); }
+function renderSocial() { renderComingSoon('Social Media — connect Meta Business first'); }
+function renderWhatsApp() { renderComingSoon('WhatsApp — complete Interakt setup first'); }
+function renderAds() { renderComingSoon('Advertising — connect Google Ads & Meta Ads first'); }
+function renderLocalSEO() { renderComingSoon('Local SEO — connecting Search Console data'); }
+function renderWebsiteSEO() { renderComingSoon('Website SEO — analysing vwholesale.in'); }
+function renderReviews() { renderComingSoon('Reviews & Reputation — connecting GBP API'); }
+function renderCompetitors() { renderComingSoon('Competitor Intelligence — coming next session'); }
+function renderSegments() { renderComingSoon('Customer Segments — coming next session'); }
