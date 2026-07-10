@@ -382,25 +382,23 @@
   </div>
 </div>
 
-<script>
-// Inline Supabase loader — avoids Edge tracking prevention on jsdelivr
-(async function() {
-  if (window.supabase) return;
-  const s = document.createElement('script');
-  s.src = 'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
-  s.crossOrigin = 'anonymous';
-  document.head.appendChild(s);
-  await new Promise(r => s.onload = r);
-})();
-</script>
-<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // ── CONFIG ──
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
-const sb = supabase.createClient(MKT_SB_URL, MKT_SB_KEY);
+let sb = null;
 let mktProfile = null;
 let aiPaused = false;
+
+// Wait for Supabase to load before initialising
+function initSupabase() {
+  if (window.supabase) {
+    sb = window.supabase.createClient(MKT_SB_URL, MKT_SB_KEY);
+    return true;
+  }
+  return false;
+}
 
 // ── AUTH ──
 async function mktLogin() {
@@ -3080,6 +3078,17 @@ function showMktToast(msg) {
 
 // ── INIT ──
 window.addEventListener('load', async () => {
+  // Wait for Supabase to be ready
+  let attempts = 0;
+  while (!initSupabase() && attempts < 20) {
+    await new Promise(r => setTimeout(r, 100));
+    attempts++;
+  }
+  if (!sb) {
+    document.getElementById('mkt-login-err').textContent = 'Failed to load Supabase. Refresh page.';
+    document.getElementById('mkt-login-err').style.display = 'block';
+    return;
+  }
   try {
     const { data: { session } } = await sb.auth.getSession();
     if (session?.user?.id) {
