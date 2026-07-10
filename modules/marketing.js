@@ -1581,7 +1581,7 @@ async function saveSetting(key, inputId) {
   showMktToast('✅ Setting saved');
 }
 
-// ── POSTER STUDIO — gpt-image-1 direct generation ──
+// ── POSTER STUDIO — Canvas Compositor (hero image + text overlay) ──
 async function renderPosterStudio() {
   const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
   const bp = (bpArr||[])[0]||{business_name:'V Wholesale',tagline:'Build Better. Pay Less.',phone:'8712697930',website:'https://vwholesale.in',address:'NH65, Bhavanipuram, Vijayawada',primary_color:'#1a2744',secondary_color:'#c9a84c'};
@@ -1625,7 +1625,7 @@ async function renderPosterStudio() {
           </div>
         </div>
         <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:var(--text2)">
-          💡 AI writes all text + designs the complete poster image. No manual editing needed. ~₹6/poster.
+          💡 AI generates a premium hero image, then our Canvas engine overlays all text, logo & branding — zero garbled text, pixel-perfect every time. ~₹4/poster.
         </div>
         <button class="mkt-btn mkt-btn-primary" onclick="generateFullPoster()" style="width:100%;padding:14px;font-size:15px;font-weight:900">
           ✨ Generate Poster
@@ -1665,8 +1665,13 @@ async function renderPosterStudio() {
   loadPosterHistory();
 }
 
+// ── POSTER CANVAS COMPOSITOR ──
+// Hero image from DALL-E 3 HD + all text/branding composited on HTML Canvas
+// Eliminates ALL text garbling from image generation models
+
 let currentPosterB64 = null;
 let currentCaption = '';
+let currentPosterContent = null;
 
 async function generateFullPoster() {
   const topic = (document.getElementById('ps-topic')?.value||'').trim();
@@ -1675,21 +1680,26 @@ async function generateFullPoster() {
   if (!topic) { showMktToast('Enter a topic first'); return; }
 
   const preview = document.getElementById('ps-preview');
+  const setStatus = (msg) => {
+    const el = document.getElementById('ps-status');
+    if (el) el.textContent = msg;
+  };
+
   preview.innerHTML = `
   <div style="text-align:center;padding:40px">
     <div class="ai-thinking" style="justify-content:center;margin-bottom:16px">
       <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
     </div>
-    <div style="font-size:14px;font-weight:700;color:var(--text2)" id="ps-status">Writing content in AI…</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:6px">Then designing poster with gpt-image-1</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">~30–60 seconds</div>
+    <div style="font-size:14px;font-weight:700;color:var(--text2)" id="ps-status">✍️ Writing content…</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">Then generating premium hero image with DALL-E 3 HD</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">~30–50 seconds</div>
   </div>`;
 
-  // Load brand profile
   const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
   const bp = (bpArr||[])[0]||{};
 
   try {
+    setStatus('✍️ Writing poster content…');
     const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
@@ -1700,66 +1710,326 @@ async function generateFullPoster() {
         website: bp.website||'vwholesale.in',
         address: bp.address||'NH65, Bhavanipuram, Vijayawada',
         tagline: bp.tagline||'Build Better. Pay Less.',
-        categories: bp.categories||['Tiles','Granite','Sanitaryware','Paints','Electricals']
       })
     });
 
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Generation failed');
 
-    currentPosterB64 = data.image_b64;
-    currentCaption = data.caption || '';
+    setStatus('🎨 Compositing poster with Canvas engine…');
+    currentPosterContent = data.content;
+    currentCaption = data.content?.caption || `✨ ${topic} now at V Wholesale, Vijayawada! 📞 8712697930 | vwholesale.in #VWholesale #Vijayawada`;
 
-    // Show image
-    preview.innerHTML = `<img src="data:image/png;base64,${data.image_b64}" style="width:100%;height:100%;object-fit:contain;border-radius:10px">`;
+    const bizInfo = {
+      name: bp.business_name || 'V Wholesale',
+      phone: bp.phone || '8712697930',
+      website: (bp.website || 'vwholesale.in').replace('https://','').replace('http://',''),
+      address: bp.address || 'NH65, Bhavanipuram, Vijayawada',
+      tagline: (bp.tagline || 'Beautiful Spaces. Built to Last.').toUpperCase(),
+    };
 
-    // Show publish card
+    const posterB64 = await composePosterCanvas(data.image_b64, data.content, bizInfo);
+    currentPosterB64 = posterB64;
+
+    preview.innerHTML = `<img src="data:image/png;base64,${posterB64}" style="width:100%;height:100%;object-fit:contain;border-radius:10px;cursor:zoom-in" onclick="window.open(this.src)" title="Click to zoom">`;
+
     const capBox = document.getElementById('ps-caption-box');
     if (capBox) capBox.textContent = currentCaption;
     const pubCard = document.getElementById('ps-publish-card');
     if (pubCard) pubCard.style.display = 'block';
 
-    // Upload image to Supabase Storage and save URL
+    // Upload composited poster to storage
     let image_url = null;
     try {
-      const byteArr = Uint8Array.from(atob(data.image_b64), c => c.charCodeAt(0));
+      const byteArr = Uint8Array.from(atob(posterB64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/png' });
       const filename = `posters/${Date.now()}-${topic.replace(/[^a-z0-9]/gi,'_').slice(0,30)}.png`;
-      const { data: upData, error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: false });
+      const { error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: false });
       if (!upErr) {
         const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(filename);
         image_url = urlData?.publicUrl || null;
       }
     } catch(uploadErr) {
-      console.warn('Image upload failed (will still save metadata):', uploadErr.message);
+      console.warn('Upload failed (metadata still saved):', uploadErr.message);
     }
 
-    // Save to history with image URL
     await sb.from('poster_history').insert({
       topic, template, language: lang,
-      headline: data.content?.headline,
+      headline: data.content?.headline_line1,
       caption: currentCaption,
       image_url,
       status: 'draft',
       created_by: mktProfile?.name
     });
     loadPosterHistory();
-
-    showMktToast('✅ Poster ready! Download or regenerate.');
+    showMktToast('✅ Poster ready! Click image to zoom or download.');
 
   } catch(e) {
     preview.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">
       <div style="font-size:32px;margin-bottom:8px">⚠️</div>
       <div style="font-weight:700;margin-bottom:4px">Generation Failed</div>
-      <div style="font-size:12px">${e.message}</div>
-      ${e.message?.includes('verify')||e.message?.includes('organization')?
-        '<div style="font-size:11px;margin-top:8px;color:var(--gold)">⚠️ gpt-image-1 needs org verification at platform.openai.com/settings/organization</div>':
-        '<div style="font-size:11px;margin-top:8px;color:var(--text3)">Check OpenAI credits and API key in Supabase secrets</div>'
-      }
+      <div style="font-size:12px;color:var(--text2)">${e.message}</div>
+      <div style="font-size:11px;margin-top:8px;color:var(--text3)">Check OpenAI credits &amp; OPENAI_API_KEY secret in Supabase</div>
     </div>`;
   }
 }
 
+// ─────────────────────────────────────────────────────────
+//  CANVAS COMPOSITOR — matches ChatGPT poster style
+//  Navy left panel + hero photo right half + full text overlay
+// ─────────────────────────────────────────────────────────
+async function composePosterCanvas(heroB64, content, biz) {
+  const S = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = S; canvas.height = S;
+  const ctx = canvas.getContext('2d');
+
+  const NAVY = '#1a2744';
+  const GOLD  = '#c9a84c';
+  const WHITE = '#ffffff';
+
+  // ── Full navy background ──
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, 0, S, S);
+
+  // ── Hero image: right 58%, top 75% ──
+  const heroX = Math.round(S * 0.41);
+  const heroH = Math.round(S * 0.755);
+  try {
+    const img = await loadImgB64(heroB64);
+    ctx.save();
+    // Rounded right panel
+    psRoundedRect(ctx, heroX, 0, S - heroX, heroH, 0, 0, 36, 36);
+    ctx.clip();
+    const sc = Math.max((S - heroX) / img.width, heroH / img.height);
+    const dw = img.width * sc, dh = img.height * sc;
+    ctx.drawImage(img, heroX + ((S - heroX) - dw)/2, (heroH - dh)/2, dw, dh);
+    ctx.restore();
+    // Subtle dark gradient over right panel left edge
+    const grad = ctx.createLinearGradient(heroX, 0, heroX + 80, 0);
+    grad.addColorStop(0, 'rgba(26,39,68,0.9)');
+    grad.addColorStop(1, 'rgba(26,39,68,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(heroX, 0, 80, heroH);
+    // Gold arc border
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.arc(heroX + 12, heroH * 0.5, heroH * 0.5 + 14, -Math.PI/2, Math.PI/2, false);
+    ctx.stroke();
+  } catch(e) { console.warn('Hero image error:', e.message); }
+
+  // ── TOP-RIGHT: "AVAILABLE IN STORE" corner badge ──
+  const bdg = (content?.badge || 'AVAILABLE IN STORE').split(' ');
+  ctx.save();
+  ctx.fillStyle = GOLD;
+  ctx.beginPath();
+  ctx.moveTo(S - 140, 0); ctx.lineTo(S, 0); ctx.lineTo(S, 88); ctx.lineTo(S - 155, 88);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = NAVY;
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 11px Arial'; ctx.fillText('★ ★ ★', S - 72, 16);
+  ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[0]||'AVAILABLE', S - 72, 34);
+  if (bdg.length > 1) { ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[1]||'IN', S - 72, 52); }
+  if (bdg.length > 2) { ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[2]||'STORE', S - 72, 68); }
+  ctx.font = 'bold 11px Arial'; ctx.fillText('★ ★ ★', S - 72, 82);
+  ctx.textAlign = 'left'; ctx.restore();
+
+  // ── V WHOLESALE LOGO + NAME (top left) ──
+  psDrawVLogo(ctx, 36, 28, 52, GOLD);
+  ctx.fillStyle = WHITE;
+  ctx.font = 'bold 21px Arial';
+  ctx.fillText('V WHOLESALE', 98, 50);
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '10px Arial';
+  ctx.fillText('TILES  •  SANITARY  •  BATHWARE', 98, 67);
+
+  // ── HEADLINE LINE 1: brand name in gold ──
+  const h1 = ((content?.headline_line1) || 'BRAND').toUpperCase();
+  ctx.fillStyle = GOLD;
+  psFitText(ctx, h1, 'bold', 36, 220, 420, 90, 46);
+
+  // ── HEADLINE LINE 2: category in white, bigger ──
+  const h2 = ((content?.headline_line2) || 'TILES').toUpperCase();
+  ctx.fillStyle = WHITE;
+  psFitText(ctx, h2, 'bold', 36, 348, 420, 118, 60);
+
+  // Gold rule with diamond
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(36, 370, 385, 2.5);
+  ctx.save(); ctx.translate(228, 370); ctx.rotate(Math.PI/4);
+  ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+
+  // ── SUBHEADLINE: gold bar ──
+  const sub = content?.subheadline || 'Now Available at V Wholesale';
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(0, 382, 440, 45);
+  ctx.fillStyle = NAVY;
+  ctx.font = 'bold 17px Arial';
+  ctx.fillText(sub, 36, 411);
+
+  // ── BODY TEXT ──
+  ctx.fillStyle = WHITE;
+  ctx.font = 'bold 16px Arial';
+  ctx.fillText(content?.body || 'Premium Wall & Floor Tile Collection', 36, 453);
+
+  // Features in gold italic
+  ctx.fillStyle = GOLD;
+  ctx.font = 'italic 13.5px Arial';
+  const feat = [content?.feature1||'Elegant Designs', content?.feature2||'Modern Finishes', content?.feature3||'Lasting Quality'];
+  ctx.fillText(feat.join('  •  '), 36, 476);
+
+  // Divider
+  ctx.strokeStyle = 'rgba(201,168,76,0.5)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(36, 492); ctx.lineTo(428, 492); ctx.stroke();
+
+  // House icon + usage text
+  psHouseIcon(ctx, 36, 503, GOLD);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.font = '13px Arial';
+  psWrapText(ctx, 'Perfect for Living Rooms, Bedrooms, Bathrooms & Outdoor Spaces', 62, 512, 360, 18);
+
+  // ── BOTTOM ZONE: dark overlay over hero image area ──
+  const botY = heroH;
+  ctx.fillStyle = 'rgba(10,18,38,0.65)';
+  ctx.fillRect(0, botY, S, S - botY);
+
+  // ── FEATURE ICONS STRIP (3 columns) ──
+  const iconZoneH = 110;
+  const iconY = botY + 14;
+  const cols = [S*0.165, S*0.5, S*0.835];
+  const icons = ['◈', '⬡', '✦'];
+  const flabels = [
+    (content?.feature1||'Luxury\nMarble Looks').replace(' & ','\n& '),
+    (content?.feature2||'Glossy, Matt &\nDesigner Finishes'),
+    (content?.feature3||'Premium Quality\nfor Modern Homes'),
+  ];
+  cols.forEach((cx, i) => {
+    // Circle
+    ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, iconY + 28, 32, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = GOLD; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(icons[i], cx, iconY + 37);
+    // Label
+    ctx.fillStyle = WHITE; ctx.font = '12px Arial';
+    flabels[i].split('\n').forEach((ln, li) => ctx.fillText(ln, cx, iconY + 74 + li*16));
+    // Separator
+    if (i < 2) {
+      ctx.strokeStyle = 'rgba(201,168,76,0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      const sx = cols[i] + (cols[i+1]-cols[i])/2;
+      ctx.moveTo(sx, iconY + 6); ctx.lineTo(sx, iconY + 96); ctx.stroke();
+    }
+  });
+  ctx.textAlign = 'left';
+
+  // ── CATEGORY STRIP ──
+  const stripItems = content?.strip_items || ['TILES','GRANITE','SANITARYWARE','PAINTS','ELECTRICALS'];
+  const stripY = S - 130;
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(0, stripY, S, 38);
+  ctx.fillStyle = NAVY;
+  ctx.font = 'bold 13px Arial';
+  ctx.textAlign = 'center';
+  const sw = S / stripItems.length;
+  stripItems.forEach((item, i) => ctx.fillText(item.toUpperCase(), sw*i + sw/2, stripY + 25));
+  ctx.textAlign = 'left';
+
+  // ── FOOTER ──
+  const footY = stripY + 38;
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, footY, S, S - footY);
+  ctx.fillStyle = GOLD; ctx.fillRect(0, footY, S, 2); // gold top rule
+
+  // Left: address block
+  ctx.fillStyle = GOLD; ctx.font = 'bold 27px Arial';
+  ctx.fillText(biz.name || 'V Wholesale', 36, footY + 34);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '12px Arial';
+  ctx.fillText('📍 ' + (biz.address||'NH65, Bhavanipuram, Vijayawada'), 36, footY + 55);
+  ctx.fillText('📞 Call: ' + (biz.phone||'8712697930'), 36, footY + 72);
+  ctx.fillText('🌐 ' + (biz.website||'vwholesale.in'), 36, footY + 89);
+
+  // Right: CTA button
+  const ctaW = 264, ctaH = 50;
+  const ctaX = S - ctaW - 36, ctaY2 = footY + 24;
+  // Filled gold button
+  ctx.fillStyle = 'rgba(201,168,76,0.12)';
+  psRoundedRect(ctx, ctaX, ctaY2, ctaW, ctaH, 25,25,25,25); ctx.fill();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
+  psRoundedRect(ctx, ctaX, ctaY2, ctaW, ctaH, 25,25,25,25); ctx.stroke();
+  ctx.fillStyle = GOLD; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center';
+  ctx.fillText((content?.cta||'VISIT OUR STORE TODAY').toUpperCase() + '  ›', ctaX + ctaW/2, ctaY2 + 31);
+  ctx.textAlign = 'left';
+
+  // Bottom tagline
+  ctx.fillStyle = GOLD; ctx.font = 'italic 11.5px Arial'; ctx.textAlign = 'center';
+  ctx.fillText(biz.tagline || 'BEAUTIFUL SPACES. BUILT TO LAST.', S/2, S - 8);
+  ctx.textAlign = 'left';
+
+  return canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+}
+
+// ── CANVAS UTILS ──
+function loadImgB64(b64) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => res(img);
+    img.onerror = () => rej(new Error('Image load failed'));
+    img.src = 'data:image/png;base64,' + b64;
+  });
+}
+function psRoundedRect(ctx, x, y, w, h, tl, tr, br, bl) {
+  ctx.beginPath();
+  ctx.moveTo(x+tl, y);
+  ctx.lineTo(x+w-tr, y); ctx.arcTo(x+w, y, x+w, y+tr, tr);
+  ctx.lineTo(x+w, y+h-br); ctx.arcTo(x+w, y+h, x+w-br, y+h, br);
+  ctx.lineTo(x+bl, y+h); ctx.arcTo(x, y+h, x, y+h-bl, bl);
+  ctx.lineTo(x, y+tl); ctx.arcTo(x, y, x+tl, y, tl);
+  ctx.closePath();
+}
+function psFitText(ctx, text, weight, x, y, maxW, startSz, minSz) {
+  let sz = startSz;
+  ctx.font = `${weight} ${sz}px Arial`;
+  while (ctx.measureText(text).width > maxW && sz > minSz) {
+    sz -= 4; ctx.font = `${weight} ${sz}px Arial`;
+  }
+  ctx.fillText(text, x, y);
+}
+function psWrapText(ctx, text, x, y, maxW, lineH) {
+  const words = text.split(' '); let line = '';
+  for (const w of words) {
+    const t = line + w + ' ';
+    if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line.trim(), x, y); y += lineH; line = w + ' '; }
+    else line = t;
+  }
+  ctx.fillText(line.trim(), x, y);
+}
+function psDrawVLogo(ctx, x, y, sz, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5;
+  // Diamond outline
+  ctx.beginPath();
+  ctx.moveTo(x+sz/2,y); ctx.lineTo(x+sz,y+sz/2); ctx.lineTo(x+sz/2,y+sz); ctx.lineTo(x,y+sz/2);
+  ctx.closePath(); ctx.stroke();
+  // V shape
+  ctx.lineWidth = 4.5;
+  ctx.beginPath();
+  ctx.moveTo(x+sz*0.24,y+sz*0.3); ctx.lineTo(x+sz*0.5,y+sz*0.72); ctx.lineTo(x+sz*0.76,y+sz*0.3);
+  ctx.stroke();
+  // Crown dots
+  [0.2,0.5,0.8].forEach(p => { ctx.beginPath(); ctx.arc(x+sz*p,y+sz*0.16,3.5,0,Math.PI*2); ctx.fill(); });
+  ctx.restore();
+}
+function psHouseIcon(ctx, x, y, color) {
+  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x,y+9); ctx.lineTo(x+10,y); ctx.lineTo(x+20,y+9);
+  ctx.moveTo(x+2,y+9); ctx.lineTo(x+2,y+20); ctx.lineTo(x+18,y+20); ctx.lineTo(x+18,y+9);
+  ctx.moveTo(x+7,y+14); ctx.lineTo(x+7,y+20); ctx.lineTo(x+13,y+20); ctx.lineTo(x+13,y+14); ctx.closePath();
+  ctx.stroke(); ctx.restore();
+}
+
+// ── POSTER ACTIONS ──
 function downloadCurrentPoster() {
   if (!currentPosterB64) { showMktToast('Generate a poster first'); return; }
   const a = document.createElement('a');
@@ -1768,19 +2038,17 @@ function downloadCurrentPoster() {
   a.click();
   showMktToast('✅ Downloaded!');
 }
-
 function copyCaptionPS() {
   if (!currentCaption) { showMktToast('No caption yet'); return; }
   navigator.clipboard.writeText(currentCaption).then(() => showMktToast('📋 Caption copied!'));
 }
-
 async function regeneratePoster(topic, template, lang) {
   const topicEl = document.getElementById('ps-topic');
-  const tmplEl = document.getElementById('ps-template');
-  const langEl = document.getElementById('ps-lang');
+  const tmplEl  = document.getElementById('ps-template');
+  const langEl  = document.getElementById('ps-lang');
   if (topicEl) topicEl.value = topic;
-  if (tmplEl) tmplEl.value = template;
-  if (langEl) langEl.value = lang;
+  if (tmplEl)  tmplEl.value  = template;
+  if (langEl)  langEl.value  = lang;
   document.getElementById('mkt-content').scrollTo({top:0, behavior:'smooth'});
   showMktToast('Ready — click ✨ Generate Poster');
 }
@@ -1789,47 +2057,61 @@ async function viewPosterHistory(id) {
   const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
   if (!h) { showMktToast('Not found'); return; }
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;overflow:hidden;margin-top:20px">
     <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
-      <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div></div>
+      <div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
+        <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px;display:grid;gap:12px">
       ${h.image_url
-        ? `<img src="${h.image_url}" style="width:100%;border-radius:10px;display:block" loading="lazy" onerror="this.parentElement.innerHTML='<div style=padding:20px;text-align:center;color:var(--text3)>Image unavailable — regenerate</div>'">`
-        : `<div style="background:var(--bg3);border-radius:10px;padding:40px;text-align:center;color:var(--text3);font-size:13px">
-            <div style="font-size:32px;margin-bottom:8px">🖼</div>
-            This poster was created before image saving was enabled.<br>Click Regenerate to recreate it.
-          </div>`
+        ? `<img src="${h.image_url}" style="width:100%;border-radius:10px;display:block;cursor:zoom-in" loading="lazy"
+             onclick="window.open(this.src)"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+        : ''
       }
-      ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px"><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div><div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto">${h.caption}</div></div>`:''}
+      <div style="background:var(--bg3);border-radius:10px;padding:32px;text-align:center;color:var(--text3);font-size:13px${h.image_url?';display:none':''}">
+        <div style="font-size:32px;margin-bottom:8px">🖼</div>
+        Click Regenerate to recreate this poster with the new Canvas engine.
+      </div>
+      ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
+        <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto">${h.caption}</div>
+      </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${h.image_url?`<a href="${h.image_url}" download="vwholesale-poster.png" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">⬇ Download</a>`:''}
-        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="this.closest('[style*=fixed]').remove();document.getElementById('ps-topic').value='${(h.topic||'').replace(/'/g,"\'")}';document.getElementById('ps-template').value='${h.template||'product'}';document.getElementById('ps-lang').value='${h.language||'en'}';mktNav('poster')">🔄 Regenerate</button>
-        <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)" onclick="if(confirm('Delete?')){deletePosterHistory(${h.id});this.closest('[style*=fixed]').remove();}">🗑 Delete</button>
+        <button class="mkt-btn mkt-btn-primary" style="flex:1"
+          onclick="this.closest('[style*=fixed]').remove();
+          document.getElementById('ps-topic').value='${(h.topic||'').replace(/'/g,"\\'")}';
+          document.getElementById('ps-template').value='${h.template||'product'}';
+          document.getElementById('ps-lang').value='${h.language||'en'}';
+          mktNav('poster')">🔄 Regenerate</button>
+        <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)"
+          onclick="if(confirm('Delete?')){deletePosterHistory(${h.id});this.closest('[style*=fixed]').remove();}">🗑 Delete</button>
         ${h.caption?`<button class="mkt-btn mkt-btn-ghost" onclick="copyPosterCaption(${h.id})">📋 Copy</button>`:''}
       </div>
     </div>
   </div>`;
   document.body.appendChild(modal);
-  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
 }
 
-async function copyPosterCaption(id){const{data:h}=await sb.from('poster_history').select('caption').eq('id',id).single().then(r=>r,()=>({data:null}));if(h?.caption)navigator.clipboard.writeText(h.caption).then(()=>showMktToast('📋 Copied!'));}
-
+async function copyPosterCaption(id) {
+  const {data:h} = await sb.from('poster_history').select('caption').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (h?.caption) navigator.clipboard.writeText(h.caption).then(() => showMktToast('📋 Copied!'));
+}
 async function deletePosterHistory(id) {
   if (!confirm('Delete this poster?')) return;
   await sb.from('poster_history').delete().eq('id', id);
-  showMktToast('Deleted');
-  loadPosterHistory();
+  showMktToast('Deleted'); loadPosterHistory();
 }
-
 async function loadPosterHistory() {
   const {data:history} = await sb.from('poster_history').select('*').order('created_at',{ascending:false}).limit(8).then(r=>r,()=>({data:[]}));
   const card = document.getElementById('ps-history-card');
-  const el = document.getElementById('ps-history');
+  const el   = document.getElementById('ps-history');
   if (!card||!el) return;
   if (!(history||[]).length) return;
   card.style.display = 'block';
@@ -1847,7 +2129,7 @@ async function loadPosterHistory() {
   </div>`).join('');
 }
 
-// ── DRAFT VIEWER ──// ── DRAFT VIEWER ──
+// ── DRAFT VIEWER ──
 
 // ── STUB PAGES ──
 function renderCampaigns() { renderComingSoon('Campaigns — coming next session'); }
