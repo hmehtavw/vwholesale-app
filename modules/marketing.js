@@ -2,7 +2,14 @@
 // ── CONFIG ──
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
-const sb = supabase.createClient(MKT_SB_URL, MKT_SB_KEY);
+const sb = supabase.createClient(MKT_SB_URL, MKT_SB_KEY, {
+  auth: {
+    persistSession: true,
+    storageKey: 'vw-marketing-auth',
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+});
 let mktProfile = null;
 let aiPaused = false;
 
@@ -1838,3 +1845,22 @@ function renderWebsiteSEO() { renderComingSoon('Website SEO — analysing vwhole
 function renderReviews() { renderComingSoon('Reviews & Reputation — connecting GBP API'); }
 function renderCompetitors() { renderComingSoon('Competitor Intelligence — coming next session'); }
 function renderSegments() { renderComingSoon('Customer Segments — coming next session'); }
+
+
+// ── AUTO LOGIN ON LOAD ──
+window.addEventListener('load', async () => {
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return;
+    const uid = session.user?.id;
+    if (!uid) return;
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', uid).single().then(r=>r, ()=>({data:null}));
+    const OK = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
+    if (profile && OK.includes(profile.role)) {
+      mktProfile = profile;
+      showMktApp();
+    }
+  } catch(e) {
+    console.log('Auto-login check:', e.message);
+  }
+});
