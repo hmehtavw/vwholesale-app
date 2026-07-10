@@ -1184,22 +1184,527 @@ async function toggleAIPause() {
   showMktToast(aiPaused ? '🛑 All AI Actions Paused' : '▶ AI Actions Resumed');
 }
 
-// ── STUB PAGES ──
-const renderApprovals = () => renderComingSoon('Approvals Queue');
-const renderCampaigns = () => renderComingSoon('Campaigns');
-const renderCalendar = () => renderComingSoon('Content Calendar');
-const renderSocial = () => renderComingSoon('Social Media');
-const renderGBP = () => renderComingSoon('Google Business Profile');
-const renderWhatsApp = () => renderComingSoon('WhatsApp Marketing');
-const renderAds = () => renderComingSoon('Advertising');
-const renderLocalSEO = () => renderComingSoon('Local SEO');
-const renderWebsiteSEO = () => renderComingSoon('Website SEO');
-const renderReviews = () => renderComingSoon('Reviews & Reputation');
-const renderAnalytics = () => renderComingSoon('Analytics');
-const renderCompetitors = () => renderComingSoon('Competitor Intelligence');
-const renderSegments = () => renderComingSoon('Customer Segments');
-const renderAudit = () => renderComingSoon('Audit Logs');
-const renderSettings = () => renderComingSoon('Settings');
+
+// ── GBP ──
+async function renderGBP() {
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">Google Business Profile</h3>
+      <div style="font-size:12px;color:var(--text3)">Create posts, respond to reviews, manage your GBP presence</div>
+    </div>
+    <a href="https://business.google.com" target="_blank" class="mkt-btn mkt-btn-ghost">Open GBP ↗</a>
+  </div>
+
+  <div class="mkt-grid-2" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-label">GBP Status</div>
+      <div class="stat-value" style="font-size:16px;color:var(--green)">✅ Live</div>
+      <div class="stat-sub">vwholesale.in connected (pending)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Last Post</div>
+      <div class="stat-value" style="font-size:16px;color:var(--gold)">10 days ago</div>
+      <div class="stat-sub">Posting gap detected — post today</div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">📍 Create GBP Post with AI</div>
+    <div class="mkt-grid-2">
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Post Type</label>
+        <select id="gbp-type" class="mkt-form-select">
+          <option value="whats_new">What's New</option>
+          <option value="offer">Offer</option>
+          <option value="event">Event</option>
+          <option value="product">Product</option>
+        </select>
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Language</label>
+        <select id="gbp-lang" class="mkt-form-select">
+          <option value="te">Telugu</option>
+          <option value="en">English</option>
+          <option value="te+en">Telugu + English</option>
+        </select>
+      </div>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Topic / Product / Offer</label>
+      <input type="text" id="gbp-topic" class="mkt-form-input" placeholder="e.g. New Kajaria tile collection, Monsoon offer on sanitaryware, Store walk-in">
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Call to Action</label>
+      <select id="gbp-cta" class="mkt-form-select">
+        <option value="call">Call Now</option>
+        <option value="book">Book</option>
+        <option value="learn_more">Learn More</option>
+        <option value="visit">Visit Store</option>
+        <option value="whatsapp">WhatsApp Us</option>
+      </select>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="generateGBPPost()">📍 Generate GBP Post</button>
+  </div>
+
+  <div id="gbp-output"></div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">📋 GBP Post Ideas This Week</div>
+    <div style="display:grid;gap:8px">
+      ${[
+        {day:'Monday', idea:'Project proof — show a completed tile installation from a recent customer', lang:'te'},
+        {day:'Wednesday', idea:'Product spotlight — featured product from top-selling category', lang:'en'},
+        {day:'Friday', idea:'Contractor Club recruitment — benefits of joining', lang:'te+en'},
+        {day:'Saturday', idea:'Customer journey — before and after renovation story', lang:'te'},
+      ].map(p => `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--purple);min-width:70px">${p.day}</div>
+        <div style="flex:1;font-size:12px">${p.idea}</div>
+        <span class="badge badge-gold">${p.lang}</span>
+        <button class="mkt-btn mkt-btn-ghost" onclick="quickGBPPost('${p.idea}','${p.lang}')" style="font-size:10px;padding:4px 8px">Draft →</button>
+      </div>`).join('')}
+    </div>
+  </div>`);
+}
+
+async function generateGBPPost() {
+  const type = document.getElementById('gbp-type').value;
+  const lang = document.getElementById('gbp-lang').value;
+  const topic = document.getElementById('gbp-topic').value;
+  const cta = document.getElementById('gbp-cta').value;
+  if (!topic) { showMktToast('Enter a topic first'); return; }
+
+  const outputEl = document.getElementById('gbp-output');
+  outputEl.innerHTML = '<div class="mkt-card"><div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><span style="font-size:12px;color:var(--text3);margin-left:8px">Writing GBP post…</span></div></div>';
+
+  const langMap = {te:'Telugu',en:'English','te+en':'bilingual Telugu and English'};
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'gbp_post', agent:'GBP Agent', model:'gpt-4o-mini',
+        prompt:`You are creating a Google Business Profile post for V Wholesale, Vijayawada.
+
+Post type: ${type}
+Language: ${langMap[lang]}
+Topic: ${topic}
+CTA: ${cta}
+
+RULES:
+- Max 1500 characters for GBP posts
+- V Wholesale, NH65 Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+- Natural, local tone — not corporate
+- Telugu should feel like a local Vijayawada person wrote it
+- Never invent prices or discounts not specified
+
+Respond ONLY in this JSON:
+{
+  "post_text": "the full GBP post text ready to copy-paste",
+  "char_count": 0,
+  "photo_suggestion": "what photo to use",
+  "best_time_to_post": "best day and time",
+  "notes": "any tips"
+}`,
+        context:{topic, type, lang, cta}
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const p = data.output;
+
+    outputEl.innerHTML = `
+    <div class="mkt-card" style="border:1px solid rgba(16,185,129,.3);margin-top:4px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
+        <div class="mkt-card-title" style="margin:0">✅ GBP Post Ready</div>
+        <div style="display:flex;gap:6px">
+          <span class="badge badge-green">GBP Post</span>
+          <span class="badge badge-gold">${lang}</span>
+          <span class="badge badge-gray">${(p.char_count||p.post_text?.length||0)} chars</span>
+        </div>
+      </div>
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;font-size:13px;line-height:1.8;margin-bottom:12px;white-space:pre-wrap">${p.post_text}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div style="font-size:11px"><span style="color:var(--text3)">📸 Photo:</span> ${p.photo_suggestion}</div>
+        <div style="font-size:11px"><span style="color:var(--text3)">⏰ Best time:</span> ${p.best_time_to_post}</div>
+      </div>
+      ${p.notes ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px">${p.notes}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" onclick="copyContent('${p.post_text?.replace(/'/g,"\'").replace(/\n/g,'\\n')}')">📋 Copy Post</button>
+        <a href="https://business.google.com" target="_blank" class="mkt-btn mkt-btn-ghost">Open GBP to Post ↗</a>
+        <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPPost()">🔄 Regenerate</button>
+      </div>
+    </div>`;
+  } catch(e) {
+    outputEl.innerHTML = `<div class="mkt-card" style="border-color:var(--red)"><div style="color:var(--red);font-size:12px">Error: ${e.message}</div></div>`;
+  }
+}
+
+function quickGBPPost(idea, lang) {
+  document.getElementById('gbp-topic').value = idea;
+  document.getElementById('gbp-lang').value = lang;
+  generateGBPPost();
+}
+
+// ── APPROVALS ──
+async function renderApprovals() {
+  const { data: approvals } = await sb.from('marketing_approvals').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
+  const pending = (approvals||[]).filter(a=>a.status==='pending');
+  const done = (approvals||[]).filter(a=>a.status!=='pending');
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Approvals Queue</h3>
+    <div style="font-size:12px;color:var(--text3)">Review and approve AI-recommended actions before execution</div>
+  </div>
+
+  ${pending.length === 0 ? `
+  <div class="mkt-card">
+    <div class="mkt-empty">
+      <div class="mkt-empty-icon">✅</div>
+      <div class="mkt-empty-title">All Clear</div>
+      <div style="font-size:12px;color:var(--text3)">No pending approvals. Run the AI CMO to generate recommendations.</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="mktNav('cmo')" style="margin-top:16px">🧠 Run AI CMO</button>
+    </div>
+  </div>` : `
+  <div style="display:grid;gap:10px">
+    ${pending.map(a => `
+    <div class="mkt-card" style="border-left:4px solid var(--gold)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:800">${a.title}</div>
+          <div style="font-size:11px;color:var(--text3)">${a.agent_name||'AI'} · ${new Date(a.created_at).toLocaleDateString('en-IN')}</div>
+        </div>
+        <span class="badge badge-gold">pending</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${a.description}</div>
+      ${a.estimated_cost > 0 ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Estimated cost: ₹${a.estimated_cost}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" onclick="approveAction(${a.id})">✅ Approve</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="rejectAction(${a.id})" style="color:var(--red)">❌ Reject</button>
+      </div>
+    </div>`).join('')}
+  </div>`}
+
+  ${done.length > 0 ? `
+  <div class="mkt-card" style="margin-top:12px">
+    <div class="mkt-card-title">History</div>
+    <table class="mkt-table">
+      <tr><th>Action</th><th>Status</th><th>Date</th></tr>
+      ${done.map(a=>`<tr>
+        <td style="font-weight:700">${a.title}</td>
+        <td><span class="badge ${a.status==='approved'?'badge-green':'badge-red'}">${a.status}</span></td>
+        <td style="color:var(--text3)">${new Date(a.created_at).toLocaleDateString('en-IN')}</td>
+      </tr>`).join('')}
+    </table>
+  </div>` : ''}
+  `);
+}
+
+async function approveAction(id) {
+  await sb.from('marketing_approvals').update({status:'approved',approver:mktProfile?.name,approved_at:new Date().toISOString()}).eq('id',id);
+  showMktToast('✅ Action approved');
+  renderApprovals();
+}
+
+async function rejectAction(id) {
+  const reason = prompt('Reason for rejection:');
+  if (reason === null) return;
+  await sb.from('marketing_approvals').update({status:'rejected',rejection_reason:reason}).eq('id',id);
+  showMktToast('Action rejected');
+  renderApprovals();
+}
+
+// ── CONTENT CALENDAR ──
+async function renderCalendar() {
+  const { data: content } = await sb.from('marketing_content').select('*').order('created_at',{ascending:false}).limit(30).then(r=>r,()=>({data:[]}));
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay() + 1);
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">Content Calendar</h3>
+      <div style="font-size:12px;color:var(--text3)">Week of ${weekStart.toLocaleDateString('en-IN',{day:'numeric',month:'long'})}</div>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="mktNav('content')">+ Create Content</button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:16px">
+    ${days.map((day,i) => {
+      const d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      const isToday = d.toDateString() === today.toDateString();
+      return `<div style="background:${isToday?'rgba(139,92,246,.15)':'var(--bg2)'};border:1px solid ${isToday?'var(--purple)':'var(--border)'};border-radius:10px;padding:10px;min-height:120px">
+        <div style="font-size:10px;font-weight:800;color:${isToday?'var(--purple)':'var(--text3)'};margin-bottom:4px">${day}</div>
+        <div style="font-size:14px;font-weight:900;color:${isToday?'var(--purple)':'var(--text2)'};margin-bottom:8px">${d.getDate()}</div>
+        <div style="font-size:10px;color:var(--text3)">
+          ${i===0?'📝 Project proof':i===2?'📦 Product/Offer':i===4?'🏆 CC Club':i===5?'👤 Customer story':''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">Recommended Weekly Rhythm</div>
+    <div style="display:grid;gap:6px">
+      ${[
+        {day:'Monday', type:'Project Proof', desc:'Real completed project photo — before/after tile/sanitary installation', platform:'Instagram + GBP', lang:'Telugu'},
+        {day:'Wednesday', type:'Product/Offer', desc:'Featured product or weekly deal — category highlight', platform:'Instagram + Facebook', lang:'English'},
+        {day:'Friday', type:'Contractor Club', desc:'Contractor recruitment — benefits, earnings, how to join', platform:'Instagram + WhatsApp', lang:'Telugu + English'},
+        {day:'Saturday', type:'Customer Story', desc:'Happy customer testimonial or journey', platform:'GBP + Instagram', lang:'Telugu'},
+      ].map(r=>`<div style="display:grid;grid-template-columns:80px 1fr 120px 100px;gap:12px;align-items:center;padding:10px;background:var(--bg3);border-radius:8px;font-size:12px">
+        <div style="font-weight:800;color:var(--purple)">${r.day}</div>
+        <div><div style="font-weight:700">${r.type}</div><div style="color:var(--text3);font-size:11px">${r.desc}</div></div>
+        <div style="color:var(--text3)">${r.platform}</div>
+        <button class="mkt-btn mkt-btn-ghost" onclick="draftContent('post','Instagram','${r.type.replace(/'/g,"\\'")}: ${r.desc.replace(/'/g,"\\'").replace(/,/g,'')}','${r.lang==='Telugu'?'te':'en'}')" style="font-size:10px;padding:4px 8px">Draft →</button>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  ${(content||[]).length > 0 ? `
+  <div class="mkt-card" style="margin-top:4px">
+    <div class="mkt-card-title">Content Drafts (${content.length})</div>
+    <div style="display:grid;gap:6px">
+      ${(content||[]).map(c=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:8px">
+        <span class="badge badge-purple">${c.platform||c.type}</span>
+        <span class="badge badge-gold">${c.language}</span>
+        <div style="flex:1;font-size:12px;font-weight:700">${c.title||c.type}</div>
+        <span class="badge ${c.status==='approved'?'badge-green':c.status==='draft'?'badge-blue':'badge-gray'}">${c.status}</span>
+        <div style="font-size:10px;color:var(--text3)">${new Date(c.created_at).toLocaleDateString('en-IN')}</div>
+      </div>`).join('')}
+    </div>
+  </div>` : ''}
+  `);
+}
+
+// ── ANALYTICS ──
+async function renderAnalytics() {
+  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
+  const totalCost = (runs||[]).reduce((s,r)=>s+(r.cost_usd||0),0);
+  const totalRuns = (runs||[]).length;
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Analytics & Reporting</h3>
+    <div style="font-size:12px;color:var(--text3)">Connect Google Analytics for full data. AI usage tracked below.</div>
+  </div>
+
+  <div class="mkt-grid-4" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-label">AI Runs Total</div>
+      <div class="stat-value" style="color:var(--purple)">${totalRuns}</div>
+      <div class="stat-sub">All agents combined</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">AI Cost Total</div>
+      <div class="stat-value" style="color:var(--green)">$${totalCost.toFixed(4)}</div>
+      <div class="stat-sub">≈ ₹${(totalCost*84).toFixed(2)}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Search Console</div>
+      <div class="stat-value" style="font-size:16px">✅</div>
+      <div class="stat-sub">Processing data (1-2 days)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Google Analytics</div>
+      <div class="stat-value" style="font-size:16px;color:var(--gold)">⏳</div>
+      <div class="stat-sub">Not connected yet</div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">📊 Connect Google Analytics 4</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">
+      Google Analytics 4 will track website visitors, traffic sources, page views and conversion events for vwholesale.in.
+    </div>
+    <div style="display:grid;gap:8px;margin-bottom:12px">
+      ${[
+        {step:'1', text:'Go to analytics.google.com', done:false},
+        {step:'2', text:'Create GA4 property for vwholesale.in', done:false},
+        {step:'3', text:'Copy your Measurement ID (G-XXXXXXXXXX)', done:false},
+        {step:'4', text:'Add it below and I will embed the tracking code', done:false},
+      ].map(s=>`<div style="display:flex;gap:10px;align-items:center;font-size:12px">
+        <span style="width:20px;height:20px;border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">${s.step}</span>
+        <span style="color:${s.done?'var(--green)':'var(--text2)'}">${s.text}</span>
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="ga-id" class="mkt-form-input" placeholder="G-XXXXXXXXXX" style="flex:1">
+      <button class="mkt-btn mkt-btn-primary" onclick="addGATracking()">Add GA4 Tracking</button>
+    </div>
+  </div>
+
+  <div class="mkt-card" style="margin-top:4px">
+    <div class="mkt-card-title">🤖 AI Usage Log</div>
+    ${(runs||[]).length > 0 ? `<table class="mkt-table">
+      <tr><th>Agent</th><th>Model</th><th>Cost</th><th>Duration</th><th>Date</th></tr>
+      ${(runs||[]).slice(0,20).map(r=>`<tr>
+        <td style="font-weight:700">${r.agent_name}</td>
+        <td style="color:var(--text3);font-size:11px">${r.model}</td>
+        <td style="color:var(--green)">$${(r.cost_usd||0).toFixed(4)}</td>
+        <td style="color:var(--text3)">${r.duration_ms}ms</td>
+        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No runs yet</div></div>'}
+  </div>`);
+}
+
+async function addGATracking() {
+  const gaId = document.getElementById('ga-id').value.trim();
+  if (!gaId.startsWith('G-')) { showMktToast('Enter valid GA4 ID (starts with G-)'); return; }
+  await sb.from('marketing_settings').upsert({key:'ga4_measurement_id', value:gaId, is_secret:false, description:'Google Analytics 4 Measurement ID'},{onConflict:'key'});
+  await sb.from('marketing_integrations').upsert({name:'Google Analytics 4', provider:'google', status:'connected', credentials_set:true, notes:`Measurement ID: ${gaId}`},{onConflict:'name'});
+  showMktToast('✅ GA4 ID saved — tracking code will be added to all pages');
+}
+
+// ── AUDIT ──
+async function renderAudit() {
+  const { data: logs } = await sb.from('marketing_audit_logs').select('*').order('created_at',{ascending:false}).limit(50).then(r=>r,()=>({data:[]}));
+  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(20).then(r=>r,()=>({data:[]}));
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Audit Logs</h3>
+    <div style="font-size:12px;color:var(--text3)">Complete record of all marketing actions and AI runs</div>
+  </div>
+
+  <div class="mkt-tabs">
+    <button class="mkt-tab active" onclick="showAuditTab('actions',this)">User Actions</button>
+    <button class="mkt-tab" onclick="showAuditTab('ai',this)">AI Agent Runs</button>
+  </div>
+
+  <div id="audit-actions" class="mkt-card">
+    ${(logs||[]).length > 0 ? `<table class="mkt-table">
+      <tr><th>Action</th><th>By</th><th>Type</th><th>Date</th></tr>
+      ${(logs||[]).map(l=>`<tr>
+        <td style="font-weight:700">${l.action}</td>
+        <td>${l.performed_by||'system'}</td>
+        <td><span class="badge ${l.performed_by_type==='human'?'badge-blue':'badge-purple'}">${l.performed_by_type}</span></td>
+        <td style="color:var(--text3);font-size:11px">${new Date(l.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No user actions logged yet</div></div>'}
+  </div>
+
+  <div id="audit-ai" style="display:none" class="mkt-card">
+    ${(runs||[]).length > 0 ? `<table class="mkt-table">
+      <tr><th>Agent</th><th>Trigger</th><th>Model</th><th>Cost</th><th>Status</th><th>Date</th></tr>
+      ${(runs||[]).map(r=>`<tr>
+        <td style="font-weight:700">${r.agent_name}</td>
+        <td style="color:var(--text3)">${r.trigger}</td>
+        <td style="font-size:11px;color:var(--text3)">${r.model}</td>
+        <td style="color:var(--green)">$${(r.cost_usd||0).toFixed(4)}</td>
+        <td><span class="badge ${r.status==='completed'?'badge-green':'badge-red'}">${r.status}</span></td>
+        <td style="color:var(--text3);font-size:11px">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No AI runs yet</div></div>'}
+  </div>`);
+}
+
+function showAuditTab(tab, btn) {
+  document.querySelectorAll('.mkt-tab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('audit-actions').style.display = tab==='actions'?'block':'none';
+  document.getElementById('audit-ai').style.display = tab==='ai'?'block':'none';
+}
+
+// ── SETTINGS ──
+async function renderSettings() {
+  const { data: settings } = await sb.from('marketing_settings').select('*').order('key').then(r=>r,()=>({data:[]}));
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Settings</h3>
+    <div style="font-size:12px;color:var(--text3)">Marketing panel configuration</div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">🛑 Global AI Control</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;background:var(--bg3);border-radius:10px">
+      <div>
+        <div style="font-weight:700">Pause All AI Actions</div>
+        <div style="font-size:12px;color:var(--text3)">Emergency stop — AI switches to recommend-only mode</div>
+      </div>
+      <button class="mkt-btn ${aiPaused?'mkt-btn-primary':'mkt-btn-ghost'}" onclick="toggleAIPause()" style="${aiPaused?'background:var(--red)':''}">
+        ${aiPaused?'▶ Resume AI':'🛑 Pause AI'}
+      </button>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">💰 Budget Controls</div>
+    <div style="display:grid;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:12px;font-weight:700">Monthly Marketing Budget</div><div style="font-size:11px;color:var(--text3)">Total budget including ads and tools</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">₹</span>
+          <input type="number" id="setting-budget" value="${(settings||[]).find(s=>s.key==='marketing_budget_monthly_inr')?.value||30000}" class="mkt-form-input" style="width:100px">
+          <button class="mkt-btn mkt-btn-ghost" onclick="saveSetting('marketing_budget_monthly_inr','setting-budget')" style="font-size:11px">Save</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:12px;font-weight:700">Auto-Spend Limit (per action)</div><div style="font-size:11px;color:var(--text3)">AI can spend up to this without approval</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px">₹</span>
+          <input type="number" id="setting-auto-limit" value="${(settings||[]).find(s=>s.key==='marketing_budget_auto_limit_inr')?.value||5000}" class="mkt-form-input" style="width:100px">
+          <button class="mkt-btn mkt-btn-ghost" onclick="saveSetting('marketing_budget_auto_limit_inr','setting-auto-limit')" style="font-size:11px">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">🤖 AI Model Settings</div>
+    <div style="display:grid;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:12px;font-weight:700">Primary Model</div><div style="font-size:11px;color:var(--text3)">Used for complex tasks (AI CMO briefings)</div></div>
+        <select id="setting-model" class="mkt-form-select" style="width:160px" onchange="saveSetting('openai_model_primary','setting-model')">
+          <option value="gpt-4o" ${(settings||[]).find(s=>s.key==='openai_model_primary')?.value==='gpt-4o'?'selected':''}>GPT-4o</option>
+          <option value="gpt-4o-mini" ${(settings||[]).find(s=>s.key==='openai_model_primary')?.value==='gpt-4o-mini'?'selected':''}>GPT-4o Mini</option>
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><div style="font-size:12px;font-weight:700">Fast Model</div><div style="font-size:11px;color:var(--text3)">Used for content, posts, quick tasks</div></div>
+        <select id="setting-model-fast" class="mkt-form-select" style="width:160px" onchange="saveSetting('openai_model_fast','setting-model-fast')">
+          <option value="gpt-4o-mini" ${(settings||[]).find(s=>s.key==='openai_model_fast')?.value==='gpt-4o-mini'?'selected':''}>GPT-4o Mini</option>
+          <option value="gpt-4o" ${(settings||[]).find(s=>s.key==='openai_model_fast')?.value==='gpt-4o'?'selected':''}>GPT-4o</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">📋 All Settings</div>
+    <table class="mkt-table">
+      <tr><th>Key</th><th>Value</th></tr>
+      ${(settings||[]).filter(s=>!s.is_secret).map(s=>`<tr>
+        <td style="font-size:11px;color:var(--text3)">${s.key}</td>
+        <td style="font-size:12px">${s.value}</td>
+      </tr>`).join('')}
+    </table>
+  </div>`);
+}
+
+async function saveSetting(key, inputId) {
+  const value = document.getElementById(inputId)?.value;
+  if (!value) return;
+  await sb.from('marketing_settings').update({value, updated_at:new Date().toISOString()}).eq('key',key);
+  showMktToast('✅ Setting saved');
+}
+
+// ── REMAINING STUBS ──
+const renderCampaigns = () => renderComingSoon('Campaigns — coming next session');
+const renderSocial = () => renderComingSoon('Social Media — connect Meta Business first');
+const renderWhatsApp = () => renderComingSoon('WhatsApp — complete Interakt setup first');
+const renderAds = () => renderComingSoon('Advertising — connect Google Ads & Meta Ads first');
+const renderLocalSEO = () => renderComingSoon('Local SEO — connecting Search Console data');
+const renderWebsiteSEO = () => renderComingSoon('Website SEO — analysing vwholesale.in');
+const renderReviews = () => renderComingSoon('Reviews — connecting GBP API');
+const renderCompetitors = () => renderComingSoon('Competitor Intelligence — coming next session');
+const renderSegments = () => renderComingSoon('Customer Segments — coming next session');
 
 // ── TOAST ──
 function showMktToast(msg) {
