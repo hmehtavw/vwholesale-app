@@ -118,6 +118,20 @@ function mktNav(page) {
 
 function setContent(html) { document.getElementById('mkt-content').innerHTML = html; }
 
+function showMktToast(msg, duration = 3000) {
+  let toast = document.getElementById('mkt-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'mkt-toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
 function renderComingSoon(title) {
   setContent(`<div class="mkt-empty">
     <div class="mkt-empty-icon">🚧</div>
