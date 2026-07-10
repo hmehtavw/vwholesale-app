@@ -1798,187 +1798,199 @@ async function composePosterCanvas(heroB64, content, biz) {
   canvas.width = S; canvas.height = S;
   const ctx = canvas.getContext('2d');
 
-  const NAVY = '#1a2744';
+  const NAVY  = '#1a2744';
   const GOLD  = '#c9a84c';
   const WHITE = '#ffffff';
 
-  // ── Full navy background ──
+  // Layout constants — hard split
+  const SPLIT_X  = 442;   // left panel width
+  const HERO_TOP = 0;
+  const HERO_H   = 815;   // hero image zone height (top 75.5%)
+  const BOT_Y    = HERO_H;
+  const STRIP_Y  = S - 130;
+  const FOOT_Y   = S - 90;
+
+  // ── 1. Full navy canvas ──
   ctx.fillStyle = NAVY;
   ctx.fillRect(0, 0, S, S);
 
-  // ── Hero image: right 58%, top 75% ──
-  const heroX = Math.round(S * 0.41);
-  const heroH = Math.round(S * 0.755);
+  // ── 2. Hero image — RIGHT HALF ONLY, strictly clipped ──
   try {
     const img = await loadImgB64(heroB64);
     ctx.save();
-    // Rounded right panel
-    psRoundedRect(ctx, heroX, 0, S - heroX, heroH, 0, 0, 36, 36);
+    // Clip strictly to right panel — no overlap with left text zone
+    ctx.beginPath();
+    ctx.rect(SPLIT_X, HERO_TOP, S - SPLIT_X, HERO_H);
     ctx.clip();
-    const sc = Math.max((S - heroX) / img.width, heroH / img.height);
+    const sc = Math.max((S - SPLIT_X) / img.width, HERO_H / img.height);
     const dw = img.width * sc, dh = img.height * sc;
-    ctx.drawImage(img, heroX + ((S - heroX) - dw)/2, (heroH - dh)/2, dw, dh);
+    ctx.drawImage(img, SPLIT_X + ((S - SPLIT_X) - dw)/2, (HERO_H - dh)/2, dw, dh);
     ctx.restore();
-    // Subtle dark gradient over right panel left edge
-    const grad = ctx.createLinearGradient(heroX, 0, heroX + 80, 0);
-    grad.addColorStop(0, 'rgba(26,39,68,0.9)');
+
+    // Gold curved border between left panel and hero
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(SPLIT_X + 8, HERO_H / 2, HERO_H / 2 + 16, -Math.PI / 2, Math.PI / 2, false);
+    ctx.stroke();
+
+    // Left-edge fade on hero (navy → transparent, 60px wide)
+    const grad = ctx.createLinearGradient(SPLIT_X, 0, SPLIT_X + 60, 0);
+    grad.addColorStop(0, 'rgba(26,39,68,1)');
     grad.addColorStop(1, 'rgba(26,39,68,0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(heroX, 0, 80, heroH);
-    // Gold arc border
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.arc(heroX + 12, heroH * 0.5, heroH * 0.5 + 14, -Math.PI/2, Math.PI/2, false);
-    ctx.stroke();
+    ctx.fillRect(SPLIT_X, HERO_TOP, 60, HERO_H);
   } catch(e) { console.warn('Hero image error:', e.message); }
 
-  // ── TOP-RIGHT: "AVAILABLE IN STORE" corner badge ──
-  const bdg = (content?.badge || 'AVAILABLE IN STORE').split(' ');
+  // ── 3. Solid navy LEFT PANEL — covers any bleed from hero ──
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, 0, SPLIT_X, HERO_H);
+
+  // ── 4. TOP-RIGHT badge ──
   ctx.save();
   ctx.fillStyle = GOLD;
   ctx.beginPath();
-  ctx.moveTo(S - 140, 0); ctx.lineTo(S, 0); ctx.lineTo(S, 88); ctx.lineTo(S - 155, 88);
+  ctx.moveTo(S - 132, 0); ctx.lineTo(S, 0); ctx.lineTo(S, 86); ctx.lineTo(S - 148, 86);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle = NAVY;
-  ctx.textAlign = 'center';
-  ctx.font = 'bold 11px Arial'; ctx.fillText('★ ★ ★', S - 72, 16);
-  ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[0]||'AVAILABLE', S - 72, 34);
-  if (bdg.length > 1) { ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[1]||'IN', S - 72, 52); }
-  if (bdg.length > 2) { ctx.font = 'bold 13px Arial'; ctx.fillText(bdg[2]||'STORE', S - 72, 68); }
-  ctx.font = 'bold 11px Arial'; ctx.fillText('★ ★ ★', S - 72, 82);
+  ctx.fillStyle = NAVY; ctx.textAlign = 'center';
+  ctx.font = 'bold 10px Arial'; ctx.fillText('★ ★ ★', S - 66, 15);
+  ctx.font = 'bold 12px Arial'; ctx.fillText('AVAILABLE', S - 66, 32);
+  ctx.font = 'bold 12px Arial'; ctx.fillText('IN STORE', S - 66, 50);
+  ctx.font = 'bold 10px Arial'; ctx.fillText('★ ★ ★', S - 66, 68);
   ctx.textAlign = 'left'; ctx.restore();
 
-  // ── V WHOLESALE LOGO + NAME (top left) ──
-  psDrawVLogo(ctx, 36, 28, 52, GOLD);
+  // ── 5. V WHOLESALE LOGO + NAME ──
+  psDrawVLogo(ctx, 36, 26, 50, GOLD);
   ctx.fillStyle = WHITE;
-  ctx.font = 'bold 21px Arial';
-  ctx.fillText('V WHOLESALE', 98, 50);
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '10px Arial';
-  ctx.fillText('TILES  •  SANITARY  •  BATHWARE', 98, 67);
+  ctx.font = 'bold 20px Arial';
+  ctx.fillText('V WHOLESALE', 96, 48);
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
+  ctx.font = '9.5px Arial';
+  ctx.fillText('TILES  •  SANITARY  •  BATHWARE', 96, 64);
 
-  // ── HEADLINE LINE 1: brand name in gold ──
-  const h1 = ((content?.headline_line1) || 'BRAND').toUpperCase();
+  // ── 6. HEADLINE LINE 1 — brand name, gold, large ──
+  const h1 = (content?.headline_line1 || 'SUNHEARRT').toUpperCase();
   ctx.fillStyle = GOLD;
-  psFitText(ctx, h1, 'bold', 36, 220, 420, 90, 46);
+  psFitText(ctx, h1, 'bold', 36, 215, SPLIT_X - 50, 88, 44);
 
-  // ── HEADLINE LINE 2: category in white, bigger ──
-  const h2 = ((content?.headline_line2) || 'TILES').toUpperCase();
+  // ── 7. HEADLINE LINE 2 — category, white, larger ──
+  const h2 = (content?.headline_line2 || 'TILES').toUpperCase();
   ctx.fillStyle = WHITE;
-  psFitText(ctx, h2, 'bold', 36, 348, 420, 118, 60);
+  psFitText(ctx, h2, 'bold', 36, 340, SPLIT_X - 50, 116, 58);
 
-  // Gold rule with diamond
+  // Gold rule + diamond
   ctx.fillStyle = GOLD;
-  ctx.fillRect(36, 370, 385, 2.5);
-  ctx.save(); ctx.translate(228, 370); ctx.rotate(Math.PI/4);
-  ctx.fillRect(-6, -6, 12, 12); ctx.restore();
+  ctx.fillRect(36, 362, SPLIT_X - 70, 2.5);
+  ctx.save();
+  ctx.translate(SPLIT_X / 2, 362);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillRect(-6, -6, 12, 12);
+  ctx.restore();
 
-  // ── SUBHEADLINE: gold bar ──
+  // ── 8. SUBHEADLINE — gold bar ──
   const sub = content?.subheadline || 'Now Available at V Wholesale';
   ctx.fillStyle = GOLD;
-  ctx.fillRect(0, 382, 440, 45);
+  ctx.fillRect(0, 374, SPLIT_X + 20, 44);
   ctx.fillStyle = NAVY;
-  ctx.font = 'bold 17px Arial';
-  ctx.fillText(sub, 36, 411);
-
-  // ── BODY TEXT ──
-  ctx.fillStyle = WHITE;
   ctx.font = 'bold 16px Arial';
-  ctx.fillText(content?.body || 'Premium Wall & Floor Tile Collection', 36, 453);
+  ctx.fillText(sub, 36, 402);
 
-  // Features in gold italic
+  // ── 9. BODY TEXT ──
+  ctx.fillStyle = WHITE;
+  ctx.font = 'bold 15.5px Arial';
+  const bodyTxt = content?.body || 'Premium Wall & Floor Tile Collection';
+  ctx.fillText(bodyTxt, 36, 444);
+
+  // Gold italic features
   ctx.fillStyle = GOLD;
-  ctx.font = 'italic 13.5px Arial';
-  const feat = [content?.feature1||'Elegant Designs', content?.feature2||'Modern Finishes', content?.feature3||'Lasting Quality'];
-  ctx.fillText(feat.join('  •  '), 36, 476);
+  ctx.font = 'italic 13px Arial';
+  const featLine = content?.feature_gold || 'Elegant Designs • Modern Finishes • Lasting Quality';
+  psWrapText(ctx, featLine, 36, 466, SPLIT_X - 50, 18);
 
-  // Divider
-  ctx.strokeStyle = 'rgba(201,168,76,0.5)';
+  // Thin gold rule
+  ctx.strokeStyle = 'rgba(201,168,76,0.45)';
   ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(36, 492); ctx.lineTo(428, 492); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(36, 490); ctx.lineTo(SPLIT_X - 20, 490); ctx.stroke();
 
-  // House icon + usage text
-  psHouseIcon(ctx, 36, 503, GOLD);
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.font = '13px Arial';
-  psWrapText(ctx, 'Perfect for Living Rooms, Bedrooms, Bathrooms & Outdoor Spaces', 62, 512, 360, 18);
+  // House icon + usage line
+  psHouseIcon(ctx, 36, 500, GOLD);
+  ctx.fillStyle = 'rgba(255,255,255,0.78)';
+  ctx.font = '12.5px Arial';
+  const usageTxt = content?.usage || 'Perfect for Living Rooms, Bedrooms, Bathrooms & Outdoor Spaces';
+  psWrapText(ctx, usageTxt, 62, 508, SPLIT_X - 60, 17);
 
-  // ── BOTTOM ZONE: dark overlay over hero image area ──
-  const botY = heroH;
-  ctx.fillStyle = 'rgba(10,18,38,0.65)';
-  ctx.fillRect(0, botY, S, S - botY);
+  // ── 10. BOTTOM ZONE — dark band across full width ──
+  ctx.fillStyle = 'rgba(8,15,35,0.72)';
+  ctx.fillRect(0, BOT_Y, S, STRIP_Y - BOT_Y);
 
-  // ── FEATURE ICONS STRIP (3 columns) ──
-  const iconZoneH = 110;
-  const iconY = botY + 14;
-  const cols = [S*0.165, S*0.5, S*0.835];
-  const icons = ['◈', '⬡', '✦'];
+  // ── 11. FEATURE ICONS — 3 equal columns ──
+  const iconY   = BOT_Y + 12;
+  const COL_W   = S / 3;
+  const icons   = ['◈', '⬡', '✦'];
   const flabels = [
-    (content?.feature1||'Luxury\nMarble Looks').replace(' & ','\n& '),
-    (content?.feature2||'Glossy, Matt &\nDesigner Finishes'),
-    (content?.feature3||'Premium Quality\nfor Modern Homes'),
+    (content?.feature1 || 'Luxury Marble Looks').replace(' & ', '\n& '),
+    (content?.feature2 || 'Glossy, Matt &\nDesigner Finishes'),
+    (content?.feature3 || 'Premium Quality\nfor Modern Homes'),
   ];
-  cols.forEach((cx, i) => {
-    // Circle
+  [0, 1, 2].forEach(i => {
+    const cx = COL_W * i + COL_W / 2;
     ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, iconY + 28, 32, 0, Math.PI*2); ctx.stroke();
-    ctx.fillStyle = GOLD; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
-    ctx.fillText(icons[i], cx, iconY + 37);
-    // Label
-    ctx.fillStyle = WHITE; ctx.font = '12px Arial';
-    flabels[i].split('\n').forEach((ln, li) => ctx.fillText(ln, cx, iconY + 74 + li*16));
-    // Separator
+    ctx.beginPath(); ctx.arc(cx, iconY + 28, 30, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = GOLD; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
+    ctx.fillText(icons[i], cx, iconY + 36);
+    ctx.fillStyle = WHITE; ctx.font = '11.5px Arial';
+    flabels[i].split('\n').forEach((ln, li) => ctx.fillText(ln, cx, iconY + 70 + li * 15));
     if (i < 2) {
-      ctx.strokeStyle = 'rgba(201,168,76,0.35)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = 'rgba(201,168,76,0.3)'; ctx.lineWidth = 1;
       ctx.beginPath();
-      const sx = cols[i] + (cols[i+1]-cols[i])/2;
-      ctx.moveTo(sx, iconY + 6); ctx.lineTo(sx, iconY + 96); ctx.stroke();
+      ctx.moveTo(COL_W * (i + 1), iconY + 8);
+      ctx.lineTo(COL_W * (i + 1), iconY + 92);
+      ctx.stroke();
     }
   });
   ctx.textAlign = 'left';
 
-  // ── CATEGORY STRIP ──
-  const stripItems = content?.strip_items || ['TILES','GRANITE','SANITARYWARE','PAINTS','ELECTRICALS'];
-  const stripY = S - 130;
+  // ── 12. CATEGORY STRIP — gold bar ──
+  const stripItems = content?.strip_items || ['TILES', 'GRANITE', 'SANITARYWARE', 'PAINTS', 'ELECTRICALS'];
   ctx.fillStyle = GOLD;
-  ctx.fillRect(0, stripY, S, 38);
+  ctx.fillRect(0, STRIP_Y, S, 38);
   ctx.fillStyle = NAVY;
-  ctx.font = 'bold 13px Arial';
+  ctx.font = 'bold 12.5px Arial';
   ctx.textAlign = 'center';
   const sw = S / stripItems.length;
-  stripItems.forEach((item, i) => ctx.fillText(item.toUpperCase(), sw*i + sw/2, stripY + 25));
+  stripItems.forEach((item, i) => ctx.fillText(item.toUpperCase(), sw * i + sw / 2, STRIP_Y + 25));
   ctx.textAlign = 'left';
 
-  // ── FOOTER ──
-  const footY = stripY + 38;
+  // ── 13. FOOTER — navy bar ──
   ctx.fillStyle = NAVY;
-  ctx.fillRect(0, footY, S, S - footY);
-  ctx.fillStyle = GOLD; ctx.fillRect(0, footY, S, 2); // gold top rule
+  ctx.fillRect(0, FOOT_Y, S, S - FOOT_Y);
+  // Gold top rule
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(0, FOOT_Y, S, 2);
 
-  // Left: address block
-  ctx.fillStyle = GOLD; ctx.font = 'bold 27px Arial';
-  ctx.fillText(biz.name || 'V Wholesale', 36, footY + 34);
-  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '12px Arial';
-  ctx.fillText('📍 ' + (biz.address||'NH65, Bhavanipuram, Vijayawada'), 36, footY + 55);
-  ctx.fillText('📞 Call: ' + (biz.phone||'8712697930'), 36, footY + 72);
-  ctx.fillText('🌐 ' + (biz.website||'vwholesale.in'), 36, footY + 89);
+  // Left: business details
+  ctx.fillStyle = GOLD; ctx.font = 'bold 26px Arial';
+  ctx.fillText(biz.name || 'V Wholesale', 36, FOOT_Y + 33);
+  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = '11.5px Arial';
+  ctx.fillText('📍 ' + (biz.address || 'NH65, Bhavanipuram, Vijayawada'), 36, FOOT_Y + 53);
+  ctx.fillText('📞 Call: ' + (biz.phone || '8712697930'), 36, FOOT_Y + 69);
+  ctx.fillText('🌐 ' + (biz.website || 'vwholesale.in'), 36, FOOT_Y + 85);
 
   // Right: CTA button
-  const ctaW = 264, ctaH = 50;
-  const ctaX = S - ctaW - 36, ctaY2 = footY + 24;
-  // Filled gold button
-  ctx.fillStyle = 'rgba(201,168,76,0.12)';
-  psRoundedRect(ctx, ctaX, ctaY2, ctaW, ctaH, 25,25,25,25); ctx.fill();
+  const ctaW = 258, ctaH = 48;
+  const ctaX = S - ctaW - 36;
+  const ctaY = FOOT_Y + 20;
+  ctx.fillStyle = 'rgba(201,168,76,0.1)';
+  psRoundedRect(ctx, ctaX, ctaY, ctaW, ctaH, 24, 24, 24, 24); ctx.fill();
   ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
-  psRoundedRect(ctx, ctaX, ctaY2, ctaW, ctaH, 25,25,25,25); ctx.stroke();
-  ctx.fillStyle = GOLD; ctx.font = 'bold 14px Arial'; ctx.textAlign = 'center';
-  ctx.fillText((content?.cta||'VISIT OUR STORE TODAY').toUpperCase() + '  ›', ctaX + ctaW/2, ctaY2 + 31);
+  psRoundedRect(ctx, ctaX, ctaY, ctaW, ctaH, 24, 24, 24, 24); ctx.stroke();
+  ctx.fillStyle = GOLD; ctx.font = 'bold 13.5px Arial'; ctx.textAlign = 'center';
+  ctx.fillText((content?.cta || 'VISIT OUR STORE TODAY').toUpperCase() + '  ›', ctaX + ctaW / 2, ctaY + 30);
   ctx.textAlign = 'left';
 
-  // Bottom tagline
-  ctx.fillStyle = GOLD; ctx.font = 'italic 11.5px Arial'; ctx.textAlign = 'center';
-  ctx.fillText(biz.tagline || 'BEAUTIFUL SPACES. BUILT TO LAST.', S/2, S - 8);
+  // Bottom tagline centre
+  ctx.fillStyle = 'rgba(201,168,76,0.7)'; ctx.font = 'italic 11px Arial'; ctx.textAlign = 'center';
+  ctx.fillText(biz.tagline || 'BEAUTIFUL SPACES. BUILT TO LAST.', S / 2, S - 8);
   ctx.textAlign = 'left';
 
   return canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
