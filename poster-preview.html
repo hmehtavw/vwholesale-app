@@ -2,281 +2,784 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700;900&family=Noto+Sans+Telugu:wght@400;700;900&display=swap" rel="stylesheet">
+<title>V Wholesale Poster Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,700;0,900;1,400&family=Playfair+Display:wght@700;900&family=Noto+Sans+Telugu:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #111; display: flex; flex-direction: column; align-items: center; padding: 20px; font-family: 'DM Sans', sans-serif; }
-.controls { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 16px; margin-bottom: 16px; width: 500px; display: grid; gap: 10px; }
-.controls label { font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 3px; }
-.controls input, .controls select, .controls textarea { width: 100%; padding: 8px; background: #222; border: 1px solid #444; border-radius: 6px; color: #fff; font-family: inherit; font-size: 13px; }
-.controls textarea { height: 80px; resize: vertical; }
-.controls button { padding: 10px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; }
-.btn-primary { background: #8B5CF6; color: #fff; }
-.btn-secondary { background: #333; color: #fff; }
-#poster-container { position: relative; }
-canvas { border-radius: 12px; display: block; }
-.download-btn { margin-top: 12px; padding: 10px 24px; background: #10B981; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 700; font-family: inherit; }
+body { background: #0d0d1a; display: flex; flex-direction: column; align-items: center; padding: 24px; font-family: 'DM Sans', sans-serif; color: #fff; min-height: 100vh; }
+h1 { font-size: 20px; font-weight: 700; color: #c9a84c; margin-bottom: 20px; letter-spacing: 1px; }
+.studio { display: flex; gap: 24px; align-items: flex-start; max-width: 1300px; width: 100%; }
+.controls { background: #12122a; border: 1px solid #2a2a4a; border-radius: 14px; padding: 20px; width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+.field label { font-size: 10px; color: #888; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 5px; }
+.field input, .field select, .field textarea { width: 100%; padding: 9px 12px; background: #1a1a35; border: 1px solid #333; border-radius: 8px; color: #fff; font-family: inherit; font-size: 13px; }
+.field textarea { height: 72px; resize: vertical; }
+.field select option { background: #1a1a35; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.btn { padding: 11px; border-radius: 9px; border: none; cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 700; transition: 0.2s; }
+.btn-gold { background: linear-gradient(135deg, #c9a84c, #f0d080); color: #1a2744; }
+.btn-gold:hover { opacity: 0.9; }
+.btn-green { background: #10b981; color: #fff; }
+.btn-green:hover { background: #059669; }
+.btn-ai { background: linear-gradient(135deg, #7c3aed, #a855f7); color: #fff; }
+.btn-ai:hover { opacity: 0.9; }
+.btn-outline { background: transparent; border: 1px solid #444; color: #aaa; }
+.btn-outline:hover { border-color: #c9a84c; color: #c9a84c; }
+.section-title { font-size: 10px; color: #c9a84c; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 8px; border-bottom: 1px solid #222; }
+.poster-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+canvas { border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.6); max-width: 100%; display: block; }
+.status { font-size: 12px; color: #888; height: 18px; text-align: center; }
+.status.loading { color: #c9a84c; }
+.status.ok { color: #10b981; }
+.ai-key-row { display: flex; gap: 8px; }
+.ai-key-row input { flex: 1; }
+.feature-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.feature-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #aaa; }
+.feature-item input[type=checkbox] { accent-color: #c9a84c; width: 14px; height: 14px; }
 </style>
 </head>
 <body>
+<h1>🎨 V Wholesale Poster Studio</h1>
 
-<div class="controls">
-  <div>
-    <label>Template</label>
-    <select id="template" onchange="generatePoster()">
-      <option value="product">Product Showcase</option>
-      <option value="offer">Offer/Sale</option>
-      <option value="contractor">Contractor Club</option>
-      <option value="store">Store Promo</option>
-      <option value="festival">Festival Special</option>
-    </select>
+<div class="studio">
+  <div class="controls">
+    <div class="section-title">Template</div>
+    <div class="field">
+      <label>Layout Style</label>
+      <select id="template" onchange="renderPoster()">
+        <option value="flagship">Flagship Store (ChatGPT Style)</option>
+        <option value="offer">Offer / Sale</option>
+        <option value="contractor">Contractor Club</option>
+        <option value="product">Product Focus</option>
+        <option value="festival">Festival Special</option>
+      </select>
+    </div>
+
+    <div class="section-title">Content</div>
+    <div class="field">
+      <label>Main Headline</label>
+      <input type="text" id="headline" value="V Wholesale —&#10;Vijayawada's" placeholder="Main headline line 1">
+    </div>
+    <div class="field">
+      <label>Headline Line 2 (Gold)</label>
+      <input type="text" id="headline2" value="Home Building Store" placeholder="Gold accent headline">
+    </div>
+    <div class="field">
+      <label>Sub-text</label>
+      <input type="text" id="subtext" value="Looking to renovate your home? We have everything you need:">
+    </div>
+    <div class="field">
+      <label>CTA Button Text</label>
+      <input type="text" id="cta" value="Walk in today!">
+    </div>
+    <div class="field">
+      <label>Features (comma separated)</label>
+      <input type="text" id="features" value="Tiles & Granite,Sanitaryware,Paints & Electricals,Expert Guidance">
+    </div>
+
+    <div class="section-title">Hero Image</div>
+    <div class="field">
+      <label>Image Source</label>
+      <select id="imageSource" onchange="toggleImageOptions()">
+        <option value="gradient">Beautiful Gradient (Free)</option>
+        <option value="upload">Upload Your Photo</option>
+        <option value="dalle">Generate with DALL-E (OpenAI Key needed)</option>
+      </select>
+    </div>
+    <div id="uploadRow" class="field" style="display:none">
+      <label>Upload Image</label>
+      <input type="file" id="imageUpload" accept="image/*" onchange="handleImageUpload(event)">
+    </div>
+    <div id="dalleRow" style="display:none">
+      <div class="field ai-key-row">
+        <input type="password" id="openaiKey" placeholder="sk-... (OpenAI API key)">
+      </div>
+      <div class="field">
+        <label>Image Prompt</label>
+        <textarea id="dallePrompt">Luxurious modern Indian living room interior with marble floor tiles, elegant furniture, warm lighting, premium home decor, photorealistic</textarea>
+      </div>
+      <button class="btn btn-ai" onclick="generateDalleImage()" style="width:100%">✨ Generate Image (~₹3)</button>
+    </div>
+
+    <div class="section-title">Actions</div>
+    <div class="row2">
+      <button class="btn btn-gold" onclick="renderPoster()">🎨 Refresh</button>
+      <button class="btn btn-green" onclick="downloadPoster()">⬇ Download PNG</button>
+    </div>
+    <button class="btn btn-outline" onclick="copyToClipboard()" style="width:100%">📋 Copy to Clipboard</button>
+
+    <div class="status" id="status">Ready</div>
   </div>
-  <div>
-    <label>Headline (Telugu or English)</label>
-    <input type="text" id="headline" value="మీ ఇంటిని అందంగా మార్చుకోండి!" placeholder="Main headline">
-  </div>
-  <div>
-    <label>Sub-headline</label>
-    <input type="text" id="subheadline" value="Premium Tiles • Sanitaryware • Paints" placeholder="Sub-text">
-  </div>
-  <div>
-    <label>Offer/Tag Line (optional)</label>
-    <input type="text" id="tagline" value="🏠 Vijayawada's #1 Home Store" placeholder="Optional tag">
-  </div>
-  <div>
-    <label>Color Theme</label>
-    <select id="theme" onchange="generatePoster()">
-      <option value="royal">Royal Blue + Gold</option>
-      <option value="dark">Dark + Purple</option>
-      <option value="warm">Warm Orange + Cream</option>
-      <option value="green">Forest Green + White</option>
-      <option value="red">Festive Red + Gold</option>
-    </select>
-  </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-    <button class="btn-primary" onclick="generatePoster()">🎨 Generate Poster</button>
-    <button class="btn-secondary" onclick="downloadPoster()">⬇ Download PNG</button>
+
+  <div class="poster-wrap">
+    <canvas id="poster" width="1080" height="1080" style="width: 540px; height: 540px;"></canvas>
   </div>
 </div>
-
-<div id="poster-container">
-  <canvas id="poster" width="1080" height="1080" style="width:500px;height:500px"></canvas>
-</div>
-<button class="download-btn" onclick="downloadPoster()">⬇ Download 1080×1080 PNG</button>
 
 <script>
-const THEMES = {
-  royal:   { bg: ['#0A1628','#1B4F8A'], accent: '#F5C842', text: '#FFFFFF', sub: '#CBD5E1', badge_bg: '#F5C842', badge_text: '#0A1628' },
-  dark:    { bg: ['#0F0F1A','#1E1040'], accent: '#8B5CF6', text: '#FFFFFF', sub: '#A78BFA', badge_bg: '#8B5CF6', badge_text: '#FFFFFF' },
-  warm:    { bg: ['#7C2D12','#EA580C'], accent: '#FEF08A', text: '#FFFFFF', sub: '#FED7AA', badge_bg: '#FEF08A', badge_text: '#7C2D12' },
-  green:   { bg: ['#14532D','#15803D'], accent: '#BBF7D0', text: '#FFFFFF', sub: '#D1FAE5', badge_bg: '#BBF7D0', badge_text: '#14532D' },
-  red:     { bg: ['#7F1D1D','#DC2626'], accent: '#FDE68A', text: '#FFFFFF', sub: '#FECACA', badge_bg: '#FDE68A', badge_text: '#7F1D1D' },
-};
+// ─── State ────────────────────────────────────────────────────────────────────
+let heroImage = null;
 
-function generatePoster() {
+// ─── Image Handling ───────────────────────────────────────────────────────────
+function toggleImageOptions() {
+  const src = document.getElementById('imageSource').value;
+  document.getElementById('uploadRow').style.display = src === 'upload' ? '' : 'none';
+  document.getElementById('dalleRow').style.display = src === 'dalle' ? '' : 'none';
+  if (src === 'gradient') { heroImage = null; renderPoster(); }
+}
+
+function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => { heroImage = img; renderPoster(); };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function generateDalleImage() {
+  const key = document.getElementById('openaiKey').value.trim();
+  const prompt = document.getElementById('dallePrompt').value.trim();
+  if (!key) { setStatus('Enter your OpenAI API key', 'loading'); return; }
+  setStatus('Generating image... (~20 sec)', 'loading');
+  try {
+    const res = await fetch('https://api.openai.com/v1/images/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      body: JSON.stringify({ model: 'dall-e-3', prompt, n: 1, size: '1024x1024', quality: 'standard' })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const imgUrl = data.data[0].url;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { heroImage = img; renderPoster(); setStatus('Image generated ✓', 'ok'); };
+    img.onerror = () => { setStatus('CORS block — use Upload instead', 'loading'); };
+    img.src = imgUrl;
+  } catch(e) { setStatus('Error: ' + e.message, 'loading'); }
+}
+
+// ─── Canvas Helpers ───────────────────────────────────────────────────────────
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y); ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h); ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r); ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function fillRR(ctx, x, y, w, h, r, color) {
+  ctx.fillStyle = color;
+  rr(ctx, x, y, w, h, r);
+  ctx.fill();
+}
+
+function clipRR(ctx, x, y, w, h, r) {
+  ctx.save();
+  rr(ctx, x, y, w, h, r);
+  ctx.clip();
+}
+
+function drawStar(ctx, cx, cy, r, color) {
+  const spikes = 12;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < spikes * 2; i++) {
+    const angle = (i * Math.PI) / spikes - Math.PI / 2;
+    const rad = i % 2 === 0 ? r : r * 0.72;
+    const px = cx + Math.cos(angle) * rad;
+    const py = cy + Math.sin(angle) * rad;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCheckIcon(ctx, x, y, size) {
+  fillRR(ctx, x, y, size, size, 8, '#22c55e');
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = size * 0.12;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + size * 0.22, y + size * 0.5);
+  ctx.lineTo(x + size * 0.44, y + size * 0.72);
+  ctx.lineTo(x + size * 0.78, y + size * 0.28);
+  ctx.stroke();
+}
+
+function drawEmoji(ctx, emoji, x, y, size) {
+  ctx.font = `${size}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, x, y);
+  ctx.textBaseline = 'alphabetic';
+}
+
+// V logo badge (top right)
+function drawLogoBadge(ctx, x, y, w, h) {
+  // Dark navy background
+  fillRR(ctx, x, y, w, h, 14, '#1a2744');
+  // Gold border
+  ctx.strokeStyle = '#c9a84c';
+  ctx.lineWidth = 2.5;
+  rr(ctx, x, y, w, h, 14);
+  ctx.stroke();
+  // Big V
+  ctx.fillStyle = '#c9a84c';
+  ctx.font = 'bold 64px "Playfair Display", Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('V', x + w/2, y + 72);
+  // WHOLESALE text
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 16px "DM Sans", sans-serif';
+  ctx.letterSpacing = '2px';
+  ctx.fillText('WHOLESALE', x + w/2, y + 96);
+  // Divider line
+  ctx.strokeStyle = '#c9a84c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 20, y + 106); ctx.lineTo(x + w - 20, y + 106);
+  ctx.stroke();
+  // Vijayawada
+  ctx.fillStyle = '#c9a84c';
+  ctx.font = '13px "DM Sans", sans-serif';
+  ctx.letterSpacing = '1px';
+  ctx.fillText('VIJAYAWADA', x + w/2, y + 122);
+  ctx.letterSpacing = '0px';
+}
+
+// ─── FLAGSHIP TEMPLATE (ChatGPT Style) ────────────────────────────────────────
+function renderFlagship(ctx, W, H, opts) {
+  const { headline, headline2, subtext, features, cta } = opts;
+  const NAVY = '#1a2744';
+  const GOLD = '#c9a84c';
+  const WHITE = '#ffffff';
+  const LW = 480; // left panel width
+  const RW = W - LW; // right panel
+
+  // ── BACKGROUND ──
+  // Left: white/light grey
+  ctx.fillStyle = '#f8f8f2';
+  ctx.fillRect(0, 0, LW, H - 220);
+  // Right: hero image or gradient
+  if (heroImage) {
+    clipRR(ctx, LW, 0, RW, H - 220, 0);
+    // Cover fit
+    const imgAR = heroImage.width / heroImage.height;
+    const boxAR = RW / (H - 220);
+    let sx, sy, sw, sh;
+    if (imgAR > boxAR) {
+      sh = heroImage.height; sw = sh * boxAR;
+      sx = (heroImage.width - sw) / 2; sy = 0;
+    } else {
+      sw = heroImage.width; sh = sw / boxAR;
+      sx = 0; sy = (heroImage.height - sh) / 2;
+    }
+    ctx.drawImage(heroImage, sx, sy, sw, sh, LW, 0, RW, H - 220);
+    ctx.restore();
+    // Subtle dark overlay on right for readability
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(LW, 0, RW, H - 220);
+  } else {
+    // Gradient room
+    const grad = ctx.createLinearGradient(LW, 0, W, H - 220);
+    grad.addColorStop(0, '#e8dcc8');
+    grad.addColorStop(0.4, '#d4c4a0');
+    grad.addColorStop(1, '#c0a878');
+    ctx.fillStyle = grad;
+    ctx.fillRect(LW, 0, RW, H - 220);
+    // Decorative marble pattern hint
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = '#fff';
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(LW + Math.random() * RW, Math.random() * (H-220));
+      ctx.bezierCurveTo(
+        LW + Math.random() * RW, Math.random() * (H-220),
+        LW + Math.random() * RW, Math.random() * (H-220),
+        LW + Math.random() * RW, Math.random() * (H-220)
+      );
+      ctx.lineWidth = Math.random() * 60 + 20;
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.stroke();
+    }
+    ctx.restore();
+    // Room illustration hint
+    drawRoomIllustration(ctx, LW, 0, RW, H - 220);
+  }
+
+  // ── TOP NAV BAR ──
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, 0, LW, 64);
+
+  // Home icon + brand in nav
+  ctx.fillStyle = GOLD;
+  ctx.font = '22px serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('⌂', 24, 42);
+  ctx.fillStyle = WHITE;
+  ctx.font = 'bold 20px "DM Sans", sans-serif';
+  ctx.fillText('V Wholesale', 54, 42);
+
+  // ── LOGO BADGE (top right of image) ──
+  drawLogoBadge(ctx, W - 175, 24, 150, 136);
+
+  // ── HEADLINE SECTION ──
+  const hlY = 90;
+  // Line 1: navy
+  ctx.fillStyle = NAVY;
+  ctx.font = 'bold 900 62px "DM Sans", sans-serif';
+  ctx.textAlign = 'left';
+  // Wrap headline
+  wrapLeft(ctx, headline, 28, hlY, LW - 40, 68, `bold 62px "DM Sans", sans-serif`, NAVY);
+
+  // Line 2: gold (large)
+  const hl1Lines = measureLines(ctx, headline, LW - 40, `bold 62px "DM Sans", sans-serif`);
+  const hl2Y = hlY + hl1Lines * 72 + 8;
+  ctx.fillStyle = GOLD;
+  ctx.font = `bold 68px "DM Sans", sans-serif`;
+  wrapLeft(ctx, headline2, 28, hl2Y, LW - 40, 76, `bold 68px "DM Sans", sans-serif`, GOLD);
+
+  // Divider
+  const divY = hl2Y + 84;
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(28, divY); ctx.lineTo(LW/2, divY);
+  ctx.stroke();
+  // Home icon on divider
+  ctx.font = '22px serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = GOLD;
+  ctx.fillText('⌂', LW/2 + 22, divY + 8);
+
+  // Subtext
+  const stY = divY + 30;
+  ctx.fillStyle = '#222';
+  ctx.font = `bold 22px "DM Sans", sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.fillText(subtext.split('?')[0] + (subtext.includes('?') ? '?' : ''), 28, stY + 22);
+  if (subtext.includes('?')) {
+    ctx.fillStyle = '#555';
+    ctx.font = `20px "DM Sans", sans-serif`;
+    ctx.fillText(subtext.split('?')[1]?.trim() || '', 28, stY + 48);
+  }
+
+  // ── FEATURE LIST ──
+  const featList = features.split(',').map(f => f.trim()).filter(Boolean);
+  const featureEmojis = ['🏠', '🚿', '🎨', '👷'];
+  const fStartY = stY + 72;
+  const fRowH = 76;
+
+  featList.forEach((feat, i) => {
+    const fy = fStartY + i * fRowH;
+    // Circle icon bg
+    ctx.save();
+    ctx.fillStyle = NAVY;
+    ctx.beginPath();
+    ctx.arc(28 + 34, fy + 34, 34, 0, Math.PI * 2);
+    ctx.fill();
+    // Emoji
+    ctx.font = '28px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(featureEmojis[i] || '✦', 28 + 34, fy + 42);
+    ctx.restore();
+
+    // Feature card
+    fillRR(ctx, 80, fy + 6, LW - 100, 56, 10, 'rgba(255,255,255,0.9)');
+    // Check icon
+    drawCheckIcon(ctx, 92, fy + 18, 32);
+    // Feature text
+    ctx.fillStyle = NAVY;
+    ctx.font = `bold 24px "DM Sans", sans-serif`;
+    ctx.textAlign = 'left';
+    ctx.fillText(feat, 136, fy + 42);
+  });
+
+  // ── PREMIUM QUALITY BADGE (on image) ──
+  const bdX = W - 210, bdY = H - 440;
+  drawStar(ctx, bdX, bdY, 90, NAVY);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold 18px "DM Sans", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('PREMIUM', bdX, bdY - 20);
+  ctx.fillStyle = GOLD;
+  ctx.font = `bold 24px "DM Sans", sans-serif`;
+  ctx.fillText('QUALITY', bdX, bdY + 4);
+  ctx.fillStyle = '#ddd';
+  ctx.font = `12px "DM Sans", sans-serif`;
+  ctx.fillText('BEST BRANDS', bdX, bdY + 24);
+  ctx.fillText('GREAT PRICES', bdX, bdY + 40);
+  // Stars above
+  for (let s = 0; s < 3; s++) {
+    ctx.fillStyle = GOLD;
+    ctx.font = '12px serif';
+    ctx.fillText('★', bdX - 14 + s * 14, bdY - 38);
+  }
+
+  // ── CATEGORY STRIP ──
+  const stripY = H - 220;
+  const cats = [
+    { label: 'TILES', emoji: '⬛' },
+    { label: 'GRANITE', emoji: '🪨' },
+    { label: 'SANITARYWARE', emoji: '🚿' },
+    { label: 'PAINTS', emoji: '🎨' },
+    { label: 'ELECTRICALS', emoji: '⚡' }
+  ];
+  const catW = W / cats.length;
+
+  cats.forEach((cat, i) => {
+    const cx = i * catW;
+    // Photo-style bg with gradient
+    const grad2 = ctx.createLinearGradient(cx, stripY, cx, stripY + 140);
+    const colors = ['#8B7355','#5a5a5a','#d4c4a0','#e8e0cc','#c0c0c0'];
+    grad2.addColorStop(0, colors[i]);
+    grad2.addColorStop(1, colors[i] + 'aa');
+    ctx.fillStyle = grad2;
+    ctx.fillRect(cx, stripY, catW, 140);
+    // Emoji
+    ctx.font = '52px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(cat.emoji, cx + catW/2, stripY + 70);
+    // Separator
+    if (i > 0) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, stripY); ctx.lineTo(cx, stripY + 140);
+      ctx.stroke();
+    }
+    // Navy label bar
+    ctx.fillStyle = NAVY;
+    ctx.fillRect(cx, stripY + 140, catW, 38);
+    ctx.fillStyle = WHITE;
+    ctx.font = `bold 15px "DM Sans", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(cat.label, cx + catW/2, stripY + 166);
+  });
+
+  // ── FOOTER ──
+  const footerY = stripY + 178;
+  ctx.fillStyle = NAVY;
+  ctx.fillRect(0, footerY, W, H - footerY);
+
+  // Location & contact (left)
+  const infoItems = [
+    { icon: '📍', text: 'NH65, Bhavanipuram, Vijayawada' },
+    { icon: '📞', text: '8712697930' },
+    { icon: '🌐', text: 'vwholesale.in' }
+  ];
+  infoItems.forEach((item, i) => {
+    ctx.font = `22px serif`;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = GOLD;
+    ctx.fillText(item.icon, 28, footerY + 32 + i * 38);
+    ctx.fillStyle = WHITE;
+    ctx.font = `20px "DM Sans", sans-serif`;
+    ctx.fillText(item.text, 60, footerY + 32 + i * 38);
+  });
+
+  // CTA button (center)
+  const ctaW = 280, ctaH = 68;
+  const ctaX = W/2 - ctaW/2, ctaY = footerY + 16;
+  // Gold gradient button
+  const ctaGrad = ctx.createLinearGradient(ctaX, ctaY, ctaX + ctaW, ctaY);
+  ctaGrad.addColorStop(0, '#c9a84c');
+  ctaGrad.addColorStop(1, '#f0d080');
+  fillRR(ctx, ctaX, ctaY, ctaW, ctaH, 34, ctaGrad);
+  // Dashed border
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  rr(ctx, ctaX + 4, ctaY + 4, ctaW - 8, ctaH - 8, 30);
+  ctx.stroke();
+  ctx.restore();
+  // CTA text (italic script style)
+  ctx.fillStyle = NAVY;
+  ctx.font = `italic bold 32px "Playfair Display", Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(cta, W/2, ctaY + 43);
+
+  // Tagline (right)
+  ctx.fillStyle = GOLD;
+  ctx.font = `22px serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('⌂', W - 130, footerY + 26);
+  ctx.fillStyle = WHITE;
+  ctx.font = `bold 16px "DM Sans", sans-serif`;
+  ctx.fillText('BUILD BETTER.', W - 130, footerY + 52);
+  ctx.fillText('LIVE BETTER.', W - 130, footerY + 72);
+  ctx.fillStyle = GOLD;
+  ctx.font = `14px "DM Sans", sans-serif`;
+  ctx.fillText('with V Wholesale', W - 130, footerY + 92);
+}
+
+function drawRoomIllustration(ctx, x, y, w, h) {
+  // Floor
+  const floorY = y + h * 0.55;
+  const floorGrad = ctx.createLinearGradient(x, floorY, x, y + h);
+  floorGrad.addColorStop(0, 'rgba(200,185,160,0.8)');
+  floorGrad.addColorStop(1, 'rgba(180,165,140,0.9)');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(x, floorY, w, h - floorY);
+
+  // Wall
+  const wallGrad = ctx.createLinearGradient(x, y, x, floorY);
+  wallGrad.addColorStop(0, 'rgba(240,230,210,0.6)');
+  wallGrad.addColorStop(1, 'rgba(220,205,185,0.7)');
+  ctx.fillStyle = wallGrad;
+  ctx.fillRect(x, y, w, floorY - y);
+
+  // Sofa
+  const sofaX = x + w * 0.1, sofaY = floorY - 80, sofaW = w * 0.55, sofaH = 80;
+  fillRR(ctx, sofaX, sofaY, sofaW, sofaH, 16, 'rgba(160,130,100,0.7)');
+  fillRR(ctx, sofaX, sofaY, sofaW, 28, 12, 'rgba(180,150,120,0.8)');
+  // Cushions
+  fillRR(ctx, sofaX + 20, sofaY + 8, 60, 50, 8, 'rgba(100,80,60,0.6)');
+  fillRR(ctx, sofaX + sofaW - 80, sofaY + 8, 60, 50, 8, 'rgba(100,80,60,0.6)');
+
+  // TV unit
+  const tvX = x + w * 0.15, tvY = floorY - 200;
+  fillRR(ctx, tvX, tvY, w * 0.5, 10, 3, 'rgba(80,60,40,0.5)');
+  fillRR(ctx, tvX + 20, tvY - 120, w * 0.4, 115, 6, 'rgba(20,20,20,0.7)');
+
+  // Pendant lights
+  for (let i = 0; i < 3; i++) {
+    const lx = x + w * (0.25 + i * 0.2);
+    ctx.strokeStyle = 'rgba(180,140,60,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(lx, y + 20);
+    ctx.lineTo(lx, y + 80 + i * 20);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,220,100,0.3)';
+    ctx.beginPath();
+    ctx.arc(lx, y + 88 + i * 20, 14, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// ─── OTHER TEMPLATES (simplified) ────────────────────────────────────────────
+function renderOffer(ctx, W, H, opts) {
+  // Navy/gold offer poster
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#0d1b3e'); grad.addColorStop(1, '#1a3a6e');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  // Decorative circles
+  ctx.save(); ctx.globalAlpha = 0.07; ctx.fillStyle = '#c9a84c';
+  ctx.beginPath(); ctx.arc(W*0.85, H*0.15, 300, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W*0.1, H*0.85, 200, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  // Logo badge
+  drawLogoBadge(ctx, W - 185, 28, 155, 138);
+  // SALE burst
+  drawStar(ctx, 180, 200, 150, '#c9a84c');
+  ctx.fillStyle = '#1a2744'; ctx.font = `bold 44px "DM Sans", sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText('MEGA', 180, 186); ctx.fillText('SALE', 180, 234);
+  // Headline
+  ctx.fillStyle = '#fff'; ctx.font = `bold 72px "DM Sans", sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText(opts.headline, W/2 + 60, 360);
+  ctx.fillStyle = '#c9a84c'; ctx.font = `bold 90px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline2, W/2, 470);
+  // Features
+  const feats = opts.features.split(',').map(f=>f.trim()).filter(Boolean);
+  feats.forEach((f,i) => {
+    ctx.fillStyle = 'rgba(255,255,255,0.1)'; rr(ctx, 200, 540+i*70, 680, 58, 12); ctx.fill();
+    drawCheckIcon(ctx, 218, 553+i*70, 32);
+    ctx.fillStyle = '#fff'; ctx.font = `bold 28px "DM Sans", sans-serif`; ctx.textAlign = 'left';
+    ctx.fillText(f, 264, 580+i*70);
+  });
+  renderFooter(ctx, W, H, opts.cta, '#1a2744', '#c9a84c');
+}
+
+function renderContractor(ctx, W, H, opts) {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0f1f0f'); grad.addColorStop(1, '#1a4020');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalAlpha = 0.06; ctx.fillStyle = '#c9a84c';
+  ctx.beginPath(); ctx.arc(W/2, H*0.3, 350, 0, Math.PI*2); ctx.fill(); ctx.restore();
+  drawLogoBadge(ctx, W - 185, 28, 155, 138);
+  ctx.fillStyle = '#c9a84c'; ctx.font = `bold 52px "DM Sans", sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText('🏆 Contractor Club', W/2, 200);
+  ctx.fillStyle = '#fff'; ctx.font = `bold 80px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline, W/2, 300);
+  ctx.fillStyle = '#c9a84c'; ctx.font = `bold 48px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline2, W/2, 370);
+  const perks = ['2% Referral Bonus on First Job','0.5% Lifetime Loyalty Earnings','Silver / Gold / Platinum Tiers','Exclusive Contractor Pricing'];
+  perks.forEach((p,i) => {
+    fillRR(ctx, 160, 420+i*80, 760, 64, 12, 'rgba(201,168,76,0.1)');
+    ctx.strokeStyle = '#c9a84c'; ctx.lineWidth = 1; rr(ctx, 160, 420+i*80, 760, 64, 12); ctx.stroke();
+    ctx.fillStyle = '#c9a84c'; ctx.font = `20px serif`; ctx.textAlign = 'left'; ctx.fillText('★', 180, 458+i*80);
+    ctx.fillStyle = '#fff'; ctx.font = `bold 24px "DM Sans", sans-serif`; ctx.fillText(p, 210, 458+i*80);
+  });
+  renderFooter(ctx, W, H, opts.cta, '#0f1f0f', '#c9a84c');
+}
+
+function renderProduct(ctx, W, H, opts) {
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#1a2744'); grad.addColorStop(1, '#0d1b3e');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  drawLogoBadge(ctx, W - 185, 28, 155, 138);
+  ctx.fillStyle = '#fff'; ctx.font = `bold 66px "DM Sans", sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText(opts.headline, W/2, 260);
+  ctx.fillStyle = '#c9a84c'; ctx.font = `bold 76px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline2, W/2, 360);
+  // Product grid
+  const prods = [
+    {e:'⬛',n:'Tiles'},{e:'🪨',n:'Granite'},{e:'🚿',n:'Sanitaryware'},
+    {e:'🎨',n:'Paints'},{e:'⚡',n:'Electricals'},{e:'🚪',n:'Hardware'}
+  ];
+  const cols = 3, rows = 2, gW = 280, gH = 200, gPad = 40;
+  prods.forEach((p,i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    const gx = (W - cols*gW - (cols-1)*gPad)/2 + col*(gW+gPad);
+    const gy = 400 + row*(gH+gPad);
+    fillRR(ctx, gx, gy, gW, gH, 16, 'rgba(255,255,255,0.07)');
+    ctx.font = `72px serif`; ctx.textAlign = 'center';
+    ctx.fillText(p.e, gx+gW/2, gy+gH*0.55);
+    ctx.fillStyle = '#fff'; ctx.font = `bold 22px "DM Sans", sans-serif`;
+    ctx.fillText(p.n, gx+gW/2, gy+gH*0.85);
+    ctx.fillStyle = '#c9a84c';
+  });
+  renderFooter(ctx, W, H, opts.cta, '#1a2744', '#c9a84c');
+}
+
+function renderFestival(ctx, W, H, opts) {
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  grad.addColorStop(0, '#7f1d1d'); grad.addColorStop(1, '#991b1b');
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+  ctx.save(); ctx.globalAlpha = 0.08; ctx.fillStyle = '#fbbf24';
+  for(let i=0;i<6;i++){ctx.beginPath();ctx.arc(Math.random()*W,Math.random()*H,100+Math.random()*200,0,Math.PI*2);ctx.fill();}
+  ctx.restore();
+  drawLogoBadge(ctx, W - 185, 28, 155, 138);
+  ctx.fillStyle = '#fbbf24'; ctx.font = `bold 52px "DM Sans", sans-serif`; ctx.textAlign = 'center';
+  ctx.fillText('🎉 Festival Special', W/2, 180);
+  ctx.fillStyle = '#fff'; ctx.font = `bold 80px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline, W/2, 290);
+  ctx.fillStyle = '#fde68a'; ctx.font = `bold 56px "DM Sans", sans-serif`;
+  ctx.fillText(opts.headline2, W/2, 370);
+  const feats = opts.features.split(',').map(f=>f.trim()).filter(Boolean);
+  feats.forEach((f,i)=>{
+    ctx.fillStyle='rgba(255,255,255,0.1)';rr(ctx,160,430+i*80,760,64,12);ctx.fill();
+    drawCheckIcon(ctx,178,443+i*80,32);
+    ctx.fillStyle='#fff';ctx.font=`bold 26px "DM Sans", sans-serif`;ctx.textAlign='left';
+    ctx.fillText(f,224,472+i*80);
+    ctx.fillStyle='#fde68a';
+  });
+  renderFooter(ctx, W, H, opts.cta, '#7f1d1d', '#fbbf24');
+}
+
+function renderFooter(ctx, W, H, cta, bgColor, accentColor) {
+  const fY = H - 160;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(0, fY, W, 160);
+  ctx.fillStyle = accentColor; ctx.font=`20px serif`; ctx.textAlign='left';
+  ctx.fillText('📍', 40, fY+36); ctx.fillStyle='#fff'; ctx.font=`20px "DM Sans",sans-serif`;
+  ctx.fillText('NH65, Bhavanipuram, Vijayawada', 70, fY+36);
+  ctx.fillStyle=accentColor; ctx.fillText('📞', 40, fY+68); ctx.fillStyle='#fff';
+  ctx.fillText('8712697930   🌐 vwholesale.in', 70, fY+68);
+  // CTA
+  const cGrad = ctx.createLinearGradient(W/2-130, fY+16, W/2+130, fY+16);
+  cGrad.addColorStop(0, accentColor); cGrad.addColorStop(1, '#f0d080');
+  fillRR(ctx, W/2-130, fY+16, 260, 60, 30, cGrad);
+  ctx.fillStyle='#1a2744'; ctx.font=`italic bold 28px "Playfair Display",Georgia,serif`;
+  ctx.textAlign='center'; ctx.fillText(cta, W/2, fY+53);
+}
+
+// ─── Text Utilities ───────────────────────────────────────────────────────────
+function wrapLeft(ctx, text, x, y, maxW, lineH, font, color) {
+  ctx.font = font; ctx.fillStyle = color; ctx.textAlign = 'left';
+  const words = text.split(/\s+/); let line = ''; let ly = y;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x, ly); line = w; ly += lineH;
+    } else line = test;
+  }
+  if (line) ctx.fillText(line, x, ly);
+}
+
+function measureLines(ctx, text, maxW, font) {
+  ctx.font = font;
+  const words = text.split(/\s+/); let line = ''; let count = 1;
+  for (const w of words) {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxW && line) { count++; line = w; }
+    else line = test;
+  }
+  return count;
+}
+
+// ─── Main Render ──────────────────────────────────────────────────────────────
+function renderPoster() {
   const canvas = document.getElementById('poster');
   const ctx = canvas.getContext('2d');
   const W = 1080, H = 1080;
-  const theme = THEMES[document.getElementById('theme').value] || THEMES.royal;
-  const template = document.getElementById('template').value;
-  const headline = document.getElementById('headline').value || 'V Wholesale';
-  const sub = document.getElementById('subheadline').value || '';
-  const tagline = document.getElementById('tagline').value || '';
+  ctx.clearRect(0, 0, W, H);
 
-  // Background gradient
-  const grad = ctx.createLinearGradient(0, 0, W, H);
-  grad.addColorStop(0, theme.bg[0]);
-  grad.addColorStop(1, theme.bg[1]);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
+  const opts = {
+    headline:  document.getElementById('headline').value || 'V Wholesale',
+    headline2: document.getElementById('headline2').value || 'Home Building Store',
+    subtext:   document.getElementById('subtext').value || '',
+    features:  document.getElementById('features').value || 'Tiles,Sanitaryware,Paints,Guidance',
+    cta:       document.getElementById('cta').value || 'Walk in today!',
+  };
 
-  // Decorative circles
-  ctx.save();
-  ctx.globalAlpha = 0.06;
-  ctx.fillStyle = theme.accent;
-  ctx.beginPath(); ctx.arc(W*0.85, H*0.15, 280, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(W*0.1, H*0.8, 200, 0, Math.PI*2); ctx.fill();
-  ctx.restore();
-
-  // Top accent line
-  ctx.fillStyle = theme.accent;
-  ctx.fillRect(80, 80, 160, 6);
-  ctx.fillRect(80, 80, 6, 160);
-
-  // Bottom accent line
-  ctx.fillRect(W-240, H-86, 160, 6);
-  ctx.fillRect(W-86, H-240, 6, 160);
-
-  // Logo area
-  const logoSize = 90;
-  const logoX = 80, logoY = 130;
-  ctx.fillStyle = theme.accent;
-  roundRect(ctx, logoX, logoY, logoSize, logoSize, 16);
-  ctx.fillStyle = theme.bg[0];
-  ctx.font = 'bold 42px DM Sans, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('VW', logoX + logoSize/2, logoY + 58);
-
-  // Brand name
-  ctx.fillStyle = theme.text;
-  ctx.font = 'bold 36px DM Sans, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('V Wholesale', logoX + logoSize + 20, logoY + 42);
-  ctx.fillStyle = theme.sub;
-  ctx.font = '22px DM Sans, sans-serif';
-  ctx.fillText('Vijayawada', logoX + logoSize + 20, logoY + 72);
-
-  // Main headline
-  ctx.fillStyle = theme.text;
-  ctx.textAlign = 'center';
-  const headlineY = template === 'offer' ? 480 : 520;
-  wrapText(ctx, headline, W/2, headlineY, W - 160, 74, 'bold 900');
-
-  // Accent divider
-  ctx.fillStyle = theme.accent;
-  ctx.fillRect(W/2 - 60, headlineY + 80, 120, 5);
-
-  // Sub headline
-  if (sub) {
-    ctx.fillStyle = theme.sub;
-    ctx.font = '32px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    wrapText(ctx, sub, W/2, headlineY + 130, W - 200, 42, 'normal');
+  const tmpl = document.getElementById('template').value;
+  switch(tmpl) {
+    case 'flagship':    renderFlagship(ctx, W, H, opts); break;
+    case 'offer':       renderOffer(ctx, W, H, opts); break;
+    case 'contractor':  renderContractor(ctx, W, H, opts); break;
+    case 'product':     renderProduct(ctx, W, H, opts); break;
+    case 'festival':    renderFestival(ctx, W, H, opts); break;
+    default:            renderFlagship(ctx, W, H, opts);
   }
 
-  // Tagline badge
-  if (tagline) {
-    ctx.font = 'bold 28px DM Sans, sans-serif';
-    const tw = ctx.measureText(tagline).width;
-    const bx = W/2 - tw/2 - 24, by = H - 260, bw = tw + 48, bh = 56;
-    ctx.fillStyle = theme.badge_bg;
-    roundRect(ctx, bx, by, bw, bh, 28);
-    ctx.fillStyle = theme.badge_text;
-    ctx.textAlign = 'center';
-    ctx.fillText(tagline, W/2, by + 38);
-  }
-
-  // Bottom info strip
-  const stripY = H - 170;
-  ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.fillRect(0, stripY, W, 170);
-
-  ctx.fillStyle = theme.accent;
-  ctx.font = 'bold 26px DM Sans, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('📍 NH65, Bhavanipuram, Vijayawada', W/2, stripY + 44);
-
-  ctx.fillStyle = theme.text;
-  ctx.font = '24px DM Sans, sans-serif';
-  ctx.fillText('📞 8712697930   🌐 vwholesale.in', W/2, stripY + 86);
-
-  // Template-specific elements
-  if (template === 'offer') {
-    // Burst
-    drawBurst(ctx, W - 180, 220, 140, theme.accent, theme.bg[0]);
-    ctx.fillStyle = theme.bg[0];
-    ctx.font = 'bold 28px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SPECIAL', W - 180, 208);
-    ctx.fillText('OFFER', W - 180, 244);
-  }
-
-  if (template === 'contractor') {
-    ctx.fillStyle = theme.accent;
-    ctx.font = 'bold 34px DM Sans, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('🏆 Contractor Club', W/2, 200);
-    ctx.fillStyle = theme.sub;
-    ctx.font = '26px DM Sans, sans-serif';
-    ctx.fillText('Join. Earn. Grow.', W/2, 246);
-  }
-
-  // Category pills for product template
-  if (template === 'product' || template === 'store') {
-    const cats = ['Tiles', 'Sanitaryware', 'Granite', 'Paints', 'Electricals'];
-    const pillY = H - 310;
-    const totalW = cats.reduce((s,c)=>s+ctx.measureText(c).width+40,0) + (cats.length-1)*12;
-    let px = W/2 - totalW/2;
-    ctx.font = 'bold 22px DM Sans, sans-serif';
-    cats.forEach(cat => {
-      const tw = ctx.measureText(cat).width + 40;
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      roundRect(ctx, px, pillY, tw, 44, 22);
-      ctx.fillStyle = theme.text;
-      ctx.textAlign = 'center';
-      ctx.fillText(cat, px + tw/2, pillY + 29);
-      px += tw + 12;
-    });
-  }
-
-  // Watermark
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.font = '18px DM Sans, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.fillText('vwholesale.in', W - 80, H - 30);
+  setStatus('Poster ready ✓', 'ok');
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
-  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
-  ctx.lineTo(x+w,y+h-r);
-  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
-  ctx.lineTo(x+r,y+h);
-  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
-  ctx.lineTo(x,y+r);
-  ctx.quadraticCurveTo(x,y,x+r,y);
-  ctx.closePath();
-  ctx.fill();
-}
-
-function wrapText(ctx, text, x, y, maxW, lineH, weight) {
-  ctx.font = `${weight} ${lineH}px 'Noto Sans Telugu', 'DM Sans', sans-serif`;
-  const words = text.split(' ');
-  let line = '';
-  let lines = [];
-  for (let w of words) {
-    const test = line + (line??' ') + w;
-    if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; }
-    else line = test;
-  }
-  if (line) lines.push(line);
-  const startY = y - ((lines.length-1)*lineH*0.6);
-  lines.forEach((l,i) => {
-    ctx.textAlign = 'center';
-    ctx.fillText(l, x, startY + i*lineH*1.1);
-  });
-}
-
-function drawBurst(ctx, cx, cy, r, fillColor, textColor) {
-  const spikes = 12;
-  ctx.save();
-  ctx.fillStyle = fillColor;
-  ctx.beginPath();
-  for (let i=0; i<spikes*2; i++) {
-    const angle = (i*Math.PI)/spikes - Math.PI/2;
-    const rad = i%2===0 ? r : r*0.75;
-    i===0 ? ctx.moveTo(cx+Math.cos(angle)*rad, cy+Math.sin(angle)*rad)
-          : ctx.lineTo(cx+Math.cos(angle)*rad, cy+Math.sin(angle)*rad);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
+// ─── Download / Copy ──────────────────────────────────────────────────────────
 function downloadPoster() {
   const canvas = document.getElementById('poster');
   const a = document.createElement('a');
-  a.download = 'vwholesale-post-' + Date.now() + '.png';
+  a.download = `vwholesale-poster-${Date.now()}.png`;
   a.href = canvas.toDataURL('image/png');
   a.click();
+  setStatus('Downloaded!', 'ok');
 }
 
-// Generate on load and on input changes
-window.onload = () => { generatePoster(); };
-['headline','subheadline','tagline'].forEach(id => {
-  document.getElementById(id).addEventListener('input', generatePoster);
-});
+async function copyToClipboard() {
+  const canvas = document.getElementById('poster');
+  canvas.toBlob(async blob => {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+      setStatus('Copied to clipboard ✓', 'ok');
+    } catch(e) { setStatus('Copy failed — use Download instead', 'loading'); }
+  });
+}
+
+function setStatus(msg, cls) {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + (cls || '');
+  if (cls === 'ok') setTimeout(() => el.textContent = 'Ready', 3000);
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+window.onload = () => {
+  renderPoster();
+  ['headline','headline2','subtext','features','cta'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => renderPoster());
+  });
+};
 </script>
 </body>
 </html>
