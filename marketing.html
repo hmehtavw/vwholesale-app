@@ -1,0 +1,1226 @@
+<!DOCTYPE html>
+<!-- build:marketing-v1 -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>V Wholesale — Marketing Intelligence</title>
+  <link rel="icon" href="./icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:      #0A0F1E;
+      --bg2:     #111827;
+      --bg3:     #1F2937;
+      --border:  #1F2937;
+      --border2: #374151;
+      --text:    #F9FAFB;
+      --text2:   #D1D5DB;
+      --text3:   #6B7280;
+      --blue:    #3B82F6;
+      --green:   #10B981;
+      --gold:    #F59E0B;
+      --red:     #EF4444;
+      --purple:  #8B5CF6;
+      --pink:    #EC4899;
+      --sidebar-w: 240px;
+      --topbar-h: 56px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 14px; }
+
+    /* ── LAYOUT ── */
+    #mkt-layout { display: flex; min-height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    #mkt-sidebar {
+      width: var(--sidebar-w); min-height: 100vh;
+      background: #080D1A; border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 100;
+      overflow-y: auto;
+    }
+    .mkt-logo {
+      padding: 16px; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .mkt-logo-icon {
+      width: 32px; height: 32px; background: var(--purple);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: 16px; flex-shrink: 0;
+    }
+    .mkt-logo-text { font-size: 13px; font-weight: 800; color: var(--text); }
+    .mkt-logo-sub { font-size: 10px; color: var(--text3); }
+    .mkt-nav { flex: 1; padding: 8px 0; }
+    .mkt-section-lbl {
+      font-size: 9px; font-weight: 800; color: var(--text3);
+      text-transform: uppercase; letter-spacing: .08em;
+      padding: 12px 16px 4px;
+    }
+    .mkt-nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px; cursor: pointer; border: none;
+      background: none; color: var(--text2); font-family: inherit;
+      font-size: 13px; width: 100%; text-align: left;
+      border-radius: 0; transition: all .15s;
+      position: relative;
+    }
+    .mkt-nav-item:hover { background: var(--bg2); color: var(--text); }
+    .mkt-nav-item.active { background: rgba(139,92,246,.15); color: var(--purple); border-right: 2px solid var(--purple); }
+    .mkt-nav-item .nav-icon { font-size: 15px; flex-shrink: 0; width: 20px; text-align: center; }
+    .mkt-nav-badge {
+      margin-left: auto; background: var(--red); color: #fff;
+      font-size: 9px; font-weight: 800; padding: 1px 5px;
+      border-radius: 8px; min-width: 16px; text-align: center;
+    }
+    .mkt-footer {
+      padding: 12px 16px; border-top: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .ai-pause-btn {
+      width: 100%; padding: 8px; background: rgba(239,68,68,.1);
+      border: 1px solid rgba(239,68,68,.3); border-radius: 8px;
+      color: var(--red); font-size: 11px; font-weight: 700;
+      cursor: pointer; font-family: inherit; margin-bottom: 8px;
+    }
+    .ai-pause-btn.paused { background: rgba(239,68,68,.3); }
+
+    /* ── MAIN ── */
+    #mkt-main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── TOPBAR ── */
+    #mkt-topbar {
+      height: var(--topbar-h); background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 20px; position: sticky; top: 0; z-index: 50;
+    }
+    .mkt-page-title { font-size: 16px; font-weight: 800; color: var(--text); }
+    .mkt-topbar-actions { display: flex; align-items: center; gap: 10px; }
+    .mkt-btn { padding: 6px 14px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; }
+    .mkt-btn-primary { background: var(--purple); color: #fff; }
+    .mkt-btn-ghost { background: var(--bg3); color: var(--text2); border: 1px solid var(--border2); }
+
+    /* ── CONTENT ── */
+    #mkt-content { flex: 1; padding: 20px; overflow-y: auto; }
+
+    /* ── CARDS ── */
+    .mkt-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px; margin-bottom: 12px;
+    }
+    .mkt-card-title { font-size: 12px; font-weight: 800; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 12px; }
+    .mkt-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .mkt-grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .mkt-grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+
+    /* ── STAT CARDS ── */
+    .stat-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px;
+    }
+    .stat-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+    .stat-value { font-size: 24px; font-weight: 900; color: var(--text); margin-bottom: 2px; }
+    .stat-sub { font-size: 11px; color: var(--text3); }
+    .stat-trend-up { color: var(--green); }
+    .stat-trend-down { color: var(--red); }
+
+    /* ── BADGES ── */
+    .badge { padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700; }
+    .badge-green { background: rgba(16,185,129,.15); color: var(--green); }
+    .badge-blue { background: rgba(59,130,246,.15); color: var(--blue); }
+    .badge-gold { background: rgba(245,158,11,.15); color: var(--gold); }
+    .badge-red { background: rgba(239,68,68,.15); color: var(--red); }
+    .badge-purple { background: rgba(139,92,246,.15); color: var(--purple); }
+    .badge-gray { background: var(--bg3); color: var(--text3); }
+
+    /* ── AGENT STATUS ── */
+    .agent-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .agent-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .agent-name { font-size: 13px; font-weight: 700; }
+    .agent-desc { font-size: 11px; color: var(--text3); }
+
+    /* ── INTEGRATION STATUS ── */
+    .integration-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .integration-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: var(--green); }
+    .dot-gold { background: var(--gold); }
+    .dot-gray { background: var(--text3); }
+    .dot-red { background: var(--red); }
+
+    /* ── LOGIN ── */
+    #mkt-login {
+      position: fixed; inset: 0; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; z-index: 999;
+    }
+    .login-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 16px; padding: 32px; width: 360px;
+    }
+    .login-logo { text-align: center; margin-bottom: 24px; }
+    .login-logo-icon { width: 56px; height: 56px; background: var(--purple); border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; margin: 0 auto 10px; }
+    .login-title { font-size: 18px; font-weight: 900; }
+    .login-sub { font-size: 12px; color: var(--text3); margin-top: 4px; }
+    .login-form { display: grid; gap: 12px; }
+    .login-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 4px; }
+    .login-input { width: 100%; padding: 10px 12px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-family: inherit; font-size: 13px; }
+    .login-input:focus { outline: none; border-color: var(--purple); }
+    .login-btn { width: 100%; padding: 12px; background: var(--purple); color: #fff; border: none; border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 4px; }
+    .login-err { font-size: 12px; color: var(--red); text-align: center; display: none; }
+
+    /* ── EMPTY STATE ── */
+    .mkt-empty { text-align: center; padding: 40px 20px; color: var(--text3); }
+    .mkt-empty-icon { font-size: 40px; margin-bottom: 10px; }
+    .mkt-empty-title { font-size: 14px; font-weight: 700; color: var(--text2); margin-bottom: 4px; }
+
+    /* ── TABLE ── */
+    .mkt-table { width: 100%; border-collapse: collapse; }
+    .mkt-table th { font-size: 10px; font-weight: 800; color: var(--text3); text-transform: uppercase; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .mkt-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .mkt-table tr:hover td { background: var(--bg3); }
+
+    /* ── TABS ── */
+    .mkt-tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .mkt-tab { padding: 8px 16px; background: none; border: none; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .mkt-tab.active { color: var(--purple); border-bottom-color: var(--purple); }
+
+    /* ── AI CHAT ── */
+    .ai-message { padding: 12px; border-radius: 10px; margin-bottom: 8px; font-size: 13px; line-height: 1.6; }
+    .ai-message.ai { background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.2); }
+    .ai-message.user { background: var(--bg3); border: 1px solid var(--border2); }
+    .ai-thinking { display: flex; gap: 4px; align-items: center; padding: 10px; }
+    .ai-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--purple); animation: pulse 1.2s infinite; }
+    .ai-dot:nth-child(2) { animation-delay: .2s; }
+    .ai-dot:nth-child(3) { animation-delay: .4s; }
+    @keyframes pulse { 0%,100%{opacity:.3} 50%{opacity:1} }
+
+    /* ── FORM ── */
+    .mkt-form-group { margin-bottom: 12px; }
+    .mkt-form-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; display: block; margin-bottom: 4px; }
+    .mkt-form-input, .mkt-form-select, .mkt-form-textarea {
+      width: 100%; padding: 9px 12px; background: var(--bg3);
+      border: 1px solid var(--border2); border-radius: 8px;
+      color: var(--text); font-family: inherit; font-size: 13px;
+    }
+    .mkt-form-input:focus, .mkt-form-select:focus, .mkt-form-textarea:focus {
+      outline: none; border-color: var(--purple);
+    }
+    .mkt-form-textarea { resize: vertical; min-height: 80px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      #mkt-sidebar { transform: translateX(-100%); transition: transform .25s; }
+      #mkt-sidebar.open { transform: translateX(0); }
+      #mkt-main { margin-left: 0; }
+      .mkt-grid-4 { grid-template-columns: 1fr 1fr; }
+      .mkt-grid-3 { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="mkt-login">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">📊</div>
+      <div class="login-title">Marketing Intelligence</div>
+      <div class="login-sub">V Wholesale · Vijayawada</div>
+    </div>
+    <div class="login-form">
+      <div>
+        <label class="login-label">Phone Number</label>
+        <input type="tel" id="mkt-phone" class="login-input" placeholder="10-digit mobile" maxlength="10" inputmode="numeric">
+      </div>
+      <div>
+        <label class="login-label">6-Digit PIN</label>
+        <input type="password" id="mkt-pin" class="login-input" placeholder="••••••" maxlength="6" inputmode="numeric">
+      </div>
+      <div class="login-err" id="mkt-login-err">Invalid credentials</div>
+      <button class="login-btn" onclick="mktLogin()">Sign In to Marketing →</button>
+    </div>
+    <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--text3)">
+      Marketing access only · <a href="/staff/" style="color:var(--purple)">Staff Portal</a>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div id="mkt-layout" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside id="mkt-sidebar">
+    <div class="mkt-logo">
+      <div class="mkt-logo-icon">📊</div>
+      <div>
+        <div class="mkt-logo-text">Marketing AI</div>
+        <div class="mkt-logo-sub">V Wholesale</div>
+      </div>
+    </div>
+
+    <nav class="mkt-nav" id="mkt-nav">
+      <div class="mkt-section-lbl">Overview</div>
+      <button class="mkt-nav-item active" onclick="mktNav('command')" data-page="command">
+        <span class="nav-icon">⚡</span> Command Centre
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('cmo')" data-page="cmo">
+        <span class="nav-icon">🧠</span> AI CMO
+      </button>
+
+      <div class="mkt-section-lbl">Campaigns</div>
+      <button class="mkt-nav-item" onclick="mktNav('campaigns')" data-page="campaigns">
+        <span class="nav-icon">🎯</span> Campaigns
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('content')" data-page="content">
+        <span class="nav-icon">✍️</span> Content Studio
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('calendar')" data-page="calendar">
+        <span class="nav-icon">📅</span> Content Calendar
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('approvals')" data-page="approvals" id="nav-approvals">
+        <span class="nav-icon">✅</span> Approvals
+      </button>
+
+      <div class="mkt-section-lbl">Channels</div>
+      <button class="mkt-nav-item" onclick="mktNav('social')" data-page="social">
+        <span class="nav-icon">📱</span> Social Media
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('gbp')" data-page="gbp">
+        <span class="nav-icon">📍</span> Google Business
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('whatsapp')" data-page="whatsapp">
+        <span class="nav-icon">💬</span> WhatsApp
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('ads')" data-page="ads">
+        <span class="nav-icon">📢</span> Advertising
+      </button>
+
+      <div class="mkt-section-lbl">SEO</div>
+      <button class="mkt-nav-item" onclick="mktNav('local-seo')" data-page="local-seo">
+        <span class="nav-icon">🗺️</span> Local SEO
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('website-seo')" data-page="website-seo">
+        <span class="nav-icon">🔍</span> Website SEO
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('reviews')" data-page="reviews">
+        <span class="nav-icon">⭐</span> Reviews
+      </button>
+
+      <div class="mkt-section-lbl">Intelligence</div>
+      <button class="mkt-nav-item" onclick="mktNav('analytics')" data-page="analytics">
+        <span class="nav-icon">📈</span> Analytics
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('competitors')" data-page="competitors">
+        <span class="nav-icon">🕵️</span> Competitors
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('segments')" data-page="segments">
+        <span class="nav-icon">👥</span> Segments
+      </button>
+
+      <div class="mkt-section-lbl">System</div>
+      <button class="mkt-nav-item" onclick="mktNav('agents')" data-page="agents">
+        <span class="nav-icon">🤖</span> AI Agents
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('brand')" data-page="brand">
+        <span class="nav-icon">🏷️</span> Brand Knowledge
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('integrations')" data-page="integrations">
+        <span class="nav-icon">🔌</span> Integrations
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('audit')" data-page="audit">
+        <span class="nav-icon">📋</span> Audit Logs
+      </button>
+      <button class="mkt-nav-item" onclick="mktNav('settings')" data-page="settings">
+        <span class="nav-icon">⚙️</span> Settings
+      </button>
+    </nav>
+
+    <div class="mkt-footer">
+      <button class="ai-pause-btn" id="ai-pause-btn" onclick="toggleAIPause()">
+        🛑 Pause All AI Actions
+      </button>
+      <div style="font-size:11px;color:var(--text3)" id="mkt-user-info">—</div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div id="mkt-main">
+    <!-- TOPBAR -->
+    <div id="mkt-topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button onclick="document.getElementById('mkt-sidebar').classList.toggle('open')"
+          style="display:none;background:none;border:none;color:var(--text);font-size:20px;cursor:pointer" id="mkt-hamburger">☰</button>
+        <div class="mkt-page-title" id="mkt-page-title">Command Centre</div>
+      </div>
+      <div class="mkt-topbar-actions">
+        <span style="font-size:11px;color:var(--text3)" id="mkt-time"></span>
+        <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()">🧠 Run AI CMO</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="mktSignOut()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- CONTENT -->
+    <div id="mkt-content">
+      <!-- Loaded dynamically -->
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+// ── CONFIG ──
+const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+const sb = supabase.createClient(MKT_SB_URL, MKT_SB_KEY);
+let mktProfile = null;
+let aiPaused = false;
+
+// ── AUTH ──
+async function mktLogin() {
+  const phone = document.getElementById('mkt-phone').value.trim();
+  const pin = document.getElementById('mkt-pin').value.trim();
+  const errEl = document.getElementById('mkt-login-err');
+  errEl.style.display = 'none';
+
+  if (!phone || phone.length < 10) { errEl.textContent = 'Enter valid phone number'; errEl.style.display = 'block'; return; }
+  if (!pin || pin.length < 6) { errEl.textContent = 'Enter 6-digit PIN'; errEl.style.display = 'block'; return; }
+
+  const { error } = await sb.auth.signInWithPassword({ email: phone + '@vwholesale.app', password: pin });
+  if (error) { errEl.textContent = 'Invalid credentials'; errEl.style.display = 'block'; return; }
+
+  const { data: profile } = await sb.from('profiles').select('*').eq('phone', phone).single();
+  if (!profile || !['admin','owner','manager','marketing'].includes(profile.role)) {
+    await sb.auth.signOut();
+    errEl.textContent = 'No marketing access for this account';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  mktProfile = profile;
+  showMktApp();
+}
+
+function showMktApp() {
+  document.getElementById('mkt-login').style.display = 'none';
+  document.getElementById('mkt-layout').style.display = 'flex';
+  document.getElementById('mkt-user-info').textContent = mktProfile?.name + ' · ' + (mktProfile?.role || '');
+  startClock();
+  loadAIPauseStatus();
+  mktNav('command');
+}
+
+async function mktSignOut() {
+  await sb.auth.signOut();
+  window.location.reload();
+}
+
+// ── CLOCK ──
+function startClock() {
+  const el = document.getElementById('mkt-time');
+  const tick = () => { el.textContent = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',hour12:true}); };
+  tick(); setInterval(tick, 30000);
+}
+
+// ── NAVIGATION ──
+const PAGE_TITLES = {
+  command: 'Command Centre', cmo: 'AI CMO', campaigns: 'Campaigns',
+  content: 'Content Studio', calendar: 'Content Calendar', approvals: 'Approvals',
+  social: 'Social Media', gbp: 'Google Business Profile', whatsapp: 'WhatsApp',
+  ads: 'Advertising', 'local-seo': 'Local SEO', 'website-seo': 'Website SEO',
+  reviews: 'Reviews & Reputation', analytics: 'Analytics', competitors: 'Competitor Intelligence',
+  segments: 'Customer Segments', agents: 'AI Agents', brand: 'Brand Knowledge',
+  integrations: 'Integrations', audit: 'Audit Logs', settings: 'Settings'
+};
+
+function mktNav(page) {
+  document.querySelectorAll('.mkt-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
+  const renderers = {
+    command: renderCommandCentre, cmo: renderAICMO, campaigns: renderCampaigns,
+    content: renderContentStudio, calendar: renderCalendar, approvals: renderApprovals,
+    social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
+    ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
+    reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
+    segments: renderSegments, agents: renderAgents, brand: renderBrand,
+    integrations: renderIntegrations, audit: renderAudit, settings: renderSettings
+  };
+  if (renderers[page]) renderers[page]();
+  else renderComingSoon(PAGE_TITLES[page] || page);
+}
+
+function setContent(html) { document.getElementById('mkt-content').innerHTML = html; }
+
+function renderComingSoon(title) {
+  setContent(`<div class="mkt-empty">
+    <div class="mkt-empty-icon">🚧</div>
+    <div class="mkt-empty-title">${title}</div>
+    <div style="font-size:12px;margin-top:4px">Coming in next build</div>
+  </div>`);
+}
+
+// ── COMMAND CENTRE ──
+async function renderCommandCentre() {
+  setContent(`<div style="text-align:center;padding:40px"><div style="font-size:24px">⏳</div><div style="color:var(--text3);margin-top:8px">Loading dashboard…</div></div>`);
+
+  // Load data
+  const [settingsRes, intRes, agentsRes, approvalsRes] = await Promise.all([
+    sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]})),
+    sb.from('marketing_integrations').select('*').then(r=>r, ()=>({data:[]})),
+    sb.from('ai_agents').select('*').then(r=>r, ()=>({data:[]})),
+    sb.from('marketing_approvals').select('*').eq('status','pending').then(r=>r, ()=>({data:[]})),
+  ]);
+
+  const settings = {};
+  (settingsRes.data||[]).forEach(s => { settings[s.key] = s.value; });
+  const integrations = intRes.data || [];
+  const agents = agentsRes.data || [];
+  const approvals = approvalsRes.data || [];
+
+  const connectedInt = integrations.filter(i => i.status === 'connected').length;
+  const budget = parseInt(settings.marketing_budget_monthly_inr || 30000);
+
+  setContent(`
+  <!-- HEADER -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div>
+      <h2 style="font-size:20px;font-weight:900">Good ${new Date().getHours()<12?'Morning':'Afternoon'}, ${mktProfile?.name?.split(' ')[0]} 👋</h2>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · V Wholesale Marketing Intelligence</div>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()">🧠 Get AI Briefing</button>
+  </div>
+
+  <!-- AI PAUSE WARNING -->
+  ${aiPaused ? `<div style="background:rgba(239,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:20px">🛑</span>
+    <div><div style="font-weight:700;color:var(--red)">All AI Actions Paused</div><div style="font-size:11px;color:var(--text3)">AI agents are running in recommend-only mode</div></div>
+    <button onclick="toggleAIPause()" style="margin-left:auto;padding:6px 12px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Resume AI</button>
+  </div>` : ''}
+
+  <!-- PENDING APPROVALS ALERT -->
+  ${approvals.length > 0 ? `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="mktNav('approvals')">
+    <span style="font-size:20px">✅</span>
+    <div><div style="font-weight:700;color:var(--gold)">${approvals.length} Action${approvals.length>1?'s':''} Awaiting Your Approval</div><div style="font-size:11px;color:var(--text3)">Click to review and approve</div></div>
+    <span style="margin-left:auto;font-size:18px;color:var(--gold)">→</span>
+  </div>` : ''}
+
+  <!-- KEY METRICS -->
+  <div class="mkt-grid-4" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-label">Monthly Budget</div>
+      <div class="stat-value">₹${(budget/1000).toFixed(0)}K</div>
+      <div class="stat-sub">₹0 spent · ₹${(budget/1000).toFixed(0)}K remaining</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">AI Agents Active</div>
+      <div class="stat-value" style="color:var(--purple)">${agents.filter(a=>a.status==='active').length}</div>
+      <div class="stat-sub">${agents.length} total configured</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Integrations</div>
+      <div class="stat-value" style="color:var(--green)">${connectedInt}</div>
+      <div class="stat-sub">${integrations.length - connectedInt} not connected</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Pending Approvals</div>
+      <div class="stat-value" style="color:${approvals.length>0?'var(--gold)':'var(--green)'}">${approvals.length}</div>
+      <div class="stat-sub">${approvals.length===0?'All clear':'Action required'}</div>
+    </div>
+  </div>
+
+  <div class="mkt-grid-2">
+
+    <!-- INTEGRATIONS STATUS -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">Platform Integrations</div>
+      <div style="display:grid;gap:8px">
+        ${integrations.map(i => `
+        <div class="integration-card">
+          <div class="integration-dot ${i.status==='connected'?'dot-green':i.status==='partial'||i.status==='setup'?'dot-gold':'dot-gray'}"></div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700">${i.name}</div>
+            <div style="font-size:10px;color:var(--text3)">${i.notes||i.status}</div>
+          </div>
+          <span class="badge ${i.status==='connected'?'badge-green':i.status==='partial'||i.status==='setup'?'badge-gold':'badge-gray'}">${i.status}</span>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- AI AGENTS STATUS -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">AI Agents</div>
+      <div style="display:grid;gap:8px">
+        ${agents.map(a => {
+          const icons = {'AI CMO':'🧠','Content Agent':'✍️','SEO Agent':'🔍','Analytics Agent':'📈','GBP Agent':'📍','WhatsApp Agent':'💬'};
+          const colors = {'orchestrator':'#8B5CF6','specialist':'#3B82F6'};
+          return `<div class="agent-card">
+            <div class="agent-icon" style="background:${colors[a.type]||'#374151'}20;color:${colors[a.type]||'#6B7280'}">${icons[a.name]||'🤖'}</div>
+            <div style="flex:1">
+              <div class="agent-name">${a.name}</div>
+              <div class="agent-desc">Level ${a.autonomy_level} · ${a.model}</div>
+            </div>
+            <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('agents')" style="width:100%;margin-top:12px;font-size:11px">Configure Agents →</button>
+    </div>
+
+  </div>
+
+  <!-- QUICK ACTIONS -->
+  <div class="mkt-card" style="margin-top:4px">
+    <div class="mkt-card-title">Quick Actions</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()">🧠 AI Weekly Briefing</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('content')">✍️ Create Content</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('gbp')">📍 GBP Post</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('brand')">🏷️ Update Brand Knowledge</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('integrations')">🔌 Connect Platform</button>
+    </div>
+  </div>
+
+  <!-- SETUP CHECKLIST -->
+  <div class="mkt-card" style="margin-top:4px">
+    <div class="mkt-card-title">🚀 Setup Checklist</div>
+    <div style="display:grid;gap:6px">
+      ${[
+        {done:true, text:'vwholesale.in domain live'},
+        {done:true, text:'Google Search Console verified'},
+        {done:true, text:'Sitemap submitted (5 pages)'},
+        {done:true, text:'robots.txt configured'},
+        {done:true, text:'GBP website URL updated (pending approval)'},
+        {done:true, text:'OpenAI API connected'},
+        {done:true, text:'Marketing database foundation created'},
+        {done:false, text:'Add OpenAI API key to Supabase secrets'},
+        {done:false, text:'Connect Instagram/Facebook (Meta Business)'},
+        {done:false, text:'Complete Interakt WhatsApp setup'},
+        {done:false, text:'Set up Google Analytics 4'},
+        {done:false, text:'Add product images (181 without images)'},
+        {done:false, text:'Create first GBP post'},
+        {done:false, text:'Configure vwholesalemart.com redirect'},
+      ].map(item => `<div style="display:flex;align-items:center;gap:8px;font-size:12px">
+        <span style="color:${item.done?'var(--green)':'var(--text3)'}">${item.done?'✅':'⬜'}</span>
+        <span style="color:${item.done?'var(--text2)':'var(--text3)'}">${item.text}</span>
+      </div>`).join('')}
+    </div>
+  </div>`);
+}
+
+// ── AI CMO ──
+async function renderAICMO() {
+  setContent(`
+  <div class="mkt-card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="width:48px;height:48px;background:rgba(139,92,246,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px">🧠</div>
+      <div>
+        <div style="font-size:16px;font-weight:900">AI CMO</div>
+        <div style="font-size:12px;color:var(--text3)">Marketing Orchestrator · Level 1 (Recommend Only) · GPT-4o</div>
+      </div>
+      <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()" style="margin-left:auto">▶ Run Now</button>
+    </div>
+    <div id="cmo-output">
+      <div class="mkt-empty">
+        <div class="mkt-empty-icon">🧠</div>
+        <div class="mkt-empty-title">AI CMO Ready</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">Click "Run Now" to get your weekly marketing briefing, strategy recommendations, and action plan.</div>
+        <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()" style="margin-top:16px">▶ Generate Weekly Briefing</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">Previous Runs</div>
+    <div id="cmo-runs-list">
+      <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No runs yet</div>
+    </div>
+  </div>`);
+
+  // Load previous runs
+  const { data: runs } = await sb.from('ai_agent_runs').select('*').eq('agent_name','AI CMO').order('created_at',{ascending:false}).limit(5).then(r=>r, ()=>({data:[]}));
+  const runsEl = document.getElementById('cmo-runs-list');
+  if (runs?.length) {
+    runsEl.innerHTML = runs.map(r => `
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;font-weight:700">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+        <div style="font-size:11px;color:var(--text3)">${r.model} · $${(r.cost_usd||0).toFixed(4)} · ${r.duration_ms}ms</div>
+      </div>
+      <span class="badge badge-green">${r.status}</span>
+    </div>`).join('');
+  }
+}
+
+async function runAICMO() {
+  if (aiPaused) { alert('AI actions are paused. Resume first.'); return; }
+
+  const outputEl = document.getElementById('cmo-output');
+  if (outputEl) {
+    outputEl.innerHTML = `<div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><span style="font-size:12px;color:var(--text3);margin-left:8px">AI CMO is analysing your business data…</span></div>`;
+  }
+
+  // Gather business context
+  const [products, campaigns, integrations] = await Promise.all([
+    sb.from('products').select('id,name,category,stock,price').limit(20).then(r=>r.data||[], ()=>[]),
+    sb.from('marketing_campaigns').select('*').limit(5).then(r=>r.data||[], ()=>[]),
+    sb.from('marketing_integrations').select('name,status').then(r=>r.data||[], ()=>[]),
+  ]);
+
+  const context = {
+    business: 'V Wholesale — Omnichannel home building store, Vijayawada, Andhra Pradesh',
+    website: 'https://vwholesale.in (just launched)',
+    monthly_budget_inr: 30000,
+    primary_goals: ['Store walk-ins', 'Quotations', 'GBP visibility', 'Contractor Club growth'],
+    priority_channels: ['Website SEO', 'Google Business Profile', 'WhatsApp', 'Instagram', 'Reels'],
+    languages: ['Telugu (primary)', 'English', 'Hindi'],
+    target_locations: ['Vijayawada', 'Guntur', 'Mangalagiri', 'Tenali', 'Eluru'],
+    product_categories: ['Tiles', 'Sanitaryware', 'Granite', 'Paints', 'Electricals', 'Plumbing'],
+    total_products: products.length,
+    integrations_status: integrations,
+    active_campaigns: campaigns.length,
+    date: new Date().toLocaleDateString('en-IN'),
+  };
+
+  try {
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({
+        action: 'weekly_briefing',
+        agent: 'AI CMO',
+        model: 'gpt-4o-mini',
+        prompt: `You are the AI CMO for V Wholesale, a home building superstore in Vijayawada, Andhra Pradesh.
+
+Your role: Analyse current business context and produce a structured weekly marketing briefing.
+
+STRICT RULES:
+- Only recommend actions based on facts provided
+- Never invent data, sales figures, or customer testimonials
+- Always specify approval level needed (recommend/draft/approve/auto)
+- Focus on local Vijayawada market
+- Prioritise Telugu language content for local channels
+
+Respond ONLY in this JSON format:
+{
+  "summary": "2-3 sentence overview of current marketing situation",
+  "top_priorities": ["priority 1", "priority 2", "priority 3"],
+  "weekly_actions": [
+    {"action": "action description", "channel": "channel name", "effort": "low/medium/high", "impact": "low/medium/high", "approval": "auto/draft/approve", "reason": "why this matters"}
+  ],
+  "content_ideas": [
+    {"type": "post/reel/story", "platform": "Instagram/GBP/WhatsApp", "topic": "topic", "language": "en/te/hi", "hook": "opening line idea"}
+  ],
+  "risks": ["risk 1", "risk 2"],
+  "opportunities": ["opportunity 1", "opportunity 2"],
+  "budget_recommendation": {"gbp_boost": 0, "meta_ads": 0, "google_ads": 0, "reason": "rationale"}
+}`,
+        context
+      })
+    });
+
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const output = data.output;
+    if (outputEl) {
+      outputEl.innerHTML = `
+      <div style="display:grid;gap:12px">
+
+        <div class="ai-message ai">
+          <div style="font-size:10px;font-weight:700;color:var(--purple);margin-bottom:6px">🧠 AI CMO WEEKLY BRIEFING · ${new Date().toLocaleDateString('en-IN')}</div>
+          <div style="font-size:13px;line-height:1.7">${output.summary || 'Analysis complete.'}</div>
+        </div>
+
+        <div class="mkt-grid-2">
+          <div class="mkt-card" style="margin:0">
+            <div class="mkt-card-title">🎯 Top Priorities</div>
+            ${(output.top_priorities||[]).map((p,i) => `<div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px"><span style="color:var(--purple);font-weight:800">${i+1}</span>${p}</div>`).join('')}
+          </div>
+          <div class="mkt-card" style="margin:0">
+            <div class="mkt-card-title">💡 Opportunities</div>
+            ${(output.opportunities||[]).map(o => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border)">• ${o}</div>`).join('')}
+            <div class="mkt-card-title" style="margin-top:12px">⚠️ Risks</div>
+            ${(output.risks||[]).map(r => `<div style="font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);color:var(--red)">• ${r}</div>`).join('')}
+          </div>
+        </div>
+
+        <div class="mkt-card" style="margin:0">
+          <div class="mkt-card-title">📋 This Week's Actions</div>
+          <div style="display:grid;gap:8px">
+            ${(output.weekly_actions||[]).map(a => `
+            <div style="display:flex;gap:12px;align-items:flex-start;padding:10px;background:var(--bg3);border-radius:8px">
+              <div style="flex:1">
+                <div style="font-size:12px;font-weight:700">${a.action}</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">${a.channel} · ${a.reason}</div>
+              </div>
+              <div style="display:flex;gap:4px;flex-shrink:0">
+                <span class="badge badge-blue">${a.impact} impact</span>
+                <span class="badge ${a.approval==='auto'?'badge-green':a.approval==='draft'?'badge-blue':'badge-gold'}">${a.approval}</span>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <div class="mkt-card" style="margin:0">
+          <div class="mkt-card-title">💡 Content Ideas This Week</div>
+          <div style="display:grid;gap:6px">
+            ${(output.content_ideas||[]).map(c => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:8px">
+              <span class="badge badge-purple">${c.platform}</span>
+              <span class="badge badge-gray">${c.type}</span>
+              <span class="badge ${c.language==='te'?'badge-gold':c.language==='hi'?'badge-blue':'badge-gray'}">${c.language}</span>
+              <div style="flex:1;font-size:12px"><strong>${c.topic}</strong> — "${c.hook}"</div>
+              <button class="mkt-btn mkt-btn-ghost" onclick="draftContent('${c.type}','${c.platform}','${c.topic.replace(/'/g,"\\'")}','${c.language}')" style="font-size:10px;padding:4px 8px">Draft →</button>
+            </div>`).join('')}
+          </div>
+        </div>
+
+        <div style="font-size:10px;color:var(--text3);text-align:center;padding:8px">
+          Generated by AI CMO · ${data.model} · $${(data.cost_usd||0).toFixed(4)} · ${data.duration_ms}ms
+        </div>
+      </div>`;
+    }
+
+  } catch(e) {
+    if (outputEl) outputEl.innerHTML = `<div style="color:var(--red);padding:16px;text-align:center">
+      <div style="font-size:20px;margin-bottom:8px">⚠️</div>
+      <div style="font-weight:700">AI CMO Error</div>
+      <div style="font-size:12px;margin-top:4px">${e.message}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Make sure OpenAI API key is set in Supabase Edge Function secrets</div>
+    </div>`;
+  }
+}
+
+// ── CONTENT STUDIO ──
+async function renderContentStudio() {
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">Content Studio</h3>
+      <div style="font-size:12px;color:var(--text3)">Create AI-assisted content in English, Telugu and Hindi</div>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showCreateContent()">+ Create Content</button>
+  </div>
+
+  <div id="content-form" style="display:none" class="mkt-card">
+    <div class="mkt-card-title">New Content</div>
+    <div class="mkt-grid-2">
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Content Type</label>
+        <select id="ct-type" class="mkt-form-select">
+          <option value="instagram_post">Instagram Post</option>
+          <option value="instagram_reel">Instagram Reel Script</option>
+          <option value="instagram_story">Instagram Story</option>
+          <option value="facebook_post">Facebook Post</option>
+          <option value="gbp_post">Google Business Post</option>
+          <option value="whatsapp_message">WhatsApp Message</option>
+        </select>
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Language</label>
+        <select id="ct-lang" class="mkt-form-select">
+          <option value="te">Telugu (తెలుగు)</option>
+          <option value="en">English</option>
+          <option value="hi">Hindi (हिन्दी)</option>
+          <option value="te+en">Telugu + English</option>
+        </select>
+      </div>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Topic / Product / Offer</label>
+      <input type="text" id="ct-topic" class="mkt-form-input" placeholder="e.g. Jaquar bathroom fittings, Tiles sale, Contractor Club benefits">
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Goal</label>
+      <select id="ct-goal" class="mkt-form-select">
+        <option value="walk_in">Drive Store Walk-ins</option>
+        <option value="enquiry">Generate Enquiry / WhatsApp</option>
+        <option value="awareness">Brand Awareness</option>
+        <option value="contractor">Contractor Recruitment</option>
+        <option value="product">Product Showcase</option>
+        <option value="offer">Promote Offer/Deal</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="mkt-btn mkt-btn-primary" onclick="generateContent()">🤖 Generate with AI</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('content-form').style.display='none'">Cancel</button>
+    </div>
+  </div>
+
+  <div id="content-output"></div>
+
+  <div class="mkt-card" style="margin-top:4px">
+    <div class="mkt-card-title">Recent Content Drafts</div>
+    <div id="content-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Loading…</div></div>
+  </div>`);
+
+  // Load recent content
+  const { data: content } = await sb.from('marketing_content').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
+  const listEl = document.getElementById('content-list');
+  if (content?.length) {
+    listEl.innerHTML = `<table class="mkt-table">
+      <tr><th>Type</th><th>Platform</th><th>Language</th><th>Status</th><th>Created</th><th>Action</th></tr>
+      ${content.map(c=>`<tr>
+        <td style="font-weight:700">${c.title||c.type}</td>
+        <td>${c.platform||'—'}</td>
+        <td>${c.language||'en'}</td>
+        <td><span class="badge ${c.status==='approved'?'badge-green':c.status==='draft'?'badge-blue':'badge-gray'}">${c.status}</span></td>
+        <td style="color:var(--text3)">${new Date(c.created_at).toLocaleDateString('en-IN')}</td>
+        <td><button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">View</button></td>
+      </tr>`).join('')}
+    </table>`;
+  } else {
+    listEl.innerHTML = '<div class="mkt-empty"><div class="mkt-empty-icon">✍️</div><div class="mkt-empty-title">No content yet</div><div style="font-size:12px;color:var(--text3)">Create your first piece of content above</div></div>';
+  }
+}
+
+function showCreateContent() {
+  document.getElementById('content-form').style.display = 'block';
+  document.getElementById('content-form').scrollIntoView({behavior:'smooth'});
+}
+
+async function generateContent() {
+  if (aiPaused) { alert('AI actions are paused.'); return; }
+  const type = document.getElementById('ct-type').value;
+  const lang = document.getElementById('ct-lang').value;
+  const topic = document.getElementById('ct-topic').value;
+  const goal = document.getElementById('ct-goal').value;
+  if (!topic) { alert('Enter a topic'); return; }
+
+  const outputEl = document.getElementById('content-output');
+  outputEl.innerHTML = `<div class="mkt-card"><div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><span style="font-size:12px;color:var(--text3);margin-left:8px">Generating ${type} in ${lang}…</span></div></div>`;
+
+  const langMap = {te:'Telugu',en:'English',hi:'Hindi','te+en':'Telugu and English (bilingual)'};
+  const typeMap = {instagram_post:'Instagram Post',instagram_reel:'Instagram Reel script with scene breakdown',instagram_story:'Instagram Story sequence',facebook_post:'Facebook Post',gbp_post:'Google Business Profile Post',whatsapp_message:'WhatsApp Message'};
+  const goalMap = {walk_in:'drive store walk-ins to V Wholesale Vijayawada',enquiry:'generate WhatsApp enquiries',awareness:'build brand awareness',contractor:'recruit contractors to the Contractor Club',product:'showcase the product',offer:'promote a special offer or deal'};
+
+  try {
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({
+        action: 'generate_content',
+        agent: 'Content Agent',
+        model: 'gpt-4o-mini',
+        prompt: `You are the Content Agent for V Wholesale, a home building superstore in Vijayawada, Andhra Pradesh.
+
+Create a ${typeMap[type]} in ${langMap[lang]} about: "${topic}"
+Goal: ${goalMap[goal]}
+
+STRICT RULES:
+- V Wholesale is at NH65, Bhavanipuram, Vijayawada
+- Phone: 8712697930
+- Website: https://vwholesale.in
+- Never invent prices, discounts, or offers not specified
+- Never fabricate customer reviews or testimonials
+- Keep content authentic and locally relevant
+- For Telugu content, use natural conversational Telugu
+
+Respond ONLY in this JSON format:
+{
+  "title": "content title/description",
+  "caption": "main caption text (in requested language)",
+  "hashtags": ["hashtag1", "hashtag2"],
+  "visual_brief": "describe what the visual/image should show",
+  "call_to_action": "specific CTA text",
+  "notes": "any important notes about this content"
+}`,
+        context: { topic, type, language: lang, goal, business: 'V Wholesale, Vijayawada' }
+      })
+    });
+
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const c = data.output;
+
+    // Save to DB
+    await sb.from('marketing_content').insert({
+      type, platform: type.split('_')[0], language: lang,
+      title: c.title, body: c.caption, caption: c.caption,
+      hashtags: c.hashtags, visual_brief: c.visual_brief,
+      call_to_action: c.call_to_action, status: 'draft',
+      ai_generated: true, ai_model: data.model
+    });
+
+    outputEl.innerHTML = `
+    <div class="mkt-card" style="border:1px solid rgba(139,92,246,.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="mkt-card-title" style="margin:0">✅ Content Generated</div>
+        <div style="display:flex;gap:6px">
+          <span class="badge badge-purple">AI Draft</span>
+          <span class="badge badge-blue">${type}</span>
+          <span class="badge badge-gold">${lang}</span>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">${c.caption}</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">HASHTAGS</div>
+        <div>${(c.hashtags||[]).map(h=>`<span class="badge badge-blue" style="margin-right:4px">#${h.replace('#','')}</span>`).join('')}</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">VISUAL BRIEF</div>
+        <div style="font-size:12px;color:var(--text2)">${c.visual_brief}</div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CALL TO ACTION</div>
+        <div style="font-size:13px;font-weight:700;color:var(--green)">${c.call_to_action}</div>
+      </div>
+      ${c.notes ? `<div style="font-size:11px;color:var(--text3);font-style:italic">${c.notes}</div>` : ''}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="mkt-btn mkt-btn-primary" onclick="copyContent('${c.caption?.replace(/'/g,"\\'").replace(/\n/g,'\\n')}')">📋 Copy Caption</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="generateContent()">🔄 Regenerate</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:8px">${data.model} · $${(data.cost_usd||0).toFixed(4)} · Saved as draft</div>
+    </div>`;
+
+  } catch(e) {
+    outputEl.innerHTML = `<div class="mkt-card" style="border-color:var(--red)"><div style="color:var(--red);font-size:12px">Error: ${e.message}<br><span style="color:var(--text3)">Check OpenAI API key in Supabase secrets</span></div></div>`;
+  }
+}
+
+async function draftContent(type, platform, topic, lang) {
+  mktNav('content');
+  setTimeout(() => {
+    showCreateContent();
+    const typeMap = {post:'instagram_post',reel:'instagram_reel',story:'instagram_story'};
+    const el = document.getElementById('ct-type');
+    if (el) el.value = typeMap[type] || 'instagram_post';
+    const topicEl = document.getElementById('ct-topic');
+    if (topicEl) topicEl.value = topic;
+    const langEl = document.getElementById('ct-lang');
+    if (langEl) langEl.value = lang;
+  }, 300);
+}
+
+function copyContent(text) {
+  navigator.clipboard.writeText(text.replace(/\\n/g,'\n')).then(()=>showMktToast('Caption copied!'));
+}
+
+// ── BRAND KNOWLEDGE ──
+async function renderBrand() {
+  const { data: knowledge } = await sb.from('brand_knowledge').select('*').order('category').then(r=>r, ()=>({data:[]}));
+  const categories = [...new Set((knowledge||[]).map(k=>k.category))];
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">Brand Knowledge</h3>
+      <div style="font-size:12px;color:var(--text3)">Facts and guidelines the AI uses to generate accurate content</div>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showAddKnowledge()">+ Add Knowledge</button>
+  </div>
+
+  <div id="brand-add-form" style="display:none" class="mkt-card">
+    <div class="mkt-card-title">Add Brand Knowledge</div>
+    <div class="mkt-grid-2">
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Category</label>
+        <select id="bk-cat" class="mkt-form-select">
+          <option value="business">Business Info</option>
+          <option value="positioning">Brand Positioning</option>
+          <option value="products">Products & Pricing</option>
+          <option value="geography">Geography & Service Area</option>
+          <option value="tone">Tone & Voice</option>
+          <option value="compliance">Compliance & Prohibited</option>
+          <option value="customers">Customer Info</option>
+          <option value="faq">FAQ</option>
+        </select>
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Title</label>
+        <input type="text" id="bk-title" class="mkt-form-input" placeholder="e.g. Store Timings">
+      </div>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Content</label>
+      <textarea id="bk-content" class="mkt-form-textarea" placeholder="Enter the verified fact or guideline…"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="mkt-btn mkt-btn-primary" onclick="saveBrandKnowledge()">Save</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('brand-add-form').style.display='none'">Cancel</button>
+    </div>
+  </div>
+
+  ${categories.map(cat => `
+  <div class="mkt-card">
+    <div class="mkt-card-title">${cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
+    <div style="display:grid;gap:8px">
+      ${(knowledge||[]).filter(k=>k.category===cat).map(k=>`
+      <div style="padding:10px;background:var(--bg3);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:12px;font-weight:700">${k.title}</div>
+          <span class="badge ${k.is_approved?'badge-green':'badge-gold'}">${k.is_approved?'approved':'pending'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.5">${k.content}</div>
+      </div>`).join('')}
+    </div>
+  </div>`).join('')}`);
+}
+
+function showAddKnowledge() {
+  document.getElementById('brand-add-form').style.display = 'block';
+}
+
+async function saveBrandKnowledge() {
+  const cat = document.getElementById('bk-cat').value;
+  const title = document.getElementById('bk-title').value;
+  const content = document.getElementById('bk-content').value;
+  if (!title || !content) { alert('Enter title and content'); return; }
+  await sb.from('brand_knowledge').insert({ category:cat, title, content, is_approved:true, language:'en' });
+  showMktToast('✅ Brand knowledge saved');
+  renderBrand();
+}
+
+// ── INTEGRATIONS ──
+async function renderIntegrations() {
+  const { data: integrations } = await sb.from('marketing_integrations').select('*').order('name').then(r=>r, ()=>({data:[]}));
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Platform Integrations</h3>
+    <div style="font-size:12px;color:var(--text3)">Connect your marketing platforms</div>
+  </div>
+  <div style="display:grid;gap:10px">
+    ${(integrations||[]).map(i => `
+    <div class="mkt-card" style="display:flex;align-items:center;gap:14px;padding:14px">
+      <div style="width:40px;height:40px;background:var(--bg3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
+        ${{
+          'Google Search Console':'🔍','Google Business Profile':'📍','Instagram':'📸',
+          'Facebook':'👥','WhatsApp Business':'💬','Google Ads':'📢','Meta Ads':'📱','OpenAI':'🧠'
+        }[i.name]||'🔌'}
+      </div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:800">${i.name}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${i.notes||'—'}</div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <span style="font-size:10px;color:${i.credentials_set?'var(--green)':'var(--text3)'}">🔑 Credentials ${i.credentials_set?'✓':'✗'}</span>
+          <span style="font-size:10px;color:${i.read_tested?'var(--green)':'var(--text3)'}">📖 Read ${i.read_tested?'✓':'✗'}</span>
+          <span style="font-size:10px;color:${i.write_tested?'var(--green)':'var(--text3)'}">✍️ Write ${i.write_tested?'✓':'✗'}</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+        <span class="badge ${i.status==='connected'?'badge-green':i.status==='setup'||i.status==='partial'?'badge-gold':'badge-gray'}">${i.status}</span>
+        <button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">${i.status==='connected'?'Configure':'Connect'}</button>
+      </div>
+    </div>`).join('')}
+  </div>`);
+}
+
+// ── AI AGENTS ──
+async function renderAgents() {
+  const { data: agents } = await sb.from('ai_agents').select('*').order('name').then(r=>r, ()=>({data:[]}));
+  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">AI Agents</h3>
+    <div style="font-size:12px;color:var(--text3)">All agents run in Recommend mode (Level 1) by default</div>
+  </div>
+
+  <div style="display:grid;gap:10px;margin-bottom:16px">
+    ${(agents||[]).map(a => `
+    <div class="mkt-card" style="padding:14px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800">${a.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${a.description}</div>
+        </div>
+        <span class="badge badge-purple">Level ${a.autonomy_level}</span>
+        <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
+      </div>
+      <div style="display:flex;gap:8px;font-size:10px;color:var(--text3)">
+        <span>Model: ${a.model}</span>
+        <span>·</span>
+        <span>Provider: ${a.provider}</span>
+        <span>·</span>
+        <span>Max cost: $${a.max_cost_per_run}/run</span>
+        ${a.last_run_at ? `<span>·</span><span>Last run: ${new Date(a.last_run_at).toLocaleDateString('en-IN')}</span>` : ''}
+      </div>
+    </div>`).join('')}
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">Recent Agent Runs</div>
+    ${(runs||[]).length ? `<table class="mkt-table">
+      <tr><th>Agent</th><th>Model</th><th>Status</th><th>Cost</th><th>Time</th></tr>
+      ${(runs||[]).map(r=>`<tr>
+        <td style="font-weight:700">${r.agent_name}</td>
+        <td style="color:var(--text3)">${r.model}</td>
+        <td><span class="badge ${r.status==='completed'?'badge-green':'badge-red'}">${r.status}</span></td>
+        <td>$${(r.cost_usd||0).toFixed(4)}</td>
+        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No agent runs yet</div></div>'}
+  </div>`);
+}
+
+// ── AI PAUSE ──
+async function loadAIPauseStatus() {
+  const { data } = await sb.from('marketing_settings').select('value').eq('key','global_ai_pause').single().then(r=>r, ()=>({data:null}));
+  aiPaused = data?.value === 'true';
+  const btn = document.getElementById('ai-pause-btn');
+  if (btn) {
+    btn.textContent = aiPaused ? '▶ Resume AI Actions' : '🛑 Pause All AI Actions';
+    btn.className = 'ai-pause-btn' + (aiPaused ? ' paused' : '');
+  }
+}
+
+async function toggleAIPause() {
+  aiPaused = !aiPaused;
+  await sb.from('marketing_settings').update({ value: aiPaused ? 'true' : 'false' }).eq('key', 'global_ai_pause');
+  await sb.from('marketing_audit_logs').insert({ action: aiPaused ? 'ai_paused' : 'ai_resumed', performed_by: mktProfile?.name, performed_by_type: 'human' });
+  loadAIPauseStatus();
+  showMktToast(aiPaused ? '🛑 All AI Actions Paused' : '▶ AI Actions Resumed');
+}
+
+// ── STUB PAGES ──
+const renderApprovals = () => renderComingSoon('Approvals Queue');
+const renderCampaigns = () => renderComingSoon('Campaigns');
+const renderCalendar = () => renderComingSoon('Content Calendar');
+const renderSocial = () => renderComingSoon('Social Media');
+const renderGBP = () => renderComingSoon('Google Business Profile');
+const renderWhatsApp = () => renderComingSoon('WhatsApp Marketing');
+const renderAds = () => renderComingSoon('Advertising');
+const renderLocalSEO = () => renderComingSoon('Local SEO');
+const renderWebsiteSEO = () => renderComingSoon('Website SEO');
+const renderReviews = () => renderComingSoon('Reviews & Reputation');
+const renderAnalytics = () => renderComingSoon('Analytics');
+const renderCompetitors = () => renderComingSoon('Competitor Intelligence');
+const renderSegments = () => renderComingSoon('Customer Segments');
+const renderAudit = () => renderComingSoon('Audit Logs');
+const renderSettings = () => renderComingSoon('Settings');
+
+// ── TOAST ──
+function showMktToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#1F2937;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;z-index:9999;border:1px solid #374151';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ── INIT ──
+window.addEventListener('load', async () => {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    const { data: profile } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+    if (profile && ['admin','owner','manager','marketing'].includes(profile.role)) {
+      mktProfile = profile;
+      showMktApp();
+    }
+  }
+});
+</script>
+</body>
+</html>
