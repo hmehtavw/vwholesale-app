@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /shop.html
+Allow: /about.html
+Allow: /contact.html
+Allow: /professionals/
+
+# Block internal portals from indexing
+Disallow: /staff/
+Disallow: /staff.html
+Disallow: /admin/
+Disallow: /admin.html
+Disallow: /marketing/
+Disallow: /marketing.html
+Disallow: /modules/
+
+Sitemap: https://vwholesale.in/sitemap.xml
