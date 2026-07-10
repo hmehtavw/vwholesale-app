@@ -3,14 +3,30 @@
 // Initialize Supabase immediately (inline bundle already loaded)
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
-let sb = window.supabase ? window.supabase.createClient(MKT_SB_URL, MKT_SB_KEY) : null;
+let sb = window.supabase ? window.supabase.createClient(MKT_SB_URL, MKT_SB_KEY, {
+  auth: {
+    persistSession: true,
+    storageKey: 'vw-marketing-auth',
+    storage: window.localStorage,
+    autoRefreshToken: true,
+    detectSessionInUrl: false
+  }
+}) : null;
 let mktProfile = null;
 let aiPaused = false;
 
 // Wait for Supabase to load before initialising
 function initSupabase() {
   if (window.supabase && !sb) {
-    sb = window.supabase.createClient(MKT_SB_URL, MKT_SB_KEY);
+    sb = window.supabase.createClient(MKT_SB_URL, MKT_SB_KEY, {
+      auth: {
+        persistSession: true,
+        storageKey: 'vw-marketing-auth',
+        storage: window.localStorage,
+        autoRefreshToken: true,
+        detectSessionInUrl: false
+      }
+    });
   }
   return !!sb;
 }
@@ -1776,6 +1792,57 @@ async function regeneratePoster(topic, template, lang) {
   showMktToast('Ready — click ✨ Generate Poster');
 }
 
+async function viewPosterHistory(id) {
+  const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (!h) { showMktToast('Not found'); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'poster-view-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  modal.innerHTML = `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
+        <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <button onclick="document.getElementById('poster-view-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">TOPIC</div>
+        <div style="font-size:13px;font-weight:700">${h.topic||'—'}</div>
+      </div>
+      ${h.headline ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">HEADLINE</div>
+        <div style="font-size:13px">${h.headline}</div>
+      </div>` : ''}
+      ${h.caption ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">CAPTION</div>
+        <div style="font-size:12px;line-height:1.7;white-space:pre-wrap">${h.caption}</div>
+        <button onclick="copyPosterCaption(${h.id})" class="mkt-btn mkt-btn-ghost" style="font-size:11px;margin-top:8px">📋 Copy Caption</button>
+      </div>` : ''}
+      <div style="font-size:11px;color:var(--text3);text-align:center">
+        Note: Generated poster image is not stored — click Regenerate to recreate it
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1"
+          onclick="document.getElementById('poster-view-modal').remove();regeneratePoster('${(h.topic||'').replace(/'/g,"\'")}','${h.template||'product'}','${h.language||'en'}')">
+          🔄 Regenerate Poster
+        </button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">Close</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function copyPosterCaption(id) {
+  const {data:h} = await sb.from('poster_history').select('caption').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (h?.caption) navigator.clipboard.writeText(h.caption).then(()=>showMktToast('📋 Caption copied!'));
+}
+
 async function deletePosterHistory(id) {
   if (!confirm('Delete this poster?')) return;
   await sb.from('poster_history').delete().eq('id', id);
@@ -1799,7 +1866,12 @@ async function loadPosterHistory() {
       </div>
       <span class="badge ${h.status==='published'?'badge-green':h.status==='scheduled'?'badge-blue':'badge-gray'}">${h.status}</span>
     </div>
+    ${h.caption ? `<div style="font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:8px;margin-bottom:6px;line-height:1.5;max-height:60px;overflow:hidden">${h.caption.slice(0,120)}${h.caption.length>120?'…':''}</div>` : ''}
     <div style="display:flex;gap:6px">
+      <button class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px"
+        onclick="viewPosterHistory(${h.id})">
+        👁 View
+      </button>
       <button class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:4px 10px"
         onclick="regeneratePoster(this.dataset.topic,this.dataset.tmpl,this.dataset.lang)"
         data-topic="${(h.topic||'').replace(/"/g,'&quot;')}" data-tmpl="${h.template||'product'}" data-lang="${h.language||'en'}">
@@ -2675,6 +2747,57 @@ async function regeneratePoster(topic, template, lang) {
   // Scroll to top of poster studio
   document.getElementById('mkt-content').scrollTo({top:0, behavior:'smooth'});
   showMktToast('Topic loaded — click ✨ Generate Poster');
+}
+
+async function viewPosterHistory(id) {
+  const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (!h) { showMktToast('Not found'); return; }
+
+  const modal = document.createElement('div');
+  modal.id = 'poster-view-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  modal.innerHTML = `
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
+        <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+      </div>
+      <button onclick="document.getElementById('poster-view-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">TOPIC</div>
+        <div style="font-size:13px;font-weight:700">${h.topic||'—'}</div>
+      </div>
+      ${h.headline ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">HEADLINE</div>
+        <div style="font-size:13px">${h.headline}</div>
+      </div>` : ''}
+      ${h.caption ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">CAPTION</div>
+        <div style="font-size:12px;line-height:1.7;white-space:pre-wrap">${h.caption}</div>
+        <button onclick="copyPosterCaption(${h.id})" class="mkt-btn mkt-btn-ghost" style="font-size:11px;margin-top:8px">📋 Copy Caption</button>
+      </div>` : ''}
+      <div style="font-size:11px;color:var(--text3);text-align:center">
+        Note: Generated poster image is not stored — click Regenerate to recreate it
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1"
+          onclick="document.getElementById('poster-view-modal').remove();regeneratePoster('${(h.topic||'').replace(/'/g,"\'")}','${h.template||'product'}','${h.language||'en'}')">
+          🔄 Regenerate Poster
+        </button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">Close</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function copyPosterCaption(id) {
+  const {data:h} = await sb.from('poster_history').select('caption').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (h?.caption) navigator.clipboard.writeText(h.caption).then(()=>showMktToast('📋 Caption copied!'));
 }
 
 async function deletePosterHistory(id) {
