@@ -1738,31 +1738,45 @@ async function generateFullPoster() {
     const pubCard = document.getElementById('ps-publish-card');
     if (pubCard) pubCard.style.display = 'block';
 
-    // Upload composited poster to storage
+    // Save composited poster to Supabase Storage (upsert=true to never fail on duplicate)
     let image_url = null;
     try {
       const byteArr = Uint8Array.from(atob(posterB64), c => c.charCodeAt(0));
       const blob = new Blob([byteArr], { type: 'image/png' });
       const filename = `posters/${Date.now()}-${topic.replace(/[^a-z0-9]/gi,'_').slice(0,30)}.png`;
-      const { error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: false });
-      if (!upErr) {
+
+      // Ensure bucket exists (creates if missing — idempotent)
+      await sb.storage.createBucket('brand-assets', { public: true }).catch(()=>{});
+
+      const { data: upData, error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: true });
+      if (upErr) {
+        console.error('Storage upload error:', upErr.message, upErr);
+      } else {
         const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(filename);
         image_url = urlData?.publicUrl || null;
+        console.log('Poster uploaded:', image_url);
       }
     } catch(uploadErr) {
-      console.warn('Upload failed (metadata still saved):', uploadErr.message);
+      console.error('Upload exception:', uploadErr.message);
     }
 
-    await sb.from('poster_history').insert({
+    // Insert history record and get the new ID so we can cache b64 locally
+    const { data: inserted } = await sb.from('poster_history').insert({
       topic, template, language: lang,
       headline: data.content?.headline_line1,
       caption: currentCaption,
       image_url,
       status: 'draft',
       created_by: mktProfile?.name
-    });
+    }).select('id').single().then(r=>r, ()=>({data:null}));
+
+    // Cache composited poster in sessionStorage by ID (survives page nav, not hard refresh)
+    if (inserted?.id) {
+      try { sessionStorage.setItem(`poster_b64_${inserted.id}`, posterB64); } catch(e) {}
+    }
+
     loadPosterHistory();
-    showMktToast('✅ Poster ready! Click image to zoom or download.');
+    showMktToast(image_url ? '✅ Poster saved! Click image to zoom or download.' : '✅ Poster ready! (Storage upload failed — download now to save)');
 
   } catch(e) {
     preview.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">
@@ -2056,6 +2070,15 @@ async function regeneratePoster(topic, template, lang) {
 async function viewPosterHistory(id) {
   const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
   if (!h) { showMktToast('Not found'); return; }
+
+  // Check if we have the composited image cached in sessionStorage
+  let cachedB64 = null;
+  try { cachedB64 = sessionStorage.getItem(`poster_b64_${id}`); } catch(e) {}
+
+  // Decide what image source to show
+  const imgSrc = h.image_url || (cachedB64 ? `data:image/png;base64,${cachedB64}` : null);
+  const downloadHref = h.image_url || (cachedB64 ? `data:image/png;base64,${cachedB64}` : null);
+
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;overflow:hidden;margin-top:20px">
@@ -2067,22 +2090,22 @@ async function viewPosterHistory(id) {
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px;display:grid;gap:12px">
-      ${h.image_url
-        ? `<img src="${h.image_url}" style="width:100%;border-radius:10px;display:block;cursor:zoom-in" loading="lazy"
+      ${imgSrc
+        ? `<img src="${imgSrc}" style="width:100%;border-radius:10px;display:block;cursor:zoom-in" loading="lazy"
              onclick="window.open(this.src)"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
         : ''
       }
-      <div style="background:var(--bg3);border-radius:10px;padding:32px;text-align:center;color:var(--text3);font-size:13px${h.image_url?';display:none':''}">
+      <div style="background:var(--bg3);border-radius:10px;padding:32px;text-align:center;color:var(--text3);font-size:13px${imgSrc?';display:none':''}">
         <div style="font-size:32px;margin-bottom:8px">🖼</div>
-        Click Regenerate to recreate this poster with the new Canvas engine.
+        Click Regenerate to recreate this poster.
       </div>
       ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px">
         <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
         <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto">${h.caption}</div>
       </div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${h.image_url?`<a href="${h.image_url}" download="vwholesale-poster.png" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">⬇ Download</a>`:''}
+        ${downloadHref?`<a href="${downloadHref}" download="vwholesale-poster-${h.id}.png" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">⬇ Download</a>`:''}
         <button class="mkt-btn mkt-btn-primary" style="flex:1"
           onclick="this.closest('[style*=fixed]').remove();
           document.getElementById('ps-topic').value='${(h.topic||'').replace(/'/g,"\\'")}';
@@ -2116,16 +2139,20 @@ async function loadPosterHistory() {
   if (!(history||[]).length) return;
   card.style.display = 'block';
   el.innerHTML = (history||[]).map(h=>`
-  <div onclick="viewPosterHistory(${h.id})" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='none'">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:700">${h.topic||'—'}</div>
-        <div style="font-size:11px;color:var(--text3)">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+  <div onclick="viewPosterHistory(${h.id})" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;display:flex;gap:10px;align-items:flex-start" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='none'">
+    ${h.image_url
+      ? `<img src="${h.image_url}" style="width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0;border:1px solid var(--border)" loading="lazy" onerror="this.style.display='none'">`
+      : `<div style="width:52px;height:52px;background:var(--bg3);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">🖼</div>`
+    }
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+        <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.topic||'—'}</div>
+        <span class="badge ${h.status==='published'?'badge-green':h.status==='scheduled'?'badge-blue':'badge-gray'}" style="flex-shrink:0">${h.status}</span>
       </div>
-      <span class="badge ${h.status==='published'?'badge-green':h.status==='scheduled'?'badge-blue':'badge-gray'}">${h.status}</span>
-      <span style="color:var(--text3);font-size:14px">›</span>
+      <div style="font-size:11px;color:var(--text3)">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+      ${h.caption?`<div style="font-size:11px;color:var(--text3);line-height:1.4;margin-top:2px">${h.caption.slice(0,60)}${h.caption.length>60?'…':''}</div>`:''}
     </div>
-    ${h.caption?`<div style="font-size:11px;color:var(--text3);line-height:1.4">${h.caption.slice(0,80)}${h.caption.length>80?'…':''}</div>`:''}
+    <span style="color:var(--text3);font-size:14px;flex-shrink:0">›</span>
   </div>`).join('');
 }
 
