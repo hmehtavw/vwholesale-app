@@ -2000,12 +2000,12 @@ function psHandleUpload() {
 
 // ── AI CAPTION GENERATION FOR UPLOADED POSTER ──
 async function psGenerateUploadCaption() {
-  const topic = (document.getElementById('ps-upload-topic')?.value || '').trim();
+  const topic    = (document.getElementById('ps-upload-topic')?.value || '').trim();
   const template = document.getElementById('ps-upload-template')?.value || 'product';
-  const lang = document.getElementById('ps-upload-lang')?.value || 'en';
+  const lang     = document.getElementById('ps-upload-lang')?.value || 'en';
 
-  if (!topic) { showMktToast('Enter what the poster is about first'); return; }
-  if (!currentPosterB64) { showMktToast('Upload a poster image first'); return; }
+  if (!topic)           { showMktToast('Enter what the poster is about first'); return; }
+  if (!currentPosterB64){ showMktToast('Upload a poster image first'); return; }
 
   const edit = document.getElementById('ps-caption-edit');
   const disp = document.getElementById('ps-caption-display');
@@ -2013,49 +2013,58 @@ async function psGenerateUploadCaption() {
   if (disp) disp.style.display = 'none';
 
   try {
-    // Call edge function content-only (no image needed)
     const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({
-        topic, template, language: lang,
-        caption_only: true,   // signal to skip image generation
-        business_name: 'V Wholesale',
-      })
+      body: JSON.stringify({ topic, template, language: lang, caption_only: true, business_name: 'V Wholesale' })
     });
     const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'API error');
 
-    // Build rich caption from content fields
     const c = data.content || {};
-    const langNote = lang === 'te' ? '(Telugu caption below)' : lang === 'hi' ? '(Hindi caption below)' : '';
 
-    const generatedCaption = c.caption ||
-      `✨ ${c.headline_line1 || topic} ${c.headline_line2 || ''} — ${c.subheadline || 'Now Available at V Wholesale'}\n\n` +
-      `${c.body || ''}\n\n` +
-      `✅ ${c.feature1 || ''}\n✅ ${c.feature2 || ''}\n✅ ${c.feature3 || ''}\n\n` +
-      `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
-      `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
-      `#VWholesale #Vijayawada #Tiles #HomeDesign #InteriorDesign #BuildingMaterials #${(c.headline_line1||topic).replace(/\s/g,'')} #HouseConstruction`;
+    // Use AI-generated caption directly — it's already rich with emojis + hashtags
+    // Only build manually if caption field is missing
+    let caption = c.caption || '';
+    if (!caption) {
+      // Extract clean brand name from headline_line1
+      const brand = (c.headline_line1 || topic.split(' ')[0]).replace(/\s/g,'');
+      const cat   = (c.headline_line2 || 'Tiles').replace(/\s/g,'');
+      caption =
+        `✨ ${c.headline_line1||''} ${c.headline_line2||''} — ${c.subheadline||'Now Available at V Wholesale'}\n\n` +
+        `${c.body||'Premium Wall & Floor Tile Collection'}\n\n` +
+        `💎 ${c.feature_gold||'Elegant Designs • Modern Finishes • Lasting Quality'}\n\n` +
+        `✅ ${c.feature1||'Luxury Marble Looks'}\n` +
+        `✅ ${c.feature2||'Glossy, Matt & Designer Finishes'}\n` +
+        `✅ ${c.feature3||'Premium Quality for Modern Homes'}\n\n` +
+        `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
+        `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
+        `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
+    }
 
-    currentCaption = generatedCaption;
-    if (edit) { edit.value = generatedCaption; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
+    currentCaption = caption;
+    if (edit) { edit.value = caption; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
     showMktToast('✅ Caption generated — edit if needed, then publish!');
 
   } catch(e) {
-    // Fallback: build a decent caption from topic alone without the edge function
-    const brand = topic.split(' ')[0];
+    console.warn('Edge function error, using fallback:', e.message);
+    // Clean fallback — extract brand word from topic properly
+    const words  = topic.trim().split(/\s+/);
+    const brand  = words[0] || 'Brand';
+    const cat    = words.find(w => ['tiles','tile','granite','paints','paint','sanitary','bathware','electrical'].includes(w.toLowerCase())) || 'Tiles';
+
     const fallback =
       `✨ ${topic} — Now Available at V Wholesale, Vijayawada!\n\n` +
-      `🏠 Transform your home with premium quality products\n` +
+      `🏠 Transform your home with premium quality\n` +
       `💎 Elegant Designs • Modern Finishes • Lasting Quality\n` +
       `✅ Perfect for Living Rooms, Bedrooms & Bathrooms\n\n` +
       `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
       `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
-      `#VWholesale #Vijayawada #${brand.replace(/\s/g,'')} #Tiles #HomeDesign #InteriorDesign #BuildingMaterials #HouseConstruction #AndhraPradesh`;
+      `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
 
     currentCaption = fallback;
     if (edit) { edit.value = fallback; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
-    showMktToast('Caption ready (offline fallback — edge function may need deployment)');
+    showMktToast('Caption ready — you can edit before posting');
   }
 }
 
