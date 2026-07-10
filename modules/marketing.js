@@ -1827,10 +1827,15 @@ async function viewPosterHistory(id) {
       </div>
       <div style="display:flex;gap:8px">
         <button class="mkt-btn mkt-btn-primary" style="flex:1"
-          onclick="document.getElementById('poster-view-modal').remove();regeneratePoster('${(h.topic||'').replace(/'/g,"\'")}','${h.template||'product'}','${h.language||'en'}')">
-          🔄 Regenerate Poster
+          onclick="document.getElementById('poster-view-modal').remove()" data-t="${(h.topic||'')}" data-tmpl="${h.template||'product'}" data-l="${h.language||'en'}"
+          onmouseup="regeneratePoster(this.dataset.t,this.dataset.tmpl,this.dataset.l)">
+          🔄 Regenerate
         </button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">Close</button>
+        <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)"
+          onclick="document.getElementById('poster-view-modal').remove();deletePosterHistory(${h.id})">
+          🗑 Delete
+        </button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">✕ Close</button>
       </div>
     </div>
   </div>`;
@@ -1858,28 +1863,16 @@ async function loadPosterHistory() {
   if (!(history||[]).length) return;
   card.style.display = 'block';
   el.innerHTML = (history||[]).map(h=>`
-  <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+  <div onclick="viewPosterHistory(${h.id})" style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='none'">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
       <div style="flex:1">
-        <div style="font-size:12px;font-weight:700">${h.topic||'—'}</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text1)">${h.topic||'—'}</div>
         <div style="font-size:11px;color:var(--text3)">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
       </div>
       <span class="badge ${h.status==='published'?'badge-green':h.status==='scheduled'?'badge-blue':'badge-gray'}">${h.status}</span>
+      <span style="font-size:16px;color:var(--text3)">›</span>
     </div>
-    ${h.caption ? `<div style="font-size:11px;color:var(--text2);background:var(--bg3);border-radius:6px;padding:8px;margin-bottom:6px;line-height:1.5;max-height:60px;overflow:hidden">${h.caption.slice(0,120)}${h.caption.length>120?'…':''}</div>` : ''}
-    <div style="display:flex;gap:6px">
-      <button class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px"
-        onclick="viewPosterHistory(${h.id})">
-        👁 View
-      </button>
-      <button class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:4px 10px"
-        onclick="regeneratePoster(this.dataset.topic,this.dataset.tmpl,this.dataset.lang)"
-        data-topic="${(h.topic||'').replace(/"/g,'&quot;')}" data-tmpl="${h.template||'product'}" data-lang="${h.language||'en'}">
-        🔄 Regenerate
-      </button>
-      <button class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px;color:var(--red)"
-        onclick="deletePosterHistory(${h.id})">🗑</button>
-    </div>
+    ${h.caption ? `<div style="font-size:11px;color:var(--text3);line-height:1.4">${h.caption.slice(0,80)}${h.caption.length>80?'…':''}</div>` : ''}
   </div>`).join('');
 }
 
@@ -2784,10 +2777,15 @@ async function viewPosterHistory(id) {
       </div>
       <div style="display:flex;gap:8px">
         <button class="mkt-btn mkt-btn-primary" style="flex:1"
-          onclick="document.getElementById('poster-view-modal').remove();regeneratePoster('${(h.topic||'').replace(/'/g,"\'")}','${h.template||'product'}','${h.language||'en'}')">
-          🔄 Regenerate Poster
+          onclick="document.getElementById('poster-view-modal').remove()" data-t="${(h.topic||'')}" data-tmpl="${h.template||'product'}" data-l="${h.language||'en'}"
+          onmouseup="regeneratePoster(this.dataset.t,this.dataset.tmpl,this.dataset.l)">
+          🔄 Regenerate
         </button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">Close</button>
+        <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)"
+          onclick="document.getElementById('poster-view-modal').remove();deletePosterHistory(${h.id})">
+          🗑 Delete
+        </button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('poster-view-modal').remove()">✕ Close</button>
       </div>
     </div>
   </div>`;
