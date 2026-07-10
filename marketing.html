@@ -1071,10 +1071,10 @@ async function renderBrandProfile() {
         <img src="${ph}" style="width:100%;height:100%;object-fit:cover">
         <button onclick="removePhoto(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;border-radius:50%;width:20px;height:20px;color:#fff;cursor:pointer;font-size:11px">✕</button>
       </div>`).join('')}
-      <label style="aspect-ratio:1;border-radius:8px;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg3)">
+      <div style="aspect-ratio:1;border-radius:8px;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg3)" onclick="document.getElementById('bp-file-input').click()">
         <div style="text-align:center"><div style="font-size:24px">+</div><div style="font-size:10px;color:var(--text3)">Add Photo</div></div>
-        <input type="file" accept="image/*" multiple style="display:none" onchange="uploadBrandPhotos(this)">
-      </label>
+      </div>
+      <input type="file" id="bp-file-input" accept="image/*" multiple style="display:none" onchange="uploadBrandPhotos(this)">
     </div>
   </div>
 
@@ -1996,12 +1996,28 @@ async function generateFullPoster() {
       method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body:JSON.stringify({
         action:'poster_text',agent:'Content Agent',model:'gpt-4o-mini',
-        prompt:`Create poster content for V Wholesale, Vijayawada home building store.
-Template: ${template} | Language: ${langMap[lang]} | Topic: ${topic}
-Address: ${bp.address} | Phone: ${bp.phone} | Web: ${bp.website}
-RULES: Natural ${langMap[lang]} tone. No invented prices/discounts. Authentic local feel.
-Respond ONLY in JSON:
-{"headline":"main headline (max 8 words)","sub_headline":"supporting text (max 12 words)","features":["feature 1","feature 2","feature 3"],"cta":"call to action text","caption":"full social media caption with emojis (3-4 lines)","hashtags":["tag1","tag2","tag3","tag4","tag5"],"dalle_prompt":"photorealistic interior design scene for this topic, luxury Indian home, warm lighting, high quality, no text in image"}`,
+        prompt:`You are creating premium marketing content for V Wholesale — Vijayawada's #1 home building superstore.
+
+BUSINESS: V Wholesale | ${bp.address} | ${bp.phone} | ${bp.website}
+TEMPLATE: ${template} | LANGUAGE: ${langMap[lang]} | TOPIC: ${topic}
+
+CRITICAL RULES:
+- Write in ${langMap[lang]} — natural, conversational, local Vijayawada tone
+- Headlines must be punchy and emotionally compelling
+- Features must be specific benefits, not generic claims
+- Never invent prices, discounts or unavailable products
+- Telugu must sound like a local person wrote it, not translated
+
+Respond ONLY in this exact JSON (no markdown):
+{
+  "headline": "powerful 6-8 word headline in ${langMap[lang]}",
+  "sub_headline": "compelling 10-14 word sub in ${langMap[lang]}",
+  "features": ["specific benefit 1 (max 5 words)", "specific benefit 2 (max 5 words)", "specific benefit 3 (max 5 words)", "specific benefit 4 (max 5 words)"],
+  "cta": "action-oriented CTA (max 4 words)",
+  "caption": "engaging 4-5 line social caption with emojis in ${langMap[lang]}",
+  "hashtags": ["vijayawada", "vwholesale", "topic-specific-1", "topic-specific-2", "homeimprovement"],
+  "dalle_prompt": "photorealistic ${template === 'contractor' ? 'professional contractor working on luxury home construction site, Andhra Pradesh' : template === 'offer' ? 'elegant showroom display of premium home materials, warm spotlights, luxury retail atmosphere' : 'stunning luxury Indian home interior, premium finishes, aspirational lifestyle'}, ultra-detailed, no text"
+}`,
         context:{topic,template,lang,business:'V Wholesale'}
       })
     });
@@ -2021,7 +2037,7 @@ Respond ONLY in JSON:
       const dalleRes = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{
         method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
         body:JSON.stringify({action:'generate_image',agent:'Poster Agent',
-          dalle_prompt: content.dalle_prompt || `Photorealistic luxury Indian home interior, ${topic}, warm lighting, premium quality, no text, editorial photography style`,
+          dalle_prompt: `Ultra-realistic interior design photograph. ${content.dalle_prompt || `Luxury Indian home interior featuring ${topic}`}. Warm ambient lighting, high-end finishes, aspirational lifestyle, professional architectural photography, shot with wide-angle lens, depth of field, no text or watermarks, hyper-detailed, 4K quality. Style: Architectural Digest India editorial shoot.`,
           size:'1024x1024',quality:'standard'})
       });
       const dalleData = await dalleRes.json();
@@ -2061,132 +2077,200 @@ Respond ONLY in JSON:
 }
 
 async function buildPosterCanvas(bp, content, heroUrl, template) {
-  const W=1080,H=1080;
+  const W=1080, H=1080;
   const canvas = document.createElement('canvas');
   canvas.width=W; canvas.height=H;
   const ctx = canvas.getContext('2d');
   const navy = bp.primary_color||'#1a2744';
-  const gold = bp.secondary_color||'#c9a84c';
+  const gold  = bp.secondary_color||'#c9a84c';
+  const white = '#FFFFFF';
 
-  // White background
-  ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,W,H);
+  // ── FULL BACKGROUND: navy ───────────────────────────────────
+  ctx.fillStyle = navy;
+  ctx.fillRect(0,0,W,H);
 
-  // Right panel — hero image or gradient
+  // ── HERO IMAGE (right 55%, rows 0–720) ─────────────────────
+  const heroX=460, heroY=0, heroW=620, heroH=720;
   if (heroUrl) {
     try {
       const img = await loadImage(heroUrl);
       ctx.save();
+      // rounded clip for hero
       ctx.beginPath();
-      ctx.rect(480,0,600,800);
+      ctx.rect(heroX, heroY, heroW, heroH);
       ctx.clip();
-      ctx.drawImage(img,480,0,600,800);
+      // cover-fit
+      const ir = img.width/img.height, cr = heroW/heroH;
+      let sw,sh,sx,sy;
+      if(ir>cr){sh=img.height;sw=sh*cr;sx=(img.width-sw)/2;sy=0;}
+      else{sw=img.width;sh=sw/cr;sy=(img.height-sh)/2;sx=0;}
+      ctx.drawImage(img,sx,sy,sw,sh,heroX,heroY,heroW,heroH);
       ctx.restore();
-    } catch(e) { drawGradientPanel(ctx,480,0,600,800,navy,gold); }
-  } else {
-    drawGradientPanel(ctx,480,0,600,800,navy,gold);
-  }
+      // dark overlay for readability
+      const ov=ctx.createLinearGradient(heroX,0,heroX+heroW,0);
+      ov.addColorStop(0,'rgba(10,23,58,0.55)');
+      ov.addColorStop(1,'rgba(10,23,58,0.08)');
+      ctx.fillStyle=ov; ctx.fillRect(heroX,heroY,heroW,heroH);
+    } catch(e) { _heroGrad(ctx,heroX,heroY,heroW,heroH,navy,gold); }
+  } else { _heroGrad(ctx,heroX,heroY,heroW,heroH,navy,gold); }
 
-  // Image overlay gradient (left fade)
-  const fadeGrad = ctx.createLinearGradient(420,0,680,0);
-  fadeGrad.addColorStop(0,'rgba(255,255,255,1)');
-  fadeGrad.addColorStop(0.3,'rgba(255,255,255,0.8)');
-  fadeGrad.addColorStop(1,'rgba(255,255,255,0)');
-  ctx.fillStyle=fadeGrad; ctx.fillRect(420,0,260,800);
+  // Left-fade over hero so content reads cleanly
+  const lf=ctx.createLinearGradient(heroX,0,heroX+180,0);
+  lf.addColorStop(0,'rgba(10,23,58,1)'); lf.addColorStop(1,'rgba(10,23,58,0)');
+  ctx.fillStyle=lf; ctx.fillRect(heroX,0,180,heroH);
 
-  // Left white panel
-  ctx.fillStyle='#FFFFFF'; ctx.fillRect(0,0,480,800);
+  // ── LEFT CONTENT PANEL (0–500) ─────────────────────────────
+  // Subtle left panel shade
+  const lp=ctx.createLinearGradient(0,0,500,0);
+  lp.addColorStop(0,navy); lp.addColorStop(1,'rgba(10,23,58,0.92)');
+  ctx.fillStyle=lp; ctx.fillRect(0,0,500,720);
 
-  // Navy top bar
-  ctx.fillStyle=navy; ctx.fillRect(0,0,480,80);
-  ctx.fillStyle='#FFFFFF';
-  ctx.font='bold 26px "DM Sans",sans-serif'; ctx.textAlign='left';
-  ctx.fillText(bp.business_name||'V Wholesale',20,52);
+  // ── TOP BAR ────────────────────────────────────────────────
+  ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(0,0,W,72);
+  // Logo pill
+  ctx.fillStyle=gold; _pill(ctx,24,14,44,44,8);
+  ctx.fillStyle=navy; ctx.font='bold 22px "DM Sans",Arial,sans-serif';
+  ctx.textAlign='center'; ctx.fillText('VW',46,42);
+  // Brand name
+  ctx.fillStyle=white; ctx.font='bold 24px "DM Sans",Arial,sans-serif';
+  ctx.textAlign='left'; ctx.fillText(bp.business_name||'V Wholesale',80,46);
+  // Right badge
+  ctx.fillStyle=gold; _pill(ctx,W-190,14,166,44,22);
+  ctx.fillStyle=navy; ctx.font='bold 16px "DM Sans",Arial,sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('★ PREMIUM QUALITY',W-107,42);
 
-  // Logo badge top right
-  ctx.fillStyle=gold;
-  roundRect2(ctx,W-130,10,120,60,10);
-  ctx.fillStyle=navy;
-  ctx.font='bold 28px "DM Sans",sans-serif'; ctx.textAlign='center';
-  ctx.fillText('VW',W-70,52);
-
-  // Headline
-  ctx.fillStyle=navy;
-  ctx.textAlign='left';
-  drawWrappedText(ctx,content.headline,24,140,440,60,'900');
-
-  // Gold line
-  ctx.fillStyle=gold; ctx.fillRect(24,220,80,5);
+  // ── HEADLINE ───────────────────────────────────────────────
+  // Gold accent bar
+  ctx.fillStyle=gold; ctx.fillRect(28,108,5,90);
+  // Main headline — large, bold, white
+  ctx.fillStyle=white;
+  const hLines = _splitLines(ctx,content.headline||'',28+20,440,56,'900');
+  hLines.forEach((l,i)=>{ ctx.font=`900 ${i===0?56:48}px "DM Sans",Arial,sans-serif`; ctx.textAlign='left'; ctx.fillStyle=i===0?white:gold; ctx.fillText(l,52,130+i*62); });
 
   // Sub headline
-  ctx.fillStyle='#444';
-  drawWrappedText(ctx,content.sub_headline,24,250,440,30,'600');
+  ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.font='400 24px "DM Sans",Arial,sans-serif';
+  _wrapDraw(ctx, content.sub_headline||'', 52, 230, 400, 32);
 
-  // Features
-  const features = content.features||[];
-  features.slice(0,4).forEach((f,i)=>{
-    const fy = 320+i*72;
-    // White card
-    ctx.fillStyle='#F8FAFC';
-    ctx.shadowColor='rgba(0,0,0,0.06)'; ctx.shadowBlur=8;
-    roundRect2(ctx,24,fy,400,56,10);
-    ctx.shadowBlur=0;
+  // Gold divider
+  ctx.fillStyle=gold; ctx.fillRect(52,270,60,3);
+
+  // ── FEATURE CARDS ──────────────────────────────────────────
+  const features = (content.features||[]).slice(0,4);
+  features.forEach((f,i)=>{
+    const fy=298+i*92;
+    // Card background
+    ctx.fillStyle='rgba(255,255,255,0.07)';
+    _pill(ctx,28,fy,420,76,12);
+    // Gold left accent
+    ctx.fillStyle=gold; ctx.fillRect(28,fy,4,76);
     // Green check circle
-    ctx.fillStyle='#10B981';
-    ctx.beginPath(); ctx.arc(52,fy+28,16,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle='#fff'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center';
-    ctx.fillText('✓',52,fy+35);
-    // Feature text
-    ctx.fillStyle=navy; ctx.font='600 22px "DM Sans",sans-serif'; ctx.textAlign='left';
-    ctx.fillText(f,80,fy+35);
+    ctx.fillStyle='#22C55E';
+    ctx.beginPath(); ctx.arc(70,fy+38,22,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=white; ctx.font='bold 20px sans-serif'; ctx.textAlign='center';
+    ctx.fillText('✓',70,fy+46);
+    // Feature text — handle long text
+    ctx.fillStyle=white; ctx.font=`600 ${f.length>30?20:23}px "DM Sans",Arial,sans-serif`;
+    ctx.textAlign='left';
+    _wrapDraw(ctx, f, 102, fy+30, 330, 26);
   });
 
-  // Category strip
-  ctx.fillStyle=navy; ctx.fillRect(0,800,W,200);
-  const cats = bp.categories||['Tiles','Granite','Sanitaryware','Paints','Electricals'];
-  const catW = W/cats.length;
+  // ── CATEGORY STRIP (full width, 720–880) ──────────────────
+  ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fillRect(0,720,W,160);
+  // Gold top line
+  ctx.fillStyle=gold; ctx.fillRect(0,720,W,3);
+  const cats = (bp.categories||['Tiles','Granite','Sanitaryware','Paints','Electricals']);
+  const cIcons=['🏠','🪨','🚿','🎨','⚡'];
+  const cW=W/cats.length;
   cats.forEach((cat,i)=>{
-    const cx2=i*catW+catW/2;
-    // Category box
-    if(i>0){ctx.fillStyle='rgba(255,255,255,0.1)';ctx.fillRect(i*catW,800,1,200);}
-    ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(i*catW+8,808,catW-16,184);
-    // Icon
-    const icons2=['⬜','🪨','🚿','🎨','⚡'];
-    ctx.font='36px sans-serif'; ctx.textAlign='center';
-    ctx.fillStyle='#fff'; ctx.fillText(icons2[i]||'🏠',cx2,870);
-    ctx.font='bold 20px "DM Sans",sans-serif';
-    ctx.fillStyle=gold; ctx.fillText(cat.toUpperCase(),cx2,910);
+    const cx2=i*cW+cW/2;
+    if(i>0){ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(i*cW,724,1,152);}
+    // Hover box on active (first by default)
+    if(i===0){ctx.fillStyle='rgba(201,168,76,0.12)'; ctx.fillRect(i*cW,720,cW,160);}
+    ctx.font='34px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(cIcons[i]||'🏠',cx2,790);
+    ctx.fillStyle=i===0?gold:white;
+    ctx.font=`bold ${cat.length>10?15:18}px "DM Sans",Arial,sans-serif`;
+    ctx.fillText(cat.toUpperCase(),cx2,830);
+    if(i===0){ctx.fillStyle=gold; ctx.fillRect(i*cW+cW*0.25,856,cW*0.5,2);}
   });
 
-  // Footer
-  ctx.fillStyle=navy; ctx.fillRect(0,950,W,130);
-  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(0,950,W,2);
-  ctx.fillStyle='#fff';
-  ctx.font='22px "DM Sans",sans-serif'; ctx.textAlign='left';
-  ctx.fillText('📍 '+bp.address,24,990);
-  ctx.fillText('📞 '+bp.phone+'   🌐 '+bp.website,24,1022);
+  // ── FOOTER (880–1080) ─────────────────────────────────────
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(0,880,W,200);
+  ctx.fillStyle=gold; ctx.fillRect(0,880,W,2);
 
-  // Gold CTA button
+  // Address + contact
+  ctx.fillStyle='rgba(255,255,255,0.85)';
+  ctx.font='20px "DM Sans",Arial,sans-serif'; ctx.textAlign='left';
+  ctx.fillText('📍 '+(bp.address||'NH65, Bhavanipuram, Vijayawada'),32,930);
+  ctx.fillText('📞 '+(bp.phone||'8712697930'),32,962);
   ctx.fillStyle=gold;
-  roundRect2(ctx,W-220,958,196,58,29);
-  ctx.fillStyle=navy;
-  ctx.font='bold 22px "DM Sans",sans-serif'; ctx.textAlign='center';
-  ctx.fillText(content.cta||'Visit Store',W-122,994);
+  ctx.fillText('🌐 '+(bp.website||'vwholesale.in'),32+300,962);
+
+  // CTA button
+  ctx.fillStyle=gold; _pill(ctx,W-260,895,228,66,33);
+  ctx.fillStyle=navy; ctx.font='bold 22px "DM Sans",Arial,sans-serif'; ctx.textAlign='center';
+  ctx.fillText(content.cta||'Visit Us Today',W-146,934);
 
   // Tagline
-  ctx.fillStyle='rgba(255,255,255,0.5)';
-  ctx.font='italic 18px "DM Sans",sans-serif'; ctx.textAlign='right';
-  ctx.fillText(bp.tagline||'Build Better. Pay Less.',W-24,1060);
+  ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.font='italic 18px "DM Sans",Arial,sans-serif'; ctx.textAlign='right';
+  ctx.fillText(bp.tagline||'Build Better. Pay Less.',W-32,1000);
 
-  // PREMIUM starburst
-  if(template!=='contractor'){
-    drawStarburst(ctx,W-95,265,70,gold,navy);
-    ctx.fillStyle=navy;
-    ctx.font='bold 13px "DM Sans",sans-serif'; ctx.textAlign='center';
-    ctx.fillText('PREMIUM',W-95,260);
-    ctx.fillText('QUALITY',W-95,278);
-  }
+  // Divider line
+  ctx.fillStyle='rgba(201,168,76,0.3)'; ctx.fillRect(32,1010,W-64,1);
+
+  // Bottom row: social handles placeholder
+  ctx.fillStyle='rgba(255,255,255,0.35)';
+  ctx.font='16px "DM Sans",Arial,sans-serif'; ctx.textAlign='left';
+  ctx.fillText('@vwholesale.in',32,1050);
+  ctx.textAlign='right';
+  ctx.fillText('Vijayawada's Home Building Store',W-32,1050);
 
   return canvas;
+}
+
+function _heroGrad(ctx,x,y,w,h,c1,c2){
+  const g=ctx.createLinearGradient(x,y,x+w,y+h);
+  g.addColorStop(0,c2+'88'); g.addColorStop(0.5,c1); g.addColorStop(1,c2+'44');
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,h);
+  // subtle pattern
+  ctx.fillStyle='rgba(255,255,255,0.03)';
+  for(let i=0;i<8;i++) for(let j=0;j<8;j++){
+    if((i+j)%2===0) ctx.fillRect(x+i*(w/8),y+j*(h/8),w/8,h/8);
+  }
+}
+
+function _pill(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r); ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h); ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r); ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y); ctx.closePath(); ctx.fill();
+}
+
+function _splitLines(ctx,text,x,maxW,size,weight){
+  ctx.font=`${weight} ${size}px "DM Sans",Arial,sans-serif`;
+  const words=text.split(' '); let line=''; const lines=[];
+  for(const w of words){
+    const t=line+(line?' ':'')+w;
+    if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=w;}
+    else line=t;
+  }
+  if(line) lines.push(line);
+  return lines;
+}
+
+function _wrapDraw(ctx,text,x,y,maxW,lineH){
+  const fsize=parseInt(ctx.font)||24;
+  const words=text.split(' '); let line=''; let ly=y;
+  for(const w of words){
+    const t=line+(line?' ':'')+w;
+    if(ctx.measureText(t).width>maxW&&line){ctx.fillText(line,x,ly);line=w;ly+=lineH;}
+    else line=t;
+  }
+  if(line) ctx.fillText(line,x,ly);
 }
 
 function loadImage(src){
