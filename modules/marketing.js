@@ -1794,16 +1794,42 @@ async function renderPosterStudio() {
         <div class="mkt-card-title">📁 Upload Your Poster</div>
         <input type="file" id="ps-upload-file" accept="image/*" style="display:none" onchange="psHandleUpload()">
         <div id="ps-upload-zone" onclick="document.getElementById('ps-upload-file').click()"
-          style="border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color .2s"
+          style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color .2s"
           onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="font-size:36px;margin-bottom:8px">🖼</div>
           <div style="font-size:13px;font-weight:700;margin-bottom:4px">Click to upload poster</div>
           <div style="font-size:11px;color:var(--text3)">JPG or PNG · 1080×1080 recommended</div>
         </div>
         <div class="mkt-form-group">
-          <label class="mkt-form-label">Post Label (for history)</label>
-          <input type="text" id="ps-upload-label" class="mkt-form-input" placeholder="e.g. Sunhearrt Tiles — Week 2">
+          <label class="mkt-form-label">What is this poster about? *</label>
+          <input type="text" id="ps-upload-topic" class="mkt-form-input"
+            placeholder="e.g. Sunhearrt tiles available at V Wholesale"
+            onkeydown="if(event.key==='Enter') psGenerateUploadCaption()">
         </div>
+        <div class="mkt-grid-2">
+          <div class="mkt-form-group">
+            <label class="mkt-form-label">Template</label>
+            <select id="ps-upload-template" class="mkt-form-select">
+              <option value="product">Product Showcase</option>
+              <option value="offer">Offer / Sale</option>
+              <option value="contractor">Contractor Club</option>
+              <option value="festival">Festival Special</option>
+              <option value="store">Store Walk-in</option>
+            </select>
+          </div>
+          <div class="mkt-form-group">
+            <label class="mkt-form-label">Language</label>
+            <select id="ps-upload-lang" class="mkt-form-select">
+              <option value="en">English</option>
+              <option value="te">Telugu</option>
+              <option value="te+en">Telugu + English</option>
+              <option value="hi">Hindi</option>
+            </select>
+          </div>
+        </div>
+        <button class="mkt-btn mkt-btn-primary" onclick="psGenerateUploadCaption()" style="width:100%;padding:11px;font-size:13px;font-weight:800">
+          ✨ Generate Caption + Hashtags
+        </button>
       </div>
 
       <!-- CAPTION BOX (shared, shown after generate or upload) -->
@@ -1941,27 +1967,98 @@ function psHandleUpload() {
   reader.onload = e => {
     const b64 = e.target.result.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
     currentPosterB64 = b64;
-    // Show preview
+
+    // Show preview immediately
     const preview = document.getElementById('ps-preview');
     preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain;border-radius:10px;cursor:zoom-in" onclick="window.open(this.src)" title="Click to zoom">`;
+
     // Badge
     const badge = document.getElementById('ps-source-badge');
-    badge.textContent = 'Manual Upload'; badge.style.display = '';
-    // Show caption area (empty, user types their own)
+    if (badge) { badge.textContent = '📁 Uploaded'; badge.style.display = ''; }
+
+    // Upload zone thumbnail
+    const zone = document.getElementById('ps-upload-zone');
+    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="max-height:72px;border-radius:6px;object-fit:contain"><div style="font-size:11px;color:var(--gold);margin-top:6px;font-weight:700">✅ ${file.name}</div>`;
+
+    // Show caption card with placeholder — user can generate or type manually
     currentCaption = '';
     const disp = document.getElementById('ps-caption-display');
     const edit = document.getElementById('ps-caption-edit');
-    if (disp) disp.textContent = '';
-    if (edit) { edit.value = ''; edit.style.display = 'block'; }
+    if (disp) { disp.style.display = 'none'; }
+    if (edit) {
+      edit.value = '';
+      edit.placeholder = 'Click "Generate Caption + Hashtags" above, or type your own caption here...';
+      edit.style.display = 'block';
+      edit.oninput = () => { currentCaption = edit.value; };
+    }
     document.getElementById('ps-caption-card').style.display  = '';
     document.getElementById('ps-publish-card').style.display  = '';
-    // Upload zone feedback
-    const zone = document.getElementById('ps-upload-zone');
-    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="max-height:80px;border-radius:6px;object-fit:contain"><div style="font-size:11px;color:var(--gold);margin-top:6px;font-weight:700">✅ ${file.name}</div>`;
-    showMktToast('✅ Poster loaded — write your caption and publish');
+    showMktToast('✅ Poster loaded — fill the topic and generate caption');
   };
   reader.readAsDataURL(file);
 }
+
+// ── AI CAPTION GENERATION FOR UPLOADED POSTER ──
+async function psGenerateUploadCaption() {
+  const topic = (document.getElementById('ps-upload-topic')?.value || '').trim();
+  const template = document.getElementById('ps-upload-template')?.value || 'product';
+  const lang = document.getElementById('ps-upload-lang')?.value || 'en';
+
+  if (!topic) { showMktToast('Enter what the poster is about first'); return; }
+  if (!currentPosterB64) { showMktToast('Upload a poster image first'); return; }
+
+  const edit = document.getElementById('ps-caption-edit');
+  const disp = document.getElementById('ps-caption-display');
+  if (edit) { edit.value = '⏳ Generating caption...'; edit.disabled = true; edit.style.display = 'block'; }
+  if (disp) disp.style.display = 'none';
+
+  try {
+    // Call edge function content-only (no image needed)
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({
+        topic, template, language: lang,
+        caption_only: true,   // signal to skip image generation
+        business_name: 'V Wholesale',
+      })
+    });
+    const data = await res.json();
+
+    // Build rich caption from content fields
+    const c = data.content || {};
+    const langNote = lang === 'te' ? '(Telugu caption below)' : lang === 'hi' ? '(Hindi caption below)' : '';
+
+    const generatedCaption = c.caption ||
+      `✨ ${c.headline_line1 || topic} ${c.headline_line2 || ''} — ${c.subheadline || 'Now Available at V Wholesale'}\n\n` +
+      `${c.body || ''}\n\n` +
+      `✅ ${c.feature1 || ''}\n✅ ${c.feature2 || ''}\n✅ ${c.feature3 || ''}\n\n` +
+      `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
+      `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
+      `#VWholesale #Vijayawada #Tiles #HomeDesign #InteriorDesign #BuildingMaterials #${(c.headline_line1||topic).replace(/\s/g,'')} #HouseConstruction`;
+
+    currentCaption = generatedCaption;
+    if (edit) { edit.value = generatedCaption; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
+    showMktToast('✅ Caption generated — edit if needed, then publish!');
+
+  } catch(e) {
+    // Fallback: build a decent caption from topic alone without the edge function
+    const brand = topic.split(' ')[0];
+    const fallback =
+      `✨ ${topic} — Now Available at V Wholesale, Vijayawada!\n\n` +
+      `🏠 Transform your home with premium quality products\n` +
+      `💎 Elegant Designs • Modern Finishes • Lasting Quality\n` +
+      `✅ Perfect for Living Rooms, Bedrooms & Bathrooms\n\n` +
+      `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
+      `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
+      `#VWholesale #Vijayawada #${brand.replace(/\s/g,'')} #Tiles #HomeDesign #InteriorDesign #BuildingMaterials #HouseConstruction #AndhraPradesh`;
+
+    currentCaption = fallback;
+    if (edit) { edit.value = fallback; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
+    showMktToast('Caption ready (offline fallback — edge function may need deployment)');
+  }
+}
+
 
 // ── CAPTION EDIT TOGGLE ──
 function psEditCaption() {
@@ -1997,7 +2094,7 @@ function psPostWhatsApp() {
 }
 
 async function psSaveFinal() {
-  const label = document.getElementById('ps-upload-label')?.value?.trim() ||
+  const label = document.getElementById('ps-upload-topic')?.value?.trim() ||
                 document.getElementById('ps-topic')?.value?.trim() ||
                 'Poster';
   if (!currentPosterB64) { showMktToast('No poster to save'); return; }

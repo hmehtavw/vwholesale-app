@@ -193,8 +193,15 @@ Deno.serve(async (req) => {
     language = "en",
     business_name = "V Wholesale",
   } = body;
+  const captionOnly = body.caption_only === true || body.caption_only === 'true';
 
   try {
+    // caption_only mode: just generate text content, skip image entirely
+    if (captionOnly) {
+      const content = await generateContent(topic, template, language, business_name);
+      return json({ ok: true, content, image_b64: null, image_source: 'none' });
+    }
+
     // Run content generation in parallel with image fetch
     const contentPromise = generateContent(topic, template, language, business_name);
 
