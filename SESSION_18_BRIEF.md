@@ -2,7 +2,7 @@
 **Date:** 10 July 2026
 **Repo:** hmehtavw/vwholesale-app | **Supabase:** ndamdnlsuktucqtcbhgp
 **Live:** https://vwholesale.in | **Working dir:** /home/claude/repo9
-**PAT:** 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
+**PAT:** GITHUB_PAT_REDACTED
 **Staff login:** 9038010175 / PIN 141820
 
 ## What is live right now
