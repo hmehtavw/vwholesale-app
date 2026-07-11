@@ -2987,26 +2987,116 @@ async function getCampaignAITip(id, name) {
 }
 
 function renderSocial() {
-  setContent(`<div style="max-width:700px;margin:0 auto"><div class="mkt-card">
-    <div class="mkt-card-title">📱 Social Media — One Push Publishing</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6">Connect once. Generate → preview per platform → one button publishes everywhere.</div>
-    <div style="display:grid;gap:10px;margin-bottom:20px">
-      ${[{icon:'📸',name:'Instagram',size:'1080×1080 · Reels 9:16',note:'Needs Meta Business OAuth'},
-         {icon:'👥',name:'Facebook Page',size:'1200×630 · Reels 9:16',note:'Same Meta Business account'},
-         {icon:'🧵',name:'Threads',size:'1080×1080 · Video 9:16',note:'Meta Graph API — same auth'},
-         {icon:'▶️',name:'YouTube Shorts',size:'1080×1920 · Max 60s',note:'YouTube Data API — channel ready'},
-         {icon:'📍',name:'Google Business Profile',size:'1200×900 · Update posts',note:'Google OAuth — same as Search Console'},
-         {icon:'💬',name:'WhatsApp Status',size:'1080×1920 · Via Interakt',note:'Complete Interakt setup first'},
-         {icon:'✖️',name:'X (Twitter)',size:'Copy-paste · Manual for now',note:'API $100/month — manual posting via link'}
-        ].map(p=>`<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:10px;padding:12px">
-          <div style="font-size:22px;width:32px;text-align:center">${p.icon}</div>
-          <div style="flex:1"><div style="font-size:13px;font-weight:700">${p.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${p.size}</div>
-          <div style="font-size:11px;color:var(--text3)">⚠️ ${p.note}</div></div>
-        </div>`).join('')}
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">📱 Social Media</h3>
+    <div style="font-size:12px;color:var(--text3)">Connect platforms · Generate content · Publish everywhere</div></div>
+  </div>
+
+  <!-- Platform connection status -->
+  <div class="mkt-card" style="margin-bottom:16px">
+    <div class="mkt-card-title">Platform Connections</div>
+    <div style="display:grid;gap:10px">
+      ${[
+        {icon:'📸', name:'Instagram', size:'1080×1080 · Reels 9:16', status:'pending', action:'Connect via Meta Business', url:'https://business.facebook.com'},
+        {icon:'👥', name:'Facebook Page', size:'1200×630 · Feed · Reels 9:16', status:'pending', action:'Same Meta Business account', url:'https://business.facebook.com'},
+        {icon:'🧵', name:'Threads', size:'1080×1080 · Video 9:16', status:'pending', action:'Meta Graph API — same auth as Instagram', url:'https://business.facebook.com'},
+        {icon:'▶️', name:'YouTube / Shorts', size:'1080×1920 · Max 60s for Shorts', status:'pending', action:'Authorize V Wholesale YouTube channel', url:'https://console.cloud.google.com'},
+        {icon:'📍', name:'Google Business Profile', size:'1200×900 · Event posts', status:'pending', action:'Google OAuth — same account as Search Console', url:'https://console.cloud.google.com'},
+        {icon:'💬', name:'WhatsApp Status', size:'1080×1920 · Via Interakt', status:'pending', action:'Complete Interakt BSP setup', url:'https://app.interakt.ai'},
+        {icon:'✖️', name:'X (Twitter)', size:'1200×675 · Manual posting', status:'manual', action:'Manual — open X, paste content', url:'https://x.com/compose/tweet'}
+      ].map(p => '<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:10px;padding:12px">'
+        + '<div style="font-size:24px;width:36px;text-align:center">'+p.icon+'</div>'
+        + '<div style="flex:1">'
+        + '<div style="font-size:13px;font-weight:700">'+p.name+'</div>'
+        + '<div style="font-size:11px;color:var(--text3)">'+p.size+'</div>'
+        + '<div style="font-size:11px;color:var(--text3);margin-top:2px">→ '+p.action+'</div>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'
+        + '<span class="badge '+(p.status==='manual'?'badge-blue':'badge-gray')+'">'+(p.status==='manual'?'Manual':'Not connected')+'</span>'
+        + '<a href="'+p.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">'+(p.status==='manual'?'Open X ↗':'Setup ↗')+'</a>'
+        + '</div></div>'
+      ).join('')}
     </div>
-    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;font-weight:700;text-align:center">🗓 Coming soon — requires Meta Business OAuth setup</div>
-  </div></div>`);
+  </div>
+
+  <!-- Manual X posting helper -->
+  <div class="mkt-card" style="margin-bottom:16px">
+    <div class="mkt-card-title">✖️ Post to X (Twitter) — Manual</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate your caption below, copy it, then click Open X to paste and post.</div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Topic / What to post about</label>
+      <input id="x-topic" class="mkt-form-input" placeholder="e.g. Kajaria premium tiles now available, Monsoon bathroom renovation">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="mkt-btn mkt-btn-primary" onclick="generateXPost()" style="flex:1">🤖 Generate X Post</button>
+      <a href="https://x.com/compose/tweet" target="_blank" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">Open X ↗</a>
+    </div>
+    <div id="x-output" style="display:none">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div id="x-content" style="font-size:13px;line-height:1.7;white-space:pre-wrap"></div>
+        <div id="x-chars" style="font-size:11px;color:var(--text3);margin-top:6px;text-align:right"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" onclick="copyXPost()" style="flex:1">📋 Copy Post</button>
+        <a href="https://x.com/compose/tweet" target="_blank" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">Open X ↗</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Publishing guide -->
+  <div class="mkt-card">
+    <div class="mkt-card-title">📖 One-Push Publishing — How it will work</div>
+    <div style="display:grid;gap:8px">
+      ${['1️⃣ Generate poster or upload your own in Poster Studio',
+         '2️⃣ AI writes caption + hashtags for each platform automatically',
+         '3️⃣ Preview how it looks on Instagram (square), YouTube (9:16), GBP (landscape)',
+         '4️⃣ Select which platforms to post to',
+         '5️⃣ One click — publishes to all selected platforms simultaneously',
+         '6️⃣ Posts tracked in Content Calendar with status per platform'
+        ].map(s=>'<div style="font-size:12px;padding:8px 10px;background:var(--bg3);border-radius:8px">'+s+'</div>').join('')}
+    </div>
+    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;margin-top:12px">
+      ⚡ One-push publishing activates once Meta Business OAuth is connected. Currently use Poster Studio → copy caption → post manually per platform.
+    </div>
+  </div>`);
+}
+
+async function generateXPost() {
+  const topic = (document.getElementById('x-topic')?.value||'').trim();
+  if (!topic) { showMktToast('Enter a topic first'); return; }
+  showMktToast('🤖 Writing X post…');
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({
+      task:'social_post',
+      platform:'X',
+      language:'en',
+      topic,
+      context:{business:'V Wholesale', location:'Vijayawada', max_chars:280}
+    })
+  });
+  const data = await res.json();
+  const content = data.content || data.text || '';
+  if (!content) { showMktToast('❌ Generation failed'); return; }
+
+  const out = document.getElementById('x-output');
+  const cont = document.getElementById('x-content');
+  const chars = document.getElementById('x-chars');
+  if (out) out.style.display = 'block';
+  if (cont) cont.textContent = content;
+  if (chars) {
+    const len = content.length;
+    chars.textContent = len + '/280 characters';
+    chars.style.color = len > 280 ? '#ef4444' : len > 240 ? '#f59e0b' : 'var(--text3)';
+  }
+}
+
+function copyXPost() {
+  const content = document.getElementById('x-content')?.textContent||'';
+  navigator.clipboard.writeText(content).then(()=>showMktToast('📋 Copied — now paste in X'));
 }
 
 function renderWhatsApp() {
