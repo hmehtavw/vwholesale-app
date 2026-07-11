@@ -130,8 +130,10 @@ async function renderCRM() {
     <input type="text" id="new-cust-name" placeholder="Name *">
     <input type="tel" id="new-cust-phone" placeholder="Phone *" maxlength="10">
     <input type="text" id="new-cust-city" placeholder="City">
-    <label style="font-size:12px;color:var(--text3);margin-top:4px;display:block">Date of Birth (for birthday wishes)</label>
+    <label style="font-size:12px;color:var(--text3);margin-top:4px;display:block">Date of Birth (for birthday wishes) <span style="color:var(--text3);font-weight:400">— optional</span></label>
     <input type="date" id="new-cust-dob">
+    <label style="font-size:12px;color:var(--text3);margin-top:8px;display:block">Wedding Anniversary (for anniversary wishes) <span style="color:var(--text3);font-weight:400">— optional</span></label>
+    <input type="date" id="new-cust-anniversary">
     <select id="new-cust-type">
       <option value="retail">Retail</option>
       <option value="b2b_pro">B2B Professional</option>
@@ -387,6 +389,7 @@ async function saveNewCustomer() {
     type: document.getElementById('new-cust-type').value,
     city: document.getElementById('new-cust-city').value,
     dateOfBirth: document.getElementById('new-cust-dob')?.value || '',
+    anniversary: document.getElementById('new-cust-anniversary')?.value || null,
     visitCount: 0, createdAt: new Date().toISOString()
   });
   showToast('Customer saved', 'success');

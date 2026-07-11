@@ -96,7 +96,7 @@ const PAGE_TITLES = {
   social: 'Social Media', gbp: 'Google Business Profile', whatsapp: 'WhatsApp',
   ads: 'Advertising', 'local-seo': 'Local SEO', 'website-seo': 'Website SEO',
   reviews: 'Reviews & Reputation', analytics: 'Analytics', competitors: 'Competitor Intelligence',
-  segments: 'Customer Segments', agents: 'AI Agents', brand: 'Brand Knowledge',
+  segments: 'Customer Segments', greetings: 'Greetings Engine', agents: 'AI Agents', brand: 'Brand Knowledge',
   integrations: 'Integrations', audit: 'Audit Logs', settings: 'Settings'
 };
 
@@ -109,7 +109,7 @@ function mktNav(page) {
     social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
     ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
     reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
-    segments: renderSegments, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
+    segments: renderSegments, greetings: renderGreetings, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
     integrations: renderIntegrations, audit: renderAudit, settings: renderSettings
   };
   if (renderers[page]) renderers[page]();
@@ -3656,3 +3656,255 @@ window.addEventListener('load', async () => {
     console.log('Auto-login check:', e.message);
   }
 });
+// ── GREETINGS ENGINE ──
+async function renderGreetings() {
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">🎂 Greetings Engine</h3>
+    <div style="font-size:12px;color:var(--text3)">Birthday & Anniversary — Customers · Contractors · Staff</div></div>
+    <button class="mkt-btn mkt-btn-primary" onclick="renderGreetings()">🔄 Refresh</button>
+  </div>
+
+  <div id="greetings-content"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Checking today's greetings…</div></div>`);
+  await loadGreetings();
+}
+
+async function loadGreetings() {
+  const el = document.getElementById('greetings-content');
+  if (!el) return;
+
+  try {
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/check-greetings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    const today = data.today || [];
+    const upcoming = data.upcoming || [];
+
+    el.innerHTML = `
+    <!-- Today's greetings -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div class="mkt-card-title">🎉 Today — ${data.date}</div>
+      ${today.length === 0
+        ? '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">🎉 No birthdays or anniversaries today</div>'
+        : '<div style="display:grid;gap:10px">' + today.map(g => `
+        <div style="background:var(--bg3);border-radius:10px;padding:14px;display:flex;align-items:center;gap:12px">
+          <div style="font-size:32px">${g.greeting_type === 'birthday' ? '🎂' : '💑'}</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:900">${g.person_name || '—'}</div>
+            <div style="font-size:12px;color:var(--text3)">${g.greeting_type === 'birthday' ? 'Birthday' : 'Anniversary'} · ${g.person_type} ${g.phone ? '· ' + g.phone : ''}</div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="mkt-btn mkt-btn-primary" onclick="generateGreetingPoster('${(g.person_name||'').replace(/'/g,"\\'")}','${g.greeting_type}','${g.person_type}')" style="font-size:11px;padding:4px 10px">🎨 Generate Poster</button>
+            <button class="mkt-btn mkt-btn-ghost" onclick="generateGreetingMessage('${(g.person_name||'').replace(/'/g,"\\'")}','${g.greeting_type}','${g.phone||''}')" style="font-size:11px;padding:4px 10px">💬 WhatsApp</button>
+          </div>
+        </div>`).join('') + '</div>'
+      }
+    </div>
+
+    <!-- Upcoming 7 days -->
+    ${upcoming.length ? `<div class="mkt-card" style="margin-bottom:14px">
+      <div class="mkt-card-title">📅 Upcoming 7 Days</div>
+      <div style="display:grid;gap:6px">
+        ${upcoming.map(u => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">
+          <div style="font-size:18px">${u.type === 'birthday' ? '🎂' : '💑'}</div>
+          <div style="flex:1"><div style="font-size:12px;font-weight:700">${u.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${u.type} · ${u.date}</div></div>
+          <span class="badge badge-blue">in ${u.days} day${u.days > 1 ? 's' : ''}</span>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Add DOB/Anniversary to customer -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div class="mkt-card-title">➕ Add Birthday / Anniversary to Customer or Contractor</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Search by phone number and update their profile with DOB or Anniversary date.</div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Phone Number</label>
+        <div style="display:flex;gap:8px">
+          <input id="greet-phone" class="mkt-form-input" placeholder="e.g. 9876543210" style="flex:1">
+          <button class="mkt-btn mkt-btn-primary" onclick="searchPersonForGreeting()">Search</button>
+        </div>
+      </div>
+      <div id="greet-person-result" style="display:none"></div>
+    </div>
+
+    <!-- Recent greeting log -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">📋 Recent Greetings Sent</div>
+      <div id="greet-log"><div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">Loading…</div></div>
+    </div>
+
+    <!-- Poster + message output -->
+    <div id="greet-output" style="display:none"></div>`;
+
+    loadGreetingLog();
+
+  } catch(e) {
+    el.innerHTML = `<div class="mkt-card" style="text-align:center;padding:30px;color:var(--red)">❌ ${e.message}</div>`;
+  }
+}
+
+async function loadGreetingLog() {
+  const el = document.getElementById('greet-log');
+  if (!el) return;
+  const { data } = await sb.from('greeting_log').select('*').order('created_at', {ascending:false}).limit(10).then(r=>r,()=>({data:[]}));
+  if (!(data||[]).length) { el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No greetings sent yet</div>'; return; }
+  el.innerHTML = '<div style="display:grid;gap:6px">' + (data||[]).map(g => `
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">
+    <div style="font-size:18px">${g.greeting_type === 'birthday' ? '🎂' : '💑'}</div>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:700">${g.person_name || '—'}</div>
+      <div style="font-size:11px;color:var(--text3)">${g.greeting_type} · ${g.person_type} · ${new Date(g.created_at).toLocaleDateString('en-IN')}</div>
+    </div>
+    <span class="badge ${g.whatsapp_sent ? 'badge-green' : 'badge-gray'}">${g.whatsapp_sent ? '✅ Sent' : 'Pending'}</span>
+  </div>`).join('') + '</div>';
+}
+
+async function searchPersonForGreeting() {
+  const phone = (document.getElementById('greet-phone')?.value||'').trim();
+  if (!phone) { showMktToast('Enter phone number'); return; }
+
+  const el = document.getElementById('greet-person-result');
+  el.style.display = 'block';
+  el.innerHTML = '<div style="font-size:12px;color:var(--text3)">⏳ Searching…</div>';
+
+  // Search in profiles and contractor_profiles
+  const [{ data: profData }, { data: contData }] = await Promise.all([
+    sb.from('profiles').select('id, name, phone, role, dob, anniversary').eq('phone', phone).limit(1).then(r=>r,()=>({data:[]})),
+    sb.from('contractor_profiles').select('id, name, phone, dob, anniversary').eq('phone', phone).limit(1).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const person = (profData||[])[0] || (contData||[])[0];
+  const table = (profData||[])[0] ? 'profiles' : 'contractor_profiles';
+
+  if (!person) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--red);padding:8px 0">No customer or contractor found with this phone number</div>';
+    return;
+  }
+
+  el.innerHTML = `
+  <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:12px;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:700">${person.name}</div>
+    <div style="font-size:11px;color:var(--text3)">${person.phone} · ${person.role||'contractor'}</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Date of Birth</label>
+      <input type="date" id="greet-dob" class="mkt-form-input" value="${person.dob||''}">
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Wedding Anniversary</label>
+      <input type="date" id="greet-ann" class="mkt-form-input" value="${person.anniversary||''}">
+    </div>
+  </div>
+  <button class="mkt-btn mkt-btn-primary" onclick="savePersonDates('${person.id}','${table}')" style="width:100%">💾 Save Dates</button>`;
+}
+
+async function savePersonDates(id, table) {
+  const dob = document.getElementById('greet-dob')?.value || null;
+  const ann = document.getElementById('greet-ann')?.value || null;
+  const { error } = await sb.from(table).update({ dob, anniversary: ann, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { showMktToast('❌ ' + error.message); return; }
+  showMktToast('✅ Dates saved! Will appear in tomorrow\'s greeting check.');
+  document.getElementById('greet-person-result').style.display = 'none';
+  document.getElementById('greet-phone').value = '';
+}
+
+async function generateGreetingPoster(name, type, personType) {
+  showMktToast(`🎨 Generating ${type} poster for ${name}…`);
+
+  const topic = type === 'birthday'
+    ? `Happy Birthday ${name} — warm birthday wishes from V Wholesale team`
+    : `Happy Anniversary ${name} — celebrating with you from V Wholesale`;
+
+  // Reuse poster studio generate flow
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+    body: JSON.stringify({
+      topic, template: type === 'birthday' ? 'festival' : 'store',
+      language: 'te+en',
+      business_name: 'V Wholesale',
+      phone: '8712697930', website: 'vwholesale.in',
+      address: 'NH65, Bhavanipuram, Vijayawada',
+      tagline: type === 'birthday' ? 'Wishing you joy and prosperity!' : 'Celebrating your special day!'
+    })
+  });
+  const data = await res.json();
+  if (!data.ok) { showMktToast('❌ ' + (data.error||'Failed')); return; }
+
+  // Show output
+  let outEl = document.getElementById('greet-output');
+  if (!outEl) { outEl = document.createElement('div'); outEl.id = 'greet-output'; document.getElementById('greetings-content').appendChild(outEl); }
+  outEl.style.display = 'block';
+  outEl.innerHTML = `
+  <div class="mkt-card" style="margin-top:14px">
+    <div class="mkt-card-title">🎨 Generated Poster — ${name}</div>
+    <img src="data:image/png;base64,${data.image_b64}" style="width:100%;border-radius:10px;margin-bottom:10px">
+    <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.7">${data.caption||''}</div>
+    <div style="display:flex;gap:8px">
+      <button class="mkt-btn mkt-btn-primary" onclick="downloadGreetingPoster('${data.image_b64.slice(0,20)}...')">⬇ Download</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(\`${(data.caption||'').replace(/`/g,"'")}\`).then(()=>showMktToast('Copied!'))">📋 Copy Caption</button>
+    </div>
+  </div>`;
+
+  // Save to greeting_log
+  await sb.from('greeting_log').insert({
+    person_type: personType, person_name: name,
+    greeting_type: type, greeting_date: new Date().toISOString().split('T')[0],
+    caption: data.caption, created_by: mktProfile?.name
+  });
+  loadGreetingLog();
+}
+
+function downloadGreetingPoster(b64Prefix) {
+  // Find the full b64 from the img tag
+  const img = document.querySelector('#greet-output img');
+  if (!img) return;
+  const full = img.src.replace('data:image/png;base64,', '');
+  const a = document.createElement('a');
+  a.download = 'vwholesale-greeting-' + Date.now() + '.png';
+  a.href = 'data:image/png;base64,' + full;
+  a.click();
+}
+
+async function generateGreetingMessage(name, type, phone) {
+  showMktToast('🤖 Writing WhatsApp message…');
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+    body: JSON.stringify({
+      task: 'whatsapp_message', platform: 'WhatsApp', language: 'te+en',
+      topic: type === 'birthday' ? `Birthday greeting for ${name}` : `Anniversary greeting for ${name}`,
+      context: { business: 'V Wholesale', location: 'Vijayawada', person_name: name, type }
+    })
+  });
+  const data = await res.json();
+  const msg = data.content || data.text || '';
+  if (!msg) { showMktToast('❌ Failed to generate'); return; }
+
+  // Show copy + WhatsApp link
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">💬 WhatsApp Greeting — ${name}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:13px;line-height:1.8;white-space:pre-wrap;margin-bottom:12px">${msg}</div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="navigator.clipboard.writeText(\`${msg.replace(/`/g,"'")}\`).then(()=>showMktToast('📋 Copied!'))">📋 Copy Message</button>
+        ${phone ? `<a href="https://wa.me/91${phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}" target="_blank" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">Open WhatsApp ↗</a>` : ''}
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+}
