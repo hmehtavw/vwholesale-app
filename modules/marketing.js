@@ -3564,16 +3564,18 @@ async function loadBlogList() {
     return;
   }
   el.innerHTML = '<div style="display:grid;gap:8px">' + posts.map(p=>`
-  <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:8px;padding:12px">
-    <div style="font-size:20px">${p.github_committed?'✅':'📝'}</div>
-    <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>
-      <div style="font-size:11px;color:var(--text3)">keyword: ${p.target_keyword||'—'} · ${p.word_count||0} words · ${p.status}</div>
-    </div>
-    <div style="display:flex;gap:6px;flex-shrink:0">
-      <button class="mkt-btn mkt-btn-ghost" onclick="viewBlogPost(${p.id})" style="font-size:10px;padding:3px 8px">👁 View</button>
-      ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id})" style="font-size:10px;padding:3px 8px">🚀 Publish</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">View Live ↗</a>`}
-      <button class="mkt-btn mkt-btn-ghost" onclick="deleteBlog(${p.id})" style="font-size:10px;padding:3px 8px;color:var(--red)">🗑</button>
+  <div style="background:var(--bg3);border-radius:10px;padding:12px;cursor:pointer" onclick="viewBlogPost(${p.id})" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='var(--bg3)'">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+      <div style="font-size:20px;margin-top:2px">${p.github_committed?'✅':'📝'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;margin-bottom:3px">${p.title}</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">🔑 ${p.target_keyword||'—'} · ${p.word_count||0} words · SEO ${p.seo_score||'—'}/100</div>
+        ${(p.tags||[]).length ? '<div style="display:flex;flex-wrap:wrap;gap:3px">' + (p.tags||[]).slice(0,5).map(t=>'<span class="badge badge-gray" style="font-size:9px">#'+t+'</span>').join('') + '</div>' : ''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
+        ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id})" style="font-size:10px;padding:3px 8px">🚀 Publish</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">Live ↗</a>`}
+        <button class="mkt-btn mkt-btn-ghost" onclick="deleteBlog(${p.id})" style="font-size:10px;padding:3px 8px;color:var(--red)">🗑</button>
+      </div>
     </div>
   </div>`).join('') + '</div>';
 }
@@ -3652,20 +3654,88 @@ async function generateBlogArticle() {
 async function viewBlogPost(id) {
   const {data:p} = await sb.from('blog_posts').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
   if (!p) return;
+
+  // Extract meta, keywords, hashtags from content
+  const metaMatch = (p.content_md||'').match(/<!--\s*meta:\s*(.+?)\s*-->/);
+  const kwMatch = (p.content_md||'').match(/<!--\s*keywords:\s*(.+?)\s*-->/);
+  const htMatch = (p.content_md||'').match(/<!--\s*hashtags:\s*(.+?)\s*-->/);
+  const imgMatch = (p.content_md||'').match(/!\[([^\]]+)\]\(([^)]+)\)/);
+
+  const metaDesc = metaMatch?.[1] || p.meta_description || '—';
+  const keywords = kwMatch?.[1]?.split(',').map(k=>k.trim()) || (p.tags||[]);
+  const hashtags = htMatch?.[1]?.split(' #').map(h=>h.replace(/^#/,'').trim()).filter(Boolean) || [];
+  const heroImg = imgMatch?.[2] || '';
+
+  // Clean content for display (remove comments)
+  const cleanContent = (p.content_md||'').replace(/<!--.*?-->/gs,'').trim();
+
   const m = document.createElement('div');
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
-  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:700px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-size:14px;font-weight:900;color:#fff">${p.title}</div>
-        <div style="font-size:11px;color:#64748b">keyword: ${p.target_keyword} · ${p.word_count} words · ${p.status}</div>
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:720px;overflow:hidden;margin-top:20px">
+
+    <!-- Header -->
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div style="flex:1">
+        <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:4px">${p.title}</div>
+        <div style="font-size:11px;color:#64748b">🔑 ${p.target_keyword} · ${p.word_count||0} words · SEO score: ${p.seo_score||'—'}/100 · ${p.status}</div>
       </div>
-      <div style="display:flex;gap:6px">
-        ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id});this.closest('[style*=fixed]').remove()" style="font-size:12px">🚀 Publish to vwholesale.in</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none">View Live ↗</a>`}
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        ${!p.github_committed
+          ? `<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id});this.closest('[style*=fixed]').remove()" style="font-size:12px">🚀 Publish to Blog</button>`
+          : `<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none">View Live ↗</a>`}
         <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
       </div>
     </div>
-    <div style="padding:20px;font-family:-apple-system,sans-serif;line-height:1.7;font-size:14px;max-height:70vh;overflow-y:auto;white-space:pre-wrap;color:var(--text1)">${p.content_md||'No content'}</div>
+
+    <div style="padding:16px;display:grid;gap:12px">
+
+      <!-- Hero Image -->
+      ${heroImg ? `<div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">📸 HERO IMAGE (from Pexels)</div>
+        <img src="${heroImg}" style="width:100%;border-radius:10px;max-height:220px;object-fit:cover" loading="lazy">
+      </div>` : `<div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text3);text-align:center">
+        No hero image — add PEXELS_API_KEY to Supabase secrets for auto stock photos
+      </div>`}
+
+      <!-- Meta Description -->
+      <div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">📄 META DESCRIPTION (${metaDesc.length} chars)</div>
+        <div style="font-size:13px;line-height:1.6">${metaDesc}</div>
+      </div>
+
+      <!-- Keywords -->
+      ${keywords.length ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">🔑 SEO KEYWORDS (${keywords.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${keywords.map(k=>`<span class="badge badge-blue">${k}</span>`).join('')}
+        </div>
+        <button onclick="navigator.clipboard.writeText('${keywords.join(', ')}').then(()=>showMktToast('Keywords copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:10px;margin-top:8px">📋 Copy Keywords</button>
+      </div>` : ''}
+
+      <!-- Hashtags -->
+      ${hashtags.length ? `<div style="background:var(--bg3);border-radius:8px;padding:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">#️⃣ HASHTAGS FOR SOCIAL (${hashtags.length})</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">
+          ${hashtags.map(h=>`<span class="badge badge-gray">#${h}</span>`).join('')}
+        </div>
+        <button onclick="navigator.clipboard.writeText('${hashtags.map(h=>'#'+h).join(' ')}').then(()=>showMktToast('Hashtags copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:10px;margin-top:8px">📋 Copy Hashtags</button>
+      </div>` : ''}
+
+      <!-- Article content -->
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">📝 ARTICLE CONTENT</div>
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;font-size:12px;line-height:1.8;white-space:pre-wrap;max-height:350px;overflow-y:auto;color:var(--text1)">${cleanContent}</div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(\`${cleanContent.replace(/`/g,"'")}\`).then(()=>showMktToast('Article copied!'))" style="flex:1">📋 Copy Article</button>
+        ${!p.github_committed
+          ? `<button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="publishBlog(${p.id});this.closest('[style*=fixed]').remove()">🚀 Publish to vwholesale.in</button>`
+          : `<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-primary" style="flex:1;text-decoration:none;text-align:center">🌐 View Live Article ↗</a>`}
+      </div>
+
+    </div>
   </div>`;
   document.body.appendChild(m);
   m.addEventListener('click',e=>{if(e.target===m)m.remove();});
