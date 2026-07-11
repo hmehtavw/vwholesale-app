@@ -3614,6 +3614,11 @@ function showNewBlogModal() {
         <label class="mkt-form-label">Target Keyword (what people Google to find this) *</label>
         <input id="blog-keyword" class="mkt-form-input" placeholder="e.g. bathroom tiles Vijayawada, granite price Andhra Pradesh">
       </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Your Ideas / Key Points to Include (optional)</label>
+        <textarea id="blog-ideas" class="mkt-form-input" rows="4" style="resize:vertical;font-size:12px;line-height:1.6" placeholder="e.g.&#10;- Mention that V Wholesale stocks 500+ tile designs&#10;- Include tips on choosing grout color&#10;- Talk about waterproofing importance&#10;- Mention our 10,000 sqft showroom on NH65&#10;- Include price range ₹30-150 per sqft"></textarea>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">💡 Add your expertise, specific product details, prices, or anything the AI should include</div>
+      </div>
       <button class="mkt-btn mkt-btn-primary" onclick="generateBlogArticle()" style="width:100%;padding:14px;font-size:14px;font-weight:900">🤖 Generate Article (~30 seconds)</button>
       <div id="blog-gen-status" style="display:none;text-align:center;padding:16px;color:var(--text3)"></div>
     </div>
@@ -3633,22 +3638,57 @@ function inferKeyword() {
 async function generateBlogArticle() {
   const title = (document.getElementById('blog-title')?.value||'').trim();
   const keyword = (document.getElementById('blog-keyword')?.value||'').trim();
-  if (!title || !keyword) { showMktToast('Enter title and keyword'); return; }
+  const ideas = (document.getElementById('blog-ideas')?.value||'').trim();
+
+  if (!title) { showMktToast('Enter an article title'); return; }
+  if (!keyword) { showMktToast('Enter a target keyword'); return; }
+
+  const btn = document.querySelector('[onclick="generateBlogArticle()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Writing article…'; }
 
   const status = document.getElementById('blog-gen-status');
-  if (status) { status.style.display='block'; status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><div style="margin-top:10px">AI writing your article… ~30 seconds</div>'; }
+  if (status) {
+    status.style.display = 'block';
+    status.innerHTML = '<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
+      + '<div style="margin-top:10px;font-size:13px">AI is writing your article…</div>'
+      + '<div style="font-size:11px;color:var(--text3);margin-top:4px">~30 seconds · 900-1100 words · hero image + keywords + hashtags</div>';
+  }
 
-  const res = await fetch(`${MKT_SB_URL}/functions/v1/write-blog-post`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body:JSON.stringify({title, target_keyword:keyword})
-  });
-  const data = await res.json();
-  if (!data.ok) { showMktToast('❌ '+data.error); if(status)status.style.display='none'; return; }
+  try {
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/write-blog-post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ title, target_keyword: keyword, ideas: ideas || null })
+    });
 
-  document.querySelector('[style*=fixed]')?.remove();
-  showMktToast('✅ Article written! Review and publish.');
-  await viewBlogPost(data.blog.id);
-  loadBlogList();
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Server error ${res.status}: ${errText.slice(0,100)}`);
+    }
+
+    const data = await res.json();
+
+    if (!data.ok) {
+      throw new Error(data.error || 'Generation failed');
+    }
+
+    if (!data.blog || !data.blog.id) {
+      throw new Error('Article saved but ID missing — check blog_posts table');
+    }
+
+    // Close modal
+    document.querySelector('[style*="position:fixed"][style*="z-index:9999"]')?.remove();
+    showMktToast('✅ Article written! ' + (data.word_count||0) + ' words · SEO score ' + (data.seo_score||0) + '/100');
+
+    await viewBlogPost(data.blog.id);
+    await loadBlogList();
+
+  } catch(e) {
+    showMktToast('❌ ' + (e.message || 'Generation failed'));
+    if (status) status.innerHTML = '<div style="color:var(--red);font-size:12px">❌ ' + (e.message||'Failed') + '</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🤖 Generate Article (~30 seconds)'; }
+  }
 }
 
 async function viewBlogPost(id) {
