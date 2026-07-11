@@ -1302,214 +1302,459 @@ async function rejectAction(id) {
 }
 
 // ── CONTENT CALENDAR ──
+// ── CONTENT CALENDAR — Monthly Planner ──
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth(); // 0-indexed
+let _calItems = [];
+let _calFestivals = [];
+
 async function renderCalendar() {
-  const { data: posts } = await sb.from('poster_history')
-    .select('*').order('created_at',{ascending:false}).limit(20)
-    .then(r=>r,()=>({data:[]}));
-
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0=Sun
-  const monday = new Date(today); monday.setDate(today.getDate() - (dayOfWeek===0?6:dayOfWeek-1));
-  const weekLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
-
-  // Scheduled slots for this week
-  const slots = [
-    { day:'Monday',    date: new Date(monday), type:'Project Proof',    icon:'🏠', hint:'Before/after tile installation photo from a recent job. Tag the customer (with permission).', lang:'te' },
-    { day:'Wednesday', date: new Date(monday), type:'Product / Offer',  icon:'📦', hint:'Spotlight a brand or product. Mention price range or any current offer.', lang:'en' },
-    { day:'Friday',    date: new Date(monday), type:'Contractor Club',  icon:'🏆', hint:'Recruit contractors. Mention 2% commission, Silver/Gold/Platinum tiers, WhatsApp to join.', lang:'te+en' },
-    { day:'Saturday',  date: new Date(monday), type:'Customer Story',   icon:'⭐', hint:'Happy customer quote or photo. Ask them to Google review V Wholesale.', lang:'te' },
-  ];
-  slots[0].date.setDate(monday.getDate() + 0);
-  slots[1].date.setDate(monday.getDate() + 2);
-  slots[2].date.setDate(monday.getDate() + 4);
-  slots[3].date.setDate(monday.getDate() + 5);
-
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">📅 Weekly Content Planner</h3>
-      <div style="font-size:12px;color:var(--text3)">Week of ${weekLabel} · Write copy → upload poster → copy & post manually</div>
+      <h3 style="font-size:16px;font-weight:900">📅 Content Calendar</h3>
+      <div style="font-size:12px;color:var(--text3)">Monthly planner — festivals, posts, reels, offers. Review every 15th.</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="mkt-btn mkt-btn-ghost" onclick="calPrevMonth()">← Prev</button>
+      <button class="mkt-btn mkt-btn-primary" id="cal-month-label" onclick="calGoToday()">This Month</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="calNextMonth()">Next →</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="showCalPlanModal()">🤖 AI Plan Month</button>
     </div>
   </div>
 
-  <!-- WEEKLY SLOTS -->
-  <div style="display:grid;gap:12px;margin-bottom:16px" id="cal-slots">
-    ${slots.map((s,i) => {
-      const dateStr = s.date.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
-      const isToday = s.date.toDateString() === today.toDateString();
-      const isPast  = s.date < today && !isToday;
-      return `
-      <div style="background:var(--bg2);border:1px solid ${isToday?'var(--gold)':'var(--border)'};border-radius:12px;overflow:hidden">
-        <!-- Slot header -->
-        <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:${isToday?'rgba(201,168,76,0.08)':'var(--bg3)'}">
-          <div style="font-size:22px">${s.icon}</div>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:900;color:${isToday?'var(--gold)':'var(--text)'}">${s.day} · ${dateStr}</div>
-            <div style="font-size:11px;color:var(--text3)">${s.type} · ${s.lang==='te'?'Telugu':s.lang==='en'?'English':'Telugu + English'}</div>
-          </div>
-          ${isPast?`<span style="font-size:10px;color:var(--text3);font-weight:600">PAST</span>`:''}
-          ${isToday?`<span style="background:var(--gold);color:#000;font-size:10px;font-weight:900;padding:2px 8px;border-radius:10px">TODAY</span>`:''}
-        </div>
-        <!-- Slot body -->
-        <div style="padding:14px 16px;display:grid;gap:10px">
-          <div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:8px 10px;border-radius:6px;line-height:1.5">
-            💡 ${s.hint}
-          </div>
-          <!-- Caption input -->
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">CAPTION / COPY</label>
-            <textarea id="cal-caption-${i}" rows="3" class="mkt-form-input" style="resize:vertical;font-size:12px;line-height:1.6"
-              placeholder="Write your post caption here... include emojis, call to action, and hashtags"></textarea>
-          </div>
-          <!-- Poster upload -->
-          <div style="display:flex;gap:8px;align-items:flex-start">
-            <div style="flex:1">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);display:block;margin-bottom:4px">POSTER IMAGE</label>
-              <input type="file" id="cal-img-${i}" accept="image/*" style="display:none" onchange="calPreviewImg(${i})">
-              <div id="cal-img-preview-${i}" onclick="document.getElementById('cal-img-${i}').click()"
-                style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;font-size:12px;color:var(--text3);min-height:60px;display:flex;align-items:center;justify-content:center;gap:8px"
-                onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
-                📎 Click to upload poster (JPG/PNG)
-              </div>
-            </div>
-          </div>
-          <!-- Action buttons -->
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="calCopyCaption(${i})">📋 Copy Caption</button>
-            <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="calDownloadImg(${i})">⬇ Download Poster</button>
-            <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="calSaveDraft(${i},'${s.type}','${s.lang}','${s.date.toISOString().slice(0,10)}')">💾 Save Draft</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
+  <!-- Month summary strip -->
+  <div id="cal-summary" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px"></div>
+
+  <!-- Calendar grid -->
+  <div class="mkt-card" style="padding:10px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px">
+      ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>'<div style="font-size:10px;font-weight:700;text-align:center;color:var(--text3);padding:4px">'+d+'</div>').join("")}
+    </div>
+    <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px"></div>
   </div>
 
-  <!-- SAVED DRAFTS -->
-  <div class="mkt-card" id="cal-drafts-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div class="mkt-card-title" style="margin:0">Saved Drafts & Posts</div>
-      <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="renderCalendar()">↺ Refresh</button>
-    </div>
-    <div id="cal-drafts">
-      ${(posts||[]).length === 0
-        ? `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">No drafts yet — save your first post above</div>`
-        : (posts||[]).map(p=>`
-          <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border)">
-            ${p.image_url
-              ? `<img src="${p.image_url}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0">`
-              : `<div style="width:48px;height:48px;background:var(--bg3);border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">🖼</div>`
-            }
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.topic||p.headline||'Draft'}</div>
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${p.template||'post'} · ${new Date(p.created_at).toLocaleDateString('en-IN')}</div>
-              ${p.caption?`<div style="font-size:11px;color:var(--text2);line-height:1.4">${p.caption.slice(0,90)}${p.caption.length>90?'…':''}</div>`:''}
-            </div>
-            <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-              ${p.caption?`<button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" onclick="navigator.clipboard.writeText(${JSON.stringify(p.caption)}).then(()=>showMktToast('📋 Copied!'))">📋 Copy</button>`:''}
-              ${p.image_url?`<a class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none" href="${p.image_url}" download="poster.png">⬇ Save</a>`:''}
-              <button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;color:var(--red)" onclick="calDeleteDraft(${p.id})">🗑</button>
-            </div>
-          </div>`).join('')
-      }
-    </div>
+  <!-- Day detail panel -->
+  <div id="cal-day-panel" style="display:none"></div>
+
+  <!-- Upcoming reels shooting plan -->
+  <div class="mkt-card" style="margin-bottom:14px" id="cal-reel-panel">
+    <div class="mkt-card-title">🎬 Reel Shooting Plan</div>
+    <div id="cal-reels" style="font-size:12px;color:var(--text3);text-align:center;padding:16px">Loading…</div>
   </div>
 
-  <!-- QUICK POSTING GUIDE -->
-  <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">📲 How to Post (Manual Flow)</div>
-    <div style="display:grid;gap:6px">
-      ${[
-        ['1','Download the poster image using ⬇ Download Poster'],
-        ['2','Copy the caption using 📋 Copy Caption'],
-        ['3','Open Instagram → + New Post → select the poster image'],
-        ['4','Paste the caption, add location: V Wholesale Vijayawada'],
-        ['5','For GBP: Google Business → Add Update → paste caption + image'],
-        ['6','For WhatsApp: Open Broadcast list → paste caption + image'],
-      ].map(([n,t])=>`
-      <div style="display:flex;gap:10px;align-items:center;padding:8px;background:var(--bg3);border-radius:6px">
-        <span style="width:20px;height:20px;border-radius:50%;background:var(--gold);color:#000;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">${n}</span>
-        <span style="font-size:12px;color:var(--text2)">${t}</span>
-      </div>`).join('')}
+  <!-- 15th Review reminder -->
+  <div class="mkt-card" id="cal-review-reminder" style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);display:none">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">📋</div>
+      <div>
+        <div style="font-size:13px;font-weight:900;color:var(--gold)">Monthly Content Review — 15th</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Today is the 15th — review next month\'s topics and freeze the plan before AI generates all content.</div>
+        <button class="mkt-btn mkt-btn-primary" onclick="showMonthReview()" style="margin-top:8px;font-size:12px">Start Review →</button>
+      </div>
     </div>
-  </div>
-  `);
-}
+  </div>`);
 
-// ── Calendar helpers ──
-function calPreviewImg(i) {
-  const file = document.getElementById(`cal-img-${i}`)?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const el = document.getElementById(`cal-img-preview-${i}`);
-    if (el) el.innerHTML = `<img src="${e.target.result}" style="max-height:80px;border-radius:6px;object-fit:contain">`;
-  };
-  reader.readAsDataURL(file);
-}
-
-function calCopyCaption(i) {
-  const txt = document.getElementById(`cal-caption-${i}`)?.value?.trim();
-  if (!txt) { showMktToast('Write a caption first'); return; }
-  navigator.clipboard.writeText(txt).then(() => showMktToast('📋 Caption copied!'));
-}
-
-function calDownloadImg(i) {
-  const file = document.getElementById(`cal-img-${i}`)?.files?.[0];
-  if (!file) { showMktToast('Upload a poster image first'); return; }
-  const url = URL.createObjectURL(file);
-  const a = document.createElement('a');
-  a.href = url; a.download = `vwholesale-poster-${Date.now()}.png`; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-async function calSaveDraft(i, type, lang, dateStr) {
-  const caption = document.getElementById(`cal-caption-${i}`)?.value?.trim();
-  const file    = document.getElementById(`cal-img-${i}`)?.files?.[0];
-  if (!caption && !file) { showMktToast('Add a caption or image first'); return; }
-
-  let image_url = null;
-  if (file) {
-    try {
-      await sb.storage.createBucket('brand-assets', { public: true }).catch(()=>{});
-      const fname = `posters/${Date.now()}-${type.replace(/\W/g,'_').slice(0,20)}.png`;
-      const { error } = await sb.storage.from('brand-assets').upload(fname, file, { contentType: file.type, upsert: true });
-      if (!error) {
-        const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(fname);
-        image_url = urlData?.publicUrl || null;
-      }
-    } catch(e) { console.warn('Upload failed:', e.message); }
+  // Show 15th review reminder if today is 14-16
+  const todayDate = new Date().getDate();
+  if (todayDate >= 14 && todayDate <= 16) {
+    document.getElementById("cal-review-reminder").style.display = "block";
   }
 
-  const { error } = await sb.from('poster_history').insert({
-    topic: type,
-    template: type.toLowerCase().replace(/\W/g,'_').slice(0,20),
-    language: lang,
-    caption,
-    image_url,
-    status: 'draft',
-    created_by: mktProfile?.name,
-    created_at: new Date(dateStr).toISOString()
+  await loadCalendar();
+}
+
+async function loadCalendar() {
+  const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN", {month:"long", year:"numeric"});
+  const btn = document.getElementById("cal-month-label");
+  if (btn) btn.textContent = monthName;
+
+  // Load from DB
+  const firstDay = `${_calYear}-${String(_calMonth+1).padStart(2,"0")}-01`;
+  const lastDay  = `${_calYear}-${String(_calMonth+1).padStart(2,"0")}-${new Date(_calYear,_calMonth+1,0).getDate()}`;
+
+  const [{data:items},{data:festivals}] = await Promise.all([
+    sb.from("content_calendar").select("*").gte("cal_date",firstDay).lte("cal_date",lastDay).order("cal_date",{ascending:true}).then(r=>r,()=>({data:[]})),
+    sb.from("festival_calendar").select("*").gte("festival_date",firstDay).lte("festival_date",lastDay).then(r=>r,()=>({data:[]}))
+  ]);
+
+  _calItems = items || [];
+  _calFestivals = festivals || [];
+
+  renderCalGrid();
+  renderCalSummary();
+  renderCalReels();
+}
+
+function renderCalGrid() {
+  const grid = document.getElementById("cal-grid");
+  if (!grid) return;
+
+  const firstDay = new Date(_calYear, _calMonth, 1).getDay();
+  const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+  const today = new Date();
+
+  let html = "";
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) {
+    html += `<div style="min-height:64px"></div>`;
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = `${_calYear}-${String(_calMonth+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const dayItems = _calItems.filter(i => i.cal_date === dateStr);
+    const dayFests = _calFestivals.filter(f => f.festival_date === dateStr);
+    const isToday = today.getFullYear()===_calYear && today.getMonth()===_calMonth && today.getDate()===d;
+    const isReel = dayItems.some(i=>i.is_reel);
+    const hasFest = dayFests.length > 0;
+    const allDone = dayItems.length > 0 && dayItems.every(i=>i.status==="published");
+    const hasDraft = dayItems.some(i=>["planned","scripted","ready"].includes(i.status));
+
+    const bg = isToday ? "rgba(201,168,76,0.15)" : "var(--bg3)";
+    const border = isToday ? "1px solid var(--gold)" : hasFest ? "1px solid rgba(139,92,246,0.4)" : "1px solid var(--border)";
+
+    html += `<div onclick="calSelectDay(${d},'${dateStr}')" style="min-height:64px;background:${bg};border:${border};border-radius:6px;padding:4px;cursor:pointer;position:relative" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='${isToday?'var(--gold)':hasFest?'rgba(139,92,246,0.4)':'var(--border)'}'">
+      <div style="font-size:11px;font-weight:${isToday?'900':'600'};color:${isToday?'var(--gold)':'var(--text1)'};">${d}</div>
+      ${hasFest ? `<div style="font-size:9px;color:#8b5cf6;line-height:1.2;margin-top:1px;overflow:hidden;max-height:20px">${dayFests[0].festival_name.slice(0,14)}</div>` : ''}
+      ${dayItems.slice(0,2).map(i=>`<div style="font-size:9px;padding:1px 3px;border-radius:3px;margin-top:1px;background:${i.status==='published'?'rgba(34,197,94,0.2)':i.status==='ready'?'rgba(59,130,246,0.2)':'rgba(201,168,76,0.15)'};color:${i.status==='published'?'#22c55e':i.status==='ready'?'#3b82f6':'var(--gold)'};overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${i.content_type==='reel'?'🎬':i.is_festival?'🎉':'📝'} ${(i.title||i.topic||'').slice(0,12)}</div>`).join('')}
+      ${dayItems.length > 2 ? `<div style="font-size:9px;color:var(--text3)">+${dayItems.length-2} more</div>` : ''}
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function renderCalSummary() {
+  const el = document.getElementById("cal-summary");
+  if (!el) return;
+  const total = _calItems.length;
+  const published = _calItems.filter(i=>i.status==="published").length;
+  const reels = _calItems.filter(i=>i.is_reel).length;
+  const festivals = _calFestivals.length;
+  const planned = _calItems.filter(i=>i.status==="planned").length;
+
+  el.innerHTML = [
+    {icon:"📝", label:"Total Posts", val:total},
+    {icon:"✅", label:"Published", val:published},
+    {icon:"🎬", label:"Reels", val:reels},
+    {icon:"🎉", label:"Festivals", val:festivals},
+    {icon:"📋", label:"Planned", val:planned}
+  ].map(m=>`<div class="mkt-card" style="padding:10px;text-align:center">
+    <div style="font-size:18px">${m.icon}</div>
+    <div style="font-size:18px;font-weight:900;margin:2px 0">${m.val}</div>
+    <div style="font-size:10px;color:var(--text3)">${m.label}</div>
+  </div>`).join("");
+}
+
+function renderCalReels() {
+  const el = document.getElementById("cal-reels");
+  if (!el) return;
+  const reels = _calItems.filter(i=>i.is_reel).sort((a,b)=>a.cal_date.localeCompare(b.cal_date));
+  if (!reels.length) {
+    el.innerHTML = `<div style="text-align:center;color:var(--text3)">No reels planned this month — use AI Plan Month to generate the schedule</div>`;
+    return;
+  }
+  el.innerHTML = `<div style="font-size:12px;color:var(--text2);margin-bottom:10px">📌 Schedule a cameraman for these dates</div>
+  <div style="display:grid;gap:6px">` +
+  reels.map(r=>`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">
+    <div style="font-size:20px">🎬</div>
+    <div style="flex:1">
+      <div style="font-size:12px;font-weight:700">${r.topic||r.title||"Reel"}</div>
+      <div style="font-size:11px;color:var(--text3)">${new Date(r.cal_date).toLocaleDateString("en-IN",{weekday:"short",day:"numeric",month:"short"})}</div>
+      ${r.reel_script ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${r.reel_script.slice(0,80)}…</div>` : ""}
+    </div>
+    <span class="badge ${r.status==="published"?"badge-green":r.status==="ready"?"badge-blue":"badge-gray"}">${r.status}</span>
+  </div>`).join("") + "</div>";
+}
+
+function calSelectDay(d, dateStr) {
+  const panel = document.getElementById("cal-day-panel");
+  if (!panel) return;
+  const dayItems = _calItems.filter(i=>i.cal_date===dateStr);
+  const dayFests = _calFestivals.filter(f=>f.festival_date===dateStr);
+  const dateLabel = new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+
+  panel.style.display = "block";
+  panel.innerHTML = `<div class="mkt-card" style="margin-bottom:14px;border:1px solid var(--gold)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:900">${dateLabel}</div>
+      <div style="display:flex;gap:6px">
+        <button class="mkt-btn mkt-btn-primary" onclick="showAddCalItem('${dateStr}')" style="font-size:11px">+ Add Post</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('cal-day-panel').style.display='none'" style="font-size:11px">✕</button>
+      </div>
+    </div>
+    ${dayFests.map(f=>`<div style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700;color:#8b5cf6">🎉 ${f.festival_name}</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">${f.description||""}</div>
+      ${(f.content_ideas||[]).length?`<div style="font-size:11px;color:var(--text2);margin-top:4px">Ideas: ${f.content_ideas.join(" · ")}</div>`:""}
+      <button class="mkt-btn mkt-btn-ghost" onclick="addFestivalPost('${dateStr}','${f.festival_name.replace(/'/g,"\'")}','${(f.content_ideas||[])[0]||""}')" style="font-size:10px;margin-top:6px">+ Create Festival Post</button>
+    </div>`).join("")}
+    ${dayItems.length===0&&dayFests.length===0?`<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">No content planned — click + Add Post</div>`:""}
+    <div style="display:grid;gap:8px">
+      ${dayItems.map(item=>`<div style="background:var(--bg3);border-radius:8px;padding:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:16px">${item.is_reel?"🎬":item.is_festival?"🎉":"📝"}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:700">${item.title||item.topic||"Post"}</div>
+            <div style="font-size:11px;color:var(--text3)">${item.content_type} · ${(item.platform||[]).join(", ")||"—"}</div>
+          </div>
+          <span class="badge ${item.status==="published"?"badge-green":item.status==="ready"?"badge-blue":item.status==="scripted"?"badge-blue":"badge-gray"}">${item.status}</span>
+        </div>
+        ${item.topic?`<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${item.topic}</div>`:""}
+        ${item.reel_script?`<div style="font-size:11px;background:var(--bg2);border-radius:6px;padding:8px;white-space:pre-wrap;margin-bottom:6px;line-height:1.5">${item.reel_script}</div>`:""}
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mkt-btn mkt-btn-primary" onclick="generateCalItemContent(${item.id})" style="font-size:10px;padding:3px 8px">🤖 Generate Content</button>
+          <button class="mkt-btn mkt-btn-ghost" onclick="updateCalStatus(${item.id},'${item.status}')" style="font-size:10px;padding:3px 8px">
+            ${item.status==="planned"?"✏️ Mark Scripted":item.status==="scripted"?"✅ Mark Ready":item.status==="ready"?"📤 Mark Published":"✓ Done"}
+          </button>
+          <button class="mkt-btn mkt-btn-ghost" onclick="deleteCalItem(${item.id})" style="font-size:10px;padding:3px 8px;color:var(--red)">🗑</button>
+        </div>
+      </div>`).join("")}
+    </div>
+  </div>`;
+  panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function showAddCalItem(dateStr) {
+  const m = document.createElement("div");
+  m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto";
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">+ Add Post — ${new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:10px">
+      <div class="mkt-form-group"><label class="mkt-form-label">Content Type</label>
+        <select id="ci-type" class="mkt-form-select">
+          <option value="post">📝 Post (Photo/Graphic)</option>
+          <option value="reel">🎬 Reel (Video)</option>
+          <option value="story">💫 Story</option>
+          <option value="festival">🎉 Festival Post</option>
+          <option value="offer">💰 Offer / Promotion</option>
+          <option value="gbp">📍 GBP Update</option>
+          <option value="blog">📄 Blog Article</option>
+        </select></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Title / Topic *</label>
+        <input id="ci-topic" class="mkt-form-input" placeholder="e.g. Kajaria Premium Tiles — Monsoon Special"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Platforms</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${["Instagram","Facebook","WhatsApp","GBP","YouTube","X"].map(p=>`<label style="font-size:11px;background:var(--bg3);padding:4px 8px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" value="${p}" ${["Instagram","Facebook"].includes(p)?"checked":""}> ${p}</label>`).join("")}
+        </div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="mkt-form-group"><label class="mkt-form-label">Priority</label>
+          <select id="ci-priority" class="mkt-form-select"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></div>
+        <div class="mkt-form-group" style="display:flex;align-items:center;gap:8px;padding-top:20px">
+          <label style="font-size:12px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="ci-reel"> Is a Reel shoot</label>
+        </div>
+      </div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Notes (optional)</label>
+        <input id="ci-notes" class="mkt-form-input" placeholder="Any specific instructions or ideas"></div>
+      <button class="mkt-btn mkt-btn-primary" onclick="saveCalItem('${dateStr}')" style="width:100%">Save to Calendar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener("click", e=>{if(e.target===m)m.remove();});
+}
+
+async function saveCalItem(dateStr) {
+  const topic = (document.getElementById("ci-topic")?.value||"").trim();
+  if (!topic) { showMktToast("Enter a topic"); return; }
+  const type = document.getElementById("ci-type")?.value||"post";
+  const platforms = [...document.querySelectorAll('[style*="fixed"] input[type=checkbox]:checked')].map(cb=>cb.value).filter(v=>["Instagram","Facebook","WhatsApp","GBP","YouTube","X"].includes(v));
+  const isReel = document.getElementById("ci-reel")?.checked||false;
+
+  await sb.from("content_calendar").insert({
+    cal_date: dateStr, content_type: type, topic, title: topic,
+    platform: platforms, is_reel: isReel,
+    priority: document.getElementById("ci-priority")?.value||"normal",
+    notes: document.getElementById("ci-notes")?.value||null,
+    status: "planned", created_by: mktProfile?.name
   });
 
-  if (error) { showMktToast('Save failed: ' + error.message); return; }
-  showMktToast('✅ Draft saved!');
-  // Clear the slot
-  const capEl = document.getElementById(`cal-caption-${i}`);
-  if (capEl) capEl.value = '';
-  const prevEl = document.getElementById(`cal-img-preview-${i}`);
-  if (prevEl) prevEl.innerHTML = '📎 Click to upload poster (JPG/PNG)';
-  renderCalendar();
+  document.querySelector("[style*=fixed]")?.remove();
+  showMktToast("✅ Added to calendar");
+  await loadCalendar();
+  calSelectDay(parseInt(dateStr.split("-")[2]), dateStr);
 }
 
-async function calDeleteDraft(id) {
-  if (!confirm('Delete this draft?')) return;
-  await sb.from('poster_history').delete().eq('id', id);
-  showMktToast('Deleted');
-  renderCalendar();
+async function addFestivalPost(dateStr, festName, idea) {
+  await sb.from("content_calendar").insert({
+    cal_date: dateStr, content_type: "festival",
+    title: festName, topic: idea || festName,
+    festival_name: festName, is_festival: true,
+    platform: ["Instagram","Facebook","GBP"],
+    status: "planned", priority: "high",
+    created_by: mktProfile?.name
+  });
+  showMktToast("✅ Festival post added");
+  await loadCalendar();
+  calSelectDay(parseInt(dateStr.split("-")[2]), dateStr);
+}
+
+async function updateCalStatus(id, current) {
+  const next = {planned:"scripted", scripted:"ready", ready:"published", published:"planned"}[current]||"scripted";
+  await sb.from("content_calendar").update({status:next, updated_at:new Date().toISOString()}).eq("id",id);
+  showMktToast(`Status → ${next}`);
+  await loadCalendar();
+}
+
+async function deleteCalItem(id) {
+  if (!confirm("Remove this from calendar?")) return;
+  await sb.from("content_calendar").delete().eq("id",id);
+  showMktToast("Removed");
+  await loadCalendar();
+}
+
+async function generateCalItemContent(id) {
+  const {data:item} = await sb.from("content_calendar").select("*").eq("id",id).single().then(r=>r,()=>({data:null}));
+  if (!item) return;
+  showMktToast("🤖 Generating content…");
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+    method:"POST", headers:{"Content-Type":"application/json","apikey":MKT_SB_KEY},
+    body:JSON.stringify({
+      task: item.is_reel ? "reel_script" : "social_post",
+      platform: (item.platform||["Instagram"])[0],
+      language: "te+en", topic: item.topic||item.title,
+      context:{business:"V Wholesale",location:"Vijayawada",type:item.content_type,festival:item.festival_name}
+    })
+  });
+  const data = await res.json();
+  const content = data.content||data.text||"";
+  if (!content) { showMktToast("❌ Failed"); return; }
+
+  const update = item.is_reel
+    ? {reel_script: content, status:"scripted"}
+    : {caption: content, status:"scripted"};
+  await sb.from("content_calendar").update({...update, updated_at:new Date().toISOString()}).eq("id",id);
+  showMktToast("✅ Content generated");
+  await loadCalendar();
+}
+
+function calPrevMonth() { if (_calMonth === 0) { _calMonth=11; _calYear--; } else { _calMonth--; } loadCalendar(); }
+function calNextMonth() { if (_calMonth === 11) { _calMonth=0; _calYear++; } else { _calMonth++; } loadCalendar(); }
+function calGoToday() { _calYear=new Date().getFullYear(); _calMonth=new Date().getMonth(); loadCalendar(); }
+
+function showCalPlanModal() {
+  const m = document.createElement("div");
+  m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN",{month:"long",year:"numeric"});
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">🤖 AI Plan — ${monthName}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+      <div style="font-size:13px;color:var(--text2);line-height:1.6">AI will create a complete month plan including:
+        <ul style="margin:8px 0 0 16px;font-size:12px;color:var(--text3)">
+          <li>Posts every Mon/Wed/Fri + weekend</li>
+          <li>Reel on every 3rd day</li>
+          <li>Festival posts auto-added</li>
+          <li>Mix of product, offer, contractor, story content</li>
+        </ul>
+      </div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Focus for this month (optional)</label>
+        <input id="plan-focus" class="mkt-form-input" placeholder="e.g. Push tiles + monsoon bathroom, Contractor Club recruitment"></div>
+      <button class="mkt-btn mkt-btn-primary" onclick="runAIMonthPlan()" style="width:100%;padding:12px;font-size:14px;font-weight:900">🚀 Generate Month Plan</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener("click",e=>{if(e.target===m)m.remove();});
+}
+
+async function runAIMonthPlan() {
+  const focus = (document.getElementById("plan-focus")?.value||"").trim();
+  document.querySelector("[style*=fixed]")?.remove();
+  showMktToast("🤖 Planning the month… this takes ~20 seconds");
+
+  const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN",{month:"long",year:"numeric"});
+  const daysInMonth = new Date(_calYear, _calMonth+1, 0).getDate();
+  const festivalsThisMonth = _calFestivals.map(f=>f.festival_name).join(", ");
+
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+    method:"POST", headers:{"Content-Type":"application/json","apikey":MKT_SB_KEY},
+    body:JSON.stringify({
+      task:"month_plan", language:"en",
+      topic:`Content plan for ${monthName}`,
+      context:{
+        business:"V Wholesale", location:"Vijayawada, Andhra Pradesh",
+        month: monthName, days_in_month: daysInMonth,
+        festivals: festivalsThisMonth||"none this month",
+        focus: focus||"balanced mix of product showcase, offers, contractor club, customer stories",
+        categories:"Tiles, Granite, Marble, Sanitaryware, Bathroom Fittings, Paints, Electricals, Flooring",
+        posting_days:"Mon Wed Fri every week, Sat optional, Reel every 3rd day",
+        reel_note:"Manually shot by Himansu/staff — just plan topics and scripts"
+      }
+    })
+  });
+  const data = await res.json();
+  const plan = data.content||data.text||"";
+
+  // Show plan as a readable modal
+  const modal = document.createElement("div");
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center";
+  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:600px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">📋 ${monthName} Plan</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Review this plan. Add individual items to calendar using + Add Post on each day, or auto-import below.</div>
+      <div style="background:var(--bg3);border-radius:8px;padding:14px;font-size:12px;line-height:1.8;white-space:pre-wrap;max-height:400px;overflow-y:auto">${plan}</div>
+      <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent).then(()=>showMktToast('Copied!'))" style="width:100%;margin-top:10px">📋 Copy Plan</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click",e=>{if(e.target===modal)modal.remove();});
+}
+
+function showMonthReview() {
+  const nextMonth = new Date(_calYear, _calMonth+1, 1);
+  const nextMonthName = nextMonth.toLocaleString("en-IN",{month:"long",year:"numeric"});
+  const m = document.createElement("div");
+  m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">📋 15th Review — Plan ${nextMonthName}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+      <div style="font-size:13px;line-height:1.6;color:var(--text2)">
+        You are reviewing content for <strong>${nextMonthName}</strong>.<br>
+        Answer these questions then click Generate Plan.
+      </div>
+      <div class="mkt-form-group"><label class="mkt-form-label">1. What products/brands to push next month?</label>
+        <input id="rev-products" class="mkt-form-input" placeholder="e.g. Asian Paints new range, Italian Marble, Somany tiles"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">2. Any offers or promotions planned?</label>
+        <input id="rev-offers" class="mkt-form-input" placeholder="e.g. 15% off sanitaryware, free delivery above 50K"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">3. Reel topics (3 reels per month, every 3rd day)</label>
+        <input id="rev-reels" class="mkt-form-input" placeholder="e.g. Showroom walkthrough, Tile laying timelapse, Customer testimonial"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">4. Any special events or launches?</label>
+        <input id="rev-events" class="mkt-form-input" placeholder="e.g. New brand launch, Contractor Club meet, Store anniversary"></div>
+      <button class="mkt-btn mkt-btn-primary" onclick="generateReviewPlan('${nextMonthName}')" style="width:100%;padding:12px;font-weight:900">🚀 Generate ${nextMonthName} Plan</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener("click",e=>{if(e.target===m)m.remove();});
+}
+
+async function generateReviewPlan(monthName) {
+  const products = document.getElementById("rev-products")?.value||"";
+  const offers = document.getElementById("rev-offers")?.value||"";
+  const reels = document.getElementById("rev-reels")?.value||"";
+  const events = document.getElementById("rev-events")?.value||"";
+  document.querySelector("[style*=fixed]")?.remove();
+
+  _calMonth = _calMonth === 11 ? 0 : _calMonth + 1;
+  if (_calMonth === 0) _calYear++;
+  await loadCalendar();
+  showCalPlanModal();
+  setTimeout(()=>{
+    const fi = document.getElementById("plan-focus");
+    if (fi) fi.value = [products,offers,reels,events].filter(Boolean).join(" | ");
+  },300);
 }
 
 
-// ── ANALYTICS ──
 async function renderAnalytics() {
   const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
   const totalCost = (runs||[]).reduce((s,r)=>s+(r.cost_usd||0),0);
@@ -3850,7 +4095,7 @@ async function generateGreetingPoster(name, type, personType) {
     <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px;font-size:13px;line-height:1.7">${data.caption||''}</div>
     <div style="display:flex;gap:8px">
       <button class="mkt-btn mkt-btn-primary" onclick="downloadGreetingPoster('${data.image_b64.slice(0,20)}...')">⬇ Download</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(\`${(data.caption||'').replace(/`/g,"'")}\`).then(()=>showMktToast('Copied!'))">📋 Copy Caption</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="copyPosterCaption('Copied!'))">📋 Copy Caption</button>)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;margin-top:8px">📋 Copy Caption</button>
     </div>
   </div>`;
 
@@ -3900,7 +4145,7 @@ async function generateGreetingMessage(name, type, phone) {
     <div style="padding:16px">
       <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:13px;line-height:1.8;white-space:pre-wrap;margin-bottom:12px">${msg}</div>
       <div style="display:flex;gap:8px">
-        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="navigator.clipboard.writeText(\`${msg.replace(/`/g,"'")}\`).then(()=>showMktToast('📋 Copied!'))">📋 Copy Message</button>
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="copyGreetMsg(this)" data-msg="${msg.replace(/"/g,'&quot;')}">📋 Copy Message</button>
         ${phone ? `<a href="https://wa.me/91${phone.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}" target="_blank" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">Open WhatsApp ↗</a>` : ''}
       </div>
     </div>
@@ -3908,3 +4153,5 @@ async function generateGreetingMessage(name, type, phone) {
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
 }
+
+function copyGreetMsg(btn) { navigator.clipboard.writeText(btn.dataset.msg||"").then(()=>showMktToast("📋 Copied!")); }
