@@ -3479,43 +3479,217 @@ async function generateLocalKeywords() {
 }
 
 function renderWebsiteSEO() {
-  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">🌐 Website SEO</h3>'
-    +'<div style="font-size:12px;color:var(--text3)">vwholesale.in · Blog Engine · Keywords · Backlinks</div></div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">⚙️ Technical SEO Status — vwholesale.in</div><div style="display:grid;gap:6px">'
-    +[{t:'HTTPS — vwholesale.in secured',done:true},
-      {t:'sitemap.xml submitted to Google Search Console',done:true},
-      {t:'robots.txt configured (blocks staff/admin/marketing)',done:true},
-      {t:'Google Search Console verified',done:true},
-      {t:'GBP website URL updated to vwholesale.in',done:true},
-      {t:'Meta description on all pages',done:false},
-      {t:'LocalBusiness schema markup on homepage',done:false},
-      {t:'Blog section /blog/ with SEO articles',done:false},
-      {t:'Page speed < 3 seconds on mobile',done:false},
-      {t:'Product pages with structured data',done:false}
-     ].map(item=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">'
-      +'<div style="width:18px;height:18px;border-radius:4px;background:'+(item.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">'+(item.done?'✓':'')+'</div>'
-      +'<div style="font-size:12px;'+(item.done?'color:var(--text3);text-decoration:line-through':'')+'">'+ item.t+'</div></div>'
-     ).join('')
-    +'</div></div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">📝 AI Blog Article Generator</div>'
-    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate SEO-optimised blog articles for vwholesale.in/blog/ — targeting Andhra Pradesh home building searches</div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Blog Topic</label>'
-    +'<input id="blog-topic" class="mkt-form-input" placeholder="e.g. How to choose bathroom tiles for Indian homes, Best granite for kitchen countertops Vijayawada"></div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Target Keyword</label>'
-    +'<input id="blog-kw" class="mkt-form-input" placeholder="e.g. bathroom tiles price Vijayawada"></div>'
-    +'<button class="mkt-btn mkt-btn-primary" onclick="generateBlogOutline()" style="width:100%;margin-bottom:10px">🤖 Generate Blog Outline + SEO Brief</button>'
-    +'<div id="blog-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7;max-height:300px;overflow-y:auto"></div></div>'
-    +'<div class="mkt-card"><div class="mkt-card-title">🔗 Useful SEO Tools</div><div style="display:grid;gap:6px">'
-    +[{n:'Google Search Console',url:'https://search.google.com/search-console'},
-      {n:'Google PageSpeed Insights',url:'https://pagespeed.web.dev/?url=https://vwholesale.in'},
-      {n:'Google Rich Results Test',url:'https://search.google.com/test/rich-results'},
-      {n:'Ahrefs Free Tools',url:'https://ahrefs.com/free-seo-tools'},
-      {n:'Schema Markup Generator',url:'https://technicalseo.com/tools/schema-markup-generator/'}
-     ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px">'
-      +'<div style="font-size:12px;font-weight:600">'+d.n+'</div>'
-      +'<a href="'+d.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none">Open ↗</a></div>'
-     ).join('')+'</div></div>');
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">🌐 Website SEO + Blog Engine</h3>
+    <div style="font-size:12px;color:var(--text3)">vwholesale.in · AI-written SEO articles · Published automatically</div></div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showNewBlogModal()">✍️ Write Article</button>
+  </div>
+
+  <!-- SEO Status -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
+    ${[
+      {icon:'✅',label:'HTTPS',val:'Live',color:'var(--green)'},
+      {icon:'🗺️',label:'Sitemap',val:'Submitted',color:'var(--green)'},
+      {icon:'🤖',label:'robots.txt',val:'Active',color:'var(--green)'},
+      {icon:'🔍',label:'Search Console',val:'Verified',color:'var(--green)'},
+      {icon:'📝',label:'/blog/',val:'Live',color:'var(--green)'}
+    ].map(m=>'<div class="mkt-card" style="padding:10px;text-align:center"><div style="font-size:18px">'+m.icon+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+m.color+'">'+m.val+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.label+'</div></div>').join('')}
+  </div>
+
+  <!-- Blog articles list -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="mkt-card-title" style="margin:0">📝 Blog Articles</div>
+      <div style="display:flex;gap:6px">
+        <a href="https://vwholesale.in/blog/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none">View Blog ↗</a>
+        <button class="mkt-btn mkt-btn-primary" onclick="showNewBlogModal()" style="font-size:11px">✍️ New Article</button>
+      </div>
+    </div>
+    <div id="blog-list"><div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div></div>
+  </div>
+
+  <!-- SEO Checklist -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">📋 SEO Checklist</div>
+    <div style="display:grid;gap:6px">
+      ${[
+        {t:'HTTPS secured — vwholesale.in',done:true},
+        {t:'sitemap.xml submitted to Google Search Console',done:true},
+        {t:'robots.txt configured',done:true},
+        {t:'GBP website updated to vwholesale.in',done:true},
+        {t:'Blog section /blog/ live and crawlable',done:true},
+        {t:'Write 4+ blog articles (target: 1 per week)',done:false},
+        {t:'Add LocalBusiness schema markup to homepage',done:false},
+        {t:'Meta descriptions on all main pages',done:false},
+        {t:'Page speed < 3s on mobile (check PageSpeed Insights)',done:false},
+        {t:'10+ blog articles published for keyword coverage',done:false},
+        {t:'Backlinks from local directories (Justdial, IndiaMart)',done:false}
+      ].map(item=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">'
+        +'<div style="width:18px;height:18px;border-radius:4px;background:'+(item.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">'+(item.done?'✓':'')+'</div>'
+        +'<div style="font-size:12px;'+(item.done?'color:var(--text3);text-decoration:line-through':'')+'">'+item.t+'</div></div>').join('')}
+    </div>
+  </div>
+
+  <!-- Tools -->
+  <div class="mkt-card">
+    <div class="mkt-card-title">🔗 SEO Tools</div>
+    <div style="display:grid;gap:6px">
+      ${[
+        {n:'Google Search Console',url:'https://search.google.com/search-console/about?resource_id=https%3A%2F%2Fvwholesale.in%2F'},
+        {n:'Google PageSpeed Insights',url:'https://pagespeed.web.dev/?url=https://vwholesale.in'},
+        {n:'View vwholesale.in Blog',url:'https://vwholesale.in/blog/'},
+        {n:'Rich Results Test',url:'https://search.google.com/test/rich-results?url=https://vwholesale.in'},
+        {n:'Ahrefs Free Backlink Checker',url:'https://ahrefs.com/backlink-checker?input=vwholesale.in'}
+      ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px">'
+        +'<div style="font-size:12px;font-weight:600">'+d.n+'</div>'
+        +'<a href="'+d.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none">Open ↗</a></div>').join('')}
+    </div>
+  </div>`);
+
+  loadBlogList();
 }
+
+async function loadBlogList() {
+  const el = document.getElementById('blog-list');
+  if (!el) return;
+  const { data: posts } = await sb.from('blog_posts').select('*').order('created_at',{ascending:false}).limit(20).then(r=>r,()=>({data:[]}));
+  if (!(posts||[]).length) {
+    el.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3)">
+      <div style="font-size:32px;margin-bottom:8px">📝</div>
+      No articles yet — click ✍️ Write Article to generate your first SEO blog post with AI.
+    </div>`;
+    return;
+  }
+  el.innerHTML = '<div style="display:grid;gap:8px">' + posts.map(p=>`
+  <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:8px;padding:12px">
+    <div style="font-size:20px">${p.github_committed?'✅':'📝'}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>
+      <div style="font-size:11px;color:var(--text3)">keyword: ${p.target_keyword||'—'} · ${p.word_count||0} words · ${p.status}</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <button class="mkt-btn mkt-btn-ghost" onclick="viewBlogPost(${p.id})" style="font-size:10px;padding:3px 8px">👁 View</button>
+      ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id})" style="font-size:10px;padding:3px 8px">🚀 Publish</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">View Live ↗</a>`}
+      <button class="mkt-btn mkt-btn-ghost" onclick="deleteBlog(${p.id})" style="font-size:10px;padding:3px 8px;color:var(--red)">🗑</button>
+    </div>
+  </div>`).join('') + '</div>';
+}
+
+function showNewBlogModal() {
+  const topics = [
+    'Best tiles for Indian bathrooms — buying guide',
+    'How to choose granite countertops for kitchen in Andhra Pradesh',
+    'Vitrified vs ceramic tiles — which is better for Indian homes',
+    'Italian marble flooring — cost and maintenance guide Vijayawada',
+    'Best paint brands in India for exterior walls — 2026 guide',
+    'Bathroom fittings buying guide — what to look for',
+    'False ceiling materials and costs — complete guide',
+    'How to choose floor tiles for your living room in Vijayawada'
+  ];
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">✍️ Write SEO Blog Article</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;background:var(--bg3);border-radius:8px;padding:10px">
+        🤖 AI will write a complete 800-1000 word SEO article targeting your keyword. Review it, then click Publish to add it live to vwholesale.in/blog/
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Article Title *</label>
+        <input id="blog-title" class="mkt-form-input" placeholder="e.g. Best tiles for Indian bathrooms — buying guide">
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">Suggested topics:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">
+          ${topics.map(t=>`<button onclick="document.getElementById('blog-title').value='${t}';inferKeyword()" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:2px 6px">${t.slice(0,30)}…</button>`).join('')}
+        </div>
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Target Keyword (what people Google to find this) *</label>
+        <input id="blog-keyword" class="mkt-form-input" placeholder="e.g. bathroom tiles Vijayawada, granite price Andhra Pradesh">
+      </div>
+      <button class="mkt-btn mkt-btn-primary" onclick="generateBlogArticle()" style="width:100%;padding:14px;font-size:14px;font-weight:900">🤖 Generate Article (~30 seconds)</button>
+      <div id="blog-gen-status" style="display:none;text-align:center;padding:16px;color:var(--text3)"></div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+}
+
+function inferKeyword() {
+  const title = document.getElementById('blog-title')?.value||'';
+  const kw = document.getElementById('blog-keyword');
+  if (kw && !kw.value && title) {
+    kw.value = title.toLowerCase().replace(/[^a-z0-9 ]/g,'').replace(/\s+/g,' ').trim().slice(0,60);
+  }
+}
+
+async function generateBlogArticle() {
+  const title = (document.getElementById('blog-title')?.value||'').trim();
+  const keyword = (document.getElementById('blog-keyword')?.value||'').trim();
+  if (!title || !keyword) { showMktToast('Enter title and keyword'); return; }
+
+  const status = document.getElementById('blog-gen-status');
+  if (status) { status.style.display='block'; status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><div style="margin-top:10px">AI writing your article… ~30 seconds</div>'; }
+
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/write-blog-post`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({title, target_keyword:keyword})
+  });
+  const data = await res.json();
+  if (!data.ok) { showMktToast('❌ '+data.error); if(status)status.style.display='none'; return; }
+
+  document.querySelector('[style*=fixed]')?.remove();
+  showMktToast('✅ Article written! Review and publish.');
+  await viewBlogPost(data.blog.id);
+  loadBlogList();
+}
+
+async function viewBlogPost(id) {
+  const {data:p} = await sb.from('blog_posts').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (!p) return;
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:700px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:14px;font-weight:900;color:#fff">${p.title}</div>
+        <div style="font-size:11px;color:#64748b">keyword: ${p.target_keyword} · ${p.word_count} words · ${p.status}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id});this.closest('[style*=fixed]').remove()" style="font-size:12px">🚀 Publish to vwholesale.in</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none">View Live ↗</a>`}
+        <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+      </div>
+    </div>
+    <div style="padding:20px;font-family:-apple-system,sans-serif;line-height:1.7;font-size:14px;max-height:70vh;overflow-y:auto;white-space:pre-wrap;color:var(--text1)">${p.content_md||'No content'}</div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+}
+
+async function publishBlog(id) {
+  showMktToast('🚀 Publishing to vwholesale.in/blog/…');
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/write-blog-post`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({action:'commit', blog_id:id})
+  });
+  const data = await res.json();
+  if (!data.ok) { showMktToast('❌ '+data.error); return; }
+  showMktToast('✅ Published! Live at '+data.url);
+  loadBlogList();
+}
+
+async function deleteBlog(id) {
+  if (!confirm('Delete this article?')) return;
+  await sb.from('blog_posts').delete().eq('id',id);
+  showMktToast('Deleted');
+  loadBlogList();
+}
+
 async function generateBlogOutline() {
   const topic = (document.getElementById('blog-topic')?.value||'').trim();
   const kw = (document.getElementById('blog-kw')?.value||'').trim();
@@ -3526,6 +3700,8 @@ async function generateBlogOutline() {
   const out = document.getElementById('blog-output');
   if (out) { out.style.display='block'; out.textContent=data.content||data.text||''; }
 }
+
+
 
 function renderReviews() {
   setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">⭐ Reviews & Q&A</h3>'
