@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home Building Tips & Guides | V Wholesale Blog — Vijayawada</title>
+  <meta name="description" content="Expert guides on tiles, granite, sanitaryware, paints and home building materials. Tips from Vijayawada's premier home building store.">
+  <link rel="canonical" href="https://vwholesale.in/blog/">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; }
+    header { background: #0A1628; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+    header a { color: #c9a84c; font-weight: 900; font-size: 18px; text-decoration: none; }
+    header span { color: #64748b; font-size: 13px; }
+    nav { background: #1e293b; padding: 10px 20px; }
+    nav a { color: #94a3b8; text-decoration: none; font-size: 13px; margin-right: 16px; }
+    nav a:hover { color: #c9a84c; }
+    .hero { background: linear-gradient(135deg, #0A1628, #1e293b); color: #fff; padding: 48px 20px; text-align: center; }
+    .hero h1 { font-size: 28px; font-weight: 900; margin-bottom: 10px; }
+    .hero p { color: #94a3b8; font-size: 15px; max-width: 500px; margin: 0 auto; }
+    .container { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
+    .blog-grid { display: grid; gap: 20px; }
+    .blog-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); border: 1px solid #e2e8f0; }
+    .blog-card-body { padding: 20px; }
+    .blog-tag { display: inline-block; background: rgba(201,168,76,.1); color: #c9a84c; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+    .blog-card h2 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+    .blog-card h2 a { color: #1e293b; text-decoration: none; }
+    .blog-card h2 a:hover { color: #c9a84c; }
+    .blog-card p { font-size: 13px; color: #64748b; line-height: 1.6; margin-bottom: 12px; }
+    .blog-meta { font-size: 11px; color: #94a3b8; }
+    .read-more { display: inline-block; margin-top: 12px; color: #c9a84c; font-size: 13px; font-weight: 700; text-decoration: none; }
+    footer { background: #0A1628; color: #64748b; text-align: center; padding: 24px; font-size: 12px; margin-top: 40px; }
+    footer a { color: #c9a84c; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">V Wholesale</a>
+    <span>Home Building & Improvement Store — Vijayawada</span>
+  </header>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/blog/">Blog</a>
+    <a href="/staff/">Staff Portal</a>
+    <a href="tel:+918712697930">📞 8712697930</a>
+  </nav>
+  <div class="hero">
+    <h1>Home Building Tips & Guides</h1>
+    <p>Expert advice on tiles, granite, sanitaryware, paints and more from Vijayawada's most complete home building store.</p>
+  </div>
+  <div class="container">
+    <div class="blog-grid" id="blog-list">
+      <div style="text-align:center;padding:40px;color:#94a3b8">Loading articles…</div>
+    </div>
+  </div>
+  <footer>
+    <p>© 2026 V Wholesale — NH65, Bhavanipuram, Vijayawada | <a href="tel:+918712697930">8712697930</a> | <a href="/">vwholesale.in</a></p>
+  </footer>
+  <script>
+    // Load blog posts from GitHub API
+    fetch('https://api.github.com/repos/hmehtavw/vwholesale-app/contents/blog', {
+      headers: { 'Accept': 'application/vnd.github.v3+json' }
+    })
+    .then(r => r.json())
+    .then(files => {
+      if (!Array.isArray(files) || files.length === 0) {
+        document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">No articles yet. Check back soon!</div>';
+        return;
+      }
+      const mdFiles = files.filter(f => f.name.endsWith('.md') && f.name !== 'README.md');
+      if (!mdFiles.length) {
+        document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">No articles yet. Check back soon!</div>';
+        return;
+      }
+      // Fetch each file to get metadata
+      Promise.all(mdFiles.map(f => fetch(f.download_url).then(r => r.text()).then(md => {
+        const titleMatch = md.match(/^#\s+(.+)$/m);
+        const metaMatch = md.match(/<!--\s*meta:\s*(.+?)\s*-->/);
+        const slug = f.name.replace('.md', '');
+        return {
+          slug,
+          title: titleMatch?.[1] || slug.replace(/-/g, ' '),
+          meta: metaMatch?.[1] || 'Read our expert guide on home building materials.',
+          date: f.last_modified || new Date().toLocaleDateString('en-IN')
+        };
+      }))).then(posts => {
+        document.getElementById('blog-list').innerHTML = posts.map(p => `
+          <div class="blog-card">
+            <div class="blog-card-body">
+              <span class="blog-tag">HOME BUILDING</span>
+              <h2><a href="/blog/${p.slug}/">${p.title}</a></h2>
+              <p>${p.meta}</p>
+              <span class="blog-meta">By V Wholesale Team · Vijayawada</span>
+              <br><a href="/blog/${p.slug}/" class="read-more">Read Article →</a>
+            </div>
+          </div>`).join('');
+      });
+    })
+    .catch(() => {
+      document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Unable to load articles. Please try again later.</div>';
+    });
+  </script>
+</body>
+</html>
