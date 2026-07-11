@@ -3100,59 +3100,254 @@ function copyXPost() {
 }
 
 function renderWhatsApp() {
-  setContent(_comingSoonCard('💬','WhatsApp Automation',
-    'Interakt-powered flows for broadcasts, chatbot FAQ, order updates and personalised greetings.',
-    [{icon:'📢',title:'Broadcast Campaigns',desc:'Send offers to segmented customer lists'},
-     {icon:'🤖',title:'FAQ Chatbot',desc:'Auto-reply to common questions 24/7'},
-     {icon:'🛒',title:'Order Updates',desc:'Quotation ready, order confirmed, delivery scheduled'},
-     {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto personalised wishes with offer code'},
-     {icon:'📊',title:'Message Analytics',desc:'Delivered, read, replied rates per campaign'}],
-    'Coming soon — complete Interakt setup first'));
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💬 WhatsApp Automation</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">Broadcasts · Chatbot · Greetings via Interakt</div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">⚙️ Setup Checklist</div><div style="display:grid;gap:8px">'
+    +[{step:'Create Interakt account at interakt.ai', url:'https://app.interakt.ai', done:false},
+      {step:'Connect WhatsApp Business number', url:'https://app.interakt.ai', done:false},
+      {step:'Get WABA approved by Meta (2-3 days)', url:'https://app.interakt.ai', done:false},
+      {step:'Add INTERAKT_API_KEY to Supabase secrets', url:'MKT_SB_URL+"/settings/vault"', done:false},
+      {step:'Create message templates in Interakt', url:'https://app.interakt.ai', done:false}
+     ].map((s,i)=>'<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px">'
+      +'<div style="width:24px;height:24px;border-radius:50%;background:'+(s.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">'+(s.done?'✓':(i+1))+'</div>'
+      +'<div style="flex:1;font-size:12px">'+s.step+'</div>'
+      +'<a href="'+s.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">Open ↗</a></div>'
+     ).join('')+'</div></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">📨 Manual Message Generator</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Type</label>'
+    +'<select id="wa-type" class="mkt-form-select">'
+    +'<option value="offer">Festival / Seasonal Offer</option>'
+    +'<option value="product">New Product Arrival</option>'
+    +'<option value="contractor">Contractor Club Invite</option>'
+    +'<option value="followup">Customer Follow-up</option></select></div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Key Details</label>'
+    +'<input id="wa-details" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles till Sunday"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateWAMessage()" style="width:100%;margin-bottom:10px">🤖 Generate Message</button>'
+    +'<div id="wa-output" style="display:none"><div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">'
+    +'<div id="wa-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="copyWAMessage()" style="width:100%">📋 Copy Message</button></div></div>');
 }
+async function generateWAMessage() {
+  const type = document.getElementById('wa-type')?.value||'offer';
+  const details = (document.getElementById('wa-details')?.value||'').trim();
+  showMktToast('🤖 Writing message…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'whatsapp_message',platform:'WhatsApp',language:'te+en',topic:type+(details?' — '+details:''),context:{business:'V Wholesale',location:'Vijayawada'}})});
+  const data = await res.json();
+  const content = data.content||data.text||'';
+  if (!content) { showMktToast('❌ Failed'); return; }
+  document.getElementById('wa-output').style.display='block';
+  document.getElementById('wa-content').textContent=content;
+}
+function copyWAMessage() { navigator.clipboard.writeText(document.getElementById('wa-content')?.textContent||'').then(()=>showMktToast('📋 Copied!')); }
 
 function renderAds() {
-  setContent(_comingSoonCard('💰','Paid Advertising',
-    'Google Ads and Meta Ads managed from one dashboard. AI suggests budgets, audiences and creatives.',
-    [{icon:'🔍',title:'Google Search Ads',desc:'Target tiles Vijayawada, granite near me, bathroom fittings'},
-     {icon:'📍',title:'Google Local Ads',desc:'Dominate local map pack for home building searches'},
-     {icon:'🎯',title:'Meta Ads (FB + IG)',desc:'Lookalike audiences from your 1,300+ customer base'},
-     {icon:'🤖',title:'AI Creative Testing',desc:'Auto A/B test which poster performs best per audience'},
-     {icon:'📊',title:'Unified ROI Dashboard',desc:'Cost per lead, ROAS across all platforms in one view'}],
-    'Coming soon — after social publishing is live'));
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💰 Paid Advertising</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">Google Ads · Meta Ads · Budget ₹30,000/month</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+    +[{l:'Monthly Budget',v:'₹30,000',i:'💰'},{l:'Google',v:'₹18,000',i:'🔍'},{l:'Meta (FB+IG)',v:'₹12,000',i:'🎯'}]
+    .map(m=>'<div class="mkt-card" style="padding:12px;text-align:center"><div style="font-size:20px">'+m.i+'</div>'
+      +'<div style="font-size:16px;font-weight:900;margin:4px 0">'+m.v+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.l+'</div></div>').join('')
+    +'</div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🔍 Google Ads (₹18,000/mo)</div>'
+    +'<div style="display:grid;gap:8px">'
+    +[{t:'Search Ads — ₹10,000',d:'tiles Vijayawada, granite price near me, bathroom fittings shop, flooring store Andhra Pradesh',note:'High intent buyers actively searching'},
+      {t:'Local/Maps Ads — ₹5,000',d:'Appears in Google Maps when someone searches near NH65 / Bhavanipuram area',note:'Drives direct store walk-ins'},
+      {t:'Display Retargeting — ₹3,000',d:'Re-shows ads to people who visited vwholesale.in but did not buy',note:'Low cost, high conversion'}
+     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+a.d+'</div>'
+      +'<div style="font-size:11px;color:var(--gold)">💡 '+a.note+'</div></div>').join('')
+    +'</div><a href="https://ads.google.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Google Ads ↗</a></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Meta Ads — Facebook + Instagram (₹12,000/mo)</div>'
+    +'<div style="display:grid;gap:8px">'
+    +[{t:'Reels Boost — ₹4,000',d:'Boost your best Reels to homeowners 28-55 within 50km of Vijayawada'},
+      {t:'Lookalike Audience — ₹5,000',d:'Upload 1,300 customer list → Meta finds 50,000+ similar people in Andhra Pradesh'},
+      {t:'Retargeting — ₹3,000',d:'Re-target people who visited vwholesale.in or engaged with your Instagram'}
+     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+a.d+'</div></div>').join('')
+    +'</div><a href="https://business.facebook.com/adsmanager" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Meta Ads Manager ↗</a></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">🤖 AI Ad Copy Generator</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Product / Focus</label>'
+    +'<input id="ads-topic" class="mkt-form-input" placeholder="e.g. Italian marble tiles, monsoon bathroom renovation"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateAdCopy()" style="width:100%;margin-bottom:10px">Generate Ad Copy + Keywords</button>'
+    +'<div id="ads-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7"></div></div>');
+}
+async function generateAdCopy() {
+  const topic = (document.getElementById('ads-topic')?.value||'').trim();
+  if (!topic) { showMktToast('Enter a topic'); return; }
+  showMktToast('🤖 Generating ad copy…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'ad_copy',language:'en',topic,context:{business:'V Wholesale',location:'Vijayawada, Andhra Pradesh',budget_inr:30000}})});
+  const data = await res.json();
+  const out = document.getElementById('ads-output');
+  if (out) { out.style.display='block'; out.textContent=data.content||data.text||'No output'; }
 }
 
 function renderLocalSEO() {
-  setContent(_comingSoonCard('📍','Local SEO',
-    'Dominate "tiles near me", "granite Vijayawada", "bathroom fittings NH65" on Google Maps and organic.',
-    [{icon:'⭐',title:'GBP Optimisation',desc:'Categories, attributes, photos, Q&A, weekly posts — all here'},
-     {icon:'🔑',title:'Local Keyword Tracker',desc:'Daily rank tracking for your top 20 local search terms'},
-     {icon:'📝',title:'Citation Builder',desc:'NAP consistency across Justdial, IndiaMart, Sulekha, Yellow Pages'},
-     {icon:'🗺️',title:'Map Pack Monitor',desc:'Track position in Google Maps 3-pack daily'},
-     {icon:'🔗',title:'Local Backlinks',desc:'AI identifies local directories and news sites to list on'}],
-    'Coming soon — after blog section is built'));
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">📍 Local SEO</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">Dominate Google Maps · Local Search · Near Me queries</div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Target Keywords (Vijayawada)</div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
+    +['tiles near me Vijayawada','granite price Vijayawada','bathroom fittings NH65','flooring shop Andhra Pradesh',
+      'sanitaryware showroom Vijayawada','paint shop Bhavanipuram','home building materials Vijayawada',
+      'Kajaria tiles dealer near me','Italian marble Vijayawada','contractor materials supply Vijayawada'
+     ].map(k=>'<span class="badge badge-blue">'+k+'</span>').join('')
+    +'</div>'
+    +'<button class="mkt-btn mkt-btn-ghost" onclick="generateLocalKeywords()" style="font-size:11px">🤖 Generate More Keywords</button>'
+    +'<div id="local-kw-output" style="display:none;margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px;font-size:12px"></div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">📋 Local SEO Checklist</div><div style="display:grid;gap:6px">'
+    +[{t:'GBP — Business name, address, phone exactly matching everywhere',done:true},
+      {t:'GBP — Add all product categories (Tiles, Granite, Sanitaryware, Paints, Electricals)',done:true},
+      {t:'GBP — Post weekly (using GBP Post Generator in this portal)',done:false},
+      {t:'GBP — Upload 20+ photos of showroom and products',done:false},
+      {t:'GBP — Answer all Q&A questions',done:false},
+      {t:'Justdial — Create/claim listing with correct NAP',done:false},
+      {t:'IndiaMart — Supplier profile with product catalogue',done:false},
+      {t:'Sulekha — Business listing',done:false},
+      {t:'vwholesale.in — Add LocalBusiness schema markup',done:false},
+      {t:'Get 5+ customer reviews on GBP this month',done:false}
+     ].map(item=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">'
+      +'<div style="width:18px;height:18px;border-radius:4px;background:'+(item.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">'+(item.done?'✓':'')+'</div>'
+      +'<div style="font-size:12px;'+(item.done?'color:var(--text3);text-decoration:line-through':'')+'">'+ item.t+'</div></div>'
+     ).join('')
+    +'</div></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">📁 Directory Links</div>'
+    +'<div style="display:grid;gap:8px">'
+    +[{n:'Google Business Profile',url:'https://business.google.com'},
+      {n:'Justdial',url:'https://www.justdial.com/vap/jd-biz/'},
+      {n:'IndiaMart',url:'https://seller.indiamart.com'},
+      {n:'Sulekha',url:'https://www.sulekha.com/business/add-business'},
+      {n:'Yellow Pages India',url:'https://www.yellowpages.in/add-business'}
+     ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:600">'+d.n+'</div>'
+      +'<a href="'+d.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none">Open ↗</a></div>'
+     ).join('')+'</div></div>');
+}
+async function generateLocalKeywords() {
+  showMktToast('🤖 Finding local keywords…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'local_keywords',language:'en',topic:'local SEO keywords',context:{business:'V Wholesale',location:'Vijayawada, Andhra Pradesh, NH65, Bhavanipuram',categories:'tiles, granite, sanitaryware, paints, electricals'}})});
+  const data = await res.json();
+  const out = document.getElementById('local-kw-output');
+  if (out) { out.style.display='block'; out.textContent=data.content||data.text||''; }
 }
 
 function renderWebsiteSEO() {
-  setContent(_comingSoonCard('🌐','Website SEO',
-    'Full SEO engine for vwholesale.in — blog automation, keyword planning, technical audit and backlinks.',
-    [{icon:'📝',title:'AI Blog Engine',desc:'Monthly plan → AI writes articles → auto-published to /blog/ on vwholesale.in'},
-     {icon:'🔑',title:'Keyword Planner',desc:'Low-competition, high-intent keywords for tiles, granite, sanitaryware in Andhra'},
-     {icon:'⚙️',title:'Technical SEO Audit',desc:'Page speed, meta tags, schema, sitemap — weekly scan'},
-     {icon:'🔗',title:'Backlink Campaign',desc:'AI identifies guest post and PR opportunities monthly'},
-     {icon:'📊',title:'Search Console Live',desc:'Impressions, clicks, avg position per page — direct from GSC'}],
-    'Coming soon — Blog section build next'));
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">🌐 Website SEO</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">vwholesale.in · Blog Engine · Keywords · Backlinks</div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">⚙️ Technical SEO Status — vwholesale.in</div><div style="display:grid;gap:6px">'
+    +[{t:'HTTPS — vwholesale.in secured',done:true},
+      {t:'sitemap.xml submitted to Google Search Console',done:true},
+      {t:'robots.txt configured (blocks staff/admin/marketing)',done:true},
+      {t:'Google Search Console verified',done:true},
+      {t:'GBP website URL updated to vwholesale.in',done:true},
+      {t:'Meta description on all pages',done:false},
+      {t:'LocalBusiness schema markup on homepage',done:false},
+      {t:'Blog section /blog/ with SEO articles',done:false},
+      {t:'Page speed < 3 seconds on mobile',done:false},
+      {t:'Product pages with structured data',done:false}
+     ].map(item=>'<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px">'
+      +'<div style="width:18px;height:18px;border-radius:4px;background:'+(item.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0">'+(item.done?'✓':'')+'</div>'
+      +'<div style="font-size:12px;'+(item.done?'color:var(--text3);text-decoration:line-through':'')+'">'+ item.t+'</div></div>'
+     ).join('')
+    +'</div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">📝 AI Blog Article Generator</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate SEO-optimised blog articles for vwholesale.in/blog/ — targeting Andhra Pradesh home building searches</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Blog Topic</label>'
+    +'<input id="blog-topic" class="mkt-form-input" placeholder="e.g. How to choose bathroom tiles for Indian homes, Best granite for kitchen countertops Vijayawada"></div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Target Keyword</label>'
+    +'<input id="blog-kw" class="mkt-form-input" placeholder="e.g. bathroom tiles price Vijayawada"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateBlogOutline()" style="width:100%;margin-bottom:10px">🤖 Generate Blog Outline + SEO Brief</button>'
+    +'<div id="blog-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7;max-height:300px;overflow-y:auto"></div></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">🔗 Useful SEO Tools</div><div style="display:grid;gap:6px">'
+    +[{n:'Google Search Console',url:'https://search.google.com/search-console'},
+      {n:'Google PageSpeed Insights',url:'https://pagespeed.web.dev/?url=https://vwholesale.in'},
+      {n:'Google Rich Results Test',url:'https://search.google.com/test/rich-results'},
+      {n:'Ahrefs Free Tools',url:'https://ahrefs.com/free-seo-tools'},
+      {n:'Schema Markup Generator',url:'https://technicalseo.com/tools/schema-markup-generator/'}
+     ].map(d=>'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:600">'+d.n+'</div>'
+      +'<a href="'+d.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none">Open ↗</a></div>'
+     ).join('')+'</div></div>');
+}
+async function generateBlogOutline() {
+  const topic = (document.getElementById('blog-topic')?.value||'').trim();
+  const kw = (document.getElementById('blog-kw')?.value||'').trim();
+  if (!topic) { showMktToast('Enter a blog topic'); return; }
+  showMktToast('🤖 Generating blog outline…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'blog_outline',language:'en',topic,context:{business:'V Wholesale',location:'Vijayawada, Andhra Pradesh',target_keyword:kw,categories:'tiles, granite, sanitaryware, paints, electricals'}})});
+  const data = await res.json();
+  const out = document.getElementById('blog-output');
+  if (out) { out.style.display='block'; out.textContent=data.content||data.text||''; }
 }
 
 function renderReviews() {
-  setContent(_comingSoonCard('⭐','Reviews & Q&A Automation',
-    'All reviews in one inbox. AI drafts replies. 4-5★ auto-approved. 1-3★ requires admin approval.',
-    [{icon:'👁️',title:'Review Monitor',desc:'GBP, Facebook, Instagram, Justdial, IndiaMart, WhatsApp — one inbox'},
-     {icon:'🤖',title:'AI Reply Drafts',desc:'4-5★: warm reply drafted. 1-3★: escalation draft for manager approval'},
-     {icon:'✅',title:'One-Click Approve & Post',desc:'Any admin approves → reply posts directly to the platform'},
-     {icon:'❓',title:'FAQ Automation',desc:'Common questions auto-answered on WhatsApp, website chatbot, Instagram DM'},
-     {icon:'📊',title:'Reputation Score',desc:'Avg rating trend, response rate, sentiment — week on week'}],
-    'Coming soon — after social publishing is live'));
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">⭐ Reviews & Q&A</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">AI drafts replies · 4-5★ auto-approve · Manual review for 1-3★</div></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🤖 AI Review Reply Generator</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Paste a review → AI drafts the perfect reply → copy and post on GBP, Facebook, etc.</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Platform</label>'
+    +'<select id="rev-platform" class="mkt-form-select">'
+    +'<option>Google Business Profile</option><option>Facebook</option><option>Instagram</option>'
+    +'<option>Justdial</option><option>IndiaMart</option></select></div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Star Rating</label>'
+    +'<select id="rev-stars" class="mkt-form-select"><option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>'
+    +'<option value="4">⭐⭐⭐⭐ 4 Stars</option><option value="3">⭐⭐⭐ 3 Stars</option>'
+    +'<option value="2">⭐⭐ 2 Stars</option><option value="1">⭐ 1 Star</option></select></div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Customer Review Text</label>'
+    +'<textarea id="rev-text" class="mkt-form-input" rows="3" style="height:80px;resize:vertical" placeholder="Paste the customer review here…"></textarea></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateReviewReply()" style="width:100%;margin-bottom:10px">🤖 Generate Reply</button>'
+    +'<div id="rev-output" style="display:none">'
+    +'<div id="rev-flag" style="display:none;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px;margin-bottom:8px;font-size:12px;color:#ef4444"></div>'
+    +'<div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">'
+    +'<div id="rev-reply" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="copyReviewReply()" style="flex:1">📋 Copy Reply</button>'
+    +'<a href="https://business.google.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">Open GBP ↗</a>'
+    +'</div></div></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">❓ FAQ Auto-Reply Generator</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate standard answers to common questions — use in WhatsApp auto-reply, website chatbot, Instagram DM.</div>'
+    +'<div style="display:grid;gap:6px;margin-bottom:12px">'
+    +['What are your store timings?','Where is your store located?','What brands of tiles do you stock?',
+      'Do you offer home delivery?','What is the price of Italian marble?','Do you give discounts for bulk orders?',
+      'Are you open on Sundays?','Do you have a showroom?'
+     ].map(q=>'<div style="display:flex;justify-content:space-between;align-items:center;background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px">'+q+'</div>'
+      +'<button class="mkt-btn mkt-btn-ghost" onclick="generateFAQAnswer(this)" data-q="'+q+'" style="font-size:10px;padding:3px 8px">Answer</button></div>'
+     ).join('')
+    +'</div>'
+    +'<div id="faq-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px">'
+    +'<div id="faq-q" style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px"></div>'
+    +'<div id="faq-a" style="font-size:12px;line-height:1.7;white-space:pre-wrap"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="copyFAQ()" style="margin-top:8px;width:100%">📋 Copy Answer</button>'
+    +'</div></div>');
 }
+async function generateReviewReply() {
+  const stars = parseInt(document.getElementById('rev-stars')?.value||'5');
+  const text = (document.getElementById('rev-text')?.value||'').trim();
+  const platform = document.getElementById('rev-platform')?.value||'Google Business Profile';
+  if (!text) { showMktToast('Paste the review text'); return; }
+  showMktToast('🤖 Drafting reply…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'review_reply',language:'en',topic:'review reply',context:{stars,platform,review_text:text,business:'V Wholesale',location:'Vijayawada'}})});
+  const data = await res.json();
+  const reply = data.content||data.text||'';
+  document.getElementById('rev-output').style.display='block';
+  document.getElementById('rev-reply').textContent=reply;
+  const flag = document.getElementById('rev-flag');
+  if (stars <= 3) { flag.style.display='block'; flag.textContent='⚠️ '+stars+'-star review — please review the reply carefully before posting. Consider calling the customer directly first.'; }
+  else { flag.style.display='none'; }
+}
+function copyReviewReply() { navigator.clipboard.writeText(document.getElementById('rev-reply')?.textContent||'').then(()=>showMktToast('📋 Copied!')); }
+async function generateFAQAnswer(btn) {
+  const q = btn.dataset.q;
+  showMktToast('🤖 Generating answer…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'faq_answer',language:'te+en',topic:'FAQ answer',context:{question:q,business:'V Wholesale',location:'NH65, Bhavanipuram, Vijayawada',timings:'10am-8pm Mon-Sat, 11am-6pm Sun',phone:'8712697930',website:'vwholesale.in'}})});
+  const data = await res.json();
+  document.getElementById('faq-output').style.display='block';
+  document.getElementById('faq-q').textContent='Q: '+q;
+  document.getElementById('faq-a').textContent=data.content||data.text||'';
+}
+function copyFAQ() { const t=(document.getElementById('faq-q')?.textContent||'')+'\n'+(document.getElementById('faq-a')?.textContent||''); navigator.clipboard.writeText(t).then(()=>showMktToast('📋 Copied!')); }
 
 async function renderCompetitors() {
   setContent(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -3380,16 +3575,68 @@ async function viewFullReport(compId, compName) {
   m.addEventListener('click', e => { if(e.target===m) m.remove(); });
 }
 
-function renderSegments() {
-  setContent(_comingSoonCard('👥','Customer Segments',
-    'Slice your 1,300+ customer base into smart segments for targeted campaigns and personalised offers.',
-    [{icon:'🏗️',title:'By Project Type',desc:'Residential, commercial, renovation — target content accordingly'},
-     {icon:'💰',title:'By Spend Band',desc:'₹50K–2L, ₹2L–10L, ₹10L+ — different offers for different budgets'},
-     {icon:'📅',title:'By Last Visit',desc:'Re-engage customers who haven\'t visited in 60/90/180 days'},
-     {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto-trigger personalised offers 7 days before special dates'},
-     {icon:'🏆',title:'Contractor Club Tier',desc:'Silver, Gold, Platinum — tier-specific campaigns and rewards'}],
-    'Coming soon — Greetings engine build next'));
+async function renderSegments() {
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">👥 Customer Segments</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">Smart segments from your 1,300+ customer base</div></div>'
+    +'<div id="seg-stats"><div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div></div>');
+  await loadSegments();
 }
+async function loadSegments() {
+  const el = document.getElementById('seg-stats');
+  if (!el) return;
+  const [{data:customers},{data:contractors}] = await Promise.all([
+    sb.from('profiles').select('role,created_at',{count:'exact'}).in('role',['customer']).then(r=>r,()=>({data:[],count:0})),
+    sb.from('profiles').select('role',{count:'exact'}).eq('role','contractor').then(r=>r,()=>({data:[],count:0}))
+  ]);
+  const total = (customers||[]).length + (contractors||[]).length;
+
+  el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px">'
+    +[{l:'Total Customers',v:total||'1,300+',i:'👥'},{l:'Contractors',v:(contractors||[]).length||'—',i:'🏗️'},
+      {l:'With Birthday Data',v:'—',i:'🎂'},{l:'Active (last 90 days)',v:'—',i:'📅'}
+     ].map(m=>'<div class="mkt-card" style="padding:12px;text-align:center"><div style="font-size:20px">'+m.i+'</div>'
+      +'<div style="font-size:18px;font-weight:900;margin:4px 0">'+m.v+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.l+'</div></div>').join('')
+    +'</div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">📋 Segment Definitions</div><div style="display:grid;gap:8px">'
+    +[{icon:'💎',name:'High Value',desc:'Spent ₹10L+ lifetime · Priority for new arrivals + exclusive previews',color:'#c9a84c'},
+      {icon:'🏗️',name:'Active Contractors',desc:'Contractor Club members · Targeted for bulk offers + referral rewards',color:'#8b5cf6'},
+      {icon:'🏠',name:'Homeowners',desc:'Single large project · Target for tile/granite/bathroom complete packages',color:'#22c55e'},
+      {icon:'😴',name:'Dormant (90+ days)',desc:'Haven\'t visited in 3+ months · Re-engage with special return offer',color:'#f59e0b'},
+      {icon:'🆕',name:'New Customers',desc:'First purchase in last 30 days · Nurture with follow-up and next-buy offer',color:'#64748b'},
+      {icon:'🎂',name:'Birthday This Month',desc:'Auto-generate personalised greeting + exclusive birthday offer',color:'#ef4444'}
+     ].map(seg=>'<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:8px;padding:12px">'
+      +'<div style="font-size:22px">'+seg.icon+'</div>'
+      +'<div style="flex:1"><div style="font-size:12px;font-weight:700;color:'+seg.color+'">'+seg.name+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+seg.desc+'</div></div>'
+      +'<button class="mkt-btn mkt-btn-ghost" data-seg="'+seg.name+'" onclick="pickSegment(this.dataset.seg)" style="font-size:10px;padding:3px 8px">Message</button></div>'
+     ).join('')
+    +'</div></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">🤖 Segment Message Generator</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-bottom:10px">Click "Message" on any segment above, or type a custom segment below.</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Segment</label><input id="seg-name" class="mkt-form-input" placeholder="e.g. Dormant customers, High Value contractors"></div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Offer / Hook</label><input id="seg-offer" class="mkt-form-input" placeholder="e.g. 15% off this weekend only, Free delivery above ₹50K"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateSegMsg()" style="width:100%;margin-bottom:10px">🤖 Generate Campaign Message</button>'
+    +'<div id="seg-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px">'
+    +'<div id="seg-msg" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="copySegMsg()" style="margin-top:8px;width:100%">📋 Copy</button></div></div>';
+}
+
+function pickSegment(name) {
+  const el = document.getElementById('seg-name');
+  if (el) { el.value = name; el.scrollIntoView({behavior:'smooth'}); }
+}
+
+async function generateSegMsg() {
+  const seg = (document.getElementById('seg-name')?.value||'').trim();
+  const offer = (document.getElementById('seg-offer')?.value||'').trim();
+  if (!seg) { showMktToast('Enter a segment name'); return; }
+  showMktToast('🤖 Generating message…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'segment_message',language:'te+en',topic:seg,context:{business:'V Wholesale',location:'Vijayawada',segment:seg,offer}})});
+  const data = await res.json();
+  document.getElementById('seg-output').style.display='block';
+  document.getElementById('seg-msg').textContent=data.content||data.text||'';
+}
+function copySegMsg() { navigator.clipboard.writeText(document.getElementById('seg-msg')?.textContent||'').then(()=>showMktToast('📋 Copied!')); }
 
 
 // ── AUTO LOGIN ON LOAD ──
