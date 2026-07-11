@@ -2666,14 +2666,324 @@ function _comingSoonCard(icon, title, desc, features, eta) {
   </div>`;
 }
 
-function renderCampaigns() {
-  setContent(_comingSoonCard('📣','Campaign Manager',
-    'Plan, execute and track multi-channel marketing campaigns from one place.',
-    [{icon:'🎯',title:'Campaign Builder',desc:'Set goal, budget, duration, audience and platforms'},
-     {icon:'📊',title:'Live Tracking',desc:'Impressions, clicks, conversions, cost per lead in real time'},
-     {icon:'🤖',title:'AI Optimisation',desc:'AI suggests when to boost, pause or redirect spend'},
-     {icon:'📁',title:'Asset Library',desc:'All posters, videos and captions organised per campaign'}],
-    'Coming soon — Content Calendar'));
+async function renderCampaigns() {
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">📣 Campaign Manager</h3>
+    <div style="font-size:12px;color:var(--text3)">Plan, execute and track multi-channel marketing campaigns</div></div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showCampaignBuilder()">+ New Campaign</button>
+  </div>
+  <div id="camp-list"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>`);
+  await loadCampaigns();
+}
+
+async function loadCampaigns() {
+  const {data:camps} = await sb.from('campaigns').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
+  const el = document.getElementById('camp-list');
+  if (!el) return;
+
+  if (!(camps||[]).length) {
+    el.innerHTML = `<div class="mkt-card" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">📣</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">No campaigns yet</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Create your first campaign — set goal, budget, platforms and start tracking performance</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="showCampaignBuilder()">+ Create First Campaign</button>
+    </div>`;
+    return;
+  }
+
+  const statusColor = {draft:'var(--text3)', active:'#22c55e', paused:'#f59e0b', completed:'#64748b'};
+  const statusBg = {draft:'badge-gray', active:'badge-green', paused:'badge-blue', completed:'badge-gray'};
+
+  el.innerHTML = `
+  <!-- Summary row -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+    ${[
+      {label:'Total Campaigns', val: camps.length, icon:'📣'},
+      {label:'Active', val: camps.filter(c=>c.status==='active').length, icon:'🟢'},
+      {label:'Total Budget', val: '₹'+((camps.reduce((s,c)=>s+(c.budget_inr||0),0)/1000).toFixed(0))+'K', icon:'💰'},
+      {label:'Total Spent', val: '₹'+((camps.reduce((s,c)=>s+(c.spent_inr||0),0)/1000).toFixed(0))+'K', icon:'📊'}
+    ].map(m=>`<div class="mkt-card" style="padding:12px;text-align:center">
+      <div style="font-size:20px">${m.icon}</div>
+      <div style="font-size:18px;font-weight:900;margin:4px 0">${m.val}</div>
+      <div style="font-size:10px;color:var(--text3)">${m.label}</div>
+    </div>`).join('')}
+  </div>
+
+  <!-- Campaign cards -->
+  <div style="display:grid;gap:12px">
+    ${camps.map(c => {
+      const days = c.end_date ? Math.ceil((new Date(c.end_date)-new Date())/(1000*60*60*24)) : null;
+      const pct = c.budget_inr > 0 ? Math.min(100, Math.round((c.spent_inr||0)/c.budget_inr*100)) : 0;
+      const platforms = (c.platforms||[]);
+      const cpl = c.conversions > 0 ? '₹'+Math.round((c.spent_inr||0)/c.conversions) : '—';
+      return `<div class="mkt-card" style="padding:16px">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+              <div style="font-size:15px;font-weight:900">${c.name}</div>
+              <span class="badge ${statusBg[c.status]||'badge-gray'}">${c.status}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text3)">${c.goal||'—'} · ${platforms.join(' · ')||'No platforms'}</div>
+            ${c.start_date ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${new Date(c.start_date).toLocaleDateString('en-IN')} → ${c.end_date?new Date(c.end_date).toLocaleDateString('en-IN'):'ongoing'} ${days!==null&&days>0?'('+days+' days left)':days<=0?'(ended)':''}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="mkt-btn mkt-btn-ghost" onclick="editCampaign(${c.id})" style="font-size:11px;padding:4px 8px">✏️</button>
+            <button class="mkt-btn mkt-btn-ghost" onclick="toggleCampaignStatus(${c.id},'${c.status}')" style="font-size:11px;padding:4px 8px">${c.status==='active'?'⏸ Pause':c.status==='paused'?'▶️ Resume':'▶️ Start'}</button>
+            <button class="mkt-btn mkt-btn-ghost" onclick="deleteCampaign(${c.id})" style="font-size:11px;padding:4px 8px;color:var(--red)">🗑</button>
+          </div>
+        </div>
+
+        <!-- Budget bar -->
+        <div style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+            <span>Budget: ₹${(c.budget_inr||0).toLocaleString('en-IN')}</span>
+            <span>Spent: ₹${(c.spent_inr||0).toLocaleString('en-IN')} (${pct}%)</span>
+          </div>
+          <div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${pct>80?'#ef4444':pct>50?'#f59e0b':'#22c55e'};border-radius:3px;transition:width .3s"></div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px">
+          ${[
+            {label:'Impressions', val:(c.impressions||0).toLocaleString('en-IN')},
+            {label:'Clicks', val:(c.clicks||0).toLocaleString('en-IN')},
+            {label:'Conversions', val:(c.conversions||0).toLocaleString('en-IN')},
+            {label:'Cost/Lead', val:cpl}
+          ].map(m=>`<div style="background:var(--bg3);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:13px;font-weight:700">${m.val}</div>
+            <div style="font-size:10px;color:var(--text3)">${m.label}</div>
+          </div>`).join('')}
+        </div>
+
+        <!-- Update stats + AI tip -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mkt-btn mkt-btn-ghost" onclick="updateCampaignStats(${c.id})" style="font-size:11px;padding:4px 10px">📊 Update Stats</button>
+          <button class="mkt-btn mkt-btn-primary" onclick="getCampaignAITip(${c.id},'${c.name.replace(/'/g,"\'")}')" style="font-size:11px;padding:4px 10px">🤖 AI Tip</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function showCampaignBuilder(existing) {
+  const c = existing || {};
+  const m = document.createElement('div');
+  m.id = 'camp-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">${c.id?'✏️ Edit Campaign':'📣 New Campaign'}</div>
+      <button onclick="document.getElementById('camp-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Campaign Name *</label>
+        <input id="camp-name" class="mkt-form-input" value="${c.name||''}" placeholder="e.g. Monsoon Bathroom Sale, Diwali Tiles Offer">
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Goal *</label>
+        <select id="camp-goal" class="mkt-form-select">
+          ${['Brand Awareness','Store Walk-ins','Lead Generation','Contractor Club Signups','Product Launch','Festival Offer','Clearance Sale'].map(g=>`<option value="${g}" ${c.goal===g?'selected':''}>${g}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Platforms</label>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">
+          ${['Instagram','Facebook','WhatsApp','GBP','YouTube','X (Manual)','Google Ads','Meta Ads'].map(p=>`
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;background:var(--bg3);padding:6px 10px;border-radius:6px;border:1px solid ${(c.platforms||[]).includes(p)?'var(--gold)':'var(--border)'}">
+            <input type="checkbox" value="${p}" ${(c.platforms||[]).includes(p)?'checked':''} onchange="this.closest('label').style.borderColor=this.checked?'var(--gold)':'var(--border)'">
+            ${p}
+          </label>`).join('')}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="mkt-form-group">
+          <label class="mkt-form-label">Budget (₹)</label>
+          <input id="camp-budget" type="number" class="mkt-form-input" value="${c.budget_inr||''}" placeholder="30000">
+        </div>
+        <div class="mkt-form-group">
+          <label class="mkt-form-label">Spent so far (₹)</label>
+          <input id="camp-spent" type="number" class="mkt-form-input" value="${c.spent_inr||''}" placeholder="0">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="mkt-form-group">
+          <label class="mkt-form-label">Start Date</label>
+          <input id="camp-start" type="date" class="mkt-form-input" value="${c.start_date||''}">
+        </div>
+        <div class="mkt-form-group">
+          <label class="mkt-form-label">End Date</label>
+          <input id="camp-end" type="date" class="mkt-form-input" value="${c.end_date||''}">
+        </div>
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Target Audience</label>
+        <input id="camp-audience" class="mkt-form-input" value="${c.target_audience||''}" placeholder="e.g. Homeowners 30-55, Contractors in Vijayawada">
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Notes</label>
+        <input id="camp-notes" class="mkt-form-input" value="${c.notes||''}" placeholder="Key message, offer details, etc.">
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="saveCampaign(${c.id||'null'})">💾 ${c.id?'Update Campaign':'Create Campaign'}</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('camp-modal').remove()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
+}
+
+async function saveCampaign(id) {
+  const name = (document.getElementById('camp-name')?.value||'').trim();
+  if (!name) { showMktToast('Enter campaign name'); return; }
+  const platforms = [...document.querySelectorAll('#camp-modal input[type=checkbox]:checked')].map(cb=>cb.value);
+  const payload = {
+    name,
+    goal: document.getElementById('camp-goal')?.value||'Brand Awareness',
+    platforms,
+    budget_inr: parseFloat(document.getElementById('camp-budget')?.value||'0')||0,
+    spent_inr: parseFloat(document.getElementById('camp-spent')?.value||'0')||0,
+    start_date: document.getElementById('camp-start')?.value||null,
+    end_date: document.getElementById('camp-end')?.value||null,
+    target_audience: document.getElementById('camp-audience')?.value?.trim()||null,
+    notes: document.getElementById('camp-notes')?.value?.trim()||null,
+    updated_at: new Date().toISOString()
+  };
+
+  let error;
+  if (id) {
+    ({error} = await sb.from('campaigns').update(payload).eq('id',id));
+  } else {
+    payload.created_by = mktProfile?.name;
+    payload.status = 'draft';
+    ({error} = await sb.from('campaigns').insert(payload));
+  }
+
+  if (error) { showMktToast('❌ '+error.message); return; }
+  document.getElementById('camp-modal')?.remove();
+  showMktToast(id ? '✅ Campaign updated' : '✅ Campaign created');
+  await loadCampaigns();
+}
+
+async function editCampaign(id) {
+  const {data:c} = await sb.from('campaigns').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (c) showCampaignBuilder(c);
+}
+
+async function toggleCampaignStatus(id, currentStatus) {
+  const next = currentStatus==='active' ? 'paused' : currentStatus==='paused' ? 'active' : 'active';
+  await sb.from('campaigns').update({status:next,updated_at:new Date().toISOString()}).eq('id',id);
+  showMktToast('Campaign '+(next==='active'?'started ▶️':'paused ⏸'));
+  await loadCampaigns();
+}
+
+async function deleteCampaign(id) {
+  if (!confirm('Delete this campaign?')) return;
+  await sb.from('campaigns').delete().eq('id',id);
+  showMktToast('Deleted');
+  await loadCampaigns();
+}
+
+function updateCampaignStats(id) {
+  const m = document.createElement('div');
+  m.id = 'stats-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:380px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">📊 Update Stats</div>
+      <button onclick="document.getElementById('stats-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:10px">
+      <div class="mkt-form-group"><label class="mkt-form-label">Impressions</label><input id="stat-imp" type="number" class="mkt-form-input" placeholder="0"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Clicks</label><input id="stat-clk" type="number" class="mkt-form-input" placeholder="0"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Conversions (walk-ins / leads)</label><input id="stat-conv" type="number" class="mkt-form-input" placeholder="0"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Amount Spent (₹)</label><input id="stat-spent" type="number" class="mkt-form-input" placeholder="0"></div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="saveStats(${id})">Save Stats</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('stats-modal').remove()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
+}
+
+async function saveStats(id) {
+  const payload = {
+    impressions: parseInt(document.getElementById('stat-imp')?.value||'0')||0,
+    clicks: parseInt(document.getElementById('stat-clk')?.value||'0')||0,
+    conversions: parseInt(document.getElementById('stat-conv')?.value||'0')||0,
+    spent_inr: parseFloat(document.getElementById('stat-spent')?.value||'0')||0,
+    updated_at: new Date().toISOString()
+  };
+  await sb.from('campaigns').update(payload).eq('id',id);
+  document.getElementById('stats-modal')?.remove();
+  showMktToast('✅ Stats updated');
+  await loadCampaigns();
+}
+
+async function getCampaignAITip(id, name) {
+  showMktToast('🤖 Getting AI tip for '+name+'…');
+  const {data:c} = await sb.from('campaigns').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (!c) return;
+
+  const cpl = c.conversions > 0 ? Math.round((c.spent_inr||0)/c.conversions) : null;
+  const pct = c.budget_inr > 0 ? Math.round((c.spent_inr||0)/c.budget_inr*100) : 0;
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({
+      task:'campaign_tip',
+      language:'en',
+      context:{
+        campaign_name: c.name,
+        goal: c.goal,
+        platforms: c.platforms,
+        budget: c.budget_inr,
+        spent: c.spent_inr,
+        budget_used_pct: pct,
+        impressions: c.impressions,
+        clicks: c.clicks,
+        conversions: c.conversions,
+        cost_per_lead: cpl,
+        days_left: c.end_date ? Math.ceil((new Date(c.end_date)-new Date())/(1000*60*60*24)) : null,
+        target_audience: c.target_audience
+      }
+    })
+  });
+
+  const data = await res.json();
+  const tip = data.content || data.text || 'No tip returned';
+
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">🤖 AI Campaign Tip — ${c.name}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:20px">
+      <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${tip}</div>
+    </div>
+    <div style="padding:0 16px 16px">
+      <button class="mkt-btn mkt-btn-ghost" style="width:100%" onclick="this.closest('[style*=fixed]').remove()">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
 }
 
 function renderSocial() {
