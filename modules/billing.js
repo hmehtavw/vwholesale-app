@@ -3421,7 +3421,7 @@ async function sendQuotationWhatsApp(id, preloaded = null) {
   const total = Math.round(q.grandTotal || 0).toLocaleString('en-IN');
 
   // Build the portal link — customer opens this for a clean printable view
-  const portalLink = `${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(quoteNo)}`;
+  const portalLink = `${window.location.origin}/quote.html?quote=${encodeURIComponent(quoteNo)}`;
 
   // Short clean message with link — not all the items
   const msg = `Dear ${q.customerName||'Customer'}, 🙏\n\nYour quotation from *${storeName}, Vijayawada* is ready.\n\n📋 *${quoteNo}* — ₹${total}\n${q.siteName ? `🏠 Site: ${q.siteName}\n` : ''}\n🔗 *View & Download:*\n${portalLink}\n\nThis link shows all items, pricing, and is printable.\nValid for 7 days.\n\nFor any changes, call us: 8712697930\n— Team ${storeName}`;

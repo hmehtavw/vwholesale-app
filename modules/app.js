@@ -2648,7 +2648,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Register service worker for offline support
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/vwholesale-app/sw.js')
+    navigator.serviceWorker.register('/sw.js')
       .then(reg => console.log('SW registered:', reg.scope))
       .catch(err => console.log('SW registration failed:', err));
   });

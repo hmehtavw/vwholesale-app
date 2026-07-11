@@ -2946,7 +2946,7 @@ async function generateCustomerPortalLink(customerId, customerPhone, createdBy) 
 
 async function sendPortalLinkWA(customerId, customerName, customerPhone, createdBy) {
   const token = await generateCustomerPortalLink(customerId, customerPhone, createdBy);
-  const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+  const link = `${window.location.origin}/?customer=${token}`;
   const msg = encodeURIComponent(
     `*V Wholesale — Your Account Portal* 🏠\n\n` +
     `Dear ${customerName},\n\n` +
@@ -3116,7 +3116,7 @@ async function shareWishlist(token) {
   // Generate a shareable wishlist link (public, no login needed)
   const shareToken = 'wl_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   await VW_DB.client.from('customer_portal_tokens').update({ shared_token: shareToken }).eq('token', token).catch(()=>{});
-  const link = `${window.location.origin}/vwholesale-app/?wishlist=${shareToken}`;
+  const link = `${window.location.origin}/?wishlist=${shareToken}`;
   const msg = encodeURIComponent(`*My V Wholesale Tile Wishlist* 🏠\n\nHere are the tiles I'm considering for my home:\n${link}\n\nYou can view designs, availability and prices.\n\n— via V Wholesale, Vijayawada`);
   if (navigator.share) {
     navigator.share({ title:'My Tile Wishlist', url: link });
@@ -3211,7 +3211,7 @@ async function submitCustomerRegistration() {
   }
 
   const token = await generateCustomerPortalLink(customerId, phone, 'self_register');
-  const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+  const link = `${window.location.origin}/?customer=${token}`;
   const wa = (document.getElementById('cr-wa')?.value.trim()||phone).replace(/\D/g,'');
   const msg = encodeURIComponent(
     `*Welcome to V Wholesale, ${name}!* 🏠\n\n` +
@@ -3393,7 +3393,7 @@ async function renderLegacyCustomerPortal() {
 
 // Generate shareable quotation link
 function getQuotationShareLink(q) {
-  return `${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}`;
+  return `${window.location.origin}/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}`;
 }
 window.getQuotationShareLink = getQuotationShareLink;
 
@@ -3523,13 +3523,13 @@ async function renderContractorPortal() {
         <div style="font-size:13px;font-weight:600">${q.quoteNo||'Q-'+q.id}</div>
         <div style="font-size:11px;color:var(--text3)">${new Date(q.date||q.createdAt).toLocaleDateString('en-IN')} · ₹${Math.round(q.grandTotal||0).toLocaleString('en-IN')}</div>
       </div>
-      <button class="btn-sm" onclick="window.open('${window.location.origin}/vwholesale-app/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}','_blank')">View</button>
+      <button class="btn-sm" onclick="window.open('${window.location.origin}/quote.html?quote=${encodeURIComponent(q.quoteNo||q.id)}','_blank')">View</button>
     </div>`).join('')}
   </div>` : ''}`;
 }
 
 async function shareReferralLink(customerId, customerName) {
-  const link = `${window.location.origin}/vwholesale-app/?ref=${customerId}`;
+  const link = `${window.location.origin}/?ref=${customerId}`;
   const msg = `Hi! I am a V Wholesale Contractor Club member.\n\nV Wholesale is the best home building materials store in Vijayawada — tiles, sanitary, electrical, paints and more.\n\nVisit them and mention my name *${customerName}* to get priority service!\n\n📍 NH-65, Beside Padmaja Suzuki, Bhavanipuram, Vijayawada\n💬 +91 87126 97930`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }

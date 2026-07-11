@@ -1823,7 +1823,7 @@ async function saveTileProduct() {
   if (btn) { btn.disabled=true; btn.textContent='Saving...'; }
 
   // Generate QR code payload
-  const qrPayload = `${window.location.origin}/vwholesale-app/?product_qr=${Date.now()}`;
+  const qrPayload = `${window.location.origin}/?product_qr=${Date.now()}`;
 
   // Insert product
   const tileSize = (window.TILE_SIZES||[]).find(s=>s.mm===size);
@@ -2046,7 +2046,7 @@ async function showQR(productId, productName) {
   const { data: p } = await VW_DB.client.from('products').select('*,tile_stock_locations(*)').eq('id',productId).single();
   if (!p) return;
 
-  const qrData = p.qr_code || `${window.location.origin}/vwholesale-app/?product_qr=${productId}`;
+  const qrData = p.qr_code || `${window.location.origin}/?product_qr=${productId}`;
   const totalBoxes = (p.tile_stock_locations||[]).filter(l=>!l.is_display).reduce((s,l)=>s+(l.qty_boxes||0),0);
 
   const sheet = document.getElementById('bottom-sheet');
@@ -3947,6 +3947,16 @@ function _renderPricingRow(item, isTile, canCost) {
     </div>
   </div>`;
 }
+
+// Update a single price field on a catalog item
+async function updateCatalogItemPrice(id, field, val, isTile) {
+  if (!id || !field) return;
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const update = { [field]: val };
+  const { error } = await VW_DB.client.from(table).update(update).eq('id', id);
+  if (error) console.error('updateCatalogItemPrice error:', error.message);
+}
+window.updateCatalogItemPrice = updateCatalogItemPrice;
 
 // Auto-save price when user types in a tier input
 async function onTierPriceChange(input, mrp, unit) {

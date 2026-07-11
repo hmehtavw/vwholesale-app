@@ -291,7 +291,7 @@ async function submitCheckin() {
     const profile = VW_AUTH.getCurrentProfile();
     if (typeof generateCustomerPortalLink === 'function') {
       const token = await generateCustomerPortalLink(customer.id, phone, profile?.name||'auto_checkin');
-      const link = `${window.location.origin}/vwholesale-app/?customer=${token}`;
+      const link = `${window.location.origin}/?customer=${token}`;
       // Show option to send portal link (non-blocking)
       showToast(`${name} checked in ✓ — tap to send portal link`, 'success');
       setTimeout(() => {

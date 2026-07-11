@@ -1954,7 +1954,7 @@ async function placeOrder() {
             order_amount: orderTotal,
             customer_name: prof?.name || '',
             customer_phone: prof?.phone || '',
-            return_url: `https://hmehtavw.github.io/vwholesale-app/shop.html?cf_order={order_id}&vw_order=${pendingOrder.id}`,
+            return_url: `https://hmehtavw.github.io/shop.html?cf_order={order_id}&vw_order=${pendingOrder.id}`,
           }),
         }
       );

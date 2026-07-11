@@ -163,7 +163,7 @@ async function approveResetPin(requestId) {
   req.newPin = newPin;
   await VW_DB.put(VW_DB.STORES.pinResetRequests, req);
   if (req.phone) {
-    const msg = encodeURIComponent(`Hi ${req.name||''},\n\nYour V Wholesale PIN has been reset.\n\nNew PIN: *${newPin}*\n\nLog in at: https://hmehtavw.github.io/vwholesale-app/\n\nPlease change it after logging in.\n\n— V Wholesale`);
+    const msg = encodeURIComponent(`Hi ${req.name||''},\n\nYour V Wholesale PIN has been reset.\n\nNew PIN: *${newPin}*\n\nLog in at: https://hmehtavw.github.io/\n\nPlease change it after logging in.\n\n— V Wholesale`);
     window.open(`https://wa.me/91${req.phone.replace(/\D/g,'')}?text=${msg}`, '_blank');
   }
   showToast('PIN reset — sent to staff via WhatsApp', 'success');
@@ -387,8 +387,8 @@ async function renderSettingsStore() {
     </div>
     <div class="form-group"><label>🖥️ Kiosk URL (open on store tablet)</label>
       <div style="display:flex;gap:8px">
-        <input type="text" value="${window.location.origin}/vwholesale-app/?kiosk=1" readonly style="flex:1;font-size:11px;background:var(--bg2)">
-        <button class="btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/vwholesale-app/?kiosk=1');showToast('Kiosk URL copied!','success')">📋</button>
+        <input type="text" value="${window.location.origin}/?kiosk=1" readonly style="flex:1;font-size:11px;background:var(--bg2)">
+        <button class="btn-sm" onclick="navigator.clipboard.writeText('${window.location.origin}/?kiosk=1');showToast('Kiosk URL copied!','success')">📋</button>
       </div>
     </div>
     <button class="btn-primary" onclick="VW_SETTINGS.saveWAConfig()">Save Store Info</button>
@@ -2246,7 +2246,7 @@ async function approveOfferIntoStaff(offerId) {
       `*Your App Login Details:*\n` +
       `📱 Phone: ${offer.candidatePhone}\n` +
       `🔐 PIN: ${pin}\n\n` +
-      `🔗 App: https://hmehtavw.github.io/vwholesale-app/\n\n` +
+      `🔗 App: https://hmehtavw.github.io/\n\n` +
       `Please login and change your PIN immediately from Settings.\n\n` +
       `— HR Team, V Wholesale`
     );
@@ -4051,7 +4051,7 @@ async function sendBroadcast() {
 
     for (const profileId of unique) {
       try {
-        await sendWebPush(profileId, title, body, 'https://hmehtavw.github.io/vwholesale-app/');
+        await sendWebPush(profileId, title, body, 'https://hmehtavw.github.io/');
         sent++;
       } catch(e) {}
     }

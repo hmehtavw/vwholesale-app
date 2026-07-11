@@ -744,7 +744,7 @@ function filterPortalStock(val) {
 }
 
 function shareProductLink(productId, token) {
-  const link = `${window.location.origin}/vwholesale-app/?contractor=${token}&product=${productId}`;
+  const link = `${window.location.origin}/?contractor=${token}&product=${productId}`;
   if (navigator.share) {
     navigator.share({ title:'V Wholesale Tile', url: link });
   } else if (navigator.clipboard) {
@@ -1369,7 +1369,7 @@ async function sharePortalLink(id, token) {
     token = Math.random().toString(36).slice(2)+Date.now().toString(36);
     await VW_DB.client.from('contractors').update({portal_token:token}).eq('id',id);
   }
-  const link = `${window.location.origin}/vwholesale-app/?contractor=${token}`;
+  const link = `${window.location.origin}/?contractor=${token}`;
   const { data: c } = await VW_DB.client.from('contractors').select('name,phone').eq('id',id).single();
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
@@ -1847,7 +1847,7 @@ async function approveContractor(contractorId) {
   }).eq('id', contractorId);
 
   // Send WhatsApp with portal link
-  const link = `${window.location.origin}/vwholesale-app/?contractor=${c.portal_token}`;
+  const link = `${window.location.origin}/?contractor=${c.portal_token}`;
   const profType = PROFESSIONAL_TYPES.find(p=>p.id===c.professional_type);
   const msg = encodeURIComponent(
     `*Welcome to V Wholesale Contractor Network!* 🎉\n\n` +
@@ -1886,7 +1886,7 @@ async function rejectContractor(contractorId) {
 // ── ADMIN UTILS ──
 
 function shareSignupLink() {
-  const link = `${window.location.origin}/vwholesale-app/?signup=contractor`;
+  const link = `${window.location.origin}/?signup=contractor`;
   const sheet = document.getElementById('bottom-sheet');
   sheet.innerHTML = `
     <div class="sheet-handle"></div>

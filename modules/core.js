@@ -81,7 +81,13 @@ async function initDB() {
   if (typeof window.supabase === 'undefined' || !window.supabase.createClient) {
     throw new Error('Supabase client library not loaded');
   }
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      storageKey: 'vw-staff-auth',
+      persistSession: true,
+      autoRefreshToken: true
+    }
+  });
   return sb;
 }
 
@@ -1763,7 +1769,7 @@ async function sendWebPush(profileId, title, body, url) {
           profile_id: profileId,
           title,
           body: body || '',
-          url: url || 'https://hmehtavw.github.io/vwholesale-app/',
+          url: url || 'https://hmehtavw.github.io/',
         }),
       }
     );
@@ -2174,7 +2180,7 @@ async function closeVisit(visitId) {
     if (exec && exec.currentVisitId === visitId) { exec.status = 'available'; exec.currentVisitId = null; await VW_DB.put(VW_DB.STORES.executives, exec); }
   }
 
-  const FEEDBACK_BASE_URL = 'https://hmehtavw.github.io/vwholesale-app/feedback.html';
+  const FEEDBACK_BASE_URL = 'https://hmehtavw.github.io/feedback.html';
 
   const customer = visit.customerId ? await VW_DB.getById(VW_DB.STORES.customers, visit.customerId) : null;
   if (customer) {

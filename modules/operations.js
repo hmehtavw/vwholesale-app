@@ -1627,7 +1627,7 @@ async function confirmCreateGatePass(invoiceId) {
   const driverPhone = document.getElementById('gp-driver-phone')?.value.trim();
   const dispatchedItems = selectedIdxs.map(i => inv.items[i]);
   const itemList = dispatchedItems.map(i => `• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
-  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+  const deliveryLink = `${window.location.origin}/?delivery=${encodeURIComponent(gatePassNo)}`;
 
   // Customer notification — include tracking link
   if (cust?.phone) {
@@ -1990,7 +1990,7 @@ async function createDirectDeliveryGatePass(invoiceId) {
   });
 
   // Build delivery link
-  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+  const deliveryLink = `${window.location.origin}/?delivery=${encodeURIComponent(gatePassNo)}`;
   const itemList = (inv.items||[]).map(i=>`• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
 
   // WhatsApp to vendor/supplier
@@ -2177,7 +2177,7 @@ async function createStaffPickupGatePass(invoiceId) {
   const gatePassNo = `GP/${fy}/${String(nextSeq).padStart(5,'0')}`;
   const allIdxs = (inv.items||[]).map((_,i)=>i);
   const itemList = (inv.items||[]).map(i=>`• ${i.name} (${i.qty} ${i.unit||'pc'})`).join('\n');
-  const deliveryLink = `${window.location.origin}/vwholesale-app/?delivery=${encodeURIComponent(gatePassNo)}`;
+  const deliveryLink = `${window.location.origin}/?delivery=${encodeURIComponent(gatePassNo)}`;
 
   // Save gate pass
   await VW_DB.put(VW_DB.STORES.gatePasses, {
@@ -2353,7 +2353,7 @@ async function createDeliveryTracking(gatePassNo, invoiceId, items, driverName, 
     dispatched_at: new Date().toISOString(),
     tracking_token: token
   });
-  return `${window.location.origin}/vwholesale-app/?track=${token}`;
+  return `${window.location.origin}/?track=${token}`;
 }
 
 window.VW_DISPATCH.renderDeliveryTrackingPage = renderDeliveryTrackingPage;

@@ -1106,7 +1106,7 @@ Object.assign(TEST_SUITES, {
         return `Token valid · customer_id: ${data.customer_id} ✓`;
       }},
       { id:'tl05', name:'Test URL credentials', run: async () => {
-        const base = window.location.origin + '/vwholesale-app/';
+        const base = window.location.origin + '/';
         return [
           `Staff login: phone + PIN 123456`,
           `Contractor: ${base}${TEST_CREDS.contractor_portal}`,

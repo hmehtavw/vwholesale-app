@@ -540,7 +540,7 @@ async function _sendContractorRegLink() {
   if (!phone || phone.length < 10) { showToast('Enter phone number first', 'warn'); return; }
   const storeInfo = await VW_DB.getSetting('store_info', { name:'V Wholesale', phone:'8712697930' });
   const msg = encodeURIComponent(
-    `Hi ${name||''}! V Wholesale, Vijayawada invites you to join the Contractor Club.\n\nRegister to earn 2% commission on every sale you refer:\nhttps://hmehtavw.github.io/vwholesale-app/?contractor=register&phone=${phone}\n\nBenefits: Commission tracking, reward points, bank transfer or store credit.\n\nFor queries: ${storeInfo.phone}`
+    `Hi ${name||''}! V Wholesale, Vijayawada invites you to join the Contractor Club.\n\nRegister to earn 2% commission on every sale you refer:\nhttps://hmehtavw.github.io/?contractor=register&phone=${phone}\n\nBenefits: Commission tracking, reward points, bank transfer or store credit.\n\nFor queries: ${storeInfo.phone}`
   );
   window.open(`https://wa.me/91${phone}?text=${msg}`, '_blank');
   showToast('Registration link sent via WhatsApp ✓', 'success');
@@ -580,7 +580,7 @@ async function addAndLinkContractor() {
     `Hi ${name}! You've been linked to a tile quotation at V Wholesale, Vijayawada.
 
 Register as a Contractor Club member to track your commission and rewards:
-https://hmehtavw.github.io/vwholesale-app/?contractor=register&phone=${phone}
+https://hmehtavw.github.io/?contractor=register&phone=${phone}
 
 For queries: ${storeInfo.phone||'call us'}`
   );
@@ -596,7 +596,7 @@ async function sendCustomerRegistrationLink() {
     `Hi ${name||''}! Your tile quotation from V Wholesale, Vijayawada is being prepared.
 
 Track your quote status here:
-https://hmehtavw.github.io/vwholesale-app/?customer=register&phone=${phone}
+https://hmehtavw.github.io/?customer=register&phone=${phone}
 
 Questions? Call us anytime.`
   );
@@ -7428,9 +7428,13 @@ async function quickReject(quoteId) {
   navigateTo('quick_approve');
 }
 
-window.VW_TILES.renderQuickApprovalPage = renderQuickApprovalPage;
-window.VW_TILES.quickApprove = quickApprove;
-window.VW_TILES.quickReject = quickReject;
+if (window.VW_TILES) {
+  window.VW_TILES.renderQuickApprovalPage = renderQuickApprovalPage;
+  window.VW_TILES.quickApprove = quickApprove;
+  window.VW_TILES.quickReject = quickReject;
+} else {
+  window.VW_TILES = { renderQuickApprovalPage, quickApprove, quickReject };
+}
 
 // ═══════════════════════════════════════════════════════════
 // TILE MOOD-BOARD SUGGESTIONS (Feature 6)
