@@ -7,98 +7,164 @@
   <meta name="description" content="Expert guides on tiles, granite, sanitaryware, paints and home building materials. Tips from Vijayawada's premier home building store.">
   <link rel="canonical" href="https://vwholesale.in/blog/">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; }
-    header { background: #0A1628; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
-    header a { color: #c9a84c; font-weight: 900; font-size: 18px; text-decoration: none; }
-    header span { color: #64748b; font-size: 13px; }
-    nav { background: #1e293b; padding: 10px 20px; }
-    nav a { color: #94a3b8; text-decoration: none; font-size: 13px; margin-right: 16px; }
-    nav a:hover { color: #c9a84c; }
-    .hero { background: linear-gradient(135deg, #0A1628, #1e293b); color: #fff; padding: 48px 20px; text-align: center; }
-    .hero h1 { font-size: 28px; font-weight: 900; margin-bottom: 10px; }
-    .hero p { color: #94a3b8; font-size: 15px; max-width: 500px; margin: 0 auto; }
-    .container { max-width: 900px; margin: 0 auto; padding: 32px 20px; }
-    .blog-grid { display: grid; gap: 20px; }
-    .blog-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.1); border: 1px solid #e2e8f0; }
-    .blog-card-body { padding: 20px; }
-    .blog-tag { display: inline-block; background: rgba(201,168,76,.1); color: #c9a84c; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
-    .blog-card h2 { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-    .blog-card h2 a { color: #1e293b; text-decoration: none; }
-    .blog-card h2 a:hover { color: #c9a84c; }
-    .blog-card p { font-size: 13px; color: #64748b; line-height: 1.6; margin-bottom: 12px; }
-    .blog-meta { font-size: 11px; color: #94a3b8; }
-    .read-more { display: inline-block; margin-top: 12px; color: #c9a84c; font-size: 13px; font-weight: 700; text-decoration: none; }
-    footer { background: #0A1628; color: #64748b; text-align: center; padding: 24px; font-size: 12px; margin-top: 40px; }
-    footer a { color: #c9a84c; text-decoration: none; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b}
+    header{background:#0A1628;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100}
+    .logo{color:#c9a84c;font-weight:900;font-size:18px;text-decoration:none}
+    nav{display:flex;gap:16px;align-items:center}
+    nav a{color:#94a3b8;text-decoration:none;font-size:13px;white-space:nowrap}
+    nav a:hover{color:#c9a84c}
+    nav .cta{background:#c9a84c;color:#000;padding:6px 14px;border-radius:6px;font-weight:700;font-size:12px}
+    .hero{background:linear-gradient(135deg,#0A1628 0%,#1e293b 100%);color:#fff;padding:52px 20px 40px;text-align:center}
+    .hero h1{font-size:30px;font-weight:900;line-height:1.25;margin-bottom:10px}
+    .hero h1 span{color:#c9a84c}
+    .hero p{color:#94a3b8;font-size:15px;max-width:520px;margin:0 auto 24px}
+    /* Scroll topics */
+    .topics-wrap{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 20px;overflow:hidden}
+    .topics-scroll{display:flex;gap:8px;overflow-x:auto;padding:12px 0;scrollbar-width:none;-ms-overflow-style:none}
+    .topics-scroll::-webkit-scrollbar{display:none}
+    .topic-pill{display:inline-flex;align-items:center;gap:5px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:#475569;white-space:nowrap;cursor:pointer;text-decoration:none;flex-shrink:0;transition:all .2s}
+    .topic-pill:hover,.topic-pill.active{background:#0A1628;color:#c9a84c;border-color:#0A1628}
+    .container{max-width:920px;margin:0 auto;padding:32px 20px 60px}
+    .blog-grid{display:grid;gap:20px}
+    @media(min-width:640px){.blog-grid{grid-template-columns:repeat(2,1fr)}}
+    @media(min-width:900px){.blog-grid{grid-template-columns:repeat(3,1fr)}}
+    .blog-card{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);border:1px solid #e2e8f0;transition:transform .2s,box-shadow .2s}
+    .blog-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.12)}
+    .card-img{height:160px;overflow:hidden;background:#e2e8f0}
+    .card-img img{width:100%;height:100%;object-fit:cover}
+    .card-body{padding:16px}
+    .card-tag{display:inline-block;background:rgba(201,168,76,.1);color:#c9a84c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+    .card-title{font-size:15px;font-weight:700;line-height:1.4;margin-bottom:8px;color:#0A1628}
+    .card-title a{color:inherit;text-decoration:none}
+    .card-title a:hover{color:#c9a84c}
+    .card-meta{font-size:11px;color:#94a3b8;margin-bottom:10px}
+    .card-excerpt{font-size:12px;color:#64748b;line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+    .read-more{font-size:12px;font-weight:700;color:#c9a84c;text-decoration:none}
+    .empty{text-align:center;padding:60px 20px;color:#94a3b8;grid-column:1/-1}
+    .empty-icon{font-size:48px;margin-bottom:12px}
+    footer{background:#0A1628;color:#64748b;text-align:center;padding:28px 20px;font-size:12px}
+    footer a{color:#c9a84c;text-decoration:none}
+    .loading{text-align:center;padding:60px;color:#94a3b8;grid-column:1/-1}
+    .spinner{width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#c9a84c;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
   <header>
-    <a href="/">V Wholesale</a>
-    <span>Home Building & Improvement Store — Vijayawada</span>
+    <a href="/" class="logo">V Wholesale</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/blog/">Blog</a>
+      <a href="tel:+918712697930" class="cta">📞 Call Us</a>
+    </nav>
   </header>
-  <nav>
-    <a href="/">Home</a>
-    <a href="/blog/">Blog</a>
-    <a href="/staff/">Staff Portal</a>
-    <a href="tel:+918712697930">📞 8712697930</a>
-  </nav>
+
+  <!-- Hero -->
   <div class="hero">
-    <h1>Home Building Tips & Guides</h1>
+    <h1>Home Building <span>Tips & Guides</span></h1>
     <p>Expert advice on tiles, granite, sanitaryware, paints and more from Vijayawada's most complete home building store.</p>
   </div>
-  <div class="container">
-    <div class="blog-grid" id="blog-list">
-      <div style="text-align:center;padding:40px;color:#94a3b8">Loading articles…</div>
+
+  <!-- Scrollable topic pills -->
+  <div class="topics-wrap">
+    <div class="topics-scroll">
+      <a class="topic-pill active" href="#" onclick="filterPosts('all',this);return false">🏠 All Articles</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('tiles',this);return false">🟦 Tiles</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('granite',this);return false">🪨 Granite</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('bathroom',this);return false">🚿 Bathroom</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('flooring',this);return false">🏗️ Flooring</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('paint',this);return false">🎨 Paints</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('kitchen',this);return false">🍳 Kitchen</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('electrical',this);return false">⚡ Electricals</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('marble',this);return false">⬜ Marble</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('sanitaryware',this);return false">🚽 Sanitaryware</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('ceiling',this);return false">✨ False Ceiling</a>
+      <a class="topic-pill" href="#" onclick="filterPosts('vastu',this);return false">🧭 Vastu Tips</a>
     </div>
   </div>
+
+  <div class="container">
+    <div class="blog-grid" id="blog-grid">
+      <div class="loading"><div class="spinner"></div>Loading articles…</div>
+    </div>
+  </div>
+
   <footer>
-    <p>© 2026 V Wholesale — NH65, Bhavanipuram, Vijayawada | <a href="tel:+918712697930">8712697930</a> | <a href="/">vwholesale.in</a></p>
+    <p style="margin-bottom:6px">© 2026 <a href="/">V Wholesale</a> — NH65, Bhavanipuram, Vijayawada, Andhra Pradesh</p>
+    <p><a href="tel:+918712697930">📞 8712697930</a> &nbsp;|&nbsp; <a href="/">vwholesale.in</a> &nbsp;|&nbsp; <a href="/blog/">Blog</a></p>
   </footer>
+
   <script>
-    // Load blog posts from GitHub API
-    fetch('https://api.github.com/repos/hmehtavw/vwholesale-app/contents/blog', {
-      headers: { 'Accept': 'application/vnd.github.v3+json' }
-    })
-    .then(r => r.json())
-    .then(files => {
-      if (!Array.isArray(files) || files.length === 0) {
-        document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">No articles yet. Check back soon!</div>';
+    let allPosts = [];
+
+    async function loadPosts() {
+      try {
+        const res = await fetch('https://api.github.com/repos/hmehtavw/vwholesale-app/contents/blog', {
+          headers: { 'Accept': 'application/vnd.github.v3+json' }
+        });
+        const files = await res.json();
+        if (!Array.isArray(files)) throw new Error('No articles yet');
+
+        const mdFiles = files.filter(f => f.name.endsWith('.md') && f.name !== 'README.md' && f.name !== '.gitkeep');
+        if (!mdFiles.length) {
+          renderPosts([]);
+          return;
+        }
+
+        const posts = await Promise.all(mdFiles.map(async f => {
+          try {
+            const r = await fetch(f.download_url);
+            const md = await r.text();
+            const titleMatch = md.match(/^#\s+(.+)$/m);
+            const metaMatch = md.match(/<!--\s*meta:\s*(.+?)\s*-->/);
+            const imgMatch = md.match(/!\[[^\]]*\]\(([^)]+pexels[^)]+)\)/);
+            const slug = f.name.replace('.md','');
+            return {
+              slug,
+              title: titleMatch?.[1] || slug.replace(/-/g,' '),
+              meta: metaMatch?.[1] || '',
+              image: imgMatch?.[1] || '',
+              text: md.toLowerCase()
+            };
+          } catch { return null; }
+        }));
+
+        allPosts = posts.filter(Boolean);
+        renderPosts(allPosts);
+      } catch(e) {
+        renderPosts([]);
+      }
+    }
+
+    function renderPosts(posts) {
+      const grid = document.getElementById('blog-grid');
+      if (!posts.length) {
+        grid.innerHTML = '<div class="empty"><div class="empty-icon">📝</div><p>No articles yet — check back soon!</p></div>';
         return;
       }
-      const mdFiles = files.filter(f => f.name.endsWith('.md') && f.name !== 'README.md');
-      if (!mdFiles.length) {
-        document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">No articles yet. Check back soon!</div>';
-        return;
-      }
-      // Fetch each file to get metadata
-      Promise.all(mdFiles.map(f => fetch(f.download_url).then(r => r.text()).then(md => {
-        const titleMatch = md.match(/^#\s+(.+)$/m);
-        const metaMatch = md.match(/<!--\s*meta:\s*(.+?)\s*-->/);
-        const slug = f.name.replace('.md', '');
-        return {
-          slug,
-          title: titleMatch?.[1] || slug.replace(/-/g, ' '),
-          meta: metaMatch?.[1] || 'Read our expert guide on home building materials.',
-          date: f.last_modified || new Date().toLocaleDateString('en-IN')
-        };
-      }))).then(posts => {
-        document.getElementById('blog-list').innerHTML = posts.map(p => `
-          <div class="blog-card">
-            <div class="blog-card-body">
-              <span class="blog-tag">HOME BUILDING</span>
-              <h2><a href="/blog/${p.slug}/">${p.title}</a></h2>
-              <p>${p.meta}</p>
-              <span class="blog-meta">By V Wholesale Team · Vijayawada</span>
-              <br><a href="/blog/${p.slug}/" class="read-more">Read Article →</a>
-            </div>
-          </div>`).join('');
-      });
-    })
-    .catch(() => {
-      document.getElementById('blog-list').innerHTML = '<div style="text-align:center;padding:40px;color:#94a3b8">Unable to load articles. Please try again later.</div>';
-    });
+      grid.innerHTML = posts.map(p => `
+        <div class="blog-card">
+          ${p.image ? `<div class="card-img"><img src="${p.image}" alt="${p.title}" loading="lazy"></div>` : '<div class="card-img" style="background:linear-gradient(135deg,#0A1628,#1e293b);display:flex;align-items:center;justify-content:center;font-size:40px">🏠</div>'}
+          <div class="card-body">
+            <span class="card-tag">Home Building</span>
+            <div class="card-title"><a href="/blog/${p.slug}/">${p.title}</a></div>
+            <div class="card-meta">By V Wholesale Team · Vijayawada</div>
+            ${p.meta ? `<div class="card-excerpt">${p.meta}</div>` : ''}
+            <a href="/blog/${p.slug}/" class="read-more">Read Article →</a>
+          </div>
+        </div>`).join('');
+    }
+
+    function filterPosts(topic, el) {
+      document.querySelectorAll('.topic-pill').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      if (topic === 'all') { renderPosts(allPosts); return; }
+      const filtered = allPosts.filter(p => p.text.includes(topic) || p.title.toLowerCase().includes(topic));
+      renderPosts(filtered.length ? filtered : allPosts);
+    }
+
+    loadPosts();
   </script>
 </body>
 </html>
