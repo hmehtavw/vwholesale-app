@@ -427,6 +427,7 @@ async function renderHRPage() {
     <button class="entry-type-btn" id="hr-tab-attendance" onclick="VW_HR_PAYROLL.switchHRTab('attendance',this)"><span class="et-icon">📋</span>Attendance</button>
     <button class="entry-type-btn" id="hr-tab-payroll" onclick="VW_HR_PAYROLL.switchHRTab('payroll',this)"><span class="et-icon">💰</span>Payroll</button>
     <button class="entry-type-btn" id="hr-tab-leaves" onclick="VW_HR_PAYROLL.switchHRTab('leaves',this)"><span class="et-icon">🏖</span>Leaves</button>
+    <button class="entry-type-btn" id="hr-tab-greetings" onclick="VW_HR_PAYROLL.switchHRTab('greetings',this)"><span class="et-icon">🎂</span>Greetings</button>
   </div>
 
   <div id="hr-tab-content">
@@ -444,6 +445,7 @@ async function switchHRTab(tab, btn) {
     case 'staff':      container.innerHTML = await renderStaffList(); break;
     case 'attendance': container.innerHTML = await renderAttendanceView(); break;
     case 'payroll':    container.innerHTML = await renderPayrollView(); break;
+    case 'greetings':  container.innerHTML = await renderStaffGreetings(); break;
     case 'leaves':     container.innerHTML = await renderLeavesView(); break;
   }
 }
@@ -4844,3 +4846,148 @@ window.VW_FIELD = {
 
 
 
+
+
+// ── STAFF GREETINGS (HR Tab) ──
+async function renderStaffGreetings() {
+  const { data: allStaff } = await VW_DB.client.from('profiles')
+    .select('id, name, phone, role, dob, anniversary')
+    .not('role', 'in', '("customer","contractor","pending")')
+    .order('name')
+    .then(r=>r, ()=>({data:[]}));
+
+  const today = new Date();
+  const mm = String(today.getMonth()+1).padStart(2,'0');
+  const dd = String(today.getDate()).padStart(2,'0');
+  const todayMD = `${mm}-${dd}`;
+  const next7 = [];
+  for (let i=1; i<=30; i++) {
+    const d = new Date(today); d.setDate(today.getDate()+i);
+    next7.push(`${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+  }
+
+  const todayBdays = (allStaff||[]).filter(s => s.dob && s.dob.slice(5,10) === todayMD);
+  const todayAnns = (allStaff||[]).filter(s => s.anniversary && s.anniversary.slice(5,10) === todayMD);
+  const upcomingBdays = (allStaff||[]).filter(s => s.dob && next7.includes(s.dob.slice(5,10)) && s.dob.slice(5,10) !== todayMD);
+  const noDate = (allStaff||[]).filter(s => !s.dob && !s.anniversary);
+
+  return `<div style="padding:4px">
+    <!-- Today -->
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">🎉 Today — ${dd}/${mm}</div>
+      ${todayBdays.length === 0 && todayAnns.length === 0
+        ? '<div style="color:var(--text3);font-size:13px;padding:12px 0">No birthdays or anniversaries today</div>'
+        : [...todayBdays.map(p=>({...p,type:'birthday'})), ...todayAnns.map(p=>({...p,type:'anniversary'}))].map(p=>`
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:8px;display:flex;align-items:center;gap:12px">
+        <div style="font-size:32px">${p.type==='birthday'?'🎂':'💑'}</div>
+        <div style="flex:1">
+          <div style="font-size:14px;font-weight:700">${p.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${p.role} ${p.phone?'· '+p.phone:''}</div>
+          <div style="font-size:11px;color:var(--gold)">${p.type==='birthday'?'Birthday today!':'Work Anniversary today!'}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <button class="btn-sm" onclick="VW_HR_PAYROLL.generateStaffGreeting('${(p.name||'').replace(/'/g,"\'")}','${p.type}','${p.phone||''}')">🎨 Generate Card</button>
+        </div>
+      </div>`).join('')
+      }
+    </div>
+
+    <!-- Upcoming 30 days -->
+    ${upcomingBdays.length ? `<div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">📅 Upcoming Birthdays (30 days)</div>
+      <div style="display:grid;gap:6px">
+        ${upcomingBdays.map(p => {
+          const dmd = p.dob.slice(5,10);
+          const daysAway = next7.indexOf(dmd)+1;
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+            <div style="font-size:20px">🎂</div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:600">${p.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${p.role} · ${p.dob.split('-').reverse().slice(0,2).join('/')}</div></div>
+            <span style="font-size:11px;font-weight:700;color:var(--gold)">in ${daysAway} day${daysAway>1?'s':''}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- Add DOB to staff -->
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">➕ Add DOB / Anniversary to Staff Member</div>
+      <div style="margin-bottom:8px">
+        <select id="hr-greet-staff" class="form-input" style="width:100%">
+          <option value="">Select staff member…</option>
+          ${(allStaff||[]).map(s=>`<option value="${s.id}" data-dob="${s.dob||''}" data-ann="${s.anniversary||''}">${s.name} (${s.role})</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Date of Birth</label>
+          <input type="date" id="hr-greet-dob" class="form-input">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">Work Anniversary</label>
+          <input type="date" id="hr-greet-ann" class="form-input">
+        </div>
+      </div>
+      <button class="btn-primary full-width" onclick="VW_HR_PAYROLL.saveStaffDates()">💾 Save Dates</button>
+    </div>
+
+    <!-- Staff without dates -->
+    ${noDate.length ? `<div>
+      <div style="font-size:12px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">⚠️ Staff Missing DOB (${noDate.length})</div>
+      <div style="font-size:12px;color:var(--text3)">${noDate.map(s=>s.name).join(', ')}</div>
+    </div>` : ''}
+  </div>`;
+}
+window.renderStaffGreetings = renderStaffGreetings;
+
+async function generateStaffGreeting(name, type, phone) {
+  showToast('🎨 Generating greeting card…', 'info');
+  const SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
+  const res = await fetch(`${SB_URL}/functions/v1/generate-poster`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':SB_KEY},
+    body:JSON.stringify({
+      topic: type==='birthday' ? `Happy Birthday ${name} — from the V Wholesale family` : `Happy Work Anniversary ${name} — thank you for your dedication`,
+      template: 'festival', language: 'en',
+      business_name: 'V Wholesale', phone: '8712697930',
+      website: 'vwholesale.in', address: 'NH65, Bhavanipuram, Vijayawada',
+      tagline: type==='birthday' ? 'Wishing you joy and success!' : 'Thank you for being part of our journey!'
+    })
+  });
+  const data = await res.json();
+  if (!data.ok) { showToast('❌ Generation failed: '+data.error, 'error'); return; }
+
+  // Show card in modal
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.innerHTML = `<div style="background:#1e293b;border-radius:16px;width:100%;max-width:420px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px;display:flex;justify-content:space-between;align-items:center">
+      <div style="color:#fff;font-size:14px;font-weight:700">${type==='birthday'?'🎂':'💑'} ${name}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <img src="data:image/png;base64,${data.image_b64}" style="width:100%;display:block">
+    <div style="padding:14px;display:grid;gap:8px">
+      <button onclick="(()=>{const a=document.createElement('a');a.download='${name.replace(/\s/g,'-')}-${type}.png';a.href='data:image/png;base64,${data.image_b64}';a.click()})()" style="width:100%;padding:12px;background:var(--accent,#c9a84c);border:none;border-radius:8px;color:#000;font-size:13px;font-weight:700;cursor:pointer">⬇ Download & Share on WhatsApp</button>
+      ${phone?`<a href="https://wa.me/91${phone.replace(/\D/g,'')}" target="_blank" style="display:block;padding:12px;background:#25D366;border-radius:8px;text-align:center;color:#fff;font-size:13px;font-weight:700;text-decoration:none">💬 Open ${name}'s WhatsApp</a>`:''}
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+}
+window.generateStaffGreeting = generateStaffGreeting;
+
+async function saveStaffDates() {
+  const sel = document.getElementById('hr-greet-staff');
+  const id = sel?.value;
+  if (!id) { showToast('Select a staff member', 'warning'); return; }
+  const dob = document.getElementById('hr-greet-dob')?.value || null;
+  const ann = document.getElementById('hr-greet-ann')?.value || null;
+  const { error } = await VW_DB.client.from('profiles').update({ dob, anniversary: ann }).eq('id', id);
+  if (error) { showToast('❌ '+error.message, 'error'); return; }
+  showToast('✅ Dates saved!', 'success');
+  // Refresh greetings tab
+  const container = document.getElementById('hr-tab-content');
+  if (container) container.innerHTML = await renderStaffGreetings();
+}
+window.saveStaffDates = saveStaffDates;
