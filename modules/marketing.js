@@ -3969,6 +3969,42 @@ async function generateAdCopy() {
   if (out) { out.style.display='block'; out.textContent=data.content||data.text||'No output'; }
 }
 
+function renderAds() {
+  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💰 Paid Advertising</h3>'
+    +'<div style="font-size:12px;color:var(--text3)">Google Ads · Meta Ads · Budget ₹30,000/month</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
+    +[{l:'Monthly Budget',v:'₹30,000',i:'💰'},{l:'Google',v:'₹18,000',i:'🔍'},{l:'Meta (FB+IG)',v:'₹12,000',i:'🎯'}]
+    .map(m=>'<div class="mkt-card" style="padding:12px;text-align:center"><div style="font-size:20px">'+m.i+'</div>'
+      +'<div style="font-size:16px;font-weight:900;margin:4px 0">'+m.v+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.l+'</div></div>').join('')
+    +'</div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🔍 Google Ads (₹18,000/mo)</div>'
+    +'<div style="display:grid;gap:8px">'
+    +[{t:'Search Ads — ₹10,000',d:'tiles Vijayawada, granite price near me, bathroom fittings shop, flooring store Andhra Pradesh',note:'High intent buyers actively searching'},
+      {t:'Local/Maps Ads — ₹5,000',d:'Appears in Google Maps when someone searches near NH65 / Bhavanipuram area',note:'Drives direct store walk-ins'},
+      {t:'Display Retargeting — ₹3,000',d:'Re-shows ads to people who visited vwholesale.in but did not buy',note:'Low cost, high conversion'}
+     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+a.d+'</div>'
+      +'<div style="font-size:11px;color:var(--gold)">💡 '+a.note+'</div></div>').join('')
+    +'</div><a href="https://ads.google.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Google Ads ↗</a></div>'
+    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Meta Ads — Facebook + Instagram (₹12,000/mo)</div>'
+    +'<div style="display:grid;gap:8px">'
+    +[{t:'Reels Boost — ₹4,000',d:'Boost your best Reels to homeowners 28-55 within 50km of Vijayawada'},
+      {t:'Lookalike Audience — ₹5,000',d:'Upload 1,300 customer list → Meta finds 50,000+ similar people in Andhra Pradesh'},
+      {t:'Retargeting — ₹3,000',d:'Re-target people who visited vwholesale.in or engaged with your Instagram'}
+     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
+      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
+      +'<div style="font-size:11px;color:var(--text3)">'+a.d+'</div></div>').join('')
+    +'</div><a href="https://business.facebook.com/adsmanager" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Meta Ads Manager ↗</a></div>'
+    +'<div class="mkt-card"><div class="mkt-card-title">🤖 AI Ad Copy Generator</div>'
+    +'<div class="mkt-form-group"><label class="mkt-form-label">Product / Focus</label>'
+    +'<input id="ads-topic" class="mkt-form-input" placeholder="e.g. Italian marble tiles, monsoon bathroom renovation"></div>'
+    +'<button class="mkt-btn mkt-btn-primary" onclick="generateAdCopy()" style="width:100%;margin-bottom:10px">Generate Ad Copy + Keywords</button>'
+    +'<div id="ads-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7"></div></div>');
+}
+
+
 function renderLocalSEO() {
   setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">📍 Local SEO</h3>'
     +'<div style="font-size:12px;color:var(--text3)">Dominate Google Maps · Local Search · Near Me queries</div></div>'
