@@ -2754,15 +2754,230 @@ function renderReviews() {
     'Session 23 — after social publishing OAuth is live'));
 }
 
-function renderCompetitors() {
-  setContent(_comingSoonCard('🔍','Competitor Intelligence',
-    'Add competitor URLs and social links. AI monitors daily — keywords, content, hashtags, strategy gaps.',
-    [{icon:'🌐',title:'Website Monitoring',desc:'Daily scrape — new pages, keyword targets, content changes, SEO moves'},
-     {icon:'📱',title:'Social Monitoring',desc:'Instagram, Facebook, YouTube — post frequency, engagement, top content'},
-     {icon:'#️⃣',title:'Hashtag & Keyword Extraction',desc:'What hashtags and SEO terms are working for them'},
-     {icon:'📊',title:'Comparison Report',desc:'V Wholesale vs competitors — weekly gap analysis with action items'},
-     {icon:'💡',title:'Growth Suggestions',desc:'AI tells you exactly what to do to outrank and outperform them'}],
-    'Session 20 — building next, high priority'));
+async function renderCompetitors() {
+  setContent(`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">🔍 Competitor Intelligence</h3>
+    <div style="font-size:12px;color:var(--text3)">Monitor competitors — keywords, content, hashtags, strategy gaps</div></div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showAddCompetitor()">+ Add Competitor</button>
+  </div>
+  <div id="comp-list"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>`);
+  await loadCompetitors();
+}
+
+async function loadCompetitors() {
+  const { data: comps } = await sb.from('competitors').select('*, competitor_reports(id,report_date,ai_summary,seo_score,keywords,ai_suggestions,created_at)').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
+  const el = document.getElementById('comp-list');
+  if (!el) return;
+  if (!(comps||[]).length) {
+    el.innerHTML = `<div class="mkt-card" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">🔍</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px">No competitors added yet</div>
+      <div style="font-size:13px;color:var(--text3);margin-bottom:20px">Add your first competitor — website, Instagram, YouTube — and AI will analyse their strategy daily</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="showAddCompetitor()">+ Add First Competitor</button>
+    </div>`;
+    return;
+  }
+  el.innerHTML = '<div style="display:grid;gap:14px">' + comps.map(c => {
+    const rep = (c.competitor_reports||[]).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+    const kws = (rep?.keywords||[]).slice(0,4);
+    const sug = (rep?.ai_suggestions||[]).slice(0,2);
+    return `<div class="mkt-card" style="padding:16px">
+      <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px">
+        <div style="width:44px;height:44px;background:var(--bg3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏢</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:900">${c.name}</div>
+          <div style="font-size:11px;color:var(--gold);margin-top:2px">${c.category||'direct'} competitor</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">
+            ${[c.website_url,c.instagram_url,c.facebook_url,c.youtube_url].filter(Boolean).map(u=>'<a href="'+u+'" target="_blank" style="color:var(--text3);text-decoration:none;margin-right:8px">🔗 '+u.replace('https://','').split('/')[0]+'</a>').join('')}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="mkt-btn mkt-btn-primary" id="analyse-btn-${c.id}" onclick="analyseCompetitor(${c.id})" style="font-size:11px;padding:4px 10px">🤖 Analyse</button>
+          <button class="mkt-btn mkt-btn-ghost" onclick="deleteCompetitor(${c.id})" style="font-size:11px;padding:4px 10px;color:var(--red)">🗑</button>
+        </div>
+      </div>
+      ${rep ? `<div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">LAST ANALYSIS · ${new Date(rep.created_at).toLocaleDateString('en-IN')}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${rep.ai_summary||'—'}</div>
+        ${rep.seo_score?`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--text3)">SEO:</span>
+          <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden"><div style="height:100%;width:${rep.seo_score}%;background:${rep.seo_score>70?'#22c55e':rep.seo_score>40?'#f59e0b':'#ef4444'};border-radius:3px"></div></div>
+          <span style="font-size:11px;font-weight:700">${rep.seo_score}/100</span>
+        </div>`:''}
+        ${kws.length?`<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">TOP KEYWORDS</div><div style="display:flex;flex-wrap:wrap;gap:4px">${kws.map(k=>'<span class="badge badge-blue">'+k+'</span>').join('')}</div></div>`:''}
+        ${sug.length?`<div><div style="font-size:10px;font-weight:700;color:var(--green);margin-bottom:4px">💡 ACTIONS FOR V WHOLESALE</div>${sug.map(s=>'<div style="font-size:11px;color:var(--text2);padding:3px 0;border-top:1px solid var(--border)">→ '+s+'</div>').join('')}</div>`:''}
+      </div>
+      <button class="mkt-btn mkt-btn-ghost" onclick="viewFullReport(${c.id},'${c.name.replace(/'/g,"\'")}')" style="font-size:11px;width:100%">📊 View Full Report</button>`
+      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">No analysis yet — click 🤖 Analyse</div>'}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+// Store competitor data for analysis
+const _compCache = {};
+
+async function loadCompetitorCache() {
+  const {data} = await sb.from('competitors').select('*').then(r=>r,()=>({data:[]}));
+  (data||[]).forEach(c => { _compCache[c.id] = c; });
+}
+
+function showAddCompetitor() {
+  const m = document.createElement('div');
+  m.id = 'add-comp-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">🔍 Add Competitor</div>
+      <button onclick="document.getElementById('add-comp-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:10px">
+      <div class="mkt-form-group"><label class="mkt-form-label">Competitor Name *</label>
+        <input type="text" id="comp-name" class="mkt-form-input" placeholder="e.g. Somany Tiles Vijayawada, Kajaria Showroom"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Website URL</label>
+        <input type="url" id="comp-website" class="mkt-form-input" placeholder="https://www.example.com"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Instagram</label>
+        <input type="url" id="comp-instagram" class="mkt-form-input" placeholder="https://instagram.com/username"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Facebook</label>
+        <input type="url" id="comp-facebook" class="mkt-form-input" placeholder="https://facebook.com/pagename"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">YouTube</label>
+        <input type="url" id="comp-youtube" class="mkt-form-input" placeholder="https://youtube.com/@channel"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Category</label>
+        <select id="comp-category" class="mkt-form-select">
+          <option value="direct">Direct (same city)</option>
+          <option value="regional">Regional (Andhra/Telangana)</option>
+          <option value="national">National Brand</option>
+          <option value="online">Online Competitor</option>
+        </select></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Notes (optional)</label>
+        <input type="text" id="comp-notes" class="mkt-form-input" placeholder="e.g. Strong on Instagram, weak on GBP"></div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="saveCompetitor(true)">💾 Save & Analyse Now</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="saveCompetitor(false)">Save Only</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
+}
+
+async function saveCompetitor(analyseNow) {
+  const name = (document.getElementById('comp-name')?.value||'').trim();
+  if (!name) { showMktToast('Enter competitor name'); return; }
+  const payload = {
+    name,
+    website_url: document.getElementById('comp-website')?.value?.trim()||null,
+    instagram_url: document.getElementById('comp-instagram')?.value?.trim()||null,
+    facebook_url: document.getElementById('comp-facebook')?.value?.trim()||null,
+    youtube_url: document.getElementById('comp-youtube')?.value?.trim()||null,
+    category: document.getElementById('comp-category')?.value||'direct',
+    notes: document.getElementById('comp-notes')?.value?.trim()||null,
+    added_by: mktProfile?.name
+  };
+  const {data:comp,error} = await sb.from('competitors').insert(payload).select().single().then(r=>r,e=>({data:null,error:e}));
+  if (!comp) { showMktToast('❌ Failed: '+(error?.message||'unknown')); return; }
+  _compCache[comp.id] = comp;
+  document.getElementById('add-comp-modal')?.remove();
+  showMktToast('✅ Competitor saved!');
+  await loadCompetitors();
+  if (analyseNow) setTimeout(()=>analyseCompetitor(comp.id), 400);
+}
+
+async function analyseCompetitor(id) {
+  const c = _compCache[id] || (await sb.from('competitors').select('*').eq('id',id).single().then(r=>r.data,()=>null));
+  if (!c) { showMktToast('Competitor not found'); return; }
+  _compCache[id] = c;
+
+  const btn = document.getElementById('analyse-btn-'+id);
+  if (btn) { btn.textContent = '⏳ Analysing…'; btn.disabled = true; }
+  showMktToast('🤖 Analysing '+c.name+'… ~15 seconds');
+
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/analyse-competitor', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({competitor_id:id,name:c.name,website_url:c.website_url,instagram_url:c.instagram_url,facebook_url:c.facebook_url,youtube_url:c.youtube_url})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error||'Analysis failed');
+    showMktToast('✅ Analysis complete for '+c.name);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  }
+  await loadCompetitors();
+}
+
+async function deleteCompetitor(id) {
+  if (!confirm('Delete this competitor and all their reports?')) return;
+  await sb.from('competitors').delete().eq('id',id);
+  showMktToast('Deleted');
+  await loadCompetitors();
+}
+
+async function viewFullReport(compId, compName) {
+  const {data:reports} = await sb.from('competitor_reports').select('*').eq('competitor_id',compId).order('created_at',{ascending:false}).limit(5).then(r=>r,()=>({data:[]}));
+  const r = (reports||[])[0];
+  if (!r) { showMktToast('No report yet — click Analyse first'); return; }
+
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;overflow:hidden;margin-top:20px">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:15px;font-weight:900;color:#fff">📊 ${compName}</div>
+      <div style="font-size:11px;color:#64748B">${new Date(r.created_at).toLocaleDateString('en-IN')} · ${reports.length} report(s) total</div></div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:12px">
+
+      <div style="background:var(--bg3);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">AI SUMMARY</div>
+        <div style="font-size:13px;line-height:1.7">${r.ai_summary||'—'}</div>
+        ${r.seo_score?`<div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          <span style="font-size:11px;color:var(--text3)">SEO Score:</span>
+          <div style="flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden"><div style="height:100%;width:${r.seo_score}%;background:${r.seo_score>70?'#22c55e':r.seo_score>40?'#f59e0b':'#ef4444'};border-radius:4px"></div></div>
+          <span style="font-size:13px;font-weight:900">${r.seo_score}/100</span>
+        </div>`:''}
+        ${r.estimated_traffic?`<div style="font-size:12px;color:var(--text3);margin-top:6px">📈 Traffic: <strong style="color:var(--text1)">${r.estimated_traffic}</strong></div>`:''}
+      </div>
+
+      ${(r.keywords||[]).length?`<div style="background:var(--bg3);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:8px">🔑 THEIR KEYWORDS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${r.keywords.map(k=>'<span class="badge badge-blue">'+k+'</span>').join('')}</div>
+      </div>`:''}
+
+      ${(r.raw_data?.keywords_to_target||[]).length?`<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:8px">🎯 V WHOLESALE SHOULD TARGET</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${r.raw_data.keywords_to_target.map(k=>'<span class="badge badge-green">'+k+'</span>').join('')}</div>
+      </div>`:''}
+
+      ${(r.hashtags||[]).length?`<div style="background:var(--bg3);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:8px">#️⃣ HASHTAGS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${r.hashtags.map(h=>'<span class="badge badge-gray">#'+h.replace('#','')+'</span>').join('')}</div>
+      </div>`:''}
+
+      ${(r.top_content||[]).length?`<div style="background:var(--bg3);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:8px">📱 CONTENT THAT WORKS FOR THEM</div>
+        ${r.top_content.map(c=>`<div style="background:var(--bg2);border-radius:8px;padding:10px;margin-bottom:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold)">${c.type||'Post'}</div>
+          <div style="font-size:12px;margin:4px 0">${c.topic||'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">${c.why_it_works||''}</div>
+        </div>`).join('')}
+      </div>`:''}
+
+      ${(r.raw_data?.content_gaps||[]).length?`<div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:8px">💡 CONTENT V WHOLESALE SHOULD CREATE</div>
+        ${r.raw_data.content_gaps.map(g=>'<div style="font-size:12px;padding:5px 0;border-top:1px solid rgba(201,168,76,0.15)">→ '+g+'</div>').join('')}
+      </div>`:''}
+
+      ${(r.ai_suggestions||[]).length?`<div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:#8b5cf6;margin-bottom:8px">🚀 ACTION PLAN FOR V WHOLESALE</div>
+        ${r.ai_suggestions.map((s,i)=>`<div style="display:flex;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(139,92,246,0.15)"><span style="color:#8b5cf6;font-weight:700">${i+1}.</span><span>${s}</span></div>`).join('')}
+      </div>`:''}
+
+      <button class="mkt-btn mkt-btn-ghost" onclick="this.closest('[style*=fixed]').remove()">Close</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if(e.target===m) m.remove(); });
 }
 
 function renderSegments() {
