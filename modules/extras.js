@@ -7514,3 +7514,128 @@ async function handleKYCFile(input, walletId, docType) {
   }
 }
 window.handleKYCFile = handleKYCFile;
+
+// ════════════════════════════════════════════════════════════
+// DAILY POSTS FEED — Staff Portal
+// All staff see today's content. CRM/Sales can share.
+// ════════════════════════════════════════════════════════════
+async function renderDailyFeed() {
+  const main = document.getElementById('main-content');
+  if (!main) return;
+  const role = VW_AUTH?.getRole?.() || '';
+  const profile = VW_AUTH?.getCurrentProfile?.() || {};
+  const canShare = ['admin','owner','manager','sales_head','sales_executive','executive',
+                    'sr_sales','sr_executive','tl','asm','crm','store_manager','floor_manager'].includes(role);
+
+  main.innerHTML = `
+  <div class="page-header" style="margin-bottom:16px">
+    <h2 style="font-size:18px;font-weight:900;margin:0">📢 Today's Posts</h2>
+    <p style="font-size:12px;color:var(--text3);margin:4px 0 0">Content created by marketing team for you to share</p>
+  </div>
+  <div id="feed-tabs" style="display:flex;gap:0;margin-bottom:16px;background:var(--bg2);border-radius:10px;padding:4px;border:1px solid var(--border)">
+    <button onclick="loadStaffFeedTab('today',this)" style="flex:1;padding:8px;border:none;background:var(--accent);color:#fff;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📅 Today</button>
+    <button onclick="loadStaffFeedTab('week',this)" style="flex:1;padding:8px;border:none;background:none;color:var(--text2);border-radius:8px;font-size:12px;cursor:pointer">📆 This Week</button>
+    <button onclick="loadStaffFeedTab('all',this)" style="flex:1;padding:8px;border:none;background:none;color:var(--text2);border-radius:8px;font-size:12px;cursor:pointer">📋 All</button>
+  </div>
+  <div id="staff-feed-list" style="display:grid;gap:12px"></div>`;
+
+  await loadStaffFeedTab('today');
+}
+
+window.renderDailyFeed = renderDailyFeed;
+
+async function loadStaffFeedTab(tab, btn) {
+  // Update tab styles
+  if (btn) {
+    document.querySelectorAll('#feed-tabs button').forEach(b => {
+      b.style.background = 'none';
+      b.style.color = 'var(--text2)';
+      b.style.fontWeight = '400';
+    });
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#fff';
+    btn.style.fontWeight = '700';
+  }
+
+  const el = document.getElementById('staff-feed-list');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div>';
+
+  const today = new Date().toISOString().split('T')[0];
+  let from = today;
+  if (tab === 'week') from = new Date(Date.now()-6*86400000).toISOString().split('T')[0];
+  if (tab === 'all') from = '2026-01-01';
+
+  const { data: posts } = await VW_DB.client.from('daily_posts_feed')
+    .select('*').eq('status','active').gte('post_date', from)
+    .order('post_date',{ascending:false}).order('created_at',{ascending:false})
+    .then(r=>r, ()=>({data:[]}));
+
+  const role = VW_AUTH?.getRole?.() || '';
+  const profile = VW_AUTH?.getCurrentProfile?.() || {};
+  const canShare = ['admin','owner','manager','sales_head','sales_executive','executive',
+                    'sr_sales','sr_executive','tl','asm','crm','store_manager','floor_manager'].includes(role);
+
+  if (!(posts||[]).length) {
+    el.innerHTML = `<div style="text-align:center;padding:40px;background:var(--bg2);border-radius:12px;border:1px solid var(--border)">
+      <div style="font-size:48px;margin-bottom:12px">📢</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">No posts yet${tab==='today'?' for today':''}</div>
+      <div style="font-size:12px;color:var(--text3)">Marketing team will push content here. Check back soon.</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = (posts||[]).map(p => {
+    const isToday = p.post_date === today;
+    const typeIcon = {offer:'💰',wish:'🎉',product:'📦',announcement:'📣',post:'📝'}[p.post_type]||'📝';
+    const waText = encodeURIComponent((p.caption||p.title||'') + '\n\n— V Wholesale, Vijayawada\n📞 8712697930 | 🌐 vwholesale.in');
+
+    return `<div style="background:var(--bg2);border:1px solid ${isToday?'var(--accent)':'var(--border)'};border-radius:14px;overflow:hidden">
+      ${isToday ? '<div style="background:var(--accent);color:#fff;font-size:10px;font-weight:700;padding:4px 14px;text-align:center">TODAY\'S POST</div>' : ''}
+      ${p.image_url ? `<div style="aspect-ratio:1;overflow:hidden;max-height:320px"><img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover"></div>` : ''}
+      <div style="padding:14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:20px">${typeIcon}</span>
+          <div>
+            <div style="font-size:14px;font-weight:800">${p.title}</div>
+            <div style="font-size:11px;color:var(--text3)">${new Date(p.post_date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})} · ${(p.platforms||[]).join(', ')||'All platforms'}</div>
+          </div>
+        </div>
+        ${p.caption ? `<div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:12px;line-height:1.7;white-space:pre-wrap;margin-bottom:10px;max-height:120px;overflow-y:auto">${p.caption}</div>` : ''}
+
+        ${canShare ? `
+        <div style="display:grid;gap:8px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3)">📤 SHARE THIS POST</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            ${p.caption ? `<button onclick="copyFeedCaption('${(p.caption||'').replace(/'/g,"\\'").replace(/\n/g,'\\n').slice(0,200)}')" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text1)">📋 Copy Caption</button>` : ''}
+            ${p.image_url ? `<button onclick="window.open('${p.image_url}','_blank')" style="flex:1;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text1)">⬇ Save Image</button>` : ''}
+          </div>
+          <a href="https://wa.me/?text=${waText}" target="_blank" style="display:block;padding:12px;background:#25D366;border-radius:8px;text-align:center;color:#fff;font-size:13px;font-weight:700;text-decoration:none" onclick="trackFeedShare(${p.id},'${profile.name||role}','whatsapp')">
+            💬 Share as WhatsApp Status
+          </a>
+        </div>` : `
+        <div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center;font-size:12px;color:var(--text3)">
+          📌 Sharing available for CRM & Sales team only
+        </div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.loadStaffFeedTab = loadStaffFeedTab;
+
+function copyFeedCaption(text) {
+  navigator.clipboard.writeText(text.replace(/\\n/g,'\n')).then(()=>{
+    showToast('📋 Caption copied! Now open Instagram and paste.', 'success');
+  });
+}
+window.copyFeedCaption = copyFeedCaption;
+
+async function trackFeedShare(feedId, staffName, platform) {
+  await VW_DB.client.from('post_shares').insert({
+    feed_id: feedId, staff_name: staffName, platform
+  });
+  // Increment shared count
+  await VW_DB.client.rpc('increment_share_count', {feed_id: feedId}).then(()=>{},()=>{});
+}
+window.trackFeedShare = trackFeedShare;

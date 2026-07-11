@@ -256,6 +256,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'my_achievements') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAchievements(); } return; }
     else if (page === 'my_advances') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAdvances(); } return; }
     else if (page === 'my_documents') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyDocuments(); } return; }
+    else if (page === 'daily_feed') { await renderDailyFeed(); return; }
     else if (page === 'my_profile') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyProfile(); } return; }
     else if (page === 'my_attendance') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyAttendance(); } return; }
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
@@ -3788,6 +3789,10 @@ const SIDEBAR_NAV = [
   { page: 'visualizer',     icon: '🎨', label: 'Room Visualizer', perm: 'billing' },
   { page: 'training',       icon: '🎓', label: 'Training',        always: true },
   { page: 'feedback',       icon: '⭐', label: 'Feedback',        always: true },
+
+  // ── DAILY FEED ──────────────────────────────────────
+  { section: 'Daily Feed' },
+  { page: 'daily_feed',    icon: '📢', label: 'Today\'s Posts',   always: true },
 
   // ── MY HR (self-service, always visible) ─────────────
   { section: 'My HR' },

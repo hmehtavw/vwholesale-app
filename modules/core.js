@@ -505,70 +505,70 @@ const ROLE_PAGES = {
                   'club','labor','ledger','feedback','training','dispatch','catalogs','vendors',
                   'quotations','tiles','granite','tile_quotes','tile_inventory','returns',
                   'visualizer','wishlist','grn','analytics','quick_quote',
-                  'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                  'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── FLOOR MANAGER: floor ops, inventory, TQs ─────────────────────────
   floor_manager: ['dashboard','checkin','cart','tasks','crm','follow_ups','inventory',
                   'club','labor','ledger','feedback','training','dispatch',
                   'quotations','tiles','granite','tile_quotes','tile_inventory','returns',
                   'visualizer','wishlist','grn','quick_quote',
-                  'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                  'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── TL / SR SALES: sales + CRM + TQs ────────────────────────────────
   tl:         ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
-                'wishlist','quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sr_sales:   ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
-                'wishlist','quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sr_executive:['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
-                'wishlist','quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   asm:        ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
-                'wishlist','quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sales_head: ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','dispatch','quotations','tiles','granite','tile_quotes','returns',
                 'visualizer','wishlist','quick_quote','analytics',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── SALES EXECUTIVE: daily billing + TQs ─────────────────────────────
   executive:  ['dashboard','checkin','cart','tasks','crm','follow_ups','feedback','training',
                 'quotations','tiles','granite','tile_quotes','returns','visualizer','wishlist',
-                'quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sales_executive: ['dashboard','checkin','cart','tasks','crm','follow_ups','feedback','training',
                 'quotations','tiles','granite','tile_quotes','returns','visualizer','wishlist',
-                'quick_quote','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── ACCOUNTS: billing verification + cash report only ────────────────
   accounts:   ['dashboard','tasks','feedback','training','ledger','returns','tile_quotes',
-                'accounts','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'accounts','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── DISPATCH: dispatch only ───────────────────────────────────────────
   dispatch:   ['dashboard','tasks','feedback','training','dispatch',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── RECEPTION: check-in + basic ──────────────────────────────────────
   reception:  ['dashboard','checkin','cart','tasks','feedback','training','returns','wishlist',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── CONTRACTOR CLUB MANAGER ──────────────────────────────────────────
   club_manager: ['dashboard','checkin','tasks','club','labor','ledger','feedback','training',
-                 'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                 'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── MANAGEMENT (general) ─────────────────────────────────────────────
   management: ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                'training','dispatch','quotations','tiles','granite','tile_quotes','returns',
                'visualizer','wishlist','quick_quote','analytics',
-               'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+               'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── BASIC STAFF ───────────────────────────────────────────────────────
   staff:      ['dashboard','checkin','tasks','feedback','training',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   training:   ['dashboard','tasks','feedback','training',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   hr:         ['dashboard','tasks','feedback','training',
-                'my_profile','my_hr','my_attendance','my_leaves','my_salary'],
+                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   pending:    [],
 

@@ -2088,6 +2088,7 @@ async function renderPosterStudio() {
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="mkt-btn mkt-btn-ghost" style="font-size:12px" onclick="copyCaptionPS()">📋 Copy Caption</button>
           <button class="mkt-btn mkt-btn-ghost" style="font-size:12px" onclick="downloadCurrentPoster()">⬇ Download PNG</button>
+          <button class="mkt-btn mkt-btn-primary" style="font-size:12px" onclick="pushToStaffFeed()">📢 Push to Staff Feed</button>
           <button class="mkt-btn mkt-btn-ghost" style="font-size:12px;color:var(--purple)" onclick="generateFullPoster()">🔄 Regenerate</button>
         </div>
       </div>
@@ -4155,3 +4156,164 @@ async function generateGreetingMessage(name, type, phone) {
 }
 
 function copyGreetMsg(btn) { navigator.clipboard.writeText(btn.dataset.msg||"").then(()=>showMktToast("📋 Copied!")); }
+
+
+// ── STAFF FEED MANAGEMENT (Marketing side) ──
+async function pushToStaffFeed(titleOverride) {
+  if (!currentPosterB64) { showMktToast('Generate a poster first'); return; }
+  const title = titleOverride || (document.getElementById('ps-topic')?.value||'').trim() || 'Today\'s Post';
+
+  let image_url = null;
+  try {
+    const byteArr = Uint8Array.from(atob(currentPosterB64), c => c.charCodeAt(0));
+    const blob = new Blob([byteArr], { type: 'image/png' });
+    const filename = `feed/${Date.now()}-feed.png`;
+    const { error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: false });
+    if (!upErr) {
+      const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(filename);
+      image_url = urlData?.publicUrl || null;
+    }
+  } catch(e) { console.warn('Upload:', e.message); }
+
+  const { error } = await sb.from('daily_posts_feed').insert({
+    post_date: new Date().toISOString().split('T')[0],
+    title, caption: currentCaption,
+    image_url, post_type: 'post',
+    platforms: ['Instagram','Facebook','WhatsApp'],
+    status: 'active', created_by: mktProfile?.name
+  });
+
+  if (error) { showMktToast('❌ ' + error.message); return; }
+  showMktToast('✅ Pushed to Staff Feed!');
+}
+
+async function renderStaffFeed() {
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div><h3 style="font-size:16px;font-weight:900">📢 Staff Daily Feed</h3>
+    <div style="font-size:12px;color:var(--text3)">Posts visible to all staff · CRM/Sales team shares as WhatsApp status</div></div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showAddFeedPost()">+ Add Post</button>
+  </div>
+  <div id="feed-list"><div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div></div>`);
+  await loadFeedPosts();
+}
+
+async function loadFeedPosts() {
+  const el = document.getElementById('feed-list');
+  if (!el) return;
+  const today = new Date().toISOString().split('T')[0];
+  const { data: posts } = await sb.from('daily_posts_feed').select('*, post_shares(count)').gte('post_date', new Date(Date.now()-7*86400000).toISOString().split('T')[0]).order('post_date', {ascending:false}).order('created_at', {ascending:false}).then(r=>r,()=>({data:[]}));
+
+  if (!(posts||[]).length) {
+    el.innerHTML = `<div class="mkt-card" style="text-align:center;padding:40px">
+      <div style="font-size:48px;margin-bottom:12px">📢</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:8px">No posts in feed yet</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:16px">Generate a poster and click "Push to Staff Feed", or add a post manually</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="showAddFeedPost()">+ Add Post</button>
+    </div>`;
+    return;
+  }
+
+  // Group by date
+  const byDate = {};
+  (posts||[]).forEach(p => {
+    const d = p.post_date;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(p);
+  });
+
+  el.innerHTML = Object.keys(byDate).sort((a,b)=>b.localeCompare(a)).map(date => {
+    const label = date === today ? '📅 Today' : date === new Date(Date.now()-86400000).toISOString().split('T')[0] ? '📅 Yesterday' : '📅 ' + new Date(date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+    return `<div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">${label}</div>
+      <div style="display:grid;gap:10px">
+        ${byDate[date].map(p => `
+        <div class="mkt-card" style="padding:14px">
+          <div style="display:flex;gap:12px">
+            ${p.image_url ? `<img src="${p.image_url}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:72px;background:var(--bg3);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px">📝</div>`}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:700;margin-bottom:3px">${p.title}</div>
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${(p.platforms||[]).join(' · ')||'—'} · ${p.post_type}</div>
+              ${p.caption ? `<div style="font-size:11px;color:var(--text2);line-height:1.5;overflow:hidden;max-height:40px">${p.caption.slice(0,100)}${p.caption.length>100?'…':''}</div>` : ''}
+              <div style="font-size:10px;color:var(--text3);margin-top:4px">Shared ${p.post_shares?.[0]?.count||0} times · by ${p.created_by||'—'}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+            <button class="mkt-btn mkt-btn-ghost" onclick="editFeedPost(${p.id})" style="font-size:11px;padding:3px 8px">✏️ Edit</button>
+            <button class="mkt-btn mkt-btn-ghost" onclick="deleteFeedPost(${p.id})" style="font-size:11px;padding:3px 8px;color:var(--red)">🗑 Remove</button>
+            <span class="badge ${p.status==='active'?'badge-green':'badge-gray'}">${p.status}</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showAddFeedPost() {
+  const m = document.createElement('div');
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
+    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:14px;font-weight:900;color:#fff">📢 Add to Staff Feed</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;gap:10px">
+      <div class="mkt-form-group"><label class="mkt-form-label">Post Date</label>
+        <input type="date" id="fp-date" class="mkt-form-input" value="${new Date().toISOString().split('T')[0]}"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Title *</label>
+        <input id="fp-title" class="mkt-form-input" placeholder="e.g. Diwali Offer — 20% off tiles"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Type</label>
+        <select id="fp-type" class="mkt-form-select">
+          <option value="post">📝 Regular Post</option>
+          <option value="offer">💰 Offer / Discount</option>
+          <option value="wish">🎉 Festival Wish</option>
+          <option value="product">📦 Product Showcase</option>
+          <option value="announcement">📣 Announcement</option>
+        </select></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Caption</label>
+        <textarea id="fp-caption" class="mkt-form-input" rows="4" style="resize:vertical;font-size:12px;line-height:1.6" placeholder="Post caption with hashtags…"></textarea></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Image URL (optional)</label>
+        <input id="fp-image" class="mkt-form-input" placeholder="Paste image URL from brand-assets storage"></div>
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="saveFeedPost()">📢 Push to Feed</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="this.closest('[style*=fixed]').remove()">Cancel</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e=>{if(e.target===m)m.remove();});
+}
+
+async function saveFeedPost() {
+  const title = (document.getElementById('fp-title')?.value||'').trim();
+  if (!title) { showMktToast('Enter a title'); return; }
+  const { error } = await sb.from('daily_posts_feed').insert({
+    post_date: document.getElementById('fp-date')?.value || new Date().toISOString().split('T')[0],
+    title, caption: document.getElementById('fp-caption')?.value||null,
+    image_url: document.getElementById('fp-image')?.value||null,
+    post_type: document.getElementById('fp-type')?.value||'post',
+    platforms: ['Instagram','Facebook','WhatsApp'],
+    status: 'active', created_by: mktProfile?.name
+  });
+  if (error) { showMktToast('❌ '+error.message); return; }
+  document.querySelector('[style*=fixed]')?.remove();
+  showMktToast('✅ Pushed to staff feed!');
+  await loadFeedPosts();
+}
+
+async function deleteFeedPost(id) {
+  if (!confirm('Remove this post from staff feed?')) return;
+  await sb.from('daily_posts_feed').delete().eq('id', id);
+  showMktToast('Removed');
+  await loadFeedPosts();
+}
+
+async function editFeedPost(id) {
+  const {data:p} = await sb.from('daily_posts_feed').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
+  if (!p) return;
+  // Quick status toggle
+  const newStatus = p.status === 'active' ? 'expired' : 'active';
+  await sb.from('daily_posts_feed').update({status:newStatus}).eq('id',id);
+  showMktToast(`Post ${newStatus}`);
+  await loadFeedPosts();
+}
