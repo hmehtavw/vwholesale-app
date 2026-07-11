@@ -8,61 +8,83 @@
   <link rel="canonical" id="page-canonical" href="https://vwholesale.in/blog/">
   <script type="application/ld+json" id="schema-org"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f8fafc; color: #1e293b; line-height: 1.7; }
-    header { background: #0A1628; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
-    header a { color: #c9a84c; font-weight: 900; font-size: 18px; text-decoration: none; }
-    header span { color: #64748b; font-size: 13px; }
-    .article-wrap { max-width: 740px; margin: 0 auto; padding: 32px 20px 60px; }
-    .breadcrumb { font-size: 12px; color: #94a3b8; margin-bottom: 20px; }
-    .breadcrumb a { color: #c9a84c; text-decoration: none; }
-    h1 { font-size: 26px; font-weight: 900; line-height: 1.3; margin-bottom: 12px; color: #0A1628; }
-    .article-meta { font-size: 12px; color: #94a3b8; margin-bottom: 28px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; }
-    .article-body h2 { font-size: 20px; font-weight: 700; margin: 28px 0 12px; color: #0A1628; }
-    .article-body h3 { font-size: 16px; font-weight: 700; margin: 20px 0 8px; color: #1e293b; }
-    .article-body p { margin-bottom: 16px; font-size: 15px; color: #374151; }
-    .article-body ul, .article-body ol { margin: 0 0 16px 20px; }
-    .article-body li { margin-bottom: 6px; font-size: 15px; color: #374151; }
-    .article-body a { color: #c9a84c; }
-    .cta-box { background: #0A1628; color: #fff; border-radius: 12px; padding: 24px; margin-top: 32px; text-align: center; }
-    .cta-box h3 { font-size: 18px; margin-bottom: 8px; color: #c9a84c; }
-    .cta-box p { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
-    .cta-box a { display: inline-block; background: #c9a84c; color: #000; padding: 12px 24px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 14px; }
-    footer { background: #0A1628; color: #64748b; text-align: center; padding: 24px; font-size: 12px; }
-    footer a { color: #c9a84c; text-decoration: none; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;line-height:1.7}
+    header{background:#0A1628;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .logo{color:#c9a84c;font-weight:900;font-size:18px;text-decoration:none}
+    nav{display:flex;gap:16px;align-items:center}
+    nav a{color:#94a3b8;text-decoration:none;font-size:13px}
+    nav a:hover{color:#c9a84c}
+    nav .cta{background:#c9a84c;color:#000;padding:6px 14px;border-radius:6px;font-weight:700;font-size:12px}
+    .article-wrap{max-width:740px;margin:0 auto;padding:32px 20px 60px}
+    .breadcrumb{font-size:12px;color:#94a3b8;margin-bottom:20px}
+    .breadcrumb a{color:#c9a84c;text-decoration:none}
+    .article-body h1{font-size:26px;font-weight:900;line-height:1.3;margin-bottom:12px;color:#0A1628}
+    .article-meta{font-size:12px;color:#94a3b8;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e2e8f0}
+    .article-body h2{font-size:20px;font-weight:700;margin:28px 0 12px;color:#0A1628}
+    .article-body h3{font-size:16px;font-weight:700;margin:20px 0 8px;color:#1e293b}
+    .article-body p{margin-bottom:16px;font-size:15px;color:#374151}
+    .article-body ul,.article-body ol{margin:0 0 16px 20px}
+    .article-body li{margin-bottom:6px;font-size:15px;color:#374151}
+    .article-body a{color:#c9a84c}
+    .article-body img{width:100%;border-radius:10px;margin:16px 0}
+    .article-body em{color:#64748b;font-size:12px;display:block;text-align:center;margin-top:-10px;margin-bottom:16px}
+    .cta-box{background:#0A1628;color:#fff;border-radius:14px;padding:28px;margin-top:36px;text-align:center}
+    .cta-box h3{font-size:19px;margin-bottom:8px;color:#c9a84c}
+    .cta-box p{font-size:13px;color:#94a3b8;margin-bottom:18px}
+    .cta-box a{display:inline-block;background:#c9a84c;color:#000;padding:12px 28px;border-radius:8px;font-weight:700;text-decoration:none;font-size:14px;margin:4px}
+    .related{margin-top:40px}
+    .related h3{font-size:16px;font-weight:700;margin-bottom:16px;color:#0A1628}
+    footer{background:#0A1628;color:#64748b;text-align:center;padding:28px;font-size:12px;margin-top:40px}
+    footer a{color:#c9a84c;text-decoration:none}
   </style>
 </head>
 <body>
   <header>
-    <a href="/">V Wholesale</a>
-    <span>Home Building & Improvement — Vijayawada</span>
+    <a href="/" class="logo">V Wholesale</a>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/blog/">Blog</a>
+      <a href="tel:+918712697930" class="cta">📞 Call Us</a>
+    </nav>
   </header>
+
   <div class="article-wrap">
     <div class="breadcrumb"><a href="/">Home</a> › <a href="/blog/">Blog</a> › <span id="bc-title">Article</span></div>
-    <div id="article-content"><div style="text-align:center;padding:60px;color:#94a3b8">Loading article…</div></div>
+    <div id="article-content" class="article-body"><div style="text-align:center;padding:60px;color:#94a3b8">Loading article…</div></div>
     <div class="cta-box">
       <h3>Visit V Wholesale — Vijayawada</h3>
-      <p>NH65, Bhavanipuram, Vijayawada · Open 10AM–8PM Mon–Sat · 11AM–6PM Sun</p>
-      <a href="tel:+918712697930">📞 Call 8712697930</a>
+      <p>NH65, Bhavanipuram, Vijayawada · Open Mon–Sat 10AM–8PM · Sun 11AM–6PM</p>
+      <a href="tel:+918712697930">📞 8712697930</a>
+      <a href="/">🌐 vwholesale.in</a>
+    </div>
+    <div class="related">
+      <h3>More Articles</h3>
+      <p style="font-size:13px;color:#64748b"><a href="/blog/" style="color:#c9a84c">← Back to all articles</a></p>
     </div>
   </div>
+
   <footer>
-    <p>© 2026 V Wholesale · <a href="/">vwholesale.in</a> · <a href="/blog/">Blog</a></p>
+    <p style="margin-bottom:6px">© 2026 <a href="/">V Wholesale</a> — NH65, Bhavanipuram, Vijayawada</p>
+    <p><a href="tel:+918712697930">📞 8712697930</a> &nbsp;|&nbsp; <a href="/">vwholesale.in</a> &nbsp;|&nbsp; <a href="/blog/">Blog</a></p>
   </footer>
+
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
-    const slug = window.location.pathname.replace(/\/blog\//,'').replace(/\//g,'');
+    const slug = window.location.pathname.replace(/\/blog\//g,'').replace(/\//g,'') || 'index';
     fetch(`https://raw.githubusercontent.com/hmehtavw/vwholesale-app/main/blog/${slug}.md`)
     .then(r => { if(!r.ok) throw new Error('Not found'); return r.text(); })
     .then(md => {
-      const titleMatch = md.match(/^#\s+(.+)$/m);
       const metaMatch = md.match(/<!--\s*meta:\s*(.+?)\s*-->/);
+      const kwMatch   = md.match(/<!--\s*keywords:\s*(.+?)\s*-->/);
+      const clean = md.replace(/<!--.*?-->/gs,'').trim();
+      const titleMatch = clean.match(/^#\s+(.+)$/m);
       const title = titleMatch?.[1] || slug.replace(/-/g,' ');
       const meta = metaMatch?.[1] || '';
-      const clean = md.replace(/<!--.*?-->/gs,'');
+
       document.getElementById('page-title').textContent = title + ' | V Wholesale Blog';
       document.getElementById('page-desc').content = meta;
-      document.getElementById('bc-title').textContent = title;
+      document.getElementById('bc-title').textContent = title.slice(0,40)+(title.length>40?'…':'');
       document.getElementById('page-canonical').href = `https://vwholesale.in/blog/${slug}/`;
       document.getElementById('schema-org').textContent = JSON.stringify({
         "@context":"https://schema.org","@type":"Article",
@@ -71,13 +93,14 @@
         "publisher":{"@type":"Organization","name":"V Wholesale","url":"https://vwholesale.in"},
         "url":`https://vwholesale.in/blog/${slug}/`
       });
+
       document.getElementById('article-content').innerHTML =
-        '<h1>' + title + '</h1>' +
         '<div class="article-meta">By V Wholesale Team · Vijayawada, Andhra Pradesh</div>' +
-        '<div class="article-body">' + marked.parse(clean.replace(/^#[^\n]+\n/,'')) + '</div>';
+        marked.parse(clean);
     })
     .catch(() => {
-      document.getElementById('article-content').innerHTML = '<div style="text-align:center;padding:40px">Article not found. <a href="/blog/" style="color:#c9a84c">← Back to Blog</a></div>';
+      document.getElementById('article-content').innerHTML =
+        '<div style="text-align:center;padding:40px">Article not found. <a href="/blog/" style="color:#c9a84c">← Back to Blog</a></div>';
     });
   </script>
 </body>
