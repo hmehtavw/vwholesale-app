@@ -290,46 +290,173 @@ async function renderCommandCentre() {
 
 // ── AI CMO ──
 async function renderAICMO() {
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading your CMO brief…</div>`);
+
+  // Pull live data for context
+  const [
+    {data:campaigns}, {data:posters}, {data:calItems},
+    {data:blogs}, {data:competitors}, {data:feedPosts}
+  ] = await Promise.all([
+    sb.from('campaigns').select('name,status,spent_inr,budget_inr,conversions').eq('status','active').then(r=>r,()=>({data:[]})),
+    sb.from('poster_history').select('created_at').gte('created_at', new Date(Date.now()-7*86400000).toISOString()).then(r=>r,()=>({data:[]})),
+    sb.from('content_calendar').select('status,cal_date').gte('cal_date', new Date().toISOString().split('T')[0]).lte('cal_date', new Date(Date.now()+7*86400000).toISOString().split('T')[0]).then(r=>r,()=>({data:[]})),
+    sb.from('blog_posts').select('status').then(r=>r,()=>({data:[]})),
+    sb.from('competitors').select('id').then(r=>r,()=>({data:[]})),
+    sb.from('daily_posts_feed').select('created_at').gte('created_at', new Date(Date.now()-7*86400000).toISOString()).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+
   setContent(`
-  <div class="mkt-card">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
-      <div style="width:48px;height:48px;background:rgba(139,92,246,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:22px">🧠</div>
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">🤖 AI CMO — Weekly Marketing Brief</h3>
+    <div style="font-size:12px;color:var(--text3)">${dateStr}</div>
+  </div>
+
+  <!-- Status snapshot -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+    ${[
+      {icon:'📣',label:'Active Campaigns',val:(campaigns||[]).length,color:'#22c55e'},
+      {icon:'🎨',label:'Posters This Week',val:(posters||[]).length,color:'var(--gold)'},
+      {icon:'📢',label:'Posts to Staff',val:(feedPosts||[]).length,color:'#3b82f6'}
+    ].map(m=>'<div class="mkt-card" style="padding:10px;text-align:center">'
+      +'<div style="font-size:20px">'+m.icon+'</div>'
+      +'<div style="font-size:18px;font-weight:900;color:'+m.color+'">'+m.val+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.label+'</div>'
+    +'</div>').join('')}
+  </div>
+
+  <!-- AI Weekly Brief -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="width:40px;height:40px;background:linear-gradient(135deg,#c9a84c,#f59e0b);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">🤖</div>
       <div>
-        <div style="font-size:16px;font-weight:900">AI CMO</div>
-        <div style="font-size:12px;color:var(--text3)">Marketing Orchestrator · Level 1 (Recommend Only) · GPT-4o</div>
+        <div style="font-size:14px;font-weight:900">Your AI Chief Marketing Officer</div>
+        <div style="font-size:11px;color:var(--text3)">Get a personalised weekly marketing plan based on your actual data</div>
       </div>
-      <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()" style="margin-left:auto">▶ Run Now</button>
     </div>
-    <div id="cmo-output">
-      <div class="mkt-empty">
-        <div class="mkt-empty-icon">🧠</div>
-        <div class="mkt-empty-title">AI CMO Ready</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">Click "Run Now" to get your weekly marketing briefing, strategy recommendations, and action plan.</div>
-        <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()" style="margin-top:16px">▶ Generate Weekly Briefing</button>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">What's happening this week? (optional)</label>
+      <input id="cmo-context" class="mkt-form-input" placeholder="e.g. Pushing Italian marble, Ganesh Chaturthi coming up, sales slow on Tuesdays">
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="generateCMOBrief()" style="width:100%;padding:14px;font-size:14px;font-weight:900">🧠 Generate This Week's Marketing Plan</button>
+    <div id="cmo-output" style="display:none;margin-top:14px">
+      <div style="background:var(--bg3);border-radius:10px;padding:16px">
+        <div id="cmo-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text1)"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="mkt-btn mkt-btn-ghost" onclick="copyText('cmo-content')" style="flex:1">📋 Copy Brief</button>
+        <button class="mkt-btn mkt-btn-primary" onclick="generateCMOBrief()" style="flex:1">🔄 Regenerate</button>
       </div>
     </div>
   </div>
 
+  <!-- Weekly content schedule -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">📅 This Week's Content Plan</div>
+    <div style="display:grid;gap:6px">
+      ${['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].map((day,i) => {
+        const d = new Date(today);
+        const diff = i - today.getDay();
+        d.setDate(today.getDate() + diff);
+        const dateStr = d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+        const isToday = d.toDateString() === today.toDateString();
+        const isPast = d < today && !isToday;
+        const calDay = (calItems||[]).filter(c=>c.cal_date===d.toISOString().split('T')[0]);
+        const postTypes = {
+          'Monday':'🏠 Project Proof — before/after tile installation',
+          'Wednesday':'📦 Product Spotlight — feature a brand or new arrival',
+          'Friday':'🏗️ Contractor Club — recruit contractors, mention 2% bonus',
+          'Saturday':'⭐ Customer Story — testimonial or review',
+          'Tuesday':'',
+          'Thursday':'',
+          'Sunday':''
+        };
+        const hint = postTypes[day];
+        return '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:'+(isToday?'rgba(201,168,76,0.08)':'var(--bg3)')+';border-radius:8px;border:'+(isToday?'1px solid rgba(201,168,76,0.3)':'1px solid transparent')+'">'
+          +'<div style="min-width:32px;text-align:center"><div style="font-size:11px;font-weight:700;color:'+(isToday?'var(--gold)':isPast?'var(--text3)':'var(--text2)')+'">'+day.slice(0,3)+'</div>'
+          +'<div style="font-size:10px;color:var(--text3)">'+dateStr+'</div></div>'
+          +'<div style="flex:1"><div style="font-size:11px;color:'+(isPast?'var(--text3)':'var(--text1)')+';">'
+          +(calDay.length?'📌 '+calDay.length+' item(s) planned':hint?hint:'<span style="color:var(--text3)">No content planned</span>')+'</div></div>'
+          +(isToday?'<span class="badge badge-green" style="font-size:9px">TODAY</span>':'')
+        +'</div>';
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- Quick actions -->
   <div class="mkt-card">
-    <div class="mkt-card-title">Previous Runs</div>
-    <div id="cmo-runs-list">
-      <div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">No runs yet</div>
+    <div class="mkt-card-title">⚡ Act on AI Recommendations</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      ${[
+        {label:"Generate Today's Poster",icon:'🎨',page:'poster'},
+        {label:'Write Blog Article',icon:'📝',page:'website-seo'},
+        {label:'Plan Calendar',icon:'📅',page:'calendar'},
+        {label:'Send WhatsApp',icon:'💬',page:'whatsapp'},
+        {label:'Check Competitors',icon:'🔍',page:'competitors'},
+        {label:'View Analytics',icon:'📊',page:'analytics'}
+      ].map(a=>'<button class="mkt-btn mkt-btn-ghost" onclick="mktNav(\''+a.page+'\');" style="display:flex;align-items:center;gap:8px;padding:10px;font-size:12px;font-weight:600">'
+        +'<span style="font-size:18px">'+a.icon+'</span>'+a.label+'</button>'
+      ).join('')}
     </div>
   </div>`);
+}
 
-  // Load previous runs
-  const { data: runs } = await sb.from('ai_agent_runs').select('*').eq('agent_name','AI CMO').order('created_at',{ascending:false}).limit(5).then(r=>r, ()=>({data:[]}));
-  const runsEl = document.getElementById('cmo-runs-list');
-  if (runs?.length) {
-    runsEl.innerHTML = runs.map(r => `
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
-      <div>
-        <div style="font-size:12px;font-weight:700">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
-        <div style="font-size:11px;color:var(--text3)">${r.model} · $${(r.cost_usd||0).toFixed(4)} · ${r.duration_ms}ms</div>
-      </div>
-      <span class="badge badge-green">${r.status}</span>
-    </div>`).join('');
-  }
+async function generateCMOBrief() {
+  const context = (document.getElementById('cmo-context')?.value||'').trim();
+  const btn = document.querySelector('[onclick="generateCMOBrief()"]');
+  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+
+  const [
+    {data:campaigns}, {data:posters7}, {data:blogs},
+    {data:competitors}, {data:calItems}, {data:greetings7}
+  ] = await Promise.all([
+    sb.from('campaigns').select('name,status,spent_inr,budget_inr,impressions,conversions').then(r=>r,()=>({data:[]})),
+    sb.from('poster_history').select('topic,template,created_at').gte('created_at', new Date(Date.now()-7*86400000).toISOString()).then(r=>r,()=>({data:[]})),
+    sb.from('blog_posts').select('title,status').then(r=>r,()=>({data:[]})),
+    sb.from('competitors').select('name').then(r=>r,()=>({data:[]})),
+    sb.from('content_calendar').select('topic,status,cal_date,is_reel').gte('cal_date', new Date().toISOString().split('T')[0]).lte('cal_date', new Date(Date.now()+7*86400000).toISOString().split('T')[0]).then(r=>r,()=>({data:[]})),
+    sb.from('greeting_log').select('person_name,greeting_type').gte('created_at', new Date(Date.now()-7*86400000).toISOString()).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const today = new Date();
+  const dayOfWeek = today.toLocaleDateString('en-IN',{weekday:'long'});
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({
+      task:'cmo_weekly_brief', language:'en',
+      topic:'Weekly marketing brief',
+      context:{
+        business:'V Wholesale', location:'Vijayawada, Andhra Pradesh',
+        today: today.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
+        day_of_week: dayOfWeek,
+        active_campaigns: (campaigns||[]).filter(c=>c.status==='active').map(c=>c.name),
+        posters_this_week: (posters7||[]).length,
+        upcoming_calendar: (calItems||[]).map(c=>c.topic||c.cal_date),
+        blog_count: {published:(blogs||[]).filter(b=>b.status==='published').length, draft:(blogs||[]).filter(b=>b.status==='draft').length},
+        competitors_tracked: (competitors||[]).map(c=>c.name),
+        greetings_sent: (greetings7||[]).length,
+        extra_context: context || 'none'
+      }
+    })
+  });
+
+  const data = await res.json();
+  const content = data.content||data.text||'';
+
+  const out = document.getElementById('cmo-output');
+  const cont = document.getElementById('cmo-content');
+  if (out) out.style.display='block';
+  if (cont) cont.textContent = content || 'No brief generated — try again';
+
+  if (btn) { btn.textContent = "🧠 Generate This Week's Marketing Plan"; btn.disabled = false; }
+}
+
+function copyText(id) {
+  const el = document.getElementById(id);
+  if (el) navigator.clipboard.writeText(el.textContent||'').then(()=>showMktToast('📋 Copied!'));
 }
 
 async function runAICMO() {
@@ -911,38 +1038,166 @@ async function saveBrandKnowledge() {
 // ── INTEGRATIONS ──
 async function renderIntegrations() {
   const { data: integrations } = await sb.from('marketing_integrations').select('*').order('name').then(r=>r, ()=>({data:[]}));
+  const { data: settings } = await sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]}));
+
+  const getInt = (name) => (integrations||[]).find(i=>i.name.toLowerCase().includes(name.toLowerCase()));
+  const getSetting = (key) => (settings||[]).find(s=>s.key===key)?.value;
+
+  const metaConn = getInt('meta') || getInt('facebook') || getInt('instagram');
+  const waConn = getInt('whatsapp') || getInt('interakt');
+  const gbpConn = getInt('google') || getInt('gbp');
+  const ytConn = getInt('youtube');
+
+  const platforms = [
+    {
+      name:'Meta Business (Instagram + Facebook)',
+      icon:'📸',
+      status: metaConn?.status || 'not_connected',
+      description:'Connect once — publish to Instagram, Facebook and Threads. Enables auto-posting from Poster Studio.',
+      steps:[
+        'Create a Meta Business account at business.facebook.com',
+        'Add your Instagram and Facebook Page to the Business account',
+        'Go to Meta Developers → Create App → Business type',
+        'Add Instagram Basic Display + Pages API permissions',
+        'Generate access token and paste below'
+      ],
+      setupUrl:'https://developers.facebook.com/apps/',
+      token_key:'META_ACCESS_TOKEN',
+      page_key:'META_PAGE_ID'
+    },
+    {
+      name:'WhatsApp Business API (Interakt)',
+      icon:'💬',
+      status: waConn?.status || 'pending',
+      description:'Send broadcasts, automate greetings, quotation updates via Interakt. Number 8712697930 under Meta review.',
+      steps:[
+        'Complete Interakt WABA approval (number 8712697930 — under review)',
+        'Add INTERAKT_API_KEY to Supabase Edge Function secrets',
+        'Create and get approved message templates in Interakt',
+        'Test with a single message before enabling broadcasts'
+      ],
+      setupUrl:'https://app.interakt.ai',
+      token_key:'INTERAKT_API_KEY',
+      note:'⏳ Number under Meta review — check Interakt dashboard'
+    },
+    {
+      name:'Google Business Profile',
+      icon:'📍',
+      status: gbpConn?.status || 'not_connected',
+      description:'Auto-post updates, offers and events to your GBP. Boosts local SEO and Maps visibility.',
+      steps:[
+        'Go to Google Cloud Console → Enable My Business API',
+        'Create OAuth 2.0 credentials (Web application type)',
+        'Add vwholesale.in to authorized redirect URIs',
+        'Click Connect below to start the OAuth flow'
+      ],
+      setupUrl:'https://console.cloud.google.com/apis/library/mybusiness.googleapis.com',
+      token_key:'GBP_ACCESS_TOKEN'
+    },
+    {
+      name:'YouTube Data API',
+      icon:'▶️',
+      status: ytConn?.status || 'not_connected',
+      description:'Upload Shorts and videos directly from the portal. Schedule posts to your V Wholesale YouTube channel.',
+      steps:[
+        'Google Cloud Console → Enable YouTube Data API v3',
+        'Create OAuth 2.0 credentials',
+        'Authorize your V Wholesale YouTube channel',
+        'Click Connect below'
+      ],
+      setupUrl:'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
+      token_key:'YOUTUBE_ACCESS_TOKEN'
+    },
+    {
+      name:'Pexels (Stock Photos)',
+      icon:'🖼️',
+      status:'connected',
+      description:'Free stock photos for poster hero images and blog articles. API key already configured.',
+      setupUrl:'https://www.pexels.com/api/',
+      note:'✅ API key configured in Supabase secrets'
+    },
+    {
+      name:'OpenAI (AI Generation)',
+      icon:'🤖',
+      status:'connected',
+      description:'Powers all AI features — poster captions, blog articles, ad copy, review replies, WhatsApp messages.',
+      setupUrl:'https://platform.openai.com',
+      note:'✅ API key configured — GPT-4o-mini for text, gpt-image-1 for posters'
+    }
+  ];
+
+  const statusConfig = {
+    connected:   {badge:'badge-green', label:'Connected ✓'},
+    pending:     {badge:'badge-blue',  label:'Pending'},
+    not_connected:{badge:'badge-gray', label:'Not Connected'},
+    setup:       {badge:'badge-blue',  label:'Setup in progress'}
+  };
+
   setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">Platform Integrations</h3>
-    <div style="font-size:12px;color:var(--text3)">Connect your marketing platforms</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">🔌 Platform Integrations</h3>
+      <div style="font-size:12px;color:var(--text3)">Connect external platforms to enable auto-publishing and automation</div>
+    </div>
   </div>
-  <div style="display:grid;gap:10px">
-    ${(integrations||[]).map(i => `
-    <div class="mkt-card" style="display:flex;align-items:center;gap:14px;padding:14px">
-      <div style="width:40px;height:40px;background:var(--bg3);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">
-        ${{
-          'Google Search Console':'🔍','Google Business Profile':'📍','Instagram':'📸',
-          'Facebook':'👥','WhatsApp Business':'💬','Google Ads':'📢','Meta Ads':'📱','OpenAI':'🧠'
-        }[i.name]||'🔌'}
-      </div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:800">${i.name}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${i.notes||'—'}</div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <span style="font-size:10px;color:${i.credentials_set?'var(--green)':'var(--text3)'}">🔑 Credentials ${i.credentials_set?'✓':'✗'}</span>
-          <span style="font-size:10px;color:${i.read_tested?'var(--green)':'var(--text3)'}">📖 Read ${i.read_tested?'✓':'✗'}</span>
-          <span style="font-size:10px;color:${i.write_tested?'var(--green)':'var(--text3)'}">✍️ Write ${i.write_tested?'✓':'✗'}</span>
+
+  <div style="display:grid;gap:12px">
+    ${platforms.map(p => {
+      const cfg = statusConfig[p.status] || statusConfig.not_connected;
+      const isConnected = p.status === 'connected';
+      return `<div class="mkt-card" style="padding:16px;border-left:3px solid ${isConnected?'#22c55e':p.status==='pending'?'#f59e0b':'var(--border)'}">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${p.steps?'12':'0'}px">
+          <div style="font-size:28px;flex-shrink:0">${p.icon}</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+              <div style="font-size:14px;font-weight:900">${p.name}</div>
+              <span class="badge ${cfg.badge}">${cfg.label}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${p.description}</div>
+            ${p.note ? `<div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:6px 10px;border-radius:6px;margin-bottom:8px">${p.note}</div>` : ''}
+            ${p.steps && !isConnected ? `
+            <div style="margin-bottom:10px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">SETUP STEPS</div>
+              <div style="display:grid;gap:4px">
+                ${p.steps.map((step,i)=>`<div style="display:flex;gap:8px;font-size:11px;color:var(--text2)">
+                  <span style="width:16px;height:16px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${i+1}</span>
+                  <span>${step}</span>
+                </div>`).join('')}
+              </div>
+            </div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <a href="${p.setupUrl}" target="_blank" class="mkt-btn ${isConnected?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;text-decoration:none;padding:5px 10px">
+              ${isConnected ? 'Settings ↗' : 'Setup ↗'}
+            </a>
+          </div>
         </div>
-      </div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
-        <span class="badge ${i.status==='connected'?'badge-green':i.status==='setup'||i.status==='partial'?'badge-gold':'badge-gray'}">${i.status}</span>
-        <button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">${i.status==='connected'?'Configure':'Connect'}</button>
-      </div>
-    </div>`).join('')}
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="mkt-card" style="margin-top:14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.2)">
+    <div class="mkt-card-title" style="color:var(--gold)">📋 Integration Roadmap</div>
+    <div style="display:grid;gap:6px;font-size:12px">
+      ${[
+        {status:'✅', item:'OpenAI — AI text + image generation'},
+        {status:'✅', item:'Pexels — Stock photos for posters and blog'},
+        {status:'✅', item:'GitHub — Blog article auto-publish'},
+        {status:'✅', item:'Supabase — Database and edge functions'},
+        {status:'⏳', item:'Interakt WhatsApp — WABA approval in progress'},
+        {status:'🔲', item:'Meta Business OAuth — Instagram + Facebook publishing'},
+        {status:'🔲', item:'Google Business Profile API — GBP auto-posting'},
+        {status:'🔲', item:'YouTube Data API — Shorts upload'},
+        {status:'🔲', item:'Google Search Console API — live SEO data in Analytics'},
+        {status:'🔲', item:'Meta Ads API — auto-pull campaign stats'},
+      ].map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">
+        <span style="font-size:14px;flex-shrink:0">${r.status}</span>
+        <span style="color:var(--text2)">${r.item}</span>
+      </div>`).join('')}
+    </div>
   </div>`);
 }
 
-// ── AI AGENTS ──
 async function renderAgents() {
   const { data: agents } = await sb.from('ai_agents').select('*').order('name').then(r=>r, ()=>({data:[]}));
   const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
@@ -1756,73 +2011,206 @@ async function generateReviewPlan(monthName) {
 
 
 async function renderAnalytics() {
-  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
-  const totalCost = (runs||[]).reduce((s,r)=>s+(r.cost_usd||0),0);
-  const totalRuns = (runs||[]).length;
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading analytics…</div>`);
+
+  // Pull all marketing data from DB in parallel
+  const [
+    {data:posters}, {data:blogs}, {data:campaigns}, {data:calItems},
+    {data:feedPosts}, {data:competitors}, {data:greetings}, {data:approvals}
+  ] = await Promise.all([
+    sb.from('poster_history').select('id,created_at,topic,template').order('created_at',{ascending:false}).limit(100).then(r=>r,()=>({data:[]})),
+    sb.from('blog_posts').select('id,status,word_count,created_at').then(r=>r,()=>({data:[]})),
+    sb.from('campaigns').select('id,name,status,budget_inr,spent_inr,impressions,clicks,conversions,created_at').then(r=>r,()=>({data:[]})),
+    sb.from('content_calendar').select('id,status,content_type,is_reel,cal_date').order('cal_date',{ascending:false}).limit(100).then(r=>r,()=>({data:[]})),
+    sb.from('daily_posts_feed').select('id,post_date,shared_count').then(r=>r,()=>({data:[]})),
+    sb.from('competitors').select('id,name').then(r=>r,()=>({data:[]})),
+    sb.from('greeting_log').select('id,greeting_type,created_at').then(r=>r,()=>({data:[]})),
+    sb.from('marketing_approvals').select('id,status').then(r=>r,()=>({data:[]}))
+  ]);
+
+  // ── CALCULATE METRICS ──
+  const now = new Date();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  const last30 = new Date(now - 30*86400000);
+  const last7   = new Date(now - 7*86400000);
+
+  const postersThisMonth = (posters||[]).filter(p => {
+    const d = new Date(p.created_at);
+    return d.getMonth()===thisMonth && d.getFullYear()===thisYear;
+  }).length;
+
+  const totalImpressions = (campaigns||[]).reduce((s,c)=>s+(c.impressions||0),0);
+  const totalClicks      = (campaigns||[]).reduce((s,c)=>s+(c.clicks||0),0);
+  const totalConversions = (campaigns||[]).reduce((s,c)=>s+(c.conversions||0),0);
+  const totalSpend       = (campaigns||[]).reduce((s,c)=>s+(c.spent_inr||0),0);
+  const totalBudget      = (campaigns||[]).reduce((s,c)=>s+(c.budget_inr||0),0);
+  const activeCampaigns  = (campaigns||[]).filter(c=>c.status==='active').length;
+  const cpl = totalConversions>0 ? Math.round(totalSpend/totalConversions) : 0;
+  const ctr = totalImpressions>0 ? ((totalClicks/totalImpressions)*100).toFixed(2) : '0.00';
+
+  const publishedBlogs = (blogs||[]).filter(b=>b.status==='published').length;
+  const draftBlogs     = (blogs||[]).filter(b=>b.status==='draft').length;
+
+  const calPublished = (calItems||[]).filter(i=>i.status==='published').length;
+  const calPlanned   = (calItems||[]).filter(i=>i.status==='planned').length;
+  const calReels     = (calItems||[]).filter(i=>i.is_reel).length;
+  const publishRate  = (calItems||[]).length>0 ? Math.round(calPublished/(calItems||[]).length*100) : 0;
+
+  // Posters by week (last 8 weeks)
+  const weeklyPosters = Array(8).fill(0);
+  (posters||[]).forEach(p => {
+    const daysAgo = Math.floor((now - new Date(p.created_at))/86400000);
+    const week = Math.floor(daysAgo/7);
+    if (week < 8) weeklyPosters[week]++;
+  });
+  weeklyPosters.reverse();
+  const maxWeekly = Math.max(...weeklyPosters, 1);
+
+  const totalShares = (feedPosts||[]).reduce((s,p)=>s+(p.shared_count||0),0);
 
   setContent(`
   <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">Analytics & Reporting</h3>
-    <div style="font-size:12px;color:var(--text3)">Connect Google Analytics for full data. AI usage tracked below.</div>
+    <h3 style="font-size:16px;font-weight:900">📊 Marketing Analytics</h3>
+    <div style="font-size:12px;color:var(--text3)">All data from your V Wholesale marketing activity</div>
   </div>
 
-  <div class="mkt-grid-4" style="margin-bottom:16px">
-    <div class="stat-card">
-      <div class="stat-label">AI Runs Total</div>
-      <div class="stat-value" style="color:var(--purple)">${totalRuns}</div>
-      <div class="stat-sub">All agents combined</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">AI Cost Total</div>
-      <div class="stat-value" style="color:var(--green)">$${totalCost.toFixed(4)}</div>
-      <div class="stat-sub">≈ ₹${(totalCost*84).toFixed(2)}</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Search Console</div>
-      <div class="stat-value" style="font-size:16px">✅</div>
-      <div class="stat-sub">Processing data (1-2 days)</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Google Analytics</div>
-      <div class="stat-value" style="font-size:16px;color:var(--gold)">⏳</div>
-      <div class="stat-sub">Not connected yet</div>
-    </div>
+  <!-- TOP KPI ROW -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    ${[
+      {icon:'🎨',label:'Posters Created',val:(posters||[]).length,sub:'this month: '+postersThisMonth,color:'var(--gold)'},
+      {icon:'📣',label:'Active Campaigns',val:activeCampaigns,sub:'of '+(campaigns||[]).length+' total',color:'#22c55e'},
+      {icon:'📝',label:'Blog Articles',val:publishedBlogs,sub:draftBlogs+' drafts pending',color:'#3b82f6'},
+      {icon:'🎂',label:'Greetings Sent',val:(greetings||[]).length,sub:'birthday + anniversary',color:'#f59e0b'}
+    ].map(m=>'<div class="mkt-card" style="padding:12px;text-align:center">'
+      +'<div style="font-size:22px">'+m.icon+'</div>'
+      +'<div style="font-size:20px;font-weight:900;color:'+m.color+';margin:4px 0">'+m.val+'</div>'
+      +'<div style="font-size:10px;font-weight:700;color:var(--text2)">'+m.label+'</div>'
+      +'<div style="font-size:10px;color:var(--text3)">'+m.sub+'</div>'
+    +'</div>').join('')}
   </div>
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">📊 Connect Google Analytics 4</div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.6">
-      Google Analytics 4 will track website visitors, traffic sources, page views and conversion events for vwholesale.in.
-    </div>
-    <div style="display:grid;gap:8px;margin-bottom:12px">
+  <!-- CAMPAIGN PERFORMANCE -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">📣 Campaign Performance (All Time)</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
       ${[
-        {step:'1', text:'Go to analytics.google.com', done:false},
-        {step:'2', text:'Create GA4 property for vwholesale.in', done:false},
-        {step:'3', text:'Copy your Measurement ID (G-XXXXXXXXXX)', done:false},
-        {step:'4', text:'Add it below and I will embed the tracking code', done:false},
-      ].map(s=>`<div style="display:flex;gap:10px;align-items:center;font-size:12px">
-        <span style="width:20px;height:20px;border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0">${s.step}</span>
-        <span style="color:${s.done?'var(--green)':'var(--text2)'}">${s.text}</span>
-      </div>`).join('')}
+        {label:'Impressions',val:totalImpressions.toLocaleString('en-IN'),icon:'👁'},
+        {label:'Clicks',val:totalClicks.toLocaleString('en-IN'),icon:'🖱'},
+        {label:'Conversions',val:totalConversions.toLocaleString('en-IN'),icon:'✅'},
+        {label:'CTR',val:ctr+'%',icon:'📈'},
+        {label:'Cost/Lead',val:cpl?'₹'+cpl.toLocaleString('en-IN'):'—',icon:'💰'}
+      ].map(m=>'<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
+        +'<div style="font-size:16px">'+m.icon+'</div>'
+        +'<div style="font-size:15px;font-weight:900;margin:3px 0">'+m.val+'</div>'
+        +'<div style="font-size:10px;color:var(--text3)">'+m.label+'</div>'
+      +'</div>').join('')}
     </div>
-    <div style="display:flex;gap:8px">
-      <input type="text" id="ga-id" class="mkt-form-input" placeholder="G-XXXXXXXXXX" style="flex:1">
-      <button class="mkt-btn mkt-btn-primary" onclick="addGATracking()">Add GA4 Tracking</button>
+    ${totalBudget>0?`<div style="margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
+        <span>Total Budget: ₹${totalBudget.toLocaleString('en-IN')}</span>
+        <span>Spent: ₹${totalSpend.toLocaleString('en-IN')} (${Math.round(totalSpend/totalBudget*100)}%)</span>
+      </div>
+      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${Math.min(100,Math.round(totalSpend/totalBudget*100))}%;background:${totalSpend/totalBudget>0.8?'#ef4444':'#22c55e'};border-radius:4px"></div>
+      </div>
+    </div>`:'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">Create campaigns and update stats to see performance data</div>'}
+    ${(campaigns||[]).length?'<div style="display:grid;gap:6px">'+
+      (campaigns||[]).slice(0,5).map(c=>'<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">'
+        +'<div style="flex:1"><div style="font-size:12px;font-weight:700">'+c.name+'</div>'
+        +'<div style="font-size:11px;color:var(--text3)">'+c.status+' · ₹'+(c.spent_inr||0).toLocaleString('en-IN')+' spent · '+(c.conversions||0)+' conversions</div></div>'
+        +'<span class="badge '+(c.status==='active'?'badge-green':c.status==='completed'?'badge-blue':'badge-gray')+'">'+c.status+'</span>'
+      +'</div>').join('')+'</div>':''}
+  </div>
+
+  <!-- CONTENT ACTIVITY -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+
+    <!-- Poster bar chart -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">🎨 Posters — Last 8 Weeks</div>
+      <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:6px">
+        ${weeklyPosters.map((v,i)=>{
+          const h = Math.round((v/maxWeekly)*80);
+          const isLast = i===7;
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
+            +'<div style="font-size:9px;color:var(--text3)">'+v+'</div>'
+            +'<div style="width:100%;background:'+(isLast?'var(--gold)':'rgba(201,168,76,0.4)')+';border-radius:3px 3px 0 0;height:'+h+'px;min-height:2px"></div>'
+          +'</div>';
+        }).join('')}
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3)">
+        <span>8 weeks ago</span><span style="color:var(--gold);font-weight:700">This week</span>
+      </div>
+    </div>
+
+    <!-- Content Calendar -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">📅 Content Calendar</div>
+      <div style="display:grid;gap:8px">
+        ${[
+          {label:'Published',val:calPublished,color:'#22c55e',pct:publishRate},
+          {label:'Planned',val:calPlanned,color:'#f59e0b',pct:calPlanned?(calItems||[]).length>0?Math.round(calPlanned/(calItems||[]).length*100):0:0},
+          {label:'Reels planned',val:calReels,color:'#8b5cf6',pct:null}
+        ].map(m=>'<div>'
+          +'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">'
+          +'<span style="color:var(--text2)">'+m.label+'</span>'
+          +'<span style="font-weight:700;color:'+m.color+'">'+m.val+(m.pct!==null?' ('+m.pct+'%)':'')+'</span></div>'
+          +(m.pct!==null?'<div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+m.pct+'%;background:'+m.color+';border-radius:3px"></div></div>':'')
+        +'</div>').join('')}
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Publish rate: <strong style="color:var(--text1)">${publishRate}%</strong></div>
+      </div>
     </div>
   </div>
 
-  <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">🤖 AI Usage Log</div>
-    ${(runs||[]).length > 0 ? `<table class="mkt-table">
-      <tr><th>Agent</th><th>Model</th><th>Cost</th><th>Duration</th><th>Date</th></tr>
-      ${(runs||[]).slice(0,20).map(r=>`<tr>
-        <td style="font-weight:700">${r.agent_name}</td>
-        <td style="color:var(--text3);font-size:11px">${r.model}</td>
-        <td style="color:var(--green)">$${(r.cost_usd||0).toFixed(4)}</td>
-        <td style="color:var(--text3)">${r.duration_ms}ms</td>
-        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
-      </tr>`).join('')}
-    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No runs yet</div></div>'}
+  <!-- BLOG + FEED ROW -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <div class="mkt-card">
+      <div class="mkt-card-title">📝 Blog Articles</div>
+      <div style="display:grid;gap:8px">
+        ${[
+          {label:'Published',val:publishedBlogs,color:'#22c55e'},
+          {label:'Drafts',val:draftBlogs,color:'#f59e0b'},
+          {label:'Total words written',val:((blogs||[]).reduce((s,b)=>s+(b.word_count||0),0)).toLocaleString('en-IN'),color:'var(--text1)'}
+        ].map(m=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px">'
+          +'<span style="font-size:12px">'+m.label+'</span>'
+          +'<span style="font-size:14px;font-weight:900;color:'+m.color+'">'+m.val+'</span>'
+        +'</div>').join('')}
+        <a href="https://vwholesale.in/blog/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;text-align:center">View Live Blog ↗</a>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div class="mkt-card-title">📢 Staff Feed</div>
+      <div style="display:grid;gap:8px">
+        ${[
+          {label:'Posts pushed',val:(feedPosts||[]).length,color:'var(--gold)'},
+          {label:'Total shares',val:totalShares,color:'#22c55e'},
+          {label:'Competitors tracked',val:(competitors||[]).length,color:'#3b82f6'}
+        ].map(m=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px">'
+          +'<span style="font-size:12px">'+m.label+'</span>'
+          +'<span style="font-size:14px;font-weight:900;color:'+m.color+'">'+m.val+'</span>'
+        +'</div>').join('')}
+        <div style="font-size:11px;color:var(--text3);padding:4px 0">Approvals pending: <strong style="color:${((approvals||[]).filter(a=>a.status==='pending').length>0?'#f59e0b':'#22c55e')}">${(approvals||[]).filter(a=>a.status==='pending').length}</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUICK ACTIONS -->
+  <div class="mkt-card">
+    <div class="mkt-card-title">⚡ Quick Actions</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+      ${[
+        {label:'Generate Poster',icon:'🎨',page:'poster'},
+        {label:'Write Blog Article',icon:'📝',page:'website-seo'},
+        {label:'Add to Calendar',icon:'📅',page:'calendar'},
+        {label:'Check Greetings',icon:'🎂',page:'greetings'},
+        {label:'Add Competitor',icon:'🔍',page:'competitors'},
+        {label:'Create Campaign',icon:'📣',page:'campaigns'}
+      ].map(a=>'<button class="mkt-btn mkt-btn-ghost" onclick="mktNav(this.dataset.p)" data-p="'+a.page+'" style="display:flex;align-items:center;gap:8px;padding:10px;font-size:12px;font-weight:600;text-align:left">'
+        +'<span style="font-size:18px">'+a.icon+'</span>'+a.label+'</button>'
+      ).join('')}
+    </div>
   </div>`);
 }
 
@@ -3345,81 +3733,232 @@ function copyXPost() {
   navigator.clipboard.writeText(content).then(()=>showMktToast('📋 Copied — now paste in X'));
 }
 
-function renderWhatsApp() {
-  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💬 WhatsApp Automation</h3>'
-    +'<div style="font-size:12px;color:var(--text3)">Broadcasts · Chatbot · Greetings via Interakt</div></div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">⚙️ Setup Checklist</div><div style="display:grid;gap:8px">'
-    +[{step:'Create Interakt account at interakt.ai', url:'https://app.interakt.ai', done:false},
-      {step:'Connect WhatsApp Business number', url:'https://app.interakt.ai', done:false},
-      {step:'Get WABA approved by Meta (2-3 days)', url:'https://app.interakt.ai', done:false},
-      {step:'Add INTERAKT_API_KEY to Supabase secrets', url:'MKT_SB_URL+"/settings/vault"', done:false},
-      {step:'Create message templates in Interakt', url:'https://app.interakt.ai', done:false}
-     ].map((s,i)=>'<div style="display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border-radius:8px">'
-      +'<div style="width:24px;height:24px;border-radius:50%;background:'+(s.done?'#22c55e':'var(--bg2)')+';display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">'+(s.done?'✓':(i+1))+'</div>'
-      +'<div style="flex:1;font-size:12px">'+s.step+'</div>'
-      +'<a href="'+s.url+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">Open ↗</a></div>'
-     ).join('')+'</div></div>'
-    +'<div class="mkt-card"><div class="mkt-card-title">📨 Manual Message Generator</div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Type</label>'
-    +'<select id="wa-type" class="mkt-form-select">'
-    +'<option value="offer">Festival / Seasonal Offer</option>'
-    +'<option value="product">New Product Arrival</option>'
-    +'<option value="contractor">Contractor Club Invite</option>'
-    +'<option value="followup">Customer Follow-up</option></select></div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Key Details</label>'
-    +'<input id="wa-details" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles till Sunday"></div>'
-    +'<button class="mkt-btn mkt-btn-primary" onclick="generateWAMessage()" style="width:100%;margin-bottom:10px">🤖 Generate Message</button>'
-    +'<div id="wa-output" style="display:none"><div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">'
-    +'<div id="wa-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div></div>'
-    +'<button class="mkt-btn mkt-btn-primary" onclick="copyWAMessage()" style="width:100%">📋 Copy Message</button></div></div>');
+async function renderWhatsApp() {
+  // Check if Interakt is configured
+  const { data: waInt } = await sb.from('social_connections').select('*').eq('platform','whatsapp').single().then(r=>r,()=>({data:null}));
+  const isLive = waInt?.status === 'connected' && waInt?.access_token_set;
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">💬 WhatsApp Automation</h3>
+      <div style="font-size:12px;color:var(--text3)">Broadcasts · Greetings · Order updates via Interakt</div>
+    </div>
+    <span class="badge ${isLive?'badge-green':'badge-blue'}">${isLive?'✅ Live':'⏳ Pending WABA'}</span>
+  </div>
+
+  <!-- WABA STATUS -->
+  ${!isLive ? `<div class="mkt-card" style="margin-bottom:14px;border-left:3px solid #f59e0b">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="font-size:28px">⏳</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px">WhatsApp Business API — Under Meta Review</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">Number 8712697930 is registered with Interakt and under Meta WABA approval. Typically takes 24-48 hours.</div>
+        <div style="display:grid;gap:6px">
+          ${[
+            {done:true, step:'Create Interakt account'},
+            {done:true, step:'Register number 8712697930'},
+            {done:true, step:'Submit for Meta WABA approval'},
+            {done:true, step:'Add INTERAKT_API_KEY to Supabase secrets'},
+            {done:false, step:'Meta approves WABA (pending — check Interakt dashboard)'},
+            {done:false, step:'Activate message templates in Interakt'},
+            {done:false, step:'Enable WhatsApp broadcasts below'}
+          ].map(s=>`<div style="display:flex;align-items:center;gap:8px;font-size:12px">
+            <div style="width:16px;height:16px;border-radius:50%;background:${s.done?'#22c55e':'var(--bg3)'};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex-shrink:0">${s.done?'✓':''}</div>
+            <span style="color:${s.done?'var(--text3)':'var(--text1)'};${s.done?'text-decoration:line-through':''}">${s.step}</span>
+          </div>`).join('')}
+        </div>
+        <a href="https://app.interakt.ai" target="_blank" class="mkt-btn mkt-btn-primary" style="margin-top:10px;font-size:12px;text-decoration:none;display:inline-block">Check Interakt Status ↗</a>
+      </div>
+    </div>
+  </div>` : ''}
+
+  <!-- BROADCAST BUILDER -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">📢 Broadcast Message Builder</div>
+    ${!isLive ? '<div style="font-size:12px;color:var(--text3);background:rgba(0,0,0,.2);border-radius:8px;padding:10px;margin-bottom:12px;text-align:center">⚠️ Broadcast sending activates after WABA approval. Build and preview templates now.</div>' : ''}
+
+    <div style="display:grid;gap:10px">
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Message Template</label>
+        <select id="wa-template" class="mkt-form-select" onchange="previewWATemplate(this.value)">
+          <option value="festival_offer">🎉 Festival / Seasonal Offer</option>
+          <option value="product_launch">📦 New Product / Brand Arrival</option>
+          <option value="contractor_club">🏗️ Contractor Club Invite</option>
+          <option value="quotation_ready">📋 Quotation Ready (Order Update)</option>
+          <option value="birthday_greeting">🎂 Birthday Greeting</option>
+          <option value="re_engagement">😴 Re-engage Dormant Customer</option>
+          <option value="custom">✏️ Custom Message</option>
+        </select>
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Target Audience</label>
+        <select id="wa-audience" class="mkt-form-select">
+          <option value="all">All Customers (1,300+)</option>
+          <option value="contractors">Contractors only</option>
+          <option value="high_value">High Value (₹1L+ purchase history)</option>
+          <option value="dormant">Dormant (not visited 90+ days)</option>
+          <option value="recent">Recent customers (last 30 days)</option>
+          <option value="birthday_this_month">Birthdays this month</option>
+        </select>
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Key Message / Offer Details</label>
+        <input id="wa-offer" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles, valid this weekend only">
+      </div>
+
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Language</label>
+        <select id="wa-lang" class="mkt-form-select">
+          <option value="te+en">Telugu + English</option>
+          <option value="en">English only</option>
+          <option value="te">Telugu only</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" onclick="generateWABroadcast()" style="flex:1">🤖 Generate Message</button>
+      </div>
+
+      <div id="wa-broadcast-output" style="display:none">
+        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:8px">PREVIEW — WhatsApp Message</div>
+          <div id="wa-broadcast-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text1)"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="mkt-btn mkt-btn-ghost" onclick="copyWABroadcast()" style="flex:1">📋 Copy Message</button>
+          ${isLive ? `<button class="mkt-btn mkt-btn-primary" onclick="sendWABroadcast()" style="flex:1">🚀 Send Broadcast</button>` : `<button class="mkt-btn mkt-btn-ghost" style="flex:1;opacity:.5" disabled>🚀 Send (activates after WABA)</button>`}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">💡 Test on your own number first before broadcasting to all customers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MESSAGE TEMPLATES -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">📋 Approved Message Templates</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">These need to be created and approved in Interakt before sending. Approval takes 1-2 days.</div>
+    <div style="display:grid;gap:8px">
+      ${[
+        {name:'quotation_ready',status:'pending',desc:'Notify customer when their quotation is ready — with quote number and amount'},
+        {name:'festival_offer',status:'pending',desc:'Festival special offer broadcast — with festival name, offer details, validity'},
+        {name:'birthday_greeting',status:'pending',desc:'Birthday wish with exclusive discount code — personalised with customer name'},
+        {name:'contractor_welcome',status:'pending',desc:'Welcome new Contractor Club member — with tier, benefits and referral code'},
+        {name:'order_update',status:'pending',desc:'Order/delivery status update — with order details and next steps'},
+        {name:'re_engagement',status:'pending',desc:'Re-engage customers who haven\'t visited in 90+ days — with special return offer'}
+      ].map(t=>`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;font-family:monospace;color:var(--gold)">${t.name}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.desc}</div>
+        </div>
+        <span class="badge ${t.status==='approved'?'badge-green':'badge-gray'}">${t.status==='approved'?'Approved':'Pending'}</span>
+      </div>`).join('')}
+    </div>
+    <a href="https://app.interakt.ai" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Create Templates in Interakt ↗</a>
+  </div>
+
+  <!-- MANUAL GENERATOR -->
+  <div class="mkt-card">
+    <div class="mkt-card-title">📨 Manual Message Generator</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Works right now — generate and copy, send manually from WhatsApp Business app.</div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Message Type</label>
+      <select id="wa-type" class="mkt-form-select">
+        <option value="offer">Festival / Seasonal Offer</option>
+        <option value="product">New Product Arrival</option>
+        <option value="contractor">Contractor Club Invite</option>
+        <option value="followup">Customer Follow-up</option>
+        <option value="quotation">Quotation Follow-up</option>
+      </select>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Key Details</label>
+      <input id="wa-details" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles till Sunday">
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="generateWAMessage()" style="width:100%;margin-bottom:10px">🤖 Generate Message</button>
+    <div id="wa-output" style="display:none">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">
+        <div id="wa-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div>
+      </div>
+      <button class="mkt-btn mkt-btn-primary" onclick="copyWAMessage()" style="width:100%">📋 Copy Message</button>
+    </div>
+  </div>`);
 }
+
+async function generateWABroadcast() {
+  const template = document.getElementById('wa-template')?.value||'festival_offer';
+  const audience = document.getElementById('wa-audience')?.value||'all';
+  const offer = (document.getElementById('wa-offer')?.value||'').trim();
+  const lang = document.getElementById('wa-lang')?.value||'te+en';
+
+  showMktToast('🤖 Writing broadcast message…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({
+      task:'whatsapp_broadcast', platform:'WhatsApp', language:lang,
+      topic:template+(offer?' — '+offer:''),
+      context:{
+        business:'V Wholesale', location:'Vijayawada',
+        template, audience, offer,
+        phone:'8712697930', website:'vwholesale.in'
+      }
+    })
+  });
+  const data = await res.json();
+  const content = data.content||data.text||'';
+  if (!content) { showMktToast('❌ Failed to generate'); return; }
+
+  document.getElementById('wa-broadcast-output').style.display='block';
+  document.getElementById('wa-broadcast-content').textContent = content;
+}
+
+function copyWABroadcast() {
+  navigator.clipboard.writeText(document.getElementById('wa-broadcast-content')?.textContent||'')
+    .then(()=>showMktToast('📋 Copied! Paste in WhatsApp Business or Interakt'));
+}
+
+async function sendWABroadcast() {
+  showMktToast('🚀 Sending via Interakt… (coming once WABA is approved)');
+}
+
+function previewWATemplate(val) {
+  const offer = document.getElementById('wa-offer');
+  if (!offer) return;
+  const hints = {
+    festival_offer:'e.g. 20% off Italian marble tiles, valid this Diwali weekend',
+    product_launch:'e.g. Kajaria new Eternia collection now in stock at Vijayawada',
+    contractor_club:'e.g. Join V Wholesale Contractor Club — 2% referral bonus',
+    quotation_ready:'e.g. Quote #VW-26-27-045 ready — ₹1,24,500',
+    birthday_greeting:'Auto-personalised — leave blank or add offer code',
+    re_engagement:'e.g. Special 10% welcome back offer for returning customers',
+    custom:'Write your own message details below'
+  };
+  offer.placeholder = hints[val]||'Enter key message details';
+}
+
 async function generateWAMessage() {
   const type = document.getElementById('wa-type')?.value||'offer';
   const details = (document.getElementById('wa-details')?.value||'').trim();
   showMktToast('🤖 Writing message…');
-  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'whatsapp_message',platform:'WhatsApp',language:'te+en',topic:type+(details?' — '+details:''),context:{business:'V Wholesale',location:'Vijayawada'}})});
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({task:'whatsapp_message',platform:'WhatsApp',language:'te+en',
+      topic:type+(details?' — '+details:''),
+      context:{business:'V Wholesale',location:'Vijayawada'}})
+  });
   const data = await res.json();
   const content = data.content||data.text||'';
   if (!content) { showMktToast('❌ Failed'); return; }
   document.getElementById('wa-output').style.display='block';
   document.getElementById('wa-content').textContent=content;
 }
-function copyWAMessage() { navigator.clipboard.writeText(document.getElementById('wa-content')?.textContent||'').then(()=>showMktToast('📋 Copied!')); }
 
-function renderAds() {
-  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💰 Paid Advertising</h3>'
-    +'<div style="font-size:12px;color:var(--text3)">Google Ads · Meta Ads · Budget ₹30,000/month</div></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
-    +[{l:'Monthly Budget',v:'₹30,000',i:'💰'},{l:'Google',v:'₹18,000',i:'🔍'},{l:'Meta (FB+IG)',v:'₹12,000',i:'🎯'}]
-    .map(m=>'<div class="mkt-card" style="padding:12px;text-align:center"><div style="font-size:20px">'+m.i+'</div>'
-      +'<div style="font-size:16px;font-weight:900;margin:4px 0">'+m.v+'</div>'
-      +'<div style="font-size:10px;color:var(--text3)">'+m.l+'</div></div>').join('')
-    +'</div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🔍 Google Ads (₹18,000/mo)</div>'
-    +'<div style="display:grid;gap:8px">'
-    +[{t:'Search Ads — ₹10,000',d:'tiles Vijayawada, granite price near me, bathroom fittings shop, flooring store Andhra Pradesh',note:'High intent buyers actively searching'},
-      {t:'Local/Maps Ads — ₹5,000',d:'Appears in Google Maps when someone searches near NH65 / Bhavanipuram area',note:'Drives direct store walk-ins'},
-      {t:'Display Retargeting — ₹3,000',d:'Re-shows ads to people who visited vwholesale.in but did not buy',note:'Low cost, high conversion'}
-     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
-      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+a.d+'</div>'
-      +'<div style="font-size:11px;color:var(--gold)">💡 '+a.note+'</div></div>').join('')
-    +'</div><a href="https://ads.google.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Google Ads ↗</a></div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Meta Ads — Facebook + Instagram (₹12,000/mo)</div>'
-    +'<div style="display:grid;gap:8px">'
-    +[{t:'Reels Boost — ₹4,000',d:'Boost your best Reels to homeowners 28-55 within 50km of Vijayawada'},
-      {t:'Lookalike Audience — ₹5,000',d:'Upload 1,300 customer list → Meta finds 50,000+ similar people in Andhra Pradesh'},
-      {t:'Retargeting — ₹3,000',d:'Re-target people who visited vwholesale.in or engaged with your Instagram'}
-     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
-      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
-      +'<div style="font-size:11px;color:var(--text3)">'+a.d+'</div></div>').join('')
-    +'</div><a href="https://business.facebook.com/adsmanager" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Meta Ads Manager ↗</a></div>'
-    +'<div class="mkt-card"><div class="mkt-card-title">🤖 AI Ad Copy Generator</div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Product / Focus</label>'
-    +'<input id="ads-topic" class="mkt-form-input" placeholder="e.g. Italian marble tiles, monsoon bathroom renovation"></div>'
-    +'<button class="mkt-btn mkt-btn-primary" onclick="generateAdCopy()" style="width:100%;margin-bottom:10px">Generate Ad Copy + Keywords</button>'
-    +'<div id="ads-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7"></div></div>');
+function copyWAMessage() {
+  navigator.clipboard.writeText(document.getElementById('wa-content')?.textContent||'').then(()=>showMktToast('📋 Copied!'));
 }
+
 async function generateAdCopy() {
   const topic = (document.getElementById('ads-topic')?.value||'').trim();
   if (!topic) { showMktToast('Enter a topic'); return; }
