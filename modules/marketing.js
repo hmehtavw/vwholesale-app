@@ -2673,7 +2673,7 @@ function renderCampaigns() {
      {icon:'📊',title:'Live Tracking',desc:'Impressions, clicks, conversions, cost per lead in real time'},
      {icon:'🤖',title:'AI Optimisation',desc:'AI suggests when to boost, pause or redirect spend'},
      {icon:'📁',title:'Asset Library',desc:'All posters, videos and captions organised per campaign'}],
-    'Session 20 — Content Calendar + Campaigns'));
+    'Coming soon — Content Calendar'));
 }
 
 function renderSocial() {
@@ -2695,7 +2695,7 @@ function renderSocial() {
           <div style="font-size:11px;color:var(--text3)">⚠️ ${p.note}</div></div>
         </div>`).join('')}
     </div>
-    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;font-weight:700;text-align:center">🗓 Session 22 — after Content Calendar and Competitors are built</div>
+    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;font-weight:700;text-align:center">🗓 Coming soon — requires Meta Business OAuth setup</div>
   </div></div>`);
 }
 
@@ -2707,7 +2707,7 @@ function renderWhatsApp() {
      {icon:'🛒',title:'Order Updates',desc:'Quotation ready, order confirmed, delivery scheduled'},
      {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto personalised wishes with offer code'},
      {icon:'📊',title:'Message Analytics',desc:'Delivered, read, replied rates per campaign'}],
-    'Session 22 — requires Interakt setup completion'));
+    'Coming soon — complete Interakt setup first'));
 }
 
 function renderAds() {
@@ -2718,7 +2718,7 @@ function renderAds() {
      {icon:'🎯',title:'Meta Ads (FB + IG)',desc:'Lookalike audiences from your 1,300+ customer base'},
      {icon:'🤖',title:'AI Creative Testing',desc:'Auto A/B test which poster performs best per audience'},
      {icon:'📊',title:'Unified ROI Dashboard',desc:'Cost per lead, ROAS across all platforms in one view'}],
-    'Session 23 — after social publishing is live'));
+    'Coming soon — after social publishing is live'));
 }
 
 function renderLocalSEO() {
@@ -2729,7 +2729,7 @@ function renderLocalSEO() {
      {icon:'📝',title:'Citation Builder',desc:'NAP consistency across Justdial, IndiaMart, Sulekha, Yellow Pages'},
      {icon:'🗺️',title:'Map Pack Monitor',desc:'Track position in Google Maps 3-pack daily'},
      {icon:'🔗',title:'Local Backlinks',desc:'AI identifies local directories and news sites to list on'}],
-    'Session 21 — after blog section is built'));
+    'Coming soon — after blog section is built'));
 }
 
 function renderWebsiteSEO() {
@@ -2740,7 +2740,7 @@ function renderWebsiteSEO() {
      {icon:'⚙️',title:'Technical SEO Audit',desc:'Page speed, meta tags, schema, sitemap — weekly scan'},
      {icon:'🔗',title:'Backlink Campaign',desc:'AI identifies guest post and PR opportunities monthly'},
      {icon:'📊',title:'Search Console Live',desc:'Impressions, clicks, avg position per page — direct from GSC'}],
-    'Session 21 — Blog section on vwholesale.in first'));
+    'Coming soon — Blog section build next'));
 }
 
 function renderReviews() {
@@ -2751,7 +2751,7 @@ function renderReviews() {
      {icon:'✅',title:'One-Click Approve & Post',desc:'Any admin approves → reply posts directly to the platform'},
      {icon:'❓',title:'FAQ Automation',desc:'Common questions auto-answered on WhatsApp, website chatbot, Instagram DM'},
      {icon:'📊',title:'Reputation Score',desc:'Avg rating trend, response rate, sentiment — week on week'}],
-    'Session 23 — after social publishing OAuth is live'));
+    'Coming soon — after social publishing is live'));
 }
 
 async function renderCompetitors() {
@@ -2988,7 +2988,7 @@ function renderSegments() {
      {icon:'📅',title:'By Last Visit',desc:'Re-engage customers who haven\'t visited in 60/90/180 days'},
      {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto-trigger personalised offers 7 days before special dates'},
      {icon:'🏆',title:'Contractor Club Tier',desc:'Silver, Gold, Platinum — tier-specific campaigns and rewards'}],
-    'Session 24 — after greetings engine is built'));
+    'Coming soon — Greetings engine build next'));
 }
 
 
