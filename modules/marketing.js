@@ -2648,15 +2648,133 @@ async function loadPosterHistory() {
 // ── DRAFT VIEWER ──
 
 // ── STUB PAGES ──
-function renderCampaigns() { renderComingSoon('Campaigns — coming next session'); }
-function renderSocial() { renderComingSoon('Social Media — connect Meta Business first'); }
-function renderWhatsApp() { renderComingSoon('WhatsApp — complete Interakt setup first'); }
-function renderAds() { renderComingSoon('Advertising — connect Google Ads & Meta Ads first'); }
-function renderLocalSEO() { renderComingSoon('Local SEO — connecting Search Console data'); }
-function renderWebsiteSEO() { renderComingSoon('Website SEO — analysing vwholesale.in'); }
-function renderReviews() { renderComingSoon('Reviews & Reputation — connecting GBP API'); }
-function renderCompetitors() { renderComingSoon('Competitor Intelligence — coming next session'); }
-function renderSegments() { renderComingSoon('Customer Segments — coming next session'); }
+// ── STUB PAGES — rich coming soon UI ──
+function _comingSoonCard(icon, title, desc, features, eta) {
+  return `<div style="max-width:600px;margin:0 auto">
+    <div class="mkt-card" style="text-align:center;padding:32px 24px">
+      <div style="font-size:48px;margin-bottom:12px">${icon}</div>
+      <div style="font-size:20px;font-weight:900;margin-bottom:8px">${title}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px">${desc}</div>
+      <div style="display:grid;gap:8px;text-align:left;margin-bottom:20px">
+        ${features.map(f=>`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px 14px">
+          <span style="font-size:18px">${f.icon}</span>
+          <div><div style="font-size:12px;font-weight:700">${f.title}</div><div style="font-size:11px;color:var(--text3)">${f.desc}</div></div>
+        </div>`).join('')}
+      </div>
+      <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;font-weight:700">🗓 ${eta}</div>
+    </div>
+  </div>`;
+}
+
+function renderCampaigns() {
+  setContent(_comingSoonCard('📣','Campaign Manager',
+    'Plan, execute and track multi-channel marketing campaigns from one place.',
+    [{icon:'🎯',title:'Campaign Builder',desc:'Set goal, budget, duration, audience and platforms'},
+     {icon:'📊',title:'Live Tracking',desc:'Impressions, clicks, conversions, cost per lead in real time'},
+     {icon:'🤖',title:'AI Optimisation',desc:'AI suggests when to boost, pause or redirect spend'},
+     {icon:'📁',title:'Asset Library',desc:'All posters, videos and captions organised per campaign'}],
+    'Session 20 — Content Calendar + Campaigns'));
+}
+
+function renderSocial() {
+  setContent(`<div style="max-width:700px;margin:0 auto"><div class="mkt-card">
+    <div class="mkt-card-title">📱 Social Media — One Push Publishing</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.6">Connect once. Generate → preview per platform → one button publishes everywhere.</div>
+    <div style="display:grid;gap:10px;margin-bottom:20px">
+      ${[{icon:'📸',name:'Instagram',size:'1080×1080 · Reels 9:16',note:'Needs Meta Business OAuth'},
+         {icon:'👥',name:'Facebook Page',size:'1200×630 · Reels 9:16',note:'Same Meta Business account'},
+         {icon:'🧵',name:'Threads',size:'1080×1080 · Video 9:16',note:'Meta Graph API — same auth'},
+         {icon:'▶️',name:'YouTube Shorts',size:'1080×1920 · Max 60s',note:'YouTube Data API — channel ready'},
+         {icon:'📍',name:'Google Business Profile',size:'1200×900 · Update posts',note:'Google OAuth — same as Search Console'},
+         {icon:'💬',name:'WhatsApp Status',size:'1080×1920 · Via Interakt',note:'Complete Interakt setup first'},
+         {icon:'✖️',name:'X (Twitter)',size:'Copy-paste · Manual for now',note:'API $100/month — manual posting via link'}
+        ].map(p=>`<div style="display:flex;align-items:center;gap:12px;background:var(--bg3);border-radius:10px;padding:12px">
+          <div style="font-size:22px;width:32px;text-align:center">${p.icon}</div>
+          <div style="flex:1"><div style="font-size:13px;font-weight:700">${p.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${p.size}</div>
+          <div style="font-size:11px;color:var(--text3)">⚠️ ${p.note}</div></div>
+        </div>`).join('')}
+    </div>
+    <div style="background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);border-radius:8px;padding:10px;font-size:12px;color:#c9a84c;font-weight:700;text-align:center">🗓 Session 22 — after Content Calendar and Competitors are built</div>
+  </div></div>`);
+}
+
+function renderWhatsApp() {
+  setContent(_comingSoonCard('💬','WhatsApp Automation',
+    'Interakt-powered flows for broadcasts, chatbot FAQ, order updates and personalised greetings.',
+    [{icon:'📢',title:'Broadcast Campaigns',desc:'Send offers to segmented customer lists'},
+     {icon:'🤖',title:'FAQ Chatbot',desc:'Auto-reply to common questions 24/7'},
+     {icon:'🛒',title:'Order Updates',desc:'Quotation ready, order confirmed, delivery scheduled'},
+     {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto personalised wishes with offer code'},
+     {icon:'📊',title:'Message Analytics',desc:'Delivered, read, replied rates per campaign'}],
+    'Session 22 — requires Interakt setup completion'));
+}
+
+function renderAds() {
+  setContent(_comingSoonCard('💰','Paid Advertising',
+    'Google Ads and Meta Ads managed from one dashboard. AI suggests budgets, audiences and creatives.',
+    [{icon:'🔍',title:'Google Search Ads',desc:'Target tiles Vijayawada, granite near me, bathroom fittings'},
+     {icon:'📍',title:'Google Local Ads',desc:'Dominate local map pack for home building searches'},
+     {icon:'🎯',title:'Meta Ads (FB + IG)',desc:'Lookalike audiences from your 1,300+ customer base'},
+     {icon:'🤖',title:'AI Creative Testing',desc:'Auto A/B test which poster performs best per audience'},
+     {icon:'📊',title:'Unified ROI Dashboard',desc:'Cost per lead, ROAS across all platforms in one view'}],
+    'Session 23 — after social publishing is live'));
+}
+
+function renderLocalSEO() {
+  setContent(_comingSoonCard('📍','Local SEO',
+    'Dominate "tiles near me", "granite Vijayawada", "bathroom fittings NH65" on Google Maps and organic.',
+    [{icon:'⭐',title:'GBP Optimisation',desc:'Categories, attributes, photos, Q&A, weekly posts — all here'},
+     {icon:'🔑',title:'Local Keyword Tracker',desc:'Daily rank tracking for your top 20 local search terms'},
+     {icon:'📝',title:'Citation Builder',desc:'NAP consistency across Justdial, IndiaMart, Sulekha, Yellow Pages'},
+     {icon:'🗺️',title:'Map Pack Monitor',desc:'Track position in Google Maps 3-pack daily'},
+     {icon:'🔗',title:'Local Backlinks',desc:'AI identifies local directories and news sites to list on'}],
+    'Session 21 — after blog section is built'));
+}
+
+function renderWebsiteSEO() {
+  setContent(_comingSoonCard('🌐','Website SEO',
+    'Full SEO engine for vwholesale.in — blog automation, keyword planning, technical audit and backlinks.',
+    [{icon:'📝',title:'AI Blog Engine',desc:'Monthly plan → AI writes articles → auto-published to /blog/ on vwholesale.in'},
+     {icon:'🔑',title:'Keyword Planner',desc:'Low-competition, high-intent keywords for tiles, granite, sanitaryware in Andhra'},
+     {icon:'⚙️',title:'Technical SEO Audit',desc:'Page speed, meta tags, schema, sitemap — weekly scan'},
+     {icon:'🔗',title:'Backlink Campaign',desc:'AI identifies guest post and PR opportunities monthly'},
+     {icon:'📊',title:'Search Console Live',desc:'Impressions, clicks, avg position per page — direct from GSC'}],
+    'Session 21 — Blog section on vwholesale.in first'));
+}
+
+function renderReviews() {
+  setContent(_comingSoonCard('⭐','Reviews & Q&A Automation',
+    'All reviews in one inbox. AI drafts replies. 4-5★ auto-approved. 1-3★ requires admin approval.',
+    [{icon:'👁️',title:'Review Monitor',desc:'GBP, Facebook, Instagram, Justdial, IndiaMart, WhatsApp — one inbox'},
+     {icon:'🤖',title:'AI Reply Drafts',desc:'4-5★: warm reply drafted. 1-3★: escalation draft for manager approval'},
+     {icon:'✅',title:'One-Click Approve & Post',desc:'Any admin approves → reply posts directly to the platform'},
+     {icon:'❓',title:'FAQ Automation',desc:'Common questions auto-answered on WhatsApp, website chatbot, Instagram DM'},
+     {icon:'📊',title:'Reputation Score',desc:'Avg rating trend, response rate, sentiment — week on week'}],
+    'Session 23 — after social publishing OAuth is live'));
+}
+
+function renderCompetitors() {
+  setContent(_comingSoonCard('🔍','Competitor Intelligence',
+    'Add competitor URLs and social links. AI monitors daily — keywords, content, hashtags, strategy gaps.',
+    [{icon:'🌐',title:'Website Monitoring',desc:'Daily scrape — new pages, keyword targets, content changes, SEO moves'},
+     {icon:'📱',title:'Social Monitoring',desc:'Instagram, Facebook, YouTube — post frequency, engagement, top content'},
+     {icon:'#️⃣',title:'Hashtag & Keyword Extraction',desc:'What hashtags and SEO terms are working for them'},
+     {icon:'📊',title:'Comparison Report',desc:'V Wholesale vs competitors — weekly gap analysis with action items'},
+     {icon:'💡',title:'Growth Suggestions',desc:'AI tells you exactly what to do to outrank and outperform them'}],
+    'Session 20 — building next, high priority'));
+}
+
+function renderSegments() {
+  setContent(_comingSoonCard('👥','Customer Segments',
+    'Slice your 1,300+ customer base into smart segments for targeted campaigns and personalised offers.',
+    [{icon:'🏗️',title:'By Project Type',desc:'Residential, commercial, renovation — target content accordingly'},
+     {icon:'💰',title:'By Spend Band',desc:'₹50K–2L, ₹2L–10L, ₹10L+ — different offers for different budgets'},
+     {icon:'📅',title:'By Last Visit',desc:'Re-engage customers who haven\'t visited in 60/90/180 days'},
+     {icon:'🎂',title:'Birthday & Anniversary',desc:'Auto-trigger personalised offers 7 days before special dates'},
+     {icon:'🏆',title:'Contractor Club Tier',desc:'Silver, Gold, Platinum — tier-specific campaigns and rewards'}],
+    'Session 24 — after greetings engine is built'));
+}
 
 
 // ── AUTO LOGIN ON LOAD ──
