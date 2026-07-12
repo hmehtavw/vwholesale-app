@@ -1,4 +1,17 @@
 
+// ── GRAB OAUTH PARAMS IMMEDIATELY (before any redirects or auth) ──
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  const code = p.get('code');
+  const state = p.get('state');
+  if (code && state === 'gbp_oauth') {
+    window._gbpOAuthCode = code;
+    window._gbpOAuthState = state;
+    // Clean URL immediately so Supabase auth doesn't get confused
+    window.history.replaceState({}, '', window.location.pathname);
+  }
+})();
+
 // ── CONFIG ──
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
@@ -70,6 +83,22 @@ function showMktApp() {
   if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (mktProfile?.role||'');
   startClock();
   loadAIPauseStatus();
+
+  // Check for OAuth callbacks — IIFE at top already grabbed code into window._gbpOAuthCode
+  if (window._gbpOAuthCode && window._gbpOAuthState === 'gbp_oauth') {
+    mktNav('gbp');
+    return;
+  }
+
+  // Returned from GBP callback page after successful connection
+  const _urlCheck = new URLSearchParams(window.location.search);
+  if (_urlCheck.get('gbp') === 'connected') {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showMktToast('✅ Google Business Profile connected!'), 500);
+    mktNav('gbp');
+    return;
+  }
+
   mktNav('command');
 }
 
@@ -1328,164 +1357,285 @@ async function deleteDraft(id) {
 
 // ── GBP ──
 async function renderGBP() {
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading GBP status…</div>`);
+
+  // Check connection status
+  const { data: conn } = await sb.from('social_connections').select('*').eq('platform','gbp').single().then(r=>r,()=>({data:null}));
+  const { data: settings } = await sb.from('marketing_settings').select('key,value').in('key',['GBP_ACCESS_TOKEN','GBP_CLIENT_ID']).then(r=>r,()=>({data:[]}));
+  const isConnected = conn?.status === 'connected' && conn?.access_token_set;
+
+  // Check for OAuth callback code in URL (may have been set before nav)
+  const urlParams = new URLSearchParams(window.location.search);
+  const oauthCode = urlParams.get('code') || window._gbpOAuthCode;
+  const oauthState = urlParams.get('state') || window._gbpOAuthState;
+  if (oauthCode && oauthState === 'gbp_oauth') {
+    window._gbpOAuthCode = null;
+    window._gbpOAuthState = null;
+    window.history.replaceState({}, '', window.location.pathname);
+    await handleGBPCallback(oauthCode);
+    return;
+  }
+
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">Google Business Profile</h3>
-      <div style="font-size:12px;color:var(--text3)">Create posts, respond to reviews, manage your GBP presence</div>
+      <h3 style="font-size:16px;font-weight:900">📍 Google Business Profile</h3>
+      <div style="font-size:12px;color:var(--text3)">Post updates, offers and events to GBP automatically</div>
     </div>
-    <a href="https://business.google.com" target="_blank" class="mkt-btn mkt-btn-ghost">Open GBP ↗</a>
+    <span class="badge ${isConnected?'badge-green':'badge-gray'}">${isConnected?'✅ Connected':'Not Connected'}</span>
   </div>
 
-  <div class="mkt-grid-2" style="margin-bottom:16px">
-    <div class="stat-card">
-      <div class="stat-label">GBP Status</div>
-      <div class="stat-value" style="font-size:16px;color:var(--green)">✅ Live</div>
-      <div class="stat-sub">vwholesale.in connected (pending)</div>
+  ${!isConnected ? `
+  <!-- Connect GBP -->
+  <div class="mkt-card" style="margin-bottom:14px;text-align:center;padding:32px">
+    <div style="font-size:48px;margin-bottom:12px">📍</div>
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px">Connect Google Business Profile</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
+      Click below to connect your V Wholesale GBP account. You'll be redirected to Google to grant access, then brought back here automatically.
     </div>
-    <div class="stat-card">
-      <div class="stat-label">Last Post</div>
-      <div class="stat-value" style="font-size:16px;color:var(--gold)">10 days ago</div>
-      <div class="stat-sub">Posting gap detected — post today</div>
+    <button class="mkt-btn mkt-btn-primary" onclick="connectGBP()" style="padding:14px 32px;font-size:14px;font-weight:900">
+      🔗 Connect Google Business Profile
+    </button>
+    <div style="font-size:11px;color:var(--text3);margin-top:12px">Uses your Google account: hmehta@vwholesale.in</div>
+  </div>
+  ` : `
+  <!-- Connected — Post creator -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="width:40px;height:40px;background:#34a853;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">📍</div>
+      <div>
+        <div style="font-size:13px;font-weight:700">Google Business Profile — Connected ✅</div>
+        <div style="font-size:11px;color:var(--text3)" id="gbp-location-name">Loading location…</div>
+      </div>
+      <button class="mkt-btn mkt-btn-ghost" onclick="disconnectGBP()" style="margin-left:auto;font-size:11px;color:var(--red)">Disconnect</button>
     </div>
   </div>
+  `}
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">📍 Create GBP Post with AI</div>
-    <div class="mkt-grid-2">
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Post Type</label>
-        <select id="gbp-type" class="mkt-form-select">
-          <option value="whats_new">What's New</option>
-          <option value="offer">Offer</option>
-          <option value="event">Event</option>
-          <option value="product">Product</option>
-        </select>
-      </div>
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Language</label>
-        <select id="gbp-lang" class="mkt-form-select">
-          <option value="te">Telugu</option>
-          <option value="en">English</option>
-          <option value="te+en">Telugu + English</option>
-        </select>
-      </div>
-    </div>
+  <!-- GBP Post Creator (always visible) -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">✍️ Create GBP Post</div>
     <div class="mkt-form-group">
-      <label class="mkt-form-label">Topic / Product / Offer</label>
-      <input type="text" id="gbp-topic" class="mkt-form-input" placeholder="e.g. New Kajaria tile collection, Monsoon offer on sanitaryware, Store walk-in">
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Call to Action</label>
-      <select id="gbp-cta" class="mkt-form-select">
-        <option value="call">Call Now</option>
-        <option value="book">Book</option>
-        <option value="learn_more">Learn More</option>
-        <option value="visit">Visit Store</option>
-        <option value="whatsapp">WhatsApp Us</option>
+      <label class="mkt-form-label">Post Type</label>
+      <select id="gbp-post-type" class="mkt-form-select">
+        <option value="standard">📢 Update / Announcement</option>
+        <option value="offer">💰 Offer / Promotion</option>
+        <option value="event">📅 Event</option>
       </select>
     </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="generateGBPPost()">📍 Generate GBP Post</button>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Post Topic</label>
+      <input id="gbp-topic" class="mkt-form-input" placeholder="e.g. Diwali special 20% off tiles, New Italian marble collection">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPPost()" style="flex:1">🤖 Generate with AI</button>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Post Text</label>
+      <textarea id="gbp-text" class="mkt-form-input" rows="5" style="resize:vertical;font-size:13px;line-height:1.7" placeholder="Your GBP post content will appear here after AI generation, or write manually…"></textarea>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Image URL (optional — from Poster Studio)</label>
+      <input id="gbp-image-url" class="mkt-form-input" placeholder="Paste image URL from your poster">
+    </div>
+    <div style="display:flex;gap:8px">
+      ${isConnected
+        ? `<button class="mkt-btn mkt-btn-primary" onclick="postToGBP()" style="flex:1;padding:12px;font-weight:700">🚀 Post to Google Business Profile</button>`
+        : `<button class="mkt-btn mkt-btn-ghost" style="flex:1;padding:12px;opacity:.5" disabled>🚀 Connect GBP first to post</button>`}
+      <button class="mkt-btn mkt-btn-ghost" onclick="copyGBPPost()" style="padding:12px">📋 Copy</button>
+    </div>
+    <div id="gbp-result" style="display:none;margin-top:10px"></div>
   </div>
 
-  <div id="gbp-output"></div>
-
+  <!-- Recent GBP posts -->
   <div class="mkt-card">
-    <div class="mkt-card-title">📋 GBP Post Ideas This Week</div>
-    <div style="display:grid;gap:8px">
-      ${[
-        {day:'Monday', idea:'Project proof — show a completed tile installation from a recent customer', lang:'te'},
-        {day:'Wednesday', idea:'Product spotlight — featured product from top-selling category', lang:'en'},
-        {day:'Friday', idea:'Contractor Club recruitment — benefits of joining', lang:'te+en'},
-        {day:'Saturday', idea:'Customer journey — before and after renovation story', lang:'te'},
-      ].map(p => `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:8px">
-        <div style="font-size:11px;font-weight:700;color:var(--purple);min-width:70px">${p.day}</div>
-        <div style="flex:1;font-size:12px">${p.idea}</div>
-        <span class="badge badge-gold">${p.lang}</span>
-        <button class="mkt-btn mkt-btn-ghost" onclick="quickGBPPost('${p.idea}','${p.lang}')" style="font-size:10px;padding:4px 8px">Draft →</button>
-      </div>`).join('')}
-    </div>
+    <div class="mkt-card-title">📋 Post History</div>
+    <div id="gbp-history"><div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">Post history will appear here after your first post</div></div>
   </div>`);
+
+  // Load location name if connected
+  if (isConnected) {
+    loadGBPLocation();
+  }
+
+  // Load post history
+  loadGBPHistory();
 }
 
-async function generateGBPPost() {
-  const type = document.getElementById('gbp-type').value;
-  const lang = document.getElementById('gbp-lang').value;
-  const topic = document.getElementById('gbp-topic').value;
-  const cta = document.getElementById('gbp-cta').value;
-  if (!topic) { showMktToast('Enter a topic first'); return; }
+function connectGBP() {
+  // Build OAuth URL directly in browser — no server call needed for this step
+  const clientId = '825770975900-hu3d3edgjaup25ec16vin7jpjs4phlo5.apps.googleusercontent.com';
+  const redirectUri = encodeURIComponent('https://vwholesale.in/marketing/');
+  const scope = encodeURIComponent('https://www.googleapis.com/auth/business.manage');
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent&state=gbp_oauth`;
+  showMktToast('🔗 Redirecting to Google…');
+  window.location.href = url;
+}
 
-  const outputEl = document.getElementById('gbp-output');
-  outputEl.innerHTML = '<div class="mkt-card"><div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><span style="font-size:12px;color:var(--text3);margin-left:8px">Writing GBP post…</span></div></div>';
+async function handleGBPCallback(code) {
+  setContent(`<div style="text-align:center;padding:40px">
+    <div style="font-size:32px;margin-bottom:12px">⏳</div>
+    <div style="font-size:14px;font-weight:700">Connecting Google Business Profile…</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:8px">Exchanging authorization code…</div>
+  </div>`);
 
-  const langMap = {te:'Telugu',en:'English','te+en':'bilingual Telugu and English'};
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body: JSON.stringify({
-        action:'gbp_post', agent:'GBP Agent', model:'gpt-4o-mini',
-        prompt:`You are creating a Google Business Profile post for V Wholesale, Vijayawada.
+    // Exchange code via edge function with retry
+    let data = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(MKT_SB_URL + '/functions/v1/gbp-oauth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+          body: JSON.stringify({ action: 'exchange_code', code })
+        });
+        if (res.status === 404) {
+          // Cold start — wait and retry
+          await new Promise(r => setTimeout(r, 2000 * attempt));
+          continue;
+        }
+        data = await res.json();
+        break;
+      } catch(fetchErr) {
+        if (attempt === 3) throw fetchErr;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    if (!data) throw new Error('Edge function unavailable after 3 attempts — please try connecting again');
+    if (!data.ok) throw new Error(data.error || 'Token exchange failed');
 
-Post type: ${type}
-Language: ${langMap[lang]}
-Topic: ${topic}
-CTA: ${cta}
+    showMktToast('✅ Google Business Profile connected!');
+    await renderGBP();
 
-RULES:
-- Max 1500 characters for GBP posts
-- V Wholesale, NH65 Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
-- Natural, local tone — not corporate
-- Telugu should feel like a local Vijayawada person wrote it
-- Never invent prices or discounts not specified
-
-Respond ONLY in this JSON:
-{
-  "post_text": "the full GBP post text ready to copy-paste",
-  "char_count": 0,
-  "photo_suggestion": "what photo to use",
-  "best_time_to_post": "best day and time",
-  "notes": "any tips"
-}`,
-        context:{topic, type, lang, cta}
-      })
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    const p = data.output;
-
-    outputEl.innerHTML = `
-    <div class="mkt-card" style="border:1px solid rgba(16,185,129,.3);margin-top:4px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:12px">
-        <div class="mkt-card-title" style="margin:0">✅ GBP Post Ready</div>
-        <div style="display:flex;gap:6px">
-          <span class="badge badge-green">GBP Post</span>
-          <span class="badge badge-gold">${lang}</span>
-          <span class="badge badge-gray">${(p.char_count||p.post_text?.length||0)} chars</span>
-        </div>
-      </div>
-      <div style="background:var(--bg3);border-radius:10px;padding:14px;font-size:13px;line-height:1.8;margin-bottom:12px;white-space:pre-wrap">${p.post_text}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div style="font-size:11px"><span style="color:var(--text3)">📸 Photo:</span> ${p.photo_suggestion}</div>
-        <div style="font-size:11px"><span style="color:var(--text3)">⏰ Best time:</span> ${p.best_time_to_post}</div>
-      </div>
-      ${p.notes ? `<div style="font-size:11px;color:var(--text3);font-style:italic;margin-bottom:12px">${p.notes}</div>` : ''}
-      <div style="display:flex;gap:8px">
-        <button class="mkt-btn mkt-btn-primary" onclick="copyContent('${p.post_text?.replace(/'/g,"\'").replace(/\n/g,'\\n')}')">📋 Copy Post</button>
-        <a href="https://business.google.com" target="_blank" class="mkt-btn mkt-btn-ghost">Open GBP to Post ↗</a>
-        <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPPost()">🔄 Regenerate</button>
-      </div>
-    </div>`;
   } catch(e) {
-    outputEl.innerHTML = `<div class="mkt-card" style="border-color:var(--red)"><div style="color:var(--red);font-size:12px">Error: ${e.message}</div></div>`;
+    console.error('GBP OAuth error:', e);
+    showMktToast('❌ Connection failed: ' + e.message);
+    setContent(`<div style="text-align:center;padding:40px">
+      <div style="font-size:32px;margin-bottom:12px">❌</div>
+      <div style="font-size:14px;font-weight:700;color:var(--red)">Connection Failed</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:8px">${e.message}</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="renderGBP()" style="margin-top:16px">← Back to GBP</button>
+    </div>`);
   }
 }
 
-function quickGBPPost(idea, lang) {
-  document.getElementById('gbp-topic').value = idea;
-  document.getElementById('gbp-lang').value = lang;
-  generateGBPPost();
+async function loadGBPLocation() {
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({action:'get_locations'})
+  });
+  const data = await res.json();
+  const el = document.getElementById('gbp-location-name');
+  if (!el) return;
+  if (data.ok && data.locations?.length) {
+    const loc = data.locations[0];
+    el.textContent = loc.title + ' — ' + (loc.storefrontAddress?.addressLines?.[0] || 'Vijayawada');
+    // Store location name
+    await sb.from('marketing_settings').upsert(
+      {key:'GBP_LOCATION_NAME', value:loc.name},
+      {onConflict:'key'}
+    );
+  } else {
+    el.textContent = 'V Wholesale — Vijayawada';
+  }
 }
+
+async function postToGBP() {
+  const text = (document.getElementById('gbp-text')?.value||'').trim();
+  const type = document.getElementById('gbp-post-type')?.value||'standard';
+  const imageUrl = (document.getElementById('gbp-image-url')?.value||'').trim();
+
+  if (!text) { showMktToast('Write or generate post text first'); return; }
+
+  const btn = document.querySelector('[onclick="postToGBP()"]');
+  if (btn) { btn.textContent = '⏳ Posting…'; btn.disabled = true; }
+  showMktToast('🚀 Posting to Google Business Profile…');
+
+  // Get location name
+  const { data: locSetting } = await sb.from('marketing_settings').select('value').eq('key','GBP_LOCATION_NAME').single().then(r=>r,()=>({data:null}));
+
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({
+      action:'create_post',
+      location_name: locSetting?.value,
+      post_text: text,
+      post_type: type,
+      media_url: imageUrl || null
+    })
+  });
+  const data = await res.json();
+
+  const result = document.getElementById('gbp-result');
+  if (result) result.style.display = 'block';
+
+  if (data.ok) {
+    showMktToast('✅ Posted to Google Business Profile!');
+    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;font-size:12px;color:#22c55e">✅ Post published to GBP successfully!</div>';
+    document.getElementById('gbp-text').value = '';
+    loadGBPHistory();
+  } else {
+    showMktToast('❌ ' + (data.error||'Post failed'));
+    if (result) result.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-size:12px;color:#ef4444">❌ ' + (data.error||'Post failed') + '</div>';
+  }
+
+  if (btn) { btn.textContent = '🚀 Post to Google Business Profile'; btn.disabled = false; }
+}
+
+async function loadGBPHistory() {
+  const { data: logs } = await sb.from('marketing_audit_logs').select('*').eq('action','gbp_post_created').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}));
+  const el = document.getElementById('gbp-history');
+  if (!el) return;
+  if (!(logs||[]).length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No posts yet</div>';
+    return;
+  }
+  el.innerHTML = '<div style="display:grid;gap:6px">' + logs.map(l=>`
+    <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">
+      <div style="font-size:18px">📍</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:600">${l.details?.post_text||'GBP Post'}…</div>
+        <div style="font-size:11px;color:var(--text3)">${new Date(l.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+      </div>
+      <span class="badge badge-green">Published</span>
+    </div>`).join('') + '</div>';
+}
+
+async function disconnectGBP() {
+  if (!confirm('Disconnect Google Business Profile?')) return;
+  await sb.from('social_connections').update({status:'not_connected',access_token_set:false,connected_at:null}).eq('platform','gbp');
+  await sb.from('marketing_settings').delete().in('key',['GBP_ACCESS_TOKEN','GBP_REFRESH_TOKEN','GBP_TOKEN_EXPIRY','GBP_LOCATION_NAME','GBP_ACCOUNT_NAME']);
+  showMktToast('Disconnected');
+  await renderGBP();
+}
+
+function copyGBPPost() {
+  navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'));
+}
+
+async function generateGBPPost() {
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  const type = document.getElementById('gbp-post-type')?.value||'standard';
+  if (!topic) { showMktToast('Enter a topic first'); return; }
+  showMktToast('🤖 Writing GBP post…');
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body:JSON.stringify({task:'gbp_post',platform:'GBP',language:'en',topic,
+      context:{business:'V Wholesale',location:'NH65, Bhavanipuram, Vijayawada',type,phone:'8712697930',website:'vwholesale.in'}})
+  });
+  const data = await res.json();
+  const content = data.content||data.text||'';
+  if (!content) { showMktToast('\u274C Failed'); return; }
+  const ta = document.getElementById('gbp-text');
+  if (ta) ta.value = content;
+  showMktToast('\u2705 GBP post written!');
+}
+
+function quickGBPPost(idea) {
+  const el = document.getElementById('gbp-topic');
+  if (el) { el.value = idea; generateGBPPost(); }
+}
+
 
 // ── APPROVALS ──
 async function renderApprovals() {
