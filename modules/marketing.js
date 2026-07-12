@@ -1561,63 +1561,35 @@ async function loadGBPLocation() {
 
 async function postToGBP() {
   const text = (document.getElementById('gbp-text')?.value||'').trim();
-  const type = document.getElementById('gbp-post-type')?.value||'standard';
   const imageUrl = (document.getElementById('gbp-image-url')?.value||'').trim();
-
   if (!text) { showMktToast('Write or generate post text first'); return; }
 
-  const btn = document.querySelector('[onclick="postToGBP()"]');
-  if (btn) { btn.textContent = '⏳ Posting…'; btn.disabled = true; }
+  await navigator.clipboard.writeText(text).catch(()=>{});
 
   const result = document.getElementById('gbp-result');
-  if (result) result.style.display = 'block';
-
-  try {
-    // Step 1: Get location name — fetch from edge fn if not cached
-    showMktToast('🔍 Getting GBP location…');
-    const { data: locSetting } = await sb.from('marketing_settings').select('value').eq('key','GBP_LOCATION_NAME').maybeSingle().then(r=>r,()=>({data:null}));
-    let locationName = locSetting?.value || null;
-
-    if (!locationName) {
-      // Fetch locations via edge function
-      const locRes = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
-        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body:JSON.stringify({action:'get_locations'})
-      });
-      const locData = await locRes.json();
-      if (!locData.ok) throw new Error('Could not fetch GBP location: ' + (locData.error||'unknown'));
-      if (!locData.locations?.length) throw new Error('No GBP locations found on this account');
-      locationName = locData.locations[0].name;
-      // Save for next time
-      await sb.from('marketing_settings').upsert({key:'GBP_LOCATION_NAME', value:locationName},{onConflict:'key'});
-    }
-
-    // Step 2: Create the post
-    showMktToast('🚀 Posting to Google Business Profile…');
-    const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
-      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({action:'create_post', location_name:locationName, post_text:text, post_type:type, media_url:imageUrl||null})
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Post failed');
-
-    showMktToast('✅ Posted to Google Business Profile!');
-    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:14px;font-size:12px">'
-      + '<div style="color:#22c55e;font-weight:700;margin-bottom:8px">✅ Post published to Google Business Profile!</div>'
-      + '<div style="color:var(--text2);margin-bottom:10px">Visible on Google Maps and Search in 2-5 minutes.</div>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
-      + '<a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:11px;text-decoration:none;padding:6px 12px">📍 View on GBP Dashboard ↗</a>'
-      + '<a href="https://www.google.com/search?q=V+Wholesale+Vijayawada" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:6px 12px">🔍 Search V Wholesale on Google ↗</a>'
-      + '</div></div>';
-    document.getElementById('gbp-text').value = '';
-    loadGBPHistory();
-
-  } catch(e) {
-    showMktToast('❌ ' + e.message);
-    if (result) result.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-size:12px;color:#ef4444">❌ ' + e.message + '</div>';
-  } finally {
-    if (btn) { btn.textContent = '🚀 Post to Google Business Profile'; btn.disabled = false; }
+  if (result) {
+    result.style.display = 'block';
+    result.innerHTML = `<div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:16px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px">📋 Text copied! Post to GBP in 3 steps:</div>
+      <div style="display:grid;gap:8px;margin-bottom:12px">
+        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">1</span><span>Click <b>Open GBP</b> below → your business dashboard opens</span></div>
+        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">2</span><span>Click <b>Add update</b> → paste text (Ctrl+V) → upload image if any</span></div>
+        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">3</span><span>Click <b>Post</b> → live on Google Maps in 2-5 minutes ✅</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none;padding:10px 16px">📍 Open GBP Dashboard ↗</a>
+        <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'))" style="font-size:12px;padding:10px 16px">📋 Copy Again</button>
+        ${imageUrl?'<a href="'+imageUrl+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:12px;text-decoration:none;padding:10px 16px">🖼️ Open Image ↗</a>':''}
+      </div>
+    </div>`;
   }
+
+  await sb.from('marketing_audit_logs').insert({
+    action:'gbp_post_created',
+    details:{post_text:text.slice(0,100),method:'manual',has_image:!!imageUrl},
+    created_at:new Date().toISOString()
+  }).then(()=>{}).catch(()=>{});
+  loadGBPHistory();
 }
 
 async function loadGBPHistory() {
