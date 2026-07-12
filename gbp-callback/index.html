@@ -5,57 +5,108 @@
   <title>Connecting GBP…</title>
   <style>
     body{font-family:-apple-system,sans-serif;background:#0A1628;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-    .box{text-align:center;padding:40px}
+    .box{text-align:center;padding:40px;max-width:400px}
     .spinner{width:40px;height:40px;border:3px solid rgba(201,168,76,.3);border-top-color:#c9a84c;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px}
     @keyframes spin{to{transform:rotate(360deg)}}
-    h2{color:#c9a84c;margin-bottom:8px}
-    p{color:#94a3b8;font-size:14px}
+    h2{color:#c9a84c;margin-bottom:8px;font-size:18px}
+    p{color:#94a3b8;font-size:13px;line-height:1.6}
     .err{color:#ef4444}
+    .detail{background:rgba(255,255,255,.05);border-radius:8px;padding:10px;margin:12px 0;font-size:11px;color:#94a3b8;text-align:left;word-break:break-all}
+    a{color:#c9a84c;text-decoration:none}
   </style>
 </head>
 <body>
   <div class="box">
     <div class="spinner" id="sp"></div>
     <h2 id="title">Connecting Google Business Profile…</h2>
-    <p id="msg">Exchanging authorization code…</p>
+    <p id="msg">Exchanging authorization code with Google…</p>
+    <div id="detail" class="detail" style="display:none"></div>
   </div>
   <script>
     const SB = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
     const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
+    function show(t, m, e, detail) {
+      document.getElementById('sp').style.display = e ? 'none' : 'block';
+      document.getElementById('title').textContent = (e ? '❌ ' : '✅ ') + t;
+      document.getElementById('title').className = e ? 'err' : '';
+      document.getElementById('msg').textContent = m;
+      if (detail) {
+        document.getElementById('detail').style.display = 'block';
+        document.getElementById('detail').textContent = detail;
+      }
+    }
+
+    async function callEdgeFn(code, attempt) {
+      show('Connecting…', `Attempt ${attempt}/4 — calling exchange function…`, false);
+      const res = await fetch(`${SB}/functions/v1/gbp-oauth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': KEY },
+        body: JSON.stringify({ action: 'exchange_code', code })
+      });
+      return { status: res.status, data: await res.json() };
+    }
+
     async function run() {
       const p = new URLSearchParams(window.location.search);
       const code = p.get('code'), state = p.get('state'), err = p.get('error');
-      if (err) { show('Access Denied', err, 1); return red(); }
-      if (!code || state !== 'gbp_oauth') { show('Invalid Callback', 'No code received', 1); return red(); }
-      try {
-        // Exchange via edge function (keeps secret server-side)
-        let data = null;
-        for (let i = 1; i <= 3; i++) {
-          const res = await fetch(`${SB}/functions/v1/gbp-oauth`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'apikey': KEY },
-            body: JSON.stringify({ action: 'exchange_code', code })
-          });
-          if (res.status === 404) { await new Promise(r => setTimeout(r, 2000 * i)); continue; }
-          data = await res.json();
-          break;
+
+      if (err) {
+        show('Access Denied', 'Google denied the request: ' + err, true);
+        setTimeout(() => window.location.href = '/marketing/', 4000);
+        return;
+      }
+      if (!code || state !== 'gbp_oauth') {
+        show('Invalid Callback', 'No authorization code received. Try connecting again.', true);
+        setTimeout(() => window.location.href = '/marketing/', 4000);
+        return;
+      }
+
+      // Wait 3 seconds for edge function warm-up before first attempt
+      show('Connecting…', 'Warming up connection to Google…', false);
+      await new Promise(r => setTimeout(r, 3000));
+
+      let lastError = '';
+      for (let i = 1; i <= 4; i++) {
+        try {
+          const { status, data } = await callEdgeFn(code, i);
+          
+          if (status === 404) {
+            // Cold start — wait and retry
+            show('Connecting…', `Starting up (attempt ${i}/4)…`, false);
+            await new Promise(r => setTimeout(r, 3000));
+            continue;
+          }
+
+          if (!data.ok) {
+            lastError = data.error || 'Unknown error';
+            show('Connection Failed', lastError, true, `Status: ${status} | Error: ${lastError}`);
+            setTimeout(() => window.location.href = '/marketing/', 5000);
+            return;
+          }
+
+          // Success
+          const accountInfo = data.accounts?.length 
+            ? data.accounts[0].name 
+            : (data.account_error ? 'Account API: ' + data.account_error : 'No account found');
+          
+          show('Connected!', 'Google Business Profile connected successfully. Redirecting…', false);
+          document.getElementById('detail').style.display = 'block';
+          document.getElementById('detail').textContent = accountInfo;
+          setTimeout(() => window.location.href = '/marketing/?gbp=connected', 2000);
+          return;
+
+        } catch(e) {
+          lastError = e.message;
+          if (i < 4) await new Promise(r => setTimeout(r, 3000));
         }
-        if (!data) throw new Error('Edge function unavailable — try again');
-        if (!data.ok) throw new Error(data.error || 'Token exchange failed');
-        show('Connected!', 'Redirecting to Marketing Portal…', 0);
-        setTimeout(() => window.location.href = '/marketing/?gbp=connected', 1500);
-      } catch(e) { show('Failed', e.message, 1); red(); }
+      }
+
+      show('Connection Failed', lastError || 'Could not reach the exchange service after 4 attempts.', true,
+        'Try: Disconnect GBP in the marketing portal and reconnect again.');
+      setTimeout(() => window.location.href = '/marketing/', 6000);
     }
 
-    function show(t, m, e) {
-      document.getElementById('sp').style.display = e ? 'none' : 'block';
-      const el = document.getElementById('title');
-      el.textContent = (e ? '❌ ' : '✅ ') + t;
-      el.className = e ? 'err' : '';
-      document.getElementById('msg').textContent = m;
-    }
-    function red() { setTimeout(() => window.location.href = '/marketing/', 4000); }
     run();
   </script>
 </body>
