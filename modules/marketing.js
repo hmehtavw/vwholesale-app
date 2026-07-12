@@ -1466,11 +1466,14 @@ async function renderGBP() {
         </label>
       </div>
       <div id="gbp-image-gen-status" style="display:none;text-align:center;padding:10px;color:var(--text3);font-size:12px"></div>
-      <div id="gbp-image-preview" style="display:none;border-radius:10px;overflow:hidden;border:1px solid var(--border);position:relative">
-        <img id="gbp-image-preview-img" src="" style="width:100%;height:160px;object-fit:cover">
-        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+    id="gbp-image-preview" style="display:none;border-radius:10px;border:1px solid var(--border);overflow:hidden">
+        <img id="gbp-image-preview-img" src="" onclick="openGBPImageFullscreen(this.src)" style="width:100%;max-height:220px;object-fit:cover;cursor:zoom-in;display:block" title="Click to view full size">
+        <div style="background:rgba(0,0,0,.7);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
           <span id="gbp-image-label" style="font-size:10px;color:#fff">Image ready</span>
-          <button onclick="clearGBPImage()" style="background:rgba(239,68,68,.9);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">✕ Remove</button>
+          <div style="display:flex;gap:6px">
+            <button onclick="openGBPImageFullscreen(document.getElementById(&apos;gbp-image-preview-img&apos;).src)" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">⛶ View</button>
+            <button onclick="clearGBPImage()" style="background:rgba(239,68,68,.9);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">✕ Remove</button>
+          </div>
         </div>
       </div>
       <input type="hidden" id="gbp-image-url">
@@ -1623,6 +1626,81 @@ async function postToGBP() {
   }).then(()=>{}).catch(()=>{});
 
   loadGBPHistory();
+}
+
+
+function openGBPImageFullscreen(url) {
+  if (!url) return;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.93);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.onclick = () => ov.remove();
+  const img = document.createElement('img');
+  img.src = url;
+  img.style.cssText = 'max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain';
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+  toolbar.onclick = e => e.stopPropagation();
+  const cb = document.createElement('button');
+  cb.textContent = '✕ Close';
+  cb.style.cssText = 'background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer';
+  cb.onclick = () => ov.remove();
+  const dl = document.createElement('a');
+  dl.href = url; dl.download = 'gbp-image.jpg'; dl.target = '_blank';
+  dl.textContent = '⬇ Download Image';
+  dl.style.cssText = 'background:#c9a84c;color:#000;border-radius:8px;padding:8px 20px;font-size:13px;text-decoration:none;font-weight:700';
+  toolbar.appendChild(cb); toolbar.appendChild(dl);
+  ov.appendChild(img); ov.appendChild(toolbar);
+  document.body.appendChild(ov);
+}
+
+function setGBPImage(url, label) {
+  const h = document.getElementById('gbp-image-url'); if(h) h.value = url;
+  const p = document.getElementById('gbp-image-preview'); if(p) p.style.display = 'block';
+  const i = document.getElementById('gbp-image-preview-img'); if(i) i.src = url;
+  const l = document.getElementById('gbp-image-label'); if(l) l.textContent = label || 'Image ready';
+  const st = document.getElementById('gbp-image-gen-status'); if(st) st.style.display = 'none';
+}
+
+function showGBPImagePreview(url) { setGBPImage(url, 'Image ready'); }
+
+function clearGBPImage() {
+  const h = document.getElementById('gbp-image-url'); if(h) h.value = '';
+  const p = document.getElementById('gbp-image-preview'); if(p) p.style.display = 'none';
+  const i = document.getElementById('gbp-image-preview-img'); if(i) i.src = '';
+  const u = document.getElementById('gbp-image-upload'); if(u) u.value = '';
+  const st = document.getElementById('gbp-image-gen-status'); if(st) st.style.display = 'none';
+}
+
+async function useLatestPoster() {
+  showMktToast('🎨 Fetching latest poster…');
+  const { data } = await sb.from('poster_history').select('poster_url,topic,created_at').order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+  if (!data?.poster_url) { showMktToast('No posters found — generate one in Poster Studio first'); return; }
+  setGBPImage(data.poster_url, '🎨 ' + (data.topic||'Latest Poster'));
+  showMktToast('✅ Latest poster loaded');
+}
+
+async function handleGBPImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5*1024*1024) { showMktToast('Image must be under 5MB'); return; }
+  showMktToast('📁 Uploading image…');
+  try {
+    const fileName = 'gbp/' + Date.now() + '_' + file.name.replace(/[^a-z0-9.]/gi,'_').toLowerCase();
+    const { data: up, error } = await sb.storage.from('marketing-assets').upload(fileName, file, {contentType:file.type, upsert:true});
+    if (error) throw new Error(error.message);
+    const { data: urlData } = sb.storage.from('marketing-assets').getPublicUrl(fileName);
+    setGBPImage(urlData.publicUrl, '📁 ' + file.name + ' (uploaded ✅)');
+    showMktToast('✅ Image uploaded and ready!');
+  } catch(e) {
+    // Use local URL — fine for manual posting (copy text → open GBP → upload image manually)
+    setGBPImage(URL.createObjectURL(file), '📁 ' + file.name + ' — click ⬇ Download to save for GBP');
+    showMktToast('✅ Image ready — download it to upload to GBP');
+  }
+}
+
+async function getPexelsKey() {
+  const { data } = await sb.from('marketing_settings').select('value').eq('key','PEXELS_API_KEY').maybeSingle().then(r=>r,()=>({data:null}));
+  return data?.value || '';
 }
 
 
