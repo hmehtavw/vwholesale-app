@@ -1617,18 +1617,34 @@ async function generateGBPPost() {
   const topic = (document.getElementById('gbp-topic')?.value||'').trim();
   const type = document.getElementById('gbp-post-type')?.value||'standard';
   if (!topic) { showMktToast('Enter a topic first'); return; }
-  showMktToast('🤖 Writing GBP post…');
-  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{
-    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body:JSON.stringify({task:'gbp_post',platform:'GBP',language:'en',topic,
-      context:{business:'V Wholesale',location:'NH65, Bhavanipuram, Vijayawada',type,phone:'8712697930',website:'vwholesale.in'}})
-  });
-  const data = await res.json();
-  const content = data.content||data.text||'';
-  if (!content) { showMktToast('\u274C Failed'); return; }
-  const ta = document.getElementById('gbp-text');
-  if (ta) ta.value = content;
-  showMktToast('\u2705 GBP post written!');
+
+  const btn = document.querySelector('[onclick="generateGBPPost()"]');
+  if (btn) { btn.textContent = '\u23F3 Writing\u2026'; btn.disabled = true; }
+  showMktToast('\uD83E\uDD16 Writing GBP post\u2026');
+
+  try {
+    const typeLabel = {standard:'Update/Announcement', offer:'Offer/Promotion', event:'Event'}[type]||'Update';
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({
+        action:'generate_text',
+        agent:'GBP Post Writer',
+        prompt:'Write a Google Business Profile post for V Wholesale, a home building materials store in Vijayawada (NH65, Bhavanipuram). Post type: '+typeLabel+'. Topic: '+topic+'. Rules: max 1500 chars, include call to action with phone 8712697930 or visit vwholesale.in, mention Vijayawada. Return JSON: {"post_text":"..."}',
+        context:{topic, type:typeLabel, business:'V Wholesale', location:'Vijayawada'}
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'AI failed');
+    const content = data.output?.post_text || data.output?.text || data.output?.content || '';
+    if (!content) throw new Error('AI returned empty post');
+    const ta = document.getElementById('gbp-text');
+    if (ta) ta.value = content;
+    showMktToast('\u2705 Post written \u2014 review and post to GBP');
+  } catch(e) {
+    showMktToast('\u274C ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '\uD83E\uDD16 Generate with AI'; btn.disabled = false; }
+  }
 }
 
 function quickGBPPost(idea) {
