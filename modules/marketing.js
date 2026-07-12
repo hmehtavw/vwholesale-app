@@ -1622,10 +1622,17 @@ async function useLatestPoster() {
 }
 
 async function generateGBPImage() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim()
-    || (document.getElementById('gbp-text')?.value||'').split(' ').slice(0,6).join(' ');
-  const customPrompt = (document.getElementById('gbp-image-prompt')?.value||'').trim();
-  if (!topic && !customPrompt) { showMktToast('Enter a post topic or image description first'); return; }
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  const postText = (document.getElementById('gbp-text')?.value||'').trim();
+
+  if (!postText && !topic) {
+    showMktToast('Generate your post text first, then click Generate AI Image');
+    return;
+  }
+
+  // Use the actual post content to drive image generation
+  // AI will read the post and create a matching visual
+  const imageContext = postText || topic;
 
   const btns = document.querySelectorAll('[onclick="generateGBPImage()"]');
   btns.forEach(b => { b.style.opacity='.5'; b.style.pointerEvents='none'; });
@@ -1636,15 +1643,15 @@ async function generateGBPImage() {
     status.dataset.timer = String(_timer);
     status.style.display='block';
     status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
-      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Generating with gpt-image-1…</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">Takes 30-45 seconds · <span id="gbp-img-secs">0s</span></div>';
+      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Reading post and generating matching image…</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">gpt-image-1 · 30-45 seconds · <span id="gbp-img-secs">0s</span></div>';
   }
 
   try {
     const res = await fetch(MKT_SB_URL+'/functions/v1/gbp-image', {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({topic, custom_prompt: customPrompt||null})
+      body:JSON.stringify({topic, post_text: imageContext})
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Image generation failed');
