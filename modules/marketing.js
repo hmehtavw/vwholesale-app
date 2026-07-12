@@ -161,6 +161,94 @@ function renderComingSoon(title) {
 }
 
 // ── COMMAND CENTRE ──
+async function generateReelScript(topic, event) {
+  if (event) event.stopPropagation();
+  if (!topic) { showMktToast('No topic for this reel'); return; }
+
+  const btn = event?.target;
+  if (btn) { btn.textContent = '⏳ Writing…'; btn.disabled = true; }
+  showMktToast('🎬 Generating reel script for: ' + topic);
+
+  try {
+    const { data: bp } = await sb.from('brand_profile').select('*').limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Reel Script Generator',
+        prompt: `Write a complete Instagram/YouTube Shorts reel script for V Wholesale, Vijayawada.
+
+TOPIC: ${topic}
+STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930
+
+Return JSON:
+{
+  "duration": "30-45 seconds",
+  "hook": "First 3 seconds — what to say/show to stop the scroll",
+  "shots": [
+    {"scene": 1, "what_to_film": "...", "onscreen_text": "...", "duration_sec": 5},
+    {"scene": 2, "what_to_film": "...", "onscreen_text": "...", "duration_sec": 8},
+    {"scene": 3, "what_to_film": "...", "onscreen_text": "...", "duration_sec": 8},
+    {"scene": 4, "what_to_film": "...", "onscreen_text": "...", "duration_sec": 7},
+    {"scene": 5, "what_to_film": "...", "onscreen_text": "...", "duration_sec": 7}
+  ],
+  "voiceover": "Optional spoken script that matches the shots",
+  "telugu_hook": "The hook translated to Telugu for Telugu audience version",
+  "caption": "Instagram caption with hook + hashtags",
+  "hashtags": ["#Vijayawada","#HomeRenovation","...12 more"],
+  "best_time_to_post": "e.g. Tuesday 7pm"
+}`,
+        context: { topic }
+      })
+    });
+    const data = await res.json();
+    const script = data.output;
+    if (!script) throw new Error('Script generation failed');
+
+    // Show in a modal overlay
+    const shots = (script.shots||[]).map((sh, i) =>
+      `<div style="padding:8px;background:var(--bg3);border-radius:6px;margin-bottom:6px">
+        <div style="font-size:11px;font-weight:700;color:var(--gold)">Scene ${i+1} · ${sh.duration_sec||'?'}s</div>
+        <div style="font-size:11px;margin-top:3px"><b>📹 Film:</b> ${sh.what_to_film}</div>
+        <div style="font-size:11px;margin-top:2px"><b>📝 Text:</b> ${sh.onscreen_text}</div>
+      </div>`).join('');
+
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;overflow-y:auto;padding:20px';
+    ov.innerHTML = `
+      <div style="max-width:500px;margin:0 auto;background:var(--bg2);border-radius:12px;padding:20px;border:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:15px;font-weight:900">🎬 Reel Script: ${topic}</div>
+          <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        <div style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold)">⚡ HOOK (first 3 seconds)</div>
+          <div style="font-size:13px;margin-top:4px">${script.hook||''}</div>
+          ${script.telugu_hook ? `<div style="font-size:12px;color:var(--text3);margin-top:4px">తెలుగు: ${script.telugu_hook}</div>` : ''}
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">SHOT LIST · ${script.duration||'30-45 seconds'}</div>
+        ${shots}
+        ${script.voiceover ? `<div style="margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px"><div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">🎙️ VOICEOVER</div><div style="font-size:11px;line-height:1.8">${script.voiceover}</div></div>` : ''}
+        <div style="margin-top:10px;padding:8px;background:var(--bg3);border-radius:6px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:4px">📌 CAPTION + HASHTAGS</div>
+          <div style="font-size:11px;line-height:1.8">${script.caption||''}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(script)},null,2)).then(()=>showMktToast('📋 Script copied!'))" class="mkt-btn mkt-btn-ghost" style="flex:1;font-size:11px;padding:8px">📋 Copy All</button>
+          <button onclick="this.closest('[style*=fixed]').remove()" class="mkt-btn mkt-btn-primary" style="flex:1;font-size:11px;padding:8px">✓ Got It</button>
+        </div>
+        ${script.best_time_to_post ? `<div style="font-size:10px;color:var(--text3);text-align:center;margin-top:8px">Best time to post: ${script.best_time_to_post}</div>` : ''}
+      </div>`;
+    document.body.appendChild(ov);
+    showMktToast('✅ Reel script ready!');
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent = '🎬 Get Script'; btn.disabled = false; }
+  }
+}
+
+
 async function renderApprovals() {
   const { data: approvals } = await sb.from('marketing_approvals').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
   const pending = (approvals||[]).filter(a=>a.status==='pending');
@@ -364,53 +452,201 @@ async function renderGBP() {
 
 // Track step progress
 async function renderAgents() {
-  const { data: agents } = await sb.from('ai_agents').select('*').order('name').then(r=>r, ()=>({data:[]}));
-  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading agents…</div>`);
+
+  const [
+    { data: notifications },
+    { data: agentRuns }
+  ] = await Promise.all([
+    sb.from('agent_notifications').select('*').eq('resolved', false).order('created_at',{ascending:false}).limit(20).then(r=>r,()=>({data:[]})),
+    sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const pending = (notifications||[]).filter(n => n.response === 'pending' && n.action_required);
+  const typeIcon = { trend_alert:'🔥', approval_request:'✅', monthly_review:'📊', quarterly_review:'📈', performance_report:'📉' };
 
   setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">AI Agents</h3>
-    <div style="font-size:12px;color:var(--text3)">All agents run in Recommend mode (Level 1) by default</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">🤖 AI Agents</h3>
+      <div style="font-size:12px;color:var(--text3)">Agents work automatically and notify you when action is needed</div>
+    </div>
+    ${pending.length ? `<span class="badge badge-red">${pending.length} need your input</span>` : '<span class="badge badge-green">All clear</span>'}
   </div>
 
-  <div style="display:grid;gap:10px;margin-bottom:16px">
-    ${(agents||[]).map(a => `
-    <div class="mkt-card" style="padding:14px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+  <!-- AGENT CARDS -->
+  <div style="display:grid;gap:10px;margin-bottom:20px">
+
+    <!-- Trend Scout -->
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:28px">🔥</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:800">${a.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${a.description}</div>
+          <div style="font-size:13px;font-weight:700">Trend Scout Agent</div>
+          <div style="font-size:11px;color:var(--text3)">Scans Google Trends + home building topics · alerts when opportunity found</div>
         </div>
-        <span class="badge badge-purple">Level ${a.autonomy_level}</span>
-        <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
+        <button onclick="runTrendScout(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">▶ Run Now</button>
       </div>
-      <div style="display:flex;gap:8px;font-size:10px;color:var(--text3)">
-        <span>Model: ${a.model}</span>
-        <span>·</span>
-        <span>Provider: ${a.provider}</span>
-        <span>·</span>
-        <span>Max cost: $${a.max_cost_per_run}/run</span>
-        ${a.last_run_at ? `<span>·</span><span>Last run: ${new Date(a.last_run_at).toLocaleDateString('en-IN')}</span>` : ''}
+      <div id="trend-scout-result" style="font-size:11px;color:var(--text3)">
+        Last run: ${agentRuns?.find(r=>r.agent_name==='Trend Scout')?.created_at
+          ? new Date(agentRuns.find((r)=>r.agent_name==='Trend Scout').created_at).toLocaleString('en-IN')
+          : 'Never — click Run Now'}
+      </div>
+    </div>
+
+    <!-- Content Agent -->
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <div style="font-size:28px">✍️</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Content Creator Agent</div>
+          <div style="font-size:11px;color:var(--text3)">Creates posts from calendar · adapts for all channels · sends for approval</div>
+        </div>
+        <button onclick="mktNav('content')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">Open Studio</button>
+      </div>
+    </div>
+
+    <!-- Review Agent -->
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="font-size:28px">📊</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Review Agent</div>
+          <div style="font-size:11px;color:var(--text3)">Monthly + quarterly performance analysis · recommends what to stop, continue, double down on</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Monthly</button>
+          <button onclick="runReview('quarterly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Quarterly</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PENDING NOTIFICATIONS -->
+  ${pending.length ? `
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px">📬 Waiting for your response (${pending.length})</div>
+  <div style="display:grid;gap:8px;margin-bottom:20px">
+    ${pending.map(n => `
+    <div class="mkt-card" style="border-left:3px solid var(--gold)">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <div style="font-size:24px;flex-shrink:0">${typeIcon[n.notification_type]||'🔔'}</div>
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${(n.notification_type||'').replace(/_/g,' ')} · ${new Date(n.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+          <div style="font-size:12px;color:var(--text1);line-height:1.7;white-space:pre-wrap;margin-bottom:10px">${n.message}</div>
+          <div style="display:flex;gap:8px">
+            <button onclick="respondNotification('${n.id}','yes',this)" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 16px">✅ Yes / Approve</button>
+            <button onclick="respondNotification('${n.id}','no',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px">✗ No / Skip</button>
+            <button onclick="respondNotification('${n.id}','dismiss',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px;color:var(--text3)">Dismiss</button>
+          </div>
+        </div>
       </div>
     </div>`).join('')}
-  </div>
+  </div>` : ''}
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">Recent Agent Runs</div>
-    ${(runs||[]).length ? `<table class="mkt-table">
-      <tr><th>Agent</th><th>Model</th><th>Status</th><th>Cost</th><th>Time</th></tr>
-      ${(runs||[]).map(r=>`<tr>
-        <td style="font-weight:700">${r.agent_name}</td>
-        <td style="color:var(--text3)">${r.model}</td>
-        <td><span class="badge ${r.status==='completed'?'badge-green':'badge-red'}">${r.status}</span></td>
-        <td>$${(r.cost_usd||0).toFixed(4)}</td>
-        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
-      </tr>`).join('')}
-    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No agent runs yet</div></div>'}
+  <!-- RECENT ACTIVITY -->
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 Recent activity</div>
+  <div style="display:grid;gap:6px">
+    ${(notifications||[]).filter((n)=>n.response!=='pending').slice(0,8).map(n => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border-radius:8px">
+      <span style="font-size:16px">${typeIcon[n.notification_type]||'🔔'}</span>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text2)">${n.message.slice(0,80)}…</div>
+        <div style="font-size:10px;color:var(--text3)">${new Date(n.created_at).toLocaleString('en-IN')} · ${n.response||'seen'}</div>
+      </div>
+      <span class="badge ${n.response==='yes'?'badge-green':n.response==='no'?'badge-gray':'badge-gray'}">${n.response||'seen'}</span>
+    </div>`).join('')}
+    ${!(notifications||[]).filter((n)=>n.response!=='pending').length
+      ? '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No activity yet</div>'
+      : ''}
   </div>`);
 }
 
-// ── AI PAUSE ──
+async function runTrendScout(btn) {
+  if (btn) { btn.textContent = '⏳ Scanning…'; btn.disabled = true; }
+  const el = document.getElementById('trend-scout-result');
+  if (el) el.innerHTML = '<span style="color:var(--text3)">⏳ Scanning trends for Vijayawada home building…</span>';
+
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/trend-scout', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+
+    if (data.alerted) {
+      if (el) el.innerHTML = `<div style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.25);border-radius:8px;padding:10px;margin-top:6px">
+        <div style="font-size:12px;font-weight:700;color:var(--gold)">🔥 Trend found!</div>
+        <div style="font-size:12px;margin:4px 0"><b>Trend:</b> ${data.trend}</div>
+        <div style="font-size:12px;margin:4px 0"><b>Idea:</b> ${data.content_idea}</div>
+        <div style="font-size:11px;color:var(--text3)">Urgency: ${data.urgency} · Saved to notifications</div>
+      </div>`;
+      showMktToast('🔥 Trend found — check notifications!');
+    } else {
+      if (el) el.innerHTML = `<span style="color:var(--text3)">✅ Scanned at ${new Date().toLocaleTimeString('en-IN')} — no high-relevance trends right now (relevance: ${data.relevance}/10)</span>`;
+      showMktToast('✅ No trending topics right now');
+    }
+  } catch(e) {
+    if (el) el.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent = '▶ Run Now'; btn.disabled = false; }
+  }
+}
+
+async function runReview(type, btn) {
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  showMktToast('📊 Generating '+type+' review…');
+  try {
+    const now = new Date();
+    const period_label = type === 'quarterly'
+      ? now.getFullYear()+'-Q'+Math.ceil((now.getMonth()+1)/3)
+      : now.toISOString().slice(0,7);
+    const start_date = type === 'quarterly'
+      ? new Date(now.getFullYear(), Math.floor(now.getMonth()/3)*3, 1).toISOString()
+      : new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/content-notifications', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'generate_review', period_type:type, period_label, start_date })
+    });
+    const data = await res.json();
+    showMktToast('✅ '+type.charAt(0).toUpperCase()+type.slice(1)+' review generated');
+    setTimeout(() => renderAgents(), 1000);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent = type.charAt(0).toUpperCase()+type.slice(1); btn.disabled = false; }
+  }
+}
+
+async function respondNotification(id, response, btn) {
+  if (btn) { btn.disabled = true; }
+  try {
+    await sb.from('agent_notifications').update({
+      response, responded_at: new Date().toISOString(), resolved: response !== 'pending'
+    }).eq('id', id);
+
+    if (response === 'yes') {
+      // Check if it's a trend alert — open content studio with suggestion
+      const { data: notif } = await sb.from('agent_notifications').select('notification_type,message').eq('id',id).single().then(r=>r,()=>({data:null}));
+      if (notif?.notification_type === 'trend_alert') {
+        showMktToast('✅ Approved — opening Content Studio to create trend post');
+        setTimeout(() => mktNav('content'), 800);
+      } else {
+        showMktToast('✅ Approved');
+      }
+    } else {
+      showMktToast(response === 'no' ? '✗ Skipped' : 'Dismissed');
+    }
+    setTimeout(() => renderAgents(), 600);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+
 async function renderBrandProfile() {
   const {data:bp} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
   const p = (bp||[])[0] || {};
