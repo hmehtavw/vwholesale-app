@@ -1643,7 +1643,7 @@ async function generateGBPImage() {
     status.dataset.timer = String(_timer);
     status.style.display='block';
     status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
-      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Reading post and generating matching image…</div>'
+      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Creating Creative Director brief + 2 poster variations…</div>'
       +'<div style="font-size:11px;color:var(--text3);margin-top:3px">gpt-image-1 · 30-45 seconds · <span id="gbp-img-secs">0s</span></div>';
   }
 
@@ -1657,9 +1657,26 @@ async function generateGBPImage() {
     if (!data.ok) throw new Error(data.error || 'Image generation failed');
     const imgUrl = data.image_url || '';
     if (!imgUrl) throw new Error('No image URL returned');
+    const variations = data.variations || [imgUrl];
     const label = data.source === 'pexels' ? '🖼️ Stock Photo' : '🤖 AI Generated (gpt-image-1)';
-    setGBPImage(imgUrl, label + (topic ? ' — ' + topic : ''));
-    showMktToast('✅ Image ready!');
+    setGBPImage(imgUrl, label + (data.qa_score ? ' · QA: '+data.qa_score+'/10' : ''));
+    showMktToast('✅ ' + (variations.length > 1 ? variations.length+' variations ready — pick the best!' : 'Image ready!'));
+
+    // Show variation picker if multiple
+    if (variations.length > 1 && status) {
+      status.style.display = 'block';
+      // Build variation picker with proper escaping
+      const pickerHtml = variations.map((vurl, vi) => {
+        const isFirst = vi === 0;
+        return '<div style="cursor:pointer;border:2px solid '+(isFirst?'var(--gold)':'var(--border)')+';border-radius:6px;overflow:hidden" data-var="'+vi+'">'
+          +'<img src="'+vurl+'" style="width:100%;height:80px;object-fit:cover;display:block" onclick="pickGBPVariation('+vi+',this.parentElement.parentElement)">'
+          +'<div style="font-size:9px;text-align:center;padding:3px;color:var(--text3)">Option '+(vi+1)+(isFirst?' ← Auto-selected':'')+'</div>'
+        +'</div>';
+      }).join('');
+      window._gbpVariations = variations;
+      status.innerHTML = '<div style="font-size:11px;font-weight:700;margin-bottom:6px">🎨 '+(variations.length)+' variations — tap to select:</div>'
+        + '<div style="display:grid;grid-template-columns:repeat('+variations.length+',1fr);gap:6px">'+pickerHtml+'</div>';
+    }
   } catch(e) {
     showMktToast('❌ ' + e.message);
     if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '<br><span style="color:var(--text3)">Try 📁 Upload Image instead</span></div>';
@@ -1670,6 +1687,18 @@ async function generateGBPImage() {
   }
 }
 
+
+function pickGBPVariation(idx, container) {
+  const vars = window._gbpVariations || [];
+  if (!vars[idx]) return;
+  setGBPImage(vars[idx], 'Variation ' + (idx+1));
+  // Update border highlight
+  if (container) {
+    container.querySelectorAll('[data-var]').forEach((el, i) => {
+      el.style.borderColor = i === idx ? 'var(--gold)' : 'var(--border)';
+    });
+  }
+}
 
 function setGBPImage(url, label) {
   const hidden = document.getElementById('gbp-image-url');
