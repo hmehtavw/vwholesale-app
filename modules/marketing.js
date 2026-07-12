@@ -81,15 +81,23 @@ function showMktApp() {
   loadAIPauseStatus();
 
 
-  // Returned from GBP callback page after successful connection
+  // Handle OAuth callbacks
   const _urlCheck = new URLSearchParams(window.location.search);
   if (_urlCheck.get('gbp') === 'connected') {
     window.history.replaceState({}, '', window.location.pathname);
     setTimeout(() => showMktToast('✅ Google Business Profile connected!'), 500);
-    mktNav('gbp');
-    return;
+    mktNav('gbp'); return;
   }
-
+  if (window._metaOAuthCode) {
+    const code = window._metaOAuthCode;
+    window._metaOAuthCode = null;
+    setTimeout(() => handleMetaOAuth(code), 500);
+    mktNav('integrations'); return;
+  }
+  if (window._metaOAuthError) {
+    setTimeout(() => showMktToast('❌ Meta connection failed: ' + window._metaOAuthError), 500);
+    window._metaOAuthError = null;
+  }
   mktNav('command');
 }
 
@@ -791,166 +799,226 @@ async function renderBrand() {
 }
 
 async function renderIntegrations() {
-  const { data: integrations } = await sb.from('marketing_integrations').select('*').order('name').then(r=>r, ()=>({data:[]}));
-  const { data: settings } = await sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]}));
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading integrations…</div>`);
 
-  const getInt = (name) => (integrations||[]).find(i=>i.name.toLowerCase().includes(name.toLowerCase()));
-  const getSetting = (key) => (settings||[]).find(s=>s.key===key)?.value;
+  const [
+    { data: settings },
+    { data: social }
+  ] = await Promise.all([
+    sb.from('marketing_settings').select('key,value').then(r=>r,()=>({data:[]})),
+    sb.from('social_connections').select('*').then(r=>r,()=>({data:[]}))
+  ]);
 
-  const metaConn = getInt('meta') || getInt('facebook') || getInt('instagram');
-  const waConn = getInt('whatsapp') || getInt('interakt');
-  const gbpConn = getInt('google') || getInt('gbp');
-  const ytConn = getInt('youtube');
+  const cfg = {};
+  (settings||[]).forEach(s => { cfg[s.key] = s.value; });
+  const sc = {};
+  (social||[]).forEach(s => { sc[s.platform] = s; });
 
-  const platforms = [
-    {
-      name:'Meta Business (Instagram + Facebook)',
-      icon:'📸',
-      status: metaConn?.status || 'not_connected',
-      description:'Connect once — publish to Instagram, Facebook and Threads. Enables auto-posting from Poster Studio.',
-      steps:[
-        'Create a Meta Business account at business.facebook.com',
-        'Add your Instagram and Facebook Page to the Business account',
-        'Go to Meta Developers → Create App → Business type',
-        'Add Instagram Basic Display + Pages API permissions',
-        'Generate access token and paste below'
-      ],
-      setupUrl:'https://developers.facebook.com/apps/',
-      token_key:'META_ACCESS_TOKEN',
-      page_key:'META_PAGE_ID'
-    },
-    {
-      name:'WhatsApp Business API (Interakt)',
-      icon:'💬',
-      status: waConn?.status || 'pending',
-      description:'Send broadcasts, automate greetings, quotation updates via Interakt. Number 8712697930 under Meta review.',
-      steps:[
-        'Complete Interakt WABA approval (number 8712697930 — under review)',
-        'Add INTERAKT_API_KEY to Supabase Edge Function secrets',
-        'Create and get approved message templates in Interakt',
-        'Test with a single message before enabling broadcasts'
-      ],
-      setupUrl:'https://app.interakt.ai',
-      token_key:'INTERAKT_API_KEY',
-      note:'⏳ Number under Meta review — check Interakt dashboard'
-    },
-    {
-      name:'Google Business Profile',
-      icon:'📍',
-      status: gbpConn?.status || 'not_connected',
-      description:'Auto-post updates, offers and events to your GBP. Boosts local SEO and Maps visibility.',
-      steps:[
-        'Go to Google Cloud Console → Enable My Business API',
-        'Create OAuth 2.0 credentials (Web application type)',
-        'Add vwholesale.in to authorized redirect URIs',
-        'Click Connect below to start the OAuth flow'
-      ],
-      setupUrl:'https://console.cloud.google.com/apis/library/mybusiness.googleapis.com',
-      token_key:'GBP_ACCESS_TOKEN'
-    },
-    {
-      name:'YouTube Data API',
-      icon:'▶️',
-      status: ytConn?.status || 'not_connected',
-      description:'Upload Shorts and videos directly from the portal. Schedule posts to your V Wholesale YouTube channel.',
-      steps:[
-        'Google Cloud Console → Enable YouTube Data API v3',
-        'Create OAuth 2.0 credentials',
-        'Authorize your V Wholesale YouTube channel',
-        'Click Connect below'
-      ],
-      setupUrl:'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
-      token_key:'YOUTUBE_ACCESS_TOKEN'
-    },
-    {
-      name:'Pexels (Stock Photos)',
-      icon:'🖼️',
-      status:'connected',
-      description:'Free stock photos for poster hero images and blog articles. API key already configured.',
-      setupUrl:'https://www.pexels.com/api/',
-      note:'✅ API key configured in Supabase secrets'
-    },
-    {
-      name:'OpenAI (AI Generation)',
-      icon:'🤖',
-      status:'connected',
-      description:'Powers all AI features — poster captions, blog articles, ad copy, review replies, WhatsApp messages.',
-      setupUrl:'https://platform.openai.com',
-      note:'✅ API key configured — GPT-4o-mini for text, gpt-image-1 for posters'
-    }
-  ];
+  const gbpOk = sc.gbp?.status === 'connected' && sc.gbp?.access_token_set;
+  const metaOk = sc.meta?.status === 'connected';
+  const waOk = sc.whatsapp?.status === 'connected';
 
-  const statusConfig = {
-    connected:   {badge:'badge-green', label:'Connected ✓'},
-    pending:     {badge:'badge-blue',  label:'Pending'},
-    not_connected:{badge:'badge-gray', label:'Not Connected'},
-    setup:       {badge:'badge-blue',  label:'Setup in progress'}
-  };
+  const statusBadge = (ok, pendingText) => ok
+    ? '<span class="badge badge-green">✅ Connected</span>'
+    : pendingText
+      ? `<span class="badge badge-yellow">⏳ ${pendingText}</span>`
+      : '<span class="badge badge-gray">Not connected</span>';
 
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900">🔌 Platform Integrations</h3>
-      <div style="font-size:12px;color:var(--text3)">Connect external platforms to enable auto-publishing and automation</div>
+  <div style="margin-bottom:20px">
+    <h3 style="font-size:16px;font-weight:900">🔌 Integrations</h3>
+    <div style="font-size:12px;color:var(--text3)">Connect channels to enable auto-publishing</div>
+  </div>
+
+  <!-- GOOGLE BUSINESS PROFILE -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">📍</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">Google Business Profile</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Post updates, offers and events to Google Maps</div>
+      </div>
+      ${statusBadge(gbpOk, !gbpOk ? 'API approval pending' : null)}
+    </div>
+    ${gbpOk ? `
+    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">
+      ✅ OAuth tokens saved · Case ID: 6-0399000041489 · API approval expected 7-10 working days from submission<br>
+      Once approved: auto-posting activates automatically — no code change needed
+    </div>` : `
+    <button onclick="connectGBP()" class="mkt-btn mkt-btn-primary" style="margin-top:10px;font-size:12px;padding:8px 16px">🔗 Connect GBP</button>`}
+  </div>
+
+  <!-- META (Instagram + Facebook) -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">📸</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">Meta — Instagram + Facebook</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Auto-post to Instagram feed, stories, Facebook post and stories</div>
+      </div>
+      ${statusBadge(metaOk, null)}
+    </div>
+    ${metaOk ? `
+    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">✅ Connected — auto-publishing active</div>
+    <button onclick="disconnectMeta()" style="margin-top:8px;background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">Disconnect</button>
+    ` : `
+    <div style="margin-top:10px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">To connect Instagram and Facebook, you need a Meta Business account with Pages access.</div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;margin-bottom:8px">Setup steps:</div>
+        <div style="display:grid;gap:6px;font-size:11px;color:var(--text2)">
+          <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0">1</span><span>Go to <a href="https://developers.facebook.com/apps" target="_blank" style="color:var(--gold)">developers.facebook.com/apps ↗</a> → Create App → Business type</span></div>
+          <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0">2</span><span>Add Instagram Graph API + Facebook Pages API products</span></div>
+          <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;flex-shrink:0">3</span><span>Get App ID + App Secret → paste below → click Connect</span></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <input id="meta-app-id" class="mkt-form-input" placeholder="Meta App ID" style="font-size:12px">
+        <input id="meta-app-secret" class="mkt-form-input" placeholder="Meta App Secret" type="password" style="font-size:12px">
+      </div>
+      <button onclick="connectMeta()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-size:12px;font-weight:700">🔗 Connect Meta (Instagram + Facebook)</button>
+    </div>`}
+  </div>
+
+  <!-- WHATSAPP -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">💬</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">WhatsApp Business (Interakt)</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Broadcast messages to customer list + approvals to 9038010175</div>
+      </div>
+      ${statusBadge(waOk, !waOk ? 'WABA approval pending' : null)}
+    </div>
+    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">
+      ${waOk
+        ? '✅ WABA active · Phone: 8712697930 · Notifications to 9038010175 active'
+        : '⏳ Waiting for Interakt WABA approval for 8712697930. All notification flows are coded and ready — will activate automatically once approved.'}
     </div>
   </div>
 
-  <div style="display:grid;gap:12px">
-    ${platforms.map(p => {
-      const cfg = statusConfig[p.status] || statusConfig.not_connected;
-      const isConnected = p.status === 'connected';
-      return `<div class="mkt-card" style="padding:16px;border-left:3px solid ${isConnected?'#22c55e':p.status==='pending'?'#f59e0b':'var(--border)'}">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${p.steps?'12':'0'}px">
-          <div style="font-size:28px;flex-shrink:0">${p.icon}</div>
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-              <div style="font-size:14px;font-weight:900">${p.name}</div>
-              <span class="badge ${cfg.badge}">${cfg.label}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${p.description}</div>
-            ${p.note ? `<div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:6px 10px;border-radius:6px;margin-bottom:8px">${p.note}</div>` : ''}
-            ${p.steps && !isConnected ? `
-            <div style="margin-bottom:10px">
-              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">SETUP STEPS</div>
-              <div style="display:grid;gap:4px">
-                ${p.steps.map((step,i)=>`<div style="display:flex;gap:8px;font-size:11px;color:var(--text2)">
-                  <span style="width:16px;height:16px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${i+1}</span>
-                  <span>${step}</span>
-                </div>`).join('')}
-              </div>
-            </div>` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-            <a href="${p.setupUrl}" target="_blank" class="mkt-btn ${isConnected?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;text-decoration:none;padding:5px 10px">
-              ${isConnected ? 'Settings ↗' : 'Setup ↗'}
-            </a>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
+  <!-- OPENAI + PEXELS -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">🤖</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">OpenAI + Pexels</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">AI content generation + stock photos</div>
+      </div>
+      <span class="badge badge-green">✅ Active</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text3)">gpt-4o-mini · gpt-image-1 (quality:high) · Pexels stock fallback</div>
   </div>
 
-  <div class="mkt-card" style="margin-top:14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.2)">
-    <div class="mkt-card-title" style="color:var(--gold)">📋 Integration Roadmap</div>
-    <div style="display:grid;gap:6px;font-size:12px">
-      ${[
-        {status:'✅', item:'OpenAI — AI text + image generation'},
-        {status:'✅', item:'Pexels — Stock photos for posters and blog'},
-        {status:'✅', item:'GitHub — Blog article auto-publish'},
-        {status:'✅', item:'Supabase — Database and edge functions'},
-        {status:'⏳', item:'Interakt WhatsApp — WABA approval in progress'},
-        {status:'🔲', item:'Meta Business OAuth — Instagram + Facebook publishing'},
-        {status:'🔲', item:'Google Business Profile API — GBP auto-posting'},
-        {status:'🔲', item:'YouTube Data API — Shorts upload'},
-        {status:'🔲', item:'Google Search Console API — live SEO data in Analytics'},
-        {status:'🔲', item:'Meta Ads API — auto-pull campaign stats'},
-      ].map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">
-        <span style="font-size:14px;flex-shrink:0">${r.status}</span>
-        <span style="color:var(--text2)">${r.item}</span>
-      </div>`).join('')}
+  <!-- TREND SCOUT SCHEDULE -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">🔥</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">Trend Scout — Auto Schedule</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Runs automatically and notifies you when a trend is found</div>
+      </div>
+      <span id="trend-schedule-status" class="badge badge-gray">Manual only</span>
+    </div>
+    <div style="margin-top:10px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Select how often to auto-scan:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${['Hourly','Every 4h','Twice daily','Daily'].map(freq=>`
+        <button onclick="setTrendSchedule('${freq}',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">${freq}</button>`).join('')}
+        <button onclick="runTrendScout(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">▶ Run Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- YOUTUBE -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">▶️</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">YouTube</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Upload Shorts and track performance</div>
+      </div>
+      <span class="badge badge-gray">Not connected</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text3)">YouTube Data API v3 — coming next session</div>
+  </div>
+
+  <!-- GITHUB (Blog) -->
+  <div class="mkt-card">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">📝</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">GitHub (Blog auto-publish)</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">vwholesale.in/blog/ — posts publish automatically</div>
+      </div>
+      <span class="badge badge-green">✅ Active</span>
     </div>
   </div>`);
 }
+
+async function connectMeta() {
+  const appId = (document.getElementById('meta-app-id')?.value||'').trim();
+  const appSecret = (document.getElementById('meta-app-secret')?.value||'').trim();
+  if (!appId || !appSecret) { showMktToast('Enter both App ID and App Secret'); return; }
+
+  // Save credentials
+  await sb.from('marketing_settings').upsert([
+    { key: 'META_APP_ID', value: appId },
+    { key: 'META_APP_SECRET', value: appSecret }
+  ], { onConflict: 'key' });
+
+  // Build OAuth URL
+  const redirectUri = encodeURIComponent('https://vwholesale.in/marketing/');
+  const scope = encodeURIComponent('pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish,pages_show_list');
+  const url = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=meta_oauth`;
+  window.location.href = url;
+}
+
+async function handleMetaOAuth(code) {
+  showMktToast('🔗 Completing Meta connection…');
+  try {
+    const { data: settings } = await sb.from('marketing_settings').select('key,value').in('key',['META_APP_ID','META_APP_SECRET']).then(r=>r,()=>({data:[]}));
+    const cfg = {}; (settings||[]).forEach(s => { cfg[s.key] = s.value; });
+    if (!cfg.META_APP_ID) { showMktToast('❌ Meta App ID not found — enter credentials first'); mktNav('integrations'); return; }
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-oauth', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'exchange_code', code, app_id:cfg.META_APP_ID, app_secret:cfg.META_APP_SECRET||'' })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error||'Meta connection failed');
+
+    await sb.from('social_connections').upsert({
+      platform:'meta', status:'connected', access_token_set:true,
+      connected_at:new Date().toISOString(), updated_at:new Date().toISOString()
+    },{onConflict:'platform'});
+
+    showMktToast('✅ Meta (Instagram + Facebook) connected!');
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  }
+}
+
+async function disconnectMeta() {
+  await sb.from('social_connections').update({status:'disconnected',access_token_set:false}).eq('platform','meta');
+  await sb.from('marketing_settings').delete().in('key',['META_ACCESS_TOKEN','META_APP_ID','META_APP_SECRET','META_PAGE_ID','META_IG_ID']);
+  showMktToast('Meta disconnected');
+  renderIntegrations();
+}
+
+async function setTrendSchedule(freq, btn) {
+  await sb.from('marketing_settings').upsert({key:'TREND_SCOUT_SCHEDULE',value:freq},{onConflict:'key'});
+  const el = document.getElementById('trend-schedule-status');
+  if (el) { el.textContent = freq; el.className = 'badge badge-green'; }
+  showMktToast('✅ Trend Scout set to: '+freq);
+  // Update all buttons
+  document.querySelectorAll('[onclick*="setTrendSchedule"]').forEach(b => {
+    b.classList.remove('mkt-btn-primary');
+    b.classList.add('mkt-btn-ghost');
+  });
+  if (btn) { btn.classList.remove('mkt-btn-ghost'); btn.classList.add('mkt-btn-primary'); }
+}
+
 
 async function renderCommandCentre() {
   setContent(`<div style="text-align:center;padding:40px"><div style="font-size:24px">⏳</div><div style="color:var(--text3);margin-top:8px">Loading dashboard…</div></div>`);
@@ -2513,206 +2581,217 @@ async function generateReviewPlan(monthName) {
 async function renderAnalytics() {
   setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading analytics…</div>`);
 
-  // Pull all marketing data from DB in parallel
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth()-1, 1).toISOString();
+
   const [
-    {data:posters}, {data:blogs}, {data:campaigns}, {data:calItems},
-    {data:feedPosts}, {data:competitors}, {data:greetings}, {data:approvals}
+    {data: contentPosts},
+    {data: channelPosts},
+    {data: performance},
+    {data: reviews},
+    {data: notifications}
   ] = await Promise.all([
-    sb.from('poster_history').select('id,created_at,topic,template').order('created_at',{ascending:false}).limit(100).then(r=>r,()=>({data:[]})),
-    sb.from('blog_posts').select('id,status,word_count,created_at').then(r=>r,()=>({data:[]})),
-    sb.from('campaigns').select('id,name,status,budget_inr,spent_inr,impressions,clicks,conversions,created_at').then(r=>r,()=>({data:[]})),
-    sb.from('content_calendar').select('id,status,content_type,is_reel,cal_date').order('cal_date',{ascending:false}).limit(100).then(r=>r,()=>({data:[]})),
-    sb.from('daily_posts_feed').select('id,post_date,shared_count').then(r=>r,()=>({data:[]})),
-    sb.from('competitors').select('id,name').then(r=>r,()=>({data:[]})),
-    sb.from('greeting_log').select('id,greeting_type,created_at').then(r=>r,()=>({data:[]})),
-    sb.from('marketing_approvals').select('id,status').then(r=>r,()=>({data:[]}))
+    sb.from('content_posts').select('*').gte('created_at', lastMonthStart).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('channel_posts').select('*').gte('created_at', lastMonthStart).then(r=>r,()=>({data:[]})),
+    sb.from('post_performance').select('*').gte('recorded_at', lastMonthStart).then(r=>r,()=>({data:[]})),
+    sb.from('monthly_reviews').select('*').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]})),
+    sb.from('agent_notifications').select('*').gte('created_at', lastMonthStart).then(r=>r,()=>({data:[]}))
   ]);
 
-  // ── CALCULATE METRICS ──
-  const now = new Date();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-  const last30 = new Date(now - 30*86400000);
-  const last7   = new Date(now - 7*86400000);
+  // Calculate metrics
+  const totalPosts = (contentPosts||[]).length;
+  const thisMonth = (contentPosts||[]).filter(p => p.created_at >= monthStart);
+  const publishedPosts = (channelPosts||[]).filter(p => p.status === 'published').length;
+  const pendingPosts = (channelPosts||[]).filter(p => p.status === 'pending').length;
 
-  const postersThisMonth = (posters||[]).filter(p => {
-    const d = new Date(p.created_at);
-    return d.getMonth()===thisMonth && d.getFullYear()===thisYear;
-  }).length;
-
-  const totalImpressions = (campaigns||[]).reduce((s,c)=>s+(c.impressions||0),0);
-  const totalClicks      = (campaigns||[]).reduce((s,c)=>s+(c.clicks||0),0);
-  const totalConversions = (campaigns||[]).reduce((s,c)=>s+(c.conversions||0),0);
-  const totalSpend       = (campaigns||[]).reduce((s,c)=>s+(c.spent_inr||0),0);
-  const totalBudget      = (campaigns||[]).reduce((s,c)=>s+(c.budget_inr||0),0);
-  const activeCampaigns  = (campaigns||[]).filter(c=>c.status==='active').length;
-  const cpl = totalConversions>0 ? Math.round(totalSpend/totalConversions) : 0;
-  const ctr = totalImpressions>0 ? ((totalClicks/totalImpressions)*100).toFixed(2) : '0.00';
-
-  const publishedBlogs = (blogs||[]).filter(b=>b.status==='published').length;
-  const draftBlogs     = (blogs||[]).filter(b=>b.status==='draft').length;
-
-  const calPublished = (calItems||[]).filter(i=>i.status==='published').length;
-  const calPlanned   = (calItems||[]).filter(i=>i.status==='planned').length;
-  const calReels     = (calItems||[]).filter(i=>i.is_reel).length;
-  const publishRate  = (calItems||[]).length>0 ? Math.round(calPublished/(calItems||[]).length*100) : 0;
-
-  // Posters by week (last 8 weeks)
-  const weeklyPosters = Array(8).fill(0);
-  (posters||[]).forEach(p => {
-    const daysAgo = Math.floor((now - new Date(p.created_at))/86400000);
-    const week = Math.floor(daysAgo/7);
-    if (week < 8) weeklyPosters[week]++;
+  // Channel breakdown
+  const channelCounts = {};
+  (channelPosts||[]).forEach(p => {
+    channelCounts[p.channel] = (channelCounts[p.channel]||0) + 1;
   });
-  weeklyPosters.reverse();
-  const maxWeekly = Math.max(...weeklyPosters, 1);
 
-  const totalShares = (feedPosts||[]).reduce((s,p)=>s+(p.shared_count||0),0);
+  // Format breakdown
+  const formatCounts = {};
+  (contentPosts||[]).forEach(p => {
+    const t = p.post_type||'image';
+    formatCounts[t] = (formatCounts[t]||0) + 1;
+  });
+
+  // Language breakdown
+  const langCounts = {bilingual:0, te:0, en:0};
+  (contentPosts||[]).forEach(p => {
+    const l = p.language||'en';
+    langCounts[l] = (langCounts[l]||0) + 1;
+  });
+
+  // Performance metrics
+  const avgEngagement = (performance||[]).length
+    ? ((performance||[]).reduce((a,p) => a+(p.engagement_rate||0), 0) / (performance||[]).length).toFixed(1)
+    : '—';
+
+  const topChannel = Object.entries(channelCounts).sort((a,b)=>b[1]-a[1])[0];
+  const topFormat = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1])[0];
+
+  // Latest review
+  const latestReview = (reviews||[])[0];
+
+  const CHANNEL_LABELS = {
+    gbp:'📍 GBP', instagram_feed:'📸 Instagram', instagram_story:'📱 IG Story',
+    facebook_post:'👤 Facebook', whatsapp_bc:'💬 WhatsApp', threads:'🧵 Threads',
+    x:'𝕏 X', youtube:'▶️ YouTube', whatsapp_status:'💚 WA Status'
+  };
+  const FORMAT_LABELS = {image:'🖼️ Image', reel:'🎬 Reel', gif:'✨ GIF', festival:'🎉 Festival', qa:'❓ Q&A'};
+
+  const barWidth = (val, max) => Math.max(4, Math.round((val/Math.max(max,1))*100));
 
   setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">📊 Marketing Analytics</h3>
-    <div style="font-size:12px;color:var(--text3)">All data from your V Wholesale marketing activity</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">📈 Analytics</h3>
+      <div style="font-size:12px;color:var(--text3)">Last 60 days · ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+    </div>
+    <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📊 Generate Report</button>
   </div>
 
-  <!-- TOP KPI ROW -->
+  <!-- KPI CARDS -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
     ${[
-      {icon:'🎨',label:'Posters Created',val:(posters||[]).length,sub:'this month: '+postersThisMonth,color:'var(--gold)'},
-      {icon:'📣',label:'Active Campaigns',val:activeCampaigns,sub:'of '+(campaigns||[]).length+' total',color:'#22c55e'},
-      {icon:'📝',label:'Blog Articles',val:publishedBlogs,sub:draftBlogs+' drafts pending',color:'#3b82f6'},
-      {icon:'🎂',label:'Greetings Sent',val:(greetings||[]).length,sub:'birthday + anniversary',color:'#f59e0b'}
-    ].map(m=>'<div class="mkt-card" style="padding:12px;text-align:center">'
-      +'<div style="font-size:22px">'+m.icon+'</div>'
-      +'<div style="font-size:20px;font-weight:900;color:'+m.color+';margin:4px 0">'+m.val+'</div>'
-      +'<div style="font-size:10px;font-weight:700;color:var(--text2)">'+m.label+'</div>'
-      +'<div style="font-size:10px;color:var(--text3)">'+m.sub+'</div>'
-    +'</div>').join('')}
+      {label:'Posts Created', value: totalPosts, sub: thisMonth.length+' this month', color:'var(--gold)'},
+      {label:'Published', value: publishedPosts, sub: pendingPosts+' pending', color:'#22c55e'},
+      {label:'Avg Engagement', value: avgEngagement+'%', sub: (performance||[]).length+' data points', color:'#3b82f6'},
+      {label:'Active Channels', value: Object.keys(channelCounts).length, sub: 'of 10 channels', color:'#a855f7'},
+    ].map(k=>`
+    <div class="mkt-card" style="text-align:center;padding:14px">
+      <div style="font-size:22px;font-weight:900;color:${k.color}">${k.value}</div>
+      <div style="font-size:11px;font-weight:600;margin-top:2px">${k.label}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${k.sub}</div>
+    </div>`).join('')}
   </div>
 
-  <!-- CAMPAIGN PERFORMANCE -->
-  <div class="mkt-card" style="margin-bottom:14px">
-    <div class="mkt-card-title">📣 Campaign Performance (All Time)</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+
+    <!-- CHANNEL BREAKDOWN -->
+    <div class="mkt-card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Posts by channel</div>
+      ${Object.keys(channelCounts).length ? Object.entries(channelCounts)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([ch, count]) => {
+          const max = Math.max(...Object.values(channelCounts));
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+              <span>${CHANNEL_LABELS[ch]||ch}</span>
+              <span style="font-weight:600">${count}</span>
+            </div>
+            <div style="height:5px;background:var(--bg3);border-radius:3px">
+              <div style="height:5px;background:var(--gold);border-radius:3px;width:${barWidth(count,max)}%"></div>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">No posts yet — start creating in Content Studio</div>'}
+    </div>
+
+    <!-- FORMAT BREAKDOWN -->
+    <div class="mkt-card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Posts by format</div>
+      ${Object.keys(formatCounts).length ? Object.entries(formatCounts)
+        .sort((a,b)=>b[1]-a[1])
+        .map(([fmt, count]) => {
+          const max = Math.max(...Object.values(formatCounts));
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
+              <span>${FORMAT_LABELS[fmt]||fmt}</span>
+              <span style="font-weight:600">${count}</span>
+            </div>
+            <div style="height:5px;background:var(--bg3);border-radius:3px">
+              <div style="height:5px;background:#3b82f6;border-radius:3px;width:${barWidth(count,max)}%"></div>
+            </div>
+          </div>`;
+        }).join('')
+      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">No format data yet</div>'}
+
+      <!-- Language split -->
+      ${totalPosts > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;margin-bottom:8px;color:var(--text3)">LANGUAGE MIX</div>
+        <div style="display:flex;gap:6px">
+          ${[
+            {key:'bilingual', label:'Bilingual', color:'#c9a84c'},
+            {key:'te', label:'Telugu', color:'#22c55e'},
+            {key:'en', label:'English', color:'#3b82f6'},
+          ].filter(l=>langCounts[l.key]>0).map(l=>`
+          <div style="text-align:center;flex:1;background:var(--bg3);border-radius:6px;padding:6px">
+            <div style="font-size:14px;font-weight:700;color:${l.color}">${langCounts[l.key]}</div>
+            <div style="font-size:10px;color:var(--text3)">${l.label}</div>
+          </div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>
+  </div>
+
+  <!-- LATEST AI REVIEW -->
+  ${latestReview ? `
+  <div class="mkt-card" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700">📊 Latest ${latestReview.period_type} review — ${latestReview.period_label}</div>
+      <span class="badge ${latestReview.status==='approved'?'badge-green':'badge-gray'}">${latestReview.status}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
       ${[
-        {label:'Impressions',val:totalImpressions.toLocaleString('en-IN'),icon:'👁'},
-        {label:'Clicks',val:totalClicks.toLocaleString('en-IN'),icon:'🖱'},
-        {label:'Conversions',val:totalConversions.toLocaleString('en-IN'),icon:'✅'},
-        {label:'CTR',val:ctr+'%',icon:'📈'},
-        {label:'Cost/Lead',val:cpl?'₹'+cpl.toLocaleString('en-IN'):'—',icon:'💰'}
-      ].map(m=>'<div style="background:var(--bg3);border-radius:8px;padding:10px;text-align:center">'
-        +'<div style="font-size:16px">'+m.icon+'</div>'
-        +'<div style="font-size:15px;font-weight:900;margin:3px 0">'+m.val+'</div>'
-        +'<div style="font-size:10px;color:var(--text3)">'+m.label+'</div>'
-      +'</div>').join('')}
+        {label:'Best channel', value: CHANNEL_LABELS[latestReview.best_channel]||latestReview.best_channel||'—'},
+        {label:'Best format', value: FORMAT_LABELS[latestReview.best_format]||latestReview.best_format||'—'},
+        {label:'Total posts', value: latestReview.total_posts||0},
+      ].map(s=>`<div style="background:var(--bg3);border-radius:6px;padding:8px;text-align:center">
+        <div style="font-size:13px;font-weight:700">${s.value}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.label}</div>
+      </div>`).join('')}
     </div>
-    ${totalBudget>0?`<div style="margin-bottom:6px">
-      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">
-        <span>Total Budget: ₹${totalBudget.toLocaleString('en-IN')}</span>
-        <span>Spent: ₹${totalSpend.toLocaleString('en-IN')} (${Math.round(totalSpend/totalBudget*100)}%)</span>
-      </div>
-      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${Math.min(100,Math.round(totalSpend/totalBudget*100))}%;background:${totalSpend/totalBudget>0.8?'#ef4444':'#22c55e'};border-radius:4px"></div>
-      </div>
-    </div>`:'<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px">Create campaigns and update stats to see performance data</div>'}
-    ${(campaigns||[]).length?'<div style="display:grid;gap:6px">'+
-      (campaigns||[]).slice(0,5).map(c=>'<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">'
-        +'<div style="flex:1"><div style="font-size:12px;font-weight:700">'+c.name+'</div>'
-        +'<div style="font-size:11px;color:var(--text3)">'+c.status+' · ₹'+(c.spent_inr||0).toLocaleString('en-IN')+' spent · '+(c.conversions||0)+' conversions</div></div>'
-        +'<span class="badge '+(c.status==='active'?'badge-green':c.status==='completed'?'badge-blue':'badge-gray')+'">'+c.status+'</span>'
-      +'</div>').join('')+'</div>':''}
-  </div>
+    ${latestReview.ai_recommendations?.length ? `
+    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">AI RECOMMENDATIONS</div>
+    ${latestReview.ai_recommendations.map(r=>`
+      <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="background:${r.priority==='high'?'rgba(239,68,68,.2)':r.priority==='medium'?'rgba(245,158,11,.2)':'rgba(34,197,94,.2)'};
+          color:${r.priority==='high'?'#ef4444':r.priority==='medium'?'#f59e0b':'#22c55e'};
+          border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">${(r.priority||'low').toUpperCase()}</span>
+        <div>
+          <div style="font-size:12px;font-weight:600">${r.action}</div>
+          <div style="font-size:11px;color:var(--text3)">${r.reason}</div>
+        </div>
+      </div>`).join('')}
+    ` : ''}
+    <button onclick="approveReview('${latestReview.id}')" class="mkt-btn mkt-btn-primary" style="margin-top:10px;width:100%;padding:10px;font-size:12px;font-weight:700">✅ Approve & Apply Recommendations</button>
+  </div>` : `
+  <div class="mkt-card" style="text-align:center;padding:20px;margin-bottom:12px">
+    <div style="font-size:28px;margin-bottom:8px">📊</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">No review generated yet</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate your first monthly review to see AI recommendations</div>
+    <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-primary" style="padding:10px 20px;font-size:12px">📊 Generate Monthly Review</button>
+  </div>`}
 
-  <!-- CONTENT ACTIVITY -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-
-    <!-- Poster bar chart -->
-    <div class="mkt-card">
-      <div class="mkt-card-title">🎨 Posters — Last 8 Weeks</div>
-      <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:6px">
-        ${weeklyPosters.map((v,i)=>{
-          const h = Math.round((v/maxWeekly)*80);
-          const isLast = i===7;
-          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">'
-            +'<div style="font-size:9px;color:var(--text3)">'+v+'</div>'
-            +'<div style="width:100%;background:'+(isLast?'var(--gold)':'rgba(201,168,76,0.4)')+';border-radius:3px 3px 0 0;height:'+h+'px;min-height:2px"></div>'
-          +'</div>';
-        }).join('')}
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3)">
-        <span>8 weeks ago</span><span style="color:var(--gold);font-weight:700">This week</span>
-      </div>
-    </div>
-
-    <!-- Content Calendar -->
-    <div class="mkt-card">
-      <div class="mkt-card-title">📅 Content Calendar</div>
-      <div style="display:grid;gap:8px">
-        ${[
-          {label:'Published',val:calPublished,color:'#22c55e',pct:publishRate},
-          {label:'Planned',val:calPlanned,color:'#f59e0b',pct:calPlanned?(calItems||[]).length>0?Math.round(calPlanned/(calItems||[]).length*100):0:0},
-          {label:'Reels planned',val:calReels,color:'#8b5cf6',pct:null}
-        ].map(m=>'<div>'
-          +'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">'
-          +'<span style="color:var(--text2)">'+m.label+'</span>'
-          +'<span style="font-weight:700;color:'+m.color+'">'+m.val+(m.pct!==null?' ('+m.pct+'%)':'')+'</span></div>'
-          +(m.pct!==null?'<div style="height:5px;background:var(--bg3);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+m.pct+'%;background:'+m.color+';border-radius:3px"></div></div>':'')
-        +'</div>').join('')}
-        <div style="font-size:11px;color:var(--text3);margin-top:4px">Publish rate: <strong style="color:var(--text1)">${publishRate}%</strong></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- BLOG + FEED ROW -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-    <div class="mkt-card">
-      <div class="mkt-card-title">📝 Blog Articles</div>
-      <div style="display:grid;gap:8px">
-        ${[
-          {label:'Published',val:publishedBlogs,color:'#22c55e'},
-          {label:'Drafts',val:draftBlogs,color:'#f59e0b'},
-          {label:'Total words written',val:((blogs||[]).reduce((s,b)=>s+(b.word_count||0),0)).toLocaleString('en-IN'),color:'var(--text1)'}
-        ].map(m=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px">'
-          +'<span style="font-size:12px">'+m.label+'</span>'
-          +'<span style="font-size:14px;font-weight:900;color:'+m.color+'">'+m.val+'</span>'
-        +'</div>').join('')}
-        <a href="https://vwholesale.in/blog/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;text-align:center">View Live Blog ↗</a>
-      </div>
-    </div>
-
-    <div class="mkt-card">
-      <div class="mkt-card-title">📢 Staff Feed</div>
-      <div style="display:grid;gap:8px">
-        ${[
-          {label:'Posts pushed',val:(feedPosts||[]).length,color:'var(--gold)'},
-          {label:'Total shares',val:totalShares,color:'#22c55e'},
-          {label:'Competitors tracked',val:(competitors||[]).length,color:'#3b82f6'}
-        ].map(m=>'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--bg3);border-radius:8px">'
-          +'<span style="font-size:12px">'+m.label+'</span>'
-          +'<span style="font-size:14px;font-weight:900;color:'+m.color+'">'+m.val+'</span>'
-        +'</div>').join('')}
-        <div style="font-size:11px;color:var(--text3);padding:4px 0">Approvals pending: <strong style="color:${((approvals||[]).filter(a=>a.status==='pending').length>0?'#f59e0b':'#22c55e')}">${(approvals||[]).filter(a=>a.status==='pending').length}</strong></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- QUICK ACTIONS -->
+  <!-- RECENT POSTS TABLE -->
   <div class="mkt-card">
-    <div class="mkt-card-title">⚡ Quick Actions</div>
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
-      ${[
-        {label:'Generate Poster',icon:'🎨',page:'poster'},
-        {label:'Write Blog Article',icon:'📝',page:'website-seo'},
-        {label:'Add to Calendar',icon:'📅',page:'calendar'},
-        {label:'Check Greetings',icon:'🎂',page:'greetings'},
-        {label:'Add Competitor',icon:'🔍',page:'competitors'},
-        {label:'Create Campaign',icon:'📣',page:'campaigns'}
-      ].map(a=>'<button class="mkt-btn mkt-btn-ghost" onclick="mktNav(this.dataset.p)" data-p="'+a.page+'" style="display:flex;align-items:center;gap:8px;padding:10px;font-size:12px;font-weight:600;text-align:left">'
-        +'<span style="font-size:18px">'+a.icon+'</span>'+a.label+'</button>'
-      ).join('')}
-    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Recent posts</div>
+    ${(contentPosts||[]).slice(0,8).length ? `
+    <div style="display:grid;gap:6px">
+      ${(contentPosts||[]).slice(0,8).map(p=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">
+        <span style="font-size:18px">${FORMAT_LABELS[p.post_type||'image']?.split(' ')[0]||'🖼️'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.topic||'Untitled'}</div>
+          <div style="font-size:10px;color:var(--text3)">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${p.language||'en'} · ${p.post_type||'image'}</div>
+        </div>
+        <span class="badge ${p.status==='published'?'badge-green':p.status==='pending_approval'?'badge-yellow':'badge-gray'}">${p.status||'draft'}</span>
+      </div>`).join('')}
+    </div>` : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No posts yet — create your first in Content Studio</div>'}
   </div>`);
 }
+
+async function approveReview(reviewId) {
+  if (!reviewId) return;
+  await sb.from('monthly_reviews').update({status:'approved'}).eq('id', reviewId);
+  showMktToast('✅ Review approved — recommendations applied to future planning');
+  renderAnalytics();
+}
+
 
 async function addGATracking() {
   const gaId = document.getElementById('ga-id').value.trim();
