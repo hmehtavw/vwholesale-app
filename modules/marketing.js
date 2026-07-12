@@ -1573,37 +1573,50 @@ async function postToGBP() {
 
   const btn = document.querySelector('[onclick="postToGBP()"]');
   if (btn) { btn.textContent = '⏳ Posting…'; btn.disabled = true; }
-  showMktToast('🚀 Posting to Google Business Profile…');
-
-  // Get location name
-  const { data: locSetting } = await sb.from('marketing_settings').select('value').eq('key','GBP_LOCATION_NAME').single().then(r=>r,()=>({data:null}));
-
-  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body:JSON.stringify({
-      action:'create_post',
-      location_name: locSetting?.value,
-      post_text: text,
-      post_type: type,
-      media_url: imageUrl || null
-    })
-  });
-  const data = await res.json();
 
   const result = document.getElementById('gbp-result');
   if (result) result.style.display = 'block';
 
-  if (data.ok) {
+  try {
+    // Step 1: Get location name — fetch from edge fn if not cached
+    showMktToast('🔍 Getting GBP location…');
+    const { data: locSetting } = await sb.from('marketing_settings').select('value').eq('key','GBP_LOCATION_NAME').maybeSingle().then(r=>r,()=>({data:null}));
+    let locationName = locSetting?.value || null;
+
+    if (!locationName) {
+      // Fetch locations via edge function
+      const locRes = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body:JSON.stringify({action:'get_locations'})
+      });
+      const locData = await locRes.json();
+      if (!locData.ok) throw new Error('Could not fetch GBP location: ' + (locData.error||'unknown'));
+      if (!locData.locations?.length) throw new Error('No GBP locations found on this account');
+      locationName = locData.locations[0].name;
+      // Save for next time
+      await sb.from('marketing_settings').upsert({key:'GBP_LOCATION_NAME', value:locationName},{onConflict:'key'});
+    }
+
+    // Step 2: Create the post
+    showMktToast('🚀 Posting to Google Business Profile…');
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({action:'create_post', location_name:locationName, post_text:text, post_type:type, media_url:imageUrl||null})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Post failed');
+
     showMktToast('✅ Posted to Google Business Profile!');
-    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;font-size:12px;color:#22c55e">✅ Post published to GBP successfully!</div>';
+    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;font-size:12px;color:#22c55e">✅ Post published to GBP! Visible in 2-3 minutes.</div>';
     document.getElementById('gbp-text').value = '';
     loadGBPHistory();
-  } else {
-    showMktToast('❌ ' + (data.error||'Post failed'));
-    if (result) result.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-size:12px;color:#ef4444">❌ ' + (data.error||'Post failed') + '</div>';
-  }
 
-  if (btn) { btn.textContent = '🚀 Post to Google Business Profile'; btn.disabled = false; }
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+    if (result) result.innerHTML = '<div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:12px;font-size:12px;color:#ef4444">❌ ' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '🚀 Post to Google Business Profile'; btn.disabled = false; }
+  }
 }
 
 async function loadGBPHistory() {
@@ -1649,12 +1662,26 @@ async function generateGBPImage() {
       + 'Show high-quality tiles, marble, or home interiors. Modern, clean, bright. '
       + 'No text, no logos, no people. Suitable for Google Business Profile post.';
 
-    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/generate-poster', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({ action:'generate_image', agent:'GBP Image Generator', dalle_prompt:prompt, size:'1024x1024', quality:'standard' })
+      body:JSON.stringify({
+        caption_only: false,
+        topic: topic,
+        custom_prompt: prompt,
+        template: 'gbp',
+        size: '1024x1024'
+      })
     });
     const data = await res.json();
-    if (!data.ok || !data.image_url) throw new Error(data.error || 'Image generation failed');
+    if (!data.ok) throw new Error(data.error || 'Image generation failed');
+    const imgUrl = data.image_url || data.poster_url || '';
+    if (!imgUrl) throw new Error('No image URL returned');
+    // Use imgUrl instead of data.image_url below
+    const input2 = document.getElementById('gbp-image-url');
+    if (input2) input2.value = imgUrl;
+    showGBPImagePreview(imgUrl);
+    showMktToast('\u2705 Image generated!');
+    return;
 
     const input = document.getElementById('gbp-image-url');
     if (input) input.value = data.image_url;
