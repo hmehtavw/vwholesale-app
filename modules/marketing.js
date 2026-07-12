@@ -1607,7 +1607,13 @@ async function postToGBP() {
     if (!data.ok) throw new Error(data.error || 'Post failed');
 
     showMktToast('✅ Posted to Google Business Profile!');
-    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:12px;font-size:12px;color:#22c55e">✅ Post published to GBP! Visible in 2-3 minutes.</div>';
+    if (result) result.innerHTML = '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:14px;font-size:12px">'
+      + '<div style="color:#22c55e;font-weight:700;margin-bottom:8px">✅ Post published to Google Business Profile!</div>'
+      + '<div style="color:var(--text2);margin-bottom:10px">Visible on Google Maps and Search in 2-5 minutes.</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      + '<a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:11px;text-decoration:none;padding:6px 12px">📍 View on GBP Dashboard ↗</a>'
+      + '<a href="https://www.google.com/search?q=V+Wholesale+Vijayawada" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:6px 12px">🔍 Search V Wholesale on Google ↗</a>'
+      + '</div></div>';
     document.getElementById('gbp-text').value = '';
     loadGBPHistory();
 
@@ -1644,64 +1650,78 @@ async function useLatestPoster() {
   if (!data?.poster_url) { showMktToast('No posters found — generate one in Poster Studio first'); return; }
   const input = document.getElementById('gbp-image-url');
   if (input) input.value = data.poster_url;
-  showGBPImagePreview(data.poster_url);
+  setGBPImage(data.poster_url, '🎨 ' + (data.topic||'Latest Poster'));
   showMktToast('✅ Latest poster loaded — ' + (data.topic||'poster'));
 }
 
 async function generateGBPImage() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim()
+    || (document.getElementById('gbp-text')?.value||'').split(' ').slice(0,6).join(' ');
   if (!topic) { showMktToast('Enter a post topic first'); return; }
 
-  const btn = document.querySelector('[onclick="generateGBPImage()"]');
-  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
-  showMktToast('🤖 Generating image — ~20 seconds…');
+  const btns = document.querySelectorAll('[onclick="generateGBPImage()"]');
+  btns.forEach(b => { b.style.opacity='.5'; b.style.pointerEvents='none'; });
+  const status = document.getElementById('gbp-image-gen-status');
+  if (status) { status.style.display='block'; status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><div style="margin-top:6px;font-size:11px">Generating with gpt-image-1 — ~20 seconds</div>'; }
 
   try {
-    const prompt = 'Professional product photography for a home building materials store in India. '
-      + 'Topic: ' + topic + '. '
-      + 'Show high-quality tiles, marble, or home interiors. Modern, clean, bright. '
-      + 'No text, no logos, no people. Suitable for Google Business Profile post.';
-
     const res = await fetch(MKT_SB_URL+'/functions/v1/generate-poster', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({
-        caption_only: false,
-        topic: topic,
-        custom_prompt: prompt,
-        template: 'gbp',
-        size: '1024x1024'
-      })
+      body:JSON.stringify({ caption_only:false, topic, size:'1024x1024', quality:'high', gbp_mode:true })
     });
+    if (!res.ok) throw new Error('Server error ' + res.status);
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Image generation failed');
-    const imgUrl = data.image_url || data.poster_url || '';
-    if (!imgUrl) throw new Error('No image URL returned');
-    // Use imgUrl instead of data.image_url below
-    const input2 = document.getElementById('gbp-image-url');
-    if (input2) input2.value = imgUrl;
-    showGBPImagePreview(imgUrl);
-    showMktToast('\u2705 Image generated!');
-    return;
-
-    const input = document.getElementById('gbp-image-url');
-    if (input) input.value = data.image_url;
-    showGBPImagePreview(data.image_url);
+    if (!data.ok) throw new Error(data.error || 'Generation failed');
+    const imgUrl = data.image_url || data.hero_url || data.poster_url || '';
+    if (!imgUrl) throw new Error('No image returned');
+    setGBPImage(imgUrl, '🤖 AI Generated (gpt-image-1)');
     showMktToast('✅ Image generated!');
   } catch(e) {
     showMktToast('❌ ' + e.message);
+    if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>';
   } finally {
-    if (btn) { btn.textContent = '🤖 Generate Image with AI'; btn.disabled = false; }
+    btns.forEach(b => { b.style.opacity=''; b.style.pointerEvents=''; });
+    if (status) setTimeout(() => { if(status) status.style.display='none'; }, 3000);
   }
 }
 
-function showGBPImagePreview(url) {
+function setGBPImage(url, label) {
+  const hidden = document.getElementById('gbp-image-url');
+  if (hidden) hidden.value = url;
   const preview = document.getElementById('gbp-image-preview');
   const img = document.getElementById('gbp-image-preview-img');
-  if (preview && img && url) {
-    img.src = url;
-    preview.style.display = 'block';
+  const lbl = document.getElementById('gbp-image-label');
+  if (preview && img) { img.src = url; preview.style.display='block'; }
+  if (lbl) lbl.textContent = label || 'Image ready';
+}
+
+function showGBPImagePreview(url) { setGBPImage(url, 'Image ready'); }
+
+function clearGBPImage() {
+  const h = document.getElementById('gbp-image-url'); if(h) h.value='';
+  const p = document.getElementById('gbp-image-preview'); if(p) p.style.display='none';
+  const i = document.getElementById('gbp-image-preview-img'); if(i) i.src='';
+  const u = document.getElementById('gbp-image-upload'); if(u) u.value='';
+}
+
+async function handleGBPImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 5*1024*1024) { showMktToast('Image must be under 5MB'); return; }
+  showMktToast('📁 Uploading…');
+  try {
+    const fileName = 'gbp/' + Date.now() + '_' + file.name.replace(/[^a-z0-9.]/gi,'_');
+    const { data: up, error } = await sb.storage.from('marketing-assets').upload(fileName, file, {contentType:file.type, upsert:true});
+    if (error) throw new Error(error.message);
+    const { data: urlData } = sb.storage.from('marketing-assets').getPublicUrl(fileName);
+    setGBPImage(urlData.publicUrl, '📁 ' + file.name);
+    showMktToast('✅ Uploaded!');
+  } catch(e) {
+    setGBPImage(URL.createObjectURL(file), '⚠️ Local preview only');
+    showMktToast('⚠️ Could not upload to storage — ' + e.message);
   }
 }
+
 
 
 async function disconnectGBP() {
