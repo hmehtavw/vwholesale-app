@@ -638,1586 +638,639 @@ Respond ONLY in this JSON format:
 
 // ── CONTENT STUDIO ──
 async function renderContentStudio() {
-  setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900">Content Studio</h3>
-      <div style="font-size:12px;color:var(--text3)">Create AI-assisted content in English, Telugu and Hindi</div>
-    </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="showCreateContent()">+ Create Content</button>
-  </div>
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading studio…</div>`);
 
-  <div id="content-form" style="display:none" class="mkt-card">
-    <div class="mkt-card-title">New Content</div>
-    <div class="mkt-grid-2">
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Content Type</label>
-        <select id="ct-type" class="mkt-form-select">
-          <option value="instagram_post">Instagram Post</option>
-          <option value="instagram_reel">Instagram Reel Script</option>
-          <option value="instagram_story">Instagram Story</option>
-          <option value="facebook_post">Facebook Post</option>
-          <option value="gbp_post">Google Business Post</option>
-          <option value="whatsapp_message">WhatsApp Message</option>
-        </select>
-      </div>
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Language</label>
-        <select id="ct-lang" class="mkt-form-select">
-          <option value="te">Telugu (తెలుగు)</option>
-          <option value="en">English</option>
-          <option value="hi">Hindi (हिन्दी)</option>
-          <option value="te+en">Telugu + English</option>
-        </select>
-      </div>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Topic / Product / Offer</label>
-      <input type="text" id="ct-topic" class="mkt-form-input" placeholder="e.g. Jaquar bathroom fittings, Tiles sale, Contractor Club benefits">
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Goal</label>
-      <select id="ct-goal" class="mkt-form-select">
-        <option value="walk_in">Drive Store Walk-ins</option>
-        <option value="enquiry">Generate Enquiry / WhatsApp</option>
-        <option value="awareness">Brand Awareness</option>
-        <option value="contractor">Contractor Recruitment</option>
-        <option value="product">Product Showcase</option>
-        <option value="offer">Promote Offer/Deal</option>
-      </select>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="mkt-btn mkt-btn-primary" onclick="generateContent()">🤖 Generate with AI</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('content-form').style.display='none'">Cancel</button>
-    </div>
-  </div>
+  // Load brand profile + upcoming calendar + recent learning
+  const [
+    {data: bp},
+    {data: calItems},
+    {data: learning}
+  ] = await Promise.all([
+    sb.from('brand_profile').select('*').limit(1).maybeSingle().then(r=>r,()=>({data:null})),
+    sb.from('content_calendar').select('*').gte('cal_date', new Date().toISOString().split('T')[0]).in('status',['planned','scripted']).order('cal_date',{ascending:true}).limit(10).then(r=>r,()=>({data:[]})),
+    sb.from('ai_learning_log').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
+  ]);
 
-  <div id="content-output"></div>
-
-  <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">Recent Content Drafts</div>
-    <div id="content-list"><div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Loading…</div></div>
-  </div>`);
-
-  // Load recent content
-  const { data: content } = await sb.from('marketing_content').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
-  const listEl = document.getElementById('content-list');
-  if (content?.length) {
-    listEl.innerHTML = `<table class="mkt-table">
-      <tr><th>Type</th><th>Platform</th><th>Language</th><th>Status</th><th>Created</th><th>Action</th></tr>
-      ${content.map(c=>`<tr>
-        <td style="font-weight:700">${c.title||c.type}</td>
-        <td>${c.platform||'—'}</td>
-        <td>${c.language||'en'}</td>
-        <td><span class="badge ${c.status==='approved'?'badge-green':c.status==='draft'?'badge-blue':'badge-gray'}">${c.status}</span></td>
-        <td style="color:var(--text3)">${new Date(c.created_at).toLocaleDateString('en-IN')}</td>
-        <td><button class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">View</button></td>
-      </tr>`).join('')}
-    </table>`;
-  } else {
-    listEl.innerHTML = '<div class="mkt-empty"><div class="mkt-empty-icon">✍️</div><div class="mkt-empty-title">No content yet</div><div style="font-size:12px;color:var(--text3)">Create your first piece of content above</div></div>';
-  }
-}
-
-function showCreateContent() {
-  document.getElementById('content-form').style.display = 'block';
-  document.getElementById('content-form').scrollIntoView({behavior:'smooth'});
-}
-
-async function generateContent() {
-  if (aiPaused) { alert('AI actions are paused.'); return; }
-  const type = document.getElementById('ct-type').value;
-  const lang = document.getElementById('ct-lang').value;
-  const topic = document.getElementById('ct-topic').value;
-  const goal = document.getElementById('ct-goal').value;
-  if (!topic) { alert('Enter a topic'); return; }
-
-  const outputEl = document.getElementById('content-output');
-  outputEl.innerHTML = `<div class="mkt-card"><div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div><span style="font-size:12px;color:var(--text3);margin-left:8px">Generating ${type} in ${lang}…</span></div></div>`;
-
-  const langMap = {te:'Telugu',en:'English',hi:'Hindi','te+en':'Telugu and English (bilingual)'};
-  const typeMap = {instagram_post:'Instagram Post',instagram_reel:'Instagram Reel script with scene breakdown',instagram_story:'Instagram Story sequence',facebook_post:'Facebook Post',gbp_post:'Google Business Profile Post',whatsapp_message:'WhatsApp Message'};
-  const goalMap = {walk_in:'drive store walk-ins to V Wholesale Vijayawada',enquiry:'generate WhatsApp enquiries',awareness:'build brand awareness',contractor:'recruit contractors to the Contractor Club',product:'showcase the product',offer:'promote a special offer or deal'};
-
-  try {
-    const res = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({
-        action: 'generate_content',
-        agent: 'Content Agent',
-        model: 'gpt-4o-mini',
-        prompt: `You are the Content Agent for V Wholesale, a home building superstore in Vijayawada, Andhra Pradesh.
-
-Create a ${typeMap[type]} in ${langMap[lang]} about: "${topic}"
-Goal: ${goalMap[goal]}
-
-STRICT RULES:
-- V Wholesale is at NH65, Bhavanipuram, Vijayawada
-- Phone: 8712697930
-- Website: https://vwholesale.in
-- Never invent prices, discounts, or offers not specified
-- Never fabricate customer reviews or testimonials
-- Keep content authentic and locally relevant
-- For Telugu content, use natural conversational Telugu
-
-Respond ONLY in this JSON format:
-{
-  "title": "content title/description",
-  "caption": "main caption text (in requested language)",
-  "hashtags": ["hashtag1", "hashtag2"],
-  "visual_brief": "describe what the visual/image should show",
-  "call_to_action": "specific CTA text",
-  "notes": "any important notes about this content"
-}`,
-        context: { topic, type, language: lang, goal, business: 'V Wholesale, Vijayawada' }
-      })
-    });
-
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error);
-    const c = data.output;
-
-    // Save to DB
-    await sb.from('marketing_content').insert({
-      type, platform: type.split('_')[0], language: lang,
-      title: c.title, body: c.caption, caption: c.caption,
-      hashtags: c.hashtags, visual_brief: c.visual_brief,
-      call_to_action: c.call_to_action, status: 'draft',
-      ai_generated: true, ai_model: data.model
-    });
-
-    outputEl.innerHTML = `
-    <div class="mkt-card" style="border:1px solid rgba(139,92,246,.3)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="mkt-card-title" style="margin:0">✅ Content Generated</div>
-        <div style="display:flex;gap:6px">
-          <span class="badge badge-purple">AI Draft</span>
-          <span class="badge badge-blue">${type}</span>
-          <span class="badge badge-gold">${lang}</span>
-        </div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
-        <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">${c.caption}</div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">HASHTAGS</div>
-        <div>${(c.hashtags||[]).map(h=>`<span class="badge badge-blue" style="margin-right:4px">#${h.replace('#','')}</span>`).join('')}</div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">VISUAL BRIEF</div>
-        <div style="font-size:12px;color:var(--text2)">${c.visual_brief}</div>
-      </div>
-      <div style="margin-bottom:10px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CALL TO ACTION</div>
-        <div style="font-size:13px;font-weight:700;color:var(--green)">${c.call_to_action}</div>
-      </div>
-      ${c.notes ? `<div style="font-size:11px;color:var(--text3);font-style:italic">${c.notes}</div>` : ''}
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="mkt-btn mkt-btn-primary" onclick="copyContent('${c.caption?.replace(/'/g,"\\'").replace(/\n/g,'\\n')}')">📋 Copy Caption</button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="generateContent()">🔄 Regenerate</button>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px">${data.model} · $${(data.cost_usd||0).toFixed(4)} · Saved as draft</div>
-    </div>`;
-
-  } catch(e) {
-    outputEl.innerHTML = `<div class="mkt-card" style="border-color:var(--red)"><div style="color:var(--red);font-size:12px">Error: ${e.message}<br><span style="color:var(--text3)">Check OpenAI API key in Supabase secrets</span></div></div>`;
-  }
-}
-
-async function draftContent(type, platform, topic, lang) {
-  mktNav('content');
-  setTimeout(() => {
-    showCreateContent();
-    const typeMap = {post:'instagram_post',reel:'instagram_reel',story:'instagram_story'};
-    const el = document.getElementById('ct-type');
-    if (el) el.value = typeMap[type] || 'instagram_post';
-    const topicEl = document.getElementById('ct-topic');
-    if (topicEl) topicEl.value = topic;
-    const langEl = document.getElementById('ct-lang');
-    if (langEl) langEl.value = lang;
-  }, 300);
-}
-
-function copyContent(text) {
-  navigator.clipboard.writeText(text.replace(/\\n/g,'\n')).then(()=>showMktToast('Caption copied!'));
-}
-
-// ── BRAND PROFILE SETUP ──
-async function renderBrandProfile() {
-  const {data:bp} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
-  const p = (bp||[])[0] || {};
-  const {data:sc} = await sb.from('social_connections').select('*').then(r=>r,()=>({data:[]}));
-  const connections = {};
-  (sc||[]).forEach(c=>{connections[c.platform]=c;});
-
-  setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">Brand Profile</h3>
-    <div style="font-size:12px;color:var(--text3)">Set once — used automatically in every poster and content piece</div>
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">🏢 Business Details</div>
-    <div class="mkt-grid-2">
-      <div class="mkt-form-group"><label class="mkt-form-label">Business Name</label><input id="bp-name" class="mkt-form-input" value="${p.business_name||'V Wholesale'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Tagline</label><input id="bp-tag" class="mkt-form-input" value="${p.tagline||'Build Better. Pay Less.'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Phone</label><input id="bp-phone" class="mkt-form-input" value="${p.phone||'8712697930'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Website</label><input id="bp-web" class="mkt-form-input" value="${p.website||'https://vwholesale.in'}"></div>
-      <div class="mkt-form-group mkt-grid-2" style="grid-column:1/-1"><label class="mkt-form-label">Address</label><input id="bp-addr" class="mkt-form-input" value="${p.address||'NH65, Bhavanipuram, Vijayawada 520012'}" style="grid-column:1/-1"></div>
-    </div>
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">🎨 Brand Colors</div>
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      <div><label class="mkt-form-label">Primary (Navy)</label>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="color" id="bp-primary" value="${p.primary_color||'#1a2744'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
-          <input id="bp-primary-hex" class="mkt-form-input" value="${p.primary_color||'#1a2744'}" style="width:100px" oninput="document.getElementById('bp-primary').value=this.value">
-        </div>
-      </div>
-      <div><label class="mkt-form-label">Secondary (Gold)</label>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="color" id="bp-secondary" value="${p.secondary_color||'#c9a84c'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
-          <input id="bp-secondary-hex" class="mkt-form-input" value="${p.secondary_color||'#c9a84c'}" style="width:100px" oninput="document.getElementById('bp-secondary').value=this.value">
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-        <div style="width:60px;height:60px;border-radius:10px;background:${p.primary_color||'#1a2744'}" id="color-preview-primary"></div>
-        <div style="width:60px;height:60px;border-radius:10px;background:${p.secondary_color||'#c9a84c'}" id="color-preview-secondary"></div>
-        <div style="font-size:11px;color:var(--text3)">Live preview</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">📸 Brand Photos</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Upload store interior, product showcase, lifestyle photos. Used as hero images in posters.</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px" id="bp-photos-grid">
-      ${(p.brand_photos||[]).map((ph,i)=>`
-      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:var(--bg3)">
-        <img src="${ph}" style="width:100%;height:100%;object-fit:cover">
-        <button onclick="removePhoto(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;border-radius:50%;width:20px;height:20px;color:#fff;cursor:pointer;font-size:11px">✕</button>
-      </div>`).join('')}
-      <div style="aspect-ratio:1;border-radius:8px;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg3)" onclick="document.getElementById('bp-file-input').click()">
-        <div style="text-align:center"><div style="font-size:24px">+</div><div style="font-size:10px;color:var(--text3)">Add Photo</div></div>
-      </div>
-      <input type="file" id="bp-file-input" accept="image/*" multiple style="display:none" onchange="uploadBrandPhotos(this)">
-    </div>
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">🔌 Social Connections</div>
-    <div style="display:grid;gap:8px">
-      ${['instagram','facebook','gbp','whatsapp'].map(pl=>{
-        const c = connections[pl]||{};
-        const labels={instagram:'Instagram',facebook:'Facebook',gbp:'Google Business Profile',whatsapp:'WhatsApp (Interakt)'};
-        const icons={instagram:'📸',facebook:'👥',gbp:'📍',whatsapp:'💬'};
-        return `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:8px">
-          <span style="font-size:20px">${icons[pl]}</span>
-          <div style="flex:1"><div style="font-size:13px;font-weight:700">${labels[pl]}</div></div>
-          <span class="badge ${c.status==='connected'?'badge-green':c.status==='setup'||c.status==='partial'?'badge-gold':'badge-gray'}">${c.status||'not connected'}</span>
-          <button class="mkt-btn mkt-btn-ghost" onclick="connectPlatform('${pl}')" style="font-size:11px">${c.status==='connected'?'Manage':'Connect'}</button>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
-
-  <button class="mkt-btn mkt-btn-primary" onclick="saveBrandProfile()" style="width:100%;padding:14px;font-size:14px">💾 Save Brand Profile</button>`);
-}
-
-async function saveBrandProfile() {
-  const payload = {
-    business_name: document.getElementById('bp-name')?.value,
-    tagline: document.getElementById('bp-tag')?.value,
-    phone: document.getElementById('bp-phone')?.value,
-    website: document.getElementById('bp-web')?.value,
-    address: document.getElementById('bp-addr')?.value,
-    primary_color: document.getElementById('bp-primary')?.value,
-    secondary_color: document.getElementById('bp-secondary')?.value,
-    updated_at: new Date().toISOString()
-  };
-  const {data:existing} = await sb.from('brand_profile').select('id').limit(1).then(r=>r,()=>({data:[]}));
-  if ((existing||[]).length) {
-    await sb.from('brand_profile').update(payload).eq('id',(existing||[])[0].id);
-  } else {
-    await sb.from('brand_profile').insert(payload);
-  }
-  showMktToast('✅ Brand profile saved');
-  await sb.from('marketing_audit_logs').insert({action:'brand_profile_updated',performed_by:mktProfile?.name,performed_by_type:'human'});
-}
-
-async function uploadBrandPhotos(input) {
-  const files = Array.from(input.files);
-  if (!files.length) return;
-  showMktToast('Uploading photos…');
-  const {data:existing} = await sb.from('brand_profile').select('id,brand_photos').limit(1).then(r=>r,()=>({data:[]}));
-  const bp = (existing||[])[0];
-  const photos = [...(bp?.brand_photos||[])];
-
-  for (const file of files) {
-    if (file.size > 5*1024*1024) { showMktToast('Max 5MB per photo'); continue; }
-    const ext = file.name.split('.').pop();
-    const path = `brand-photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const {error} = await sb.storage.from('brand-assets').upload(path, file, {upsert:true});
-    if (error) { showMktToast('Upload failed: '+error.message); continue; }
-    const {data:{publicUrl}} = sb.storage.from('brand-assets').getPublicUrl(path);
-    photos.push(publicUrl);
-  }
-
-  if (bp?.id) {
-    await sb.from('brand_profile').update({brand_photos:photos}).eq('id',bp.id);
-  } else {
-    await sb.from('brand_profile').insert({brand_photos:photos});
-  }
-  showMktToast(`✅ ${files.length} photo(s) uploaded`);
-  renderBrandProfile();
-}
-
-async function removePhoto(index) {
-  const {data:existing} = await sb.from('brand_profile').select('id,brand_photos').limit(1).then(r=>r,()=>({data:[]}));
-  const bp = (existing||[])[0];
-  if (!bp) return;
-  const photos = [...(bp.brand_photos||[])];
-  photos.splice(index,1);
-  await sb.from('brand_profile').update({brand_photos:photos}).eq('id',bp.id);
-  renderBrandProfile();
-}
-
-async function connectPlatform(platform) {
-  const guides = {
-    instagram: 'To connect Instagram:\n1. Go to business.facebook.com\n2. Create a Meta App\n3. Add Instagram Basic Display\n4. Get Page Access Token\n5. Come back and paste it here\n\nContact support for guided setup.',
-    facebook: 'To connect Facebook:\n1. Go to business.facebook.com\n2. Create Meta App with Pages API\n3. Generate Page Access Token\n4. Paste it here',
-    gbp: 'Google Business Profile API requires:\n1. Google Cloud Console project\n2. Enable Business Profile API\n3. OAuth 2.0 credentials\n4. Authorize vwholesale.in\n\nThis will be set up in the next session.',
-    whatsapp: 'WhatsApp via Interakt:\n1. Complete your Interakt setup\n2. Get your API key from Interakt dashboard\n3. Add it to Settings → Integrations'
-  };
-  alert(guides[platform]||'Connection guide coming soon');
-}
-
-// ── BRAND KNOWLEDGE ──
-// ── BRAND KNOWLEDGE ──
-async function renderBrand() {
-  const { data: knowledge } = await sb.from('brand_knowledge').select('*').order('category').then(r=>r, ()=>({data:[]}));
-  const categories = [...new Set((knowledge||[]).map(k=>k.category))];
-
-  setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900">Brand Knowledge</h3>
-      <div style="font-size:12px;color:var(--text3)">Facts and guidelines the AI uses to generate accurate content</div>
-    </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="showAddKnowledge()">+ Add Knowledge</button>
-  </div>
-
-  <div id="brand-add-form" style="display:none" class="mkt-card">
-    <div class="mkt-card-title">Add Brand Knowledge</div>
-    <div class="mkt-grid-2">
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Category</label>
-        <select id="bk-cat" class="mkt-form-select">
-          <option value="business">Business Info</option>
-          <option value="positioning">Brand Positioning</option>
-          <option value="products">Products & Pricing</option>
-          <option value="geography">Geography & Service Area</option>
-          <option value="tone">Tone & Voice</option>
-          <option value="compliance">Compliance & Prohibited</option>
-          <option value="customers">Customer Info</option>
-          <option value="faq">FAQ</option>
-        </select>
-      </div>
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Title</label>
-        <input type="text" id="bk-title" class="mkt-form-input" placeholder="e.g. Store Timings">
-      </div>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Content</label>
-      <textarea id="bk-content" class="mkt-form-textarea" placeholder="Enter the verified fact or guideline…"></textarea>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button class="mkt-btn mkt-btn-primary" onclick="saveBrandKnowledge()">Save</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('brand-add-form').style.display='none'">Cancel</button>
-    </div>
-  </div>
-
-  ${categories.map(cat => `
-  <div class="mkt-card">
-    <div class="mkt-card-title">${cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
-    <div style="display:grid;gap:8px">
-      ${(knowledge||[]).filter(k=>k.category===cat).map(k=>`
-      <div style="padding:10px;background:var(--bg3);border-radius:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div style="font-size:12px;font-weight:700">${k.title}</div>
-          <span class="badge ${k.is_approved?'badge-green':'badge-gold'}">${k.is_approved?'approved':'pending'}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.5">${k.content}</div>
-      </div>`).join('')}
-    </div>
-  </div>`).join('')}`);
-}
-
-function showAddKnowledge() {
-  document.getElementById('brand-add-form').style.display = 'block';
-}
-
-async function saveBrandKnowledge() {
-  const cat = document.getElementById('bk-cat').value;
-  const title = document.getElementById('bk-title').value;
-  const content = document.getElementById('bk-content').value;
-  if (!title || !content) { alert('Enter title and content'); return; }
-  await sb.from('brand_knowledge').insert({ category:cat, title, content, is_approved:true, language:'en' });
-  showMktToast('✅ Brand knowledge saved');
-  renderBrand();
-}
-
-// ── INTEGRATIONS ──
-async function renderIntegrations() {
-  const { data: integrations } = await sb.from('marketing_integrations').select('*').order('name').then(r=>r, ()=>({data:[]}));
-  const { data: settings } = await sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]}));
-
-  const getInt = (name) => (integrations||[]).find(i=>i.name.toLowerCase().includes(name.toLowerCase()));
-  const getSetting = (key) => (settings||[]).find(s=>s.key===key)?.value;
-
-  const metaConn = getInt('meta') || getInt('facebook') || getInt('instagram');
-  const waConn = getInt('whatsapp') || getInt('interakt');
-  const gbpConn = getInt('google') || getInt('gbp');
-  const ytConn = getInt('youtube');
-
-  const platforms = [
-    {
-      name:'Meta Business (Instagram + Facebook)',
-      icon:'📸',
-      status: metaConn?.status || 'not_connected',
-      description:'Connect once — publish to Instagram, Facebook and Threads. Enables auto-posting from Poster Studio.',
-      steps:[
-        'Create a Meta Business account at business.facebook.com',
-        'Add your Instagram and Facebook Page to the Business account',
-        'Go to Meta Developers → Create App → Business type',
-        'Add Instagram Basic Display + Pages API permissions',
-        'Generate access token and paste below'
-      ],
-      setupUrl:'https://developers.facebook.com/apps/',
-      token_key:'META_ACCESS_TOKEN',
-      page_key:'META_PAGE_ID'
-    },
-    {
-      name:'WhatsApp Business API (Interakt)',
-      icon:'💬',
-      status: waConn?.status || 'pending',
-      description:'Send broadcasts, automate greetings, quotation updates via Interakt. Number 8712697930 under Meta review.',
-      steps:[
-        'Complete Interakt WABA approval (number 8712697930 — under review)',
-        'Add INTERAKT_API_KEY to Supabase Edge Function secrets',
-        'Create and get approved message templates in Interakt',
-        'Test with a single message before enabling broadcasts'
-      ],
-      setupUrl:'https://app.interakt.ai',
-      token_key:'INTERAKT_API_KEY',
-      note:'⏳ Number under Meta review — check Interakt dashboard'
-    },
-    {
-      name:'Google Business Profile',
-      icon:'📍',
-      status: gbpConn?.status || 'not_connected',
-      description:'Auto-post updates, offers and events to your GBP. Boosts local SEO and Maps visibility.',
-      steps:[
-        'Go to Google Cloud Console → Enable My Business API',
-        'Create OAuth 2.0 credentials (Web application type)',
-        'Add vwholesale.in to authorized redirect URIs',
-        'Click Connect below to start the OAuth flow'
-      ],
-      setupUrl:'https://console.cloud.google.com/apis/library/mybusiness.googleapis.com',
-      token_key:'GBP_ACCESS_TOKEN'
-    },
-    {
-      name:'YouTube Data API',
-      icon:'▶️',
-      status: ytConn?.status || 'not_connected',
-      description:'Upload Shorts and videos directly from the portal. Schedule posts to your V Wholesale YouTube channel.',
-      steps:[
-        'Google Cloud Console → Enable YouTube Data API v3',
-        'Create OAuth 2.0 credentials',
-        'Authorize your V Wholesale YouTube channel',
-        'Click Connect below'
-      ],
-      setupUrl:'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
-      token_key:'YOUTUBE_ACCESS_TOKEN'
-    },
-    {
-      name:'Pexels (Stock Photos)',
-      icon:'🖼️',
-      status:'connected',
-      description:'Free stock photos for poster hero images and blog articles. API key already configured.',
-      setupUrl:'https://www.pexels.com/api/',
-      note:'✅ API key configured in Supabase secrets'
-    },
-    {
-      name:'OpenAI (AI Generation)',
-      icon:'🤖',
-      status:'connected',
-      description:'Powers all AI features — poster captions, blog articles, ad copy, review replies, WhatsApp messages.',
-      setupUrl:'https://platform.openai.com',
-      note:'✅ API key configured — GPT-4o-mini for text, gpt-image-1 for posters'
-    }
+  const CHANNELS = [
+    {id:'gbp',          label:'📍 GBP',              size:'1:1',      auto:true},
+    {id:'instagram_feed',label:'📸 Instagram Feed',  size:'1:1/4:5',  auto:false},
+    {id:'instagram_story',label:'📱 Instagram Story',size:'9:16',     auto:false},
+    {id:'facebook_post', label:'👤 Facebook Post',   size:'1.91:1',   auto:false},
+    {id:'facebook_story',label:'📖 Facebook Story',  size:'9:16',     auto:false},
+    {id:'whatsapp_bc',   label:'💬 WhatsApp Broadcast',size:'1:1',    auto:false},
+    {id:'whatsapp_status',label:'💚 WA Status',      size:'9:16',     auto:false},
+    {id:'threads',       label:'🧵 Threads',          size:'1:1',     auto:false},
+    {id:'x',             label:'𝕏 X / Twitter',      size:'16:9',    auto:false},
+    {id:'youtube',       label:'▶️ YouTube',          size:'16:9',    auto:false},
   ];
 
-  const statusConfig = {
-    connected:   {badge:'badge-green', label:'Connected ✓'},
-    pending:     {badge:'badge-blue',  label:'Pending'},
-    not_connected:{badge:'badge-gray', label:'Not Connected'},
-    setup:       {badge:'badge-blue',  label:'Setup in progress'}
-  };
+  const POST_TYPES = [
+    {id:'image',    label:'🖼️ Image post'},
+    {id:'reel',     label:'🎬 Reel (manual record)'},
+    {id:'gif',      label:'✨ GIF / Motion'},
+    {id:'festival', label:'🎉 Festival / Occasion'},
+    {id:'qa',       label:'❓ Tip / Q&A carousel'},
+  ];
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">🔌 Platform Integrations</h3>
-      <div style="font-size:12px;color:var(--text3)">Connect external platforms to enable auto-publishing and automation</div>
+      <h3 style="font-size:16px;font-weight:900">✍️ Content Studio</h3>
+      <div style="font-size:12px;color:var(--text3)">One brief → all channels. AI writes, you approve.</div>
     </div>
   </div>
 
-  <div style="display:grid;gap:12px">
-    ${platforms.map(p => {
-      const cfg = statusConfig[p.status] || statusConfig.not_connected;
-      const isConnected = p.status === 'connected';
-      return `<div class="mkt-card" style="padding:16px;border-left:3px solid ${isConnected?'#22c55e':p.status==='pending'?'#f59e0b':'var(--border)'}">
-        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${p.steps?'12':'0'}px">
-          <div style="font-size:28px;flex-shrink:0">${p.icon}</div>
-          <div style="flex:1">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
-              <div style="font-size:14px;font-weight:900">${p.name}</div>
-              <span class="badge ${cfg.badge}">${cfg.label}</span>
-            </div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${p.description}</div>
-            ${p.note ? `<div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:6px 10px;border-radius:6px;margin-bottom:8px">${p.note}</div>` : ''}
-            ${p.steps && !isConnected ? `
-            <div style="margin-bottom:10px">
-              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">SETUP STEPS</div>
-              <div style="display:grid;gap:4px">
-                ${p.steps.map((step,i)=>`<div style="display:flex;gap:8px;font-size:11px;color:var(--text2)">
-                  <span style="width:16px;height:16px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${i+1}</span>
-                  <span>${step}</span>
-                </div>`).join('')}
-              </div>
-            </div>` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
-            <a href="${p.setupUrl}" target="_blank" class="mkt-btn ${isConnected?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;text-decoration:none;padding:5px 10px">
-              ${isConnected ? 'Settings ↗' : 'Setup ↗'}
-            </a>
-          </div>
-        </div>
-      </div>`;
-    }).join('')}
-  </div>
+  <!-- STEP 1: What are we creating? -->
+  <div class="mkt-card" style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">Step 1 — What are we creating?</div>
 
-  <div class="mkt-card" style="margin-top:14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.2)">
-    <div class="mkt-card-title" style="color:var(--gold)">📋 Integration Roadmap</div>
-    <div style="display:grid;gap:6px;font-size:12px">
-      ${[
-        {status:'✅', item:'OpenAI — AI text + image generation'},
-        {status:'✅', item:'Pexels — Stock photos for posters and blog'},
-        {status:'✅', item:'GitHub — Blog article auto-publish'},
-        {status:'✅', item:'Supabase — Database and edge functions'},
-        {status:'⏳', item:'Interakt WhatsApp — WABA approval in progress'},
-        {status:'🔲', item:'Meta Business OAuth — Instagram + Facebook publishing'},
-        {status:'🔲', item:'Google Business Profile API — GBP auto-posting'},
-        {status:'🔲', item:'YouTube Data API — Shorts upload'},
-        {status:'🔲', item:'Google Search Console API — live SEO data in Analytics'},
-        {status:'🔲', item:'Meta Ads API — auto-pull campaign stats'},
-      ].map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">
-        <span style="font-size:14px;flex-shrink:0">${r.status}</span>
-        <span style="color:var(--text2)">${r.item}</span>
-      </div>`).join('')}
-    </div>
-  </div>`);
-}
-
-async function renderAgents() {
-  const { data: agents } = await sb.from('ai_agents').select('*').order('name').then(r=>r, ()=>({data:[]}));
-  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
-
-  setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">AI Agents</h3>
-    <div style="font-size:12px;color:var(--text3)">All agents run in Recommend mode (Level 1) by default</div>
-  </div>
-
-  <div style="display:grid;gap:10px;margin-bottom:16px">
-    ${(agents||[]).map(a => `
-    <div class="mkt-card" style="padding:14px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:800">${a.name}</div>
-          <div style="font-size:11px;color:var(--text3)">${a.description}</div>
-        </div>
-        <span class="badge badge-purple">Level ${a.autonomy_level}</span>
-        <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
-      </div>
-      <div style="display:flex;gap:8px;font-size:10px;color:var(--text3)">
-        <span>Model: ${a.model}</span>
-        <span>·</span>
-        <span>Provider: ${a.provider}</span>
-        <span>·</span>
-        <span>Max cost: $${a.max_cost_per_run}/run</span>
-        ${a.last_run_at ? `<span>·</span><span>Last run: ${new Date(a.last_run_at).toLocaleDateString('en-IN')}</span>` : ''}
-      </div>
-    </div>`).join('')}
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">Recent Agent Runs</div>
-    ${(runs||[]).length ? `<table class="mkt-table">
-      <tr><th>Agent</th><th>Model</th><th>Status</th><th>Cost</th><th>Time</th></tr>
-      ${(runs||[]).map(r=>`<tr>
-        <td style="font-weight:700">${r.agent_name}</td>
-        <td style="color:var(--text3)">${r.model}</td>
-        <td><span class="badge ${r.status==='completed'?'badge-green':'badge-red'}">${r.status}</span></td>
-        <td>$${(r.cost_usd||0).toFixed(4)}</td>
-        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
-      </tr>`).join('')}
-    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No agent runs yet</div></div>'}
-  </div>`);
-}
-
-// ── AI PAUSE ──
-async function loadAIPauseStatus() {
-  const { data } = await sb.from('marketing_settings').select('value').eq('key','global_ai_pause').single().then(r=>r, ()=>({data:null}));
-  aiPaused = data?.value === 'true';
-  const btn = document.getElementById('ai-pause-btn');
-  if (btn) {
-    btn.textContent = aiPaused ? '▶ Resume AI Actions' : '🛑 Pause All AI Actions';
-    btn.className = 'ai-pause-btn' + (aiPaused ? ' paused' : '');
-  }
-}
-
-async function toggleAIPause() {
-  aiPaused = !aiPaused;
-  await sb.from('marketing_settings').update({ value: aiPaused ? 'true' : 'false' }).eq('key', 'global_ai_pause');
-  await sb.from('marketing_audit_logs').insert({ action: aiPaused ? 'ai_paused' : 'ai_resumed', performed_by: mktProfile?.name, performed_by_type: 'human' });
-  loadAIPauseStatus();
-  showMktToast(aiPaused ? '🛑 All AI Actions Paused' : '▶ AI Actions Resumed');
-}
-
-
-// ── DRAFT VIEWER ──
-async function viewDraft(id) {
-  const {data:c} = await sb.from('marketing_content').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
-  if (!c) { showMktToast('Draft not found'); return; }
-
-  const modal = document.createElement('div');
-  modal.id = 'draft-modal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:999;overflow-y:auto;padding:20px;display:flex;align-items:center;justify-content:center';
-  modal.innerHTML = `
-  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:560px;overflow:hidden">
-    <div style="background:#0A1628;padding:16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div>
-        <div style="font-size:15px;font-weight:900;color:#fff">${c.title||c.type}</div>
-        <div style="font-size:11px;color:#64748B">${c.platform||'—'} · ${c.language||'en'} · ${new Date(c.created_at).toLocaleDateString('en-IN')}</div>
+        <label class="mkt-form-label">Topic / Campaign</label>
+        <input id="cs-topic" class="mkt-form-input"
+          value="${(calItems||[])[0]?.topic||''}"
+          placeholder="e.g. Italian marble new collection, Diwali offer, Kajaria tiles">
+        ${(calItems||[]).length ? `<div style="font-size:10px;color:var(--gold);margin-top:3px">📅 Next from calendar: ${(calItems||[])[0]?.cal_date} — ${(calItems||[])[0]?.topic}</div>` : ''}
       </div>
-      <button onclick="document.getElementById('draft-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
-    </div>
-    <div style="padding:16px;display:grid;gap:12px">
       <div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
-        <div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">${c.caption||c.body||'—'}</div>
-      </div>
-      ${c.hashtags?.length ? `<div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">HASHTAGS</div>
-        <div>${(c.hashtags||[]).map(h=>`<span class="badge badge-blue" style="margin:2px">#${h.replace('#','')}</span>`).join('')}</div>
-      </div>` : ''}
-      ${c.visual_brief ? `<div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">VISUAL BRIEF</div>
-        <div style="font-size:12px;color:var(--text2)">${c.visual_brief}</div>
-      </div>` : ''}
-      ${c.call_to_action ? `<div>
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CALL TO ACTION</div>
-        <div style="font-size:13px;font-weight:700;color:var(--green)">${c.call_to_action}</div>
-      </div>` : ''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="mkt-btn mkt-btn-primary" onclick="navigator.clipboard.writeText('${(c.caption||c.body||'').replace(/'/g,"\\'")}').then(()=>showMktToast('Copied!'))">📋 Copy Caption</button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="approveDraft(${id})">✅ Approve</button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('draft-modal').remove();draftContent('${c.type}','${c.platform||'Instagram'}','${(c.title||'').replace(/'/g,"\\'")}','${c.language||'en'}')">🔄 Regenerate</button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="deleteDraft(${id});document.getElementById('draft-modal').remove()" style="color:var(--red)">🗑 Delete</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
-}
-
-async function approveDraft(id) {
-  await sb.from('marketing_content').update({status:'approved',approved_by:mktProfile?.name,approved_at:new Date().toISOString()}).eq('id',id);
-  showMktToast('✅ Draft approved');
-  document.getElementById('draft-modal')?.remove();
-  renderContentStudio();
-}
-
-async function deleteDraft(id) {
-  if (!confirm('Delete this draft?')) return;
-  await sb.from('marketing_content').delete().eq('id',id);
-  showMktToast('Draft deleted');
-  document.getElementById('draft-modal')?.remove();
-  renderContentStudio();
-}
-
-// ── GBP ──
-async function renderGBP() {
-  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div>`);
-
-  const { data: conn } = await sb.from('social_connections').select('*').eq('platform','gbp').single().then(r=>r,()=>({data:null}));
-  const isConnected = conn?.status === 'connected' && conn?.access_token_set;
-
-  // Handle OAuth callback from URL
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('gbp') === 'connected') {
-    window.history.replaceState({}, '', window.location.pathname);
-    setTimeout(() => showMktToast('✅ Google Business Profile connected!'), 300);
-  }
-
-  // Load previous posts for learning context
-  const { data: prevPosts } = await sb.from('marketing_audit_logs')
-    .select('details,created_at').eq('action','gbp_post_created')
-    .order('created_at',{ascending:false}).limit(5)
-    .then(r=>r,()=>({data:[]}));
-
-  // Get next topic from content calendar
-  const today = new Date().toISOString().split('T')[0];
-  const { data: calItem } = await sb.from('content_calendar')
-    .select('topic,content_type,notes,cal_date')
-    .gte('cal_date', today)
-    .in('status',['planned','scripted'])
-    .order('cal_date',{ascending:true})
-    .limit(1).maybeSingle()
-    .then(r=>r,()=>({data:null}));
-
-  const suggestedTopic = calItem?.topic || '';
-
-  setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900">📍 Google Business Profile</h3>
-      <div style="font-size:12px;color:var(--text3)">Post updates and offers to Google Maps</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px">
-      <span class="badge ${isConnected?'badge-green':'badge-gray'}">${isConnected?'✅ Connected':'Not Connected'}</span>
-      ${isConnected ? '<button onclick="disconnectGBP()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">Disconnect</button>' : ''}
-    </div>
-  </div>
-
-  ${!isConnected ? `
-  <div class="mkt-card" style="text-align:center;padding:32px;margin-bottom:16px">
-    <div style="font-size:40px;margin-bottom:12px">📍</div>
-    <div style="font-size:14px;font-weight:700;margin-bottom:6px">Connect Google Business Profile</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Connect once to enable GBP posting from this portal</div>
-    <button class="mkt-btn mkt-btn-primary" onclick="connectGBP()" style="padding:12px 28px;font-size:14px;font-weight:700">🔗 Connect GBP</button>
-  </div>` : ''}
-
-  <!-- MAIN POST CREATOR — Clean, minimal UI -->
-  <div class="mkt-card" style="margin-bottom:14px">
-
-    <!-- Topic selector -->
-    <div style="margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Post Topic</div>
-      <div style="display:flex;gap:8px">
-        <input id="gbp-topic" class="mkt-form-input" style="flex:1" placeholder="What is this post about?"
-          value="${suggestedTopic}" oninput="gbpTopicChanged()">
-        <select id="gbp-post-type" class="mkt-form-select" style="width:140px">
-          <option value="standard">📢 Update</option>
-          <option value="offer">💰 Offer</option>
-          <option value="event">📅 Event</option>
+        <label class="mkt-form-label">Post type</label>
+        <select id="cs-type" class="mkt-form-select" onchange="csTypeChanged(this.value)">
+          ${POST_TYPES.map(t=>`<option value="${t.id}">${t.label}</option>`).join('')}
         </select>
       </div>
-      ${calItem ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📅 From your content calendar: ${calItem.cal_date} — ${calItem.content_type||'post'}</div>` : ''}
     </div>
 
-    <!-- ONE button — everything happens automatically -->
-    <button id="gbp-create-btn" class="mkt-btn mkt-btn-primary" onclick="createGBPPost()" 
-      style="width:100%;padding:16px;font-size:15px;font-weight:900;letter-spacing:.3px">
-      ✨ Create GBP Post
-    </button>
+    <!-- Language selector -->
+    <div style="margin-bottom:10px">
+      <label class="mkt-form-label">Language</label>
+      <div style="display:flex;gap:6px">
+        ${[
+          {id:'bilingual', label:'🇮🇳 Bilingual (Telugu headline + English body)', default:true},
+          {id:'te',        label:'తెలుగు Telugu'},
+          {id:'en',        label:'🇬🇧 English'},
+        ].map(l=>`
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;flex:1">
+            <input type="radio" name="cs-lang" value="${l.id}" ${l.default?'checked':''} style="accent-color:var(--gold)">
+            ${l.label}
+          </label>`).join('')}
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Bilingual recommended — Telugu stops the scroll, English boosts SEO. Festival posts auto-switch to Telugu.</div>
+    </div>
 
-    <!-- Progress indicator — shows during AI processing -->
-    <div id="gbp-progress" style="display:none;margin-top:16px">
-      <div style="display:grid;gap:6px" id="gbp-steps"></div>
+    <!-- Channel selection -->
+    <div>
+      <label class="mkt-form-label">Publish to channels</label>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px">
+        ${CHANNELS.map(c=>`
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:11px">
+            <input type="checkbox" name="cs-channel" value="${c.id}" ${c.id==='gbp'?'checked':''} style="accent-color:var(--gold)">
+            <span style="flex:1">${c.label}</span>
+            <span style="font-size:9px;color:var(--text3)">${c.size}</span>
+          </label>`).join('')}
+      </div>
     </div>
   </div>
 
-  <!-- OUTPUT — appears after creation -->
-  <div id="gbp-output" style="display:none">
+  <!-- Reel-specific: shown only for reel type -->
+  <div id="cs-reel-section" style="display:none" class="mkt-card" style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">Reel brief (AI prepares, you record)</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7">
+      After creating, you'll get:<br>
+      • Hook line (first 3 seconds to stop scroll)<br>
+      • Shot list (what to film, scene by scene)<br>
+      • On-screen text for each scene<br>
+      • Voiceover script (optional)<br>
+      • Caption with hashtags + SEO keywords
+    </div>
+  </div>
 
-    <!-- Content preview -->
-    <div class="mkt-card" style="margin-bottom:14px">
+  <!-- GIF section -->
+  <div id="cs-gif-section" style="display:none" class="mkt-card" style="margin-bottom:12px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">GIF / Motion style</div>
+    <div style="display:grid;gap:6px">
+      ${[
+        {id:'before_after', label:'Before / After reveal', desc:'Upload 2 photos — AI creates wipe animation'},
+        {id:'product_loop', label:'Product showcase loop', desc:'AI generates product images and animates as carousel'},
+        {id:'text_reveal',  label:'Text reveal animation', desc:'Animated text card — great for WhatsApp status'},
+      ].map(g=>`
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 10px">
+          <input type="radio" name="cs-gif" value="${g.id}" ${g.id==='before_after'?'checked':''} style="accent-color:var(--gold)">
+          <div><div style="font-size:12px;font-weight:600">${g.label}</div><div style="font-size:11px;color:var(--text3)">${g.desc}</div></div>
+        </label>`).join('')}
+    </div>
+    <div style="margin-top:8px">
+      <label class="mkt-form-label">Upload before photo (for before/after)</label>
+      <input type="file" id="cs-before-img" accept="image/*" class="mkt-form-input" style="padding:4px">
+      <label class="mkt-form-label" style="margin-top:6px">Upload after photo</label>
+      <input type="file" id="cs-after-img" accept="image/*" class="mkt-form-input" style="padding:4px">
+    </div>
+  </div>
+
+  <!-- CREATE BUTTON -->
+  <button id="cs-create-btn" class="mkt-btn mkt-btn-primary" onclick="createUnifiedContent()"
+    style="width:100%;padding:16px;font-size:15px;font-weight:900;letter-spacing:.3px;margin-bottom:12px">
+    ✨ Create Content for All Channels
+  </button>
+
+  <!-- PROGRESS -->
+  <div id="cs-progress" style="display:none;margin-bottom:12px" class="mkt-card">
+    <div id="cs-steps" style="display:grid;gap:6px"></div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div id="cs-output" style="display:none">
+
+    <!-- Master content -->
+    <div class="mkt-card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700">Post Content</div>
-        <button onclick="regenerateGBPContent()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Regenerate</button>
+        <div style="font-size:13px;font-weight:700">Master content</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="csRegenContent()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Regenerate</button>
+          <button onclick="csCopyMaster()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">📋 Copy</button>
+        </div>
       </div>
-      <textarea id="gbp-text" class="mkt-form-input" rows="6" style="font-size:13px;line-height:1.7;resize:vertical"></textarea>
+      <textarea id="cs-master-text" class="mkt-form-input" rows="7" style="font-size:13px;line-height:1.8;resize:vertical"></textarea>
+      <div id="cs-seo-keywords" style="margin-top:8px;display:none">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">SEO KEYWORDS</div>
+        <div id="cs-kw-pills" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
     </div>
 
-    <!-- Image section — 2 variations -->
-    <div class="mkt-card" style="margin-bottom:14px">
+    <!-- Reel script (shown for reel type) -->
+    <div id="cs-reel-output" style="display:none" class="mkt-card" style="margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎬 Reel script & shot list</div>
+      <div id="cs-reel-content" style="font-size:12px;line-height:1.9;white-space:pre-wrap;color:var(--text1)"></div>
+    </div>
+
+    <!-- Image section -->
+    <div class="mkt-card" style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700">Post Image</div>
+        <div style="font-size:13px;font-weight:700">Visuals</div>
         <div style="display:flex;gap:6px">
-          <button onclick="regenerateGBPImage()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 New Images</button>
+          <button onclick="csRegenImage()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 New images</button>
           <label class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px;cursor:pointer;margin:0">
-            📁 Upload
-            <input type="file" id="gbp-image-upload" accept="image/jpeg,image/png,image/webp" onchange="handleGBPImageUpload(this)" style="display:none">
+            📁 Upload <input type="file" id="cs-img-upload" accept="image/*" onchange="csHandleUpload(this)" style="display:none">
           </label>
         </div>
       </div>
-
-      <!-- Image variations grid -->
-      <div id="gbp-variations" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"></div>
-      <input type="hidden" id="gbp-image-url">
-
-      <!-- Selected image preview -->
-      <div id="gbp-selected-preview" style="display:none;border-radius:8px;overflow:hidden;border:2px solid var(--gold)">
-        <img id="gbp-preview-img" src="" style="width:100%;max-height:240px;object-fit:cover;display:block;cursor:zoom-in" onclick="openGBPImageFullscreen(this.src)">
-        <div style="background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
-          <span id="gbp-preview-label" style="font-size:10px;color:#fff"></span>
-          <button onclick="openGBPImageFullscreen(document.getElementById('gbp-preview-img').src)" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">⛶ Fullscreen</button>
+      <div id="cs-image-variations" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px"></div>
+      <div id="cs-selected-image" style="display:none;border-radius:8px;overflow:hidden;border:2px solid var(--gold)">
+        <img id="cs-selected-img" src="" style="width:100%;max-height:220px;object-fit:cover;display:block;cursor:zoom-in" onclick="openGBPImageFullscreen(this.src)">
+        <div style="background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between">
+          <span id="cs-img-label" style="font-size:10px;color:#fff"></span>
+          <button onclick="openGBPImageFullscreen(document.getElementById('cs-selected-img').src)" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">⛶ Fullscreen</button>
         </div>
       </div>
+      <input type="hidden" id="cs-image-url">
     </div>
 
-    <!-- Verify + Publish -->
-    <div class="mkt-card" style="margin-bottom:14px">
-      <div id="gbp-verify-result" style="display:none;margin-bottom:12px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-        <button class="mkt-btn mkt-btn-ghost" onclick="verifyGBPPost()" style="padding:12px;font-weight:700">🔍 Verify Content</button>
-        <button class="mkt-btn mkt-btn-primary" onclick="publishGBPPost()" style="padding:12px;font-weight:700">🚀 Publish to GBP</button>
+    <!-- Channel adaptations -->
+    <div class="mkt-card" style="margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">Channel versions <span style="font-size:11px;color:var(--text3);font-weight:400">— tap to expand</span></div>
+      <div id="cs-channel-versions" style="display:grid;gap:6px"></div>
+    </div>
+
+    <!-- Approve + Publish -->
+    <div class="mkt-card" style="margin-bottom:12px">
+      <div id="cs-verify-result" style="margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <button class="mkt-btn mkt-btn-ghost" onclick="csVerify()" style="padding:12px;font-weight:700">🔍 Verify</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="csSendForApproval()" style="padding:12px;font-weight:700">📲 Send for Approval</button>
+        <button class="mkt-btn mkt-btn-primary" onclick="csPublishAll()" style="padding:12px;font-weight:700">🚀 Publish All</button>
       </div>
-    </div>
-  </div>
-
-  <!-- Post history -->
-  <div class="mkt-card">
-    <div class="mkt-card-title">📋 Recent GBP Posts</div>
-    <div id="gbp-history">
-      ${(prevPosts||[]).length ? (prevPosts||[]).map(p=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div style="font-size:18px">📍</div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:600">${p.details?.post_text||p.details?.topic||'GBP Post'}</div>
-            <div style="font-size:10px;color:var(--text3)">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
-          </div>
-          <span class="badge badge-green">Posted</span>
-        </div>`).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No posts yet</div>'}
     </div>
   </div>`);
 }
 
-// Track step progress
-function gbpStep(steps, idx, status, msg) {
-  const icons = {pending:'⏳', done:'✅', error:'❌'};
-  steps[idx] = {status, msg};
-  const el = document.getElementById('gbp-steps');
+function csTypeChanged(type) {
+  document.getElementById('cs-reel-section').style.display = type === 'reel' ? 'block' : 'none';
+  document.getElementById('cs-gif-section').style.display = type === 'gif' ? 'block' : 'none';
+  if (type === 'festival') {
+    // Auto-switch to Telugu for festivals
+    const teRadio = document.querySelector('input[name="cs-lang"][value="te"]');
+    if (teRadio) teRadio.checked = true;
+    showMktToast('🎉 Festival post — switched to Telugu automatically');
+  }
+}
+
+function csStep(idx, status, msg) {
+  window._csSteps = window._csSteps || {};
+  window._csSteps[idx] = {status, msg};
+  const el = document.getElementById('cs-steps');
   if (!el) return;
-  el.innerHTML = Object.values(steps).map(s =>
+  const icons = {pending:'⏳', done:'✅', error:'❌'};
+  el.innerHTML = Object.values(window._csSteps).map(s =>
     `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:${s.status==='done'?'var(--green)':s.status==='error'?'var(--red)':'var(--text2)'}">
       <span>${icons[s.status]||'⏳'}</span><span>${s.msg}</span>
     </div>`).join('');
 }
 
-// ONE function — everything happens automatically
-async function createGBPPost() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+async function createUnifiedContent() {
+  const topic = (document.getElementById('cs-topic')?.value||'').trim();
   if (!topic) { showMktToast('Enter a topic first'); return; }
 
-  const btn = document.getElementById('gbp-create-btn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Working…'; }
+  const postType = document.getElementById('cs-type')?.value || 'image';
+  const language = document.querySelector('input[name="cs-lang"]:checked')?.value || 'bilingual';
+  const channels = [...document.querySelectorAll('input[name="cs-channel"]:checked')].map(c=>c.value);
 
-  const progress = document.getElementById('gbp-progress');
-  if (progress) progress.style.display = 'block';
-  document.getElementById('gbp-output').style.display = 'none';
-
-  const steps = {};
+  const btn = document.getElementById('cs-create-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Creating…'; }
+  document.getElementById('cs-progress').style.display = 'block';
+  document.getElementById('cs-output').style.display = 'none';
+  window._csSteps = {};
+  window._csCurrentTopic = topic;
+  window._csCurrentType = postType;
+  window._csCurrentLang = language;
+  window._csChannels = channels;
 
   try {
-    // STEP 1: Generate post content (hidden AI layer)
-    gbpStep(steps, 1, 'pending', 'Writing post content…');
-
-    // Fetch context: brand profile + recent posts for learning
+    // Load context for AI learning
     const [
-      {data:bp},
-      {data:recentPosts},
-      {data:calItem}
+      {data: bp},
+      {data: recentPosts},
+      {data: topPerformers}
     ] = await Promise.all([
       sb.from('brand_profile').select('*').limit(1).maybeSingle().then(r=>r,()=>({data:null})),
-      sb.from('marketing_audit_logs').select('details').eq('action','gbp_post_created').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]})),
-      sb.from('content_calendar').select('topic,notes,content_type').eq('topic',topic).maybeSingle().then(r=>r,()=>({data:null}))
+      sb.from('content_posts').select('topic,master_text,language,post_type').order('created_at',{ascending:false}).limit(5).then(r=>r,()=>({data:[]})),
+      sb.from('ai_learning_log').select('*').order('engagement_rate',{ascending:false}).limit(3).then(r=>r,()=>({data:[]}))
     ]);
 
-    const postType = document.getElementById('gbp-post-type')?.value || 'standard';
-    const recentContext = (recentPosts||[]).map(p => p.details?.post_text||'').filter(Boolean).join(' | ').slice(0,200);
+    // Build language instruction
+    const langInstructions = {
+      bilingual: 'Write with a Telugu headline/greeting (2-4 words in Telugu script), then English body. End with a Telugu CTA like "ఇప్పుడే సందర్శించండి!" followed by English contact.',
+      te: 'Write entirely in Telugu script. Natural Telugu as spoken in Vijayawada.',
+      en: 'Write entirely in English.'
+    };
+
+    const learningContext = (topPerformers||[]).length
+      ? 'High-performing past patterns: ' + (topPerformers||[]).map(p=>`${p.post_type} ${p.language} ${p.what_worked}`).join('; ')
+      : '';
+
+    const recentContext = (recentPosts||[]).length
+      ? 'Recent posts (avoid repeating): ' + (recentPosts||[]).map(p=>p.topic).join(', ')
+      : '';
+
+    // STAGE 1: Master content
+    csStep(1, 'pending', 'Writing master content…');
+
+    const postTypePrompts = {
+      image: 'Write a promotional post for an image.',
+      reel: 'Write a reel caption (short, punchy, hook-first).',
+      gif: 'Write a short animated post caption.',
+      festival: 'Write a warm festival greeting with business mention. Telugu preferred.',
+      qa: 'Write a tip or Q&A post in carousel slide format (5 slides: question → answer steps → CTA).'
+    };
 
     const contentRes = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({
-        action: 'generate_text',
-        agent: 'GBP Content Writer',
-        prompt: `Write a Google Business Profile post for V Wholesale, Vijayawada. Return JSON with two fields.
+        action: 'generate_text', agent: 'Content Studio',
+        prompt: `You are writing social media content for V Wholesale, a premium home building materials store in Vijayawada, Andhra Pradesh, India.
 
 TOPIC: ${topic}
 POST TYPE: ${postType}
-CALENDAR NOTES: ${calItem?.notes || 'none'}
-${recentContext ? 'AVOID REPEATING (recent posts context): '+recentContext : ''}
+${postTypePrompts[postType]||''}
 
-POST REQUIREMENTS:
-- 300-500 characters of main content
-- Natural, confident tone — written like a store owner
-- Include location: Vijayawada / NH65 Bhavanipuram / Andhra Pradesh
-- Include CTA with phone 8712697930 or vwholesale.in
-- After the main content, add a blank line then 8-12 relevant hashtags
-- Hashtags should target: local Vijayawada searches, category keywords, home renovation terms
+LANGUAGE: ${langInstructions[language]}
 
-HASHTAG STRATEGY (include mix of):
-- Local: #Vijayawada #AndhraPradesh #VijayawadaHomes #Bhavanipuram
-- Category: based on topic (e.g. #Tiles #GraniteTiles #MarbleFlooring)
-- Intent: #HomeRenovation #InteriorDesign #HomeDecor #BuildingMaterials
-- Brand: #VWholesale #HomeBuilding
+BRAND: V Wholesale | NH65, Bhavanipuram, Vijayawada | Phone: 8712697930 | vwholesale.in
+CATEGORIES: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals, Flooring, False Ceiling
+
+${learningContext}
+${recentContext}
+
+REQUIREMENTS:
+- 200-400 characters of main content
+- After content: blank line, then 10-15 hashtags
+- Hashtags mix: local (#Vijayawada #AndhraPradesh #Bhavanipuram), category, intent (#HomeRenovation #InteriorDesign), brand (#VWholesale)
+- Natural tone — written like a real store owner, not a corporate ad
 
 Return JSON:
 {
-  "post_text": "main post content here\n\n#hashtag1 #hashtag2 #hashtag3...",
-  "seo_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+  "master_text": "full post with hashtags",
+  "seo_keywords": ["5-7 search keywords"],
+  "reel_script": ${postType === 'reel' ? '{"hook":"","shots":["scene 1","scene 2","scene 3"],"onscreen_text":["text 1","text 2","text 3"],"voiceover":"optional script","caption":"short caption"}' : 'null'}
 }`,
-        context: { business: 'V Wholesale', location: 'Vijayawada', type: postType }
+        context: { topic, language, type: postType, brand: 'V Wholesale' }
       })
     });
     const contentData = await contentRes.json();
-    const outputData = contentData.output || {};
-    const postText = outputData.post_text || outputData.text || outputData.content || (typeof outputData === 'string' ? outputData : '') || '';
-    const seoKeywords = outputData.seo_keywords || [];
-    if (!postText) throw new Error('Content generation failed');
+    const output = contentData.output || {};
+    const masterText = output.master_text || '';
+    const seoKeywords = output.seo_keywords || [];
+    const reelScript = output.reel_script;
 
-    const textEl = document.getElementById('gbp-text');
-    if (textEl) textEl.value = typeof postText === 'string' ? postText : JSON.stringify(postText);
+    if (!masterText) throw new Error('Content generation failed');
 
-    // Show SEO keywords if present
+    document.getElementById('cs-master-text').value = masterText;
+
     if (seoKeywords.length) {
-      window._gbpSEOKeywords = seoKeywords;
+      document.getElementById('cs-seo-keywords').style.display = 'block';
+      document.getElementById('cs-kw-pills').innerHTML = seoKeywords.map(k=>
+        `<span style="background:rgba(201,168,76,.1);color:var(--gold);border:1px solid rgba(201,168,76,.3);border-radius:12px;padding:2px 8px;font-size:10px">${k}</span>`
+      ).join('');
     }
-    gbpStep(steps, 1, 'done', 'Post content written');
 
-    // Store topic for image generation
-    window._gbpCurrentTopic = topic;
-    window._gbpCurrentText = textEl?.value || '';
+    if (reelScript && postType === 'reel') {
+      document.getElementById('cs-reel-output').style.display = 'block';
+      const shots = (reelScript.shots||[]).map((sh,i)=>(i+1)+'. '+sh).join('\n');
+      const onscreen = (reelScript.onscreen_text||[]).map((t,i)=>'Scene '+(i+1)+': '+t).join('\n');
+      document.getElementById('cs-reel-content').textContent =
+        '🎬 HOOK (first 3 seconds):\n' + reelScript.hook + '\n\n' +
+        '📹 SHOT LIST:\n' + shots + '\n\n' +
+        '📝 ON-SCREEN TEXT:\n' + onscreen + '\n\n' +
+        (reelScript.voiceover ? '🎙️ VOICEOVER:\n' + reelScript.voiceover + '\n\n' : '') +
+        '📌 CAPTION:\n' + reelScript.caption;
+    }
 
-    // STEP 2: Generate 2 image variations (hidden)
-    gbpStep(steps, 2, 'pending', 'Creating 2 poster variations with AI…');
-    await generateGBPImageInternal(topic, textEl?.value || '', steps);
+    csStep(1, 'done', 'Content written in ' + (language==='bilingual'?'Telugu + English':language==='te'?'Telugu':'English'));
 
-    // STEP 3: Auto-verify
-    gbpStep(steps, 3, 'pending', 'Verifying content quality…');
-    await verifyGBPPostInternal(steps);
+    // STAGE 2: Generate image (skip for reel type)
+    if (postType !== 'reel') {
+      csStep(2, 'pending', 'Generating 2 poster variations…');
+      const imgRes = await fetch(`${MKT_SB_URL}/functions/v1/gbp-image`, {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({topic, post_text: masterText})
+      });
+      const imgData = await imgRes.json();
+      if (imgData.ok && imgData.image_url) {
+        window._csVariations = imgData.variations || [imgData.image_url];
+        csRenderVariations(imgData.variations||[imgData.image_url], imgData.image_url, imgData.qa_score);
+        csStep(2, 'done', `${(imgData.variations||[imgData.image_url]).length} variations ready · QA ${imgData.qa_score||'?'}/10`);
+      } else {
+        csStep(2, 'done', 'Image generation pending — upload manually');
+      }
+    } else {
+      csStep(2, 'done', 'Reel — record using script above, upload separately');
+    }
+
+    // STAGE 3: Adapt for each channel
+    csStep(3, 'pending', 'Adapting for ' + channels.length + ' channels…');
+    await csAdaptChannels(masterText, channels, language);
+    csStep(3, 'done', channels.length + ' channel versions ready');
+
+    // STAGE 4: Save to DB
+    csStep(4, 'pending', 'Saving content…');
+    const { data: savedPost } = await sb.from('content_posts').insert({
+      topic, language, post_type: postType,
+      master_text: masterText,
+      seo_keywords: seoKeywords,
+      hashtags: (masterText.match(/#\w+/g)||[]),
+      reel_script: reelScript || null,
+      status: 'draft',
+      updated_at: new Date().toISOString()
+    }).select().single().then(r=>r,()=>({data:null}));
+
+    window._csCurrentPostId = savedPost?.id;
+    csStep(4, 'done', 'Saved as draft');
 
     // Show output
-    document.getElementById('gbp-output').style.display = 'block';
-    setTimeout(() => {
-      document.getElementById('gbp-output')?.scrollIntoView({behavior:'smooth', block:'start'});
-    }, 300);
+    document.getElementById('cs-output').style.display = 'block';
+    setTimeout(() => document.getElementById('cs-output')?.scrollIntoView({behavior:'smooth',block:'start'}), 300);
 
   } catch(e) {
-    gbpStep(steps, 99, 'error', '❌ ' + e.message);
+    csStep(99, 'error', e.message);
     showMktToast('❌ ' + e.message);
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '✨ Create GBP Post'; }
-    if (progress) setTimeout(() => { progress.style.display = 'none'; }, 2000);
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Create Content for All Channels'; }
+    setTimeout(() => { document.getElementById('cs-progress').style.display='none'; }, 3000);
   }
 }
 
-async function generateGBPImageInternal(topic, postText, steps) {
-  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-image`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({topic, post_text: postText})
-  });
-  const data = await res.json();
-  if (!data.ok) throw new Error('Image generation failed: ' + data.error);
-
-  window._gbpVariations = data.variations || [data.image_url];
-  renderGBPVariations(data.variations || [data.image_url], data.image_url, data.qa_score);
-  gbpStep(steps, 2, 'done', `${(data.variations||[data.image_url]).length} poster variations created (QA: ${data.qa_score||'?'}/10)`);
-}
-
-async function verifyGBPPostInternal(steps) {
-  const text = document.getElementById('gbp-text')?.value || '';
-  const checks = [];
-  const passes = [];
-
-  if (text.length < 50) checks.push('Post too short');
-  else passes.push('Length good ('+text.length+' chars)');
-
-  if (text.length > 1500) checks.push('Exceeds 1500 chars');
-
-  if (!text.includes('8712697930') && !text.includes('vwholesale')) checks.push('Missing contact info');
-  else passes.push('Contact info included');
-
-  const hashtagCount = (text.match(/#\w+/g)||[]).length;
-  if (hashtagCount < 5) checks.push('Add more hashtags ('+hashtagCount+' found, aim for 8+)');
-  else passes.push(hashtagCount+' hashtags included');
-
-  if (text.toLowerCase().includes('vijayawada') || text.toLowerCase().includes('andhra')) passes.push('Local SEO: location mentioned');
-  else checks.push('Add location mention (Vijayawada)');
-
-  const seoKw = window._gbpSEOKeywords || [];
-
-  const el = document.getElementById('gbp-verify-result');
-  if (el) {
-    el.style.display = 'block';
-    el.innerHTML = `
-      <div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:700;margin-bottom:6px;color:var(--text2)">CONTENT CHECK</div>
-        <div style="display:grid;gap:4px">
-          ${passes.map(p=>`<div style="font-size:11px;color:#22c55e">✅ ${p}</div>`).join('')}
-          ${checks.map(c=>`<div style="font-size:11px;color:#f59e0b">⚠️ ${c}</div>`).join('')}
-        </div>
-        ${seoKw.length ? `<div style="margin-top:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">SEO KEYWORDS TO TARGET</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px">
-            ${seoKw.map(k=>'<span style="background:rgba(201,168,76,.1);color:var(--gold);border:1px solid rgba(201,168,76,.3);border-radius:12px;padding:2px 8px;font-size:10px">'+k+'</span>').join('')}
-          </div>
-        </div>` : ''}
-      </div>
-      ${!checks.length ? '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px;font-size:12px;color:#22c55e;text-align:center;font-weight:700">✅ Ready to publish</div>' : ''}
-    `;
-    gbpStep(steps||{}, 3, checks.length?'done':'done', checks.length?'⚠️ '+checks[0]:'Content verified ✅');
-  }
-}
-
-function renderGBPVariations(urls, selectedUrl, qaScore) {
-  const grid = document.getElementById('gbp-variations');
+function csRenderVariations(urls, selectedUrl, qaScore) {
+  const grid = document.getElementById('cs-image-variations');
   if (!grid) return;
   grid.innerHTML = urls.map((url, i) => `
-    <div onclick="selectGBPVariation(${i})" data-vi="${i}"
+    <div onclick="csSelectVariation(${i})" data-cvi="${i}"
       style="cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid ${url===selectedUrl?'var(--gold)':'var(--border)'};transition:border .2s">
       <img src="${url}" style="width:100%;height:100px;object-fit:cover;display:block">
-      <div style="padding:4px 6px;font-size:10px;text-align:center;color:var(--text3)">
-        Option ${i+1}${url===selectedUrl?' ✓':''}${i===0&&qaScore?` · QA ${qaScore}/10`:''}
+      <div style="padding:3px 6px;font-size:10px;text-align:center;color:var(--text3)">
+        Option ${i+1}${url===selectedUrl?' ✓':''}${i===0&&qaScore?' · QA '+qaScore+'/10':''}
       </div>
     </div>`).join('');
-
-  // Set first as selected
-  selectGBPVariation(0, true);
+  csSelectVariation(0, true);
 }
 
-function openGBPImageFullscreen(url) {
-  if (!url) return;
-  const ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.93);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
-  ov.onclick = () => ov.remove();
-  const img = document.createElement('img');
-  img.src = url;
-  img.style.cssText = 'max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain';
-  const tb = document.createElement('div');
-  tb.style.cssText = 'display:flex;gap:10px;margin-top:14px';
-  tb.onclick = e => e.stopPropagation();
-  const cb = document.createElement('button');
-  cb.textContent = '✕ Close';
-  cb.style.cssText = 'background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer';
-  cb.onclick = () => ov.remove();
-  const dl = document.createElement('a');
-  dl.href = url; dl.download = 'gbp-post.png'; dl.target = '_blank';
-  dl.textContent = '⬇ Download';
-  dl.style.cssText = 'background:#c9a84c;color:#000;border-radius:8px;padding:8px 20px;font-size:13px;text-decoration:none;font-weight:700';
-  tb.appendChild(cb); tb.appendChild(dl);
-  ov.appendChild(img); ov.appendChild(tb);
-  document.body.appendChild(ov);
-}
-
-
-function selectGBPVariation(idx, silent) {
-  const vars = window._gbpVariations || [];
-  const url = vars[idx];
-  if (!url) return;
-
-  document.getElementById('gbp-image-url').value = url;
-  const preview = document.getElementById('gbp-selected-preview');
-  const img = document.getElementById('gbp-preview-img');
-  const lbl = document.getElementById('gbp-preview-label');
+function csSelectVariation(idx, silent) {
+  const vars = window._csVariations || [];
+  if (!vars[idx]) return;
+  document.getElementById('cs-image-url').value = vars[idx];
+  const preview = document.getElementById('cs-selected-image');
+  const img = document.getElementById('cs-selected-img');
+  const lbl = document.getElementById('cs-img-label');
   if (preview) preview.style.display = 'block';
-  if (img) img.src = url;
+  if (img) img.src = vars[idx];
   if (lbl) lbl.textContent = 'Option ' + (idx+1) + ' selected';
-
-  // Update border
-  document.querySelectorAll('[data-vi]').forEach((el, i) => {
-    el.style.borderColor = i === idx ? 'var(--gold)' : 'var(--border)';
-    const sub = el.querySelector('div');
-    if (sub) sub.textContent = 'Option '+(i+1)+(i===idx?' ✓':'');
+  document.querySelectorAll('[data-cvi]').forEach((el,i) => {
+    el.style.borderColor = i===idx ? 'var(--gold)' : 'var(--border)';
   });
-
-  if (!silent) showMktToast('Option ' + (idx+1) + ' selected');
+  if (!silent) showMktToast('Option '+(idx+1)+' selected');
 }
 
-async function regenerateGBPContent() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
-  if (!topic) { showMktToast('No topic set'); return; }
-  const btn = document.querySelector('[onclick="regenerateGBPContent()"]');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-  try {
-    const steps = {};
-    await generateGBPImageInternal(topic, '', steps);
-    showMktToast('✅ Content regenerated');
-  } finally {
-    if (btn) { btn.textContent = '🔄 Regenerate'; btn.disabled = false; }
-  }
-}
+async function csAdaptChannels(masterText, channels, language) {
+  const CHANNEL_RULES = {
+    gbp:             {name:'📍 GBP',              size:'1:1',     note:'No hashtags in body. Max 1500 chars. Local focus.'},
+    instagram_feed:  {name:'📸 Instagram Feed',   size:'1:1',     note:'All hashtags. Hook in first line. 150-300 chars.'},
+    instagram_story: {name:'📱 Instagram Story',  size:'9:16',    note:'Ultra short. 1-2 lines. Strong CTA.'},
+    facebook_post:   {name:'👤 Facebook Post',    size:'1.91:1',  note:'Conversational. 100-200 chars. Fewer hashtags (5).'},
+    facebook_story:  {name:'📖 Facebook Story',   size:'9:16',    note:'Very short. 1 line + CTA.'},
+    whatsapp_bc:     {name:'💬 WhatsApp Broadcast',size:'1:1',    note:'Personal tone. No hashtags. Include phone 8712697930.'},
+    whatsapp_status: {name:'💚 WhatsApp Status',  size:'9:16',    note:'Max 2 lines. Eye-catching. No hashtags.'},
+    threads:         {name:'🧵 Threads',           size:'1:1',     note:'Conversational. 150 chars. 2-3 hashtags.'},
+    x:               {name:'𝕏 X',                size:'16:9',    note:'Max 280 chars. 2-3 hashtags. Hook-first.'},
+    youtube:         {name:'▶️ YouTube',           size:'16:9',    note:'Title + description. SEO keywords. Chapters if reel.'},
+  };
 
-async function regenerateGBPImage() {
-  const topic = window._gbpCurrentTopic || (document.getElementById('gbp-topic')?.value||'').trim();
-  const postText = document.getElementById('gbp-text')?.value || '';
-  const btn = document.querySelector('[onclick="regenerateGBPImage()"]');
-  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
-  showMktToast('🤖 Generating new poster variations…');
-  try {
-    const steps = {};
-    await generateGBPImageInternal(topic, postText, steps);
-    showMktToast('✅ New variations ready');
-  } catch(e) {
-    showMktToast('❌ ' + e.message);
-  } finally {
-    if (btn) { btn.textContent = '🔄 New Images'; btn.disabled = false; }
-  }
-}
-
-async function verifyGBPPost() {
-  const steps = {};
-  await verifyGBPPostInternal(steps);
-  showMktToast('✅ Verification complete');
-}
-
-async function publishGBPPost() {
-  const text = (document.getElementById('gbp-text')?.value||'').trim();
-  const imageUrl = document.getElementById('gbp-image-url')?.value || '';
-  if (!text) { showMktToast('No post text to publish'); return; }
-
-  await navigator.clipboard.writeText(text).catch(()=>{});
-
-  const result = document.getElementById('gbp-verify-result');
-  if (result) {
-    result.style.display = 'block';
-    result.innerHTML = `<div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:14px">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px">📋 Text copied! Post in 3 steps:</div>
-      <div style="display:grid;gap:6px;margin-bottom:12px;font-size:12px">
-        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">1</span><span>Click <b>Open GBP</b> below</span></div>
-        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">2</span><span>Click <b>Add update</b> → paste text (Ctrl+V) → upload image</span></div>
-        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">3</span><span>Click <b>Post</b> → live in 2-5 minutes</span></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none;padding:10px 16px">📍 Open GBP ↗</a>
-        <button onclick="navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:10px 16px">📋 Copy Again</button>
-        ${imageUrl?`<a href="${imageUrl}" download="gbp-post.png" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:12px;text-decoration:none;padding:10px 16px">⬇ Download Image</a>`:''}
-      </div>
-    </div>`;
-  }
-
-  // Log to history
-  await sb.from('marketing_audit_logs').insert({
-    action:'gbp_post_created',
-    details:{post_text:text.slice(0,100), topic:window._gbpCurrentTopic||'', has_image:!!imageUrl, method:'auto'},
-    created_at:new Date().toISOString()
-  }).then(()=>{}).catch(()=>{});
-
-  loadGBPHistory();
-}
-
-
-function gbpTopicChanged() {
-  // Reset output when topic changes
-  document.getElementById('gbp-output').style.display = 'none';
-  document.getElementById('gbp-progress').style.display = 'none';
-}
-
-
-function connectGBP() {
-  // Build OAuth URL directly in browser — no server call needed for this step
-  const clientId = '825770975900-hu3d3edgjaup25ec16vin7jpjs4phlo5.apps.googleusercontent.com';
-  const redirectUri = encodeURIComponent('https://vwholesale.in/marketing/');
-  const scope = encodeURIComponent('https://www.googleapis.com/auth/business.manage');
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=offline&prompt=consent&state=gbp_oauth`;
-  showMktToast('🔗 Redirecting to Google…');
-  window.location.href = url;
-}
-
-async function handleGBPCallback(code) {
-  setContent(`<div style="text-align:center;padding:40px">
-    <div style="font-size:32px;margin-bottom:12px">⏳</div>
-    <div style="font-size:14px;font-weight:700">Connecting Google Business Profile…</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:8px">Exchanging authorization code…</div>
-  </div>`);
-
-  try {
-    // Exchange code via edge function with retry
-    let data = null;
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const res = await fetch(MKT_SB_URL + '/functions/v1/gbp-oauth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-          body: JSON.stringify({ action: 'exchange_code', code })
-        });
-        if (res.status === 404) {
-          // Cold start — wait and retry
-          await new Promise(r => setTimeout(r, 2000 * attempt));
-          continue;
-        }
-        data = await res.json();
-        break;
-      } catch(fetchErr) {
-        if (attempt === 3) throw fetchErr;
-        await new Promise(r => setTimeout(r, 2000));
-      }
+  const adaptedVersions = {};
+  // For now adapt top 4 channels shown + simple rule-based adaptation for others
+  for (const ch of channels) {
+    const rule = CHANNEL_RULES[ch];
+    if (!rule) continue;
+    // Simple adaptation rules (no extra API call to save cost)
+    let adapted = masterText;
+    if (ch === 'gbp') {
+      adapted = masterText.replace(/#[\w\u0C00-\u0C7F]+/g,'').replace(/\s+#[\s\S]*$/,'').trim();
+      if (adapted.length > 1500) adapted = adapted.slice(0,1497)+'…';
+    } else if (ch === 'whatsapp_bc') {
+      adapted = masterText.replace(/#[\w\u0C00-\u0C7F]+/g,'').replace(/\s+#[\s\S]*$/,'').trim();
+    } else if (ch === 'instagram_story' || ch === 'facebook_story' || ch === 'whatsapp_status') {
+      adapted = masterText.split('\n')[0].slice(0,120);
+    } else if (ch === 'x') {
+      const noHash = masterText.replace(/#\w+/g,'').trim();
+      adapted = noHash.slice(0,240) + ' #VWholesale #Vijayawada';
+    } else if (ch === 'threads') {
+      adapted = masterText.slice(0,280);
     }
-    if (!data) throw new Error('Edge function unavailable after 3 attempts — please try connecting again');
-    if (!data.ok) throw new Error(data.error || 'Token exchange failed');
-
-    showMktToast('✅ Google Business Profile connected!');
-    await renderGBP();
-
-  } catch(e) {
-    console.error('GBP OAuth error:', e);
-    showMktToast('❌ Connection failed: ' + e.message);
-    setContent(`<div style="text-align:center;padding:40px">
-      <div style="font-size:32px;margin-bottom:12px">❌</div>
-      <div style="font-size:14px;font-weight:700;color:var(--red)">Connection Failed</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:8px">${e.message}</div>
-      <button class="mkt-btn mkt-btn-primary" onclick="renderGBP()" style="margin-top:16px">← Back to GBP</button>
-    </div>`);
+    adaptedVersions[ch] = {name: rule.name, size: rule.size, text: adapted};
   }
+
+  window._csAdaptedVersions = adaptedVersions;
+  const container = document.getElementById('cs-channel-versions');
+  if (!container) return;
+  container.innerHTML = Object.entries(adaptedVersions).map(([ch, v]) => `
+    <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div onclick="toggleChannelVersion('${ch}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg3);cursor:pointer">
+        <span style="font-size:12px;font-weight:600;flex:1">${v.name}</span>
+        <span style="font-size:10px;color:var(--text3)">${v.size}</span>
+        <span style="font-size:10px;color:var(--text3)">${v.text.length} chars</span>
+        <span id="ch-toggle-${ch}" style="font-size:11px;color:var(--text3)">▸</span>
+      </div>
+      <div id="ch-content-${ch}" style="display:none;padding:10px 12px">
+        <textarea class="mkt-form-input" id="ch-text-${ch}" rows="4" style="font-size:11px;line-height:1.7">${v.text}</textarea>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('ch-text-${ch}').value).then(()=>showMktToast('📋 Copied!'))" class="mkt-btn mkt-btn-ghost" style="margin-top:6px;font-size:11px;padding:4px 10px">📋 Copy</button>
+      </div>
+    </div>`).join('');
 }
 
-async function loadGBPLocation() {
-  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-oauth`, {
-    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body:JSON.stringify({action:'get_locations'})
-  });
-  const data = await res.json();
-  const el = document.getElementById('gbp-location-name');
+function toggleChannelVersion(ch) {
+  const el = document.getElementById('ch-content-'+ch);
+  const toggle = document.getElementById('ch-toggle-'+ch);
   if (!el) return;
-  if (data.ok && data.locations?.length) {
-    const loc = data.locations[0];
-    el.textContent = loc.title + ' — ' + (loc.storefrontAddress?.addressLines?.[0] || 'Vijayawada');
-    // Store location name
-    await sb.from('marketing_settings').upsert(
-      {key:'GBP_LOCATION_NAME', value:loc.name},
-      {onConflict:'key'}
-    );
-  } else {
-    el.textContent = 'V Wholesale — Vijayawada';
-  }
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (toggle) toggle.textContent = isOpen ? '▸' : '▾';
 }
 
-async function postToGBP() {
-  const text = (document.getElementById('gbp-text')?.value||'').trim();
-  const imageUrl = (document.getElementById('gbp-image-url')?.value||'').trim();
-  if (!text) { showMktToast('Write or generate post text first'); return; }
-
-  await navigator.clipboard.writeText(text).catch(()=>{});
-
-  const result = document.getElementById('gbp-result');
-  if (result) {
-    result.style.display = 'block';
-    result.innerHTML = `<div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:16px">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px">📋 Text copied! Post to GBP in 3 steps:</div>
-      <div style="display:grid;gap:8px;margin-bottom:12px">
-        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">1</span><span>Click <b>Open GBP</b> below → your business dashboard opens</span></div>
-        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">2</span><span>Click <b>Add update</b> → paste text (Ctrl+V) → upload image if any</span></div>
-        <div style="display:flex;gap:8px;font-size:12px;align-items:flex-start"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:10px;flex-shrink:0">3</span><span>Click <b>Post</b> → live on Google Maps in 2-5 minutes ✅</span></div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none;padding:10px 16px">📍 Open GBP Dashboard ↗</a>
-        <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'))" style="font-size:12px;padding:10px 16px">📋 Copy Again</button>
-        ${imageUrl?'<a href="'+imageUrl+'" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:12px;text-decoration:none;padding:10px 16px">🖼️ Open Image ↗</a>':''}
-      </div>
-    </div>`;
-  }
-
-  await sb.from('marketing_audit_logs').insert({
-    action:'gbp_post_created',
-    details:{post_text:text.slice(0,100),method:'manual',has_image:!!imageUrl},
-    created_at:new Date().toISOString()
-  }).then(()=>{}).catch(()=>{});
-  loadGBPHistory();
+async function csAdaptLanguage() {
+  const topic = window._csCurrentTopic;
+  const lang = window._csCurrentLang;
+  const type = window._csCurrentType;
+  const channels = window._csChannels || ['gbp'];
+  if (!topic) return;
+  await createUnifiedContent();
 }
 
-async function loadGBPHistory() {
-  const { data: logs } = await sb.from('marketing_audit_logs').select('*').eq('action','gbp_post_created').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}));
-  const el = document.getElementById('gbp-history');
-  if (!el) return;
-  if (!(logs||[]).length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No posts yet</div>';
-    return;
-  }
-  el.innerHTML = '<div style="display:grid;gap:6px">' + logs.map(l=>`
-    <div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">
-      <div style="font-size:18px">📍</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:600">${l.details?.post_text||'GBP Post'}…</div>
-        <div style="font-size:11px;color:var(--text3)">${new Date(l.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-      </div>
-      <span class="badge badge-green">Published</span>
-    </div>`).join('') + '</div>';
+async function csRegenContent() {
+  const topic = (document.getElementById('cs-topic')?.value||window._csCurrentTopic||'').trim();
+  if (!topic) { showMktToast('No topic'); return; }
+  showMktToast('🔄 Regenerating…');
+  await createUnifiedContent();
 }
 
-async function useLatestPoster() {
-  showMktToast('🎨 Fetching latest poster…');
-  const { data } = await sb.from('poster_history').select('poster_url,topic,created_at').order('created_at',{ascending:false}).limit(1).single().then(r=>r,()=>({data:null}));
-  if (!data?.poster_url) { showMktToast('No posters found — generate one in Poster Studio first'); return; }
-  const input = document.getElementById('gbp-image-url');
-  if (input) input.value = data.poster_url;
-  setGBPImage(data.poster_url, '🎨 ' + (data.topic||'Latest Poster'));
-  showMktToast('✅ Latest poster loaded — ' + (data.topic||'poster'));
-}
-
-async function generateGBPImage() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
-  const postText = (document.getElementById('gbp-text')?.value||'').trim();
-
-  if (!postText && !topic) {
-    showMktToast('Generate your post text first, then click Generate AI Image');
-    return;
-  }
-
-  // Use the actual post content to drive image generation
-  // AI will read the post and create a matching visual
-  const imageContext = postText || topic;
-
-  const btns = document.querySelectorAll('[onclick="generateGBPImage()"]');
-  btns.forEach(b => { b.style.opacity='.5'; b.style.pointerEvents='none'; });
-  const status = document.getElementById('gbp-image-gen-status');
-  if (status) {
-    let _secs = 0;
-    const _timer = setInterval(() => { _secs++; const el = document.getElementById('gbp-img-secs'); if(el) el.textContent = _secs+'s'; }, 1000);
-    status.dataset.timer = String(_timer);
-    status.style.display='block';
-    status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
-      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Creating Creative Director brief + 2 poster variations…</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">gpt-image-1 · 30-45 seconds · <span id="gbp-img-secs">0s</span></div>';
-  }
-
+async function csRegenImage() {
+  const topic = window._csCurrentTopic || (document.getElementById('cs-topic')?.value||'').trim();
+  const text = document.getElementById('cs-master-text')?.value || '';
+  showMktToast('🤖 Generating new images…');
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/gbp-image', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({topic, post_text: imageContext})
+    const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-image`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({topic, post_text: text})
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Image generation failed');
-    const imgUrl = data.image_url || '';
-    if (!imgUrl) throw new Error('No image URL returned');
-    const variations = data.variations || [imgUrl];
-    const label = data.source === 'pexels' ? '🖼️ Stock Photo' : '🤖 AI Generated (gpt-image-1)';
-    setGBPImage(imgUrl, label + (data.qa_score ? ' · QA: '+data.qa_score+'/10' : ''));
-    showMktToast('✅ ' + (variations.length > 1 ? variations.length+' variations ready — pick the best!' : 'Image ready!'));
-
-    // Show variation picker if multiple
-    if (variations.length > 1 && status) {
-      status.style.display = 'block';
-      // Build variation picker with proper escaping
-      const pickerHtml = variations.map((vurl, vi) => {
-        const isFirst = vi === 0;
-        return '<div style="cursor:pointer;border:2px solid '+(isFirst?'var(--gold)':'var(--border)')+';border-radius:6px;overflow:hidden" data-var="'+vi+'">'
-          +'<img src="'+vurl+'" style="width:100%;height:80px;object-fit:cover;display:block" onclick="pickGBPVariation('+vi+',this.parentElement.parentElement)">'
-          +'<div style="font-size:9px;text-align:center;padding:3px;color:var(--text3)">Option '+(vi+1)+(isFirst?' ← Auto-selected':'')+'</div>'
-        +'</div>';
-      }).join('');
-      window._gbpVariations = variations;
-      status.innerHTML = '<div style="font-size:11px;font-weight:700;margin-bottom:6px">🎨 '+(variations.length)+' variations — tap to select:</div>'
-        + '<div style="display:grid;grid-template-columns:repeat('+variations.length+',1fr);gap:6px">'+pickerHtml+'</div>';
-    }
-  } catch(e) {
-    showMktToast('❌ ' + e.message);
-    if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '<br><span style="color:var(--text3)">Try 📁 Upload Image instead</span></div>';
-  } finally {
-    btns.forEach(b => { b.style.opacity=''; b.style.pointerEvents=''; });
-    if (status?.dataset?.timer) clearInterval(parseInt(status.dataset.timer));
-    if (status && !status.innerHTML.includes('❌')) setTimeout(() => { status.style.display='none'; }, 2000);
-  }
+    if (!data.ok) throw new Error(data.error);
+    window._csVariations = data.variations || [data.image_url];
+    csRenderVariations(data.variations||[data.image_url], data.image_url, data.qa_score);
+    showMktToast('✅ New variations ready');
+  } catch(e) { showMktToast('❌ '+e.message); }
 }
 
-
-function pickGBPVariation(idx, container) {
-  const vars = window._gbpVariations || [];
-  if (!vars[idx]) return;
-  setGBPImage(vars[idx], 'Variation ' + (idx+1));
-  // Update border highlight
-  if (container) {
-    container.querySelectorAll('[data-var]').forEach((el, i) => {
-      el.style.borderColor = i === idx ? 'var(--gold)' : 'var(--border)';
-    });
-  }
+function csHandleUpload(input) {
+  const file = input.files[0]; if(!file) return;
+  const url = URL.createObjectURL(file);
+  window._csVariations = [url];
+  csRenderVariations([url], url, null);
+  document.getElementById('cs-image-url').value = url;
+  showMktToast('✅ Image uploaded');
 }
 
-function setGBPImage(url, label) {
-  const hidden = document.getElementById('gbp-image-url');
-  if (hidden) hidden.value = url;
-  const preview = document.getElementById('gbp-image-preview');
-  const img = document.getElementById('gbp-image-preview-img');
-  const lbl = document.getElementById('gbp-image-label');
-  if (preview && img) { img.src = url; preview.style.display='block'; }
-  if (lbl) lbl.textContent = label || 'Image ready';
+function csCopyMaster() {
+  navigator.clipboard.writeText(document.getElementById('cs-master-text')?.value||'').then(()=>showMktToast('📋 Copied!'));
 }
 
-function showGBPImagePreview(url) { setGBPImage(url, 'Image ready'); }
-
-function clearGBPImage() {
-  const h = document.getElementById('gbp-image-url'); if(h) h.value='';
-  const p = document.getElementById('gbp-image-preview'); if(p) p.style.display='none';
-  const i = document.getElementById('gbp-image-preview-img'); if(i) i.src='';
-  const u = document.getElementById('gbp-image-upload'); if(u) u.value='';
+function csVerify() {
+  const text = document.getElementById('cs-master-text')?.value || '';
+  const passes = [], checks = [];
+  if (text.length >= 100) passes.push('Length good (' + text.length + ' chars)');
+  else checks.push('Too short');
+  if ((text.match(/#\w+/g)||[]).length >= 8) passes.push((text.match(/#\w+/g)||[]).length + ' hashtags');
+  else checks.push('Add more hashtags');
+  if (text.includes('8712697930') || text.includes('vwholesale')) passes.push('Contact info present');
+  else checks.push('Missing contact info');
+  const el = document.getElementById('cs-verify-result');
+  if (el) el.innerHTML = `<div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:12px">
+    ${passes.map(p=>`<div style="color:var(--green)">✅ ${p}</div>`).join('')}
+    ${checks.map(c=>`<div style="color:#f59e0b">⚠️ ${c}</div>`).join('')}
+    ${!checks.length?'<div style="color:var(--green);font-weight:700;margin-top:6px">✅ Ready to publish</div>':''}
+  </div>`;
+  showMktToast(checks.length ? '⚠️ ' + checks[0] : '✅ Content verified');
 }
 
-async function handleGBPImageUpload(input) {
-  const file = input.files[0];
-  if (!file) return;
-  if (file.size > 5*1024*1024) { showMktToast('Image must be under 5MB'); return; }
-  showMktToast('📁 Uploading…');
-  try {
-    const fileName = 'gbp/' + Date.now() + '_' + file.name.replace(/[^a-z0-9.]/gi,'_');
-    const { data: up, error } = await sb.storage.from('marketing-assets').upload(fileName, file, {contentType:file.type, upsert:true});
-    if (error) throw new Error(error.message);
-    const { data: urlData } = sb.storage.from('marketing-assets').getPublicUrl(fileName);
-    setGBPImage(urlData.publicUrl, '📁 ' + file.name);
-    showMktToast('✅ Uploaded!');
-  } catch(e) {
-    setGBPImage(URL.createObjectURL(file), '⚠️ Local preview only');
-    showMktToast('⚠️ Could not upload to storage — ' + e.message);
-  }
-}
+async function csSendForApproval() {
+  const topic = window._csCurrentTopic || (document.getElementById('cs-topic')?.value||'').trim();
+  const imageUrl = document.getElementById('cs-image-url')?.value || '';
 
-
-
-async function disconnectGBP() {
-  if (!confirm('Disconnect Google Business Profile?')) return;
-  await sb.from('social_connections').update({status:'not_connected',access_token_set:false,connected_at:null}).eq('platform','gbp');
-  await sb.from('marketing_settings').delete().in('key',['GBP_ACCESS_TOKEN','GBP_REFRESH_TOKEN','GBP_TOKEN_EXPIRY','GBP_LOCATION_NAME','GBP_ACCOUNT_NAME']);
-  showMktToast('Disconnected');
-  await renderGBP();
-}
-
-function copyGBPPost() {
-  navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'));
-}
-
-async function generateGBPPost() {
-  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
-  const type = document.getElementById('gbp-post-type')?.value||'standard';
-  if (!topic) { showMktToast('Enter a topic first'); return; }
-
-  const btn = document.querySelector('[onclick="generateGBPPost()"]');
-  if (btn) { btn.textContent = '\u23F3 Writing\u2026'; btn.disabled = true; }
-  showMktToast('\uD83E\uDD16 Writing GBP post\u2026');
+  const btn = document.querySelector('[onclick="csSendForApproval()"]');
+  if (btn) { btn.textContent = '⏳ Sending…'; btn.disabled = true; }
 
   try {
-    const typeLabel = {standard:'Update/Announcement', offer:'Offer/Promotion', event:'Event'}[type]||'Update';
-    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    // Call notification edge function — handles WhatsApp + DB
+    const res = await fetch(MKT_SB_URL+'/functions/v1/content-notifications', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({
-        action:'generate_text',
-        agent:'GBP Post Writer',
-        prompt:'Write a Google Business Profile post for V Wholesale, a home building materials store in Vijayawada (NH65, Bhavanipuram). Post type: '+typeLabel+'. Topic: '+topic+'. Rules: max 1500 chars, include call to action with phone 8712697930 or visit vwholesale.in, mention Vijayawada. Return JSON: {"post_text":"..."}',
-        context:{topic, type:typeLabel, business:'V Wholesale', location:'Vijayawada'}
+      body: JSON.stringify({
+        action: 'send_approval',
+        agent_name: 'Content Studio',
+        topic,
+        message: 'Content ready for approval: "'+topic+'". Image: '+(imageUrl?'attached':'not yet')+'. Review in portal.',
+        image_url: imageUrl
       })
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'AI failed');
-    const content = data.output?.post_text || data.output?.text || data.output?.content || '';
-    if (!content) throw new Error('AI returned empty post');
-    const ta = document.getElementById('gbp-text');
-    if (ta) ta.value = content;
-    showMktToast('\u2705 Post written \u2014 review and post to GBP');
+
+    if (window._csCurrentPostId) {
+      await sb.from('content_posts').update({status:'pending_approval'}).eq('id', window._csCurrentPostId);
+    }
+
+    const waStatus = data.whatsapp_sent
+      ? '📲 WhatsApp alert sent to 9038010175'
+      : '🔔 Logged in portal (WhatsApp will activate once WABA approved)';
+
+    const el = document.getElementById('cs-verify-result');
+    if (el) el.innerHTML = '<div style="background:rgba(201,168,76,.1);border:1px solid rgba(201,168,76,.3);border-radius:8px;padding:10px;font-size:12px;color:var(--gold)">⏳ Approval requested · '+waStatus+'</div>';
+    showMktToast('✅ Approval request sent');
   } catch(e) {
-    showMktToast('\u274C ' + e.message);
+    showMktToast('❌ '+e.message);
   } finally {
-    if (btn) { btn.textContent = '\uD83E\uDD16 Generate with AI'; btn.disabled = false; }
+    if (btn) { btn.textContent = '📲 Send for Approval'; btn.disabled = false; }
   }
 }
 
-function quickGBPPost(idea) {
-  const el = document.getElementById('gbp-topic');
-  if (el) { el.value = idea; generateGBPPost(); }
-}
+async function csPublishAll() {
+  const text = document.getElementById('cs-master-text')?.value || '';
+  const imageUrl = document.getElementById('cs-image-url')?.value || '';
+  const channels = window._csChannels || ['gbp'];
+  const adaptedVersions = window._csAdaptedVersions || {};
+  if (!text) { showMktToast('No content to publish'); return; }
 
+  await navigator.clipboard.writeText(text).catch(()=>{});
 
-// ── APPROVALS ──
-async function renderApprovals() {
-  const { data: approvals } = await sb.from('marketing_approvals').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
-  const pending = (approvals||[]).filter(a=>a.status==='pending');
-  const done = (approvals||[]).filter(a=>a.status!=='pending');
+  // Save channel posts
+  if (window._csCurrentPostId) {
+    const channelRows = channels.map(ch => ({
+      content_post_id: window._csCurrentPostId,
+      channel: ch,
+      adapted_text: adaptedVersions[ch]?.text || text,
+      image_url: imageUrl,
+      image_size: adaptedVersions[ch]?.size || '1:1',
+      status: 'pending'
+    }));
+    await sb.from('channel_posts').insert(channelRows).then(()=>{}).catch(()=>{});
+    await sb.from('content_posts').update({status:'published',approved_at:new Date().toISOString()}).eq('id',window._csCurrentPostId);
+  }
 
-  setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">Approvals Queue</h3>
-    <div style="font-size:12px;color:var(--text3)">Review and approve AI-recommended actions before execution</div>
-  </div>
-
-  ${pending.length === 0 ? `
-  <div class="mkt-card">
-    <div class="mkt-empty">
-      <div class="mkt-empty-icon">✅</div>
-      <div class="mkt-empty-title">All Clear</div>
-      <div style="font-size:12px;color:var(--text3)">No pending approvals. Run the AI CMO to generate recommendations.</div>
-      <button class="mkt-btn mkt-btn-primary" onclick="mktNav('cmo')" style="margin-top:16px">🧠 Run AI CMO</button>
-    </div>
-  </div>` : `
-  <div style="display:grid;gap:10px">
-    ${pending.map(a => `
-    <div class="mkt-card" style="border-left:4px solid var(--gold)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
-        <div>
-          <div style="font-size:14px;font-weight:800">${a.title}</div>
-          <div style="font-size:11px;color:var(--text3)">${a.agent_name||'AI'} · ${new Date(a.created_at).toLocaleDateString('en-IN')}</div>
-        </div>
-        <span class="badge badge-gold">pending</span>
+  const el = document.getElementById('cs-verify-result');
+  if (el) el.innerHTML = `
+    <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">📋 Content saved + text copied!</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Post manually to each channel below. Image: click Open to view/download.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:11px;text-decoration:none;padding:8px 12px">📍 Open GBP ↗</a>
+        <a href="https://www.instagram.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">📸 Instagram ↗</a>
+        <a href="https://www.facebook.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">👤 Facebook ↗</a>
+        ${imageUrl?`<a href="${imageUrl}" download target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">⬇ Download Image</a>`:''}
       </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${a.description}</div>
-      ${a.estimated_cost > 0 ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Estimated cost: ₹${a.estimated_cost}</div>` : ''}
-      <div style="display:flex;gap:8px">
-        <button class="mkt-btn mkt-btn-primary" onclick="approveAction(${a.id})">✅ Approve</button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="rejectAction(${a.id})" style="color:var(--red)">❌ Reject</button>
-      </div>
-    </div>`).join('')}
-  </div>`}
-
-  ${done.length > 0 ? `
-  <div class="mkt-card" style="margin-top:12px">
-    <div class="mkt-card-title">History</div>
-    <table class="mkt-table">
-      <tr><th>Action</th><th>Status</th><th>Date</th></tr>
-      ${done.map(a=>`<tr>
-        <td style="font-weight:700">${a.title}</td>
-        <td><span class="badge ${a.status==='approved'?'badge-green':'badge-red'}">${a.status}</span></td>
-        <td style="color:var(--text3)">${new Date(a.created_at).toLocaleDateString('en-IN')}</td>
-      </tr>`).join('')}
-    </table>
-  </div>` : ''}
-  `);
+    </div>`;
+  showMktToast('✅ Published and saved to all channels');
 }
-
-async function approveAction(id) {
-  await sb.from('marketing_approvals').update({status:'approved',approver:mktProfile?.name,approved_at:new Date().toISOString()}).eq('id',id);
-  showMktToast('✅ Action approved');
-  renderApprovals();
-}
-
-async function rejectAction(id) {
-  const reason = prompt('Reason for rejection:');
-  if (reason === null) return;
-  await sb.from('marketing_approvals').update({status:'rejected',rejection_reason:reason}).eq('id',id);
-  showMktToast('Action rejected');
-  renderApprovals();
-}
-
-// ── CONTENT CALENDAR ──
-// ── CONTENT CALENDAR — Monthly Planner ──
-let _calYear = new Date().getFullYear();
-let _calMonth = new Date().getMonth(); // 0-indexed
-let _calItems = [];
-let _calFestivals = [];
 
 async function renderCalendar() {
   setContent(`
