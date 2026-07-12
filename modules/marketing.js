@@ -1675,49 +1675,34 @@ async function generateGBPImage() {
   const btns = document.querySelectorAll('[onclick="generateGBPImage()"]');
   btns.forEach(b => { b.style.opacity='.5'; b.style.pointerEvents='none'; });
   const status = document.getElementById('gbp-image-gen-status');
-  if (status) { status.style.display='block'; status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div><div style="margin-top:6px;font-size:11px">Generating with gpt-image-1 — ~20 seconds</div>'; }
+  if (status) {
+    status.style.display='block';
+    status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
+      +'<div style="margin-top:6px;font-size:11px">Finding best image for your post…</div>';
+  }
 
   try {
-    // Get session token for edge function auth
-    const { data: { session } } = await sb.auth.getSession();
-    const authToken = session?.access_token || MKT_SB_KEY;
-
-    const res = await fetch(MKT_SB_URL+'/functions/v1/generate-poster', {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/gbp-image', {
       method:'POST',
-      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY,'Authorization':'Bearer '+authToken},
-      body:JSON.stringify({ caption_only:false, topic, size:'1024x1024', quality:'high', gbp_mode:true })
+      headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({topic})
     });
-    if (!res.ok) {
-      // Fallback: use Pexels stock photo
-      showMktToast('⚠️ AI image unavailable — trying stock photo…');
-      const q = encodeURIComponent(topic.split(' ').slice(0,3).join(' ') + ' home interior India');
-      const px = await fetch('https://api.pexels.com/v1/search?query='+q+'&per_page=1&orientation=square', {
-        headers:{'Authorization': await getPexelsKey()}
-      });
-      const pxd = await px.json();
-      const pxUrl = pxd.photos?.[0]?.src?.large || pxd.photos?.[0]?.src?.medium || '';
-      if (pxUrl) { setGBPImage(pxUrl, '🖼️ Stock Photo (Pexels)'); showMktToast('✅ Stock photo added'); return; }
-      throw new Error('Server error ' + res.status + ' — try uploading an image instead');
-    }
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Generation failed');
-    const imgUrl = data.image_url || data.hero_url || data.poster_url || '';
-    if (!imgUrl) throw new Error('No image returned');
-    setGBPImage(imgUrl, '🤖 AI Generated (gpt-image-1)');
-    showMktToast('✅ Image generated!');
+    if (!data.ok) throw new Error(data.error || 'Image generation failed');
+    const imgUrl = data.image_url || '';
+    if (!imgUrl) throw new Error('No image URL returned');
+    const label = data.source === 'pexels' ? '🖼️ Stock Photo' : '🤖 AI Generated';
+    setGBPImage(imgUrl, label + ' — ' + topic);
+    showMktToast('✅ Image ready (' + (data.source||'AI') + ')');
   } catch(e) {
     showMktToast('❌ ' + e.message);
-    if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>';
+    if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '<br><span style="color:var(--text3)">Try 📁 Upload Image instead</span></div>';
   } finally {
     btns.forEach(b => { b.style.opacity=''; b.style.pointerEvents=''; });
-    if (status) setTimeout(() => { if(status) status.style.display='none'; }, 3000);
+    if (status && !status.innerHTML.includes('❌')) setTimeout(() => { status.style.display='none'; }, 2000);
   }
 }
 
-async function getPexelsKey() {
-  const { data } = await sb.from('marketing_settings').select('value').eq('key','PEXELS_API_KEY').maybeSingle().then(r=>r,()=>({data:null}));
-  return data?.value || '';
-}
 
 function setGBPImage(url, label) {
   const hidden = document.getElementById('gbp-image-url');
