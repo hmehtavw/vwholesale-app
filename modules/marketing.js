@@ -1452,8 +1452,15 @@ async function renderGBP() {
       <textarea id="gbp-text" class="mkt-form-input" rows="5" style="resize:vertical;font-size:13px;line-height:1.7" placeholder="Your GBP post content will appear here after AI generation, or write manually…"></textarea>
     </div>
     <div class="mkt-form-group">
-      <label class="mkt-form-label">Image URL (optional — from Poster Studio)</label>
-      <input id="gbp-image-url" class="mkt-form-input" placeholder="Paste image URL from your poster">
+      <label class="mkt-form-label">Image (optional)</label>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <button class="mkt-btn mkt-btn-ghost" onclick="useLatestPoster()" style="font-size:11px;padding:6px 10px">🎨 Use Latest Poster</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPImage()" style="font-size:11px;padding:6px 10px">🤖 Generate Image with AI</button>
+      </div>
+      <input id="gbp-image-url" class="mkt-form-input" placeholder="Paste image URL or use buttons above">
+      <div id="gbp-image-preview" style="display:none;margin-top:8px;border-radius:8px;overflow:hidden;max-height:120px">
+        <img id="gbp-image-preview-img" src="" style="width:100%;height:120px;object-fit:cover">
+      </div>
     </div>
     <div style="display:flex;gap:8px">
       ${isConnected
@@ -1617,6 +1624,58 @@ async function loadGBPHistory() {
       <span class="badge badge-green">Published</span>
     </div>`).join('') + '</div>';
 }
+
+async function useLatestPoster() {
+  showMktToast('🎨 Fetching latest poster…');
+  const { data } = await sb.from('poster_history').select('poster_url,topic,created_at').order('created_at',{ascending:false}).limit(1).single().then(r=>r,()=>({data:null}));
+  if (!data?.poster_url) { showMktToast('No posters found — generate one in Poster Studio first'); return; }
+  const input = document.getElementById('gbp-image-url');
+  if (input) input.value = data.poster_url;
+  showGBPImagePreview(data.poster_url);
+  showMktToast('✅ Latest poster loaded — ' + (data.topic||'poster'));
+}
+
+async function generateGBPImage() {
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  if (!topic) { showMktToast('Enter a post topic first'); return; }
+
+  const btn = document.querySelector('[onclick="generateGBPImage()"]');
+  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+  showMktToast('🤖 Generating image — ~20 seconds…');
+
+  try {
+    const prompt = 'Professional product photography for a home building materials store in India. '
+      + 'Topic: ' + topic + '. '
+      + 'Show high-quality tiles, marble, or home interiors. Modern, clean, bright. '
+      + 'No text, no logos, no people. Suitable for Google Business Profile post.';
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({ action:'generate_image', agent:'GBP Image Generator', dalle_prompt:prompt, size:'1024x1024', quality:'standard' })
+    });
+    const data = await res.json();
+    if (!data.ok || !data.image_url) throw new Error(data.error || 'Image generation failed');
+
+    const input = document.getElementById('gbp-image-url');
+    if (input) input.value = data.image_url;
+    showGBPImagePreview(data.image_url);
+    showMktToast('✅ Image generated!');
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🤖 Generate Image with AI'; btn.disabled = false; }
+  }
+}
+
+function showGBPImagePreview(url) {
+  const preview = document.getElementById('gbp-image-preview');
+  const img = document.getElementById('gbp-image-preview-img');
+  if (preview && img && url) {
+    img.src = url;
+    preview.style.display = 'block';
+  }
+}
+
 
 async function disconnectGBP() {
   if (!confirm('Disconnect Google Business Profile?')) return;
