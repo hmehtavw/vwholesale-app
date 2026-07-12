@@ -1365,121 +1365,406 @@ async function deleteDraft(id) {
 
 // ── GBP ──
 async function renderGBP() {
-  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading GBP status…</div>`);
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div>`);
 
-  // Check connection status
   const { data: conn } = await sb.from('social_connections').select('*').eq('platform','gbp').single().then(r=>r,()=>({data:null}));
-  const { data: settings } = await sb.from('marketing_settings').select('key,value').in('key',['GBP_ACCESS_TOKEN','GBP_CLIENT_ID']).then(r=>r,()=>({data:[]}));
   const isConnected = conn?.status === 'connected' && conn?.access_token_set;
 
-  // Check for OAuth callback code in URL (may have been set before nav)
+  // Handle OAuth callback from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('gbp') === 'connected') {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showMktToast('✅ Google Business Profile connected!'), 300);
+  }
 
+  // Load previous posts for learning context
+  const { data: prevPosts } = await sb.from('marketing_audit_logs')
+    .select('details,created_at').eq('action','gbp_post_created')
+    .order('created_at',{ascending:false}).limit(5)
+    .then(r=>r,()=>({data:[]}));
+
+  // Get next topic from content calendar
+  const today = new Date().toISOString().split('T')[0];
+  const { data: calItem } = await sb.from('content_calendar')
+    .select('topic,content_type,notes,cal_date')
+    .gte('cal_date', today)
+    .in('status',['planned','scripted'])
+    .order('cal_date',{ascending:true})
+    .limit(1).maybeSingle()
+    .then(r=>r,()=>({data:null}));
+
+  const suggestedTopic = calItem?.topic || '';
 
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div>
       <h3 style="font-size:16px;font-weight:900">📍 Google Business Profile</h3>
-      <div style="font-size:12px;color:var(--text3)">Post updates, offers and events to GBP automatically</div>
+      <div style="font-size:12px;color:var(--text3)">Post updates and offers to Google Maps</div>
     </div>
-    <span class="badge ${isConnected?'badge-green':'badge-gray'}">${isConnected?'✅ Connected':'Not Connected'}</span>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="badge ${isConnected?'badge-green':'badge-gray'}">${isConnected?'✅ Connected':'Not Connected'}</span>
+      ${isConnected ? '<button onclick="disconnectGBP()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">Disconnect</button>' : ''}
+    </div>
   </div>
 
   ${!isConnected ? `
-  <!-- Connect GBP -->
-  <div class="mkt-card" style="margin-bottom:14px;text-align:center;padding:32px">
-    <div style="font-size:48px;margin-bottom:12px">📍</div>
-    <div style="font-size:15px;font-weight:700;margin-bottom:8px">Connect Google Business Profile</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:20px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
-      Click below to connect your V Wholesale GBP account. You'll be redirected to Google to grant access, then brought back here automatically.
-    </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="connectGBP()" style="padding:14px 32px;font-size:14px;font-weight:900">
-      🔗 Connect Google Business Profile
-    </button>
-    <div style="font-size:11px;color:var(--text3);margin-top:12px">Uses your Google account: hmehta@vwholesale.in</div>
-  </div>
-  ` : `
-  <!-- Connected — Post creator -->
-  <div class="mkt-card" style="margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <div style="width:40px;height:40px;background:#34a853;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">📍</div>
-      <div>
-        <div style="font-size:13px;font-weight:700">Google Business Profile — Connected ✅</div>
-        <div style="font-size:11px;color:var(--text3)" id="gbp-location-name">Loading location…</div>
-      </div>
-      <button class="mkt-btn mkt-btn-ghost" onclick="disconnectGBP()" style="margin-left:auto;font-size:11px;color:var(--red)">Disconnect</button>
-    </div>
-  </div>
-  `}
+  <div class="mkt-card" style="text-align:center;padding:32px;margin-bottom:16px">
+    <div style="font-size:40px;margin-bottom:12px">📍</div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">Connect Google Business Profile</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Connect once to enable GBP posting from this portal</div>
+    <button class="mkt-btn mkt-btn-primary" onclick="connectGBP()" style="padding:12px 28px;font-size:14px;font-weight:700">🔗 Connect GBP</button>
+  </div>` : ''}
 
-  <!-- GBP Post Creator (always visible) -->
+  <!-- MAIN POST CREATOR — Clean, minimal UI -->
   <div class="mkt-card" style="margin-bottom:14px">
-    <div class="mkt-card-title">✍️ Create GBP Post</div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Post Type</label>
-      <select id="gbp-post-type" class="mkt-form-select">
-        <option value="standard">📢 Update / Announcement</option>
-        <option value="offer">💰 Offer / Promotion</option>
-        <option value="event">📅 Event</option>
-      </select>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Post Topic</label>
-      <input id="gbp-topic" class="mkt-form-input" placeholder="e.g. Diwali special 20% off tiles, New Italian marble collection">
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px">
-      <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPPost()" style="flex:1">🤖 Generate with AI</button>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Post Text</label>
-      <textarea id="gbp-text" class="mkt-form-input" rows="5" style="resize:vertical;font-size:13px;line-height:1.7" placeholder="Your GBP post content will appear here after AI generation, or write manually…"></textarea>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Image (optional but recommended)</label>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px">
-        <button class="mkt-btn mkt-btn-ghost" onclick="generateGBPImage()" style="font-size:11px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:3px">
-          <span style="font-size:18px">🤖</span><span>Generate AI Image</span>
-        </button>
-        <button class="mkt-btn mkt-btn-ghost" onclick="useLatestPoster()" style="font-size:11px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:3px">
-          <span style="font-size:18px">🎨</span><span>Use Latest Poster</span>
-        </button>
-        <label class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;margin:0">
-          <span style="font-size:18px">📁</span><span>Upload Image</span>
-          <input type="file" id="gbp-image-upload" accept="image/jpeg,image/png,image/webp" onchange="handleGBPImageUpload(this)" style="display:none">
-        </label>
+
+    <!-- Topic selector -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Post Topic</div>
+      <div style="display:flex;gap:8px">
+        <input id="gbp-topic" class="mkt-form-input" style="flex:1" placeholder="What is this post about?"
+          value="${suggestedTopic}" oninput="gbpTopicChanged()">
+        <select id="gbp-post-type" class="mkt-form-select" style="width:140px">
+          <option value="standard">📢 Update</option>
+          <option value="offer">💰 Offer</option>
+          <option value="event">📅 Event</option>
+        </select>
       </div>
-      <div id="gbp-image-gen-status" style="display:none;text-align:center;padding:10px;color:var(--text3);font-size:12px"></div>
-      <div id="gbp-image-preview" style="display:none;border-radius:10px;overflow:hidden;border:1px solid var(--border);position:relative">
-        <img id="gbp-image-preview-img" src="" style="width:100%;height:160px;object-fit:cover">
-        <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
-          <span id="gbp-image-label" style="font-size:10px;color:#fff">Image ready</span>
-          <button onclick="clearGBPImage()" style="background:rgba(239,68,68,.9);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">✕ Remove</button>
+      ${calItem ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📅 From your content calendar: ${calItem.cal_date} — ${calItem.content_type||'post'}</div>` : ''}
+    </div>
+
+    <!-- ONE button — everything happens automatically -->
+    <button id="gbp-create-btn" class="mkt-btn mkt-btn-primary" onclick="createGBPPost()" 
+      style="width:100%;padding:16px;font-size:15px;font-weight:900;letter-spacing:.3px">
+      ✨ Create GBP Post
+    </button>
+
+    <!-- Progress indicator — shows during AI processing -->
+    <div id="gbp-progress" style="display:none;margin-top:16px">
+      <div style="display:grid;gap:6px" id="gbp-steps"></div>
+    </div>
+  </div>
+
+  <!-- OUTPUT — appears after creation -->
+  <div id="gbp-output" style="display:none">
+
+    <!-- Content preview -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700">Post Content</div>
+        <button onclick="regenerateGBPContent()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Regenerate</button>
+      </div>
+      <textarea id="gbp-text" class="mkt-form-input" rows="6" style="font-size:13px;line-height:1.7;resize:vertical"></textarea>
+    </div>
+
+    <!-- Image section — 2 variations -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700">Post Image</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="regenerateGBPImage()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 New Images</button>
+          <label class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px;cursor:pointer;margin:0">
+            📁 Upload
+            <input type="file" id="gbp-image-upload" accept="image/jpeg,image/png,image/webp" onchange="handleGBPImageUpload(this)" style="display:none">
+          </label>
         </div>
       </div>
+
+      <!-- Image variations grid -->
+      <div id="gbp-variations" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"></div>
       <input type="hidden" id="gbp-image-url">
+
+      <!-- Selected image preview -->
+      <div id="gbp-selected-preview" style="display:none;border-radius:8px;overflow:hidden;border:2px solid var(--gold)">
+        <img id="gbp-preview-img" src="" style="width:100%;max-height:240px;object-fit:cover;display:block;cursor:zoom-in" onclick="openGBPImageFullscreen(this.src)">
+        <div style="background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+          <span id="gbp-preview-label" style="font-size:10px;color:#fff"></span>
+          <button onclick="openGBPImageFullscreen(document.getElementById('gbp-preview-img').src)" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">⛶ Fullscreen</button>
+        </div>
+      </div>
     </div>
-    <div style="display:flex;gap:8px">
-      ${isConnected
-        ? `<button class="mkt-btn mkt-btn-primary" onclick="postToGBP()" style="flex:1;padding:12px;font-weight:700">🚀 Post to Google Business Profile</button>`
-        : `<button class="mkt-btn mkt-btn-ghost" style="flex:1;padding:12px;opacity:.5" disabled>🚀 Connect GBP first to post</button>`}
-      <button class="mkt-btn mkt-btn-ghost" onclick="copyGBPPost()" style="padding:12px">📋 Copy</button>
+
+    <!-- Verify + Publish -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div id="gbp-verify-result" style="display:none;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="mkt-btn mkt-btn-ghost" onclick="verifyGBPPost()" style="padding:12px;font-weight:700">🔍 Verify Content</button>
+        <button class="mkt-btn mkt-btn-primary" onclick="publishGBPPost()" style="padding:12px;font-weight:700">🚀 Publish to GBP</button>
+      </div>
     </div>
-    <div id="gbp-result" style="display:none;margin-top:10px"></div>
   </div>
 
-  <!-- Recent GBP posts -->
+  <!-- Post history -->
   <div class="mkt-card">
-    <div class="mkt-card-title">📋 Post History</div>
-    <div id="gbp-history"><div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">Post history will appear here after your first post</div></div>
+    <div class="mkt-card-title">📋 Recent GBP Posts</div>
+    <div id="gbp-history">
+      ${(prevPosts||[]).length ? (prevPosts||[]).map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:18px">📍</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">${p.details?.post_text||p.details?.topic||'GBP Post'}</div>
+            <div style="font-size:10px;color:var(--text3)">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+          </div>
+          <span class="badge badge-green">Posted</span>
+        </div>`).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No posts yet</div>'}
+    </div>
   </div>`);
+}
 
-  // Load location name if connected
-  if (isConnected) {
-    loadGBPLocation();
+// Track step progress
+function gbpStep(steps, idx, status, msg) {
+  const icons = {pending:'⏳', done:'✅', error:'❌'};
+  steps[idx] = {status, msg};
+  const el = document.getElementById('gbp-steps');
+  if (!el) return;
+  el.innerHTML = Object.values(steps).map(s =>
+    `<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:${s.status==='done'?'var(--green)':s.status==='error'?'var(--red)':'var(--text2)'}">
+      <span>${icons[s.status]||'⏳'}</span><span>${s.msg}</span>
+    </div>`).join('');
+}
+
+// ONE function — everything happens automatically
+async function createGBPPost() {
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  if (!topic) { showMktToast('Enter a topic first'); return; }
+
+  const btn = document.getElementById('gbp-create-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Working…'; }
+
+  const progress = document.getElementById('gbp-progress');
+  if (progress) progress.style.display = 'block';
+  document.getElementById('gbp-output').style.display = 'none';
+
+  const steps = {};
+
+  try {
+    // STEP 1: Generate post content (hidden AI layer)
+    gbpStep(steps, 1, 'pending', 'Writing post content…');
+
+    // Fetch context: brand profile + recent posts for learning
+    const [
+      {data:bp},
+      {data:recentPosts},
+      {data:calItem}
+    ] = await Promise.all([
+      sb.from('brand_profile').select('*').limit(1).maybeSingle().then(r=>r,()=>({data:null})),
+      sb.from('marketing_audit_logs').select('details').eq('action','gbp_post_created').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]})),
+      sb.from('content_calendar').select('topic,notes,content_type').eq('topic',topic).maybeSingle().then(r=>r,()=>({data:null}))
+    ]);
+
+    const postType = document.getElementById('gbp-post-type')?.value || 'standard';
+    const recentContext = (recentPosts||[]).map(p => p.details?.post_text||'').filter(Boolean).join(' | ').slice(0,200);
+
+    const contentRes = await fetch(`${MKT_SB_URL}/functions/v1/marketing-ai`, {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action: 'generate_text',
+        agent: 'GBP Content Writer',
+        prompt: `Write a Google Business Profile post for V Wholesale, Vijayawada.
+
+Topic: ${topic}
+Post type: ${postType}
+Calendar notes: ${calItem?.notes || 'none'}
+${recentContext ? 'Recent posts (learn from these, do not repeat): '+recentContext : ''}
+
+Rules:
+- Max 1500 characters
+- Natural, conversational tone — not corporate
+- Include location mention (Vijayawada / NH65 Bhavanipuram)
+- End with CTA: visit us / call 8712697930 / vwholesale.in
+- No hashtags (GBP doesn't use them)
+- Make it feel like a real business owner wrote it
+
+Return JSON: {"post_text": "..."}`,
+        context: { business: 'V Wholesale', location: 'Vijayawada', type: postType }
+      })
+    });
+    const contentData = await contentRes.json();
+    const postText = contentData.output?.post_text || contentData.output?.text || contentData.output?.content || contentData.output || '';
+    if (!postText) throw new Error('Content generation failed');
+
+    const textEl = document.getElementById('gbp-text');
+    if (textEl) textEl.value = typeof postText === 'string' ? postText : JSON.stringify(postText);
+    gbpStep(steps, 1, 'done', 'Post content written');
+
+    // Store topic for image generation
+    window._gbpCurrentTopic = topic;
+    window._gbpCurrentText = textEl?.value || '';
+
+    // STEP 2: Generate 2 image variations (hidden)
+    gbpStep(steps, 2, 'pending', 'Creating 2 poster variations with AI…');
+    await generateGBPImageInternal(topic, textEl?.value || '', steps);
+
+    // STEP 3: Auto-verify
+    gbpStep(steps, 3, 'pending', 'Verifying content quality…');
+    await verifyGBPPostInternal(steps);
+
+    // Show output
+    document.getElementById('gbp-output').style.display = 'block';
+    setTimeout(() => {
+      document.getElementById('gbp-output')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }, 300);
+
+  } catch(e) {
+    gbpStep(steps, 99, 'error', '❌ ' + e.message);
+    showMktToast('❌ ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Create GBP Post'; }
+    if (progress) setTimeout(() => { progress.style.display = 'none'; }, 2000);
+  }
+}
+
+async function generateGBPImageInternal(topic, postText, steps) {
+  const res = await fetch(`${MKT_SB_URL}/functions/v1/gbp-image`, {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({topic, post_text: postText})
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error('Image generation failed: ' + data.error);
+
+  window._gbpVariations = data.variations || [data.image_url];
+  renderGBPVariations(data.variations || [data.image_url], data.image_url, data.qa_score);
+  gbpStep(steps, 2, 'done', `${(data.variations||[data.image_url]).length} poster variations created (QA: ${data.qa_score||'?'}/10)`);
+}
+
+async function verifyGBPPostInternal(steps) {
+  const text = document.getElementById('gbp-text')?.value || '';
+  const checks = [];
+  if (text.length < 50) checks.push('Post is too short');
+  if (text.length > 1500) checks.push('Post exceeds 1500 characters');
+  if (!text.includes('8712697930') && !text.includes('vwholesale')) checks.push('Missing contact info');
+
+  const el = document.getElementById('gbp-verify-result');
+  if (el) {
+    el.style.display = 'block';
+    if (checks.length) {
+      el.innerHTML = '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;font-size:12px;color:#f59e0b">⚠️ '+ checks.join(' · ')+'</div>';
+      gbpStep(steps, 3, 'done', 'Verify: ' + checks.join(', '));
+    } else {
+      el.innerHTML = '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px;font-size:12px;color:#22c55e">✅ Content looks good — ready to publish</div>';
+      gbpStep(steps, 3, 'done', 'Content verified ✅');
+    }
+  }
+}
+
+function renderGBPVariations(urls, selectedUrl, qaScore) {
+  const grid = document.getElementById('gbp-variations');
+  if (!grid) return;
+  grid.innerHTML = urls.map((url, i) => `
+    <div onclick="selectGBPVariation(${i})" data-vi="${i}"
+      style="cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid ${url===selectedUrl?'var(--gold)':'var(--border)'};transition:border .2s">
+      <img src="${url}" style="width:100%;height:100px;object-fit:cover;display:block">
+      <div style="padding:4px 6px;font-size:10px;text-align:center;color:var(--text3)">
+        Option ${i+1}${url===selectedUrl?' ✓':''}${i===0&&qaScore?` · QA ${qaScore}/10`:''}
+      </div>
+    </div>`).join('');
+
+  // Set first as selected
+  selectGBPVariation(0, true);
+}
+
+function selectGBPVariation(idx, silent) {
+  const vars = window._gbpVariations || [];
+  const url = vars[idx];
+  if (!url) return;
+
+  document.getElementById('gbp-image-url').value = url;
+  const preview = document.getElementById('gbp-selected-preview');
+  const img = document.getElementById('gbp-preview-img');
+  const lbl = document.getElementById('gbp-preview-label');
+  if (preview) preview.style.display = 'block';
+  if (img) img.src = url;
+  if (lbl) lbl.textContent = 'Option ' + (idx+1) + ' selected';
+
+  // Update border
+  document.querySelectorAll('[data-vi]').forEach((el, i) => {
+    el.style.borderColor = i === idx ? 'var(--gold)' : 'var(--border)';
+    const sub = el.querySelector('div');
+    if (sub) sub.textContent = 'Option '+(i+1)+(i===idx?' ✓':'');
+  });
+
+  if (!silent) showMktToast('Option ' + (idx+1) + ' selected');
+}
+
+async function regenerateGBPContent() {
+  const topic = (document.getElementById('gbp-topic')?.value||'').trim();
+  if (!topic) { showMktToast('No topic set'); return; }
+  const btn = document.querySelector('[onclick="regenerateGBPContent()"]');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  try {
+    const steps = {};
+    await generateGBPImageInternal(topic, '', steps);
+    showMktToast('✅ Content regenerated');
+  } finally {
+    if (btn) { btn.textContent = '🔄 Regenerate'; btn.disabled = false; }
+  }
+}
+
+async function regenerateGBPImage() {
+  const topic = window._gbpCurrentTopic || (document.getElementById('gbp-topic')?.value||'').trim();
+  const postText = document.getElementById('gbp-text')?.value || '';
+  const btn = document.querySelector('[onclick="regenerateGBPImage()"]');
+  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+  showMktToast('🤖 Generating new poster variations…');
+  try {
+    const steps = {};
+    await generateGBPImageInternal(topic, postText, steps);
+    showMktToast('✅ New variations ready');
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🔄 New Images'; btn.disabled = false; }
+  }
+}
+
+async function verifyGBPPost() {
+  const steps = {};
+  await verifyGBPPostInternal(steps);
+  showMktToast('✅ Verification complete');
+}
+
+async function publishGBPPost() {
+  const text = (document.getElementById('gbp-text')?.value||'').trim();
+  const imageUrl = document.getElementById('gbp-image-url')?.value || '';
+  if (!text) { showMktToast('No post text to publish'); return; }
+
+  await navigator.clipboard.writeText(text).catch(()=>{});
+
+  const result = document.getElementById('gbp-verify-result');
+  if (result) {
+    result.style.display = 'block';
+    result.innerHTML = `<div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:14px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:10px">📋 Text copied! Post in 3 steps:</div>
+      <div style="display:grid;gap:6px;margin-bottom:12px;font-size:12px">
+        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">1</span><span>Click <b>Open GBP</b> below</span></div>
+        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">2</span><span>Click <b>Add update</b> → paste text (Ctrl+V) → upload image</span></div>
+        <div style="display:flex;gap:8px"><span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0">3</span><span>Click <b>Post</b> → live in 2-5 minutes</span></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:12px;text-decoration:none;padding:10px 16px">📍 Open GBP ↗</a>
+        <button onclick="navigator.clipboard.writeText(document.getElementById('gbp-text')?.value||'').then(()=>showMktToast('📋 Copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:10px 16px">📋 Copy Again</button>
+        ${imageUrl?`<a href="${imageUrl}" download="gbp-post.png" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:12px;text-decoration:none;padding:10px 16px">⬇ Download Image</a>`:''}
+      </div>
+    </div>`;
   }
 
-  // Load post history
+  // Log to history
+  await sb.from('marketing_audit_logs').insert({
+    action:'gbp_post_created',
+    details:{post_text:text.slice(0,100), topic:window._gbpCurrentTopic||'', has_image:!!imageUrl, method:'auto'},
+    created_at:new Date().toISOString()
+  }).then(()=>{}).catch(()=>{});
+
   loadGBPHistory();
 }
+
+
+function gbpTopicChanged() {
+  // Reset output when topic changes
+  document.getElementById('gbp-output').style.display = 'none';
+  document.getElementById('gbp-progress').style.display = 'none';
+}
+
 
 function connectGBP() {
   // Build OAuth URL directly in browser — no server call needed for this step
