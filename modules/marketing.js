@@ -1,24 +1,9 @@
 
-// ── GRAB OAUTH PARAMS IMMEDIATELY (before any redirects or auth) ──
-(function() {
-  const p = new URLSearchParams(window.location.search);
-  const code = p.get('code');
-  const state = p.get('state');
-  if (code && state === 'gbp_oauth') {
-    window._gbpOAuthCode = code;
-    window._gbpOAuthState = state;
-    // Clean URL immediately so Supabase auth doesn't get confused
-    window.history.replaceState({}, '', window.location.pathname);
-  }
-})();
-
-// ── GRAB OAUTH PARAMS IMMEDIATELY ──
+// ── GBP OAUTH — redirect immediately to dedicated callback page ──
 (function() {
   const p = new URLSearchParams(window.location.search);
   const code = p.get('code'), state = p.get('state');
   if (code && state === 'gbp_oauth') {
-    // Redirect to dedicated callback page — do NOT handle here
-    // marketing portal + Supabase auth interfere with token exchange
     window.location.replace('/gbp-callback/?code=' + encodeURIComponent(code) + '&state=gbp_oauth');
   }
 })();
@@ -95,11 +80,6 @@ function showMktApp() {
   startClock();
   loadAIPauseStatus();
 
-  // Check for OAuth callbacks — IIFE at top already grabbed code into window._gbpOAuthCode
-  if (window._gbpOAuthCode && window._gbpOAuthState === 'gbp_oauth') {
-    mktNav('gbp');
-    return;
-  }
 
   // Returned from GBP callback page after successful connection
   const _urlCheck = new URLSearchParams(window.location.search);
@@ -1393,16 +1373,7 @@ async function renderGBP() {
   const isConnected = conn?.status === 'connected' && conn?.access_token_set;
 
   // Check for OAuth callback code in URL (may have been set before nav)
-  const urlParams = new URLSearchParams(window.location.search);
-  const oauthCode = urlParams.get('code') || window._gbpOAuthCode;
-  const oauthState = urlParams.get('state') || window._gbpOAuthState;
-  if (oauthCode && oauthState === 'gbp_oauth') {
-    window._gbpOAuthCode = null;
-    window._gbpOAuthState = null;
-    window.history.replaceState({}, '', window.location.pathname);
-    await handleGBPCallback(oauthCode);
-    return;
-  }
+
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
