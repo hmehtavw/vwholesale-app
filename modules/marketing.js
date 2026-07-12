@@ -1624,30 +1624,35 @@ async function useLatestPoster() {
 async function generateGBPImage() {
   const topic = (document.getElementById('gbp-topic')?.value||'').trim()
     || (document.getElementById('gbp-text')?.value||'').split(' ').slice(0,6).join(' ');
-  if (!topic) { showMktToast('Enter a post topic first'); return; }
+  const customPrompt = (document.getElementById('gbp-image-prompt')?.value||'').trim();
+  if (!topic && !customPrompt) { showMktToast('Enter a post topic or image description first'); return; }
 
   const btns = document.querySelectorAll('[onclick="generateGBPImage()"]');
   btns.forEach(b => { b.style.opacity='.5'; b.style.pointerEvents='none'; });
   const status = document.getElementById('gbp-image-gen-status');
   if (status) {
+    let _secs = 0;
+    const _timer = setInterval(() => { _secs++; const el = document.getElementById('gbp-img-secs'); if(el) el.textContent = _secs+'s'; }, 1000);
+    status.dataset.timer = String(_timer);
     status.style.display='block';
     status.innerHTML='<div class="ai-thinking" style="justify-content:center"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'
-      +'<div style="margin-top:6px;font-size:11px">Finding best image for your post…</div>';
+      +'<div style="margin-top:8px;font-size:12px;font-weight:700">🤖 Generating with gpt-image-1…</div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:3px">Takes 30-45 seconds · <span id="gbp-img-secs">0s</span></div>';
   }
 
   try {
     const res = await fetch(MKT_SB_URL+'/functions/v1/gbp-image', {
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({topic})
+      body:JSON.stringify({topic, custom_prompt: customPrompt||null})
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Image generation failed');
     const imgUrl = data.image_url || '';
     if (!imgUrl) throw new Error('No image URL returned');
-    const label = data.source === 'pexels' ? '🖼️ Stock Photo' : '🤖 AI Generated';
-    setGBPImage(imgUrl, label + ' — ' + topic);
-    showMktToast('✅ Image ready (' + (data.source||'AI') + ')');
+    const label = data.source === 'pexels' ? '🖼️ Stock Photo' : '🤖 AI Generated (gpt-image-1)';
+    setGBPImage(imgUrl, label + (topic ? ' — ' + topic : ''));
+    showMktToast('✅ Image ready!');
   } catch(e) {
     showMktToast('❌ ' + e.message);
     if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '<br><span style="color:var(--text3)">Try 📁 Upload Image instead</span></div>';
