@@ -1653,6 +1653,7 @@ async function generateGBPImage() {
     if (status) status.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '<br><span style="color:var(--text3)">Try 📁 Upload Image instead</span></div>';
   } finally {
     btns.forEach(b => { b.style.opacity=''; b.style.pointerEvents=''; });
+    if (status?.dataset?.timer) clearInterval(parseInt(status.dataset.timer));
     if (status && !status.innerHTML.includes('❌')) setTimeout(() => { status.style.display='none'; }, 2000);
   }
 }
