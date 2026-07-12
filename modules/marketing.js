@@ -17,8 +17,9 @@
   const p = new URLSearchParams(window.location.search);
   const code = p.get('code'), state = p.get('state');
   if (code && state === 'gbp_oauth') {
-    window._gbpOAuthCode = code; window._gbpOAuthState = state;
-    window.history.replaceState({}, '', window.location.pathname);
+    // Redirect to dedicated callback page — do NOT handle here
+    // marketing portal + Supabase auth interfere with token exchange
+    window.location.replace('/gbp-callback/?code=' + encodeURIComponent(code) + '&state=gbp_oauth');
   }
 })();
 
