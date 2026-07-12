@@ -161,6 +161,561 @@ function renderComingSoon(title) {
 }
 
 // ── COMMAND CENTRE ──
+async function renderApprovals() {
+  const { data: approvals } = await sb.from('marketing_approvals').select('*').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]}));
+  const pending = (approvals||[]).filter(a=>a.status==='pending');
+  const done = (approvals||[]).filter(a=>a.status!=='pending');
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Approvals Queue</h3>
+    <div style="font-size:12px;color:var(--text3)">Review and approve AI-recommended actions before execution</div>
+  </div>
+
+  ${pending.length === 0 ? `
+  <div class="mkt-card">
+    <div class="mkt-empty">
+      <div class="mkt-empty-icon">✅</div>
+      <div class="mkt-empty-title">All Clear</div>
+      <div style="font-size:12px;color:var(--text3)">No pending approvals. Run the AI CMO to generate recommendations.</div>
+      <button class="mkt-btn mkt-btn-primary" onclick="mktNav('cmo')" style="margin-top:16px">🧠 Run AI CMO</button>
+    </div>
+  </div>` : `
+  <div style="display:grid;gap:10px">
+    ${pending.map(a => `
+    <div class="mkt-card" style="border-left:4px solid var(--gold)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:14px;font-weight:800">${a.title}</div>
+          <div style="font-size:11px;color:var(--text3)">${a.agent_name||'AI'} · ${new Date(a.created_at).toLocaleDateString('en-IN')}</div>
+        </div>
+        <span class="badge badge-gold">pending</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">${a.description}</div>
+      ${a.estimated_cost > 0 ? `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">Estimated cost: ₹${a.estimated_cost}</div>` : ''}
+      <div style="display:flex;gap:8px">
+        <button class="mkt-btn mkt-btn-primary" onclick="approveAction(${a.id})">✅ Approve</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="rejectAction(${a.id})" style="color:var(--red)">❌ Reject</button>
+      </div>
+    </div>`).join('')}
+  </div>`}
+
+  ${done.length > 0 ? `
+  <div class="mkt-card" style="margin-top:12px">
+    <div class="mkt-card-title">History</div>
+    <table class="mkt-table">
+      <tr><th>Action</th><th>Status</th><th>Date</th></tr>
+      ${done.map(a=>`<tr>
+        <td style="font-weight:700">${a.title}</td>
+        <td><span class="badge ${a.status==='approved'?'badge-green':'badge-red'}">${a.status}</span></td>
+        <td style="color:var(--text3)">${new Date(a.created_at).toLocaleDateString('en-IN')}</td>
+      </tr>`).join('')}
+    </table>
+  </div>` : ''}
+  `);
+}
+
+async function renderGBP() {
+  setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading…</div>`);
+
+  const { data: conn } = await sb.from('social_connections').select('*').eq('platform','gbp').single().then(r=>r,()=>({data:null}));
+  const isConnected = conn?.status === 'connected' && conn?.access_token_set;
+
+  // Handle OAuth callback from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('gbp') === 'connected') {
+    window.history.replaceState({}, '', window.location.pathname);
+    setTimeout(() => showMktToast('✅ Google Business Profile connected!'), 300);
+  }
+
+  // Load previous posts for learning context
+  const { data: prevPosts } = await sb.from('marketing_audit_logs')
+    .select('details,created_at').eq('action','gbp_post_created')
+    .order('created_at',{ascending:false}).limit(5)
+    .then(r=>r,()=>({data:[]}));
+
+  // Get next topic from content calendar
+  const today = new Date().toISOString().split('T')[0];
+  const { data: calItem } = await sb.from('content_calendar')
+    .select('topic,content_type,notes,cal_date')
+    .gte('cal_date', today)
+    .in('status',['planned','scripted'])
+    .order('cal_date',{ascending:true})
+    .limit(1).maybeSingle()
+    .then(r=>r,()=>({data:null}));
+
+  const suggestedTopic = calItem?.topic || '';
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">📍 Google Business Profile</h3>
+      <div style="font-size:12px;color:var(--text3)">Post updates and offers to Google Maps</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="badge ${isConnected?'badge-green':'badge-gray'}">${isConnected?'✅ Connected':'Not Connected'}</span>
+      ${isConnected ? '<button onclick="disconnectGBP()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">Disconnect</button>' : ''}
+    </div>
+  </div>
+
+  ${!isConnected ? `
+  <div class="mkt-card" style="text-align:center;padding:32px;margin-bottom:16px">
+    <div style="font-size:40px;margin-bottom:12px">📍</div>
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">Connect Google Business Profile</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:20px">Connect once to enable GBP posting from this portal</div>
+    <button class="mkt-btn mkt-btn-primary" onclick="connectGBP()" style="padding:12px 28px;font-size:14px;font-weight:700">🔗 Connect GBP</button>
+  </div>` : ''}
+
+  <!-- MAIN POST CREATOR — Clean, minimal UI -->
+  <div class="mkt-card" style="margin-bottom:14px">
+
+    <!-- Topic selector -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Post Topic</div>
+      <div style="display:flex;gap:8px">
+        <input id="gbp-topic" class="mkt-form-input" style="flex:1" placeholder="What is this post about?"
+          value="${suggestedTopic}" oninput="gbpTopicChanged()">
+        <select id="gbp-post-type" class="mkt-form-select" style="width:140px">
+          <option value="standard">📢 Update</option>
+          <option value="offer">💰 Offer</option>
+          <option value="event">📅 Event</option>
+        </select>
+      </div>
+      ${calItem ? `<div style="font-size:11px;color:var(--gold);margin-top:4px">📅 From your content calendar: ${calItem.cal_date} — ${calItem.content_type||'post'}</div>` : ''}
+    </div>
+
+    <!-- ONE button — everything happens automatically -->
+    <button id="gbp-create-btn" class="mkt-btn mkt-btn-primary" onclick="createGBPPost()" 
+      style="width:100%;padding:16px;font-size:15px;font-weight:900;letter-spacing:.3px">
+      ✨ Create GBP Post
+    </button>
+
+    <!-- Progress indicator — shows during AI processing -->
+    <div id="gbp-progress" style="display:none;margin-top:16px">
+      <div style="display:grid;gap:6px" id="gbp-steps"></div>
+    </div>
+  </div>
+
+  <!-- OUTPUT — appears after creation -->
+  <div id="gbp-output" style="display:none">
+
+    <!-- Content preview -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700">Post Content</div>
+        <button onclick="regenerateGBPContent()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Regenerate</button>
+      </div>
+      <textarea id="gbp-text" class="mkt-form-input" rows="6" style="font-size:13px;line-height:1.7;resize:vertical"></textarea>
+    </div>
+
+    <!-- Image section — 2 variations -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700">Post Image</div>
+        <div style="display:flex;gap:6px">
+          <button onclick="regenerateGBPImage()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 New Images</button>
+          <label class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px;cursor:pointer;margin:0">
+            📁 Upload
+            <input type="file" id="gbp-image-upload" accept="image/jpeg,image/png,image/webp" onchange="handleGBPImageUpload(this)" style="display:none">
+          </label>
+        </div>
+      </div>
+
+      <!-- Image variations grid -->
+      <div id="gbp-variations" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px"></div>
+      <input type="hidden" id="gbp-image-url">
+
+      <!-- Selected image preview -->
+      <div id="gbp-selected-preview" style="display:none;border-radius:8px;overflow:hidden;border:2px solid var(--gold)">
+        <img id="gbp-preview-img" src="" style="width:100%;max-height:240px;object-fit:cover;display:block;cursor:zoom-in" onclick="openGBPImageFullscreen(this.src)">
+        <div style="background:rgba(0,0,0,.6);padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+          <span id="gbp-preview-label" style="font-size:10px;color:#fff"></span>
+          <button onclick="openGBPImageFullscreen(document.getElementById('gbp-preview-img').src)" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:4px;padding:2px 8px;font-size:10px;cursor:pointer">⛶ Fullscreen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Verify + Publish -->
+    <div class="mkt-card" style="margin-bottom:14px">
+      <div id="gbp-verify-result" style="display:none;margin-bottom:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="mkt-btn mkt-btn-ghost" onclick="verifyGBPPost()" style="padding:12px;font-weight:700">🔍 Verify Content</button>
+        <button class="mkt-btn mkt-btn-primary" onclick="publishGBPPost()" style="padding:12px;font-weight:700">🚀 Publish to GBP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Post history -->
+  <div class="mkt-card">
+    <div class="mkt-card-title">📋 Recent GBP Posts</div>
+    <div id="gbp-history">
+      ${(prevPosts||[]).length ? (prevPosts||[]).map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div style="font-size:18px">📍</div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">${p.details?.post_text||p.details?.topic||'GBP Post'}</div>
+            <div style="font-size:10px;color:var(--text3)">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+          </div>
+          <span class="badge badge-green">Posted</span>
+        </div>`).join('') : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No posts yet</div>'}
+    </div>
+  </div>`);
+}
+
+// Track step progress
+async function renderAgents() {
+  const { data: agents } = await sb.from('ai_agents').select('*').order('name').then(r=>r, ()=>({data:[]}));
+  const { data: runs } = await sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r, ()=>({data:[]}));
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">AI Agents</h3>
+    <div style="font-size:12px;color:var(--text3)">All agents run in Recommend mode (Level 1) by default</div>
+  </div>
+
+  <div style="display:grid;gap:10px;margin-bottom:16px">
+    ${(agents||[]).map(a => `
+    <div class="mkt-card" style="padding:14px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800">${a.name}</div>
+          <div style="font-size:11px;color:var(--text3)">${a.description}</div>
+        </div>
+        <span class="badge badge-purple">Level ${a.autonomy_level}</span>
+        <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
+      </div>
+      <div style="display:flex;gap:8px;font-size:10px;color:var(--text3)">
+        <span>Model: ${a.model}</span>
+        <span>·</span>
+        <span>Provider: ${a.provider}</span>
+        <span>·</span>
+        <span>Max cost: $${a.max_cost_per_run}/run</span>
+        ${a.last_run_at ? `<span>·</span><span>Last run: ${new Date(a.last_run_at).toLocaleDateString('en-IN')}</span>` : ''}
+      </div>
+    </div>`).join('')}
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">Recent Agent Runs</div>
+    ${(runs||[]).length ? `<table class="mkt-table">
+      <tr><th>Agent</th><th>Model</th><th>Status</th><th>Cost</th><th>Time</th></tr>
+      ${(runs||[]).map(r=>`<tr>
+        <td style="font-weight:700">${r.agent_name}</td>
+        <td style="color:var(--text3)">${r.model}</td>
+        <td><span class="badge ${r.status==='completed'?'badge-green':'badge-red'}">${r.status}</span></td>
+        <td>$${(r.cost_usd||0).toFixed(4)}</td>
+        <td style="color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN')}</td>
+      </tr>`).join('')}
+    </table>` : '<div class="mkt-empty"><div style="color:var(--text3);font-size:12px">No agent runs yet</div></div>'}
+  </div>`);
+}
+
+// ── AI PAUSE ──
+async function renderBrandProfile() {
+  const {data:bp} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
+  const p = (bp||[])[0] || {};
+  const {data:sc} = await sb.from('social_connections').select('*').then(r=>r,()=>({data:[]}));
+  const connections = {};
+  (sc||[]).forEach(c=>{connections[c.platform]=c;});
+
+  setContent(`
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900">Brand Profile</h3>
+    <div style="font-size:12px;color:var(--text3)">Set once — used automatically in every poster and content piece</div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">🏢 Business Details</div>
+    <div class="mkt-grid-2">
+      <div class="mkt-form-group"><label class="mkt-form-label">Business Name</label><input id="bp-name" class="mkt-form-input" value="${p.business_name||'V Wholesale'}"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Tagline</label><input id="bp-tag" class="mkt-form-input" value="${p.tagline||'Build Better. Pay Less.'}"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Phone</label><input id="bp-phone" class="mkt-form-input" value="${p.phone||'8712697930'}"></div>
+      <div class="mkt-form-group"><label class="mkt-form-label">Website</label><input id="bp-web" class="mkt-form-input" value="${p.website||'https://vwholesale.in'}"></div>
+      <div class="mkt-form-group mkt-grid-2" style="grid-column:1/-1"><label class="mkt-form-label">Address</label><input id="bp-addr" class="mkt-form-input" value="${p.address||'NH65, Bhavanipuram, Vijayawada 520012'}" style="grid-column:1/-1"></div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">🎨 Brand Colors</div>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+      <div><label class="mkt-form-label">Primary (Navy)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="color" id="bp-primary" value="${p.primary_color||'#1a2744'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
+          <input id="bp-primary-hex" class="mkt-form-input" value="${p.primary_color||'#1a2744'}" style="width:100px" oninput="document.getElementById('bp-primary').value=this.value">
+        </div>
+      </div>
+      <div><label class="mkt-form-label">Secondary (Gold)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="color" id="bp-secondary" value="${p.secondary_color||'#c9a84c'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
+          <input id="bp-secondary-hex" class="mkt-form-input" value="${p.secondary_color||'#c9a84c'}" style="width:100px" oninput="document.getElementById('bp-secondary').value=this.value">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
+        <div style="width:60px;height:60px;border-radius:10px;background:${p.primary_color||'#1a2744'}" id="color-preview-primary"></div>
+        <div style="width:60px;height:60px;border-radius:10px;background:${p.secondary_color||'#c9a84c'}" id="color-preview-secondary"></div>
+        <div style="font-size:11px;color:var(--text3)">Live preview</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">📸 Brand Photos</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Upload store interior, product showcase, lifestyle photos. Used as hero images in posters.</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px" id="bp-photos-grid">
+      ${(p.brand_photos||[]).map((ph,i)=>`
+      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:var(--bg3)">
+        <img src="${ph}" style="width:100%;height:100%;object-fit:cover">
+        <button onclick="removePhoto(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;border-radius:50%;width:20px;height:20px;color:#fff;cursor:pointer;font-size:11px">✕</button>
+      </div>`).join('')}
+      <div style="aspect-ratio:1;border-radius:8px;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg3)" onclick="document.getElementById('bp-file-input').click()">
+        <div style="text-align:center"><div style="font-size:24px">+</div><div style="font-size:10px;color:var(--text3)">Add Photo</div></div>
+      </div>
+      <input type="file" id="bp-file-input" accept="image/*" multiple style="display:none" onchange="uploadBrandPhotos(this)">
+    </div>
+  </div>
+
+  <div class="mkt-card">
+    <div class="mkt-card-title">🔌 Social Connections</div>
+    <div style="display:grid;gap:8px">
+      ${['instagram','facebook','gbp','whatsapp'].map(pl=>{
+        const c = connections[pl]||{};
+        const labels={instagram:'Instagram',facebook:'Facebook',gbp:'Google Business Profile',whatsapp:'WhatsApp (Interakt)'};
+        const icons={instagram:'📸',facebook:'👥',gbp:'📍',whatsapp:'💬'};
+        return `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:8px">
+          <span style="font-size:20px">${icons[pl]}</span>
+          <div style="flex:1"><div style="font-size:13px;font-weight:700">${labels[pl]}</div></div>
+          <span class="badge ${c.status==='connected'?'badge-green':c.status==='setup'||c.status==='partial'?'badge-gold':'badge-gray'}">${c.status||'not connected'}</span>
+          <button class="mkt-btn mkt-btn-ghost" onclick="connectPlatform('${pl}')" style="font-size:11px">${c.status==='connected'?'Manage':'Connect'}</button>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <button class="mkt-btn mkt-btn-primary" onclick="saveBrandProfile()" style="width:100%;padding:14px;font-size:14px">💾 Save Brand Profile</button>`);
+}
+
+async function renderBrand() {
+  const { data: knowledge } = await sb.from('brand_knowledge').select('*').order('category').then(r=>r, ()=>({data:[]}));
+  const categories = [...new Set((knowledge||[]).map(k=>k.category))];
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">Brand Knowledge</h3>
+      <div style="font-size:12px;color:var(--text3)">Facts and guidelines the AI uses to generate accurate content</div>
+    </div>
+    <button class="mkt-btn mkt-btn-primary" onclick="showAddKnowledge()">+ Add Knowledge</button>
+  </div>
+
+  <div id="brand-add-form" style="display:none" class="mkt-card">
+    <div class="mkt-card-title">Add Brand Knowledge</div>
+    <div class="mkt-grid-2">
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Category</label>
+        <select id="bk-cat" class="mkt-form-select">
+          <option value="business">Business Info</option>
+          <option value="positioning">Brand Positioning</option>
+          <option value="products">Products & Pricing</option>
+          <option value="geography">Geography & Service Area</option>
+          <option value="tone">Tone & Voice</option>
+          <option value="compliance">Compliance & Prohibited</option>
+          <option value="customers">Customer Info</option>
+          <option value="faq">FAQ</option>
+        </select>
+      </div>
+      <div class="mkt-form-group">
+        <label class="mkt-form-label">Title</label>
+        <input type="text" id="bk-title" class="mkt-form-input" placeholder="e.g. Store Timings">
+      </div>
+    </div>
+    <div class="mkt-form-group">
+      <label class="mkt-form-label">Content</label>
+      <textarea id="bk-content" class="mkt-form-textarea" placeholder="Enter the verified fact or guideline…"></textarea>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="mkt-btn mkt-btn-primary" onclick="saveBrandKnowledge()">Save</button>
+      <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('brand-add-form').style.display='none'">Cancel</button>
+    </div>
+  </div>
+
+  ${categories.map(cat => `
+  <div class="mkt-card">
+    <div class="mkt-card-title">${cat.charAt(0).toUpperCase()+cat.slice(1)}</div>
+    <div style="display:grid;gap:8px">
+      ${(knowledge||[]).filter(k=>k.category===cat).map(k=>`
+      <div style="padding:10px;background:var(--bg3);border-radius:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:12px;font-weight:700">${k.title}</div>
+          <span class="badge ${k.is_approved?'badge-green':'badge-gold'}">${k.is_approved?'approved':'pending'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.5">${k.content}</div>
+      </div>`).join('')}
+    </div>
+  </div>`).join('')}`);
+}
+
+async function renderIntegrations() {
+  const { data: integrations } = await sb.from('marketing_integrations').select('*').order('name').then(r=>r, ()=>({data:[]}));
+  const { data: settings } = await sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]}));
+
+  const getInt = (name) => (integrations||[]).find(i=>i.name.toLowerCase().includes(name.toLowerCase()));
+  const getSetting = (key) => (settings||[]).find(s=>s.key===key)?.value;
+
+  const metaConn = getInt('meta') || getInt('facebook') || getInt('instagram');
+  const waConn = getInt('whatsapp') || getInt('interakt');
+  const gbpConn = getInt('google') || getInt('gbp');
+  const ytConn = getInt('youtube');
+
+  const platforms = [
+    {
+      name:'Meta Business (Instagram + Facebook)',
+      icon:'📸',
+      status: metaConn?.status || 'not_connected',
+      description:'Connect once — publish to Instagram, Facebook and Threads. Enables auto-posting from Poster Studio.',
+      steps:[
+        'Create a Meta Business account at business.facebook.com',
+        'Add your Instagram and Facebook Page to the Business account',
+        'Go to Meta Developers → Create App → Business type',
+        'Add Instagram Basic Display + Pages API permissions',
+        'Generate access token and paste below'
+      ],
+      setupUrl:'https://developers.facebook.com/apps/',
+      token_key:'META_ACCESS_TOKEN',
+      page_key:'META_PAGE_ID'
+    },
+    {
+      name:'WhatsApp Business API (Interakt)',
+      icon:'💬',
+      status: waConn?.status || 'pending',
+      description:'Send broadcasts, automate greetings, quotation updates via Interakt. Number 8712697930 under Meta review.',
+      steps:[
+        'Complete Interakt WABA approval (number 8712697930 — under review)',
+        'Add INTERAKT_API_KEY to Supabase Edge Function secrets',
+        'Create and get approved message templates in Interakt',
+        'Test with a single message before enabling broadcasts'
+      ],
+      setupUrl:'https://app.interakt.ai',
+      token_key:'INTERAKT_API_KEY',
+      note:'⏳ Number under Meta review — check Interakt dashboard'
+    },
+    {
+      name:'Google Business Profile',
+      icon:'📍',
+      status: gbpConn?.status || 'not_connected',
+      description:'Auto-post updates, offers and events to your GBP. Boosts local SEO and Maps visibility.',
+      steps:[
+        'Go to Google Cloud Console → Enable My Business API',
+        'Create OAuth 2.0 credentials (Web application type)',
+        'Add vwholesale.in to authorized redirect URIs',
+        'Click Connect below to start the OAuth flow'
+      ],
+      setupUrl:'https://console.cloud.google.com/apis/library/mybusiness.googleapis.com',
+      token_key:'GBP_ACCESS_TOKEN'
+    },
+    {
+      name:'YouTube Data API',
+      icon:'▶️',
+      status: ytConn?.status || 'not_connected',
+      description:'Upload Shorts and videos directly from the portal. Schedule posts to your V Wholesale YouTube channel.',
+      steps:[
+        'Google Cloud Console → Enable YouTube Data API v3',
+        'Create OAuth 2.0 credentials',
+        'Authorize your V Wholesale YouTube channel',
+        'Click Connect below'
+      ],
+      setupUrl:'https://console.cloud.google.com/apis/library/youtube.googleapis.com',
+      token_key:'YOUTUBE_ACCESS_TOKEN'
+    },
+    {
+      name:'Pexels (Stock Photos)',
+      icon:'🖼️',
+      status:'connected',
+      description:'Free stock photos for poster hero images and blog articles. API key already configured.',
+      setupUrl:'https://www.pexels.com/api/',
+      note:'✅ API key configured in Supabase secrets'
+    },
+    {
+      name:'OpenAI (AI Generation)',
+      icon:'🤖',
+      status:'connected',
+      description:'Powers all AI features — poster captions, blog articles, ad copy, review replies, WhatsApp messages.',
+      setupUrl:'https://platform.openai.com',
+      note:'✅ API key configured — GPT-4o-mini for text, gpt-image-1 for posters'
+    }
+  ];
+
+  const statusConfig = {
+    connected:   {badge:'badge-green', label:'Connected ✓'},
+    pending:     {badge:'badge-blue',  label:'Pending'},
+    not_connected:{badge:'badge-gray', label:'Not Connected'},
+    setup:       {badge:'badge-blue',  label:'Setup in progress'}
+  };
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">🔌 Platform Integrations</h3>
+      <div style="font-size:12px;color:var(--text3)">Connect external platforms to enable auto-publishing and automation</div>
+    </div>
+  </div>
+
+  <div style="display:grid;gap:12px">
+    ${platforms.map(p => {
+      const cfg = statusConfig[p.status] || statusConfig.not_connected;
+      const isConnected = p.status === 'connected';
+      return `<div class="mkt-card" style="padding:16px;border-left:3px solid ${isConnected?'#22c55e':p.status==='pending'?'#f59e0b':'var(--border)'}">
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:${p.steps?'12':'0'}px">
+          <div style="font-size:28px;flex-shrink:0">${p.icon}</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+              <div style="font-size:14px;font-weight:900">${p.name}</div>
+              <span class="badge ${cfg.badge}">${cfg.label}</span>
+            </div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:8px">${p.description}</div>
+            ${p.note ? `<div style="font-size:11px;color:var(--text3);background:var(--bg3);padding:6px 10px;border-radius:6px;margin-bottom:8px">${p.note}</div>` : ''}
+            ${p.steps && !isConnected ? `
+            <div style="margin-bottom:10px">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">SETUP STEPS</div>
+              <div style="display:grid;gap:4px">
+                ${p.steps.map((step,i)=>`<div style="display:flex;gap:8px;font-size:11px;color:var(--text2)">
+                  <span style="width:16px;height:16px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">${i+1}</span>
+                  <span>${step}</span>
+                </div>`).join('')}
+              </div>
+            </div>` : ''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            <a href="${p.setupUrl}" target="_blank" class="mkt-btn ${isConnected?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;text-decoration:none;padding:5px 10px">
+              ${isConnected ? 'Settings ↗' : 'Setup ↗'}
+            </a>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+
+  <div class="mkt-card" style="margin-top:14px;background:rgba(201,168,76,0.05);border:1px solid rgba(201,168,76,0.2)">
+    <div class="mkt-card-title" style="color:var(--gold)">📋 Integration Roadmap</div>
+    <div style="display:grid;gap:6px;font-size:12px">
+      ${[
+        {status:'✅', item:'OpenAI — AI text + image generation'},
+        {status:'✅', item:'Pexels — Stock photos for posters and blog'},
+        {status:'✅', item:'GitHub — Blog article auto-publish'},
+        {status:'✅', item:'Supabase — Database and edge functions'},
+        {status:'⏳', item:'Interakt WhatsApp — WABA approval in progress'},
+        {status:'🔲', item:'Meta Business OAuth — Instagram + Facebook publishing'},
+        {status:'🔲', item:'Google Business Profile API — GBP auto-posting'},
+        {status:'🔲', item:'YouTube Data API — Shorts upload'},
+        {status:'🔲', item:'Google Search Console API — live SEO data in Analytics'},
+        {status:'🔲', item:'Meta Ads API — auto-pull campaign stats'},
+      ].map(r=>`<div style="display:flex;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border)">
+        <span style="font-size:14px;flex-shrink:0">${r.status}</span>
+        <span style="color:var(--text2)">${r.item}</span>
+      </div>`).join('')}
+    </div>
+  </div>`);
+}
+
 async function renderCommandCentre() {
   setContent(`<div style="text-align:center;padding:40px"><div style="font-size:24px">⏳</div><div style="color:var(--text3);margin-top:8px">Loading dashboard…</div></div>`);
 
