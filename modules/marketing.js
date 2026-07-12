@@ -1560,31 +1560,48 @@ async function createGBPPost() {
       body: JSON.stringify({
         action: 'generate_text',
         agent: 'GBP Content Writer',
-        prompt: `Write a Google Business Profile post for V Wholesale, Vijayawada.
+        prompt: `Write a Google Business Profile post for V Wholesale, Vijayawada. Return JSON with two fields.
 
-Topic: ${topic}
-Post type: ${postType}
-Calendar notes: ${calItem?.notes || 'none'}
-${recentContext ? 'Recent posts (learn from these, do not repeat): '+recentContext : ''}
+TOPIC: ${topic}
+POST TYPE: ${postType}
+CALENDAR NOTES: ${calItem?.notes || 'none'}
+${recentContext ? 'AVOID REPEATING (recent posts context): '+recentContext : ''}
 
-Rules:
-- Max 1500 characters
-- Natural, conversational tone — not corporate
-- Include location mention (Vijayawada / NH65 Bhavanipuram)
-- End with CTA: visit us / call 8712697930 / vwholesale.in
-- No hashtags (GBP doesn't use them)
-- Make it feel like a real business owner wrote it
+POST REQUIREMENTS:
+- 300-500 characters of main content
+- Natural, confident tone — written like a store owner
+- Include location: Vijayawada / NH65 Bhavanipuram / Andhra Pradesh
+- Include CTA with phone 8712697930 or vwholesale.in
+- After the main content, add a blank line then 8-12 relevant hashtags
+- Hashtags should target: local Vijayawada searches, category keywords, home renovation terms
 
-Return JSON: {"post_text": "..."}`,
+HASHTAG STRATEGY (include mix of):
+- Local: #Vijayawada #AndhraPradesh #VijayawadaHomes #Bhavanipuram
+- Category: based on topic (e.g. #Tiles #GraniteTiles #MarbleFlooring)
+- Intent: #HomeRenovation #InteriorDesign #HomeDecor #BuildingMaterials
+- Brand: #VWholesale #HomeBuilding
+
+Return JSON:
+{
+  "post_text": "main post content here\n\n#hashtag1 #hashtag2 #hashtag3...",
+  "seo_keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+}`,
         context: { business: 'V Wholesale', location: 'Vijayawada', type: postType }
       })
     });
     const contentData = await contentRes.json();
-    const postText = contentData.output?.post_text || contentData.output?.text || contentData.output?.content || contentData.output || '';
+    const outputData = contentData.output || {};
+    const postText = outputData.post_text || outputData.text || outputData.content || (typeof outputData === 'string' ? outputData : '') || '';
+    const seoKeywords = outputData.seo_keywords || [];
     if (!postText) throw new Error('Content generation failed');
 
     const textEl = document.getElementById('gbp-text');
     if (textEl) textEl.value = typeof postText === 'string' ? postText : JSON.stringify(postText);
+
+    // Show SEO keywords if present
+    if (seoKeywords.length) {
+      window._gbpSEOKeywords = seoKeywords;
+    }
     gbpStep(steps, 1, 'done', 'Post content written');
 
     // Store topic for image generation
@@ -1630,20 +1647,45 @@ async function generateGBPImageInternal(topic, postText, steps) {
 async function verifyGBPPostInternal(steps) {
   const text = document.getElementById('gbp-text')?.value || '';
   const checks = [];
-  if (text.length < 50) checks.push('Post is too short');
-  if (text.length > 1500) checks.push('Post exceeds 1500 characters');
+  const passes = [];
+
+  if (text.length < 50) checks.push('Post too short');
+  else passes.push('Length good ('+text.length+' chars)');
+
+  if (text.length > 1500) checks.push('Exceeds 1500 chars');
+
   if (!text.includes('8712697930') && !text.includes('vwholesale')) checks.push('Missing contact info');
+  else passes.push('Contact info included');
+
+  const hashtagCount = (text.match(/#\w+/g)||[]).length;
+  if (hashtagCount < 5) checks.push('Add more hashtags ('+hashtagCount+' found, aim for 8+)');
+  else passes.push(hashtagCount+' hashtags included');
+
+  if (text.toLowerCase().includes('vijayawada') || text.toLowerCase().includes('andhra')) passes.push('Local SEO: location mentioned');
+  else checks.push('Add location mention (Vijayawada)');
+
+  const seoKw = window._gbpSEOKeywords || [];
 
   const el = document.getElementById('gbp-verify-result');
   if (el) {
     el.style.display = 'block';
-    if (checks.length) {
-      el.innerHTML = '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:10px;font-size:12px;color:#f59e0b">⚠️ '+ checks.join(' · ')+'</div>';
-      gbpStep(steps, 3, 'done', 'Verify: ' + checks.join(', '));
-    } else {
-      el.innerHTML = '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px;font-size:12px;color:#22c55e">✅ Content looks good — ready to publish</div>';
-      gbpStep(steps, 3, 'done', 'Content verified ✅');
-    }
+    el.innerHTML = `
+      <div style="background:var(--bg3);border-radius:10px;padding:12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;margin-bottom:6px;color:var(--text2)">CONTENT CHECK</div>
+        <div style="display:grid;gap:4px">
+          ${passes.map(p=>`<div style="font-size:11px;color:#22c55e">✅ ${p}</div>`).join('')}
+          ${checks.map(c=>`<div style="font-size:11px;color:#f59e0b">⚠️ ${c}</div>`).join('')}
+        </div>
+        ${seoKw.length ? `<div style="margin-top:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">SEO KEYWORDS TO TARGET</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${seoKw.map(k=>'<span style="background:rgba(201,168,76,.1);color:var(--gold);border:1px solid rgba(201,168,76,.3);border-radius:12px;padding:2px 8px;font-size:10px">'+k+'</span>').join('')}
+          </div>
+        </div>` : ''}
+      </div>
+      ${!checks.length ? '<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:10px;font-size:12px;color:#22c55e;text-align:center;font-weight:700">✅ Ready to publish</div>' : ''}
+    `;
+    gbpStep(steps||{}, 3, checks.length?'done':'done', checks.length?'⚠️ '+checks[0]:'Content verified ✅');
   }
 }
 
@@ -1662,6 +1704,31 @@ function renderGBPVariations(urls, selectedUrl, qaScore) {
   // Set first as selected
   selectGBPVariation(0, true);
 }
+
+function openGBPImageFullscreen(url) {
+  if (!url) return;
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.93);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  ov.onclick = () => ov.remove();
+  const img = document.createElement('img');
+  img.src = url;
+  img.style.cssText = 'max-width:90vw;max-height:80vh;border-radius:8px;object-fit:contain';
+  const tb = document.createElement('div');
+  tb.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+  tb.onclick = e => e.stopPropagation();
+  const cb = document.createElement('button');
+  cb.textContent = '✕ Close';
+  cb.style.cssText = 'background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:8px 20px;font-size:13px;cursor:pointer';
+  cb.onclick = () => ov.remove();
+  const dl = document.createElement('a');
+  dl.href = url; dl.download = 'gbp-post.png'; dl.target = '_blank';
+  dl.textContent = '⬇ Download';
+  dl.style.cssText = 'background:#c9a84c;color:#000;border-radius:8px;padding:8px 20px;font-size:13px;text-decoration:none;font-weight:700';
+  tb.appendChild(cb); tb.appendChild(dl);
+  ov.appendChild(img); ov.appendChild(tb);
+  document.body.appendChild(ov);
+}
+
 
 function selectGBPVariation(idx, silent) {
   const vars = window._gbpVariations || [];
