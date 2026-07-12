@@ -174,11 +174,12 @@ async function renderCommandCentre() {
   setContent(`<div style="text-align:center;padding:40px"><div style="font-size:24px">⏳</div><div style="color:var(--text3);margin-top:8px">Loading dashboard…</div></div>`);
 
   // Load data
-  const [settingsRes, intRes, agentsRes, approvalsRes] = await Promise.all([
+  const [settingsRes, intRes, agentsRes, approvalsRes, socialRes] = await Promise.all([
     sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]})),
     sb.from('marketing_integrations').select('*').then(r=>r, ()=>({data:[]})),
     sb.from('ai_agents').select('*').then(r=>r, ()=>({data:[]})),
     sb.from('marketing_approvals').select('*').eq('status','pending').then(r=>r, ()=>({data:[]})),
+    sb.from('social_connections').select('platform,status,access_token_set').then(r=>r, ()=>({data:[]})),
   ]);
 
   const settings = {};
@@ -186,8 +187,23 @@ async function renderCommandCentre() {
   const integrations = intRes.data || [];
   const agents = agentsRes.data || [];
   const approvals = approvalsRes.data || [];
+  const socialConns = {};
+  (socialRes.data||[]).forEach(s => { socialConns[s.platform] = s; });
 
-  const connectedInt = integrations.filter(i => i.status === 'connected').length;
+  const gbpConnected = socialConns['gbp']?.status === 'connected' && socialConns['gbp']?.access_token_set;
+  const waConnected  = socialConns['whatsapp']?.status === 'connected';
+  const metaConnected = socialConns['meta']?.status === 'connected';
+
+  // Build live integration list
+  const liveIntegrations = [
+    {name:'OpenAI (AI generation)', status:'connected', notes:'GPT-4o-mini + gpt-image-1'},
+    {name:'Pexels (stock photos)',  status:'connected', notes:'API key configured'},
+    {name:'GitHub (blog publish)',  status:'connected', notes:'Auto-publish to vwholesale.in/blog/'},
+    {name:'Google Business Profile',status: gbpConnected?'connected':'not_connected', notes: gbpConnected?'Connected ✅ — ready to post':'Click to connect'},
+    {name:'WhatsApp (Interakt)',    status: waConnected?'connected':'pending', notes: waConnected?'Live':'WABA approval pending for 8712697930'},
+    {name:'Meta (Instagram/FB)',    status: metaConnected?'connected':'not_connected', notes: metaConnected?'Connected':'Not set up yet'},
+  ];
+  const connectedInt = liveIntegrations.filter(i => i.status === 'connected').length;
   const budget = parseInt(settings.marketing_budget_monthly_inr || 30000);
 
   setContent(`
@@ -244,7 +260,7 @@ async function renderCommandCentre() {
     <div class="mkt-card">
       <div class="mkt-card-title">Platform Integrations</div>
       <div style="display:grid;gap:8px">
-        ${integrations.map(i => `
+        ${liveIntegrations.map(i => `
         <div class="integration-card">
           <div class="integration-dot ${i.status==='connected'?'dot-green':i.status==='partial'||i.status==='setup'?'dot-gold':'dot-gray'}"></div>
           <div style="flex:1">
@@ -295,20 +311,21 @@ async function renderCommandCentre() {
     <div class="mkt-card-title">🚀 Setup Checklist</div>
     <div style="display:grid;gap:6px">
       ${[
-        {done:true, text:'vwholesale.in domain live'},
-        {done:true, text:'Google Search Console verified'},
-        {done:true, text:'Sitemap submitted (5 pages)'},
-        {done:true, text:'robots.txt configured'},
-        {done:true, text:'GBP website URL updated (pending approval)'},
-        {done:true, text:'OpenAI API connected'},
-        {done:true, text:'Marketing database foundation created'},
-        {done:false, text:'Add OpenAI API key to Supabase secrets'},
-        {done:false, text:'Connect Instagram/Facebook (Meta Business)'},
-        {done:false, text:'Complete Interakt WhatsApp setup'},
-        {done:false, text:'Set up Google Analytics 4'},
-        {done:false, text:'Add product images (181 without images)'},
+        {done:true,  text:'vwholesale.in domain live'},
+        {done:true,  text:'Google Search Console verified'},
+        {done:true,  text:'Sitemap submitted'},
+        {done:true,  text:'robots.txt configured'},
+        {done:true,  text:'OpenAI API connected (GPT-4o-mini + image)'},
+        {done:true,  text:'Pexels stock photos connected'},
+        {done:true,  text:'GitHub blog auto-publish connected'},
+        {done:true,  text:'Marketing database created'},
+        {done:gbpConnected,  text:'Google Business Profile connected'},
         {done:false, text:'Create first GBP post'},
-        {done:false, text:'Configure vwholesalemart.com redirect'},
+        {done:false, text:'Connect Meta Business (Instagram + Facebook)'},
+        {done:false, text:'Complete Interakt WhatsApp WABA approval'},
+        {done:false, text:'Set up Google Analytics 4'},
+        {done:false, text:'Write first 5 blog articles'},
+        {done:false, text:'Add DOBs for customers (greetings engine)'},
       ].map(item => `<div style="display:flex;align-items:center;gap:8px;font-size:12px">
         <span style="color:${item.done?'var(--green)':'var(--text3)'}">${item.done?'✅':'⬜'}</span>
         <span style="color:${item.done?'var(--text2)':'var(--text3)'}">${item.text}</span>
