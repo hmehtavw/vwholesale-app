@@ -581,6 +581,11 @@ html, body {
   z-index: 200; max-height: 92vh; overflow-y: auto;
 }
 #bottom-sheet.open { transform: translateY(0); }
+/* On desktop staff mode — sheet starts after sidebar so nothing is hidden */
+@media (min-width: 901px) {
+  body.staff-mode #bottom-sheet { left: var(--sidebar-w); }
+  body.staff-mode.sidebar-collapsed #bottom-sheet { left: 56px; }
+}
 #sheet-overlay {
   position: fixed; inset: 0; background: rgba(4,8,36,0.8);
   z-index: 190; opacity: 0; pointer-events: none; transition: opacity 0.3s;
