@@ -3893,25 +3893,17 @@ function closeSidebar() {
 }
 
 function toggleSidebarCollapse() {
-  const sidebar = document.getElementById('staff-sidebar');
-  const wrapper = document.getElementById('app-wrapper');
   const btn = document.getElementById('sb-collapse-btn');
-  if (!sidebar) return;
-  const isCollapsed = sidebar.classList.toggle('collapsed');
-  wrapper?.classList.toggle('sidebar-collapsed', isCollapsed);
-  // Persist preference
+  // body.sidebar-collapsed is single source of truth
+  const isCollapsed = document.body.classList.toggle('sidebar-collapsed');
   try { localStorage.setItem('vw-sb-collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
-  // Update button tooltip
   if (btn) btn.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
 }
 
 function initSidebarCollapse() {
-  // Restore collapsed state on load
   try {
-    const collapsed = localStorage.getItem('vw-sb-collapsed') === '1';
-    if (collapsed) {
-      document.getElementById('staff-sidebar')?.classList.add('collapsed');
-      document.getElementById('app-wrapper')?.classList.add('sidebar-collapsed');
+    if (localStorage.getItem('vw-sb-collapsed') === '1') {
+      document.body.classList.add('sidebar-collapsed');
       const btn = document.getElementById('sb-collapse-btn');
       if (btn) btn.title = 'Expand sidebar';
     }
