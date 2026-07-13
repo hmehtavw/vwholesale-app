@@ -101,6 +101,8 @@ function showMktApp() {
   mktNav('command');
   // Auto-run trend scout if scheduled
   setTimeout(checkAndRunTrendScout, 3000);
+  // Auto-sync Instagram ID silently on every load
+  setTimeout(autoSyncInstagramId, 5000);
 }
 
 function startClock() {
@@ -1120,6 +1122,30 @@ async function testThreadsPost() {
     if (data.url) window.open(data.url, '_blank');
   } catch(e) { showMktToast('❌ '+e.message); }
   finally { if (btn) { btn.textContent='🧪 Test Post'; btn.disabled=false; } }
+}
+
+async function autoSyncInstagramId() {
+  // Silently keeps Instagram ID in sync — runs on every portal load
+  try {
+    const { data: rows } = await sb.from('marketing_settings').select('key,value')
+      .in('key',['META_ACCESS_TOKEN','META_PAGE_ID','META_PAGE_TOKEN','META_IG_ID'])
+      .then(r=>r,()=>({data:[]}));
+    const cfg = {}; (rows||[]).forEach(r=>{cfg[r.key]=r.value;});
+    if (!cfg.META_ACCESS_TOKEN || !cfg.META_PAGE_ID) return; // not connected
+    if (cfg.META_IG_ID) return; // already have it — nothing to do
+
+    // Fetch IG ID using saved page token or user token
+    const token = cfg.META_PAGE_TOKEN || cfg.META_ACCESS_TOKEN;
+    const res = await fetch(`https://graph.facebook.com/v19.0/${cfg.META_PAGE_ID}?fields=instagram_business_account&access_token=${token}`);
+    const data = await res.json();
+    const igId = data.instagram_business_account?.id;
+    if (igId) {
+      await sb.from('marketing_settings').upsert({key:'META_IG_ID',value:igId},{onConflict:'key'});
+      console.log('[Meta] Instagram ID auto-synced:', igId);
+    }
+  } catch(e) {
+    console.log('[Meta] Auto-sync Instagram ID failed silently:', e.message);
+  }
 }
 
 async function connectMeta() {
@@ -3602,6 +3628,17 @@ async function renderAnalytics() {
     <div id="review-output" style="margin-top:12px"></div>
   </div>
 
+  <!-- LIVE SOCIAL ANALYTICS -->
+  <div class="mkt-card" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700">📡 Live Social Analytics</div>
+      <button onclick="loadSocialAnalytics()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Refresh</button>
+    </div>
+    <div id="social-analytics-output">
+      <div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">Click Refresh to load live data from Instagram, Facebook and YouTube</div>
+    </div>
+  </div>
+
   <!-- PAST REVIEWS -->
   ${(reviews||[]).length ? `
   <div class="mkt-card">
@@ -3630,6 +3667,114 @@ async function renderAnalytics() {
     </div>
   </div>` : ''}
   `);
+}
+
+async function loadSocialAnalytics() {
+  const el = document.getElementById('social-analytics-output');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">⏳ Fetching live data from Meta + YouTube…</div>';
+
+  const [igRes, fbRes, ytRes] = await Promise.all([
+    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'instagram_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})),
+    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'facebook_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})),
+    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'youtube_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}))
+  ]);
+
+  const platforms = [
+    { key:'ig', data:igRes, icon:'📸', name:'Instagram', color:'#e1306c' },
+    { key:'fb', data:fbRes, icon:'👤', name:'Facebook', color:'#1877f2' },
+    { key:'yt', data:ytRes, icon:'▶️', name:'YouTube', color:'#ff0000' }
+  ];
+
+  el.innerHTML = `
+    <!-- PLATFORM HEADER CARDS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
+      ${platforms.map(p => {
+        if (!p.data.ok) return `
+          <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center;opacity:.6">
+            <div style="font-size:22px">${p.icon}</div>
+            <div style="font-size:11px;font-weight:700;margin-top:4px">${p.name}</div>
+            <div style="font-size:10px;color:var(--red);margin-top:4px">${p.data.error?.slice(0,30)||'Not connected'}</div>
+          </div>`;
+
+        const acc = p.data.account || {};
+        const followerKey = acc.followers !== undefined ? 'followers' : acc.subscribers !== undefined ? 'subscribers' : 'fans';
+        const followerCount = (acc.followers || acc.subscribers || acc.fans || 0).toLocaleString('en-IN');
+        const secondKey = acc.media_count !== undefined ? 'Posts' : acc.video_count !== undefined ? 'Videos' : 'Page Likes';
+        const secondVal = (acc.media_count || acc.video_count || acc.fans || 0).toLocaleString('en-IN');
+
+        return `
+          <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:22px">${p.icon}</div>
+            <div style="font-size:11px;font-weight:700;margin-top:4px;color:var(--text1)">${p.name}</div>
+            <div style="font-size:18px;font-weight:900;color:${p.color};margin-top:6px">${followerCount}</div>
+            <div style="font-size:10px;color:var(--text3)">${followerKey}</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text2);margin-top:4px">${secondVal} <span style="font-size:10px;color:var(--text3)">${secondKey}</span></div>
+          </div>`;
+      }).join('')}
+    </div>
+
+    <!-- INSTAGRAM RECENT POSTS -->
+    ${igRes.ok && igRes.posts?.length ? `
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">📸 Instagram — Recent Posts</div>
+      <div style="display:grid;gap:6px">
+        ${igRes.posts.slice(0,5).map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${p.caption||p.type}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(p.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          </div>
+          <div style="display:flex;gap:10px;font-size:11px;flex-shrink:0">
+            <span title="Likes">❤️ ${p.likes.toLocaleString('en-IN')}</span>
+            <span title="Comments">💬 ${p.comments.toLocaleString('en-IN')}</span>
+            <span title="Reach" style="color:var(--gold)">👁 ${(p.reach||0).toLocaleString('en-IN')}</span>
+            <span title="Engagement Rate" style="color:#22c55e">${p.engagement_rate}%</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- YOUTUBE RECENT VIDEOS -->
+    ${ytRes.ok && ytRes.videos?.length ? `
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">▶️ YouTube — Recent Videos</div>
+      <div style="display:grid;gap:6px">
+        ${ytRes.videos.slice(0,5).map(v=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">
+          ${v.thumbnail?`<img src="${v.thumbnail}" style="width:48px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0">`:'<div style="width:48px;height:36px;background:var(--bg4);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">▶️</div>'}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.title}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(v.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          </div>
+          <div style="display:flex;gap:10px;font-size:11px;flex-shrink:0">
+            <span title="Views">👁 ${v.views.toLocaleString('en-IN')}</span>
+            <span title="Likes">❤️ ${v.likes.toLocaleString('en-IN')}</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- FACEBOOK RECENT POSTS -->
+    ${fbRes.ok && fbRes.posts?.length ? `
+    <div>
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:8px">👤 Facebook — Recent Posts</div>
+      <div style="display:grid;gap:6px">
+        ${fbRes.posts.slice(0,3).map(p=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text2)">${p.message||'Post'}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${new Date(p.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>
+          </div>
+          <div style="display:flex;gap:10px;font-size:11px;flex-shrink:0">
+            <span>❤️ ${p.likes}</span>
+            <span>💬 ${p.comments}</span>
+            <span>🔁 ${p.shares}</span>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
 }
 
 function reviewPeriodChanged() {
