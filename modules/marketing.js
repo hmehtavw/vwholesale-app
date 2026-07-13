@@ -1,10 +1,24 @@
 
-// ── GBP OAUTH — redirect immediately to dedicated callback page ──
+// ── OAUTH CALLBACKS — capture at page load before anything else ──
 (function() {
   const p = new URLSearchParams(window.location.search);
-  const code = p.get('code'), state = p.get('state');
+  const code = p.get('code'), state = p.get('state'), err = p.get('error');
+
+  // GBP OAuth — redirect to dedicated callback page
   if (code && state === 'gbp_oauth') {
     window.location.replace('/gbp-callback/?code=' + encodeURIComponent(code) + '&state=gbp_oauth');
+    return;
+  }
+
+  // Meta OAuth — capture code for handleMetaOAuth()
+  if (state === 'meta_oauth') {
+    if (code) {
+      window._metaOAuthCode = code;
+    } else if (err) {
+      window._metaOAuthError = err + (p.get('error_description') ? ': ' + p.get('error_description') : '');
+    }
+    // Clean URL immediately
+    window.history.replaceState({}, '', window.location.pathname);
   }
 })();
 
