@@ -466,61 +466,93 @@ async function renderAgents() {
     { data: notifications },
     { data: agentRuns }
   ] = await Promise.all([
-    sb.from('agent_notifications').select('*').eq('resolved', false).order('created_at',{ascending:false}).limit(20).then(r=>r,()=>({data:[]})),
-    sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
+    sb.from('agent_notifications')
+      .select('*')
+      .or('resolved.eq.false,resolved.is.null')
+      .order('created_at',{ascending:false})
+      .limit(30)
+      .then(r=>r,()=>({data:[]})),
+    sb.from('ai_agent_runs').select('*').order('created_at',{ascending:false}).limit(5).then(r=>r,()=>({data:[]}))
   ]);
 
-  const pending = (notifications||[]).filter(n => n.response === 'pending' && n.action_required);
-  const typeIcon = { trend_alert:'🔥', approval_request:'✅', monthly_review:'📊', quarterly_review:'📈', performance_report:'📉' };
+  const pending = (notifications||[]).filter(n => n.response === 'pending');
+  const recent = (notifications||[]).filter(n => n.response !== 'pending').slice(0,8);
+
+  const typeIcon = {
+    trend_alert:'🔥',
+    approval_request:'✅',
+    monthly_review:'📊',
+    quarterly_review:'📈',
+    performance_report:'📉'
+  };
+  const typeLabel = {
+    trend_alert:'Trend Alert',
+    approval_request:'Content Ready for Approval',
+    monthly_review:'Monthly Review',
+    quarterly_review:'Quarterly Review',
+    performance_report:'Performance Report'
+  };
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
       <h3 style="font-size:16px;font-weight:900">🤖 AI Agents</h3>
-      <div style="font-size:12px;color:var(--text3)">Agents work automatically and notify you when action is needed</div>
+      <div style="font-size:12px;color:var(--text3)">Agents create content automatically — you approve before publishing</div>
     </div>
-    ${pending.length ? `<span class="badge badge-red">${pending.length} need your input</span>` : '<span class="badge badge-green">All clear</span>'}
+    ${pending.length
+      ? `<span class="badge badge-red">${pending.length} need approval</span>`
+      : '<span class="badge badge-green">All clear</span>'}
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <div class="mkt-card" style="margin-bottom:14px;background:rgba(201,168,76,.06);border:1px solid rgba(201,168,76,.2)">
+    <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">⚡ How automation works</div>
+    <div style="display:flex;gap:0;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text2)">
+      ${['📅 Calendar plans the day','→','🤖 Agent auto-creates content for all channels','→','📬 Notification sent here','→','✅ You approve','→','🚀 Published everywhere'].map(s=>
+        s==='→'
+          ? `<span style="color:var(--text3);margin:0 6px">→</span>`
+          : `<span style="background:var(--bg3);border-radius:6px;padding:3px 8px;margin:2px">${s}</span>`
+      ).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">
+      📅 Go to Calendar → click <b>⚡ Auto-Create</b> on any planned day → content appears here for your approval
+    </div>
   </div>
 
   <!-- AGENT CARDS -->
-  <div style="display:grid;gap:10px;margin-bottom:20px">
-
-    <!-- Trend Scout -->
+  <div style="display:grid;gap:8px;margin-bottom:16px">
     <div class="mkt-card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <div style="font-size:28px">🔥</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">🔥</div>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:700">Trend Scout Agent</div>
-          <div style="font-size:11px;color:var(--text3)">Scans Google Trends + home building topics · alerts when opportunity found</div>
+          <div style="font-size:13px;font-weight:700">Trend Scout</div>
+          <div style="font-size:11px;color:var(--text3)">Scans home building trends for Vijayawada · alerts when opportunity found</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:2px">Last run: ${agentRuns?.find(r=>r.agent_name==='Trend Scout')?.created_at
+            ? new Date(agentRuns.find(r=>r.agent_name==='Trend Scout').created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+            : 'Never'}</div>
         </div>
-        <button onclick="runTrendScout(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">▶ Run Now</button>
+        <button onclick="runTrendScout(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">▶ Run</button>
       </div>
-      <div id="trend-scout-result" style="font-size:11px;color:var(--text3)">
-        Last run: ${agentRuns?.find(r=>r.agent_name==='Trend Scout')?.created_at
-          ? new Date(agentRuns.find((r)=>r.agent_name==='Trend Scout').created_at).toLocaleString('en-IN')
-          : 'Never — click Run Now'}
+      <div id="trend-scout-result"></div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">📅</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Calendar Auto-Creator</div>
+          <div style="font-size:11px;color:var(--text3)">Opens calendar → click ⚡ Auto-Create on any day → content created for all channels automatically</div>
+        </div>
+        <button onclick="mktNav('calendar')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Open Calendar</button>
       </div>
     </div>
 
-    <!-- Content Agent -->
     <div class="mkt-card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <div style="font-size:28px">✍️</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:700">Content Creator Agent</div>
-          <div style="font-size:11px;color:var(--text3)">Creates posts from calendar · adapts for all channels · sends for approval</div>
-        </div>
-        <button onclick="mktNav('content')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">Open Studio</button>
-      </div>
-    </div>
-
-    <!-- Review Agent -->
-    <div class="mkt-card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-        <div style="font-size:28px">📊</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">📊</div>
         <div style="flex:1">
           <div style="font-size:13px;font-weight:700">Review Agent</div>
-          <div style="font-size:11px;color:var(--text3)">Monthly + quarterly performance analysis · recommends what to stop, continue, double down on</div>
+          <div style="font-size:11px;color:var(--text3)">Monthly + quarterly performance analysis with AI recommendations</div>
         </div>
         <div style="display:flex;gap:6px">
           <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Monthly</button>
@@ -530,44 +562,56 @@ async function renderAgents() {
     </div>
   </div>
 
-  <!-- PENDING NOTIFICATIONS -->
+  <!-- PENDING APPROVALS -->
   ${pending.length ? `
-  <div style="font-size:13px;font-weight:700;margin-bottom:10px">📬 Waiting for your response (${pending.length})</div>
-  <div style="display:grid;gap:8px;margin-bottom:20px">
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+    📬 Waiting for your approval
+    <span class="badge badge-red">${pending.length}</span>
+  </div>
+  <div style="display:grid;gap:10px;margin-bottom:20px">
     ${pending.map(n => `
-    <div class="mkt-card" style="border-left:3px solid var(--gold)">
+    <div class="mkt-card" style="border-left:3px solid ${n.notification_type==='trend_alert'?'#f59e0b':'var(--gold)'}">
       <div style="display:flex;align-items:flex-start;gap:10px">
         <div style="font-size:24px;flex-shrink:0">${typeIcon[n.notification_type]||'🔔'}</div>
         <div style="flex:1">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:4px">${(n.notification_type||'').replace(/_/g,' ')} · ${new Date(n.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-          <div style="font-size:12px;color:var(--text1);line-height:1.7;white-space:pre-wrap;margin-bottom:10px">${n.message}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text3)">${typeLabel[n.notification_type]||n.notification_type}</div>
+            <div style="font-size:10px;color:var(--text3)">${new Date(n.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+          <div style="font-size:12px;color:var(--text1);line-height:1.8;white-space:pre-wrap;margin-bottom:10px;max-height:120px;overflow-y:auto">${n.message}</div>
           <div style="display:flex;gap:8px">
-            <button onclick="respondNotification('${n.id}','yes',this)" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 16px">✅ Yes / Approve</button>
-            <button onclick="respondNotification('${n.id}','no',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px">✗ No / Skip</button>
-            <button onclick="respondNotification('${n.id}','dismiss',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px;color:var(--text3)">Dismiss</button>
+            <button onclick="respondNotification('${n.id}','yes',this)" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 16px">✅ Approve & Publish</button>
+            <button onclick="respondNotification('${n.id}','no',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px">✏️ Edit First</button>
+            <button onclick="respondNotification('${n.id}','dismiss',this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 16px;color:var(--text3)">✗ Skip</button>
           </div>
         </div>
       </div>
     </div>`).join('')}
-  </div>` : ''}
+  </div>` : `
+  <div class="mkt-card" style="text-align:center;padding:20px;margin-bottom:16px">
+    <div style="font-size:28px;margin-bottom:8px">📭</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">No pending approvals</div>
+    <div style="font-size:12px;color:var(--text3)">Go to Calendar → click ⚡ Auto-Create on a planned day to generate content</div>
+    <button onclick="mktNav('calendar')" class="mkt-btn mkt-btn-primary" style="margin-top:12px;padding:8px 20px;font-size:12px">📅 Open Calendar</button>
+  </div>`}
 
   <!-- RECENT ACTIVITY -->
-  <div style="font-size:13px;font-weight:700;margin-bottom:10px">📋 Recent activity</div>
-  <div style="display:grid;gap:6px">
-    ${(notifications||[]).filter((n)=>n.response!=='pending').slice(0,8).map(n => `
+  ${recent.length ? `
+  <div style="font-size:13px;font-weight:700;margin-bottom:8px">Recent activity</div>
+  <div style="display:grid;gap:5px">
+    ${recent.map(n=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg3);border-radius:8px">
       <span style="font-size:16px">${typeIcon[n.notification_type]||'🔔'}</span>
-      <div style="flex:1">
-        <div style="font-size:11px;color:var(--text2)">${n.message.slice(0,80)}…</div>
-        <div style="font-size:10px;color:var(--text3)">${new Date(n.created_at).toLocaleString('en-IN')} · ${n.response||'seen'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${n.message?.slice(0,80)||''}…</div>
+        <div style="font-size:10px;color:var(--text3)">${new Date(n.created_at).toLocaleString('en-IN',{day:'numeric',month:'short'})} · ${n.response||'seen'}</div>
       </div>
-      <span class="badge ${n.response==='yes'?'badge-green':n.response==='no'?'badge-gray':'badge-gray'}">${n.response||'seen'}</span>
+      <span class="badge ${n.response==='yes'?'badge-green':'badge-gray'}">${n.response==='yes'?'Approved':n.response==='no'?'Editing':'Skipped'}</span>
     </div>`).join('')}
-    ${!(notifications||[]).filter((n)=>n.response!=='pending').length
-      ? '<div style="font-size:12px;color:var(--text3);text-align:center;padding:12px">No activity yet</div>'
-      : ''}
-  </div>`);
+  </div>` : ''}
+  `);
 }
+
 
 async function runTrendScout(btn) {
   if (btn) { btn.textContent = '⏳ Scanning…'; btn.disabled = true; }
@@ -1112,9 +1156,15 @@ async function fetchMetaIgId() {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
+    // Only update display — don't re-render entire page (which resets status)
     const el = document.getElementById('meta-status-detail');
-    if (el) el.innerHTML = '✅ Connected · Page: V Wholesale · Instagram: @vwholesaleindia (ID: '+data.ig_id+')';
-    showMktToast('✅ Instagram ID synced: '+data.ig_id);
+    if (data.ig_id && data.ig_id !== 'not_found') {
+      if (el) el.innerHTML = '✅ Connected · Page: V Wholesale · Instagram: @vwholesaleindia (ID: '+data.ig_id+')';
+      showMktToast('✅ Instagram ID: '+data.ig_id);
+    } else {
+      if (el) el.innerHTML = '✅ Facebook Page connected · Instagram not linked yet — link @vwholesaleindia to V Wholesale page in Facebook Settings → Linked Accounts';
+      showMktToast('⚠️ Instagram not linked to Facebook page yet');
+    }
   } catch(e) {
     showMktToast('❌ '+e.message);
   } finally {
@@ -2366,8 +2416,8 @@ async function renderCalendar() {
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
           ${existing ? `<span class="badge badge-green" style="font-size:9px">${existing.status}</span>` : ''}
           <button onclick="quickCreateFromCalendar('${item.topic}','${item.content_type||'image'}','${item.language||'bilingual'}')" 
-            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">
-            ${existing ? '✏️ Edit' : '✨ Create'}
+            class="mkt-btn ${existing ? 'mkt-btn-ghost' : 'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
+            ${existing ? '✏️ Edit' : '⚡ Auto-Create'}
           </button>
         </div>
       </div>`;
@@ -2531,22 +2581,90 @@ async function uploadReel(input, calId, postId) {
   }
 }
 
-function quickCreateFromCalendar(topic, type, language) {
-  // Switch to content studio with pre-filled values
-  mktNav('content');
-  setTimeout(() => {
-    const topicEl = document.getElementById('cs-topic');
-    const typeEl = document.getElementById('cs-type');
-    const langEl = document.querySelector('input[name="cs-lang"][value="'+language+'"]');
-    if (topicEl) topicEl.value = topic;
-    if (typeEl) typeEl.value = type;
-    if (langEl) langEl.checked = true;
-    if (type === 'festival') {
-      const teEl = document.querySelector('input[name="cs-lang"][value="te"]');
-      if (teEl) teEl.checked = true;
+async function quickCreateFromCalendar(topic, type, language) {
+  if (!topic) return;
+  // Show inline generation status on the calendar card
+  const btn = event?.target;
+  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+  showMktToast('⚡ Auto-creating content for: ' + topic);
+
+  try {
+    const lang = type === 'festival' ? 'te' : (language || 'bilingual');
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Calendar Auto-Creator',
+        prompt: `Create a social media post for V Wholesale, Vijayawada.
+
+TOPIC: ${topic}
+FORMAT: ${type || 'image'}
+LANGUAGE: ${lang === 'bilingual' ? 'Telugu headline + English body' : lang === 'te' ? 'Full Telugu' : 'English'}
+STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+PRODUCTS: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals
+
+Return JSON:
+{
+  "master_text": "Full post copy ready to publish (hook + body + CTA)",
+  "gbp_text": "GBP version — no hashtags, professional tone, under 300 chars",
+  "instagram_caption": "Instagram version with hook + hashtags (12-15)",
+  "facebook_text": "Facebook version — slightly longer, warm tone",
+  "threads_text": "Threads version — conversational, under 200 chars",
+  "whatsapp_text": "WhatsApp broadcast — personal, action-oriented",
+  "hashtags": ["#Vijayawada","#HomeRenovation","...10 more"],
+  "image_prompt": "Detailed description for AI image generation",
+  "best_time": "e.g. Tuesday 7:00pm"
+}`,
+        context: { topic, type, language: lang }
+      })
+    });
+    const data = await res.json();
+    const content = data.output;
+    if (!content) throw new Error('Generation failed');
+
+    // Save to content_posts
+    const { data: saved, error } = await sb.from('content_posts').upsert({
+      topic,
+      post_type: type || 'image',
+      language: lang,
+      master_text: content.master_text || '',
+      status: 'pending_approval',
+      reel_script: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'topic' }).select().single().then(r=>r,()=>({data:null,error:'save failed'}));
+
+    // Save channel adaptations
+    if (saved?.id) {
+      const channelRows = [
+        {content_post_id:saved.id, channel:'gbp',           adapted_text:content.gbp_text||'',           status:'pending_approval'},
+        {content_post_id:saved.id, channel:'instagram_feed', adapted_text:content.instagram_caption||'',  status:'pending_approval'},
+        {content_post_id:saved.id, channel:'facebook_post',  adapted_text:content.facebook_text||'',      status:'pending_approval'},
+        {content_post_id:saved.id, channel:'threads',        adapted_text:content.threads_text||'',       status:'pending_approval'},
+        {content_post_id:saved.id, channel:'whatsapp_bc',    adapted_text:content.whatsapp_text||'',      status:'pending_approval'},
+      ].filter(r => r.adapted_text);
+      await sb.from('channel_posts').upsert(channelRows, {onConflict:'content_post_id,channel'}).then(()=>{}).catch(()=>{});
     }
-    showMktToast('Topic pre-filled — click Create to generate content');
-  }, 400);
+
+    // Update calendar status
+    await sb.from('content_calendar').update({status:'scripted'}).eq('topic', topic).then(()=>{}).catch(()=>{});
+
+    // Send for approval notification
+    await sb.from('agent_notifications').insert({
+      agent_name: 'Calendar Auto-Creator',
+      notification_type: 'approval_request',
+      message: 'New post ready for approval:\n\nTopic: "'+topic+'"\nType: '+type+'\nLanguage: '+lang+'\n\n'+content.master_text?.slice(0,200)+'\n\nBest time: '+(content.best_time||'TBD'),
+      action_required: true,
+      response: 'pending',
+      created_at: new Date().toISOString()
+    }).then(()=>{}).catch(()=>{});
+
+    showMktToast('✅ Content created and sent for approval!');
+    // Refresh calendar to show updated status
+    setTimeout(() => renderCalendar(), 600);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+    if (btn) { btn.textContent = '⚡ Auto-Create'; btn.disabled = false; }
+  }
 }
 
 function addCalendarItem(defaultType) {
