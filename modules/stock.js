@@ -4092,6 +4092,40 @@ window.renderCatalogUploadPage  = renderCatalogUploadPage;
 window.renderCatalogReviewPage  = renderCatalogReviewPage;
 window.updateCatalogItemPrice   = updateCatalogItemPrice;
 window.updateCatalogItemField   = updateCatalogItemField;
+// ── Make catalog item live (publish to storefront)
+async function makeCatalogItemLive(id, isTile) {
+  if (!id) return;
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const { error } = await VW_DB.client.from(table).update({ status: 'live', updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  showToast('✅ Item is now live', 'success');
+  if (typeof loadBatchItems === 'function') loadBatchItems('all');
+}
+
+// ── Delete catalog item
+async function deleteCatalogItem(id, isTile) {
+  if (!confirm('Delete this item?')) return;
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const { error } = await VW_DB.client.from(table).delete().eq('id', id);
+  if (error) { showToast('❌ ' + error.message, 'error'); return; }
+  showToast('🗑️ Deleted', 'success');
+  if (typeof loadBatchItems === 'function') loadBatchItems('all');
+}
+
+// ── Apply bulk pricing to all items
+async function applyBulkPricingToAll() {
+  showToast('⏳ Applying bulk pricing…', 'info');
+  if (typeof applyBulkPricingFormula === 'function') applyBulkPricingFormula();
+}
+
+// ── Make all items live
+async function makeAllLive() {
+  if (!confirm('Make all reviewed items live?')) return;
+  const { error } = await VW_DB.client.from('brand_catalog_items').update({ status: 'live', updated_at: new Date().toISOString() }).eq('status', 'reviewed');
+  if (!error) { showToast('✅ All items are now live', 'success'); if (typeof loadBatchItems === 'function') loadBatchItems('all'); }
+  else showToast('❌ ' + error.message, 'error');
+}
+
 window.makeCatalogItemLive      = makeCatalogItemLive;
 window.deleteCatalogItem        = deleteCatalogItem;
 window.applyBulkPricingToAll    = applyBulkPricingToAll;

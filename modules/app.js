@@ -15,7 +15,7 @@ async function navigateTo(page, params) {
   // Close ALL overlays/sheets immediately on navigation — prevents
   // the New Quotation drawer (bottom-sheet) from staying open
   closeSheet();
-  closePDP();
+  if (typeof closePDP === 'function') closePDP();
 
   // Redirect non-admin trying to access admin-only pages
   const _role = VW_AUTH.getRole();
@@ -3868,6 +3868,7 @@ function buildSidebar() {
 
 function sbNavigate(page) {
   closeSheet();
+  if (typeof closePDP === 'function') closePDP();
   navigateTo(page);
   document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.toggle('active', b.dataset.sbPage === page));
   const titleEl = document.getElementById('st-page-title');
