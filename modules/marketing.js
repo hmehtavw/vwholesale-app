@@ -2325,8 +2325,8 @@ async function renderCalendar() {
   (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
 
   // Separate reels from other content
-  const reelDays = (calItems||[]).filter(i => i.content_type==='reel' || i.post_type==='reel');
-  const otherDays = (calItems||[]).filter(i => i.content_type!=='reel' && i.post_type!=='reel');
+  const reelDays = (calItems||[]).filter(i => i.is_reel === true || i.content_type==='reel');
+  const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel');
 
   const TYPE_ICON = {image:'🖼️', reel:'🎬', gif:'✨', festival:'🎉', qa:'❓', offer:'💰', post:'📝'};
   const STATUS_BADGE = {
@@ -2646,7 +2646,7 @@ Return JSON:
     }
 
     // Update calendar status
-    await sb.from('content_calendar').update({status:'scripted'}).eq('topic', topic).then(()=>{}).catch(()=>{});
+    await sb.from('content_calendar').update({status:'scripted',updated_at:new Date().toISOString()}).eq('topic', topic).then(()=>{}).catch(()=>{});
 
     // Send for approval notification
     await sb.from('agent_notifications').insert({
@@ -2700,11 +2700,10 @@ async function saveCalendarItem() {
   const topic = (document.getElementById('cal-topic')?.value||'').trim();
   const date = document.getElementById('cal-date')?.value;
   const type = document.getElementById('cal-type')?.value||'image';
-  const lang = document.getElementById('cal-lang')?.value||'bilingual';
   const notes = document.getElementById('cal-notes')?.value||'';
   if (!topic || !date) { showMktToast('Enter topic and date'); return; }
 
-  await sb.from('content_calendar').insert({topic, cal_date:date, content_type:type, language:lang, notes, status:'planned', created_at:new Date().toISOString()});
+  await sb.from('content_calendar').insert({topic, cal_date:date, content_type:type, is_reel:type==='reel', notes, status:'planned', created_at:new Date().toISOString()});
   document.querySelector('[style*="fixed"][style*="z-index:99999"]')?.remove();
   showMktToast('✅ Added to calendar');
   renderCalendar();
