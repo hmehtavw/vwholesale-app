@@ -1132,14 +1132,15 @@ async function autoSyncInstagramId() {
       .then(r=>r,()=>({data:[]}));
     const cfg = {}; (rows||[]).forEach(r=>{cfg[r.key]=r.value;});
     if (!cfg.META_ACCESS_TOKEN || !cfg.META_PAGE_ID) return; // not connected
-    if (cfg.META_IG_ID) return; // already have it — nothing to do
+    // Only sync if IG ID is truly missing (empty string or null)
+    if (cfg.META_IG_ID && cfg.META_IG_ID.length > 5) return; // already have valid ID
 
     // Fetch IG ID using saved page token or user token
     const token = cfg.META_PAGE_TOKEN || cfg.META_ACCESS_TOKEN;
     const res = await fetch(`https://graph.facebook.com/v19.0/${cfg.META_PAGE_ID}?fields=instagram_business_account&access_token=${token}`);
     const data = await res.json();
     const igId = data.instagram_business_account?.id;
-    if (igId) {
+    if (igId && igId.length > 5) {
       await sb.from('marketing_settings').upsert({key:'META_IG_ID',value:igId},{onConflict:'key'});
       // Keep social_connections in sync
       await sb.from('social_connections').upsert([
@@ -1147,6 +1148,8 @@ async function autoSyncInstagramId() {
         {platform:'facebook',  status:'connected', access_token_set:true, updated_at:new Date().toISOString()},
       ],{onConflict:'platform'}).then(()=>{}).catch(()=>{});
       console.log('[Meta] Instagram ID auto-synced:', igId);
+    } else {
+      console.log('[Meta] IG ID not found in this fetch — keeping existing value');
     }
   } catch(e) {
     console.log('[Meta] Auto-sync Instagram ID failed silently:', e.message);
