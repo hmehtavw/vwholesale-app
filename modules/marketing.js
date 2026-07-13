@@ -99,6 +99,8 @@ function showMktApp() {
     window._metaOAuthError = null;
   }
   mktNav('command');
+  // Auto-run trend scout if scheduled
+  setTimeout(checkAndRunTrendScout, 3000);
 }
 
 function startClock() {
@@ -990,11 +992,26 @@ async function renderIntegrations() {
       <div style="font-size:32px">▶️</div>
       <div style="flex:1">
         <div style="font-size:14px;font-weight:700">YouTube</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Upload Shorts and track performance</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Upload Shorts, track views and subscriber growth</div>
       </div>
-      <span class="badge badge-gray">Not connected</span>
+      <span id="yt-status-badge" class="badge badge-gray">Not connected</span>
     </div>
-    <div style="margin-top:8px;font-size:11px;color:var(--text3)">YouTube Data API v3 — coming next session</div>
+    <div style="margin-top:10px;display:grid;gap:8px">
+      <div>
+        <label class="mkt-form-label">YouTube Channel ID <span style="color:var(--text3);font-weight:400">(from youtube.com/channel/UC...)</span></label>
+        <input id="yt-channel-id" class="mkt-form-input" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxx" style="font-size:12px">
+      </div>
+      <div>
+        <label class="mkt-form-label">YouTube Data API v3 Key <span style="color:var(--text3);font-weight:400">(Google Cloud Console → APIs → YouTube Data API v3)</span></label>
+        <input id="yt-api-key" class="mkt-form-input" type="password" placeholder="AIza..." style="font-size:12px">
+      </div>
+      <button onclick="saveYouTubeSettings()" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px;font-weight:700">🔗 Connect YouTube</button>
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:11px;color:var(--text3)">
+        <b>How to get these:</b><br>
+        1. Channel ID → go to your YouTube channel → click your profile pic → Settings → Advanced settings → Channel ID<br>
+        2. API Key → console.cloud.google.com → create project → Enable YouTube Data API v3 → Credentials → Create API Key
+      </div>
+    </div>
   </div>
 
   <!-- THREADS -->
@@ -1179,17 +1196,85 @@ async function disconnectMeta() {
   renderIntegrations();
 }
 
+async function saveYouTubeSettings() {
+  const channelId = (document.getElementById('yt-channel-id')?.value||'').trim();
+  const apiKey = (document.getElementById('yt-api-key')?.value||'').trim();
+  if (!channelId || !apiKey) { showMktToast('Enter both Channel ID and API Key'); return; }
+
+  showMktToast('⏳ Verifying YouTube connection…');
+  try {
+    // Test the API key by fetching channel info
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.items?.length) throw new Error('Channel not found — check Channel ID');
+
+    const channel = data.items[0];
+    const name = channel.snippet?.title || 'Unknown';
+    const subs = parseInt(channel.statistics?.subscriberCount||0).toLocaleString('en-IN');
+    const views = parseInt(channel.statistics?.viewCount||0).toLocaleString('en-IN');
+
+    // Save to DB
+    await sb.from('marketing_settings').upsert([
+      {key:'YOUTUBE_CHANNEL_ID', value:channelId},
+      {key:'YOUTUBE_API_KEY', value:apiKey},
+      {key:'YOUTUBE_CHANNEL_NAME', value:name}
+    ],{onConflict:'key'});
+
+    await sb.from('social_connections').upsert({
+      platform:'youtube', status:'connected', access_token_set:true,
+      connected_at:new Date().toISOString(), updated_at:new Date().toISOString()
+    },{onConflict:'platform'});
+
+    const badge = document.getElementById('yt-status-badge');
+    if (badge) { badge.textContent='✅ Connected'; badge.className='badge badge-green'; }
+    showMktToast(`✅ YouTube connected: ${name} · ${subs} subscribers · ${views} views`);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  }
+}
+
 async function setTrendSchedule(freq, btn) {
-  await sb.from('marketing_settings').upsert({key:'TREND_SCOUT_SCHEDULE',value:freq},{onConflict:'key'});
+  await sb.from('marketing_settings').upsert([
+    {key:'TREND_SCOUT_SCHEDULE', value:freq},
+    {key:'TREND_SCOUT_NEXT_RUN', value:getTrendNextRun(freq)}
+  ],{onConflict:'key'});
   const el = document.getElementById('trend-schedule-status');
   if (el) { el.textContent = freq; el.className = 'badge badge-green'; }
-  showMktToast('✅ Trend Scout set to: '+freq);
-  // Update all buttons
+  showMktToast('✅ Trend Scout set to: '+freq+' — next run: '+new Date(getTrendNextRun(freq)).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
   document.querySelectorAll('[onclick*="setTrendSchedule"]').forEach(b => {
     b.classList.remove('mkt-btn-primary');
     b.classList.add('mkt-btn-ghost');
   });
   if (btn) { btn.classList.remove('mkt-btn-ghost'); btn.classList.add('mkt-btn-primary'); }
+}
+
+function getTrendNextRun(freq) {
+  const now = Date.now();
+  const intervals = {'Hourly':3600000,'Every 4h':14400000,'Twice daily':43200000,'Daily':86400000};
+  return String(now + (intervals[freq]||86400000));
+}
+
+async function checkAndRunTrendScout() {
+  // Called on portal load — runs trend scout if schedule says it's due
+  try {
+    const { data: rows } = await sb.from('marketing_settings').select('key,value')
+      .in('key',['TREND_SCOUT_SCHEDULE','TREND_SCOUT_NEXT_RUN','TREND_SCOUT_LAST_RUN']).then(r=>r,()=>({data:[]}));
+    const cfg = {}; (rows||[]).forEach(r=>{cfg[r.key]=r.value;});
+    if (!cfg.TREND_SCOUT_SCHEDULE) return; // not scheduled
+    const nextRun = parseInt(cfg.TREND_SCOUT_NEXT_RUN||'0');
+    if (Date.now() < nextRun) return; // not time yet
+    console.log('[Trend Scout] Auto-running — schedule:', cfg.TREND_SCOUT_SCHEDULE);
+    // Run silently
+    const res = await fetch(MKT_SB_URL+'/functions/v1/trend-scout',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:'{}'});
+    const data = await res.json();
+    // Set next run time
+    await sb.from('marketing_settings').upsert([
+      {key:'TREND_SCOUT_NEXT_RUN', value:getTrendNextRun(cfg.TREND_SCOUT_SCHEDULE)},
+      {key:'TREND_SCOUT_LAST_RUN', value:String(Date.now())}
+    ],{onConflict:'key'});
+    if (data.alerted) showMktToast('🔥 Trend Scout found a trend! Check AI Agents.');
+  } catch(e) { console.log('[Trend Scout] Auto-run error:', e.message); }
 }
 
 
@@ -2862,6 +2947,7 @@ Return JSON:
   "whatsapp_text": "WhatsApp broadcast — personal, action-oriented",
   "hashtags": ["#Vijayawada","#HomeRenovation","...10 more"],
   "image_prompt": "Detailed description for AI image generation",
+  "gif_frames": "If content_type is gif: describe 3 frames for before/after or product loop animation",
   "best_time": "e.g. Tuesday 7:00pm"
 }`,
         context: { topic, type, language: lang }
@@ -3362,200 +3448,268 @@ async function renderAnalytics() {
     {data: contentPosts},
     {data: channelPosts},
     {data: performance},
-    {data: reviews},
-    {data: notifications}
+    {data: reviews}
   ] = await Promise.all([
     sb.from('content_posts').select('*').gte('created_at', lastMonthStart).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
     sb.from('channel_posts').select('*').gte('created_at', lastMonthStart).then(r=>r,()=>({data:[]})),
     sb.from('post_performance').select('*').gte('recorded_at', lastMonthStart).then(r=>r,()=>({data:[]})),
-    sb.from('monthly_reviews').select('*').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]})),
-    sb.from('agent_notifications').select('*').gte('created_at', lastMonthStart).then(r=>r,()=>({data:[]}))
+    sb.from('monthly_reviews').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
   ]);
 
-  // Calculate metrics
   const totalPosts = (contentPosts||[]).length;
-  const thisMonth = (contentPosts||[]).filter(p => p.created_at >= monthStart);
-  const publishedPosts = (channelPosts||[]).filter(p => p.status === 'published').length;
-  const pendingPosts = (channelPosts||[]).filter(p => p.status === 'pending').length;
-
-  // Channel breakdown
-  const channelCounts = {};
-  (channelPosts||[]).forEach(p => {
-    channelCounts[p.channel] = (channelCounts[p.channel]||0) + 1;
-  });
-
-  // Format breakdown
-  const formatCounts = {};
-  (contentPosts||[]).forEach(p => {
-    const t = p.post_type||'image';
-    formatCounts[t] = (formatCounts[t]||0) + 1;
-  });
-
-  // Language breakdown
-  const langCounts = {bilingual:0, te:0, en:0};
-  (contentPosts||[]).forEach(p => {
-    const l = p.language||'en';
-    langCounts[l] = (langCounts[l]||0) + 1;
-  });
-
-  // Performance metrics
-  const avgEngagement = (performance||[]).length
-    ? ((performance||[]).reduce((a,p) => a+(p.engagement_rate||0), 0) / (performance||[]).length).toFixed(1)
+  const thisMonth = (contentPosts||[]).filter(p => p.created_at >= new Date(now.getFullYear(), now.getMonth(), 1).toISOString());
+  const publishedPosts = (channelPosts||[]).filter(p => p.status==='published').length;
+  const avgEng = (performance||[]).length
+    ? ((performance||[]).reduce((a,p)=>a+(p.engagement_rate||0),0)/(performance||[]).length).toFixed(1)
     : '—';
 
-  const topChannel = Object.entries(channelCounts).sort((a,b)=>b[1]-a[1])[0];
-  const topFormat = Object.entries(formatCounts).sort((a,b)=>b[1]-a[1])[0];
+  const channelCounts = {};
+  (channelPosts||[]).forEach(p => { channelCounts[p.channel]=(channelCounts[p.channel]||0)+1; });
+  const formatCounts = {};
+  (contentPosts||[]).forEach(p => { formatCounts[p.post_type||'image']=(formatCounts[p.post_type||'image']||0)+1; });
 
-  // Latest review
-  const latestReview = (reviews||[])[0];
-
-  const CHANNEL_LABELS = {
-    gbp:'📍 GBP', instagram_feed:'📸 Instagram', instagram_story:'📱 IG Story',
-    facebook_post:'👤 Facebook', whatsapp_bc:'💬 WhatsApp', threads:'🧵 Threads',
-    x:'𝕏 X', youtube:'▶️ YouTube', whatsapp_status:'💚 WA Status'
-  };
-  const FORMAT_LABELS = {image:'🖼️ Image', reel:'🎬 Reel', gif:'✨ GIF', festival:'🎉 Festival', qa:'❓ Q&A'};
-
-  const barWidth = (val, max) => Math.max(4, Math.round((val/Math.max(max,1))*100));
+  const CHANNEL_LABELS = {gbp:'📍 GBP',instagram_feed:'📸 Instagram',facebook_post:'👤 Facebook',whatsapp_bc:'💬 WhatsApp',threads:'🧵 Threads',x:'𝕏 X',youtube:'▶️ YouTube'};
+  const FORMAT_LABELS = {image:'🖼️ Image',reel:'🎬 Reel',gif:'✨ GIF',festival:'🎉 Festival',qa:'❓ Q&A'};
+  const barW = (val, max) => Math.max(4, Math.round((val/Math.max(max,1))*100));
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">📈 Analytics</h3>
-      <div style="font-size:12px;color:var(--text3)">Last 60 days · ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</div>
+      <h3 style="font-size:16px;font-weight:900">📈 Analytics & Reviews</h3>
+      <div style="font-size:12px;color:var(--text3)">Performance data + AI-powered reviews</div>
     </div>
-    <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📊 Generate Report</button>
   </div>
 
   <!-- KPI CARDS -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
     ${[
-      {label:'Posts Created', value: totalPosts, sub: thisMonth.length+' this month', color:'var(--gold)'},
-      {label:'Published', value: publishedPosts, sub: pendingPosts+' pending', color:'#22c55e'},
-      {label:'Avg Engagement', value: avgEngagement+'%', sub: (performance||[]).length+' data points', color:'#3b82f6'},
-      {label:'Active Channels', value: Object.keys(channelCounts).length, sub: 'of 10 channels', color:'#a855f7'},
-    ].map(k=>`
-    <div class="mkt-card" style="text-align:center;padding:14px">
+      {label:'Posts Created', value:totalPosts, sub:thisMonth.length+' this month', color:'var(--gold)'},
+      {label:'Published', value:publishedPosts, sub:(totalPosts-publishedPosts)+' pending', color:'#22c55e'},
+      {label:'Avg Engagement', value:avgEng+'%', sub:(performance||[]).length+' data points', color:'#3b82f6'},
+      {label:'Active Channels', value:Object.keys(channelCounts).length, sub:'of 9 channels', color:'#a855f7'},
+    ].map(k=>`<div class="mkt-card" style="text-align:center;padding:14px">
       <div style="font-size:22px;font-weight:900;color:${k.color}">${k.value}</div>
       <div style="font-size:11px;font-weight:600;margin-top:2px">${k.label}</div>
       <div style="font-size:10px;color:var(--text3);margin-top:2px">${k.sub}</div>
     </div>`).join('')}
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-
-    <!-- CHANNEL BREAKDOWN -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
     <div class="mkt-card">
-      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Posts by channel</div>
-      ${Object.keys(channelCounts).length ? Object.entries(channelCounts)
-        .sort((a,b)=>b[1]-a[1])
-        .map(([ch, count]) => {
-          const max = Math.max(...Object.values(channelCounts));
-          return `<div style="margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
-              <span>${CHANNEL_LABELS[ch]||ch}</span>
-              <span style="font-weight:600">${count}</span>
-            </div>
-            <div style="height:5px;background:var(--bg3);border-radius:3px">
-              <div style="height:5px;background:var(--gold);border-radius:3px;width:${barWidth(count,max)}%"></div>
-            </div>
-          </div>`;
-        }).join('')
-      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">No posts yet — start creating in Content Studio</div>'}
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">Posts by channel</div>
+      ${Object.keys(channelCounts).length ? Object.entries(channelCounts).sort((a,b)=>b[1]-a[1]).map(([ch,n])=>{
+        const max=Math.max(...Object.values(channelCounts));
+        return `<div style="margin-bottom:7px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span>${CHANNEL_LABELS[ch]||ch}</span><span style="font-weight:600">${n}</span></div>
+          <div style="height:4px;background:var(--bg3);border-radius:2px"><div style="height:4px;background:var(--gold);border-radius:2px;width:${barW(n,max)}%"></div></div>
+        </div>`;}).join('')
+      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No data yet</div>'}
     </div>
-
-    <!-- FORMAT BREAKDOWN -->
     <div class="mkt-card">
-      <div style="font-size:13px;font-weight:700;margin-bottom:12px">Posts by format</div>
-      ${Object.keys(formatCounts).length ? Object.entries(formatCounts)
-        .sort((a,b)=>b[1]-a[1])
-        .map(([fmt, count]) => {
-          const max = Math.max(...Object.values(formatCounts));
-          return `<div style="margin-bottom:8px">
-            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">
-              <span>${FORMAT_LABELS[fmt]||fmt}</span>
-              <span style="font-weight:600">${count}</span>
-            </div>
-            <div style="height:5px;background:var(--bg3);border-radius:3px">
-              <div style="height:5px;background:#3b82f6;border-radius:3px;width:${barWidth(count,max)}%"></div>
-            </div>
-          </div>`;
-        }).join('')
-      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">No format data yet</div>'}
-
-      <!-- Language split -->
-      ${totalPosts > 0 ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-        <div style="font-size:11px;font-weight:700;margin-bottom:8px;color:var(--text3)">LANGUAGE MIX</div>
-        <div style="display:flex;gap:6px">
-          ${[
-            {key:'bilingual', label:'Bilingual', color:'#c9a84c'},
-            {key:'te', label:'Telugu', color:'#22c55e'},
-            {key:'en', label:'English', color:'#3b82f6'},
-          ].filter(l=>langCounts[l.key]>0).map(l=>`
-          <div style="text-align:center;flex:1;background:var(--bg3);border-radius:6px;padding:6px">
-            <div style="font-size:14px;font-weight:700;color:${l.color}">${langCounts[l.key]}</div>
-            <div style="font-size:10px;color:var(--text3)">${l.label}</div>
-          </div>`).join('')}
-        </div>
-      </div>` : ''}
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">Posts by format</div>
+      ${Object.keys(formatCounts).length ? Object.entries(formatCounts).sort((a,b)=>b[1]-a[1]).map(([fmt,n])=>{
+        const max=Math.max(...Object.values(formatCounts));
+        return `<div style="margin-bottom:7px">
+          <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:2px"><span>${FORMAT_LABELS[fmt]||fmt}</span><span style="font-weight:600">${n}</span></div>
+          <div style="height:4px;background:var(--bg3);border-radius:2px"><div style="height:4px;background:#3b82f6;border-radius:2px;width:${barW(n,max)}%"></div></div>
+        </div>`;}).join('')
+      : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No data yet</div>'}
     </div>
   </div>
 
-  <!-- LATEST AI REVIEW -->
-  ${latestReview ? `
-  <div class="mkt-card" style="margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700">📊 Latest ${latestReview.period_type} review — ${latestReview.period_label}</div>
-      <span class="badge ${latestReview.status==='approved'?'badge-green':'badge-gray'}">${latestReview.status}</span>
+  <!-- REVIEW GENERATOR -->
+  <div class="mkt-card" style="margin-bottom:16px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px">📊 Generate AI Review</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label class="mkt-form-label">Review period</label>
+        <select id="review-period" class="mkt-form-select" onchange="reviewPeriodChanged()">
+          <option value="weekly">Weekly (last 7 days)</option>
+          <option value="fortnightly">Fortnightly (last 14 days)</option>
+          <option value="monthly" selected>Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+          <option value="custom">Custom date range</option>
+        </select>
+      </div>
+      <div id="review-month-picker">
+        <label class="mkt-form-label">Month</label>
+        <select id="review-month" class="mkt-form-select">
+          ${Array.from({length:6},(_,i)=>{
+            const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+            const val = d.toISOString().split('T')[0].slice(0,7);
+            const lbl = d.toLocaleString('en-IN',{month:'long',year:'numeric'});
+            return `<option value="${val}" ${i===0?'selected':''}>${lbl}</option>`;
+          }).join('')}
+        </select>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
-      ${[
-        {label:'Best channel', value: CHANNEL_LABELS[latestReview.best_channel]||latestReview.best_channel||'—'},
-        {label:'Best format', value: FORMAT_LABELS[latestReview.best_format]||latestReview.best_format||'—'},
-        {label:'Total posts', value: latestReview.total_posts||0},
-      ].map(s=>`<div style="background:var(--bg3);border-radius:6px;padding:8px;text-align:center">
-        <div style="font-size:13px;font-weight:700">${s.value}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.label}</div>
-      </div>`).join('')}
+    <div id="review-custom-dates" style="display:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <label class="mkt-form-label">From</label>
+        <input id="review-from" class="mkt-form-input" type="date" value="${new Date(now.getFullYear(),now.getMonth(),1).toISOString().split('T')[0]}">
+      </div>
+      <div>
+        <label class="mkt-form-label">To</label>
+        <input id="review-to" class="mkt-form-input" type="date" value="${now.toISOString().split('T')[0]}">
+      </div>
     </div>
-    ${latestReview.ai_recommendations?.length ? `
-    <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">AI RECOMMENDATIONS</div>
-    ${latestReview.ai_recommendations.map(r=>`
-      <div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
-        <span style="background:${r.priority==='high'?'rgba(239,68,68,.2)':r.priority==='medium'?'rgba(245,158,11,.2)':'rgba(34,197,94,.2)'};
-          color:${r.priority==='high'?'#ef4444':r.priority==='medium'?'#f59e0b':'#22c55e'};
-          border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;flex-shrink:0;margin-top:1px">${(r.priority||'low').toUpperCase()}</span>
-        <div>
-          <div style="font-size:12px;font-weight:600">${r.action}</div>
-          <div style="font-size:11px;color:var(--text3)">${r.reason}</div>
-        </div>
-      </div>`).join('')}
-    ` : ''}
-    <button onclick="approveReview('${latestReview.id}')" class="mkt-btn mkt-btn-primary" style="margin-top:10px;width:100%;padding:10px;font-size:12px;font-weight:700">✅ Approve & Apply Recommendations</button>
-  </div>` : `
-  <div class="mkt-card" style="text-align:center;padding:20px;margin-bottom:12px">
-    <div style="font-size:28px;margin-bottom:8px">📊</div>
-    <div style="font-size:13px;font-weight:700;margin-bottom:4px">No review generated yet</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate your first monthly review to see AI recommendations</div>
-    <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-primary" style="padding:10px 20px;font-size:12px">📊 Generate Monthly Review</button>
-  </div>`}
+    <button onclick="generateReview()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-weight:700">📊 Generate Review</button>
+    <div id="review-output" style="margin-top:12px"></div>
+  </div>
 
-  <!-- RECENT POSTS TABLE -->
+  <!-- PAST REVIEWS -->
+  ${(reviews||[]).length ? `
   <div class="mkt-card">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Recent posts</div>
-    ${(contentPosts||[]).slice(0,8).length ? `
-    <div style="display:grid;gap:6px">
-      ${(contentPosts||[]).slice(0,8).map(p=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">
-        <span style="font-size:18px">${FORMAT_LABELS[p.post_type||'image']?.split(' ')[0]||'🖼️'}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.topic||'Untitled'}</div>
-          <div style="font-size:10px;color:var(--text3)">${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${p.language||'en'} · ${p.post_type||'image'}</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">Past reviews</div>
+    <div style="display:grid;gap:8px">
+      ${(reviews||[]).map(r=>`
+      <div style="padding:10px;background:var(--bg3);border-radius:8px;cursor:pointer" onclick="expandReview('${r.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:700">${r.period_label||r.period_type} Review</div>
+            <div style="font-size:10px;color:var(--text3)">${new Date(r.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+          </div>
+          <span class="badge ${r.status==='approved'?'badge-green':'badge-gray'}">${r.status||'draft'}</span>
         </div>
-        <span class="badge ${p.status==='published'?'badge-green':p.status==='pending_approval'?'badge-yellow':'badge-gray'}">${p.status||'draft'}</span>
+        <div id="review-expand-${r.id}" style="display:none;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          ${r.ai_recommendations?.length ? r.ai_recommendations.map(rec=>`
+          <div style="display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+            <span style="background:${rec.priority==='high'?'rgba(239,68,68,.2)':rec.priority==='medium'?'rgba(245,158,11,.2)':'rgba(34,197,94,.2)'};
+              color:${rec.priority==='high'?'#ef4444':rec.priority==='medium'?'#f59e0b':'#22c55e'};
+              border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;flex-shrink:0;margin-top:2px">${(rec.priority||'').toUpperCase()}</span>
+            <div><div style="font-size:12px;font-weight:600">${rec.action}</div><div style="font-size:11px;color:var(--text3)">${rec.reason}</div></div>
+          </div>`).join('') : '<div style="font-size:12px;color:var(--text3)">No recommendations recorded</div>'}
+          ${r.status!=='approved'?`<button onclick="approveReview('${r.id}')" class="mkt-btn mkt-btn-primary" style="margin-top:8px;width:100%;padding:8px;font-size:12px">✅ Approve</button>`:''}
+        </div>
       </div>`).join('')}
-    </div>` : '<div style="font-size:12px;color:var(--text3);text-align:center;padding:16px">No posts yet — create your first in Content Studio</div>'}
-  </div>`);
+    </div>
+  </div>` : ''}
+  `);
+}
+
+function reviewPeriodChanged() {
+  const period = document.getElementById('review-period')?.value;
+  const monthPicker = document.getElementById('review-month-picker');
+  const customDates = document.getElementById('review-custom-dates');
+  if (monthPicker) monthPicker.style.display = period === 'monthly' ? 'block' : 'none';
+  if (customDates) customDates.style.display = period === 'custom' ? 'grid' : 'none';
+}
+
+function expandReview(id) {
+  const el = document.getElementById('review-expand-'+id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function generateReview(typeOverride, btnEl) {
+  const period = typeOverride || document.getElementById('review-period')?.value || 'monthly';
+  const btn = btnEl || document.querySelector('[onclick="generateReview()"]');
+  const out = document.getElementById('review-output');
+  if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="padding:12px;color:var(--text3);font-size:12px">⏳ AI is analysing your content performance…</div>';
+
+  try {
+    const now = new Date();
+    let startDate, endDate = now.toISOString(), periodLabel;
+
+    if (period === 'weekly') {
+      startDate = new Date(now.getTime()-7*86400000).toISOString();
+      periodLabel = 'Week of '+new Date(now.getTime()-7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    } else if (period === 'fortnightly') {
+      startDate = new Date(now.getTime()-14*86400000).toISOString();
+      periodLabel = 'Fortnight ending '+now.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+    } else if (period === 'monthly') {
+      const m = document.getElementById('review-month')?.value || now.toISOString().slice(0,7);
+      const [yr,mo] = m.split('-').map(Number);
+      startDate = new Date(yr,mo-1,1).toISOString();
+      endDate = new Date(yr,mo,0,23,59,59).toISOString();
+      periodLabel = new Date(yr,mo-1,1).toLocaleString('en-IN',{month:'long',year:'numeric'});
+    } else if (period === 'quarterly') {
+      const q = Math.floor(now.getMonth()/3);
+      startDate = new Date(now.getFullYear(),q*3,1).toISOString();
+      periodLabel = now.getFullYear()+'-Q'+(q+1);
+    } else if (period === 'yearly') {
+      startDate = new Date(now.getFullYear(),0,1).toISOString();
+      periodLabel = 'Year '+now.getFullYear();
+    } else if (period === 'custom') {
+      startDate = new Date(document.getElementById('review-from')?.value).toISOString();
+      endDate = new Date(document.getElementById('review-to')?.value+'T23:59:59').toISOString();
+      periodLabel = document.getElementById('review-from')?.value+' to '+document.getElementById('review-to')?.value;
+    }
+
+    // Fetch period data
+    const [
+      {data: posts},
+      {data: channels},
+      {data: perf},
+      {data: calItems},
+      {data: stratSessions}
+    ] = await Promise.all([
+      sb.from('content_posts').select('topic,post_type,language,status').gte('created_at', startDate).lte('created_at', endDate).then(r=>r,()=>({data:[]})),
+      sb.from('channel_posts').select('channel,status').gte('created_at', startDate).lte('created_at', endDate).then(r=>r,()=>({data:[]})),
+      sb.from('post_performance').select('*').gte('recorded_at', startDate).lte('recorded_at', endDate).then(r=>r,()=>({data:[]})),
+      sb.from('content_calendar').select('topic,content_type,status').gte('cal_date', startDate.split('T')[0]).lte('cal_date', endDate.split('T')[0]).then(r=>r,()=>({data:[]})),
+      sb.from('strategy_sessions').select('summary,key_themes').gte('created_at', startDate).then(r=>r,()=>({data:[]}))
+    ]);
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/content-notifications', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action: 'generate_review',
+        period_type: period,
+        period_label: periodLabel,
+        start_date: startDate,
+        end_date: endDate,
+        data_summary: {
+          total_posts: (posts||[]).length,
+          published: (channels||[]).filter(c=>c.status==='published').length,
+          channels_used: [...new Set((channels||[]).map(c=>c.channel))],
+          formats: [...new Set((posts||[]).map(p=>p.post_type))],
+          avg_engagement: (perf||[]).length ? ((perf||[]).reduce((a,p)=>a+(p.engagement_rate||0),0)/(perf||[]).length).toFixed(1) : null,
+          planned_vs_actual: { planned:(calItems||[]).length, created:(posts||[]).length },
+          strategy_themes: (stratSessions||[]).map(s=>s.key_themes).join(', ')
+        }
+      })
+    });
+    const data = await res.json();
+
+    // Show inline
+    const reviewData = data.review || data;
+    if (out) out.innerHTML = `
+      <div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:8px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">📊 ${periodLabel} Review</div>
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+          ${[
+            {l:'Posts created', v:(posts||[]).length},
+            {l:'Published', v:(channels||[]).filter(c=>c.status==='published').length},
+            {l:'Avg engagement', v:(perf||[]).length?((perf||[]).reduce((a,p)=>a+(p.engagement_rate||0),0)/(perf||[]).length).toFixed(1)+'%':'—'},
+          ].map(s=>`<div style="background:var(--bg3);border-radius:6px;padding:8px;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:var(--gold)">${s.v}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:2px">${s.l}</div>
+          </div>`).join('')}
+        </div>
+
+        ${reviewData.ai_recommendations?.length ? `
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase">AI Recommendations</div>
+        ${reviewData.ai_recommendations.map(r=>`
+        <div style="display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+          <span style="background:${r.priority==='high'?'rgba(239,68,68,.2)':r.priority==='medium'?'rgba(245,158,11,.2)':'rgba(34,197,94,.2)'};
+            color:${r.priority==='high'?'#ef4444':r.priority==='medium'?'#f59e0b':'#22c55e'};
+            border-radius:4px;padding:1px 6px;font-size:9px;font-weight:700;flex-shrink:0;margin-top:2px">${(r.priority||'').toUpperCase()}</span>
+          <div><div style="font-size:12px;font-weight:600">${r.action}</div><div style="font-size:11px;color:var(--text3)">${r.reason}</div></div>
+        </div>`).join('')}` : '<div style="font-size:12px;color:var(--text3)">Review saved — no recommendations yet</div>'}
+
+        <button onclick="approveReview('${reviewData.id||''}')" class="mkt-btn mkt-btn-primary" style="width:100%;margin-top:10px;padding:8px;font-size:12px">✅ Approve & Archive</button>
+      </div>`;
+
+    showMktToast('✅ '+periodLabel+' review generated');
+  } catch(e) {
+    if (out) out.innerHTML = `<div style="color:var(--red);padding:8px;font-size:12px">❌ ${e.message}</div>`;
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent = '📊 Generate Review'; btn.disabled = false; }
+  }
 }
 
 async function approveReview(reviewId) {
