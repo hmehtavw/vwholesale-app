@@ -3958,6 +3958,15 @@ async function updateCatalogItemPrice(id, field, val, isTile) {
 }
 window.updateCatalogItemPrice = updateCatalogItemPrice;
 
+async function updateCatalogItemField(id, field, val, isTile) {
+  if (!id || !field) return;
+  const table = isTile ? 'non_inventory_tiles' : 'brand_catalog_items';
+  const { error } = await VW_DB.client.from(table).update({ [field]: val }).eq('id', id);
+  if (error) console.error('updateCatalogItemField error:', error.message);
+  else showToast && showToast('✅ Saved');
+}
+window.updateCatalogItemField = updateCatalogItemField;
+
 // Auto-save price when user types in a tier input
 async function onTierPriceChange(input, mrp, unit) {
   const field  = input.dataset.field;
