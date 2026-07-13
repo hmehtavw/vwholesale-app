@@ -964,9 +964,12 @@ async function renderIntegrations() {
       <span id="threads-status-badge" class="badge badge-yellow">⏳ Verify</span>
     </div>
     <div id="threads-status-detail" style="margin-top:8px;font-size:11px;color:var(--text3)">Click Verify to confirm connection</div>
-    <div style="display:flex;gap:8px;margin-top:8px">
-      <button onclick="verifyThreadsConnection()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">🔄 Verify Connection</button>
-      <button onclick="testThreadsPost()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">🧪 Test Post</button>
+    <div style="margin-top:8px;display:grid;gap:6px">
+      <input id="threads-test-image" class="mkt-form-input" style="font-size:11px" placeholder="Image URL for test post (optional — paste any public image URL)">
+      <div style="display:flex;gap:8px">
+        <button onclick="verifyThreadsConnection()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">🔄 Verify</button>
+        <button onclick="testThreadsPost()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">🧪 Test Post with Image</button>
+      </div>
     </div>
   </div>
 
@@ -1009,9 +1012,11 @@ async function testThreadsPost() {
   const btn = document.querySelector('[onclick="testThreadsPost()"]');
   if (btn) { btn.textContent='⏳ Posting…'; btn.disabled=true; }
   try {
-    // Try to get latest image from content posts
-    const { data: lp } = await sb.from('content_posts').select('master_image_url').not('master_image_url','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
-    window._latestThreadsImageUrl = lp?.master_image_url || '';
+    // Get image: first check manual input, then latest content post
+    const manualImgUrl = (document.getElementById('threads-test-image')?.value||'').trim();
+    const { data: lp } = await sb.from('content_posts').select('master_image_url').not('master_image_url','is',null).neq('master_image_url','').order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+    window._latestThreadsImageUrl = manualImgUrl || lp?.master_image_url || '';
+    console.log('Threads image URL:', window._latestThreadsImageUrl||'none');
 
     const res = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
