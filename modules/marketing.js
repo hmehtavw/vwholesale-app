@@ -965,7 +965,14 @@ async function renderIntegrations() {
     </div>
     <div id="threads-status-detail" style="margin-top:8px;font-size:11px;color:var(--text3)">Click Verify to confirm connection</div>
     <div style="margin-top:8px;display:grid;gap:6px">
-      <input id="threads-test-image" class="mkt-form-input" style="font-size:11px" placeholder="Image URL for test post (optional — paste any public image URL)">
+      <div style="display:flex;gap:6px;align-items:center">
+        <label class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px;cursor:pointer;margin:0;flex-shrink:0">
+          📁 Upload Image
+          <input type="file" id="threads-test-image-file" accept="image/*" onchange="threadsUploadTestImage(this)" style="display:none">
+        </label>
+        <div id="threads-test-image-status" style="font-size:11px;color:var(--text3)">No image selected</div>
+        <input type="hidden" id="threads-test-image">
+      </div>
       <div style="display:flex;gap:8px">
         <button onclick="verifyThreadsConnection()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">🔄 Verify</button>
         <button onclick="testThreadsPost()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">🧪 Test Post with Image</button>
@@ -984,6 +991,25 @@ async function renderIntegrations() {
       <span class="badge badge-green">✅ Active</span>
     </div>
   </div>`);
+}
+
+async function threadsUploadTestImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('threads-test-image-status');
+  if (status) status.textContent = '⏳ Uploading…';
+  try {
+    const fname = 'threads/test_'+Date.now()+'_'+file.name.replace(/[^a-z0-9.]/gi,'_').toLowerCase();
+    const { error } = await sb.storage.from('marketing-assets').upload(fname, file, {contentType:file.type, upsert:true});
+    if (error) throw new Error(error.message);
+    const { data: ud } = sb.storage.from('marketing-assets').getPublicUrl(fname);
+    document.getElementById('threads-test-image').value = ud.publicUrl;
+    if (status) status.innerHTML = '<span style="color:#22c55e">✅ '+file.name+' ready</span>';
+    showMktToast('✅ Image uploaded and ready');
+  } catch(e) {
+    if (status) status.textContent = '❌ '+e.message;
+    showMktToast('❌ Upload failed: '+e.message);
+  }
 }
 
 async function verifyThreadsConnection() {
