@@ -953,6 +953,23 @@ async function renderIntegrations() {
     <div style="margin-top:8px;font-size:11px;color:var(--text3)">YouTube Data API v3 — coming next session</div>
   </div>
 
+  <!-- THREADS -->
+  <div class="mkt-card" style="margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:32px">🧵</div>
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:700">Threads @vwholesaleindia</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Auto-post to Threads — token connected</div>
+      </div>
+      <span id="threads-status-badge" class="badge badge-yellow">⏳ Verify</span>
+    </div>
+    <div id="threads-status-detail" style="margin-top:8px;font-size:11px;color:var(--text3)">Click Verify to confirm connection</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="verifyThreadsConnection()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">🔄 Verify Connection</button>
+      <button onclick="testThreadsPost()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 14px">🧪 Test Post</button>
+    </div>
+  </div>
+
   <!-- GITHUB (Blog) -->
   <div class="mkt-card">
     <div style="display:flex;align-items:center;gap:12px">
