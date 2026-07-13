@@ -1141,6 +1141,11 @@ async function autoSyncInstagramId() {
     const igId = data.instagram_business_account?.id;
     if (igId) {
       await sb.from('marketing_settings').upsert({key:'META_IG_ID',value:igId},{onConflict:'key'});
+      // Keep social_connections in sync
+      await sb.from('social_connections').upsert([
+        {platform:'instagram', status:'connected', access_token_set:true, updated_at:new Date().toISOString()},
+        {platform:'facebook',  status:'connected', access_token_set:true, updated_at:new Date().toISOString()},
+      ],{onConflict:'platform'}).then(()=>{}).catch(()=>{});
       console.log('[Meta] Instagram ID auto-synced:', igId);
     }
   } catch(e) {
@@ -1180,10 +1185,12 @@ async function handleMetaOAuth(code) {
     const data = await res.json();
     if (!data.ok) throw new Error(data.error||'Meta connection failed');
 
-    await sb.from('social_connections').upsert({
-      platform:'meta', status:'connected', access_token_set:true,
-      connected_at:new Date().toISOString(), updated_at:new Date().toISOString()
-    },{onConflict:'platform'});
+    const _now = new Date().toISOString();
+    await sb.from('social_connections').upsert([
+      {platform:'meta',      status:'connected', access_token_set:true, connected_at:_now, updated_at:_now},
+      {platform:'instagram', status:'connected', access_token_set:true, connected_at:_now, updated_at:_now},
+      {platform:'facebook',  status:'connected', access_token_set:true, connected_at:_now, updated_at:_now},
+    ],{onConflict:'platform'});
 
     showMktToast('✅ Meta (Instagram + Facebook) connected!');
   } catch(e) {
