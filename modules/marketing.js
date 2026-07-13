@@ -2132,60 +2132,343 @@ async function csPublishAll() {
 }
 
 async function renderCalendar() {
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading calendar…</div>`);
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
+  const monthLabel = now.toLocaleString('en-IN', {month:'long', year:'numeric'});
+
+  const [
+    {data: calItems},
+    {data: contentPosts}
+  ] = await Promise.all([
+    sb.from('content_calendar').select('*').gte('cal_date', monthStart).lte('cal_date', monthEnd).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]})),
+    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]}))
+  ]);
+
+  // Map content posts by topic for quick lookup
+  const contentByTopic = {};
+  (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
+
+  // Separate reels from other content
+  const reelDays = (calItems||[]).filter(i => i.content_type==='reel' || i.post_type==='reel');
+  const otherDays = (calItems||[]).filter(i => i.content_type!=='reel' && i.post_type!=='reel');
+
+  const TYPE_ICON = {image:'🖼️', reel:'🎬', gif:'✨', festival:'🎉', qa:'❓', offer:'💰', post:'📝'};
+  const STATUS_BADGE = {
+    draft: 'badge-gray', planned: 'badge-gray', scripted: 'badge-yellow',
+    approved: 'badge-green', published: 'badge-green', recorded: 'badge-blue'
+  };
+
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">📅 Content Calendar</h3>
-      <div style="font-size:12px;color:var(--text3)">Monthly planner — festivals, posts, reels, offers. Review every 15th.</div>
+      <h3 style="font-size:16px;font-weight:900">📅 ${monthLabel}</h3>
+      <div style="font-size:12px;color:var(--text3)">${(calItems||[]).length} posts planned · ${reelDays.length} reels · ${otherDays.length} other</div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="mkt-btn mkt-btn-ghost" onclick="calPrevMonth()">← Prev</button>
-      <button class="mkt-btn mkt-btn-primary" id="cal-month-label" onclick="calGoToday()">This Month</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="calNextMonth()">Next →</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="showCalPlanModal()">🤖 AI Plan Month</button>
-    </div>
+    <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
   </div>
 
-  <!-- Month summary strip -->
-  <div id="cal-summary" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px"></div>
-
-  <!-- Calendar grid -->
-  <div class="mkt-card" style="padding:10px;margin-bottom:14px">
-    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:6px">
-      ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=>'<div style="font-size:10px;font-weight:700;text-align:center;color:var(--text3);padding:4px">'+d+'</div>').join("")}
+  <!-- REEL DAYS — shown prominently at top -->
+  ${reelDays.length ? `
+  <div style="margin-bottom:20px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+      🎬 Reel days this month
+      <span style="font-size:11px;font-weight:400;color:var(--text3)">(${reelDays.length} reels planned — scripts ready to use)</span>
     </div>
-    <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px"></div>
-  </div>
+    <div style="display:grid;gap:10px">
+      ${reelDays.map(item => {
+        const existing = contentByTopic[item.topic];
+        const hasScript = existing?.reel_script;
+        const date = new Date(item.cal_date);
+        const dayLabel = date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+        const isPast = date < now;
+        const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
+        return `
+        <div class="mkt-card" style="border-left:3px solid ${isToday?'var(--gold)':hasScript?'#22c55e':'var(--border)'}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:${hasScript?'10px':'0'}">
+            <div style="text-align:center;min-width:44px">
+              <div style="font-size:20px;font-weight:900;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
+              <div style="font-size:10px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short',month:'short'})}</div>
+            </div>
+            <div style="flex:1">
+              <div style="font-size:13px;font-weight:700">${item.topic||'Untitled reel'}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px">${item.notes||'No notes'}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              ${isPast && !hasScript ? '<span style="font-size:10px;color:#ef4444">Past</span>' : ''}
+              ${hasScript
+                ? '<span class="badge badge-green">✅ Script ready</span>'
+                : `<button onclick="generateAndShowReelScript('${item.topic}','${item.id}',this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">🎬 Generate Script</button>`}
+            </div>
+          </div>
 
-  <!-- Day detail panel -->
-  <div id="cal-day-panel" style="display:none"></div>
+          ${hasScript ? `
+          <!-- Script inline -->
+          <div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">
+            ${renderReelScriptInline(existing.reel_script, item.id, existing.id)}
+          </div>` : `
+          <div id="reel-script-${item.id}" style="display:none"></div>`}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>` : `
+  <div class="mkt-card" style="text-align:center;padding:20px;margin-bottom:16px;border-left:3px solid var(--gold)">
+    <div style="font-size:28px;margin-bottom:8px">🎬</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">No reel days planned yet</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Add reel days to your calendar and scripts will appear here automatically</div>
+    <button onclick="addCalendarItem('reel')" class="mkt-btn mkt-btn-primary" style="padding:8px 20px;font-size:12px">+ Add Reel Day</button>
+  </div>`}
 
-  <!-- Upcoming reels shooting plan -->
-  <div class="mkt-card" style="margin-bottom:14px" id="cal-reel-panel">
-    <div class="mkt-card-title">🎬 Reel Shooting Plan</div>
-    <div id="cal-reels" style="font-size:12px;color:var(--text3);text-align:center;padding:16px">Loading…</div>
-  </div>
+  <!-- ALL OTHER DAYS -->
+  <div style="font-size:13px;font-weight:700;margin-bottom:10px">All planned posts</div>
+  <div style="display:grid;gap:6px">
+    ${(calItems||[]).length ? (calItems||[]).map(item => {
+      const existing = contentByTopic[item.topic];
+      const date = new Date(item.cal_date);
+      const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
+      const icon = TYPE_ICON[item.content_type||item.post_type||'post']||'📝';
+      return `
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isToday?'rgba(201,168,76,.08)':'var(--bg3)'};border-radius:8px;border:1px solid ${isToday?'rgba(201,168,76,.3)':'var(--border)'}">
+        <div style="text-align:center;min-width:36px">
+          <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
+          <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
+        </div>
+        <span style="font-size:18px">${icon}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
+          <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} · ${item.language||'en'}</div>
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+          ${existing ? `<span class="badge badge-green" style="font-size:9px">${existing.status}</span>` : ''}
+          <button onclick="quickCreateFromCalendar('${item.topic}','${item.content_type||'image'}','${item.language||'bilingual'}')" 
+            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">
+            ${existing ? '✏️ Edit' : '✨ Create'}
+          </button>
+        </div>
+      </div>`;
+    }).join('') : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No posts planned this month — add some above</div>`}
+  </div>`);
+}
 
-  <!-- 15th Review reminder -->
-  <div class="mkt-card" id="cal-review-reminder" style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);display:none">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div style="font-size:32px">📋</div>
-      <div>
-        <div style="font-size:13px;font-weight:900;color:var(--gold)">Monthly Content Review — 15th</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">Today is the 15th — review next month\'s topics and freeze the plan before AI generates all content.</div>
-        <button class="mkt-btn mkt-btn-primary" onclick="showMonthReview()" style="margin-top:8px;font-size:12px">Start Review →</button>
+function renderReelScriptInline(script, calId, postId) {
+  if (!script || typeof script !== 'object') return '<div style="font-size:12px;color:var(--text3)">Script data invalid — regenerate</div>';
+  const shots = (script.shots||[]);
+  return `
+    <!-- Hook -->
+    <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px">⚡ HOOK — first 3 seconds</div>
+      <div style="font-size:13px;font-weight:600">${script.hook||''}</div>
+      ${script.telugu_hook ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">తెలుగు: ${script.telugu_hook}</div>` : ''}
+    </div>
+
+    <!-- Shot list -->
+    <div style="margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">📹 SHOT LIST · ${script.duration||'30-45 sec'}</div>
+      <div style="display:grid;gap:5px">
+        ${shots.map((sh, i) => `
+        <div style="display:grid;grid-template-columns:20px 1fr 1fr;gap:8px;align-items:start;padding:6px 8px;background:var(--bg3);border-radius:6px">
+          <div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:2px">${i+1}</div>
+          <div>
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">FILM</div>
+            <div style="font-size:11px">${sh.what_to_film||sh}</div>
+          </div>
+          <div>
+            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">ON SCREEN · ${sh.duration_sec||'?'}s</div>
+            <div style="font-size:11px;font-weight:600">${sh.onscreen_text||''}</div>
+          </div>
+        </div>`).join('')}
       </div>
     </div>
-  </div>`);
 
-  // Show 15th review reminder if today is 14-16
-  const todayDate = new Date().getDate();
-  if (todayDate >= 14 && todayDate <= 16) {
-    document.getElementById("cal-review-reminder").style.display = "block";
-  }
+    ${script.voiceover ? `
+    <div style="margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:6px">
+      <div style="font-size:9px;font-weight:700;color:var(--text3);margin-bottom:4px">🎙️ VOICEOVER</div>
+      <div style="font-size:11px;line-height:1.8">${script.voiceover}</div>
+    </div>` : ''}
 
-  await loadCalendar();
+    <!-- Caption -->
+    <div style="margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:6px">
+      <div style="font-size:9px;font-weight:700;color:var(--text3);margin-bottom:4px">📌 CAPTION + HASHTAGS</div>
+      <div style="font-size:11px;line-height:1.8">${script.caption||''}</div>
+      ${script.best_time_to_post ? `<div style="font-size:10px;color:var(--gold);margin-top:4px">Best time: ${script.best_time_to_post}</div>` : ''}
+    </div>
+
+    <!-- Upload + Actions -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <label class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 14px;cursor:pointer;margin:0">
+        📹 Upload Recorded Reel
+        <input type="file" accept="video/*,video/mp4,video/mov,video/avi" onchange="uploadReel(this,'${calId}','${postId}')" style="display:none">
+      </label>
+      <button onclick="navigator.clipboard.writeText(document.querySelector('[data-caption-${calId}]')?.textContent||'${(script.caption||'').replace(/'/g,"\'")}').then(()=>showMktToast('📋 Caption copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📋 Copy Caption</button>
+      <button onclick="generateAndShowReelScript('${script.topic||''}','${calId}',this,true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate</button>
+    </div>
+    <div id="reel-upload-status-${calId}" style="margin-top:6px;font-size:11px;color:var(--text3)"></div>
+    <!-- Hidden caption for copy -->
+    <span data-caption-${calId} style="display:none">${script.caption||''}</span>
+  `;
 }
+
+async function generateAndShowReelScript(topic, calId, btn, regenerate) {
+  if (!topic) { showMktToast('No topic for this reel'); return; }
+  if (btn) { btn.textContent = '⏳ Writing script…'; btn.disabled = true; }
+
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Reel Script Generator',
+        prompt: `Write a complete Instagram Reel / YouTube Shorts script for V Wholesale, Vijayawada.
+
+TOPIC: ${topic}
+STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+CATEGORIES: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals
+
+Return JSON:
+{
+  "duration": "30-45 seconds",
+  "hook": "First 3 seconds — spoken line or text to stop the scroll",
+  "telugu_hook": "Same hook in Telugu script for Telugu version",
+  "shots": [
+    {"scene": 1, "what_to_film": "specific instruction", "onscreen_text": "text overlay", "duration_sec": 5},
+    {"scene": 2, "what_to_film": "specific instruction", "onscreen_text": "text overlay", "duration_sec": 8},
+    {"scene": 3, "what_to_film": "specific instruction", "onscreen_text": "text overlay", "duration_sec": 8},
+    {"scene": 4, "what_to_film": "specific instruction", "onscreen_text": "text overlay", "duration_sec": 7},
+    {"scene": 5, "what_to_film": "specific instruction", "onscreen_text": "CTA text", "duration_sec": 7}
+  ],
+  "voiceover": "Full spoken script matching the shots",
+  "caption": "Instagram caption with strong hook first line, then copy, then hashtags",
+  "best_time_to_post": "e.g. Tuesday 7:00pm",
+  "topic": "${topic}"
+}`,
+        context: { topic }
+      })
+    });
+    const data = await res.json();
+    const script = data.output;
+    if (!script || typeof script !== 'object') throw new Error('Script generation failed');
+
+    // Save to content_posts
+    const { data: existing } = await sb.from('content_posts').select('id').eq('topic', topic).maybeSingle().then(r=>r,()=>({data:null}));
+    if (existing?.id) {
+      await sb.from('content_posts').update({reel_script: script, post_type:'reel', status:'scripted', updated_at:new Date().toISOString()}).eq('id', existing.id);
+    } else {
+      await sb.from('content_posts').insert({topic, post_type:'reel', reel_script:script, status:'scripted', language:'bilingual', created_at:new Date().toISOString(), updated_at:new Date().toISOString()});
+    }
+
+    // Update calendar item status
+    if (calId) await sb.from('content_calendar').update({status:'scripted'}).eq('id', calId);
+
+    // Show inline
+    const scriptEl = document.getElementById('reel-script-'+calId);
+    if (scriptEl) {
+      scriptEl.style.display = 'block';
+      scriptEl.style.borderTop = '1px solid var(--border)';
+      scriptEl.style.paddingTop = '10px';
+      scriptEl.innerHTML = renderReelScriptInline(script, calId, existing?.id||'');
+    }
+    if (btn) btn.outerHTML = '<span class="badge badge-green">✅ Script ready</span>';
+    showMktToast('✅ Script ready — scroll down to see it');
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+    if (btn) { btn.textContent = '🎬 Generate Script'; btn.disabled = false; }
+  }
+}
+
+async function uploadReel(input, calId, postId) {
+  const file = input.files[0];
+  if (!file) return;
+  const maxMB = 200;
+  if (file.size > maxMB*1024*1024) { showMktToast('Video must be under '+maxMB+'MB'); return; }
+
+  const statusEl = document.getElementById('reel-upload-status-'+calId);
+  if (statusEl) statusEl.innerHTML = '<span style="color:var(--gold)">⏳ Uploading reel… ('+Math.round(file.size/1024/1024)+'MB)</span>';
+
+  try {
+    const fileName = 'reels/'+Date.now()+'_'+file.name.replace(/[^a-z0-9._]/gi,'_').toLowerCase();
+    const { error } = await sb.storage.from('marketing-assets').upload(fileName, file, {contentType:file.type, upsert:true});
+    if (error) throw new Error(error.message);
+
+    const { data: urlData } = sb.storage.from('marketing-assets').getPublicUrl(fileName);
+    const videoUrl = urlData.publicUrl;
+
+    // Update content post with video URL
+    if (postId) {
+      await sb.from('content_posts').update({master_image_url: videoUrl, status:'recorded', updated_at:new Date().toISOString()}).eq('id', postId);
+    }
+    // Update calendar
+    if (calId) await sb.from('content_calendar').update({status:'recorded'}).eq('id', calId).then(()=>{}).catch(()=>{});
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:#22c55e">✅ Reel uploaded! <a href="'+videoUrl+'" target="_blank" style="color:var(--gold)">View ↗</a></span>';
+    showMktToast('✅ Reel uploaded and saved!');
+  } catch(e) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--red)">❌ Upload failed: '+e.message+'</span>';
+    showMktToast('❌ Upload failed: '+e.message);
+  }
+}
+
+function quickCreateFromCalendar(topic, type, language) {
+  // Switch to content studio with pre-filled values
+  mktNav('content');
+  setTimeout(() => {
+    const topicEl = document.getElementById('cs-topic');
+    const typeEl = document.getElementById('cs-type');
+    const langEl = document.querySelector('input[name="cs-lang"][value="'+language+'"]');
+    if (topicEl) topicEl.value = topic;
+    if (typeEl) typeEl.value = type;
+    if (langEl) langEl.checked = true;
+    if (type === 'festival') {
+      const teEl = document.querySelector('input[name="cs-lang"][value="te"]');
+      if (teEl) teEl.checked = true;
+    }
+    showMktToast('Topic pre-filled — click Create to generate content');
+  }, 400);
+}
+
+function addCalendarItem(defaultType) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:400px;border:1px solid var(--border)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px">Add to calendar</div>
+      <div style="display:grid;gap:8px">
+        <input id="cal-topic" class="mkt-form-input" placeholder="Topic / campaign name">
+        <input id="cal-date" class="mkt-form-input" type="date" value="${new Date().toISOString().split('T')[0]}">
+        <select id="cal-type" class="mkt-form-select">
+          ${[{id:'image',l:'🖼️ Image'},{id:'reel',l:'🎬 Reel'},{id:'gif',l:'✨ GIF'},{id:'festival',l:'🎉 Festival'},{id:'qa',l:'❓ Q&A'}]
+            .map(t=>`<option value="${t.id}" ${defaultType===t.id?'selected':''}>${t.l}</option>`).join('')}
+        </select>
+        <select id="cal-lang" class="mkt-form-select">
+          <option value="bilingual">Bilingual (recommended)</option>
+          <option value="te">Telugu</option>
+          <option value="en">English</option>
+        </select>
+        <textarea id="cal-notes" class="mkt-form-input" rows="2" placeholder="Notes (optional)"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button onclick="saveCalendarItem()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;font-size:13px;font-weight:700">Save</button>
+        <button onclick="this.closest('[style*=fixed]').remove()" class="mkt-btn mkt-btn-ghost" style="padding:10px 16px">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('cal-topic')?.focus(), 100);
+}
+
+async function saveCalendarItem() {
+  const topic = (document.getElementById('cal-topic')?.value||'').trim();
+  const date = document.getElementById('cal-date')?.value;
+  const type = document.getElementById('cal-type')?.value||'image';
+  const lang = document.getElementById('cal-lang')?.value||'bilingual';
+  const notes = document.getElementById('cal-notes')?.value||'';
+  if (!topic || !date) { showMktToast('Enter topic and date'); return; }
+
+  await sb.from('content_calendar').insert({topic, cal_date:date, content_type:type, language:lang, notes, status:'planned', created_at:new Date().toISOString()});
+  document.querySelector('[style*="fixed"][style*="z-index:99999"]')?.remove();
+  showMktToast('✅ Added to calendar');
+  renderCalendar();
+}
+
 
 async function loadCalendar() {
   const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN", {month:"long", year:"numeric"});
