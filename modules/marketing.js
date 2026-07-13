@@ -1227,9 +1227,11 @@ async function loadYouTubeStats() {
 }
 
 async function saveYouTubeSettings() {
-  const channelId = (document.getElementById('yt-channel-id')?.value||'').trim();
   const apiKey = (document.getElementById('yt-api-key')?.value||'').trim();
-  if (!channelId || !apiKey) { showMktToast('Enter both Channel ID and API Key'); return; }
+  if (!apiKey) { showMktToast('Enter the API Key'); return; }
+  // Channel ID is already saved — read from DB
+  const { data: chRow } = await sb.from('marketing_settings').select('value').eq('key','YOUTUBE_CHANNEL_ID').maybeSingle().then(r=>r,()=>({data:null}));
+  const channelId = chRow?.value || 'UCFQfukKHctvBn_cSqBL66zg';
 
   showMktToast('⏳ Verifying YouTube connection…');
   try {
@@ -1248,7 +1250,9 @@ async function saveYouTubeSettings() {
     await sb.from('marketing_settings').upsert([
       {key:'YOUTUBE_CHANNEL_ID', value:channelId},
       {key:'YOUTUBE_API_KEY', value:apiKey},
-      {key:'YOUTUBE_CHANNEL_NAME', value:name}
+      {key:'YOUTUBE_CHANNEL_NAME', value:name},
+      {key:'YOUTUBE_SUBSCRIBER_COUNT', value:subs},
+      {key:'YOUTUBE_VIEW_COUNT', value:views},
     ],{onConflict:'key'});
 
     await sb.from('social_connections').upsert({
