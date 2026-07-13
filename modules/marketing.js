@@ -1009,9 +1009,16 @@ async function testThreadsPost() {
   const btn = document.querySelector('[onclick="testThreadsPost()"]');
   if (btn) { btn.textContent='⏳ Posting…'; btn.disabled=true; }
   try {
+    // Try to get latest image from content posts
+    const { data: lp } = await sb.from('content_posts').select('master_image_url').not('master_image_url','is',null).order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+    window._latestThreadsImageUrl = lp?.master_image_url || '';
+
     const res = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body: JSON.stringify({action:'publish_text', text:'V Wholesale — Premium Home Building Materials in Vijayawada. Tiles, Granite, Marble & more. Visit us at NH65, Bhavanipuram. 📞 8712697930 | vwholesale.in\n\n#Vijayawada #HomeRenovation #VWholesale #Tiles #Marble'})
+      body: JSON.stringify(Object.assign(
+        {text:'V Wholesale — Premium Home Building Materials in Vijayawada. Tiles, Granite, Marble & more. Visit us at NH65, Bhavanipuram. 📞 8712697930 | vwholesale.in\n\n#Vijayawada #HomeRenovation #VWholesale #Tiles #Marble'},
+        window._latestThreadsImageUrl ? {action:'publish_image', image_url:window._latestThreadsImageUrl} : {action:'publish_text'}
+      ))
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error);
