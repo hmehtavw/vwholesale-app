@@ -12,6 +12,11 @@ const ADMIN_ONLY_PAGES = new Set(['settings','hr','analytics','accounts','eod','
   'marketing','autotest','daily_report','quick_approve','bulk_photos','service','kiosk','employeeapp']);
 
 async function navigateTo(page, params) {
+  // Close ALL overlays/sheets immediately on navigation — prevents
+  // the New Quotation drawer (bottom-sheet) from staying open
+  closeSheet();
+  closePDP();
+
   // Redirect non-admin trying to access admin-only pages
   const _role = VW_AUTH.getRole();
   if (ADMIN_ONLY_PAGES.has(page) && _role !== 'admin') {
@@ -2133,10 +2138,25 @@ async function handleNotificationAction(notifId, action) {
 window.handleNotificationAction = handleNotificationAction;
 
 function closeSheet() {
-  stopActiveScanner(); // any of the 60+ call sites for closeSheet() might be closing a sheet with a live camera running — always stop it here rather than hunting down each one
-  cleanupAbandonedNewProductPhotos(); // same reasoning — if the Add Product sheet is closing with unsaved photos still sitting in newProductPhotos, they were never attached to anything and should be removed from storage rather than left orphaned
-  document.getElementById('bottom-sheet').classList.remove('open');
-  document.getElementById('sheet-overlay').classList.remove('open');
+  stopActiveScanner();
+  cleanupAbandonedNewProductPhotos();
+  const sheet = document.getElementById('bottom-sheet');
+  const overlay = document.getElementById('sheet-overlay');
+  if (sheet) {
+    sheet.classList.remove('open');
+    sheet.style.removeProperty('display');
+    sheet.style.removeProperty('transform');
+    sheet.style.removeProperty('visibility');
+  }
+  if (overlay) {
+    overlay.classList.remove('open');
+    overlay.style.removeProperty('display');
+    overlay.style.removeProperty('opacity');
+    overlay.style.removeProperty('visibility');
+    overlay.style.removeProperty('pointer-events');
+  }
+  document.body.style.removeProperty('overflow');
+  document.body.classList.remove('modal-open','drawer-open','sheet-open','overflow-hidden');
 }
 
 function openFeedback(customerId, visitId) { navigateTo('feedback'); }
@@ -2641,6 +2661,8 @@ window.approveLeave = (id,s) => VW_HR.approveLeave(id,s);
 document.addEventListener('DOMContentLoaded', async () => {
   // Restore sidebar collapse state
   if (typeof initSidebarCollapse === 'function') initSidebarCollapse();
+  // Ensure all overlays/sheets start closed
+  closeSheet();
   await init();
   // Build sidebar after init — retry if sb-nav not ready yet
   buildSidebar();
@@ -3845,6 +3867,7 @@ function buildSidebar() {
 }
 
 function sbNavigate(page) {
+  closeSheet();
   navigateTo(page);
   document.querySelectorAll('.sb-nav-item').forEach(b => b.classList.toggle('active', b.dataset.sbPage === page));
   const titleEl = document.getElementById('st-page-title');
