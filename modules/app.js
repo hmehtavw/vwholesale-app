@@ -2639,6 +2639,8 @@ window.submitLeave = () => VW_HR.submitLeave();
 window.approveLeave = (id,s) => VW_HR.approveLeave(id,s);
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Restore sidebar collapse state
+  if (typeof initSidebarCollapse === 'function') initSidebarCollapse();
   await init();
   // Build sidebar after init — retry if sb-nav not ready yet
   buildSidebar();
@@ -3833,8 +3835,8 @@ function buildSidebar() {
     const hasAccess = item.always || role === 'admin' || allowed.has(item.page) ||
       (item.perm && allowed.has(item.perm));
     if (!hasAccess) continue;
-    html += `<button class="sb-nav-item" data-sb-page="${item.page}" onclick="sbNavigate('${item.page}')">
-      <span class="sb-nav-icon">${item.icon}</span><span>${item.label}</span>
+    html += `<button class="sb-nav-item" data-sb-page="${item.page}" onclick="sbNavigate('${item.page}')" title="${item.label}">
+      <span class="sb-nav-icon" style="font-size:18px;flex-shrink:0">${item.icon}</span><span class="sb-nav-label">${item.label}</span>
     </button>`;
   }
 
@@ -3861,5 +3863,34 @@ function closeSidebar() {
   document.getElementById('staff-sidebar')?.classList.remove('open');
   document.getElementById('sb-overlay')?.classList.remove('show');
 }
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('staff-sidebar');
+  const wrapper = document.getElementById('app-wrapper');
+  const btn = document.getElementById('sb-collapse-btn');
+  if (!sidebar) return;
+  const isCollapsed = sidebar.classList.toggle('collapsed');
+  wrapper?.classList.toggle('sidebar-collapsed', isCollapsed);
+  // Persist preference
+  try { localStorage.setItem('vw-sb-collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
+  // Update button tooltip
+  if (btn) btn.title = isCollapsed ? 'Expand sidebar' : 'Collapse sidebar';
+}
+
+function initSidebarCollapse() {
+  // Restore collapsed state on load
+  try {
+    const collapsed = localStorage.getItem('vw-sb-collapsed') === '1';
+    if (collapsed) {
+      document.getElementById('staff-sidebar')?.classList.add('collapsed');
+      document.getElementById('app-wrapper')?.classList.add('sidebar-collapsed');
+      const btn = document.getElementById('sb-collapse-btn');
+      if (btn) btn.title = 'Expand sidebar';
+    }
+  } catch(e) {}
+}
+
 window.toggleSidebar = toggleSidebar;
 window.closeSidebar = closeSidebar;
+window.toggleSidebarCollapse = toggleSidebarCollapse;
+window.initSidebarCollapse = initSidebarCollapse;

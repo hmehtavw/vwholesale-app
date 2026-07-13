@@ -1188,6 +1188,17 @@ td strong { color: var(--text); }
   transition: transform .25s cubic-bezier(.32,.72,0,1);
 }
 #staff-sidebar.open { transform: translateX(0); }
+/* Collapsed sidebar — icons only */
+#staff-sidebar.collapsed { width: 56px !important; }
+#staff-sidebar.collapsed .sb-logo-name,
+#staff-sidebar.collapsed .sb-logo-sub,
+#staff-sidebar.collapsed .sb-nav-label,
+#staff-sidebar.collapsed .sb-footer { display: none !important; }
+#staff-sidebar.collapsed .sb-head { padding: 10px 8px; justify-content: center; }
+#staff-sidebar.collapsed #sb-collapse-btn { transform: rotate(180deg); }
+#staff-sidebar.collapsed .sb-nav-item { justify-content: center; padding: 10px 0; }
+#staff-sidebar.collapsed .sb-logo-box { margin: 0 auto; }
+#app-wrapper.sidebar-collapsed { margin-left: 56px !important; }
 /* desktop: sidebar always visible — handled by @media (min-width:901px) below */
 
 .sb-overlay {
@@ -1506,10 +1517,14 @@ window.addEventListener('load', async function() {
 <aside id="staff-sidebar">
   <div class="sb-head">
     <div class="sb-logo-box">VW</div>
-    <div>
+    <div style="flex:1">
       <div class="sb-logo-name">V Wholesale</div>
       <div class="sb-logo-sub">Staff Portal</div>
     </div>
+    <button onclick="toggleSidebarCollapse()" id="sb-collapse-btn"
+      title="Collapse sidebar"
+      style="background:none;border:none;color:#64748B;font-size:18px;cursor:pointer;padding:4px 6px;border-radius:6px;line-height:1;flex-shrink:0"
+      onmouseover="this.style.color='#94A3B8'" onmouseout="this.style.color='#64748B'">‹</button>
   </div>
   <nav class="sb-nav" id="sb-nav">
     <!-- Populated by JS based on role/permissions -->
