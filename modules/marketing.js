@@ -983,6 +983,44 @@ async function renderIntegrations() {
   </div>`);
 }
 
+async function verifyThreadsConnection() {
+  const badge = document.getElementById('threads-status-badge');
+  const detail = document.getElementById('threads-status-detail');
+  if (badge) { badge.textContent = '⏳ Checking…'; badge.className = 'badge badge-gray'; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'verify'})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    if (badge) { badge.textContent = '✅ Connected'; badge.className = 'badge badge-green'; }
+    if (detail) detail.innerHTML = '✅ @'+data.username+' · ID: '+data.id;
+    showMktToast('✅ Threads connected: @'+data.username);
+  } catch(e) {
+    if (badge) { badge.textContent = '❌ Error'; badge.className = 'badge badge-gray'; }
+    if (detail) detail.textContent = '❌ '+e.message;
+    showMktToast('❌ '+e.message);
+  }
+}
+
+async function testThreadsPost() {
+  if (!confirm('Post a test message to @vwholesaleindia on Threads?')) return;
+  const btn = document.querySelector('[onclick="testThreadsPost()"]');
+  if (btn) { btn.textContent='⏳ Posting…'; btn.disabled=true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'publish_text', text:'V Wholesale — Premium Home Building Materials in Vijayawada. Tiles, Granite, Marble & more. Visit us at NH65, Bhavanipuram. 📞 8712697930 | vwholesale.in\n\n#Vijayawada #HomeRenovation #VWholesale #Tiles #Marble'})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    showMktToast('✅ Test posted to Threads!');
+    if (data.url) window.open(data.url, '_blank');
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='🧪 Test Post'; btn.disabled=false; } }
+}
+
 async function connectMeta() {
   const appId = (document.getElementById('meta-app-id')?.value||'').trim();
   const appSecret = (document.getElementById('meta-app-secret')?.value||'').trim();
