@@ -2311,31 +2311,34 @@ async function renderCalendar() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
   const monthLabel = now.toLocaleString('en-IN', {month:'long', year:'numeric'});
+  const nextStrategyDate = getNextStrategyDate();
 
   const [
     {data: calItems},
-    {data: contentPosts}
+    {data: contentPosts},
+    {data: strategySessions}
   ] = await Promise.all([
     sb.from('content_calendar').select('*').gte('cal_date', monthStart).lte('cal_date', monthEnd).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]})),
-    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]}))
+    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]})),
+    sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]}))
   ]);
 
-  // Map content posts by topic for quick lookup
   const contentByTopic = {};
   (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
 
-  // Separate reels from other content
   const reelDays = (calItems||[]).filter(i => i.is_reel === true || i.content_type==='reel');
   const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel');
 
   const TYPE_ICON = {image:'🖼️', reel:'🎬', gif:'✨', festival:'🎉', qa:'❓', offer:'💰', post:'📝'};
-  const STATUS_BADGE = {
-    draft: 'badge-gray', planned: 'badge-gray', scripted: 'badge-yellow',
-    approved: 'badge-green', published: 'badge-green', recorded: 'badge-blue'
-  };
+
+  const lastSession = (strategySessions||[])[0];
+  const daysSinceSession = lastSession
+    ? Math.floor((Date.now() - new Date(lastSession.created_at).getTime()) / 86400000)
+    : 999;
+  const sessionDue = daysSinceSession >= 12;
 
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
     <div>
       <h3 style="font-size:16px;font-weight:900">📅 ${monthLabel}</h3>
       <div style="font-size:12px;color:var(--text3)">${(calItems||[]).length} posts planned · ${reelDays.length} reels · ${otherDays.length} other</div>
@@ -2343,67 +2346,74 @@ async function renderCalendar() {
     <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
   </div>
 
-  <!-- REEL DAYS — shown prominently at top -->
+  <!-- STRATEGY SESSION BANNER -->
+  <div class="mkt-card" style="margin-bottom:16px;border-left:3px solid ${sessionDue?'#ef4444':'var(--gold)'}">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:28px">🧠</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">Fortnightly Strategy Session
+          ${sessionDue?'<span class="badge badge-red" style="margin-left:8px">Due now</span>':''}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          ${lastSession
+            ? `Last session: ${new Date(lastSession.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${daysSinceSession} days ago · Next due: ${nextStrategyDate}`
+            : 'No sessions yet — start your first strategy session'}
+        </div>
+        ${lastSession?.summary ? `<div style="font-size:11px;color:var(--text2);margin-top:4px;font-style:italic">"${lastSession.summary.slice(0,100)}…"</div>` : ''}
+      </div>
+      <button onclick="openStrategySession()" class="mkt-btn ${sessionDue?'mkt-btn-primary':'mkt-btn-ghost'}" style="font-size:11px;padding:8px 14px;flex-shrink:0">
+        ${sessionDue?'🧠 Start Session':'💬 View / Update'}
+      </button>
+    </div>
+  </div>
+
+  <!-- REEL DAYS -->
   ${reelDays.length ? `
   <div style="margin-bottom:20px">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px">
-      🎬 Reel days this month
-      <span style="font-size:11px;font-weight:400;color:var(--text3)">(${reelDays.length} reels planned — scripts ready to use)</span>
-    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎬 Reel days — ${reelDays.length} this month</div>
     <div style="display:grid;gap:10px">
       ${reelDays.map(item => {
         const existing = contentByTopic[item.topic];
         const hasScript = existing?.reel_script;
         const date = new Date(item.cal_date);
-        const dayLabel = date.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
         const isPast = date < now;
         const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
         return `
-        <div class="mkt-card" style="border-left:3px solid ${isToday?'var(--gold)':hasScript?'#22c55e':'var(--border)'}">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:${hasScript?'10px':'0'}">
+        <div class="mkt-card" id="cal-card-${item.id}" style="border-left:3px solid ${isToday?'var(--gold)':hasScript?'#22c55e':'var(--border)'}">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
             <div style="text-align:center;min-width:44px">
               <div style="font-size:20px;font-weight:900;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
               <div style="font-size:10px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short',month:'short'})}</div>
             </div>
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:700">${item.topic||'Untitled reel'}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${item.notes||'No notes'}</div>
+              <div style="font-size:13px;font-weight:700" id="cal-topic-display-${item.id}">${item.topic||'Untitled reel'}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:2px" id="cal-notes-display-${item.id}">${item.notes||''}</div>
             </div>
-            <div style="display:flex;gap:6px;align-items:center">
-              ${isPast && !hasScript ? '<span style="font-size:10px;color:#ef4444">Past</span>' : ''}
+            <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+              <button onclick="editCalendarItem('${item.id}','${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'reel'}','${(item.notes||'').replace(/'/g,"\'")}',true)"
+                class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
               ${hasScript
-                ? '<span class="badge badge-green">✅ Script ready</span>'
-                : `<button onclick="generateAndShowReelScript('${item.topic}','${item.id}',this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">🎬 Generate Script</button>`}
+                ? '<span class="badge badge-green" style="font-size:10px">✅ Script ready</span>'
+                : `<button onclick="generateAndShowReelScript('${(item.topic||'').replace(/'/g,"\'")}','${item.id}',this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 10px">🎬 Script</button>`}
             </div>
           </div>
-
-          ${hasScript ? `
-          <!-- Script inline -->
-          <div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">
-            ${renderReelScriptInline(existing.reel_script, item.id, existing.id)}
-          </div>` : `
-          <div id="reel-script-${item.id}" style="display:none"></div>`}
+          ${hasScript ? `<div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">${renderReelScriptInline(existing.reel_script, item.id, existing.id)}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
-  </div>` : `
-  <div class="mkt-card" style="text-align:center;padding:20px;margin-bottom:16px;border-left:3px solid var(--gold)">
-    <div style="font-size:28px;margin-bottom:8px">🎬</div>
-    <div style="font-size:13px;font-weight:700;margin-bottom:4px">No reel days planned yet</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Add reel days to your calendar and scripts will appear here automatically</div>
-    <button onclick="addCalendarItem('reel')" class="mkt-btn mkt-btn-primary" style="padding:8px 20px;font-size:12px">+ Add Reel Day</button>
-  </div>`}
+  </div>` : ''}
 
-  <!-- ALL OTHER DAYS -->
+  <!-- ALL PLANNED POSTS -->
   <div style="font-size:13px;font-weight:700;margin-bottom:10px">All planned posts</div>
   <div style="display:grid;gap:6px">
     ${(calItems||[]).length ? (calItems||[]).map(item => {
       const existing = contentByTopic[item.topic];
       const date = new Date(item.cal_date);
       const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
-      const icon = TYPE_ICON[item.content_type||item.post_type||'post']||'📝';
+      const icon = TYPE_ICON[item.content_type||'post']||'📝';
+      const statusColor = existing?.status === 'published' ? '#22c55e' : existing?.status === 'pending_approval' ? '#f59e0b' : 'var(--text3)';
       return `
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isToday?'rgba(201,168,76,.08)':'var(--bg3)'};border-radius:8px;border:1px solid ${isToday?'rgba(201,168,76,.3)':'var(--border)'}">
+      <div id="cal-row-${item.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isToday?'rgba(201,168,76,.08)':'var(--bg3)'};border-radius:8px;border:1px solid ${isToday?'rgba(201,168,76,.3)':'var(--border)'}">
         <div style="text-align:center;min-width:36px">
           <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
           <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
@@ -2411,77 +2421,317 @@ async function renderCalendar() {
         <span style="font-size:18px">${icon}</span>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
-          <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} · ${item.language||'en'}</div>
+          <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
         </div>
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-          ${existing ? `<span class="badge badge-green" style="font-size:9px">${existing.status}</span>` : ''}
-          <button onclick="quickCreateFromCalendar('${item.topic}','${item.content_type||'image'}','${item.language||'bilingual'}')" 
-            class="mkt-btn ${existing ? 'mkt-btn-ghost' : 'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
-            ${existing ? '✏️ Edit' : '⚡ Auto-Create'}
+          ${existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : ''}
+          <button onclick="editCalendarItem('${item.id}','${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','${(item.notes||'').replace(/'/g,"\'")}',false)"
+            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
+          <button onclick="quickCreateFromCalendar('${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','bilingual')"
+            class="mkt-btn ${existing?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
+            ${existing?'✏️ Regen':'⚡ Create'}
           </button>
         </div>
       </div>`;
-    }).join('') : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No posts planned this month — add some above</div>`}
+    }).join('') : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No posts planned — click + Add or start a Strategy Session above</div>`}
   </div>`);
 }
 
-function renderReelScriptInline(script, calId, postId) {
-  if (!script || typeof script !== 'object') return '<div style="font-size:12px;color:var(--text3)">Script data invalid — regenerate</div>';
-  const shots = (script.shots||[]);
-  return `
-    <!-- Hook -->
-    <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px">⚡ HOOK — first 3 seconds</div>
-      <div style="font-size:13px;font-weight:600">${script.hook||''}</div>
-      ${script.telugu_hook ? `<div style="font-size:11px;color:var(--text3);margin-top:4px">తెలుగు: ${script.telugu_hook}</div>` : ''}
-    </div>
-
-    <!-- Shot list -->
-    <div style="margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px">📹 SHOT LIST · ${script.duration||'30-45 sec'}</div>
-      <div style="display:grid;gap:5px">
-        ${shots.map((sh, i) => `
-        <div style="display:grid;grid-template-columns:20px 1fr 1fr;gap:8px;align-items:start;padding:6px 8px;background:var(--bg3);border-radius:6px">
-          <div style="font-size:10px;font-weight:700;color:var(--gold);margin-top:2px">${i+1}</div>
-          <div>
-            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">FILM</div>
-            <div style="font-size:11px">${sh.what_to_film||sh}</div>
-          </div>
-          <div>
-            <div style="font-size:9px;color:var(--text3);margin-bottom:2px">ON SCREEN · ${sh.duration_sec||'?'}s</div>
-            <div style="font-size:11px;font-weight:600">${sh.onscreen_text||''}</div>
-          </div>
-        </div>`).join('')}
-      </div>
-    </div>
-
-    ${script.voiceover ? `
-    <div style="margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:6px">
-      <div style="font-size:9px;font-weight:700;color:var(--text3);margin-bottom:4px">🎙️ VOICEOVER</div>
-      <div style="font-size:11px;line-height:1.8">${script.voiceover}</div>
-    </div>` : ''}
-
-    <!-- Caption -->
-    <div style="margin-bottom:10px;padding:8px 10px;background:var(--bg3);border-radius:6px">
-      <div style="font-size:9px;font-weight:700;color:var(--text3);margin-bottom:4px">📌 CAPTION + HASHTAGS</div>
-      <div style="font-size:11px;line-height:1.8">${script.caption||''}</div>
-      ${script.best_time_to_post ? `<div style="font-size:10px;color:var(--gold);margin-top:4px">Best time: ${script.best_time_to_post}</div>` : ''}
-    </div>
-
-    <!-- Upload + Actions -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <label class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 14px;cursor:pointer;margin:0">
-        📹 Upload Recorded Reel
-        <input type="file" accept="video/*,video/mp4,video/mov,video/avi" onchange="uploadReel(this,'${calId}','${postId}')" style="display:none">
-      </label>
-      <button onclick="navigator.clipboard.writeText(document.querySelector('[data-caption-${calId}]')?.textContent||'${(script.caption||'').replace(/'/g,"\'")}').then(()=>showMktToast('📋 Caption copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📋 Copy Caption</button>
-      <button onclick="generateAndShowReelScript('${script.topic||''}','${calId}',this,true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate</button>
-    </div>
-    <div id="reel-upload-status-${calId}" style="margin-top:6px;font-size:11px;color:var(--text3)"></div>
-    <!-- Hidden caption for copy -->
-    <span data-caption-${calId} style="display:none">${script.caption||''}</span>
-  `;
+function getNextStrategyDate() {
+  const now = new Date();
+  const day = now.getDate();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  // Fortnightly = 1st and 15th of each month
+  if (day < 15) return new Date(year, month, 15).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+  return new Date(year, month+1, 1).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 }
+
+function editCalendarItem(id, currentTopic, type, currentNotes, isReel) {
+  const ov = document.createElement('div');
+  ov.id = 'edit-cal-overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML = `
+    <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:420px;border:1px solid var(--border)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:14px">✏️ Edit calendar day</div>
+      <div style="display:grid;gap:10px">
+        <div>
+          <label class="mkt-form-label">Topic / Campaign name</label>
+          <input id="edit-cal-topic" class="mkt-form-input" value="${currentTopic}" placeholder="What is this post about?">
+        </div>
+        <div>
+          <label class="mkt-form-label">Notes for AI (optional)</label>
+          <textarea id="edit-cal-notes" class="mkt-form-input" rows="2" placeholder="Any specific angles, products, offers to mention?">${currentNotes}</textarea>
+        </div>
+        <div>
+          <label class="mkt-form-label">Format</label>
+          <select id="edit-cal-type" class="mkt-form-select">
+            ${[{id:'image',l:'🖼️ Image'},{id:'reel',l:'🎬 Reel'},{id:'gif',l:'✨ GIF'},{id:'festival',l:'🎉 Festival'},{id:'qa',l:'❓ Q&A'}]
+              .map(t=>`<option value="${t.id}" ${type===t.id?'selected':''}>${t.l}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button onclick="saveEditCalendarItem('${id}')" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;font-weight:700">💾 Save & Auto-Generate</button>
+        <button onclick="saveEditCalendarItemOnly('${id}')" class="mkt-btn mkt-btn-ghost" style="padding:10px 14px">Save only</button>
+        <button onclick="document.getElementById('edit-cal-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="padding:10px 12px">✕</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('edit-cal-topic')?.focus(), 100);
+}
+
+async function saveEditCalendarItem(id) {
+  const topic = (document.getElementById('edit-cal-topic')?.value||'').trim();
+  const notes = document.getElementById('edit-cal-notes')?.value||'';
+  const type = document.getElementById('edit-cal-type')?.value||'image';
+  if (!topic) { showMktToast('Enter a topic'); return; }
+  document.getElementById('edit-cal-overlay')?.remove();
+
+  // Update the calendar item
+  await sb.from('content_calendar').update({
+    topic, notes, content_type:type, is_reel:type==='reel', status:'planned', updated_at:new Date().toISOString()
+  }).eq('id', id);
+
+  showMktToast('✅ Saved — generating content…');
+  // Auto-generate content
+  await quickCreateFromCalendar(topic, type, 'bilingual');
+}
+
+async function saveEditCalendarItemOnly(id) {
+  const topic = (document.getElementById('edit-cal-topic')?.value||'').trim();
+  const notes = document.getElementById('edit-cal-notes')?.value||'';
+  const type = document.getElementById('edit-cal-type')?.value||'image';
+  if (!topic) { showMktToast('Enter a topic'); return; }
+  document.getElementById('edit-cal-overlay')?.remove();
+  await sb.from('content_calendar').update({
+    topic, notes, content_type:type, is_reel:type==='reel', updated_at:new Date().toISOString()
+  }).eq('id', id);
+  showMktToast('✅ Topic updated');
+  renderCalendar();
+}
+
+async function openStrategySession() {
+  // Load last session for context
+  const { data: sessions } = await sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+  const { data: calItems } = await sb.from('content_calendar').select('topic,content_type,cal_date').gte('cal_date', new Date().toISOString().split('T')[0]).order('cal_date',{ascending:true}).limit(20).then(r=>r,()=>({data:[]}));
+
+  const existingTopics = (calItems||[]).map(c=>`${new Date(c.cal_date).getDate()} ${new Date(c.cal_date).toLocaleString('en-IN',{month:'short'})} — ${c.topic}`).join('\n');
+  const now = new Date();
+  const monthLabel = now.toLocaleString('en-IN',{month:'long',year:'numeric'});
+
+  const ov = document.createElement('div');
+  ov.id = 'strategy-overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;overflow-y:auto;padding:20px';
+  ov.innerHTML = `
+    <div style="max-width:560px;margin:0 auto;background:var(--bg2);border-radius:12px;padding:20px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:900">🧠 Strategy Session — ${monthLabel}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Fortnightly planning — human + AI brain working together</div>
+        </div>
+        <button onclick="document.getElementById('strategy-overlay').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+      </div>
+
+      ${sessions ? `
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px">
+        <div style="font-weight:700;color:var(--gold);margin-bottom:4px">Last session — ${new Date(sessions.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</div>
+        <div style="color:var(--text2);line-height:1.7">${sessions.summary||'No summary recorded'}</div>
+      </div>` : ''}
+
+      ${existingTopics ? `
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-bottom:14px;font-size:11px">
+        <div style="font-weight:700;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Current calendar</div>
+        <div style="color:var(--text2);line-height:1.9;white-space:pre-wrap">${existingTopics}</div>
+      </div>` : ''}
+
+      <div style="display:grid;gap:10px;margin-bottom:14px">
+        <div>
+          <label class="mkt-form-label">What's happening this month? <span style="color:var(--text3);font-weight:400">(promotions, new stock, events, festivals, season)</span></label>
+          <textarea id="ss-happening" class="mkt-form-input" rows="3" placeholder="e.g. New marble shipment arrived. Bakrid next week. Monsoon season — good time for waterproofing push. Running 10% off on sanitaryware..."></textarea>
+        </div>
+        <div>
+          <label class="mkt-form-label">Who do you want to reach? <span style="color:var(--text3);font-weight:400">(focus this fortnight)</span></label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            ${['Home owners','Contractors','Architects','Interior Designers','Builders'].map(a=>`
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:5px 10px">
+              <input type="checkbox" name="ss-audience" value="${a}" style="accent-color:var(--gold)"> ${a}
+            </label>`).join('')}
+          </div>
+        </div>
+        <div>
+          <label class="mkt-form-label">Any specific products or categories to push?</label>
+          <input id="ss-products" class="mkt-form-input" placeholder="e.g. Italian marble, Jaquar sanitaryware, Asian Paints, vitrified tiles">
+        </div>
+        <div>
+          <label class="mkt-form-label">Any topics you want AI to suggest for?</label>
+          <textarea id="ss-ideas" class="mkt-form-input" rows="2" placeholder="e.g. something about monsoon renovation, a reel showing our showroom, contractor success story..."></textarea>
+        </div>
+        <div>
+          <label class="mkt-form-label">Your notes / context for AI <span style="color:var(--text3);font-weight:400">(anything else)</span></label>
+          <textarea id="ss-notes" class="mkt-form-input" rows="2" placeholder="e.g. We had low footfall last week. Competitors are running ads. A contractor brought 3 customers this week..."></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px">
+        <button onclick="runStrategySession()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:12px;font-size:13px;font-weight:700">🧠 Generate Content Plan with AI</button>
+        <button onclick="document.getElementById('strategy-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="padding:12px 16px">Cancel</button>
+      </div>
+
+      <div id="ss-output" style="margin-top:16px"></div>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+async function runStrategySession() {
+  const happening = (document.getElementById('ss-happening')?.value||'').trim();
+  const products = (document.getElementById('ss-products')?.value||'').trim();
+  const ideas = (document.getElementById('ss-ideas')?.value||'').trim();
+  const notes = (document.getElementById('ss-notes')?.value||'').trim();
+  const audiences = [...document.querySelectorAll('input[name="ss-audience"]:checked')].map(el=>el.value);
+
+  const out = document.getElementById('ss-output');
+  if (out) out.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">⏳ AI is planning your content strategy…</div>';
+
+  try {
+    const now = new Date();
+    const daysLeft = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate() - now.getDate();
+    const { data: existing } = await sb.from('content_calendar').select('topic,content_type,cal_date').gte('cal_date', now.toISOString().split('T')[0]).lte('cal_date', new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0]).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]}));
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Strategy Session',
+        prompt: `You are the marketing strategist for V Wholesale, Vijayawada — a premium home building materials store. Home Depot for Tier 2 India. Target: Vijayawada + 100km radius (Guntur, Eluru, Tenali, Mangalagiri).
+
+STRATEGY SESSION — ${now.toLocaleString('en-IN',{month:'long',year:'numeric'})}
+Days remaining this month: ${daysLeft}
+Primary audiences this fortnight: ${audiences.join(', ')||'Home owners, Contractors'}
+
+WHAT IS HAPPENING:
+${happening||'Normal month'}
+
+PRODUCTS TO PUSH:
+${products||'Tiles, Granite, Marble, Sanitaryware'}
+
+HUMAN IDEAS:
+${ideas||'None specific'}
+
+ADDITIONAL CONTEXT:
+${notes||'None'}
+
+EXISTING CALENDAR:
+${(existing||[]).map(c=>`${c.cal_date}: ${c.topic} (${c.content_type})`).join('\n')||'Empty — suggest full plan'}
+
+Based on everything above, create a smart content plan. Return JSON:
+{
+  "summary": "2-3 sentence summary of this fortnight strategy",
+  "key_themes": ["theme1","theme2","theme3"],
+  "suggested_posts": [
+    {
+      "suggested_date": "2026-07-XX",
+      "topic": "specific compelling topic",
+      "content_type": "image|reel|festival|qa",
+      "notes": "angle to take, what to show, key message",
+      "audience": "who this targets",
+      "why": "why this topic works right now"
+    }
+  ],
+  "keywords": ["keyword1","keyword2","keyword3","keyword4","keyword5"],
+  "hashtags": ["#Vijayawada","#HomeRenovation","...15 total"],
+  "avoid": "what NOT to post this fortnight and why"
+}`,
+        context: { happening, products, ideas, audiences }
+      })
+    });
+
+    const data = await res.json();
+    const plan = data.output;
+    if (!plan) throw new Error('Strategy generation failed');
+
+    if (out) out.innerHTML = `
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px">🧠 AI Content Strategy</div>
+
+        <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:12px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">STRATEGY SUMMARY</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.8">${plan.summary||''}</div>
+          ${plan.key_themes?.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${plan.key_themes.map(t=>`<span style="background:var(--bg3);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--gold)">${t}</span>`).join('')}</div>` : ''}
+        </div>
+
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">SUGGESTED POSTS (${(plan.suggested_posts||[]).length})</div>
+        <div style="display:grid;gap:8px;margin-bottom:12px">
+          ${(plan.suggested_posts||[]).map((post,i)=>`
+          <div style="background:var(--bg3);border-radius:8px;padding:10px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+              <div style="font-size:12px;font-weight:700">${post.topic}</div>
+              <div style="font-size:10px;color:var(--text3);flex-shrink:0;margin-left:8px">${post.suggested_date}</div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:6px">${post.content_type} · ${post.audience} · ${post.why}</div>
+            <div style="font-size:11px;color:var(--text2)">${post.notes}</div>
+            <button onclick="addSuggestedPost('${post.topic.replace(/'/g,"\'")}','${post.content_type}','${post.suggested_date}','${(post.notes||'').replace(/'/g,"\'").replace(/\n/g,' ')}',this)"
+              class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:4px 10px;margin-top:8px">+ Add to Calendar</button>
+          </div>`).join('')}
+        </div>
+
+        ${plan.keywords?.length ? `
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase">SEO KEYWORDS</div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${plan.keywords.map(k=>`<span style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--text2)">${k}</span>`).join('')}</div>
+        </div>` : ''}
+
+        ${plan.hashtags?.length ? `
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px;text-transform:uppercase">HASHTAG SET</div>
+          <div style="font-size:11px;color:var(--text2);line-height:1.8">${plan.hashtags.join(' ')}</div>
+          <button onclick="navigator.clipboard.writeText('${plan.hashtags.join(' ')}').then(()=>showMktToast('📋 Hashtags copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 10px;margin-top:6px">📋 Copy Hashtags</button>
+        </div>` : ''}
+
+        ${plan.avoid ? `
+        <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;padding:10px;margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:4px">⚠️ AVOID THIS FORTNIGHT</div>
+          <div style="font-size:11px;color:var(--text2)">${plan.avoid}</div>
+        </div>` : ''}
+
+        <button onclick="saveStrategySession('${(plan.summary||'').replace(/'/g,"\'")}','${(plan.key_themes||[]).join(', ').replace(/'/g,"\'")}',this)" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-weight:700">💾 Save Session & Apply to Calendar</button>
+      </div>`;
+
+  } catch(e) {
+    if (out) out.innerHTML = `<div style="color:var(--red);padding:10px">❌ ${e.message}</div>`;
+    showMktToast('❌ '+e.message);
+  }
+}
+
+async function addSuggestedPost(topic, type, date, notes, btn) {
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  try {
+    await sb.from('content_calendar').insert({
+      topic, content_type:type, cal_date:date, notes, is_reel:type==='reel',
+      status:'planned', created_at:new Date().toISOString()
+    });
+    if (btn) { btn.textContent = '✅ Added'; btn.style.background='#22c55e'; btn.style.color='#000'; }
+    showMktToast('✅ "'+topic+'" added to calendar');
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+    if (btn) { btn.textContent = '+ Add to Calendar'; btn.disabled = false; }
+  }
+}
+
+async function saveStrategySession(summary, themes, btn) {
+  if (btn) { btn.textContent = '⏳ Saving…'; btn.disabled = true; }
+  try {
+    await sb.from('strategy_sessions').insert({
+      summary, key_themes:themes, created_at:new Date().toISOString()
+    });
+    showMktToast('✅ Strategy session saved!');
+    document.getElementById('strategy-overlay')?.remove();
+    renderCalendar();
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+    if (btn) { btn.textContent = '💾 Save Session'; btn.disabled = false; }
+  }
+}
+
 
 async function generateAndShowReelScript(topic, calId, btn, regenerate) {
   if (!topic) { showMktToast('No topic for this reel'); return; }
