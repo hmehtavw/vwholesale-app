@@ -78,7 +78,7 @@ function showMktApp() {
   const infoEl = document.getElementById('mkt-user-info');
   if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (mktProfile?.role||'');
   startClock();
-  loadAIPauseStatus();
+  // loadAIPauseStatus — reserved for future AI pause/resume control
 
 
   // Handle OAuth callbacks
