@@ -991,26 +991,28 @@ async function renderIntegrations() {
     <div style="display:flex;align-items:center;gap:12px">
       <div style="font-size:32px">▶️</div>
       <div style="flex:1">
-        <div style="font-size:14px;font-weight:700">YouTube</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">Upload Shorts, track views and subscriber growth</div>
+        <div style="font-size:14px;font-weight:700">YouTube — @vwholesaleindia</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Track views, subscribers and upload Shorts</div>
       </div>
-      <span id="yt-status-badge" class="badge badge-gray">Not connected</span>
+      <span id="yt-status-badge" class="badge ${cfg.YOUTUBE_API_KEY ? 'badge-green' : 'badge-yellow'}">${cfg.YOUTUBE_API_KEY ? '✅ API Key saved' : '⚙️ API Key needed'}</span>
     </div>
     <div style="margin-top:10px;display:grid;gap:8px">
-      <div>
-        <label class="mkt-form-label">YouTube Channel ID <span style="color:var(--text3);font-weight:400">(from youtube.com/channel/UC...)</span></label>
-        <input id="yt-channel-id" class="mkt-form-input" placeholder="UCxxxxxxxxxxxxxxxxxxxxxxxxx" style="font-size:12px">
+      <div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:11px;color:var(--text2)">
+        <div style="margin-bottom:4px"><b>Channel:</b> V Wholesale India</div>
+        <div style="margin-bottom:4px"><b>Channel ID:</b> UCFQfukKHctvBn_cSqBL66zg</div>
+        <div><b>URL:</b> youtube.com/@vwholesaleindia</div>
       </div>
       <div>
-        <label class="mkt-form-label">YouTube Data API v3 Key <span style="color:var(--text3);font-weight:400">(Google Cloud Console → APIs → YouTube Data API v3)</span></label>
-        <input id="yt-api-key" class="mkt-form-input" type="password" placeholder="AIza..." style="font-size:12px">
+        <label class="mkt-form-label">YouTube Data API v3 Key</label>
+        <input id="yt-api-key" class="mkt-form-input" type="password" placeholder="AIza..." value="${cfg.YOUTUBE_API_KEY||''}" style="font-size:12px">
       </div>
-      <button onclick="saveYouTubeSettings()" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px;font-weight:700">🔗 Connect YouTube</button>
-      <div style="background:var(--bg3);border-radius:8px;padding:10px;font-size:11px;color:var(--text3)">
-        <b>How to get these:</b><br>
-        1. Channel ID → go to your YouTube channel → click your profile pic → Settings → Advanced settings → Channel ID<br>
-        2. API Key → console.cloud.google.com → create project → Enable YouTube Data API v3 → Credentials → Create API Key
+      <div style="display:flex;gap:8px">
+        <button onclick="saveYouTubeSettings()" class="mkt-btn mkt-btn-primary" style="flex:1;font-size:12px;padding:8px;font-weight:700">
+          ${cfg.YOUTUBE_API_KEY ? '🔄 Update & Verify' : '🔗 Connect YouTube'}
+        </button>
+        ${cfg.YOUTUBE_API_KEY ? '<button onclick="loadYouTubeStats()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:8px 12px">📊 Load Stats</button>' : ''}
       </div>
+      <div id="yt-stats-display"></div>
     </div>
   </div>
 
@@ -1196,6 +1198,34 @@ async function disconnectMeta() {
   renderIntegrations();
 }
 
+async function loadYouTubeStats() {
+  const statsEl = document.getElementById('yt-stats-display');
+  if (statsEl) statsEl.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Loading…</div>';
+  try {
+    const { data: rows } = await sb.from('marketing_settings').select('key,value').in('key',['YOUTUBE_CHANNEL_ID','YOUTUBE_API_KEY']).then(r=>r,()=>({data:[]}));
+    const cfg = {}; (rows||[]).forEach(r=>{cfg[r.key]=r.value;});
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${cfg.YOUTUBE_CHANNEL_ID}&key=${cfg.YOUTUBE_API_KEY}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const ch = data.items?.[0];
+    if (!ch) throw new Error('Channel not found');
+    const subs = parseInt(ch.statistics?.subscriberCount||0).toLocaleString('en-IN');
+    const views = parseInt(ch.statistics?.viewCount||0).toLocaleString('en-IN');
+    const videos = parseInt(ch.statistics?.videoCount||0);
+    if (statsEl) statsEl.innerHTML = `<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px;font-size:11px">
+      <div style="font-weight:700;color:#22c55e;margin-bottom:6px">▶️ ${ch.snippet?.title}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${subs}</div><div style="color:var(--text3)">Subscribers</div></div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${views}</div><div style="color:var(--text3)">Views</div></div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${videos}</div><div style="color:var(--text3)">Videos</div></div>
+      </div>
+    </div>`;
+  } catch(e) {
+    if (statsEl) statsEl.innerHTML = `<div style="color:var(--red);font-size:11px">❌ ${e.message}</div>`;
+    showMktToast('❌ '+e.message);
+  }
+}
+
 async function saveYouTubeSettings() {
   const channelId = (document.getElementById('yt-channel-id')?.value||'').trim();
   const apiKey = (document.getElementById('yt-api-key')?.value||'').trim();
@@ -1228,7 +1258,17 @@ async function saveYouTubeSettings() {
 
     const badge = document.getElementById('yt-status-badge');
     if (badge) { badge.textContent='✅ Connected'; badge.className='badge badge-green'; }
-    showMktToast(`✅ YouTube connected: ${name} · ${subs} subscribers · ${views} views`);
+
+    const statsEl = document.getElementById('yt-stats-display');
+    if (statsEl) statsEl.innerHTML = `<div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:10px;font-size:11px">
+      <div style="font-weight:700;color:#22c55e;margin-bottom:6px">✅ Connected — ${name}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${subs}</div><div style="color:var(--text3)">Subscribers</div></div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${views}</div><div style="color:var(--text3)">Total Views</div></div>
+        <div><div style="font-size:16px;font-weight:700;color:var(--gold)">${parseInt(channel.statistics?.videoCount||0)}</div><div style="color:var(--text3)">Videos</div></div>
+      </div>
+    </div>`;
+    showMktToast('✅ YouTube connected: '+name+' · '+subs+' subscribers');
   } catch(e) {
     showMktToast('❌ '+e.message);
   }
