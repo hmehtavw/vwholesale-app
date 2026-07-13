@@ -876,7 +876,14 @@ async function renderIntegrations() {
         <input id="meta-app-id" class="mkt-form-input" placeholder="Meta App ID" style="font-size:12px">
         <input id="meta-app-secret" class="mkt-form-input" placeholder="Meta App Secret" type="password" style="font-size:12px">
       </div>
-      <button onclick="connectMeta()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-size:12px;font-weight:700">🔗 Connect Meta (Instagram + Facebook)</button>
+      <button onclick="connectMeta()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-size:12px;font-weight:700">🔗 Connect Meta via OAuth</button>
+      <div style="margin-top:8px;padding:10px;background:var(--bg3);border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">OR paste token from Graph API Explorer:</div>
+        <div style="display:flex;gap:6px">
+          <input id="meta-manual-token" class="mkt-form-input" placeholder="EAAxxxxxxxx" style="font-size:11px;flex:1">
+          <button onclick="connectMetaWithToken(document.getElementById('meta-manual-token')?.value)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;flex-shrink:0">Connect</button>
+        </div>
+      </div>
     </div>`}
   </div>
 
@@ -5078,6 +5085,24 @@ function adsToggleCampaign() {
   const open = form.style.display !== 'none';
   form.style.display = open ? 'none' : 'block';
   if (btn) btn.textContent = open ? '▸ Expand' : '▾ Collapse';
+}
+
+async function connectMetaWithToken(shortToken) {
+  if (!shortToken) { showMktToast('No token provided'); return; }
+  showMktToast('⏳ Connecting Meta account…');
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-setup', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'exchange_token', short_token:shortToken})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error||'Connection failed');
+    showMktToast('✅ Meta connected! Page: '+data.page_name+(data.ig_id?' · Instagram: '+data.ig_id:''));
+    // Update social_connections badge in portal
+    setTimeout(() => mktNav('integrations'), 1000);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  }
 }
 
 async function saveAdAccountSettings() {
