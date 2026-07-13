@@ -4832,38 +4832,380 @@ async function generateAdCopy() {
 }
 
 function renderAds() {
-  setContent('<div style="margin-bottom:16px"><h3 style="font-size:16px;font-weight:900">💰 Paid Advertising</h3>'
-    +'<div style="font-size:12px;color:var(--text3)">Google Ads · Meta Ads · Budget ₹30,000/month</div></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'
-    +[{l:'Monthly Budget',v:'₹30,000',i:'💰'},{l:'Google',v:'₹18,000',i:'🔍'},{l:'Meta (FB+IG)',v:'₹12,000',i:'🎯'}]
-    .map(m=>'<div class="mkt-card" style="padding:12px;text-align:center"><div style="font-size:20px">'+m.i+'</div>'
-      +'<div style="font-size:16px;font-weight:900;margin:4px 0">'+m.v+'</div>'
-      +'<div style="font-size:10px;color:var(--text3)">'+m.l+'</div></div>').join('')
-    +'</div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🔍 Google Ads (₹18,000/mo)</div>'
-    +'<div style="display:grid;gap:8px">'
-    +[{t:'Search Ads — ₹10,000',d:'tiles Vijayawada, granite price near me, bathroom fittings shop, flooring store Andhra Pradesh',note:'High intent buyers actively searching'},
-      {t:'Local/Maps Ads — ₹5,000',d:'Appears in Google Maps when someone searches near NH65 / Bhavanipuram area',note:'Drives direct store walk-ins'},
-      {t:'Display Retargeting — ₹3,000',d:'Re-shows ads to people who visited vwholesale.in but did not buy',note:'Low cost, high conversion'}
-     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
-      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-bottom:3px">'+a.d+'</div>'
-      +'<div style="font-size:11px;color:var(--gold)">💡 '+a.note+'</div></div>').join('')
-    +'</div><a href="https://ads.google.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Google Ads ↗</a></div>'
-    +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Meta Ads — Facebook + Instagram (₹12,000/mo)</div>'
-    +'<div style="display:grid;gap:8px">'
-    +[{t:'Reels Boost — ₹4,000',d:'Boost your best Reels to homeowners 28-55 within 50km of Vijayawada'},
-      {t:'Lookalike Audience — ₹5,000',d:'Upload 1,300 customer list → Meta finds 50,000+ similar people in Andhra Pradesh'},
-      {t:'Retargeting — ₹3,000',d:'Re-target people who visited vwholesale.in or engaged with your Instagram'}
-     ].map(a=>'<div style="background:var(--bg3);border-radius:8px;padding:10px">'
-      +'<div style="font-size:12px;font-weight:700;margin-bottom:3px">'+a.t+'</div>'
-      +'<div style="font-size:11px;color:var(--text3)">'+a.d+'</div></div>').join('')
-    +'</div><a href="https://business.facebook.com/adsmanager" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Open Meta Ads Manager ↗</a></div>'
-    +'<div class="mkt-card"><div class="mkt-card-title">🤖 AI Ad Copy Generator</div>'
-    +'<div class="mkt-form-group"><label class="mkt-form-label">Product / Focus</label>'
-    +'<input id="ads-topic" class="mkt-form-input" placeholder="e.g. Italian marble tiles, monsoon bathroom renovation"></div>'
-    +'<button class="mkt-btn mkt-btn-primary" onclick="generateAdCopy()" style="width:100%;margin-bottom:10px">Generate Ad Copy + Keywords</button>'
-    +'<div id="ads-output" style="display:none;background:var(--bg3);border-radius:8px;padding:12px;white-space:pre-wrap;font-size:12px;line-height:1.7"></div></div>');
+  // Async wrapper
+  _renderAdsAsync();
+}
+
+async function _renderAdsAsync() {
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading ads…</div>`);
+
+  const [
+    { data: settings },
+    { data: contentPosts }
+  ] = await Promise.all([
+    sb.from('marketing_settings').select('key,value').in('key',['META_AD_ACCOUNT_ID','META_ACCESS_TOKEN','META_PAGE_ID','META_IG_ID']).then(r=>r,()=>({data:[]})),
+    sb.from('content_posts').select('id,topic,post_type,master_text,master_image_url,status,created_at').order('created_at',{ascending:false}).limit(20).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const cfg = {};
+  (settings||[]).forEach(s => { cfg[s.key] = s.value; });
+  const isReady = !!(cfg.META_AD_ACCOUNT_ID && cfg.META_ACCESS_TOKEN);
+
+  setContent(`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">📢 Advertising</h3>
+      <div style="font-size:12px;color:var(--text3)">Boost posts · Run campaigns · Track performance · All via Meta Ads API</div>
+    </div>
+    <span class="badge ${isReady?'badge-green':'badge-yellow'}">${isReady?'✅ Ad Account Ready':'⚙️ Setup needed'}</span>
+  </div>
+
+  ${!isReady ? `
+  <div class="mkt-card" style="margin-bottom:14px;border-left:3px solid var(--gold)">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">⚙️ Connect Meta Ad Account</div>
+    <div style="display:grid;gap:8px;margin-bottom:10px">
+      <div>
+        <label class="mkt-form-label">Ad Account ID <span style="color:var(--text3);font-weight:400">(Ads Manager URL → act_XXXXXXXXX)</span></label>
+        <input id="ad-account-id" class="mkt-form-input" placeholder="act_1234567890" value="${cfg.META_AD_ACCOUNT_ID||''}">
+      </div>
+      <div>
+        <label class="mkt-form-label">System User Access Token <span style="color:var(--text3);font-weight:400">(Business Settings → System Users → Generate Token)</span></label>
+        <input id="ads-token" class="mkt-form-input" type="password" placeholder="EAAxxxxxxxxxx">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <label class="mkt-form-label">Facebook Page ID</label>
+          <input id="ads-page-id" class="mkt-form-input" placeholder="${cfg.META_PAGE_ID||'auto-filled if Meta connected'}" value="${cfg.META_PAGE_ID||''}">
+        </div>
+        <div>
+          <label class="mkt-form-label">Instagram Account ID</label>
+          <input id="ads-ig-id" class="mkt-form-input" placeholder="${cfg.META_IG_ID||'auto-filled if Meta connected'}" value="${cfg.META_IG_ID||''}">
+        </div>
+      </div>
+    </div>
+    <button onclick="saveAdAccountSettings()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-weight:700">💾 Save & Verify</button>
+    <div style="margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px;font-size:11px;color:var(--text3)">
+      <b>How to get System User Token:</b><br>
+      business.facebook.com → Settings → Users → System Users → select Admin user → Generate New Token → select your app → tick: ads_management, ads_read, business_management → Generate
+    </div>
+  </div>` : ''}
+
+  <!-- BOOST A POST -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px">⚡ Boost a post</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Amplify an existing post. Fastest way to increase reach with paid spend.</div>
+    <div style="display:grid;gap:8px">
+      <div>
+        <label class="mkt-form-label">Select post</label>
+        <select id="boost-post-select" class="mkt-form-select" onchange="adsBoostPreview()">
+          <option value="">— Choose post to boost —</option>
+          ${(contentPosts||[]).map(p=>`<option value="${p.id}" data-text="${(p.master_text||p.topic||'').slice(0,80).replace(/"/g,'&quot;')}" data-img="${p.master_image_url||''}">${p.topic||'Untitled'} · ${p.post_type||'image'} · ${new Date(p.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</option>`).join('')}
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div>
+          <label class="mkt-form-label">Daily budget (₹)</label>
+          <input id="boost-budget" class="mkt-form-input" type="number" value="200" min="100" step="50" oninput="adsUpdateTotal()">
+        </div>
+        <div>
+          <label class="mkt-form-label">Days</label>
+          <input id="boost-days" class="mkt-form-input" type="number" value="5" min="1" max="30" oninput="adsUpdateTotal()">
+        </div>
+        <div>
+          <label class="mkt-form-label">Total spend</label>
+          <div id="boost-total-display" style="padding:8px 10px;background:var(--bg3);border-radius:6px;font-size:13px;font-weight:700;color:var(--gold)">₹1,000</div>
+        </div>
+      </div>
+      <div>
+        <label class="mkt-form-label">Objective</label>
+        <select id="boost-objective" class="mkt-form-select">
+          <option value="POST_ENGAGEMENT">Post engagement (likes, comments, shares)</option>
+          <option value="REACH">Maximum reach</option>
+          <option value="LINK_CLICKS">Website clicks (vwholesale.in)</option>
+          <option value="VIDEO_VIEWS">Video views (for reels)</option>
+        </select>
+      </div>
+
+      <!-- Audience -->
+      <div style="background:var(--bg3);border-radius:8px;padding:10px">
+        <div style="font-size:11px;font-weight:700;margin-bottom:8px;color:var(--text3)">TARGET AUDIENCE</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Location</label>
+            <input id="aud-location" class="mkt-form-input" value="Vijayawada, Andhra Pradesh" style="font-size:11px">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Radius (km)</label>
+            <input id="aud-radius" class="mkt-form-input" type="number" value="100" style="font-size:11px">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div>
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Age min</label>
+            <input id="aud-age-min" class="mkt-form-input" type="number" value="25" style="font-size:11px">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Age max</label>
+            <input id="aud-age-max" class="mkt-form-input" type="number" value="55" style="font-size:11px">
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Gender</label>
+            <select id="aud-gender" class="mkt-form-select" style="font-size:11px">
+              <option value="ALL">All</option><option value="MALE">Male</option><option value="FEMALE">Female</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">Interests</label>
+          <input id="aud-interests" class="mkt-form-input" value="Home improvement, Interior design, Real estate, Construction" style="font-size:11px">
+        </div>
+      </div>
+
+      <div id="boost-preview-card" style="display:none;background:rgba(201,168,76,.07);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px;font-size:11px"></div>
+
+      <button onclick="boostPost()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:12px;font-size:14px;font-weight:700" ${!isReady?'disabled':''}>
+        ⚡ Boost Post
+      </button>
+      ${!isReady ? '<div style="font-size:11px;color:var(--text3);text-align:center">Connect Ad Account above first</div>' : ''}
+    </div>
+  </div>
+
+  <!-- FULL CAMPAIGN -->
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:700">🎯 Full campaign</div>
+        <div style="font-size:11px;color:var(--text3)">Custom creatives, objectives, A/B testing, conversion tracking</div>
+      </div>
+      <button onclick="adsToggleCampaign()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px" id="camp-toggle">▸ Expand</button>
+    </div>
+    <div id="full-campaign-form" style="display:none;margin-top:12px">
+      <div style="display:grid;gap:8px">
+        <div>
+          <label class="mkt-form-label">Campaign name</label>
+          <input id="camp-name" class="mkt-form-input" placeholder="V Wholesale July — Marble Collection">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label class="mkt-form-label">Objective</label>
+            <select id="camp-objective" class="mkt-form-select">
+              <option value="AWARENESS">Brand Awareness</option>
+              <option value="TRAFFIC">Website Traffic</option>
+              <option value="ENGAGEMENT" selected>Engagement</option>
+              <option value="LEADS">Lead Generation</option>
+              <option value="SALES">Sales</option>
+            </select>
+          </div>
+          <div>
+            <label class="mkt-form-label">Platforms</label>
+            <select id="camp-platform" class="mkt-form-select">
+              <option value="both">Facebook + Instagram</option>
+              <option value="ig">Instagram only</option>
+              <option value="fb">Facebook only</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div>
+            <label class="mkt-form-label">Total budget (₹)</label>
+            <input id="camp-budget" class="mkt-form-input" type="number" value="5000" min="500">
+          </div>
+          <div>
+            <label class="mkt-form-label">Duration (days)</label>
+            <input id="camp-days" class="mkt-form-input" type="number" value="14" min="3">
+          </div>
+          <div>
+            <label class="mkt-form-label">CTA button</label>
+            <select id="camp-cta" class="mkt-form-select">
+              <option value="CALL_NOW">Call Now</option>
+              <option value="LEARN_MORE">Learn More</option>
+              <option value="SHOP_NOW">Shop Now</option>
+              <option value="CONTACT_US">Contact Us</option>
+              <option value="GET_DIRECTIONS">Get Directions</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="mkt-form-label">Ad creative — use existing post</label>
+          <select id="camp-post" class="mkt-form-select">
+            <option value="">— Select post as creative —</option>
+            ${(contentPosts||[]).map(p=>`<option value="${p.id}">${p.topic||'Untitled'} · ${p.post_type||'image'}</option>`).join('')}
+          </select>
+        </div>
+        <button onclick="createCampaign()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:12px;font-weight:700" ${!isReady?'disabled':''}>🚀 Create Campaign</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTIVE CAMPAIGNS -->
+  <div class="mkt-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700">📊 Active campaigns</div>
+      ${isReady?'<button onclick="loadAdCampaigns()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Refresh</button>':''}
+    </div>
+    <div id="ad-campaigns-list">
+      <div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">${isReady?'Loading…':'Connect Ad Account above to see campaigns'}</div>
+    </div>
+  </div>`);
+
+  if (isReady) loadAdCampaigns();
+}
+
+function adsUpdateTotal() {
+  const b = parseInt(document.getElementById('boost-budget')?.value||'200');
+  const d = parseInt(document.getElementById('boost-days')?.value||'5');
+  const el = document.getElementById('boost-total-display');
+  if (el) el.textContent = '₹'+((b*d)||0).toLocaleString('en-IN');
+}
+
+function adsBoostPreview() {
+  const sel = document.getElementById('boost-post-select');
+  const opt = sel?.options[sel.selectedIndex];
+  const preview = document.getElementById('boost-preview-card');
+  if (!preview || !opt?.value) { if(preview) preview.style.display='none'; return; }
+  preview.style.display = 'block';
+  const text = opt.dataset?.text||'';
+  const img = opt.dataset?.img||'';
+  preview.innerHTML = '<div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:6px">📄 POST PREVIEW</div>'
+    + (img?`<img src="${img}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;float:right;margin-left:8px">`:'' )
+    + `<div style="font-size:11px;line-height:1.6">${text}${text.length>=80?'…':''}</div>`;
+}
+
+function adsToggleCampaign() {
+  const form = document.getElementById('full-campaign-form');
+  const btn = document.getElementById('camp-toggle');
+  if (!form) return;
+  const open = form.style.display !== 'none';
+  form.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '▸ Expand' : '▾ Collapse';
+}
+
+async function saveAdAccountSettings() {
+  const rawId = (document.getElementById('ad-account-id')?.value||'').trim();
+  const token = (document.getElementById('ads-token')?.value||'').trim();
+  const pageId = (document.getElementById('ads-page-id')?.value||'').trim();
+  const igId = (document.getElementById('ads-ig-id')?.value||'').trim();
+  if (!rawId || !token) { showMktToast('Ad Account ID and Token required'); return; }
+  const adId = rawId.startsWith('act_') ? rawId : 'act_'+rawId;
+
+  showMktToast('⏳ Verifying…');
+  try {
+    const test = await fetch(`https://graph.facebook.com/v19.0/${adId}?fields=name,currency,account_status&access_token=${token}`);
+    const d = await test.json();
+    if (d.error) throw new Error(d.error.message);
+
+    const rows = [{key:'META_AD_ACCOUNT_ID',value:adId},{key:'META_ACCESS_TOKEN',value:token}];
+    if (pageId) rows.push({key:'META_PAGE_ID',value:pageId});
+    if (igId) rows.push({key:'META_IG_ID',value:igId});
+    await sb.from('marketing_settings').upsert(rows,{onConflict:'key'});
+
+    showMktToast('✅ Ad Account connected: '+d.name+' ('+d.currency+')');
+    setTimeout(_renderAdsAsync, 600);
+  } catch(e) { showMktToast('❌ '+e.message); }
+}
+
+async function boostPost() {
+  const postId = document.getElementById('boost-post-select')?.value;
+  if (!postId) { showMktToast('Select a post to boost'); return; }
+  const budget = parseInt(document.getElementById('boost-budget')?.value||'200');
+  const days = parseInt(document.getElementById('boost-days')?.value||'5');
+  const objective = document.getElementById('boost-objective')?.value||'POST_ENGAGEMENT';
+  const ageMin = parseInt(document.getElementById('aud-age-min')?.value||'25');
+  const ageMax = parseInt(document.getElementById('aud-age-max')?.value||'55');
+  const gender = document.getElementById('aud-gender')?.value||'ALL';
+  const interests = (document.getElementById('aud-interests')?.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+
+  const btn = document.querySelector('[onclick="boostPost()"]');
+  if (btn) { btn.textContent='⏳ Boosting…'; btn.disabled=true; }
+  try {
+    const { data: post } = await sb.from('content_posts').select('*').eq('id',postId).single().then(r=>r,()=>({data:null}));
+    if (!post) throw new Error('Post not found');
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-ads',{
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'boost_post', post_text:post.master_text||post.topic||'', image_url:post.master_image_url||'',
+        objective, daily_budget_inr:budget, duration_days:days,
+        targeting:{age_min:ageMin,age_max:ageMax,gender,interests,location:'Vijayawada',radius_km:100}
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error||'Boost failed');
+    showMktToast('✅ Boosted! Campaign: '+data.campaign_id);
+    await sb.from('marketing_audit_logs').insert({action:'ad_boost',details:{post_id:postId,budget:budget*days,campaign_id:data.campaign_id},created_at:new Date().toISOString()}).then(()=>{}).catch(()=>{});
+    setTimeout(loadAdCampaigns, 800);
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='⚡ Boost Post'; btn.disabled=false; } }
+}
+
+async function createCampaign() {
+  const name = (document.getElementById('camp-name')?.value||'').trim();
+  if (!name) { showMktToast('Enter campaign name'); return; }
+  const objective = document.getElementById('camp-objective')?.value||'ENGAGEMENT';
+  const budget = parseInt(document.getElementById('camp-budget')?.value||'5000');
+  const days = parseInt(document.getElementById('camp-days')?.value||'14');
+  const platform = document.getElementById('camp-platform')?.value||'both';
+  const cta = document.getElementById('camp-cta')?.value||'CALL_NOW';
+  const postId = document.getElementById('camp-post')?.value;
+
+  const btn = document.querySelector('[onclick="createCampaign()"]');
+  if (btn) { btn.textContent='⏳ Creating…'; btn.disabled=true; }
+  try {
+    let postData = null;
+    if (postId) {
+      const { data: p } = await sb.from('content_posts').select('*').eq('id',postId).single().then(r=>r,()=>({data:null}));
+      postData = p;
+    }
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-ads',{
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'create_campaign', campaign_name:name, objective, total_budget_inr:budget, duration_days:days, platform, cta,
+        post_text:postData?.master_text||'', image_url:postData?.master_image_url||'',
+        targeting:{age_min:25,age_max:55,gender:'ALL',interests:['Home improvement','Interior design','Real estate'],location:'Vijayawada',radius_km:100}
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error||'Failed');
+    showMktToast('✅ Campaign created! ID: '+data.campaign_id);
+    setTimeout(loadAdCampaigns, 800);
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='🚀 Create Campaign'; btn.disabled=false; } }
+}
+
+async function loadAdCampaigns() {
+  const el = document.getElementById('ad-campaigns-list');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:12px;font-size:12px;color:var(--text3)">⏳ Loading from Meta…</div>';
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-ads',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'get_campaigns'})});
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const campaigns = data.campaigns||[];
+    if (!campaigns.length) { el.innerHTML='<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">No campaigns yet</div>'; return; }
+    const SC = {ACTIVE:'#22c55e',PAUSED:'#f59e0b',DELETED:'#ef4444',ARCHIVED:'#94a3b8'};
+    el.innerHTML = campaigns.map(c=>`
+    <div style="padding:10px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${c.insights?'8px':'0'}">
+        <div style="flex:1"><div style="font-size:12px;font-weight:700">${c.name}</div><div style="font-size:10px;color:var(--text3)">${c.objective||''}</div></div>
+        <span style="background:${SC[c.status]||'#94a3b8'}22;color:${SC[c.status]||'#94a3b8'};border-radius:12px;padding:2px 8px;font-size:10px;font-weight:700">${c.status}</span>
+        ${c.status==='ACTIVE'?`<button onclick="pauseCampaign('${c.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">⏸</button>`:`<button onclick="resumeCampaign('${c.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">▶</button>`}
+      </div>
+      ${c.insights?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+        ${[{l:'Reach',v:c.insights.reach||'—'},{l:'Impressions',v:c.insights.impressions||'—'},{l:'Clicks',v:c.insights.clicks||'—'},{l:'Spend',v:c.insights.spend?'₹'+Math.round(c.insights.spend):'—'}]
+        .map(m=>`<div style="text-align:center;background:var(--bg3);border-radius:5px;padding:5px"><div style="font-size:12px;font-weight:700">${m.v}</div><div style="font-size:9px;color:var(--text3)">${m.l}</div></div>`).join('')}
+      </div>`:''}
+    </div>`).join('');
+  } catch(e) { el.innerHTML=`<div style="text-align:center;padding:12px;font-size:12px;color:var(--text3)">${e.message}</div>`; }
+}
+
+async function pauseCampaign(id) {
+  const r = await fetch(MKT_SB_URL+'/functions/v1/meta-ads',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'update_campaign',campaign_id:id,status:'PAUSED'})});
+  const d = await r.json(); showMktToast(d.ok?'⏸ Paused':'❌ '+d.error); if(d.ok) setTimeout(loadAdCampaigns,500);
+}
+
+async function resumeCampaign(id) {
+  const r = await fetch(MKT_SB_URL+'/functions/v1/meta-ads',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'update_campaign',campaign_id:id,status:'ACTIVE'})});
+  const d = await r.json(); showMktToast(d.ok?'▶ Resumed':'❌ '+d.error); if(d.ok) setTimeout(loadAdCampaigns,500);
 }
 
 
