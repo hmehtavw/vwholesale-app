@@ -3674,11 +3674,30 @@ async function loadSocialAnalytics() {
   if (!el) return;
   el.innerHTML = '<div style="text-align:center;padding:16px;font-size:12px;color:var(--text3)">⏳ Fetching live data from Meta + YouTube…</div>';
 
+  const callFn = async (action) => {
+    try {
+      const r = await fetch(MKT_SB_URL+'/functions/v1/social-analytics', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({action}),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!r.ok) return {ok:false, error:'HTTP '+r.status+' '+r.statusText};
+      const text = await r.text();
+      try { return JSON.parse(text); } catch { return {ok:false, error:'Invalid JSON: '+text.slice(0,100)}; }
+    } catch(e) {
+      return {ok:false, error: e.name==='TimeoutError' ? 'Timed out after 30s' : e.message};
+    }
+  };
+
   const [igRes, fbRes, ytRes] = await Promise.all([
-    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'instagram_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})),
-    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'facebook_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})),
-    fetch(MKT_SB_URL+'/functions/v1/social-analytics',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'youtube_insights'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}))
+    callFn('instagram_insights'),
+    callFn('facebook_insights'),
+    callFn('youtube_insights')
   ]);
+
+  console.log('[Analytics] IG:', igRes.ok, igRes.error||'ok');
+  console.log('[Analytics] FB:', fbRes.ok, fbRes.error||'ok');
+  console.log('[Analytics] YT:', ytRes.ok, ytRes.error||'ok');
 
   const platforms = [
     { key:'ig', data:igRes, icon:'📸', name:'Instagram', color:'#e1306c' },
