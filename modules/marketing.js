@@ -103,6 +103,8 @@ function showMktApp() {
   setTimeout(checkAndRunTrendScout, 3000);
   // Auto-sync Instagram ID silently on every load
   setTimeout(autoSyncInstagramId, 5000);
+  // Check Meta token expiry and auto-refresh if needed
+  setTimeout(checkAndRefreshMetaToken, 8000);
 }
 
 function startClock() {
@@ -1122,6 +1124,49 @@ async function testThreadsPost() {
     if (data.url) window.open(data.url, '_blank');
   } catch(e) { showMktToast('❌ '+e.message); }
   finally { if (btn) { btn.textContent='🧪 Test Post'; btn.disabled=false; } }
+}
+
+async function checkAndRefreshMetaToken() {
+  try {
+    const { data: rows } = await sb.from('marketing_settings').select('key,value')
+      .in('key',['META_TOKEN_EXPIRY','META_APP_ID','META_APP_SECRET','META_ACCESS_TOKEN'])
+      .then(r=>r,()=>({data:[]}));
+    const cfg = {}; (rows||[]).forEach(r=>{cfg[r.key]=r.value;});
+
+    if (!cfg.META_ACCESS_TOKEN || !cfg.META_APP_ID || !cfg.META_APP_SECRET) return;
+
+    const expiry = parseInt(cfg.META_TOKEN_EXPIRY||'0');
+    const daysLeft = expiry ? Math.floor((expiry - Date.now()) / 86400000) : 0;
+
+    // Refresh if expiring within 10 days or already expired
+    if (expiry && daysLeft > 10) {
+      console.log('[Meta] Token valid for', daysLeft, 'days');
+      return;
+    }
+
+    console.log('[Meta] Token expiring soon (', daysLeft, 'days) — refreshing...');
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-setup', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'refresh_token',
+        app_id: cfg.META_APP_ID,
+        app_secret: cfg.META_APP_SECRET,
+        token: cfg.META_ACCESS_TOKEN
+      })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      console.log('[Meta] Token refreshed successfully — valid for', data.expires_days, 'days');
+      if (daysLeft <= 0) showMktToast('✅ Meta token refreshed automatically');
+    } else {
+      // Show warning if token is expired and couldn't refresh
+      if (daysLeft <= 0) {
+        showMktToast('⚠️ Meta token expired — go to Integrations → paste new token from developers.facebook.com/tools/explorer');
+      }
+    }
+  } catch(e) {
+    console.log('[Meta] Token refresh check failed:', e.message);
+  }
 }
 
 async function autoSyncInstagramId() {
