@@ -1174,7 +1174,7 @@ td strong { color: var(--text); }
 /* ═══════════════════════════════════════════
    ADMIN-STYLE SIDEBAR LAYOUT FOR STAFF APP
 ═══════════════════════════════════════════ */
-:root { --sidebar-w: 220px; }
+:root { --sidebar-w: 200px; }
 
 /* Sidebar */
 #staff-sidebar {
@@ -1202,11 +1202,13 @@ td strong { color: var(--text); }
 /* desktop: sidebar always visible — handled by @media (min-width:901px) below */
 
 .sb-overlay {
-  display: none; position: fixed; inset: 0;
+  position: fixed; inset: 0;
   background: rgba(0,0,0,.5); z-index: 199;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .25s, visibility .25s;
 }
-body.staff-mode .sb-overlay { display: none; }
-.sb-overlay.show { display: block; }
+body.staff-mode .sb-overlay { opacity: 0; visibility: hidden; pointer-events: none; }
+.sb-overlay.show { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }
 
 .sb-head {
   padding: 14px 16px;
@@ -1295,7 +1297,9 @@ body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !imp
 /* ─── DESKTOP (>900px): sidebar always visible, no hamburger ─── */
 @media (min-width: 901px) {
   #staff-sidebar { transform: translateX(0) !important; }
-  #app-wrapper { margin-left: var(--sidebar-w) !important; }
+  #app-wrapper { margin-left: var(--sidebar-w); }
+  #app-wrapper.sidebar-collapsed { margin-left: 56px !important; }
+  body.staff-mode #app-wrapper:not(.sidebar-collapsed) { margin-left: var(--sidebar-w); }
   .st-menu-btn { display: none !important; }
   .sb-overlay { display: none !important; }
 }
@@ -1306,7 +1310,7 @@ body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !imp
   body.staff-mode #staff-sidebar.open { transform: translateX(0); }
   body.staff-mode #app-wrapper { margin-left: 0 !important; }
   .st-menu-btn { display: flex !important; }
-  .sb-overlay.show { display: block !important; }
+  .sb-overlay.show { opacity: 1 !important; visibility: visible !important; pointer-events: auto !important; }
 }
 </style>
 </head>

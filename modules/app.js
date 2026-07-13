@@ -3856,12 +3856,16 @@ function sbNavigate(page) {
 window.sbNavigate = sbNavigate;
 
 function toggleSidebar() {
-  document.getElementById('staff-sidebar')?.classList.toggle('open');
-  document.getElementById('sb-overlay')?.classList.toggle('show');
+  const sidebar = document.getElementById('staff-sidebar');
+  const isOpen = sidebar?.classList.toggle('open');
+  document.getElementById('sb-overlay')?.classList.toggle('show', !!isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
 }
 function closeSidebar() {
   document.getElementById('staff-sidebar')?.classList.remove('open');
-  document.getElementById('sb-overlay')?.classList.remove('show');
+  const ov = document.getElementById('sb-overlay');
+  if (ov) { ov.classList.remove('show'); ov.style.opacity=''; ov.style.visibility=''; ov.style.pointerEvents=''; }
+  document.body.style.overflow = '';
 }
 
 function toggleSidebarCollapse() {
