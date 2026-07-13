@@ -859,8 +859,11 @@ async function renderIntegrations() {
       ${statusBadge(metaOk, null)}
     </div>
     ${metaOk ? `
-    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">✅ Connected — auto-publishing active</div>
-    <button onclick="disconnectMeta()" style="margin-top:8px;background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">Disconnect</button>
+    <div id="meta-status-detail" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">✅ Connected — auto-publishing active</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="fetchMetaIgId()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Sync Instagram ID</button>
+      <button onclick="disconnectMeta()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">Disconnect</button>
+    </div>
     ` : `
     <div style="margin-top:10px">
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">To connect Instagram and Facebook, you need a Meta Business account with Pages access.</div>
@@ -1003,6 +1006,26 @@ async function handleMetaOAuth(code) {
     showMktToast('✅ Meta (Instagram + Facebook) connected!');
   } catch(e) {
     showMktToast('❌ '+e.message);
+  }
+}
+
+async function fetchMetaIgId() {
+  const btn = document.querySelector('[onclick="fetchMetaIgId()"]');
+  if (btn) { btn.textContent = '⏳ Syncing…'; btn.disabled = true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-setup', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'fetch_ig_id'})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const el = document.getElementById('meta-status-detail');
+    if (el) el.innerHTML = '✅ Connected · Page: V Wholesale · Instagram: @vwholesaleindia (ID: '+data.ig_id+')';
+    showMktToast('✅ Instagram ID synced: '+data.ig_id);
+  } catch(e) {
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent = '🔄 Sync Instagram ID'; btn.disabled = false; }
   }
 }
 
