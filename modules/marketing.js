@@ -924,9 +924,16 @@ async function renderIntegrations() {
     </div>
     ${metaOk ? `
     <div id="meta-status-detail" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">✅ Connected — auto-publishing active</div>
-    <div style="display:flex;gap:8px;margin-top:8px">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button onclick="fetchMetaIgId()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Sync Instagram ID</button>
       <button onclick="disconnectMeta()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">Disconnect</button>
+    </div>
+    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">🔑 Refresh token (paste from Graph API Explorer → V Wholesale app → Generate Access Token):</div>
+      <div style="display:flex;gap:6px">
+        <input id="meta-refresh-token" class="mkt-form-input" placeholder="EAAxxxxxxxx" style="font-size:11px;flex:1">
+        <button onclick="connectMetaWithToken(document.getElementById('meta-refresh-token')?.value)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;flex-shrink:0">Refresh</button>
+      </div>
     </div>
     ` : `
     <div style="margin-top:10px">
