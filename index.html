@@ -131,8 +131,8 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 .pgrid .pcard{flex:none}
 
 /* ── PDP SHEET ── */
-.pdp-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200}
-.pdp-overlay.open{display:block}
+.pdp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,visibility .25s}
+.pdp-overlay.open{opacity:1;visibility:visible;pointer-events:auto}
 .pdp-sheet{position:fixed;inset:0;background:#fff;z-index:201;transform:translateX(100%);transition:transform .3s cubic-bezier(.32,.72,0,1);overflow-y:auto;padding-bottom:80px}
 .pdp-sheet.open{transform:translateX(0)}
 .pdp-close{position:sticky;top:0;display:flex;align-items:center;gap:10px;padding:12px 14px;background:#fff;border-bottom:1px solid var(--bdr);z-index:5}
@@ -165,8 +165,8 @@ html,body{height:100%;background:#F4F4F4;color:#111;font-family:'DM Sans',system
 .pdp-bar-qty{flex:1;display:flex;align-items:center;border:2px solid var(--g);border-radius:10px;overflow:hidden;height:46px}
 
 /* ── SHEET ── */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;backdrop-filter:blur(1px)}
-.overlay.open{display:block}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:150;backdrop-filter:blur(1px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s,visibility .25s}
+.overlay.open{opacity:1;visibility:visible;pointer-events:auto}
 .sheet{position:fixed;bottom:0;left:0;right:0;background:#fff;border-radius:20px 20px 0 0;z-index:160;transform:translateY(105%);transition:transform .3s cubic-bezier(.32,.72,0,1);max-height:90vh;overflow-y:auto;padding:0 16px calc(20px + env(safe-area-inset-bottom))}
 .sheet.open{transform:translateY(0)}
 .sheet-handle{width:36px;height:4px;background:#E0E0E0;border-radius:2px;margin:12px auto 18px}
@@ -1151,9 +1151,10 @@ async function openPDP(id) {
 
 
 function closePDP() {
-  document.getElementById('pdp-sheet').classList.remove('open');
-  document.getElementById('pdp-overlay').classList.remove('open');
-  document.getElementById('pdp-bar').style.display = 'none';
+  document.getElementById('pdp-sheet')?.classList.remove('open');
+  document.getElementById('pdp-overlay')?.classList.remove('open');
+  document.getElementById('pdp-bar')?.classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 // ── WISHLIST ──
@@ -1199,6 +1200,9 @@ async function openWishlist() {
 
 // ── PAGES ──
 function showPage(page) {
+  // Always close all overlays when navigating
+  closeSheet();
+  closePDP();
   _currentPage = page;
   const pages = ['home','cat','search','orders','account','offers','wishlist'];
   pages.forEach(p => {
@@ -1621,6 +1625,7 @@ async function loadOffers() {
 function closeSheet() {
   document.getElementById('bottom-sheet')?.classList.remove('open');
   document.getElementById('sheet-overlay')?.classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 // ── TOAST ──
@@ -1632,6 +1637,22 @@ function toast(msg, duration=2500) {
   container.appendChild(el);
   setTimeout(() => { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.remove(), 300); }, duration);
 }
+
+// ── CLOSE ALL OVERLAYS (central function) ──
+function closeAllOverlays() {
+  closeSheet();
+  closePDP();
+}
+
+// Escape key closes all overlays
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeAllOverlays();
+}, { passive: true });
+
+// On DOMContentLoaded, reset UI state
+document.addEventListener('DOMContentLoaded', function() {
+  closeAllOverlays();
+});
 
 // ── INIT ──
 async function init() {
