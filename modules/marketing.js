@@ -1425,170 +1425,214 @@ async function checkAndRunTrendScout() {
 
 
 async function renderCommandCentre() {
-  setContent(`<div style="text-align:center;padding:40px"><div style="font-size:24px">⏳</div><div style="color:var(--text3);margin-top:8px">Loading dashboard…</div></div>`);
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your AI CMO briefing…</div>`);
 
-  // Load data
-  const [settingsRes, intRes, agentsRes, approvalsRes, socialRes] = await Promise.all([
-    sb.from('marketing_settings').select('key,value').then(r=>r, ()=>({data:[]})),
-    sb.from('marketing_integrations').select('*').then(r=>r, ()=>({data:[]})),
-    sb.from('ai_agents').select('*').then(r=>r, ()=>({data:[]})),
-    sb.from('marketing_approvals').select('*').eq('status','pending').then(r=>r, ()=>({data:[]})),
-    sb.from('social_connections').select('platform,status,access_token_set').then(r=>r, ()=>({data:[]})),
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const yesterday = new Date(now.getTime()-86400000).toISOString().split('T')[0];
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
+
+  const [
+    {data: todayPosts},
+    {data: monthPosts},
+    {data: channelPosts},
+    {data: calToday},
+    {data: notifications},
+    {data: ytSettings},
+    {data: stratSessions}
+  ] = await Promise.all([
+    sb.from('content_posts').select('*').gte('created_at', yesterday+'T00:00:00').then(r=>r,()=>({data:[]})),
+    sb.from('content_posts').select('id,post_type,status').gte('created_at', monthStart).then(r=>r,()=>({data:[]})),
+    sb.from('channel_posts').select('channel,status').eq('status','published').gte('created_at', monthStart).then(r=>r,()=>({data:[]})),
+    sb.from('content_calendar').select('*').eq('cal_date', todayStr).then(r=>r,()=>({data:[]})),
+    sb.from('agent_notifications').select('*').or('resolved.eq.false,resolved.is.null').eq('response','pending').order('created_at',{ascending:false}).limit(5).then(r=>r,()=>({data:[]})),
+    sb.from('marketing_settings').select('key,value').in('key',['YOUTUBE_SUBSCRIBER_COUNT','YOUTUBE_VIDEO_COUNT','META_IG_ID']).then(r=>r,()=>({data:[]})),
+    sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(1).then(r=>r,()=>({data:[]}))
   ]);
 
-  const settings = {};
-  (settingsRes.data||[]).forEach(s => { settings[s.key] = s.value; });
-  const integrations = intRes.data || [];
-  const agents = agentsRes.data || [];
-  const approvals = approvalsRes.data || [];
-  const socialConns = {};
-  (socialRes.data||[]).forEach(s => { socialConns[s.platform] = s; });
+  const ytCfg = {}; (ytSettings||[]).forEach(r=>{ytCfg[r.key]=r.value;});
+  const monthPublished = (channelPosts||[]).length;
+  const pendingApprovals = (notifications||[]).length;
+  const todayCalItems = calToday||[];
+  const lastSession = (stratSessions||[])[0];
+  const daysSinceStrategy = lastSession
+    ? Math.floor((Date.now()-new Date(lastSession.created_at).getTime())/86400000)
+    : 999;
 
-  const gbpConnected = socialConns['gbp']?.status === 'connected' && socialConns['gbp']?.access_token_set;
-  const waConnected  = socialConns['whatsapp']?.status === 'connected';
-  const metaConnected = socialConns['meta']?.status === 'connected';
+  // AI CMO suggestions based on data
+  const suggestions = [];
+  if (todayCalItems.length === 0) suggestions.push({icon:'📅', text:'No content planned for today — open Calendar to add a post', action:"mktNav('calendar')", urgent:true});
+  if (pendingApprovals > 0) suggestions.push({icon:'✅', text:`${pendingApprovals} post${pendingApprovals>1?'s':''} waiting for your approval`, action:"mktNav('agents')", urgent:true});
+  if (daysSinceStrategy >= 12) suggestions.push({icon:'🧠', text:'Strategy session overdue — plan your content for the next fortnight', action:"mktNav('calendar');setTimeout(openStrategySession,400)", urgent:true});
+  if (monthPublished < 5) suggestions.push({icon:'📢', text:'Only '+monthPublished+' posts published this month — target is 15-20', action:"mktNav('calendar')", urgent:false});
+  if (!ytCfg.META_IG_ID) suggestions.push({icon:'📸', text:'Instagram not connected — sync it in Integrations', action:"mktNav('integrations')", urgent:false});
+  suggestions.push({icon:'🔥', text:'Run Trend Scout to find today\u2019s opportunities', action:"mktNav('agents')", urgent:false});
+  suggestions.push({icon:'🎬', text:'Record a reel \u2014 your audience engages 3x more with video', action:"mktNav('calendar')", urgent:false});
 
-  // Build live integration list
-  const liveIntegrations = [
-    {name:'OpenAI (AI generation)', status:'connected', notes:'GPT-4o-mini + gpt-image-1'},
-    {name:'Pexels (stock photos)',  status:'connected', notes:'API key configured'},
-    {name:'GitHub (blog publish)',  status:'connected', notes:'Auto-publish to vwholesale.in/blog/'},
-    {name:'Google Business Profile',status: gbpConnected?'connected':'not_connected', notes: gbpConnected?'Connected ✅ — ready to post':'Click to connect'},
-    {name:'WhatsApp (Interakt)',    status: waConnected?'connected':'pending', notes: waConnected?'Live':'WABA approval pending for 8712697930'},
-    {name:'Meta (Instagram/FB)',    status: metaConnected?'connected':'not_connected', notes: metaConnected?'Connected':'Not set up yet'},
-  ];
-  const connectedInt = liveIntegrations.filter(i => i.status === 'connected').length;
-  const budget = parseInt(settings.marketing_budget_monthly_inr || 30000);
+  const todayDateStr = now.toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'long', year:'numeric'});
 
   setContent(`
-  <!-- HEADER -->
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-    <div>
-      <h2 style="font-size:20px;font-weight:900">Good ${new Date().getHours()<12?'Morning':'Afternoon'}, ${mktProfile?.name?.split(' ')[0]} 👋</h2>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · V Wholesale Marketing Intelligence</div>
+  <!-- CMO GREETING -->
+  <div style="background:linear-gradient(135deg,#0A1628,#1a2a8a);border:1px solid rgba(201,168,76,.3);border-radius:14px;padding:20px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="font-size:36px">🤖</div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:900;color:#fff">${greeting}, Himansu</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px">${todayDateStr}</div>
+        <div style="font-size:12px;color:var(--gold);margin-top:6px;font-weight:600">
+          ${monthPublished} posts published this month · ${(monthPosts||[]).length} created · ${pendingApprovals} pending approval
+        </div>
+      </div>
+      <button onclick="generateCMOBriefing(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:8px 14px;flex-shrink:0">🧠 AI Briefing</button>
     </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()">🧠 Get AI Briefing</button>
+    <div id="cmo-briefing-output" style="margin-top:0"></div>
   </div>
 
-  <!-- AI PAUSE WARNING -->
-  ${aiPaused ? `<div style="background:rgba(239,68,68,.1);border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
-    <span style="font-size:20px">🛑</span>
-    <div><div style="font-weight:700;color:var(--red)">All AI Actions Paused</div><div style="font-size:11px;color:var(--text3)">AI agents are running in recommend-only mode</div></div>
-    <button onclick="toggleAIPause()" style="margin-left:auto;padding:6px 12px;background:var(--red);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">Resume AI</button>
-  </div>` : ''}
-
-  <!-- PENDING APPROVALS ALERT -->
-  ${approvals.length > 0 ? `<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;margin-bottom:16px;display:flex;align-items:center;gap:10px;cursor:pointer" onclick="mktNav('approvals')">
-    <span style="font-size:20px">✅</span>
-    <div><div style="font-weight:700;color:var(--gold)">${approvals.length} Action${approvals.length>1?'s':''} Awaiting Your Approval</div><div style="font-size:11px;color:var(--text3)">Click to review and approve</div></div>
-    <span style="margin-left:auto;font-size:18px;color:var(--gold)">→</span>
-  </div>` : ''}
-
-  <!-- KEY METRICS -->
-  <div class="mkt-grid-4" style="margin-bottom:16px">
-    <div class="stat-card">
-      <div class="stat-label">Monthly Budget</div>
-      <div class="stat-value">₹${(budget/1000).toFixed(0)}K</div>
-      <div class="stat-sub">₹0 spent · ₹${(budget/1000).toFixed(0)}K remaining</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">AI Agents Active</div>
-      <div class="stat-value" style="color:var(--purple)">${agents.filter(a=>a.status==='active').length}</div>
-      <div class="stat-sub">${agents.length} total configured</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Integrations</div>
-      <div class="stat-value" style="color:var(--green)">${connectedInt}</div>
-      <div class="stat-sub">${integrations.length - connectedInt} not connected</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Pending Approvals</div>
-      <div class="stat-value" style="color:${approvals.length>0?'var(--gold)':'var(--green)'}">${approvals.length}</div>
-      <div class="stat-sub">${approvals.length===0?'All clear':'Action required'}</div>
-    </div>
-  </div>
-
-  <div class="mkt-grid-2">
-
-    <!-- INTEGRATIONS STATUS -->
+  <!-- TODAY'S PLAN -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
     <div class="mkt-card">
-      <div class="mkt-card-title">Platform Integrations</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">📅 Today's Content</div>
+      ${todayCalItems.length ? todayCalItems.map(item=>`
+      <div style="padding:8px;background:var(--bg3);border-radius:6px;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600">${item.topic||'Untitled'}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${item.content_type||'post'} · ${item.status||'planned'}</div>
+        <div style="display:flex;gap:5px;margin-top:6px">
+          ${item.is_reel
+            ? `<button onclick="generateAndShowReelScript('${(item.topic||'').replace(/'/g,"\'")}','${item.id}',this)" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">🎬 Script</button>`
+            : `<button onclick="quickCreateFromCalendar('${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','bilingual')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">⚡ Create</button>`}
+        </div>
+      </div>`).join('')
+      : `<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">
+          Nothing planned for today
+          <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="display:block;margin:8px auto 0;font-size:11px;padding:6px 12px">+ Add Today</button>
+        </div>`}
+    </div>
+
+    <div class="mkt-card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">📊 This Month</div>
       <div style="display:grid;gap:8px">
-        ${liveIntegrations.map(i => `
-        <div class="integration-card">
-          <div class="integration-dot ${i.status==='connected'?'dot-green':i.status==='partial'||i.status==='setup'?'dot-gold':'dot-gray'}"></div>
-          <div style="flex:1">
-            <div style="font-size:12px;font-weight:700">${i.name}</div>
-            <div style="font-size:10px;color:var(--text3)">${i.notes||i.status}</div>
-          </div>
-          <span class="badge ${i.status==='connected'?'badge-green':i.status==='partial'||i.status==='setup'?'badge-gold':'badge-gray'}">${i.status}</span>
+        ${[
+          {label:'Posts Created', value:(monthPosts||[]).length, color:'var(--gold)'},
+          {label:'Published', value:monthPublished, color:'#22c55e'},
+          {label:'Reels', value:(monthPosts||[]).filter(p=>p.post_type==='reel').length, color:'#a855f7'},
+          {label:'Pending Approval', value:pendingApprovals, color:pendingApprovals>0?'#f59e0b':'var(--text3)'},
+        ].map(m=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;background:var(--bg3);border-radius:6px">
+          <div style="font-size:11px;color:var(--text2)">${m.label}</div>
+          <div style="font-size:16px;font-weight:700;color:${m.color}">${m.value}</div>
         </div>`).join('')}
       </div>
     </div>
+  </div>
 
-    <!-- AI AGENTS STATUS -->
-    <div class="mkt-card">
-      <div class="mkt-card-title">AI Agents</div>
-      <div style="display:grid;gap:8px">
-        ${agents.map(a => {
-          const icons = {'AI CMO':'🧠','Content Agent':'✍️','SEO Agent':'🔍','Analytics Agent':'📈','GBP Agent':'📍','WhatsApp Agent':'💬'};
-          const colors = {'orchestrator':'#8B5CF6','specialist':'#3B82F6'};
-          return `<div class="agent-card">
-            <div class="agent-icon" style="background:${colors[a.type]||'#374151'}20;color:${colors[a.type]||'#6B7280'}">${icons[a.name]||'🤖'}</div>
-            <div style="flex:1">
-              <div class="agent-name">${a.name}</div>
-              <div class="agent-desc">Level ${a.autonomy_level} · ${a.model}</div>
-            </div>
-            <span class="badge ${a.status==='active'?'badge-green':'badge-gray'}">${a.status}</span>
-          </div>`;
-        }).join('')}
-      </div>
-      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('agents')" style="width:100%;margin-top:12px;font-size:11px">Configure Agents →</button>
+  <!-- AI SUGGESTIONS -->
+  <div class="mkt-card" style="margin-bottom:16px">
+    <div style="font-size:12px;font-weight:700;margin-bottom:10px">💡 AI Suggestions for Today</div>
+    <div style="display:grid;gap:8px">
+      ${suggestions.map(s=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;background:${s.urgent?'rgba(201,168,76,.06)':'var(--bg3)'};border:1px solid ${s.urgent?'rgba(201,168,76,.2)':'var(--border)'};border-radius:8px;cursor:pointer" onclick="${s.action}">
+        <span style="font-size:20px;flex-shrink:0">${s.icon}</span>
+        <div style="flex:1;font-size:12px;color:var(--text2)">${s.text}</div>
+        <span style="font-size:16px;color:var(--text3)">›</span>
+      </div>`).join('')}
     </div>
-
   </div>
 
   <!-- QUICK ACTIONS -->
-  <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">Quick Actions</div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="mkt-btn mkt-btn-primary" onclick="runAICMO()">🧠 AI Weekly Briefing</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('content')">✍️ Create Content</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('gbp')">📍 GBP Post</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('brand')">🏷️ Update Brand Knowledge</button>
-      <button class="mkt-btn mkt-btn-ghost" onclick="mktNav('integrations')">🔌 Connect Platform</button>
-    </div>
+  <div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Actions</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+    ${[
+      {icon:'📅', label:'Calendar', page:'calendar'},
+      {icon:'🤖', label:'AI Agents', page:'agents'},
+      {icon:'📸', label:'Create Post', page:'content'},
+      {icon:'🖼️', label:'AI Photoshoot', fn:'openAIPhotoshoot()'},
+      {icon:'📢', label:'Boost Post', page:'ads'},
+      {icon:'📊', label:'Analytics', page:'analytics'},
+      {icon:'🔌', label:'Integrations', page:'integrations'},
+      {icon:'🔥', label:'Trend Scout', fn:"mktNav('agents');setTimeout(()=>runTrendScout(),400)"},
+    ].map(a=>`
+    <button onclick="${a.fn||"mktNav('"+a.page+"')"}" class="mkt-btn mkt-btn-ghost" style="flex-direction:column;align-items:center;padding:12px 6px;gap:6px;display:flex;font-size:11px;height:70px">
+      <span style="font-size:22px">${a.icon}</span>
+      <span style="color:var(--text2)">${a.label}</span>
+    </button>`).join('')}
   </div>
 
-  <!-- SETUP CHECKLIST -->
-  <div class="mkt-card" style="margin-top:4px">
-    <div class="mkt-card-title">🚀 Setup Checklist</div>
-    <div style="display:grid;gap:6px">
+  <!-- CHANNEL STATUS -->
+  <div class="mkt-card">
+    <div style="font-size:12px;font-weight:700;margin-bottom:10px">🔌 Channel Status</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       ${[
-        {done:true,  text:'vwholesale.in domain live'},
-        {done:true,  text:'Google Search Console verified'},
-        {done:true,  text:'Sitemap submitted'},
-        {done:true,  text:'robots.txt configured'},
-        {done:true,  text:'OpenAI API connected (GPT-4o-mini + image)'},
-        {done:true,  text:'Pexels stock photos connected'},
-        {done:true,  text:'GitHub blog auto-publish connected'},
-        {done:true,  text:'Marketing database created'},
-        {done:gbpConnected,  text:'Google Business Profile connected'},
-        {done:false, text:'Create first GBP post'},
-        {done:false, text:'Connect Meta Business (Instagram + Facebook)'},
-        {done:false, text:'Complete Interakt WhatsApp WABA approval'},
-        {done:false, text:'Set up Google Analytics 4'},
-        {done:false, text:'Write first 5 blog articles'},
-        {done:false, text:'Add DOBs for customers (greetings engine)'},
-      ].map(item => `<div style="display:flex;align-items:center;gap:8px;font-size:12px">
-        <span style="color:${item.done?'var(--green)':'var(--text3)'}">${item.done?'✅':'⬜'}</span>
-        <span style="color:${item.done?'var(--text2)':'var(--text3)'}">${item.text}</span>
+        {icon:'📍', name:'GBP', status:'API pending', color:'#f59e0b'},
+        {icon:'📸', name:'Instagram', status:'Connected', color:'#22c55e'},
+        {icon:'👤', name:'Facebook', status:'Connected', color:'#22c55e'},
+        {icon:'🧵', name:'Threads', status:'Connected', color:'#22c55e'},
+        {icon:'▶️', name:'YouTube', status:'Connected', color:'#22c55e'},
+        {icon:'💬', name:'WhatsApp', status:'WABA pending', color:'#f59e0b'},
+      ].map(c=>`
+      <div style="text-align:center;padding:8px;background:var(--bg3);border-radius:8px">
+        <div style="font-size:18px">${c.icon}</div>
+        <div style="font-size:11px;font-weight:600;margin-top:2px">${c.name}</div>
+        <div style="font-size:9px;color:${c.color};margin-top:2px">${c.status}</div>
       </div>`).join('')}
     </div>
   </div>`);
 }
 
-// ── AI CMO ──
+async function generateCMOBriefing(btn) {
+  if (btn) { btn.textContent='⏳ Thinking…'; btn.disabled=true; }
+  const out = document.getElementById('cmo-briefing-output');
+  if (out) out.innerHTML='';
+
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+    const [
+      {data: posts},
+      {data: cal},
+      {data: sessions}
+    ] = await Promise.all([
+      sb.from('content_posts').select('topic,post_type,status').gte('created_at', monthStart).then(r=>r,()=>({data:[]})),
+      sb.from('content_calendar').select('topic,content_type,cal_date,status').gte('cal_date', now.toISOString().split('T')[0]).limit(7).then(r=>r,()=>({data:[]})),
+      sb.from('strategy_sessions').select('summary,key_themes').order('created_at',{ascending:false}).limit(1).then(r=>r,()=>({data:[]}))
+    ]);
+
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'AI CMO',
+        prompt: `You are the AI CMO for V Wholesale, Vijayawada — India's premium home building materials store.
+
+Today: ${now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}
+Month: ${now.toLocaleString('en-IN',{month:'long',year:'numeric'})}
+Posts this month: ${(posts||[]).length} created, ${(posts||[]).filter(p=>p.status==='published').length} published
+Upcoming calendar: ${(cal||[]).map(c=>`${new Date(c.cal_date).getDate()} ${c.topic}`).join(', ')||'empty'}
+Last strategy: ${(sessions||[])[0]?.summary?.slice(0,100)||'none'}
+
+Write a short, sharp AI CMO morning briefing for Himansu. Like a real CMO would:
+- What worked yesterday (infer from data)
+- Top 2-3 priorities for today
+- One bold suggestion
+- Keep it under 80 words, conversational, direct
+
+Return as plain text, no JSON.`,
+        context: {}
+      })
+    });
+    const data = await res.json();
+    const briefing = typeof data.output === 'string' ? data.output : data.output?.master_text || 'Ready to help you grow V Wholesale today.';
+
+    if (out) out.innerHTML = `<div style="margin-top:14px;padding:12px;background:rgba(255,255,255,.05);border-radius:8px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.8;border-left:3px solid var(--gold)">${briefing}</div>`;
+  } catch(e) {
+    if (out) out.innerHTML = `<div style="margin-top:10px;font-size:11px;color:var(--text3)">Briefing unavailable — ${e.message}</div>`;
+  } finally {
+    if (btn) { btn.textContent='🧠 AI Briefing'; btn.disabled=false; }
+  }
+}
+
+
 async function renderAICMO() {
   setContent(`<div style="text-align:center;padding:30px;color:var(--text3)">⏳ Loading your CMO brief…</div>`);
 
@@ -4147,6 +4191,180 @@ async function saveSetting(key, inputId) {
 }
 
 // ── POSTER STUDIO — Canvas Compositor (hero image + text overlay) ──
+function openAIPhotoshoot() {
+  const ov = document.createElement('div');
+  ov.id = 'photoshoot-overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;overflow-y:auto;padding:20px';
+  ov.innerHTML = `
+    <div style="max-width:520px;margin:0 auto;background:var(--bg2);border-radius:14px;padding:20px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div>
+          <div style="font-size:16px;font-weight:900">🖼️ AI Photoshoot</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">Upload a product photo → AI places it in 8 professional scenes</div>
+        </div>
+        <button onclick="document.getElementById('photoshoot-overlay').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+      </div>
+
+      <!-- Upload Product -->
+      <div style="margin-bottom:14px">
+        <label class="mkt-form-label">Product photo <span style="color:var(--text3);font-weight:400">(tile, granite slab, sanitaryware, paint can, etc)</span></label>
+        <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px dashed var(--border);border-radius:10px;padding:20px;cursor:pointer;background:var(--bg3);min-height:100px" id="photoshoot-drop-zone">
+          <span id="photoshoot-preview-area" style="font-size:36px">📷</span>
+          <span id="photoshoot-upload-label" style="font-size:12px;color:var(--text3);margin-top:8px">Click to upload product photo</span>
+          <input type="file" id="photoshoot-file" accept="image/*" onchange="photoshootPreview(this)" style="display:none">
+        </label>
+      </div>
+
+      <!-- Product Name -->
+      <div style="margin-bottom:14px">
+        <label class="mkt-form-label">Product name / description</label>
+        <input id="photoshoot-product" class="mkt-form-input" placeholder="e.g. Italian Carrara Marble 60x120cm, Jaquar Basin, Asian Paints Royale">
+      </div>
+
+      <!-- Scene Selection -->
+      <div style="margin-bottom:14px">
+        <label class="mkt-form-label">Select scenes <span style="color:var(--text3);font-weight:400">(choose up to 4)</span></label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${[
+            {id:'bathroom', icon:'🚿', label:'Luxury Bathroom'},
+            {id:'kitchen', icon:'🍳', label:'Modern Kitchen'},
+            {id:'living', icon:'🛋️', label:'Living Room'},
+            {id:'bedroom', icon:'🛏️', label:'Master Bedroom'},
+            {id:'showroom', icon:'🏪', label:'Showroom Display'},
+            {id:'exterior', icon:'🏠', label:'Home Exterior'},
+            {id:'construction', icon:'🏗️', label:'Under Construction'},
+            {id:'studio', icon:'✨', label:'Studio / White Background'},
+          ].map(s=>`
+          <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px">
+            <input type="checkbox" name="ps-scene" value="${s.id}" style="accent-color:var(--gold)"> ${s.icon} ${s.label}
+          </label>`).join('')}
+        </div>
+      </div>
+
+      <button onclick="runAIPhotoshoot()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:12px;font-size:14px;font-weight:700">✨ Generate AI Photoshoot</button>
+      <div id="photoshoot-results" style="margin-top:14px"></div>
+    </div>`;
+  document.body.appendChild(ov);
+}
+
+function photoshootPreview(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const preview = document.getElementById('photoshoot-preview-area');
+    const label = document.getElementById('photoshoot-upload-label');
+    if (preview) preview.innerHTML = `<img src="${e.target.result}" style="max-height:80px;max-width:200px;border-radius:6px;object-fit:contain">`;
+    if (label) label.textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runAIPhotoshoot() {
+  const fileInput = document.getElementById('photoshoot-file');
+  const product = (document.getElementById('photoshoot-product')?.value||'').trim();
+  const scenes = [...document.querySelectorAll('input[name="ps-scene"]:checked')].map(el=>el.value);
+
+  if (!fileInput?.files?.[0]) { showMktToast('Upload a product photo first'); return; }
+  if (!product) { showMktToast('Enter the product name'); return; }
+  if (scenes.length === 0) { showMktToast('Select at least one scene'); return; }
+  if (scenes.length > 4) { showMktToast('Select up to 4 scenes only'); return; }
+
+  const btn = document.querySelector('[onclick="runAIPhotoshoot()"]');
+  if (btn) { btn.textContent='⏳ Generating…'; btn.disabled=true; }
+
+  const results = document.getElementById('photoshoot-results');
+  if (results) results.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">⏳ AI is creating your product scenes… (~30-60 seconds)</div>';
+
+  const sceneLabels = {
+    bathroom:'luxurious modern bathroom with marble walls and ambient lighting',
+    kitchen:'contemporary modular kitchen with island counter',
+    living:'elegant living room with neutral tones and natural light',
+    bedroom:'master bedroom suite with designer furniture',
+    showroom:'professional retail showroom display with spotlighting',
+    exterior:'premium home exterior facade with landscaping',
+    construction:'active construction site being tiled by workers',
+    studio:'clean white studio background with soft shadows'
+  };
+
+  try {
+    // Upload product image to Supabase storage first
+    const file = fileInput.files[0];
+    const fname = 'photoshoot/'+Date.now()+'_'+file.name.replace(/[^a-z0-9.]/gi,'_').toLowerCase();
+    const { error: upErr } = await sb.storage.from('marketing-assets').upload(fname, file, {contentType:file.type, upsert:true});
+    if (upErr) throw new Error('Upload failed: '+upErr.message);
+    const { data: urlData } = sb.storage.from('marketing-assets').getPublicUrl(fname);
+    const productUrl = urlData.publicUrl;
+
+    // Generate scenes in parallel (max 2 at a time to avoid rate limits)
+    const generatedImages = [];
+    for (let i = 0; i < scenes.length; i += 2) {
+      const batch = scenes.slice(i, i+2);
+      const batchResults = await Promise.all(batch.map(async sceneId => {
+        const res = await fetch(MKT_SB_URL+'/functions/v1/gbp-image', {
+          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body: JSON.stringify({
+            action:'generate_scene',
+            product_name: product,
+            product_image_url: productUrl,
+            scene: sceneLabels[sceneId] || sceneId,
+            scene_id: sceneId,
+            brand: 'V Wholesale Vijayawada',
+            prompt_override: `Professional product photography: ${product} installed/displayed in a ${sceneLabels[sceneId]||sceneId}. Photo-realistic, architectural photography style, warm lighting, premium quality. The product should be the hero of the image. V Wholesale branding can be subtle.`
+          })
+        });
+        const data = await res.json();
+        return { sceneId, url: data.image_url || data.urls?.[0] || null, error: data.error };
+      }));
+      generatedImages.push(...batchResults);
+
+      // Show progress
+      if (results) results.innerHTML = `<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px">⏳ Generated ${generatedImages.filter(g=>g.url).length}/${scenes.length} scenes…</div>`;
+    }
+
+    // Display results
+    const successImages = generatedImages.filter(g => g.url);
+    if (!successImages.length) throw new Error('No images generated — try again');
+
+    if (results) results.innerHTML = `
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text1)">✅ ${successImages.length} scenes generated for: ${product}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        ${successImages.map(img=>`
+        <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+          <img src="${img.url}" style="width:100%;height:140px;object-fit:cover;display:block">
+          <div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.7));padding:8px">
+            <div style="font-size:10px;color:#fff;font-weight:600">${img.sceneId.charAt(0).toUpperCase()+img.sceneId.slice(1)}</div>
+          </div>
+          <div style="position:absolute;top:6px;right:6px;display:flex;gap:4px">
+            <a href="${img.url}" download style="background:rgba(0,0,0,.6);border:none;border-radius:4px;padding:4px 6px;font-size:10px;color:#fff;text-decoration:none">⬇️</a>
+            <button onclick="usePhotoshootImage('${img.url}','${product}')" style="background:rgba(201,168,76,.9);border:none;border-radius:4px;padding:4px 6px;font-size:10px;color:#000;cursor:pointer;font-weight:700">Use</button>
+          </div>
+        </div>`).join('')}
+      </div>
+      <button onclick="openAIPhotoshoot()" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;font-size:12px;padding:8px">🔄 Generate New Scenes</button>`;
+
+  } catch(e) {
+    if (results) results.innerHTML = `<div style="color:var(--red);padding:12px;font-size:12px;text-align:center">❌ ${e.message}</div>`;
+    showMktToast('❌ '+e.message);
+  } finally {
+    if (btn) { btn.textContent='✨ Generate AI Photoshoot'; btn.disabled=false; }
+  }
+}
+
+async function usePhotoshootImage(imageUrl, product) {
+  // Save to content_posts as master image and open content studio
+  showMktToast('✅ Image saved — opening Content Studio');
+  document.getElementById('photoshoot-overlay')?.remove();
+  mktNav('content');
+  setTimeout(() => {
+    const topicEl = document.getElementById('cs-topic');
+    if (topicEl) topicEl.value = product;
+    // Pre-fill the image URL for publishing
+    window._photoshootImageUrl = imageUrl;
+    showMktToast('Topic and image ready — click Create to generate captions');
+  }, 500);
+}
+
 async function renderPosterStudio() {
   const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
   const bp = (bpArr||[])[0]||{business_name:'V Wholesale',tagline:'Build Better. Pay Less.',phone:'8712697930',website:'https://vwholesale.in',address:'NH65, Bhavanipuram, Vijayawada'};
