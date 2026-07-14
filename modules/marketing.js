@@ -158,7 +158,8 @@ function mktNav(page) {
     ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
     reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
     segments: renderSegments, greetings: renderGreetings, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
-    integrations: renderIntegrations, audit: renderAudit, settings: renderSettings
+    integrations: renderIntegrations, audit: renderAudit, settings: renderSettings,
+    'web-push': renderWebPush
   };
   if (renderers[page]) renderers[page]();
   else renderComingSoon(PAGE_TITLES[page] || page);
@@ -7890,6 +7891,119 @@ async function pushToStaffFeed(titleOverride) {
 
   if (error) { showMktToast('❌ ' + error.message); return; }
   showMktToast('✅ Pushed to Staff Feed!');
+}
+
+async function renderWebPush() {
+  setContent('<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading…</div>');
+
+  const [
+    {data: subs},
+    {data: logs}
+  ] = await Promise.all([
+    sb.from('web_push_subscriptions').select('id,phone,subscribed_at,active').eq('active',true).order('subscribed_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('push_notifications_log').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const subCount = (subs||[]).length;
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+    + '<div><h3 style="font-size:16px;font-weight:900">🔔 Web Push Notifications</h3>'
+    + '<div style="font-size:12px;color:var(--text3)">Push alerts to customers on vwholesale.in · ' + subCount + ' subscribers</div></div></div>';
+
+  // Stats
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--gold)">' + subCount + '</div><div style="font-size:11px;color:var(--text3)">Active Subscribers</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#22c55e">' + (logs||[]).reduce((a,l)=>a+(l.sent_count||0),0) + '</div><div style="font-size:11px;color:var(--text3)">Total Sent</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#3b82f6">' + (logs||[]).length + '</div><div style="font-size:11px;color:var(--text3)">Campaigns</div></div>'
+    + '</div>';
+
+  // Send notification form
+  html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">📢 Send Push Notification</div>'
+    + '<div style="display:grid;gap:8px">'
+    + '<div><label class="mkt-form-label">Title (bold text)</label><input id="push-title" class="mkt-form-input" placeholder="e.g. Diwali Offer — 15% off all tiles"></div>'
+    + '<div><label class="mkt-form-label">Message body</label><textarea id="push-body" class="mkt-form-input" rows="2" placeholder="e.g. Visit V Wholesale today. Limited stock. NH65 Bhavanipuram."></textarea></div>'
+    + '<div><label class="mkt-form-label">Target</label>'
+    + '<select id="push-target" class="mkt-form-select">'
+    + '<option value="all">All subscribers (' + subCount + ')</option>'
+    + '<option value="ai">AI-generated message</option>'
+    + '</select></div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="generatePushMessage()" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Write</button>'
+    + '<button onclick="sendPushNotification()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-weight:700">🔔 Send to ' + subCount + ' subscribers</button>'
+    + '</div></div></div>';
+
+  // Quick notification templates
+  const pushTemplates = [
+    {icon:'🎉', title:'Festival Offer', body:'Visit V Wholesale today — special festival prices on tiles and granite. NH65 Bhavanipuram.'},
+    {icon:'🆕', title:'New Arrival', body:'New stock just arrived — Italian marble, vitrified tiles and more. First come first served!'},
+    {icon:'⏰', title:'Weekend Sale', body:'This weekend only — extra 5% on all orders above 25000. Visit V Wholesale NH65.'},
+    {icon:'📞', title:'Need Help?', body:'Our tile experts are ready. Call 8712697930 or visit V Wholesale NH65 today.'},
+  ];
+  html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Templates</div><div style="display:grid;gap:6px">';
+  pushTemplates.forEach(function(t) {
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">'
+      + '<span style="font-size:18px">' + t.icon + '</span>'
+      + '<div style="flex:1"><div style="font-size:11px;font-weight:600">' + t.title + '</div>'
+      + '<div style="font-size:10px;color:var(--text3)">' + t.body.slice(0,60) + '...</div></div>'
+      + '<button onclick="usePushTemplate(this)" data-title="' + t.title + '" data-body="' + t.body + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">Use</button></div>';
+  });
+  html += '</div></div>';
+
+  // Recent notifications
+  if ((logs||[]).length) {
+    html += '<div class="mkt-card"><div style="font-size:12px;font-weight:700;margin-bottom:10px">📋 Recent Notifications</div>'
+      + '<div style="display:grid;gap:6px">';
+    (logs||[]).forEach(log => {
+      html += '<div style="padding:8px;background:var(--bg3);border-radius:6px">'
+        + '<div style="display:flex;justify-content:space-between;margin-bottom:2px">'
+        + '<div style="font-size:12px;font-weight:600">' + (log.title||'') + '</div>'
+        + '<div style="font-size:10px;color:var(--text3)">' + new Date(log.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + '</div></div>'
+        + '<div style="font-size:11px;color:var(--text2)">' + (log.body||'') + '</div>'
+        + '<div style="font-size:10px;color:var(--text3);margin-top:3px">Sent to ' + (log.sent_count||0) + ' subscribers</div></div>';
+    });
+    html += '</div></div>';
+  }
+
+  setContent(html);
+}
+
+function usePushTemplate(btn) {
+  const t = document.getElementById('push-title');
+  const b = document.getElementById('push-body');
+  if (t) t.value = btn.dataset.title || '';
+  if (b) b.value = btn.dataset.body || '';
+}
+
+async function generatePushMessage() {
+  const topic = prompt('What is this notification about?');
+  if (!topic) return;
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({ action:'generate_text', agent:'Push Notification',
+      prompt: 'Write a web push notification for V Wholesale Vijayawada about: ' + topic + '. Title: max 50 chars. Body: max 120 chars. Urgent and action-oriented. Return JSON: {"title":"...","body":"..."}',
+      context: {} })
+  });
+  const d = await res.json();
+  const msg = d.output;
+  if (msg?.title) document.getElementById('push-title').value = msg.title;
+  if (msg?.body) document.getElementById('push-body').value = msg.body;
+  showMktToast('✅ AI message ready');
+}
+
+async function sendPushNotification() {
+  const title = (document.getElementById('push-title')?.value||'').trim();
+  const body = (document.getElementById('push-body')?.value||'').trim();
+  const target = document.getElementById('push-target')?.value || 'all';
+  if (!title || !body) { showMktToast('Enter title and message'); return; }
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/web-push', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({ action:'send', title, body, target })
+  });
+  const d = await res.json();
+  if (d.ok) showMktToast('✅ Sent to ' + d.sent + ' subscribers!');
+  else showMktToast('❌ ' + d.error);
+  renderWebPush();
 }
 
 async function renderStaffFeed() {
