@@ -6346,7 +6346,7 @@ async function waSendSingle() {
     body: JSON.stringify({
       action:'send_template',
       phone,
-      template_name: 'vw_offer_alert',
+      template_name: 'vassure_promotional_offer',
       language_code: 'en',
       body_values: ['Himansu', message, 'today']
     })
@@ -6641,12 +6641,21 @@ async function waQuickSend(btnOrType) {
   if (!phone && type !== 'festival') { showMktToast('Enter phone number'); return; }
   document.querySelectorAll('.wa-quick-modal').forEach(e=>e.remove());
 
+  // Map quick action types to actual approved Interakt templates
+  const templateMap = {
+    quotation: { name:'vassure_order_confirmation', values:[name, document.getElementById('qa-quot')?.value||'', document.getElementById('qa-total')?.value||''] },
+    review:    { name:'vassure_feedback_request',   values:[name, document.getElementById('qa-product')?.value||'your purchase'] },
+    festival:  { name:'vassure_special_event_greetings', values:[document.getElementById('qa-festival')?.value||'Festival'] },
+    contractor:{ name:'vassure_bulk_order_assistance', values:[name, 'Contractor Club earnings update', document.getElementById('qa-earn')?.value||'0'] },
+  };
+  const tmpl = templateMap[type] || { name:'vassure_promotional_offer', values:[name, message, 'today'] };
+
   const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({ action:'notify', phone, message })
+    body: JSON.stringify({ action:'send_template', phone, template_name: tmpl.name, body_values: tmpl.values, language_code:'en' })
   });
   const d = await res.json();
-  showMktToast(d.ok ? 'WhatsApp sent to ' + name : 'Failed: ' + (d.error||'error'));
+  showMktToast(d.ok ? '✅ WhatsApp sent to ' + name : '❌ ' + (d.error||'Send failed'));
 }
 
 
