@@ -1423,8 +1423,8 @@ async function renderIntegrations() {
     </div>
     <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">
       ${waOk
-        ? '✅ Interakt connected · Phone: 8712697930 · WhatsApp active'
-        : '⏳ API key saved — click Verify to confirm connection'}
+        ? '✅ Meta Direct API · Phone: +91 8712697930 · No Interakt fees'
+        : '⏳ Click Verify to test Meta WhatsApp connection'}
     </div>
   </div>
 
