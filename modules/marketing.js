@@ -6766,8 +6766,24 @@ async function waAIWrite(btn) {
         })
       });
       const data = await res.json();
-      const msg = typeof data.output === 'string' ? data.output : data.output?.master_text || data.output?.whatsapp_text || '';
-      if (!msg) throw new Error('Generation failed');
+      console.log('[WA AI Write] API response:', JSON.stringify(data).slice(0,500));
+      // Parse output — marketing-ai returns various formats
+      let msg = '';
+      if (typeof data.output === 'string') {
+        msg = data.output;
+      } else if (typeof data.output === 'object' && data.output !== null) {
+        msg = data.output.master_text || data.output.whatsapp_text || data.output.message || data.output.text || Object.values(data.output)[0] || '';
+      } else if (data.result) {
+        msg = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
+      } else if (data.content) {
+        msg = data.content;
+      } else if (data.text) {
+        msg = data.text;
+      } else if (data.message) {
+        msg = data.message;
+      }
+      msg = (msg||'').trim();
+      if (!msg) throw new Error('Empty response from AI — console has details');
 
       const outEl = document.getElementById('wa-ai-output');
       if (outEl) {
