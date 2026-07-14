@@ -1439,6 +1439,7 @@ async function renderCommandCentre() {
     {data: monthPosts},
     {data: channelPosts},
     {data: calToday},
+    {data: calMonth},
     {data: notifications},
     {data: ytSettings},
     {data: stratSessions}
@@ -1447,6 +1448,7 @@ async function renderCommandCentre() {
     sb.from('content_posts').select('id,post_type,status').gte('created_at', monthStart).then(r=>r,()=>({data:[]})),
     sb.from('channel_posts').select('channel,status').eq('status','published').gte('created_at', monthStart).then(r=>r,()=>({data:[]})),
     sb.from('content_calendar').select('*').eq('cal_date', todayStr).then(r=>r,()=>({data:[]})),
+    sb.from('content_calendar').select('*').gte('cal_date', todayStr).order('cal_date',{ascending:true}).limit(30).then(r=>r,()=>({data:[]})),
     sb.from('agent_notifications').select('*').or('resolved.eq.false,resolved.is.null').eq('response','pending').order('created_at',{ascending:false}).limit(5).then(r=>r,()=>({data:[]})),
     sb.from('marketing_settings').select('key,value').in('key',['YOUTUBE_SUBSCRIBER_COUNT','YOUTUBE_VIDEO_COUNT','META_IG_ID']).then(r=>r,()=>({data:[]})),
     sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(1).then(r=>r,()=>({data:[]}))
@@ -1489,6 +1491,47 @@ async function renderCommandCentre() {
     </div>
     <div id="cmo-briefing-output" style="margin-top:0"></div>
   </div>
+
+  <!-- STRATEGY SESSION BANNER IN CMO -->
+  ${sessionDue ? `
+  <div class="mkt-card" style="margin-bottom:14px;border-left:3px solid #ef4444;background:rgba(239,68,68,.04)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:26px">🧠</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">Strategy Session Due
+          <span class="badge badge-red" style="margin-left:8px">Overdue</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          ${lastSession
+            ? `Last session was ${daysSinceSession} days ago · Next: ${nextStrategyDate}`
+            : 'No sessions yet — plan your first content strategy'}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">
+          📅 ${(calMonth||[]).length} posts planned ahead · ${(calMonth||[]).filter(c=>c.is_reel).length} reels · ${(calMonth||[]).filter(c=>!c.is_reel&&c.content_type!=='reel').length} other
+        </div>
+      </div>
+      <button onclick="openStrategySession()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:8px 14px;flex-shrink:0">🧠 Start Session</button>
+    </div>
+  </div>` : `
+  <div class="mkt-card" style="margin-bottom:14px;border-left:3px solid var(--gold);background:rgba(201,168,76,.04)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="font-size:26px">🧠</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">Content Strategy Active</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">
+          ${lastSession
+            ? `Last session: ${new Date(lastSession.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · Next due: ${nextStrategyDate}`
+            : 'No sessions yet'}
+          ${lastSession?.summary ? ` · "${lastSession.summary.slice(0,60)}…"` : ''}
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:3px">
+          📅 <b>${(calMonth||[]).length}</b> posts planned · <b>${(calMonth||[]).filter(c=>c.is_reel).length}</b> reels · 
+          Next: ${calMonth?.[0] ? new Date(calMonth[0].cal_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' — '+calMonth[0].topic : 'Nothing scheduled'}
+        </div>
+      </div>
+      <button onclick="openStrategySession()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px;flex-shrink:0">💬 Update</button>
+    </div>
+  </div>`}
 
   <!-- TODAY'S PLAN -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
@@ -2590,13 +2633,12 @@ async function renderCalendar() {
 
   const [
     {data: calItems},
-    {data: contentPosts},
-    {data: strategySessions}
+    {data: contentPosts}
   ] = await Promise.all([
     sb.from('content_calendar').select('*').gte('cal_date', monthStart).lte('cal_date', monthEnd).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]})),
-    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]})),
-    sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(3).then(r=>r,()=>({data:[]}))
+    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]}))
   ]);
+  const strategySessions = null;
 
   const contentByTopic = {};
   (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
@@ -2619,27 +2661,6 @@ async function renderCalendar() {
       <div style="font-size:12px;color:var(--text3)">${(calItems||[]).length} posts planned · ${reelDays.length} reels · ${otherDays.length} other</div>
     </div>
     <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
-  </div>
-
-  <!-- STRATEGY SESSION BANNER -->
-  <div class="mkt-card" style="margin-bottom:16px;border-left:3px solid ${sessionDue?'#ef4444':'var(--gold)'}">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div style="font-size:28px">🧠</div>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:700">Fortnightly Strategy Session
-          ${sessionDue?'<span class="badge badge-red" style="margin-left:8px">Due now</span>':''}
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">
-          ${lastSession
-            ? `Last session: ${new Date(lastSession.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} · ${daysSinceSession} days ago · Next due: ${nextStrategyDate}`
-            : 'No sessions yet — start your first strategy session'}
-        </div>
-        ${lastSession?.summary ? `<div style="font-size:11px;color:var(--text2);margin-top:4px;font-style:italic">"${lastSession.summary.slice(0,100)}…"</div>` : ''}
-      </div>
-      <button onclick="openStrategySession()" class="mkt-btn ${sessionDue?'mkt-btn-primary':'mkt-btn-ghost'}" style="font-size:11px;padding:8px 14px;flex-shrink:0">
-        ${sessionDue?'🧠 Start Session':'💬 View / Update'}
-      </button>
-    </div>
   </div>
 
   <!-- REEL DAYS -->
