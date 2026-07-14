@@ -1416,7 +1416,7 @@ async function renderIntegrations() {
     <div style="display:flex;align-items:center;gap:12px">
       <div style="font-size:32px">💬</div>
       <div style="flex:1">
-        <div style="font-size:14px;font-weight:700">WhatsApp Business (Interakt)</div>
+        <div style="font-size:14px;font-weight:700">💬 WhatsApp Business (Meta Direct)</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Broadcast messages to customer list + approvals to 9038010175</div>
       </div>
       ${statusBadge(waOk, !waOk ? 'Verify connection' : null)}
