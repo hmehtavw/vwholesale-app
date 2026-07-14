@@ -625,6 +625,53 @@ async function renderAgents() {
         <button onclick="bulkGenerateMonth()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">🚀 Bulk Run</button>
       </div>
     </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">⭐</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Post-Purchase Review Requests</div>
+          <div style="font-size:11px;color:var(--text3)">Auto-send review requests to recent customers via Email + WhatsApp</div>
+        </div>
+        <button onclick="runReviewRequestAgent(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">▶️ Run Now</button>
+      </div>
+      <div id="review-request-output" style="margin-top:10px"></div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">📊</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Campaign ROI Tracker</div>
+          <div style="font-size:11px;color:var(--text3)">Link marketing campaigns to billing data to track real revenue</div>
+        </div>
+        <button onclick="mktNav('analytics')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">View →</button>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">📝</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">SEO Blog Generator</div>
+          <div style="font-size:11px;color:var(--text3)">Auto-generate SEO blog posts targeting Vijayawada keywords for vwholesale.in</div>
+        </div>
+        <button onclick="generateSEOBlogPost(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Generate</button>
+      </div>
+      <div id="seo-blog-output" style="margin-top:10px"></div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">▶️</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">YouTube SEO Optimizer</div>
+          <div style="font-size:11px;color:var(--text3)">Generate optimized titles, descriptions and tags for YouTube videos</div>
+        </div>
+        <button onclick="generateYouTubeSEO(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Optimize</button>
+      </div>
+      <div id="yt-seo-output" style="margin-top:10px"></div>
+    </div>
   </div>
 
   <!-- PENDING APPROVALS -->
@@ -4409,6 +4456,128 @@ function reviewPeriodChanged() {
 function expandReview(id) {
   const el = document.getElementById('review-expand-'+id);
   if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function runReviewRequestAgent(btn) {
+  if (btn) { btn.textContent='⏳ Running…'; btn.disabled=true; }
+  const out = document.getElementById('review-request-output');
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Finding recent customers without review request…</div>';
+  try {
+    // Get customers who purchased in last 7-30 days but haven't had review request sent
+    const sevenDaysAgo = new Date(Date.now()-7*86400000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now()-30*86400000).toISOString();
+    const { data: customers } = await sb.from('customers')
+      .select('id,name,email,phone,last_visit')
+      .gte('last_visit', thirtyDaysAgo)
+      .lte('last_visit', sevenDaysAgo)
+      .limit(20)
+      .then(r=>r,()=>({data:[]}));
+
+    if (!customers?.length) {
+      if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">No eligible customers found (purchased 7-30 days ago)</div>';
+      return;
+    }
+
+    let sent = 0;
+    for (const c of customers) {
+      // Send email if available
+      if (c.email) {
+        await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
+          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body: JSON.stringify({ action:'send_review_request', to:c.email, customer_name:c.name||'Customer', product:'building materials' })
+        }).catch(()=>{});
+        sent++;
+      }
+      // Send WhatsApp if available (uses vassure_feedback_request template)
+      if (c.phone) {
+        await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
+          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body: JSON.stringify({ action:'send_template', phone:c.phone, template_name:'vassure_feedback_request', body_values:[], language_code:'en' })
+        }).catch(()=>{});
+      }
+    }
+
+    showMktToast('✅ Review requests sent to ' + sent + ' customers');
+    if (out) out.innerHTML = '<div style="font-size:11px;color:#22c55e">✅ Sent to ' + customers.length + ' recent customers · ' + sent + ' via email</div>';
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+    if (out) out.innerHTML = '<div style="font-size:11px;color:var(--red)">❌ ' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent='▶️ Run Now'; btn.disabled=false; }
+  }
+}
+
+async function generateSEOBlogPost(btn) {
+  const topic = prompt('Blog post topic? (leave blank for auto-suggest)') || 'tiles in vijayawada';
+  if (btn) { btn.textContent='⏳ Writing…'; btn.disabled=true; }
+  const out = document.getElementById('seo-blog-output');
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Generating SEO blog post…</div>';
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'generate_text', agent:'SEO Blog',
+        prompt: 'Write a short SEO blog post (400-500 words) for V Wholesale, Vijayawada targeting the keyword "' + topic + '". Include: H1 title, 2-3 subheadings, natural keyword usage, mention V Wholesale at NH65 Bhavanipuram, call to action. Return just the blog post text.',
+        context: {} })
+    });
+    const data = await res.json();
+    const content = data.output?.message || typeof data.output === 'string' ? (data.output?.message || data.output) : '';
+    if (out && content) {
+      out.innerHTML = '<div style="background:var(--bg3);border-radius:8px;padding:12px;font-size:12px;color:var(--text2);line-height:1.8;max-height:200px;overflow-y:auto">' + content + '</div>';
+      const blogCopyBtn = document.createElement('button');
+      blogCopyBtn.className = 'mkt-btn mkt-btn-ghost';
+      blogCopyBtn.style.cssText = 'margin-top:8px;font-size:11px;padding:5px 10px';
+      blogCopyBtn.textContent = 'Copy Blog Post';
+      blogCopyBtn.onclick = function() { navigator.clipboard.writeText(content).then(function(){ showMktToast('Copied!'); }); };
+      out.appendChild(blogCopyBtn);
+    }
+  } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
+  finally { if (btn) { btn.textContent='Generate'; btn.disabled=false; } }
+}
+
+async function generateYouTubeSEO(btn) {
+  const videoTitle = prompt('Enter your video title or topic:');
+  if (!videoTitle) return;
+  if (btn) { btn.textContent='⏳ Optimizing…'; btn.disabled=true; }
+  const out = document.getElementById('yt-seo-output');
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Generating YouTube SEO…</div>';
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'generate_text', agent:'YouTube SEO',
+        prompt: 'Generate YouTube SEO for V Wholesale Vijayawada. Video: "' + videoTitle + '". Return JSON: {"title":"optimized title under 60 chars","description":"300 word SEO description with keywords","tags":["10-15 tags"],"thumbnail_text":"short text for thumbnail overlay"}',
+        context: {} })
+    });
+    const data = await res.json();
+    let seo = data.output;
+    if (typeof seo === 'string') try { seo = JSON.parse(seo); } catch { seo = { title: videoTitle, description: seo, tags: [], thumbnail_text: '' }; }
+    if (typeof seo === 'object' && seo?.message) try { seo = JSON.parse(seo.message); } catch { seo = { title: videoTitle, description: seo.message, tags: [] }; }
+    if (out) {
+      out.innerHTML = '';
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;gap:8px';
+
+      const addSection = (label, content) => {
+        const d = document.createElement('div');
+        d.style.cssText = 'background:var(--bg3);border-radius:6px;padding:8px';
+        d.innerHTML = '<div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px">' + label + '</div>'
+          + '<div style="font-size:12px;max-height:80px;overflow-y:auto">' + content + '</div>';
+        const btn = document.createElement('button');
+        btn.className = 'mkt-btn mkt-btn-ghost';
+        btn.style.cssText = 'font-size:10px;padding:2px 8px;margin-top:4px';
+        btn.textContent = 'Copy';
+        btn.onclick = function() { navigator.clipboard.writeText(content).then(function(){ showMktToast('Copied!'); }); };
+        d.appendChild(btn);
+        grid.appendChild(d);
+      };
+
+      addSection('TITLE', seo?.title || videoTitle);
+      addSection('DESCRIPTION', seo?.description || '');
+      addSection('TAGS', (seo?.tags || []).join(', '));
+      if (seo?.thumbnail_text) addSection('THUMBNAIL TEXT', seo.thumbnail_text);
+      out.appendChild(grid);
+    }
+  } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
+  finally { if (btn) { btn.textContent='Optimize'; btn.disabled=false; } }
 }
 
 async function generateReview(typeOverride, btnEl) {
