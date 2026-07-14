@@ -6344,7 +6344,7 @@ async function waSendSingle() {
   // WhatsApp Business API only allows TEMPLATE messages for outbound.
   // Free text is only allowed if customer messaged you in last 24 hrs.
   // We use vw_offer_alert template with the message as the body value.
-  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+  const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
     body: JSON.stringify({
       action:'send_template',
@@ -6386,7 +6386,7 @@ async function waSendBroadcast() {
   showMktToast('⏳ Sending to ' + validCustomers.length + ' customers…');
 
   const broadcastList = validCustomers.map(c => ({ phone: c.phone, message }));
-  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+  const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
     body: JSON.stringify({ action:'send_broadcast', broadcast_list:broadcastList, campaign_name:campName })
   });
@@ -6533,7 +6533,7 @@ async function sendWATemplateNow(templateName, varCount, langCode) {
   try {
     if (phone) {
       // Single send
-      const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+      const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
         body: JSON.stringify({ action:'send_template', phone, template_name:templateName, body_values:bodyValues, language_code: langCode||'en' })
       });
@@ -6552,7 +6552,7 @@ async function sendWATemplateNow(templateName, varCount, langCode) {
       if (!phones.length) { showMktToast('No customers found in this segment'); return; }
       if (!confirm('Send to ' + phones.length + ' customers in segment "' + segment + '"?')) return;
 
-      const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+      const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
         body: JSON.stringify({ action:'send_broadcast', phones, template_name:templateName, body_values:bodyValues, language_code: langCode||'en' })
       });
@@ -6660,7 +6660,7 @@ async function waQuickSend(btnOrType) {
   };
   const tmpl = templateMap[type] || { name:'vassure_promotional_offer', values:[] };
 
-  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+  const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
     body: JSON.stringify({ action:'send_template', phone, template_name: tmpl.name, body_values: tmpl.values, language_code:'en' })
   });
@@ -6672,7 +6672,7 @@ async function waQuickSend(btnOrType) {
 async function verifyInterakt(btn) {
   if (btn) { btn.textContent='⏳ Verifying…'; btn.disabled=true; }
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({ action:'verify' })
     });
@@ -6725,7 +6725,7 @@ async function sendWABroadcast(templateName, bodyValues, phones, btn) {
   if (!templateName) { showMktToast('Select a template first'); return; }
   if (btn) { btn.textContent='⏳ Sending…'; btn.disabled=true; }
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({ action:'send_broadcast', template_name:templateName, body_values:bodyValues||[], phones, language_code:'en' })
     });
@@ -6863,7 +6863,7 @@ async function syncWATemplates(btn) {
   if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
   showMktToast('🔄 Fetching templates from Interakt…');
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({ action:'get_templates' })
     });
