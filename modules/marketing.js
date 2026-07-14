@@ -923,7 +923,10 @@ async function renderIntegrations() {
       ${statusBadge(metaOk, null)}
     </div>
     ${metaOk ? `
-    <div id="meta-status-detail" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">✅ Connected — auto-publishing active</div>
+    <div id="meta-status-detail" style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:#22c55e">
+      ✅ Connected · Page: ${cfg.META_PAGE_NAME||'V Wholesale'} · Instagram: @vwholesaleindia
+      ${cfg.META_IG_ID ? `(ID: ${cfg.META_IG_ID})` : '— <span style="color:#f59e0b">click Sync Instagram ID</span>'}
+    </div>
     <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
       <button onclick="fetchMetaIgId()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">🔄 Sync Instagram ID</button>
       <button onclick="disconnectMeta()" style="background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer">Disconnect</button>
