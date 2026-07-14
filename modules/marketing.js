@@ -6285,7 +6285,10 @@ async function renderWhatsApp() {
 
   // TEMPLATES
   html += '<div class="mkt-card" style="margin-bottom:14px">'
-    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📋 Approved Templates</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<div style="font-size:12px;font-weight:700">📋 Approved Templates</div>'
+    + '<button onclick="syncWATemplates(this)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 10px">🔄 Sync from Interakt</button></div>'
+    + '<div style="font-size:10px;color:var(--text3);margin-bottom:8px">Click Use Template — variables {{1}} {{2}} get filled before sending</div>'
     + '<div style="display:grid;gap:8px">';
 
   (templates||[]).forEach(t => {
@@ -6854,6 +6857,41 @@ function fillWAMessage(msg) {
   if (singleEl) singleEl.value = msg;
   if (broadcastEl) broadcastEl.value = msg;
   showMktToast('✅ Message filled');
+}
+
+async function syncWATemplates(btn) {
+  if (btn) { btn.textContent = '⏳…'; btn.disabled = true; }
+  showMktToast('🔄 Fetching templates from Interakt…');
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'get_templates' })
+    });
+    const data = await res.json();
+    const templates = data.templates || [];
+    if (!templates.length) { showMktToast('⚠️ No templates returned from Interakt'); return; }
+
+    for (const t of templates) {
+      const body = t.body || t.components?.find(c=>c.type==='BODY')?.text || t.content || '';
+      const varNums = (body.match(/{{\d+}}/g)||[]).map(v=>parseInt(v.replace(/[{}]/g,'')));
+      const varCount = varNums.length ? Math.max(...varNums) : 0;
+      const status = (t.status||t.approvalStatus||'').toLowerCase().includes('approv') ? 'approved' : (t.status||'pending').toLowerCase();
+      await sb.from('whatsapp_templates').upsert({
+        name: t.name,
+        status,
+        language: t.language || t.languageCode || 'en',
+        category: t.category || 'MARKETING',
+        body: body.slice(0,500),
+        var_count: varCount
+      },{onConflict:'name'}).then(r=>r,()=>null);
+    }
+    showMktToast('✅ Synced ' + templates.length + ' templates');
+    renderWhatsApp();
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+  } finally {
+    if (btn) { btn.textContent = '🔄 Sync from Interakt'; btn.disabled = false; }
+  }
 }
 
 function copyWAMessage() {
