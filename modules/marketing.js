@@ -6335,15 +6335,29 @@ function waAIGenBroadcast() {
 async function waSendSingle() {
   const phone = (document.getElementById('wa-single-phone')?.value||'').trim();
   const message = (document.getElementById('wa-single-msg')?.value||'').trim();
-  if (!phone || !message) { showMktToast('Enter phone and message'); return; }
+  if (!phone) { showMktToast('Enter phone number'); return; }
+  if (!message) { showMktToast('Enter a message or use a template above'); return; }
 
+  // WhatsApp Business API only allows TEMPLATE messages for outbound.
+  // Free text is only allowed if customer messaged you in last 24 hrs.
+  // We use vw_offer_alert template with the message as the body value.
   const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({ action:'notify', phone, message })
+    body: JSON.stringify({
+      action:'send_template',
+      phone,
+      template_name: 'vw_offer_alert',
+      language_code: 'en',
+      body_values: ['Himansu', message, 'today']
+    })
   });
   const d = await res.json();
-  if (d.ok) showMktToast('✅ WhatsApp sent to +91' + phone.replace(/[^0-9]/g,''));
-  else showMktToast('❌ ' + (d.error||'Send failed'));
+  if (d.ok) {
+    showMktToast('✅ WhatsApp sent to +91' + phone.replace(/[^0-9]/g,''));
+  } else {
+    // If vw_offer_alert fails, show clear message
+    showMktToast('❌ ' + (d.error||'Send failed') + ' — Use "Use Template" buttons above to send approved templates');
+  }
 }
 
 async function waSendBroadcast() {
