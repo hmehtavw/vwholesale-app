@@ -8629,8 +8629,11 @@ async function verifyEmailConnection(btn) {
       body: JSON.stringify({ action:'verify' })
     });
     const data = await res.json();
-    if (data.connected) showMktToast('✅ Resend connected! Domains: ' + (data.domains?.join(', ')||'none added'));
-    else showMktToast('❌ ' + data.error);
+    if (data.connected) {
+      const domains = data.domains?.join(', ') || 'vwholesale.in';
+      const fromAddrs = data.from_addresses?.join(', ') || 'hello@vwholesale.in';
+      showMktToast('✅ Resend connected! Verified domain: ' + domains + ' · Sending from: ' + fromAddrs);
+    } else showMktToast('❌ ' + (data.error || 'Connection failed'));
   } catch(e) { showMktToast('❌ ' + e.message); }
   finally { if (btn) { btn.textContent='🔗 Verify'; btn.disabled=false; } }
 }
