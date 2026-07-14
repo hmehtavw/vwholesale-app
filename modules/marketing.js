@@ -6297,7 +6297,7 @@ async function renderWhatsApp() {
       + '<div style="font-size:11px;font-weight:700;color:var(--gold)">' + t.name + '</div>'
       + '<span class="badge badge-green" style="font-size:9px">' + t.category + '</span></div>'
       + '<div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">' + (t.body||'').slice(0,120) + '…</div>'
-      + '<button onclick="loadWATemplate(this)" data-name="' + t.name + '" data-lang="' + (t.language||'en') + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" data-body="' + encodeURIComponent((t.body||'').slice(0,400)) + '">Use Template</button>'
+      + '<button onclick="loadWATemplate(this)" data-name="' + t.name + '" data-lang="' + (t.language||'en') + '" data-varcount="' + (t.var_count||0) + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" data-body="' + encodeURIComponent((t.body||'').slice(0,400)) + '">Use Template</button>'
       + '</div>';
   });
   html += '</div></div>';
@@ -6409,8 +6409,8 @@ function loadWATemplate(btn) {
   const name = btn.dataset.name || '';
   const body = decodeURIComponent(btn.dataset.body || '');
   const vars = (body.match(/{{\d+}}/g) || []);
-  const varCount = vars.length;
-  const varNames = ['Customer Name', 'Message Detail', 'Amount / Date'];
+  const varCount = parseInt(btn.dataset.varcount || '0') || vars.length;
+  const varNames = ['Customer Name', 'Message Detail', 'Amount / Date / Phone', 'Value 4', 'Value 5'];
 
   // Build modal via DOM (avoids quote escaping issues)
   const existing = document.getElementById('wa-template-modal');
