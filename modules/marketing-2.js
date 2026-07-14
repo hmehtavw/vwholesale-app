@@ -4067,6 +4067,87 @@ async function verifyEmailConnection(btn) {
   finally { if (btn) { btn.textContent='🔗 Verify'; btn.disabled=false; } }
 }
 
+function buildEmailHTML(subject, body) {
+  const bodyHtml = body.split('\n').join('<br>');
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; background: #f4f4f4; color: #333; }
+  .wrapper { max-width: 600px; margin: 0 auto; background: #fff; }
+  .header { background: #0A1628; padding: 0; text-align: center; }
+  .header-top { background: #0A1628; padding: 20px; }
+  .header-top h1 { color: #C9A84C; font-size: 28px; letter-spacing: 2px; margin-bottom: 4px; }
+  .header-top p { color: rgba(255,255,255,0.6); font-size: 12px; }
+  .banner { background: linear-gradient(135deg, #0A1628, #1a3a5c); padding: 24px 30px; border-bottom: 3px solid #C9A84C; }
+  .banner h2 { color: #fff; font-size: 20px; font-weight: 700; }
+  .content { padding: 30px; background: #fff; }
+  .content p { line-height: 1.8; color: #444; font-size: 14px; margin-bottom: 12px; }
+  .cta-button { display: inline-block; background: #C9A84C; color: #000; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 14px; margin: 16px 0; }
+  .divider { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+  .store-info { background: #f9f9f9; padding: 20px 30px; border-top: 3px solid #C9A84C; }
+  .store-info h3 { color: #0A1628; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .store-info p { font-size: 12px; color: #666; line-height: 1.6; }
+  .footer { background: #0A1628; padding: 16px 30px; text-align: center; }
+  .footer p { color: rgba(255,255,255,0.5); font-size: 11px; line-height: 1.6; }
+  .footer a { color: #C9A84C; text-decoration: none; }
+  @media (max-width: 600px) { .content { padding: 20px; } .banner { padding: 16px 20px; } }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- HEADER -->
+  <div class="header-top">
+    <h1>V <span style="color:#fff">Wholesale</span></h1>
+    <p>Vijayawada's Premium Home Building Materials Store</p>
+  </div>
+
+  <!-- BANNER -->
+  <div class="banner">
+    <h2>${subject}</h2>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+    <p>${bodyHtml}</p>
+    <hr class="divider">
+    <div style="text-align:center">
+      <a href="https://vwholesale.in" class="cta-button">Visit vwholesale.in</a>
+    </div>
+  </div>
+
+  <!-- STORE INFO -->
+  <div class="store-info">
+    <h3>📍 Visit Us</h3>
+    <p>
+      NH65, Bhavanipuram, Vijayawada, Andhra Pradesh 520012<br>
+      📞 <a href="tel:8712697930" style="color:#0A1628">8712697930</a> &nbsp;|&nbsp;
+      🌐 <a href="https://vwholesale.in" style="color:#0A1628">vwholesale.in</a><br>
+      🕐 Mon–Sat: 9:00 AM – 7:00 PM
+    </p>
+    <p style="margin-top:10px">
+      <strong>Products:</strong> Tiles · Granite · Marble · Sanitaryware · Paints · Electricals
+    </p>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p>
+      © 2026 Vassure Wholesale Pvt Ltd · V Wholesale<br>
+      <a href="https://vwholesale.in">vwholesale.in</a> · 8712697930 ·
+      <a href="https://vwholesale.in/shop">Shop Online</a><br>
+      <span style="font-size:10px;opacity:.6">You are receiving this email as a V Wholesale customer. 
+      <a href="mailto:noreply@vwholesale.in?subject=Unsubscribe" style="color:rgba(255,255,255,.4)">Unsubscribe</a></span>
+    </p>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
 async function sendEmailCampaign(btn) {
   const subject = (document.getElementById('email-subject')?.value||'').trim();
   const body = (document.getElementById('email-body')?.value||'').trim();
@@ -4081,7 +4162,7 @@ async function sendEmailCampaign(btn) {
       if (!single) { showMktToast('Enter email address'); return; }
       const res = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({ action:'send_email', to:single, subject, html:'<p>' + body.split('\n').join('<br>') + '</p>' })
+        body: JSON.stringify({ action:'send_email', to:single, subject, html: buildEmailHTML(subject, body) })
       });
       const data = await res.json();
       if (data.ok) showMktToast('✅ Email sent to ' + single);
@@ -4097,7 +4178,7 @@ async function sendEmailCampaign(btn) {
 
       const res = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({ action:'send_broadcast', emails, subject, html:'<p>' + body.split('\n').join('<br>') + '</p>', campaign_name: subject })
+        body: JSON.stringify({ action:'send_broadcast', emails, subject, html: buildEmailHTML(subject, body), campaign_name: subject })
       });
       const data = await res.json();
       showMktToast('✅ Sent to ' + data.sent + ' · Failed: ' + data.failed);
