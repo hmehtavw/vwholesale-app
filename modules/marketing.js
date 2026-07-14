@@ -6406,9 +6406,179 @@ async function waLoadSegmentCount(segment) {
 function loadWATemplate(btn) {
   const name = btn.dataset.name || '';
   const body = decodeURIComponent(btn.dataset.body || '');
-  const el = document.getElementById('wa-broadcast-msg') || document.getElementById('wa-single-msg');
-  if (el) el.value = body.replace(/{{1}}/g,'[Customer Name]').replace(/{{2}}/g,'[Detail]').replace(/{{3}}/g,'[Value]');
-  showMktToast('✅ Template loaded — edit the [placeholders]');
+  const vars = (body.match(/{{\d+}}/g) || []);
+  const varCount = vars.length;
+  const varNames = ['Customer Name', 'Message Detail', 'Amount / Date'];
+
+  // Build modal via DOM (avoids quote escaping issues)
+  const existing = document.getElementById('wa-template-modal');
+  if (existing) existing.remove();
+
+  const ov = document.createElement('div');
+  ov.id = 'wa-template-modal';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:480px;border:1px solid var(--border);margin:auto';
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:14px';
+  header.innerHTML = '<div style="font-size:15px;font-weight:700">💬 ' + name + '</div>';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer';
+  closeBtn.onclick = () => ov.remove();
+  header.appendChild(closeBtn);
+  card.appendChild(header);
+
+  // Template body preview
+  const preview = document.createElement('div');
+  preview.style.cssText = 'background:var(--bg3);border-radius:8px;padding:10px;font-size:11px;color:var(--text2);line-height:1.8;margin-bottom:14px';
+  preview.innerHTML = body.replace(/\n/g, '<br>');
+  card.appendChild(preview);
+
+  // Variable inputs
+  if (varCount > 0) {
+    const varDiv = document.createElement('div');
+    varDiv.style.cssText = 'display:grid;gap:8px;margin-bottom:12px';
+    for (let i = 1; i <= varCount; i++) {
+      const d = document.createElement('div');
+      const lbl = document.createElement('label');
+      lbl.className = 'mkt-form-label';
+      lbl.textContent = 'Variable ' + i + ' — replaces {{' + i + '}}';
+      const inp = document.createElement('input');
+      inp.id = 'wa-var-' + i;
+      inp.className = 'mkt-form-input';
+      inp.placeholder = varNames[i-1] || 'Value ' + i;
+      d.appendChild(lbl);
+      d.appendChild(inp);
+      varDiv.appendChild(d);
+    }
+    card.appendChild(varDiv);
+  }
+
+  // Send to section
+  const sendLabel = document.createElement('div');
+  sendLabel.style.cssText = 'font-size:12px;font-weight:700;margin-bottom:8px';
+  sendLabel.textContent = 'Send to:';
+  card.appendChild(sendLabel);
+
+  const sendGrid = document.createElement('div');
+  sendGrid.style.cssText = 'display:grid;gap:8px;margin-bottom:12px';
+  sendGrid.innerHTML = '<div><label class="mkt-form-label">Single phone number</label>'
+    + '<input id="wa-send-phone" class="mkt-form-input" placeholder="9876543210" type="tel"></div>'
+    + '<div style="text-align:center;font-size:11px;color:var(--text3)">— OR —</div>'
+    + '<div><label class="mkt-form-label">Bulk — send to segment</label>'
+    + '<select id="wa-send-segment" class="mkt-form-select">'
+    + '<option value="">Select segment…</option>'
+    + '<option value="all">All customers</option>'
+    + '<option value="contractor">Contractors only</option>'
+    + '<option value="high_value">High value (>₹50k)</option>'
+    + '<option value="inactive">Inactive 90 days</option>'
+    + '</select></div>';
+  card.appendChild(sendGrid);
+
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;gap:8px';
+  const sendBtn = document.createElement('button');
+  sendBtn.className = 'mkt-btn mkt-btn-primary';
+  sendBtn.style.cssText = 'flex:1;padding:10px;font-weight:700';
+  sendBtn.textContent = '📤 Send via Interakt';
+  sendBtn.onclick = () => sendWATemplateNow(name, varCount);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'mkt-btn mkt-btn-ghost';
+  cancelBtn.style.cssText = 'padding:10px 14px';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = () => ov.remove();
+  btnRow.appendChild(sendBtn);
+  btnRow.appendChild(cancelBtn);
+  card.appendChild(btnRow);
+
+  // Result area
+  const result = document.createElement('div');
+  result.id = 'wa-send-result';
+  result.style.marginTop = '10px';
+  card.appendChild(result);
+
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+  setTimeout(() => document.getElementById('wa-send-phone')?.focus(), 100);
+}
+
+
+async function sendWATemplateNow(templateName, varCount) {
+  const phone = (document.getElementById('wa-send-phone')?.value||'').trim();
+  const segment = document.getElementById('wa-send-segment')?.value||'';
+  if (!phone && !segment) { showMktToast('Enter a phone number or select a segment'); return; }
+
+  // Get variable values
+  const bodyValues = [];
+  for (let i = 1; i <= varCount; i++) {
+    bodyValues.push(document.getElementById('wa-var-' + i)?.value || 'V Wholesale');
+  }
+
+  const resultEl = document.getElementById('wa-send-result');
+  if (resultEl) resultEl.innerHTML = '<div style="padding:8px;color:var(--text3);font-size:12px">⏳ Sending via Interakt…</div>';
+
+  try {
+    if (phone) {
+      // Single send
+      const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'send_template', phone, template_name:templateName, body_values:bodyValues, language_code:'en' })
+      });
+      const data = await res.json();
+      if (data.ok || data.status === 200 || data.data?.result === 'success') {
+        showMktToast('✅ WhatsApp sent to '+phone);
+        if (resultEl) resultEl.innerHTML = '<div style="padding:8px;background:rgba(34,197,94,.1);border-radius:6px;font-size:12px;color:#22c55e">✅ Sent successfully to ' + phone + '</div>';
+      } else {
+        const errMsg = data.error || data.data?.message || JSON.stringify(data).slice(0,100);
+        showMktToast('❌ ' + errMsg);
+        if (resultEl) resultEl.innerHTML = '<div style="padding:8px;background:rgba(239,68,68,.1);border-radius:6px;font-size:12px;color:#ef4444">❌ ' + errMsg + '</div>';
+      }
+    } else {
+      // Bulk send — fetch phones from CRM
+      const phones = await getSegmentPhones(segment);
+      if (!phones.length) { showMktToast('No customers found in this segment'); return; }
+      if (!confirm('Send to ' + phones.length + ' customers in segment "' + segment + '"?')) return;
+
+      const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'send_broadcast', phones, template_name:templateName, body_values:bodyValues, language_code:'en' })
+      });
+      const data = await res.json();
+      showMktToast('✅ Sent to ' + data.sent + ' · Failed: ' + data.failed);
+      if (resultEl) resultEl.innerHTML = '<div style="padding:8px;background:rgba(34,197,94,.1);border-radius:6px;font-size:12px;color:#22c55e">✅ Broadcast sent to ' + data.sent + ' customers</div>';
+
+      await sb.from('push_notifications_log').insert({
+        title:'WA Broadcast: ' + templateName, body:'Segment: ' + segment, 
+        target:'whatsapp', sent_count:data.sent, created_at:new Date().toISOString()
+      });
+    }
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+    if (resultEl) resultEl.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>';
+  }
+}
+
+async function getSegmentPhones(segment) {
+  // Fetch phone numbers from customers table based on segment
+  let query = sb.from('customers').select('phone,type,total_spent,last_visit').not('phone','is',null);
+  
+  if (segment === 'contractor') {
+    query = query.eq('type','contractor');
+  } else if (segment === 'high_value') {
+    query = query.gte('total_spent', 50000);
+  } else if (segment === 'inactive') {
+    const ninetyDaysAgo = new Date(Date.now() - 90*86400000).toISOString();
+    query = query.lt('last_visit', ninetyDaysAgo);
+  }
+  // all = no filter
+
+  const { data } = await query.limit(500).then(r=>r,()=>({data:[]}));
+  return (data||[]).map(c => c.phone).filter(Boolean).map(p => p.replace(/\D/g,'').slice(-10));
 }
 
 function useWATemplate(name, body) {
