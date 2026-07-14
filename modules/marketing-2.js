@@ -3985,17 +3985,28 @@ async function renderEmail() {
   // Quick templates
   html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Email Templates</div>'
     + '<div style="display:grid;gap:6px">';
-  [
+  const emailTemplates = [
     {icon:'🎉', label:'Festival Offer', subject:'Special Festival Offer from V Wholesale', body:'Dear Customer, Wishing you a joyous celebration! This festive season V Wholesale brings special offers on tiles, granite, marble and more. Visit NH65 Bhavanipuram Vijayawada or call 8712697930. Team V Wholesale'},
-    {icon:'⭐', label:'Review Request', subject:'How was your V Wholesale experience?', body:'Dear Customer, Thank you for your recent purchase from V Wholesale. Would you spare 2 minutes to share your experience on Google? Your feedback helps us serve you better. Call: 8712697930. Team V Wholesale'},
-    {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert — Marble, Tiles & More at V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit NH65 Bhavanipuram Vijayawada. Call: 8712697930. Team V Wholesale'},
-  ].forEach(t => {
-    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">'
-      + '<span style="font-size:18px">' + t.icon + '</span>'
+    {icon:'⭐', label:'Review Request', subject:'How was your V Wholesale experience?', body:'Dear Customer, Thank you for your recent purchase from V Wholesale. Would you spare 2 minutes to share your experience on Google? Your feedback helps us serve you better. Call 8712697930. Team V Wholesale'},
+    {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert from V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit NH65 Bhavanipuram Vijayawada. Call 8712697930. Team V Wholesale'},
+  ];
+  const emailTemplateContainer = document.createElement('div');
+  emailTemplateContainer.style.cssText = 'display:grid;gap:6px';
+  emailTemplates.forEach(function(t) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px';
+    row.innerHTML = '<span style="font-size:18px">' + t.icon + '</span>'
       + '<div style="flex:1"><div style="font-size:11px;font-weight:600">' + t.label + '</div>'
-      + '<div style="font-size:10px;color:var(--text3)">' + t.subject + '</div></div>'
-      + '<button onclick="fillEmailTemplate(' + JSON.stringify(t.subject) + ',' + JSON.stringify(t.body) + ')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">Use</button></div>';
+      + '<div style="font-size:10px;color:var(--text3)">' + t.subject + '</div></div>';
+    const useBtn = document.createElement('button');
+    useBtn.className = 'mkt-btn mkt-btn-ghost';
+    useBtn.style.cssText = 'font-size:10px;padding:3px 8px';
+    useBtn.textContent = 'Use';
+    useBtn.onclick = (function(subject, body) { return function() { fillEmailTemplate(subject, body); }; })(t.subject, t.body);
+    row.appendChild(useBtn);
+    emailTemplateContainer.appendChild(row);
   });
+  html += emailTemplateContainer.outerHTML;
   html += '</div></div>';
 
   // Recent sends
