@@ -1459,9 +1459,12 @@ async function renderCommandCentre() {
   const pendingApprovals = (notifications||[]).length;
   const todayCalItems = calToday||[];
   const lastSession = (stratSessions||[])[0];
-  const daysSinceStrategy = lastSession
+  const daysSinceSession = lastSession
     ? Math.floor((Date.now()-new Date(lastSession.created_at).getTime())/86400000)
     : 999;
+  const daysSinceStrategy = daysSinceSession; // alias
+  const sessionDue = daysSinceSession >= 12;
+  const nextStrategyDate = getNextStrategyDate();
 
   // AI CMO suggestions based on data
   const suggestions = [];
@@ -6257,7 +6260,7 @@ async function connectMetaWithToken(shortToken) {
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error||'Connection failed');
-    showMktToast('✅ Meta connected! Page: '+data.page_name+(data.ig_id?' · Instagram: '+data.ig_id:''));
+    showMktToast('✅ Meta connected! '+(data.page_name?'Page: '+data.page_name:'')+(data.ig_id?' · Instagram: '+data.ig_id:'')+(data.expires_days?' · Valid '+data.expires_days+' days':''));
     // Update social_connections badge in portal
     setTimeout(() => mktNav('integrations'), 1000);
   } catch(e) {
