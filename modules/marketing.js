@@ -2124,7 +2124,7 @@ Return as plain text, no JSON.`,
       })
     });
     const data = await res.json();
-    const briefing = typeof data.output === 'string' ? data.output : data.output?.master_text || 'Ready to help you grow V Wholesale today.';
+    const briefing = typeof data.output === 'string' ? data.output : (data.output?.message || data.output?.master_text || 'Ready to help you grow V Wholesale today.');
 
     if (out) out.innerHTML = `<div style="margin-top:14px;padding:12px;background:rgba(255,255,255,.05);border-radius:8px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.8;border-left:3px solid var(--gold)">${briefing}</div>`;
   } catch(e) {
@@ -6719,7 +6719,7 @@ async function generateWAMessage() {
       })
     });
     const data = await res.json();
-    const content = typeof data.output === 'string' ? data.output : data.output?.master_text || data.output?.whatsapp_text || '';
+    const content = typeof data.output === 'string' ? data.output : (data.output?.message || data.output?.master_text) || data.output?.whatsapp_text || '';
     if (!content) throw new Error('No content generated');
     const outEl = document.getElementById('wa-output');
     const contentEl = document.getElementById('wa-content');
@@ -6772,7 +6772,7 @@ async function waAIWrite(btn) {
       if (typeof data.output === 'string') {
         msg = data.output;
       } else if (typeof data.output === 'object' && data.output !== null) {
-        msg = data.output.master_text || data.output.whatsapp_text || data.output.message || data.output.text || Object.values(data.output)[0] || '';
+        msg = data.output.message || data.output.master_text || data.output.whatsapp_text || data.output.text || Object.values(data.output)[0] || '';
       } else if (data.result) {
         msg = typeof data.result === 'string' ? data.result : JSON.stringify(data.result);
       } else if (data.content) {
