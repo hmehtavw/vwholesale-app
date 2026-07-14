@@ -6294,7 +6294,7 @@ async function renderWhatsApp() {
       + '<div style="font-size:11px;font-weight:700;color:var(--gold)">' + t.name + '</div>'
       + '<span class="badge badge-green" style="font-size:9px">' + t.category + '</span></div>'
       + '<div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">' + (t.body||'').slice(0,120) + '…</div>'
-      + '<button onclick="loadWATemplate(this)" data-name="' + t.name + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" data-body="' + encodeURIComponent((t.body||'').slice(0,400)) + '">Use Template</button>'
+      + '<button onclick="loadWATemplate(this)" data-name="' + t.name + '" data-lang="' + (t.language||'en') + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" data-body="' + encodeURIComponent((t.body||'').slice(0,400)) + '">Use Template</button>'
       + '</div>';
   });
   html += '</div></div>';
@@ -6471,7 +6471,7 @@ function loadWATemplate(btn) {
   sendBtn.className = 'mkt-btn mkt-btn-primary';
   sendBtn.style.cssText = 'flex:1;padding:10px;font-weight:700';
   sendBtn.textContent = '📤 Send via Interakt';
-  sendBtn.onclick = () => sendWATemplateNow(name, varCount);
+  sendBtn.onclick = () => sendWATemplateNow(name, varCount, btn.dataset.lang || 'en');
   const cancelBtn = document.createElement('button');
   cancelBtn.className = 'mkt-btn mkt-btn-ghost';
   cancelBtn.style.cssText = 'padding:10px 14px';
@@ -6493,7 +6493,7 @@ function loadWATemplate(btn) {
 }
 
 
-async function sendWATemplateNow(templateName, varCount) {
+async function sendWATemplateNow(templateName, varCount, langCode) {
   const phone = (document.getElementById('wa-send-phone')?.value||'').trim();
   const segment = document.getElementById('wa-send-segment')?.value||'';
   if (!phone && !segment) { showMktToast('Enter a phone number or select a segment'); return; }
@@ -6512,7 +6512,7 @@ async function sendWATemplateNow(templateName, varCount) {
       // Single send
       const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({ action:'send_template', phone, template_name:templateName, body_values:bodyValues, language_code:'en' })
+        body: JSON.stringify({ action:'send_template', phone, template_name:templateName, body_values:bodyValues, language_code: langCode||'en' })
       });
       const data = await res.json();
       if (data.ok || data.status === 200 || data.data?.result === 'success') {
@@ -6531,7 +6531,7 @@ async function sendWATemplateNow(templateName, varCount) {
 
       const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({ action:'send_broadcast', phones, template_name:templateName, body_values:bodyValues, language_code:'en' })
+        body: JSON.stringify({ action:'send_broadcast', phones, template_name:templateName, body_values:bodyValues, language_code: langCode||'en' })
       });
       const data = await res.json();
       showMktToast('✅ Sent to ' + data.sent + ' · Failed: ' + data.failed);
@@ -6730,12 +6730,84 @@ async function generateWAMessage() {
 }
 
 async function waAIWrite(btn) {
-  // Show a quick topic input then generate
-  const topic = prompt('What is this WhatsApp message about? e.g. Diwali offer, New marble stock, Contractor update');
-  if (!topic) return;
-  const detailsEl = document.getElementById('wa-details');
-  if (detailsEl) { detailsEl.value = topic; }
-  await generateWAMessage();
+  // Use custom modal — browser prompt() closes on window switch
+  const ov = document.createElement('div');
+  ov.id = 'wa-ai-write-modal';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:400px;border:1px solid var(--border)';
+  card.innerHTML = '<div style="font-size:14px;font-weight:700;margin-bottom:10px">✨ AI Write WhatsApp Message</div>'
+    + '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Describe what this message is about and AI will write it</div>'
+    + '<textarea id="wa-ai-topic" class="mkt-form-input" rows="3" placeholder="e.g. V Wholesale running 40 rs per sft tile sale this month, valid till end of July, visit NH65"></textarea>'
+    + '<div style="display:flex;gap:8px;margin-top:10px">'
+    + '<button id="wa-ai-generate-btn" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;font-weight:700">✨ Generate</button>'
+    + '<button id="wa-ai-cancel-btn" class="mkt-btn mkt-btn-ghost" style="padding:10px 14px">Cancel</button>'
+    + '</div>'
+    + '<div id="wa-ai-output" style="margin-top:10px"></div>';
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+  // Wire cancel button
+  const cancelBtn = document.getElementById('wa-ai-cancel-btn');
+  if (cancelBtn) cancelBtn.onclick = () => ov.remove();
+  setTimeout(() => document.getElementById('wa-ai-topic')?.focus(), 100);
+
+  document.getElementById('wa-ai-generate-btn').onclick = async () => {
+    const topic = (document.getElementById('wa-ai-topic')?.value||'').trim();
+    if (!topic) { showMktToast('Enter what the message is about'); return; }
+    const gBtn = document.getElementById('wa-ai-generate-btn');
+    if (gBtn) { gBtn.textContent='⏳ Writing…'; gBtn.disabled=true; }
+    try {
+      const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({
+          action:'generate_text', agent:'WhatsApp AI Write',
+          prompt: 'Write a WhatsApp message for V Wholesale Vijayawada. Topic: ' + topic + '. Keep under 200 characters. Warm, direct, includes CTA to visit or call 8712697930. Return just the message text, no JSON.',
+          context: {}
+        })
+      });
+      const data = await res.json();
+      const msg = typeof data.output === 'string' ? data.output : data.output?.master_text || data.output?.whatsapp_text || '';
+      if (!msg) throw new Error('Generation failed');
+
+      const outEl = document.getElementById('wa-ai-output');
+      if (outEl) {
+        outEl.innerHTML = '';
+        const msgDiv = document.createElement('div');
+        msgDiv.style.cssText = 'background:var(--bg3);border-radius:8px;padding:10px;font-size:12px;line-height:1.8;color:var(--text2);margin-bottom:8px';
+        msgDiv.textContent = msg;
+        outEl.appendChild(msgDiv);
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:6px';
+        const copyBtn2 = document.createElement('button');
+        copyBtn2.className = 'mkt-btn mkt-btn-ghost';
+        copyBtn2.style.cssText = 'font-size:11px;padding:5px 10px';
+        copyBtn2.textContent = 'Copy';
+        copyBtn2.onclick = function() { navigator.clipboard.writeText(msg).then(function() { showMktToast('Copied!'); }); };
+        const useBtn2 = document.createElement('button');
+        useBtn2.className = 'mkt-btn mkt-btn-primary';
+        useBtn2.style.cssText = 'font-size:11px;padding:5px 10px';
+        useBtn2.textContent = 'Use this message';
+        useBtn2.onclick = function() { fillWAMessage(msg); var m = document.getElementById('wa-ai-write-modal'); if(m) m.remove(); };
+        btnRow.appendChild(copyBtn2);
+        btnRow.appendChild(useBtn2);
+        outEl.appendChild(btnRow);
+      }
+      } catch(e) {
+      const outEl = document.getElementById('wa-ai-output');
+      if (outEl) outEl.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>';
+    } finally {
+      if (gBtn) { gBtn.textContent='✨ Generate'; gBtn.disabled=false; }
+    }
+  };
+}
+
+function fillWAMessage(msg) {
+  // Fill into single message input or broadcast message
+  const singleEl = document.getElementById('wa-single-msg');
+  const broadcastEl = document.getElementById('wa-broadcast-msg');
+  if (singleEl) singleEl.value = msg;
+  if (broadcastEl) broadcastEl.value = msg;
+  showMktToast('✅ Message filled');
 }
 
 function copyWAMessage() {
