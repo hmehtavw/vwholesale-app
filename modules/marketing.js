@@ -6259,7 +6259,7 @@ async function renderWhatsApp() {
     + '<input id="wa-single-phone" class="mkt-form-input" placeholder="Phone number e.g. 9876543210">'
     + '<textarea id="wa-single-msg" class="mkt-form-input" rows="3" placeholder="Type your message..."></textarea>'
     + '<div style="display:flex;gap:8px">'
-    + '<button onclick="waAIWrite()" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Write</button>'
+    + '<button onclick="waAIWrite(this)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Write</button>'
     + '<button onclick="waSendSingle()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-weight:700">Send WhatsApp</button>'
     + '</div></div></div>';
 
@@ -6377,21 +6377,6 @@ async function waSendBroadcast() {
   if (d.ok) showMktToast('✅ Sent: ' + d.sent + ' · Failed: ' + d.failed);
   else showMktToast('❌ ' + (d.error||'Broadcast failed'));
   setTimeout(() => renderWhatsApp(), 2000);
-}
-
-async function waAIWrite() {
-  const topic = prompt('What is this WhatsApp message about?');
-  if (!topic) return;
-  await generateWhatsAppBroadcast(topic, 'all');
-  // Transfer generated message to single send field
-  setTimeout(() => {
-    const waOut = document.getElementById('wa-output');
-    if (waOut) {
-      const text = waOut.querySelector('div')?.textContent || '';
-      const msgEl = document.getElementById('wa-single-msg');
-      if (msgEl && text.length > 10) msgEl.value = text.slice(0, 500);
-    }
-  }, 3000);
 }
 
 async function waLoadSegmentCount(segment) {
@@ -6721,20 +6706,36 @@ async function sendWABroadcast(templateName, bodyValues, phones, btn) {
   finally { if (btn) { btn.textContent='📤 Send Broadcast'; btn.disabled=false; } }
 }
 async function generateWAMessage() {
-  const type = document.getElementById('wa-type')?.value||'offer';
   const details = (document.getElementById('wa-details')?.value||'').trim();
-  showMktToast('🤖 Writing message…');
-  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{
-    method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body:JSON.stringify({task:'whatsapp_message',platform:'WhatsApp',language:'te+en',
-      topic:type+(details?' — '+details:''),
-      context:{business:'V Wholesale',location:'Vijayawada'}})
-  });
-  const data = await res.json();
-  const content = data.content||data.text||'';
-  if (!content) { showMktToast('❌ Failed'); return; }
-  document.getElementById('wa-output').style.display='block';
-  document.getElementById('wa-content').textContent=content;
+  if (!details) { showMktToast('Enter what the message is about first'); return; }
+  showMktToast('🤖 Writing WhatsApp message…');
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'WhatsApp AI Write',
+        prompt: 'Write a WhatsApp message for V Wholesale Vijayawada about: ' + details + '. Keep under 160 characters. Warm, direct, includes CTA. Return just the message text.',
+        context: {}
+      })
+    });
+    const data = await res.json();
+    const content = typeof data.output === 'string' ? data.output : data.output?.master_text || data.output?.whatsapp_text || '';
+    if (!content) throw new Error('No content generated');
+    const outEl = document.getElementById('wa-output');
+    const contentEl = document.getElementById('wa-content');
+    if (outEl) outEl.style.display = 'block';
+    if (contentEl) contentEl.textContent = content;
+    showMktToast('✅ Message ready');
+  } catch(e) { showMktToast('❌ ' + e.message); }
+}
+
+async function waAIWrite(btn) {
+  // Show a quick topic input then generate
+  const topic = prompt('What is this WhatsApp message about? e.g. Diwali offer, New marble stock, Contractor update');
+  if (!topic) return;
+  const detailsEl = document.getElementById('wa-details');
+  if (detailsEl) { detailsEl.value = topic; }
+  await generateWAMessage();
 }
 
 function copyWAMessage() {
