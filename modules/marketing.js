@@ -980,6 +980,7 @@ Return JSON:
 
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
     ov.innerHTML = `
       <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:480px;border:1px solid var(--border)">
         <div style="font-size:15px;font-weight:700;margin-bottom:14px">🏷️ Hashtags for: ${topic||'your post'}</div>
@@ -1014,6 +1015,7 @@ async function generateWhatsAppBroadcast(topic, audience) {
   if (!topic) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
     ov.innerHTML = `
       <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:440px;border:1px solid var(--border)">
         <div style="font-size:15px;font-weight:700;margin-bottom:14px">💬 WhatsApp Broadcast Generator</div>
@@ -1104,6 +1106,7 @@ async function generateContractorContent(contractorName, projectType) {
   if (!contractorName) {
     const ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
     ov.innerHTML = `
       <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:440px;border:1px solid var(--border)">
         <div style="font-size:15px;font-weight:700;margin-bottom:14px">👷 Contractor Club Content Kit</div>
@@ -3203,6 +3206,7 @@ function editCalendarItem(id, currentTopic, type, currentNotes, isReel) {
   const ov = document.createElement('div');
   ov.id = 'edit-cal-overlay';
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
   ov.innerHTML = `
     <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:420px;border:1px solid var(--border)">
       <div style="font-size:15px;font-weight:700;margin-bottom:14px">✏️ Edit calendar day</div>
@@ -3673,6 +3677,7 @@ Return JSON:
 function addCalendarItem(defaultType) {
   const ov = document.createElement('div');
   ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
   ov.innerHTML = `
     <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:400px;border:1px solid var(--border)">
       <div style="font-size:15px;font-weight:700;margin-bottom:14px">Add to calendar</div>
@@ -6219,158 +6224,262 @@ function copyXPost() {
 }
 
 async function renderWhatsApp() {
-  // Check if Interakt is configured
-  const { data: waInt } = await sb.from('social_connections').select('*').eq('platform','whatsapp').single().then(r=>r,()=>({data:null}));
-  const isLive = waInt?.status === 'connected' && waInt?.access_token_set;
+  setContent('<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading WhatsApp…</div>');
 
-  setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900">💬 WhatsApp Automation</h3>
-      <div style="font-size:12px;color:var(--text3)">Broadcasts · Greetings · Order updates via Interakt</div>
-    </div>
-    <span class="badge ${isLive?'badge-green':'badge-blue'}">${isLive?'✅ Live':'⏳ Pending WABA'}</span>
-  </div>
+  const [
+    {data: settings},
+    {data: broadcasts},
+    {data: templates}
+  ] = await Promise.all([
+    sb.from('marketing_settings').select('key,value').in('key',['INTERAKT_API_KEY','INTERAKT_PHONE']).then(r=>r,()=>({data:[]})),
+    sb.from('whatsapp_broadcasts').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]})),
+    sb.from('whatsapp_templates').select('*').eq('status','approved').then(r=>r,()=>({data:[]}))
+  ]);
 
-  <!-- WABA STATUS -->
-  ${!isLive ? `<div class="mkt-card" style="margin-bottom:14px;border-left:3px solid #f59e0b">
-    <div style="display:flex;gap:12px;align-items:flex-start">
-      <div style="font-size:28px">⏳</div>
-      <div>
-        <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:4px">WhatsApp Business API — Under Meta Review</div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:10px">Number 8712697930 is registered with Interakt and under Meta WABA approval. Typically takes 24-48 hours.</div>
-        <div style="display:grid;gap:6px">
-          ${[
-            {done:true, step:'Create Interakt account'},
-            {done:true, step:'Register number 8712697930'},
-            {done:true, step:'Submit for Meta WABA approval'},
-            {done:true, step:'Add INTERAKT_API_KEY to Supabase secrets'},
-            {done:false, step:'Meta approves WABA (pending — check Interakt dashboard)'},
-            {done:false, step:'Activate message templates in Interakt'},
-            {done:false, step:'Enable WhatsApp broadcasts below'}
-          ].map(s=>`<div style="display:flex;align-items:center;gap:8px;font-size:12px">
-            <div style="width:16px;height:16px;border-radius:50%;background:${s.done?'#22c55e':'var(--bg3)'};display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff;flex-shrink:0">${s.done?'✓':''}</div>
-            <span style="color:${s.done?'var(--text3)':'var(--text1)'};${s.done?'text-decoration:line-through':''}">${s.step}</span>
-          </div>`).join('')}
-        </div>
-        <a href="https://app.interakt.ai" target="_blank" class="mkt-btn mkt-btn-primary" style="margin-top:10px;font-size:12px;text-decoration:none;display:inline-block">Check Interakt Status ↗</a>
-      </div>
-    </div>
-  </div>` : ''}
+  const cfg = {}; (settings||[]).forEach(s=>{cfg[s.key]=s.value;});
+  const isConnected = !!cfg.INTERAKT_API_KEY;
+  const totalSent = (broadcasts||[]).reduce((a,b)=>a+(b.sent_count||0),0);
 
-  <!-- BROADCAST BUILDER -->
-  <div class="mkt-card" style="margin-bottom:14px">
-    <div class="mkt-card-title">📢 Broadcast Message Builder</div>
-    ${!isLive ? '<div style="font-size:12px;color:var(--text3);background:rgba(0,0,0,.2);border-radius:8px;padding:10px;margin-bottom:12px;text-align:center">⚠️ Broadcast sending activates after WABA approval. Build and preview templates now.</div>' : ''}
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+    + '<div><h3 style="font-size:16px;font-weight:900">💬 WhatsApp Marketing</h3>'
+    + '<div style="font-size:12px;color:var(--text3)">Powered by Interakt · ' + (cfg.INTERAKT_PHONE||'8712697930') + '</div></div>'
+    + '<span class="badge ' + (isConnected?'badge-green':'badge-red') + '">' + (isConnected?'✅ Connected':'❌ Not Connected') + '</span></div>';
 
-    <div style="display:grid;gap:10px">
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Message Template</label>
-        <select id="wa-template" class="mkt-form-select" onchange="previewWATemplate(this.value)">
-          <option value="festival_offer">🎉 Festival / Seasonal Offer</option>
-          <option value="product_launch">📦 New Product / Brand Arrival</option>
-          <option value="contractor_club">🏗️ Contractor Club Invite</option>
-          <option value="quotation_ready">📋 Quotation Ready (Order Update)</option>
-          <option value="birthday_greeting">🎂 Birthday Greeting</option>
-          <option value="re_engagement">😴 Re-engage Dormant Customer</option>
-          <option value="custom">✏️ Custom Message</option>
-        </select>
-      </div>
+  // Stats
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#25D366">' + totalSent + '</div><div style="font-size:11px;color:var(--text3)">Messages Sent</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--gold)">' + (broadcasts||[]).length + '</div><div style="font-size:11px;color:var(--text3)">Campaigns</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#3b82f6">' + (templates||[]).length + '</div><div style="font-size:11px;color:var(--text3)">Templates</div></div>'
+    + '</div>';
 
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Target Audience</label>
-        <select id="wa-audience" class="mkt-form-select">
-          <option value="all">All Customers (1,300+)</option>
-          <option value="contractors">Contractors only</option>
-          <option value="high_value">High Value (₹1L+ purchase history)</option>
-          <option value="dormant">Dormant (not visited 90+ days)</option>
-          <option value="recent">Recent customers (last 30 days)</option>
-          <option value="birthday_this_month">Birthdays this month</option>
-        </select>
-      </div>
+  // SEND SINGLE MESSAGE
+  html += '<div class="mkt-card" style="margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📱 Send Single Message</div>'
+    + '<div style="display:grid;gap:8px">'
+    + '<input id="wa-single-phone" class="mkt-form-input" placeholder="Phone number e.g. 9876543210">'
+    + '<textarea id="wa-single-msg" class="mkt-form-input" rows="3" placeholder="Type your message..."></textarea>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="waAIWrite()" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Write</button>'
+    + '<button onclick="waSendSingle()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-weight:700">Send WhatsApp</button>'
+    + '</div></div></div>';
 
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Key Message / Offer Details</label>
-        <input id="wa-offer" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles, valid this weekend only">
-      </div>
+  // BROADCAST
+  html += '<div class="mkt-card" style="margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📢 Broadcast Campaign</div>'
+    + '<div style="display:grid;gap:8px">'
+    + '<div><label class="mkt-form-label">Campaign name</label><input id="wa-camp-name" class="mkt-form-input" placeholder="e.g. Diwali Offer 2026"></div>'
+    + '<div><label class="mkt-form-label">Target segment</label>'
+    + '<select id="wa-segment" class="mkt-form-select" onchange="waLoadSegmentCount(this.value)">'
+    + '<option value="all">All customers</option>'
+    + '<option value="contractor">Contractors only</option>'
+    + '<option value="high_value">High value (>₹50k)</option>'
+    + '<option value="inactive">Inactive 90 days</option>'
+    + '</select></div>'
+    + '<div id="wa-segment-count" style="font-size:11px;color:var(--text3)">Select segment to see count</div>'
+    + '<div><label class="mkt-form-label">Message</label>'
+    + '<textarea id="wa-broadcast-msg" class="mkt-form-input" rows="4" placeholder="Write your broadcast message..."></textarea></div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="waAIGenBroadcast()" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Generate</button>'
+    + '<button onclick="waSendBroadcast()" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-weight:700">🚀 Send Broadcast</button>'
+    + '</div></div></div>';
 
-      <div class="mkt-form-group">
-        <label class="mkt-form-label">Language</label>
-        <select id="wa-lang" class="mkt-form-select">
-          <option value="te+en">Telugu + English</option>
-          <option value="en">English only</option>
-          <option value="te">Telugu only</option>
-        </select>
-      </div>
+  // TEMPLATES
+  html += '<div class="mkt-card" style="margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📋 Approved Templates</div>'
+    + '<div style="display:grid;gap:8px">';
 
-      <div style="display:flex;gap:8px">
-        <button class="mkt-btn mkt-btn-primary" onclick="generateWABroadcast()" style="flex:1">🤖 Generate Message</button>
-      </div>
+  (templates||[]).forEach(t => {
+    html += '<div style="background:var(--bg3);border-radius:8px;padding:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--gold)">' + t.name + '</div>'
+      + '<span class="badge badge-green" style="font-size:9px">' + t.category + '</span></div>'
+      + '<div style="font-size:11px;color:var(--text2);line-height:1.7;margin-bottom:6px">' + (t.body||'').slice(0,120) + '…</div>'
+      + '<button onclick="loadWATemplate(this)" data-name="' + t.name + '" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" data-body="' + encodeURIComponent((t.body||'').slice(0,400)) + '">Use Template</button>'
+      + '</div>';
+  });
+  html += '</div></div>';
 
-      <div id="wa-broadcast-output" style="display:none">
-        <div style="background:var(--bg3);border-radius:8px;padding:14px;margin-bottom:10px">
-          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:8px">PREVIEW — WhatsApp Message</div>
-          <div id="wa-broadcast-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap;color:var(--text1)"></div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="mkt-btn mkt-btn-ghost" onclick="copyWABroadcast()" style="flex:1">📋 Copy Message</button>
-          ${isLive ? `<button class="mkt-btn mkt-btn-primary" onclick="sendWABroadcast()" style="flex:1">🚀 Send Broadcast</button>` : `<button class="mkt-btn mkt-btn-ghost" style="flex:1;opacity:.5" disabled>🚀 Send (activates after WABA)</button>`}
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center">💡 Test on your own number first before broadcasting to all customers</div>
-      </div>
-    </div>
-  </div>
+  // QUICK ACTIONS
+  html += '<div class="mkt-card" style="margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Actions</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<button onclick="waQuickAction(&quot;quotation&quot;)" class="mkt-btn mkt-btn-ghost" style="padding:10px;text-align:left"><div style="font-size:16px;margin-bottom:2px">📄</div><div style="font-size:11px;font-weight:600">Quotation Ready</div><div style="font-size:10px;color:var(--text3)">Notify customer</div></button>'
+    + '<button onclick="waQuickAction(&quot;review&quot;)" class="mkt-btn mkt-btn-ghost" style="padding:10px;text-align:left"><div style="font-size:16px;margin-bottom:2px">⭐</div><div style="font-size:11px;font-weight:600">Review Request</div><div style="font-size:10px;color:var(--text3)">Post-purchase</div></button>'
+    + '<button onclick="waQuickAction(&quot;festival&quot;)" class="mkt-btn mkt-btn-ghost" style="padding:10px;text-align:left"><div style="font-size:16px;margin-bottom:2px">🎉</div><div style="font-size:11px;font-weight:600">Festival Greeting</div><div style="font-size:10px;color:var(--text3)">All customers</div></button>'
+    + '<button onclick="waQuickAction(&quot;contractor&quot;)" class="mkt-btn mkt-btn-ghost" style="padding:10px;text-align:left"><div style="font-size:16px;margin-bottom:2px">👷</div><div style="font-size:11px;font-weight:600">Contractor Update</div><div style="font-size:10px;color:var(--text3)">Referral earnings</div></button>'
+    + '</div></div>';
 
-  <!-- MESSAGE TEMPLATES -->
-  <div class="mkt-card" style="margin-bottom:14px">
-    <div class="mkt-card-title">📋 Approved Message Templates</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">These need to be created and approved in Interakt before sending. Approval takes 1-2 days.</div>
-    <div style="display:grid;gap:8px">
-      ${[
-        {name:'quotation_ready',status:'pending',desc:'Notify customer when their quotation is ready — with quote number and amount'},
-        {name:'festival_offer',status:'pending',desc:'Festival special offer broadcast — with festival name, offer details, validity'},
-        {name:'birthday_greeting',status:'pending',desc:'Birthday wish with exclusive discount code — personalised with customer name'},
-        {name:'contractor_welcome',status:'pending',desc:'Welcome new Contractor Club member — with tier, benefits and referral code'},
-        {name:'order_update',status:'pending',desc:'Order/delivery status update — with order details and next steps'},
-        {name:'re_engagement',status:'pending',desc:'Re-engage customers who haven\'t visited in 90+ days — with special return offer'}
-      ].map(t=>`<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:10px">
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:700;font-family:monospace;color:var(--gold)">${t.name}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">${t.desc}</div>
-        </div>
-        <span class="badge ${t.status==='approved'?'badge-green':'badge-gray'}">${t.status==='approved'?'Approved':'Pending'}</span>
-      </div>`).join('')}
-    </div>
-    <a href="https://app.interakt.ai" target="_blank" class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;text-decoration:none;display:block;text-align:center">Create Templates in Interakt ↗</a>
-  </div>
+  // RECENT BROADCASTS
+  if ((broadcasts||[]).length) {
+    html += '<div class="mkt-card"><div style="font-size:12px;font-weight:700;margin-bottom:10px">📊 Recent Broadcasts</div>'
+      + '<div style="display:grid;gap:6px">';
+    (broadcasts||[]).slice(0,5).forEach(b => {
+      html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">'
+        + '<div style="flex:1"><div style="font-size:12px;font-weight:600">' + (b.campaign_name||'Broadcast') + '</div>'
+        + '<div style="font-size:10px;color:var(--text3)">' + new Date(b.created_at).toLocaleDateString("en-IN",{day:"numeric",month:"short"}) + '</div></div>'
+        + '<div style="text-align:right"><div style="font-size:14px;font-weight:700;color:#25D366">' + (b.sent_count||0) + '</div>'
+        + '<div style="font-size:9px;color:var(--text3)">sent</div></div></div>';
+    });
+    html += '</div></div>';
+  }
 
-  <!-- MANUAL GENERATOR -->
-  <div class="mkt-card">
-    <div class="mkt-card-title">📨 Manual Message Generator</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Works right now — generate and copy, send manually from WhatsApp Business app.</div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Message Type</label>
-      <select id="wa-type" class="mkt-form-select">
-        <option value="offer">Festival / Seasonal Offer</option>
-        <option value="product">New Product Arrival</option>
-        <option value="contractor">Contractor Club Invite</option>
-        <option value="followup">Customer Follow-up</option>
-        <option value="quotation">Quotation Follow-up</option>
-      </select>
-    </div>
-    <div class="mkt-form-group">
-      <label class="mkt-form-label">Key Details</label>
-      <input id="wa-details" class="mkt-form-input" placeholder="e.g. 20% off Italian marble tiles till Sunday">
-    </div>
-    <button class="mkt-btn mkt-btn-primary" onclick="generateWAMessage()" style="width:100%;margin-bottom:10px">🤖 Generate Message</button>
-    <div id="wa-output" style="display:none">
-      <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:8px">
-        <div id="wa-content" style="font-size:13px;line-height:1.8;white-space:pre-wrap"></div>
-      </div>
-      <button class="mkt-btn mkt-btn-primary" onclick="copyWAMessage()" style="width:100%">📋 Copy Message</button>
-    </div>
-  </div>`);
+  setContent(html);
 }
+
+function waAIGenBroadcast() {
+  const name = (document.getElementById('wa-camp-name')?.value||'offer').trim();
+  const seg = document.getElementById('wa-segment')?.value || 'all';
+  generateWhatsAppBroadcast(name, seg);
+}
+
+async function waSendSingle() {
+  const phone = (document.getElementById('wa-single-phone')?.value||'').trim();
+  const message = (document.getElementById('wa-single-msg')?.value||'').trim();
+  if (!phone || !message) { showMktToast('Enter phone and message'); return; }
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({ action:'send_message', phone, message })
+  });
+  const d = await res.json();
+  if (d.ok) showMktToast('✅ WhatsApp sent to +91' + phone.replace(/[^0-9]/g,''));
+  else showMktToast('❌ ' + (d.error||'Send failed'));
+}
+
+async function waSendBroadcast() {
+  const campName = (document.getElementById('wa-camp-name')?.value||'Broadcast').trim();
+  const message = (document.getElementById('wa-broadcast-msg')?.value||'').trim();
+  const segment = document.getElementById('wa-segment')?.value || 'all';
+  if (!message) { showMktToast('Enter broadcast message'); return; }
+
+  // Fetch customers based on segment
+  let query = sb.from('customers').select('name,phone').not('phone','is',null);
+  if (segment === 'contractor') query = query.eq('type','contractor');
+
+  const { data: customers } = await query.limit(500).then(r=>r,()=>({data:[]}));
+  const validCustomers = (customers||[]).filter(c=>c.phone && c.phone.replace(/[^0-9]/g,'').length >= 10);
+
+  if (!validCustomers.length) { showMktToast('No customers found in this segment with valid phone numbers'); return; }
+
+  const confirmed = confirm('Send to ' + validCustomers.length + ' customers in [' + segment + '] segment? ' + message.slice(0,80));
+
+
+  if (!confirmed) return;
+
+  showMktToast('⏳ Sending to ' + validCustomers.length + ' customers…');
+
+  const broadcastList = validCustomers.map(c => ({ phone: c.phone, message }));
+  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({ action:'send_broadcast', broadcast_list:broadcastList, campaign_name:campName })
+  });
+  const d = await res.json();
+  if (d.ok) showMktToast('✅ Sent: ' + d.sent + ' · Failed: ' + d.failed);
+  else showMktToast('❌ ' + (d.error||'Broadcast failed'));
+  setTimeout(() => renderWhatsApp(), 2000);
+}
+
+async function waAIWrite() {
+  const topic = prompt('What is this WhatsApp message about?');
+  if (!topic) return;
+  await generateWhatsAppBroadcast(topic, 'all');
+  // Transfer generated message to single send field
+  setTimeout(() => {
+    const waOut = document.getElementById('wa-output');
+    if (waOut) {
+      const text = waOut.querySelector('div')?.textContent || '';
+      const msgEl = document.getElementById('wa-single-msg');
+      if (msgEl && text.length > 10) msgEl.value = text.slice(0, 500);
+    }
+  }, 3000);
+}
+
+async function waLoadSegmentCount(segment) {
+  const el = document.getElementById('wa-segment-count');
+  if (!el) return;
+  let query = sb.from('customers').select('id', {count:'exact',head:true}).not('phone','is',null);
+  if (segment === 'contractor') query = query.eq('type','contractor');
+  const { count } = await query.then(r=>r,()=>({count:0}));
+  el.textContent = (count||0) + ' customers with phone numbers in this segment';
+}
+
+function loadWATemplate(btn) {
+  const name = btn.dataset.name || '';
+  const body = decodeURIComponent(btn.dataset.body || '');
+  const el = document.getElementById('wa-broadcast-msg') || document.getElementById('wa-single-msg');
+  if (el) el.value = body.replace(/{{1}}/g,'[Customer Name]').replace(/{{2}}/g,'[Detail]').replace(/{{3}}/g,'[Value]');
+  showMktToast('✅ Template loaded — edit the [placeholders]');
+}
+
+function useWATemplate(name, body) {
+  const el = document.getElementById('wa-broadcast-msg') || document.getElementById('wa-single-msg');
+  if (el) el.value = body.replace(/\\n/g,'\n').replace(/{{1}}/g,'[Customer Name]').replace(/{{2}}/g,'[Detail]').replace(/{{3}}/g,'[Value]');
+
+  showMktToast('✅ Template loaded — edit the placeholders');
+}
+
+async function waQuickAction(type) {
+  const actions = {
+    quotation: { title:'Quotation Notification', fields:[{l:'Customer phone',id:'qa-phone',p:'9876543210'},{l:'Customer name',id:'qa-name',p:'Ravi Kumar'},{l:'Quotation number',id:'qa-quot',p:'TQ-2026-001'},{l:'Total amount',id:'qa-total',p:'45,000'}] },
+    review: { title:'Review Request', fields:[{l:'Customer phone',id:'qa-phone',p:'9876543210'},{l:'Customer name',id:'qa-name',p:'Ravi Kumar'},{l:'Product purchased',id:'qa-product',p:'Italian Marble Tiles'}] },
+    festival: { title:'Festival Greeting', fields:[{l:'Festival name',id:'qa-festival',p:'Diwali'},{l:'Target segment',id:'qa-seg',p:'all',type:'select',opts:['all','contractor','homeowner']}] },
+    contractor: { title:'Contractor Update', fields:[{l:'Contractor phone',id:'qa-phone',p:'9876543210'},{l:'Contractor name',id:'qa-name',p:'Kumar'},{l:'This month earnings',id:'qa-earn',p:'2,500'}] },
+  };
+
+  const action = actions[type];
+  if (!action) return;
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.className = 'wa-quick-modal';
+  ov.innerHTML = '<div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:400px;border:1px solid var(--border)">'
+    + '<div style="font-size:15px;font-weight:700;margin-bottom:14px">💬 ' + action.title + '</div>'
+    + '<div style="display:grid;gap:8px;margin-bottom:12px">'
+    + action.fields.map(f => '<div><label class="mkt-form-label">' + f.l + '</label>'
+      + (f.type==='select'
+        ? '<select id="' + f.id + '" class="mkt-form-select">' + (f.opts||[]).map(o=>'<option>'+o+'</option>').join('') + '</select>'
+        : '<input id="' + f.id + '" class="mkt-form-input" placeholder="' + f.p + '">') + '</div>'
+    ).join('')
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="waQuickSend(this.dataset.type)" data-type="' + type + '" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;font-weight:700">Send WhatsApp</button>'
+    + '<button onclick="document.querySelectorAll(\'.wa-quick-modal\').forEach(e=>e.remove())" class="mkt-btn mkt-btn-ghost" style="padding:10px 14px">Cancel</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+
+async function waQuickSend(btnOrType) {
+  const type = typeof btnOrType === 'string' ? btnOrType : (btnOrType?.dataset?.type||'quotation');
+  const phone = (document.getElementById('qa-phone')?.value||'').trim();
+  const name = (document.getElementById('qa-name')?.value||'Customer').trim();
+  let message = '';
+
+  if (type === 'quotation') {
+    const quot = document.getElementById('qa-quot')?.value||'';
+    const total = document.getElementById('qa-total')?.value||'';
+    message = 'Hi ' + name + '! Your quotation from V Wholesale is ready. Quotation: ' + quot + '. Total: Rs ' + total + '. Valid 7 days. Call: 8712697930. Visit: NH65, Bhavanipuram, Vijayawada. Team V Wholesale';
+  } else if (type === 'review') {
+    const product = document.getElementById('qa-product')?.value||'your purchase';
+    message = 'Hi ' + name + '! Thank you for shopping at V Wholesale. We hope you are loving your ' + product + '. Please rate us on Google - search V Wholesale Vijayawada. Your feedback means a lot! Team V Wholesale';
+  } else if (type === 'contractor') {
+    const earn = document.getElementById('qa-earn')?.value||'0';
+    message = 'Hi ' + name + '! V Wholesale Contractor Club update: This month earnings: Rs ' + earn + '. Keep referring and earning! 2% on every referral. Call: 8712697930. Team V Wholesale';
+  } else {
+    const festival = document.getElementById('qa-festival')?.value||'festival';
+    message = festival + ' subhakankshalu! V Wholesale nundi meeku mariyu meeru kutumbaaniki subhasirvadalu. NH65, Bhavanipuram, Vijayawada. 8712697930. Team V Wholesale';
+  }
+
+  if (!phone && type !== 'festival') { showMktToast('Enter phone number'); return; }
+  document.querySelectorAll('.wa-quick-modal').forEach(e=>e.remove());
+
+  const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+    method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+    body: JSON.stringify({ action:'send_message', phone, message })
+  });
+  const d = await res.json();
+  showMktToast(d.ok ? 'WhatsApp sent to ' + name : 'Failed: ' + (d.error||'error'));
+}
+
 
 async function generateWABroadcast() {
   const template = document.getElementById('wa-template')?.value||'festival_offer';
