@@ -1419,12 +1419,12 @@ async function renderIntegrations() {
         <div style="font-size:14px;font-weight:700">WhatsApp Business (Interakt)</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">Broadcast messages to customer list + approvals to 9038010175</div>
       </div>
-      ${statusBadge(waOk, !waOk ? 'WABA approval pending' : null)}
+      ${statusBadge(waOk, !waOk ? 'Verify connection' : null)}
     </div>
     <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;color:var(--text3)">
       ${waOk
-        ? '✅ WABA active · Phone: 8712697930 · Notifications to 9038010175 active'
-        : '⏳ Waiting for Interakt WABA approval for 8712697930. All notification flows are coded and ready — will activate automatically once approved.'}
+        ? '✅ Interakt connected · Phone: 8712697930 · WhatsApp active'
+        : '⏳ API key saved — click Verify to confirm connection'}
     </div>
   </div>
 
@@ -6481,6 +6481,25 @@ async function waQuickSend(btnOrType) {
 }
 
 
+async function verifyInterakt(btn) {
+  if (btn) { btn.textContent='⏳ Verifying…'; btn.disabled=true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'verify' })
+    });
+    const data = await res.json();
+    if (data.connected) {
+      showMktToast('✅ Interakt connected! Templates: '+data.template_count);
+      await sb.from('social_connections').upsert({platform:'whatsapp',status:'connected',access_token_set:true,updated_at:new Date().toISOString()},{onConflict:'platform'});
+      renderWhatsApp();
+    } else {
+      showMktToast('❌ Connection failed — check API key in Integrations');
+    }
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='🔗 Verify Connection'; btn.disabled=false; } }
+}
+
 async function generateWABroadcast() {
   const template = document.getElementById('wa-template')?.value||'festival_offer';
   const audience = document.getElementById('wa-audience')?.value||'all';
@@ -6513,25 +6532,24 @@ function copyWABroadcast() {
     .then(()=>showMktToast('📋 Copied! Paste in WhatsApp Business or Interakt'));
 }
 
-async function sendWABroadcast() {
-  showMktToast('🚀 Sending via Interakt… (coming once WABA is approved)');
+async function sendWABroadcast(templateName, bodyValues, phones, btn) {
+  if (!phones?.length) { showMktToast('No phone numbers provided'); return; }
+  if (!templateName) { showMktToast('Select a template first'); return; }
+  if (btn) { btn.textContent='⏳ Sending…'; btn.disabled=true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'send_broadcast', template_name:templateName, body_values:bodyValues||[], phones, language_code:'en' })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showMktToast('✅ Sent to '+data.sent+' · Failed: '+data.failed);
+      // Log to DB
+      await sb.from('push_notifications_log').insert({title:'WhatsApp: '+templateName, body:'Sent to '+data.sent+' numbers', target:'whatsapp', sent_count:data.sent, created_at:new Date().toISOString()});
+    } else showMktToast('❌ '+data.error);
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='📤 Send Broadcast'; btn.disabled=false; } }
 }
-
-function previewWATemplate(val) {
-  const offer = document.getElementById('wa-offer');
-  if (!offer) return;
-  const hints = {
-    festival_offer:'e.g. 20% off Italian marble tiles, valid this Diwali weekend',
-    product_launch:'e.g. Kajaria new Eternia collection now in stock at Vijayawada',
-    contractor_club:'e.g. Join V Wholesale Contractor Club — 2% referral bonus',
-    quotation_ready:'e.g. Quote #VW-26-27-045 ready — ₹1,24,500',
-    birthday_greeting:'Auto-personalised — leave blank or add offer code',
-    re_engagement:'e.g. Special 10% welcome back offer for returning customers',
-    custom:'Write your own message details below'
-  };
-  offer.placeholder = hints[val]||'Enter key message details';
-}
-
 async function generateWAMessage() {
   const type = document.getElementById('wa-type')?.value||'offer';
   const details = (document.getElementById('wa-details')?.value||'').trim();
