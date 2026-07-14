@@ -575,9 +575,53 @@ async function renderAgents() {
           <div style="font-size:11px;color:var(--text3)">Monthly + quarterly performance analysis with AI recommendations</div>
         </div>
         <div style="display:flex;gap:6px">
-          <button onclick="runReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Monthly</button>
-          <button onclick="runReview('quarterly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Quarterly</button>
+          <button onclick="generateReview('monthly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Monthly</button>
+          <button onclick="generateReview('quarterly',this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">Quarterly</button>
         </div>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">💬</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">WhatsApp Content Prep</div>
+          <div style="font-size:11px;color:var(--text3)">Generate broadcast messages ready to send via Interakt</div>
+        </div>
+        <button onclick="generateWhatsAppBroadcast()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Generate</button>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">⭐</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Review Reply Generator</div>
+          <div style="font-size:11px;color:var(--text3)">Auto-generate professional replies to Google reviews</div>
+        </div>
+        <button onclick="generateReviewReply()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Generate</button>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">👷</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Contractor Club Content Kit</div>
+          <div style="font-size:11px;color:var(--text3)">Generate ready-made posts for contractors to share on WhatsApp/Instagram</div>
+        </div>
+        <button onclick="generateContractorContent()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Generate</button>
+      </div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:26px">🚀</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">Bulk Generate This Month</div>
+          <div style="font-size:11px;color:var(--text3)">Generate content for all planned calendar days in one click</div>
+        </div>
+        <button onclick="bulkGenerateMonth()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">🚀 Bulk Run</button>
       </div>
     </div>
   </div>
@@ -720,86 +764,485 @@ async function respondNotification(id, response, btn) {
 
 
 async function renderBrandProfile() {
-  const {data:bp} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
-  const p = (bp||[])[0] || {};
-  const {data:sc} = await sb.from('social_connections').select('*').then(r=>r,()=>({data:[]}));
-  const connections = {};
-  (sc||[]).forEach(c=>{connections[c.platform]=c;});
+  setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading brand profile…</div>`);
+
+  const { data: bp } = await sb.from('brand_profile').select('*').limit(1).maybeSingle().then(r=>r,()=>({data:null}));
 
   setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">Brand Profile</h3>
-    <div style="font-size:12px;color:var(--text3)">Set once — used automatically in every poster and content piece</div>
-  </div>
-
-  <div class="mkt-card">
-    <div class="mkt-card-title">🏢 Business Details</div>
-    <div class="mkt-grid-2">
-      <div class="mkt-form-group"><label class="mkt-form-label">Business Name</label><input id="bp-name" class="mkt-form-input" value="${p.business_name||'V Wholesale'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Tagline</label><input id="bp-tag" class="mkt-form-input" value="${p.tagline||'Build Better. Pay Less.'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Phone</label><input id="bp-phone" class="mkt-form-input" value="${p.phone||'8712697930'}"></div>
-      <div class="mkt-form-group"><label class="mkt-form-label">Website</label><input id="bp-web" class="mkt-form-input" value="${p.website||'https://vwholesale.in'}"></div>
-      <div class="mkt-form-group mkt-grid-2" style="grid-column:1/-1"><label class="mkt-form-label">Address</label><input id="bp-addr" class="mkt-form-input" value="${p.address||'NH65, Bhavanipuram, Vijayawada 520012'}" style="grid-column:1/-1"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900">🏷️ Brand Profile & Voice</h3>
+      <div style="font-size:12px;color:var(--text3)">Defines how AI writes for V Wholesale across all channels</div>
     </div>
+    <button onclick="saveBrandProfile()" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 16px;font-weight:700">💾 Save</button>
   </div>
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">🎨 Brand Colors</div>
-    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-      <div><label class="mkt-form-label">Primary (Navy)</label>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="color" id="bp-primary" value="${p.primary_color||'#1a2744'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
-          <input id="bp-primary-hex" class="mkt-form-input" value="${p.primary_color||'#1a2744'}" style="width:100px" oninput="document.getElementById('bp-primary').value=this.value">
+  <div style="display:grid;gap:12px">
+
+    <div class="mkt-card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">🏪 Store Identity</div>
+      <div style="display:grid;gap:8px">
+        <div>
+          <label class="mkt-form-label">Brand name</label>
+          <input id="bp-name" class="mkt-form-input" value="${bp?.name||'V Wholesale'}" placeholder="V Wholesale">
+        </div>
+        <div>
+          <label class="mkt-form-label">Tagline</label>
+          <input id="bp-tagline" class="mkt-form-input" value="${bp?.tagline||'Home Depot for Tier 2 India'}" placeholder="Your tagline">
+        </div>
+        <div>
+          <label class="mkt-form-label">Store address</label>
+          <input id="bp-address" class="mkt-form-input" value="${bp?.address||'NH65, Bhavanipuram, Vijayawada'}" placeholder="Address">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div>
+            <label class="mkt-form-label">Phone</label>
+            <input id="bp-phone" class="mkt-form-input" value="${bp?.phone||'8712697930'}" placeholder="Phone">
+          </div>
+          <div>
+            <label class="mkt-form-label">Website</label>
+            <input id="bp-website" class="mkt-form-input" value="${bp?.website||'vwholesale.in'}" placeholder="Website">
+          </div>
         </div>
       </div>
-      <div><label class="mkt-form-label">Secondary (Gold)</label>
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="color" id="bp-secondary" value="${p.secondary_color||'#c9a84c'}" style="width:44px;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
-          <input id="bp-secondary-hex" class="mkt-form-input" value="${p.secondary_color||'#c9a84c'}" style="width:100px" oninput="document.getElementById('bp-secondary').value=this.value">
+    </div>
+
+    <div class="mkt-card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">🎯 Target Audience</div>
+      <div style="display:grid;gap:8px">
+        <div>
+          <label class="mkt-form-label">Primary audiences</label>
+          <input id="bp-audience" class="mkt-form-input" value="${bp?.target_audience||'Home owners, Contractors, Architects, Interior Designers, Builders'}" placeholder="Who you sell to">
+        </div>
+        <div>
+          <label class="mkt-form-label">Target geography</label>
+          <input id="bp-geography" class="mkt-form-input" value="${bp?.geography||'Vijayawada + 100km radius — Guntur, Eluru, Tenali, Mangalagiri, Machilipatnam'}" placeholder="Target area">
+        </div>
+        <div>
+          <label class="mkt-form-label">Key products / categories</label>
+          <input id="bp-products" class="mkt-form-input" value="${bp?.products||'Tiles, Granite, Marble, Sanitaryware, Paints, Electricals, TISAN (private label)'}" placeholder="Products">
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-top:16px">
-        <div style="width:60px;height:60px;border-radius:10px;background:${p.primary_color||'#1a2744'}" id="color-preview-primary"></div>
-        <div style="width:60px;height:60px;border-radius:10px;background:${p.secondary_color||'#c9a84c'}" id="color-preview-secondary"></div>
-        <div style="font-size:11px;color:var(--text3)">Live preview</div>
+    </div>
+
+    <div class="mkt-card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">🗣️ Brand Voice</div>
+      <div style="display:grid;gap:8px">
+        <div>
+          <label class="mkt-form-label">Tone of voice</label>
+          <select id="bp-tone" class="mkt-form-select">
+            ${['Confident & Premium','Warm & Friendly','Expert & Educational','Bold & Direct','Local & Approachable'].map(t=>`<option value="${t}" ${(bp?.tone||'Confident & Premium')===t?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="mkt-form-label">Language preference</label>
+          <select id="bp-language" class="mkt-form-select">
+            ${[{v:'bilingual',l:'Bilingual — Telugu headline + English body (recommended)'},{v:'te',l:'Telugu first'},{v:'en',l:'English first'},{v:'hi',l:'Hindi (for North Indian contractors)'}].map(o=>`<option value="${o.v}" ${(bp?.language_pref||'bilingual')===o.v?'selected':''}>${o.l}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="mkt-form-label">Key messages to always include</label>
+          <textarea id="bp-messages" class="mkt-form-input" rows="2" placeholder="e.g. Vijayawada's largest tile showroom, 5000+ products, expert guidance">${bp?.key_messages||'Vijayawada\u2019s premium home building store \u00B7 5000+ products \u00B7 Expert guidance \u00B7 Contractor Club benefits'}</textarea>
+        </div>
+        <div>
+          <label class="mkt-form-label">Words / phrases to AVOID</label>
+          <textarea id="bp-avoid" class="mkt-form-input" rows="2" placeholder="e.g. cheap, discount, cheap prices — use 'value' instead">${bp?.words_to_avoid||'cheap, cheapest, low quality, best price (use value, premium, competitive pricing)'}</textarea>
+        </div>
+        <div>
+          <label class="mkt-form-label">Competitors (internal only — never mention in posts)</label>
+          <input id="bp-competitors" class="mkt-form-input" value="${bp?.competitors||'IBO, Hippo Homes, local tile shops'}" placeholder="Competitors">
+        </div>
+        <div>
+          <label class="mkt-form-label">Unique selling points (USPs)</label>
+          <textarea id="bp-usps" class="mkt-form-input" rows="3" placeholder="What makes V Wholesale different">${bp?.usps||'Largest selection in Vijayawada \u00B7 Contractor Club with 2% referral bonus \u00B7 TISAN private label \u00B7 Expert staff \u00B7 Home delivery \u00B7 EMI options'}</textarea>
+        </div>
       </div>
     </div>
-  </div>
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">📸 Brand Photos</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Upload store interior, product showcase, lifestyle photos. Used as hero images in posters.</div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px" id="bp-photos-grid">
-      ${(p.brand_photos||[]).map((ph,i)=>`
-      <div style="aspect-ratio:1;border-radius:8px;overflow:hidden;position:relative;background:var(--bg3)">
-        <img src="${ph}" style="width:100%;height:100%;object-fit:cover">
-        <button onclick="removePhoto(${i})" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.7);border:none;border-radius:50%;width:20px;height:20px;color:#fff;cursor:pointer;font-size:11px">✕</button>
-      </div>`).join('')}
-      <div style="aspect-ratio:1;border-radius:8px;border:2px dashed var(--border2);display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--bg3)" onclick="document.getElementById('bp-file-input').click()">
-        <div style="text-align:center"><div style="font-size:24px">+</div><div style="font-size:10px;color:var(--text3)">Add Photo</div></div>
+    <div class="mkt-card">
+      <div style="font-size:12px;font-weight:700;margin-bottom:10px">📢 Content Defaults</div>
+      <div style="display:grid;gap:8px">
+        <div>
+          <label class="mkt-form-label">Default CTA (Call to Action)</label>
+          <input id="bp-cta" class="mkt-form-input" value="${bp?.default_cta||'Visit us at NH65, Bhavanipuram \u00B7 Call 8712697930 \u00B7 vwholesale.in'}" placeholder="Your standard CTA">
+        </div>
+        <div>
+          <label class="mkt-form-label">Always-on hashtags (added to every post)</label>
+          <input id="bp-hashtags" class="mkt-form-input" value="${bp?.always_hashtags||'#VWholesale #Vijayawada #HomeRenovation #BuildingMaterials #Tiles'}" placeholder="#yourbrand #yourcity">
+        </div>
+        <div>
+          <label class="mkt-form-label">Instagram handle</label>
+          <input id="bp-instagram" class="mkt-form-input" value="${bp?.instagram_handle||'@vwholesaleindia'}" placeholder="@handle">
+        </div>
       </div>
-      <input type="file" id="bp-file-input" accept="image/*" multiple style="display:none" onchange="uploadBrandPhotos(this)">
     </div>
-  </div>
 
-  <div class="mkt-card">
-    <div class="mkt-card-title">🔌 Social Connections</div>
-    <div style="display:grid;gap:8px">
-      ${['instagram','facebook','gbp','whatsapp'].map(pl=>{
-        const c = connections[pl]||{};
-        const labels={instagram:'Instagram',facebook:'Facebook',gbp:'Google Business Profile',whatsapp:'WhatsApp (Interakt)'};
-        const icons={instagram:'📸',facebook:'👥',gbp:'📍',whatsapp:'💬'};
-        return `<div style="display:flex;align-items:center;gap:12px;padding:10px;background:var(--bg3);border-radius:8px">
-          <span style="font-size:20px">${icons[pl]}</span>
-          <div style="flex:1"><div style="font-size:13px;font-weight:700">${labels[pl]}</div></div>
-          <span class="badge ${c.status==='connected'?'badge-green':c.status==='setup'||c.status==='partial'?'badge-gold':'badge-gray'}">${c.status||'not connected'}</span>
-          <button class="mkt-btn mkt-btn-ghost" onclick="connectPlatform('${pl}')" style="font-size:11px">${c.status==='connected'?'Manage':'Connect'}</button>
-        </div>`;
-      }).join('')}
-    </div>
-  </div>
+    <button onclick="saveBrandProfile()" class="mkt-btn mkt-btn-primary" style="width:100%;padding:12px;font-size:14px;font-weight:700">💾 Save Brand Profile</button>
+  </div>`);
+}
 
-  <button class="mkt-btn mkt-btn-primary" onclick="saveBrandProfile()" style="width:100%;padding:14px;font-size:14px">💾 Save Brand Profile</button>`);
+async function saveBrandProfile() {
+  const data = {
+    name: document.getElementById('bp-name')?.value||'V Wholesale',
+    tagline: document.getElementById('bp-tagline')?.value||'',
+    address: document.getElementById('bp-address')?.value||'',
+    phone: document.getElementById('bp-phone')?.value||'',
+    website: document.getElementById('bp-website')?.value||'',
+    target_audience: document.getElementById('bp-audience')?.value||'',
+    geography: document.getElementById('bp-geography')?.value||'',
+    products: document.getElementById('bp-products')?.value||'',
+    tone: document.getElementById('bp-tone')?.value||'Confident & Premium',
+    language_pref: document.getElementById('bp-language')?.value||'bilingual',
+    key_messages: document.getElementById('bp-messages')?.value||'',
+    words_to_avoid: document.getElementById('bp-avoid')?.value||'',
+    competitors: document.getElementById('bp-competitors')?.value||'',
+    usps: document.getElementById('bp-usps')?.value||'',
+    default_cta: document.getElementById('bp-cta')?.value||'',
+    always_hashtags: document.getElementById('bp-hashtags')?.value||'',
+    instagram_handle: document.getElementById('bp-instagram')?.value||'',
+    updated_at: new Date().toISOString()
+  };
+
+  const { data: existing } = await sb.from('brand_profile').select('id').limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+  if (existing?.id) {
+    await sb.from('brand_profile').update(data).eq('id', existing.id);
+  } else {
+    await sb.from('brand_profile').insert({...data, created_at:new Date().toISOString()});
+  }
+  showMktToast('✅ Brand profile saved — AI will use this for all future content');
+}
+
+
+// ── BULK CONTENT GENERATION ──
+async function bulkGenerateMonth() {
+  const { data: calItems } = await sb.from('content_calendar')
+    .select('*')
+    .gte('cal_date', new Date().toISOString().split('T')[0])
+    .lte('cal_date', new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().split('T')[0])
+    .neq('status','published')
+    .order('cal_date',{ascending:true})
+    .then(r=>r,()=>({data:[]}));
+
+  const pending = (calItems||[]).filter(c => c.status === 'planned');
+  if (!pending.length) { showMktToast('No planned posts this month — add some to the calendar first'); return; }
+
+  const confirmed = confirm(`Generate content for all ${pending.length} planned posts this month? This will create content for all channels and send for approval.`);
+  if (!confirmed) return;
+
+  showMktToast(`⏳ Generating ${pending.length} posts… this will take a moment`);
+  let success = 0;
+
+  for (const item of pending) {
+    try {
+      await quickCreateFromCalendar(item.topic, item.content_type||'image', 'bilingual');
+      success++;
+      showMktToast(`✅ ${success}/${pending.length} — ${item.topic.slice(0,30)}`);
+      await new Promise(r => setTimeout(r, 2000)); // Rate limit between calls
+    } catch(e) {
+      console.error('Bulk gen error:', item.topic, e.message);
+    }
+  }
+  showMktToast(`✅ Bulk generation complete — ${success}/${pending.length} posts created. Check AI Agents for approvals.`);
+  mktNav('agents');
+}
+
+// ── HASHTAG RESEARCH ──
+async function generateHashtags(topic, btn) {
+  if (btn) { btn.textContent='⏳…'; btn.disabled=true; }
+  try {
+    const { data: bp } = await sb.from('brand_profile').select('always_hashtags,geography,products').limit(1).maybeSingle().then(r=>r,()=>({data:null}));
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Hashtag Research',
+        prompt: `Generate a comprehensive hashtag set for V Wholesale Vijayawada for this topic: "${topic||'home renovation'}"
+
+Geography: ${bp?.geography||'Vijayawada, Andhra Pradesh'}
+Products: ${bp?.products||'Tiles, Granite, Marble, Sanitaryware'}
+Always-on tags: ${bp?.always_hashtags||'#VWholesale #Vijayawada'}
+
+Return JSON:
+{
+  "primary": ["#5-8 high-relevance tags for this specific topic"],
+  "local": ["#5 Vijayawada/Andhra Pradesh local tags"],
+  "category": ["#5 home building category tags"],
+  "trending": ["#3 currently trending related tags"],
+  "always_on": ["#VWholesale","#Vijayawada","#HomeRenovation","#BuildingMaterials"],
+  "full_set": "complete recommended set of 20-25 hashtags as one string"
+}`,
+        context: { topic }
+      })
+    });
+    const data = await res.json();
+    const tags = data.output;
+    if (!tags?.full_set) throw new Error('Generation failed');
+
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = `
+      <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:480px;border:1px solid var(--border)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">🏷️ Hashtags for: ${topic||'your post'}</div>
+        ${[
+          {label:'Primary', tags:tags.primary, color:'var(--gold)'},
+          {label:'Local', tags:tags.local, color:'#22c55e'},
+          {label:'Category', tags:tags.category, color:'#3b82f6'},
+          {label:'Trending', tags:tags.trending, color:'#a855f7'},
+        ].map(g=>`
+        <div style="margin-bottom:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:5px;text-transform:uppercase">${g.label}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${(g.tags||[]).map(t=>`<span style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:3px 8px;font-size:11px;color:${g.color}">${t}</span>`).join('')}
+          </div>
+        </div>`).join('')}
+        <div style="background:var(--bg3);border-radius:8px;padding:10px;margin-top:8px">
+          <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">FULL SET (copy all)</div>
+          <div style="font-size:11px;color:var(--text2);line-height:1.8">${tags.full_set}</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button onclick="navigator.clipboard.writeText('${(tags.full_set||'').replace(/'/g,"\'")}').then(()=>showMktToast('📋 Copied!'))" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-size:12px">📋 Copy All</button>
+          <button onclick="this.closest('[style*=fixed]').remove()" class="mkt-btn mkt-btn-ghost" style="padding:8px 14px">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='🏷️ Hashtags'; btn.disabled=false; } }
+}
+
+// ── REVIEW RESPONSE AI ──
+async function generateWhatsAppBroadcast(topic, audience) {
+  if (!topic) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = `
+      <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:440px;border:1px solid var(--border)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">💬 WhatsApp Broadcast Generator</div>
+        <div style="display:grid;gap:8px;margin-bottom:12px">
+          <div>
+            <label class="mkt-form-label">Topic / Campaign</label>
+            <input id="wa-topic" class="mkt-form-input" placeholder="e.g. Diwali tile offer, New marble collection, Contractor Club">
+          </div>
+          <div>
+            <label class="mkt-form-label">Target audience</label>
+            <select id="wa-audience" class="mkt-form-select">
+              <option value="all">All customers</option>
+              <option value="contractors">Contractors only</option>
+              <option value="homeowners">Home owners</option>
+              <option value="architects">Architects & Designers</option>
+            </select>
+          </div>
+          <div>
+            <label class="mkt-form-label">Offer / key detail (optional)</label>
+            <input id="wa-offer" class="mkt-form-input" placeholder="e.g. 15% off, free delivery above ₹50,000">
+          </div>
+        </div>
+        <button onclick="generateWhatsAppBroadcast(document.getElementById('wa-topic')?.value, document.getElementById('wa-audience')?.value)" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-weight:700">✨ Generate Messages</button>
+        <div id="wa-output" style="margin-top:12px"></div>
+      </div>`;
+    document.body.appendChild(ov);
+    return;
+  }
+
+  const outEl = document.getElementById('wa-output');
+  if (outEl) outEl.innerHTML = '<div style="padding:10px;color:var(--text3);font-size:12px">⏳ Writing WhatsApp messages…</div>';
+
+  try {
+    const offer = document.getElementById('wa-offer')?.value||'';
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'WhatsApp Broadcast',
+        prompt: `Write 3 WhatsApp broadcast messages for V Wholesale Vijayawada.
+
+Topic: ${topic}
+Audience: ${audience||'all customers'}
+Offer/Detail: ${offer||'none'}
+Store: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+
+Rules:
+- Each message max 200 characters (WhatsApp best practice)
+- Personal, conversational tone (not formal)
+- Telugu version for message 3
+- Start with greeting, end with CTA
+- No formal language
+
+Return JSON:
+{
+  "message1": "Urgent/offer focused version",
+  "message2": "Warm/relationship version",
+  "message3": "Telugu version",
+  "best_time": "Best time to send this broadcast"
+}`,
+        context: { topic, audience }
+      })
+    });
+    const data = await res.json();
+    const msgs = data.output;
+    if (!msgs?.message1) throw new Error('Generation failed');
+
+    if (outEl) outEl.innerHTML = `
+      <div style="display:grid;gap:8px;margin-top:4px">
+        ${[
+          {label:'Version 1 — Offer focused', msg:msgs.message1, color:'var(--gold)'},
+          {label:'Version 2 — Relationship', msg:msgs.message2, color:'#22c55e'},
+          {label:'Version 3 — Telugu', msg:msgs.message3, color:'#a855f7'},
+        ].map(v=>`
+        <div style="background:var(--bg3);border-radius:8px;padding:10px">
+          <div style="font-size:10px;font-weight:700;color:${v.color};margin-bottom:5px;text-transform:uppercase">${v.label}</div>
+          <div style="font-size:12px;line-height:1.8;color:var(--text2)">${v.msg}</div>
+          <button onclick="navigator.clipboard.writeText(${JSON.stringify(v.msg)}).then(()=>showMktToast('📋 Copied!'))" class="mkt-btn mkt-btn-ghost" style="margin-top:6px;font-size:10px;padding:3px 10px">📋 Copy</button>
+        </div>`).join('')}
+        <div style="font-size:11px;color:var(--text3);text-align:center">Best time: ${msgs.best_time||'10am-12pm or 6pm-8pm'}</div>
+      </div>`;
+  } catch(e) {
+    if (outEl) outEl.innerHTML = `<div style="color:var(--red);font-size:11px">❌ ${e.message}</div>`;
+  }
+}
+
+// ── CONTRACTOR CLUB CONTENT ──
+async function generateContractorContent(contractorName, projectType) {
+  if (!contractorName) {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = `
+      <div style="background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:440px;border:1px solid var(--border)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:14px">👷 Contractor Club Content Kit</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:12px">Generate ready-made social posts for your contractors to share</div>
+        <div style="display:grid;gap:8px;margin-bottom:12px">
+          <div>
+            <label class="mkt-form-label">Contractor name</label>
+            <input id="cc-name" class="mkt-form-input" placeholder="e.g. Ravi Kumar (Painter)">
+          </div>
+          <div>
+            <label class="mkt-form-label">Project type</label>
+            <select id="cc-project" class="mkt-form-select">
+              <option value="tile-work">Tile flooring / wall work</option>
+              <option value="painting">Painting project</option>
+              <option value="bathroom">Bathroom renovation</option>
+              <option value="kitchen">Kitchen renovation</option>
+              <option value="full-home">Full home renovation</option>
+              <option value="new-construction">New construction</option>
+            </select>
+          </div>
+          <div>
+            <label class="mkt-form-label">Location (optional)</label>
+            <input id="cc-location" class="mkt-form-input" placeholder="e.g. Guntur, Vijayawada, Mangalagiri">
+          </div>
+        </div>
+        <button onclick="generateContractorContent(document.getElementById('cc-name')?.value, document.getElementById('cc-project')?.value)" class="mkt-btn mkt-btn-primary" style="width:100%;padding:10px;font-weight:700">✨ Generate Kit</button>
+        <div id="cc-output" style="margin-top:12px"></div>
+      </div>`;
+    document.body.appendChild(ov);
+    return;
+  }
+
+  const outEl = document.getElementById('cc-output');
+  if (outEl) outEl.innerHTML = '<div style="padding:10px;color:var(--text3);font-size:12px">⏳ Creating content kit…</div>';
+
+  try {
+    const location = document.getElementById('cc-location')?.value || 'Vijayawada';
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'Contractor Content Kit',
+        prompt: `Create a social media content kit for a contractor to share about their project.
+
+Contractor: ${contractorName}
+Project type: ${projectType||'renovation'}
+Location: ${location}
+Materials sourced from: V Wholesale, NH65 Bhavanipuram, Vijayawada (8712697930)
+
+Generate 3 posts the contractor can copy-paste to their WhatsApp status or Instagram:
+1. Project announcement post (when starting work)
+2. Mid-project progress update
+3. Project completion post (with V Wholesale mention)
+
+Return JSON:
+{
+  "post1": { "text": "...", "caption": "WhatsApp or Instagram caption" },
+  "post2": { "text": "...", "caption": "WhatsApp or Instagram caption" },
+  "post3": { "text": "...", "caption": "WhatsApp or Instagram caption — includes V Wholesale mention naturally" },
+  "story_text": "One-line story/status text",
+  "referral_reminder": "Reminder text about V Wholesale Contractor Club referral bonus"
+}`,
+        context: { contractorName, projectType, location }
+      })
+    });
+    const data = await res.json();
+    const kit = data.output;
+    if (!kit?.post1) throw new Error('Generation failed');
+
+    if (outEl) outEl.innerHTML = `
+      <div style="display:grid;gap:8px">
+        ${[
+          {label:'Post 1 — Project Start', post:kit.post1},
+          {label:'Post 2 — Progress Update', post:kit.post2},
+          {label:'Post 3 — Completion (with V Wholesale)', post:kit.post3},
+        ].map((p,i)=>`
+        <div style="background:var(--bg3);border-radius:8px;padding:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:5px;text-transform:uppercase">${p.label}</div>
+          <div style="font-size:12px;line-height:1.8;color:var(--text2)">${p.post?.text||''}</div>
+          <button onclick="navigator.clipboard.writeText(${JSON.stringify(p.post?.text||'')}).then(()=>showMktToast('📋 Post ${i+1} copied!'))" class="mkt-btn mkt-btn-ghost" style="margin-top:6px;font-size:10px;padding:3px 10px">📋 Copy</button>
+        </div>`).join('')}
+        <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px">
+          <div style="font-size:10px;font-weight:700;color:var(--gold);margin-bottom:4px">💰 REFERRAL REMINDER TO SHARE</div>
+          <div style="font-size:11px;color:var(--text2)">${kit.referral_reminder||''}</div>
+        </div>
+      </div>`;
+  } catch(e) {
+    if (outEl) outEl.innerHTML = `<div style="color:var(--red);font-size:11px">❌ ${e.message}</div>`;
+  }
+}
+
+// ── A/B COPY VARIANTS ──
+async function generateABVariants(topic, type, btn) {
+  if (btn) { btn.textContent='⏳ Generating 3 variants…'; btn.disabled=true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({
+        action:'generate_text', agent:'A/B Variants',
+        prompt: `Write 3 different copy variants for the same social media post for V Wholesale Vijayawada.
+
+Topic: ${topic}
+Format: ${type||'Instagram post'}
+Each variant should have a different angle/hook to test what resonates.
+
+Return JSON:
+{
+  "variant_a": { "hook": "Angle A label", "text": "Full post copy", "why": "Why this angle might work" },
+  "variant_b": { "hook": "Angle B label", "text": "Full post copy", "why": "Why this angle might work" },
+  "variant_c": { "hook": "Angle C label", "text": "Full post copy", "why": "Why this angle might work" },
+  "recommendation": "Which variant to try first and why"
+}`,
+        context: { topic, type }
+      })
+    });
+    const data = await res.json();
+    const vars = data.output;
+    if (!vars?.variant_a) throw new Error('Generation failed');
+
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;overflow-y:auto;padding:20px';
+    ov.innerHTML = `
+      <div style="max-width:520px;margin:0 auto;background:var(--bg2);border-radius:12px;padding:20px;border:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:15px;font-weight:700">🧪 A/B Variants: ${topic}</div>
+          <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer">✕</button>
+        </div>
+        ${['a','b','c'].map(v=>`
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--gold)">Variant ${v.toUpperCase()} — ${vars['variant_'+v]?.hook||''}</span>
+          </div>
+          <div style="font-size:12px;line-height:1.8;color:var(--text2);margin-bottom:8px">${vars['variant_'+v]?.text||''}</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:6px">💡 ${vars['variant_'+v]?.why||''}</div>
+          <button onclick="navigator.clipboard.writeText(${JSON.stringify(vars['variant_'+v]?.text||'')}).then(()=>showMktToast('📋 Variant ${v.toUpperCase()} copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 10px">📋 Copy</button>
+        </div>`).join('')}
+        ${vars.recommendation ? `<div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:10px"><div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:4px">⭐ AI Recommendation</div><div style="font-size:11px;color:var(--text2)">${vars.recommendation}</div></div>` : ''}
+      </div>`;
+    document.body.appendChild(ov);
+  } catch(e) { showMktToast('❌ '+e.message); }
+  finally { if (btn) { btn.textContent='🧪 A/B Variants'; btn.disabled=false; } }
 }
 
 async function renderBrand() {
@@ -1591,7 +2034,7 @@ async function renderCommandCentre() {
 
   <!-- QUICK ACTIONS -->
   <div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Actions</div>
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto">
     ${[
       {icon:'📅', label:'Calendar', page:'calendar'},
       {icon:'🤖', label:'AI Agents', page:'agents'},
@@ -1601,6 +2044,12 @@ async function renderCommandCentre() {
       {icon:'📊', label:'Analytics', page:'analytics'},
       {icon:'🔌', label:'Integrations', page:'integrations'},
       {icon:'🔥', label:'Trend Scout', fn:"mktNav('agents');setTimeout(()=>runTrendScout(),400)"},
+      {icon:'💬', label:'WhatsApp', fn:"generateWhatsAppBroadcast()"},
+      {icon:'⭐', label:'Review Reply', fn:"generateReviewReply()"},
+      {icon:'👷', label:'Contractor Kit', fn:"generateContractorContent()"},
+      {icon:'🏷️', label:'Hashtags', fn:"generateHashtags(prompt('Topic for hashtags:')||'home renovation')"},
+      {icon:'🧪', label:'A/B Variants', fn:"generateABVariants(prompt('Topic:')||'tiles',prompt('Format:')||'Instagram post')"},
+      {icon:'🚀', label:'Bulk Generate', fn:"bulkGenerateMonth()"},
     ].map(a=>`
     <button onclick="${a.fn||"mktNav('"+a.page+"')"}" class="mkt-btn mkt-btn-ghost" style="flex-direction:column;align-items:center;padding:12px 6px;gap:6px;display:flex;font-size:11px;height:70px">
       <span style="font-size:22px">${a.icon}</span>
@@ -3150,7 +3599,7 @@ async function quickCreateFromCalendar(topic, type, language) {
 
 TOPIC: ${topic}
 FORMAT: ${type || 'image'}
-LANGUAGE: ${lang === 'bilingual' ? 'Telugu headline + English body' : lang === 'te' ? 'Full Telugu' : 'English'}
+LANGUAGE: ${lang === 'bilingual' ? 'Telugu headline + English body' : lang === 'te' ? 'Full Telugu' : lang === 'hi' ? 'Hindi' : lang === 'ta' ? 'Tamil' : lang === 'kn' ? 'Kannada' : 'English'}
 STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
 PRODUCTS: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals
 
@@ -3698,7 +4147,7 @@ async function renderAnalytics() {
   </div>
 
   <!-- KPI CARDS -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto">
     ${[
       {label:'Posts Created', value:totalPosts, sub:thisMonth.length+' this month', color:'var(--gold)'},
       {label:'Published', value:publishedPosts, sub:(totalPosts-publishedPosts)+' pending', color:'#22c55e'},
