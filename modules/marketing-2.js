@@ -3990,23 +3990,15 @@ async function renderEmail() {
     {icon:'⭐', label:'Review Request', subject:'How was your V Wholesale experience?', body:'Dear Customer, Thank you for your recent purchase from V Wholesale. Would you spare 2 minutes to share your experience on Google? Your feedback helps us serve you better. Call 8712697930. Team V Wholesale'},
     {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert from V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit NH65 Bhavanipuram Vijayawada. Call 8712697930. Team V Wholesale'},
   ];
-  const emailTemplateContainer = document.createElement('div');
-  emailTemplateContainer.style.cssText = 'display:grid;gap:6px';
-  emailTemplates.forEach(function(t) {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px';
-    row.innerHTML = '<span style="font-size:18px">' + t.icon + '</span>'
+  // Store templates globally so buttons can access them after HTML render
+  window._emailTemplates = emailTemplates;
+  html += emailTemplates.map(function(t, i) {
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">'
+      + '<span style="font-size:18px">' + t.icon + '</span>'
       + '<div style="flex:1"><div style="font-size:11px;font-weight:600">' + t.label + '</div>'
-      + '<div style="font-size:10px;color:var(--text3)">' + t.subject + '</div></div>';
-    const useBtn = document.createElement('button');
-    useBtn.className = 'mkt-btn mkt-btn-ghost';
-    useBtn.style.cssText = 'font-size:10px;padding:3px 8px';
-    useBtn.textContent = 'Use';
-    useBtn.onclick = (function(subject, body) { return function() { fillEmailTemplate(subject, body); }; })(t.subject, t.body);
-    row.appendChild(useBtn);
-    emailTemplateContainer.appendChild(row);
-  });
-  html += emailTemplateContainer.outerHTML;
+      + '<div style="font-size:10px;color:var(--text3)">' + t.subject + '</div></div>'
+      + '<button onclick="useEmailTemplate(' + i + ')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">Use</button></div>';
+  }).join('');
   html += '</div></div>';
 
   // Recent sends
@@ -4022,6 +4014,12 @@ async function renderEmail() {
   }
 
   setContent(html);
+}
+
+function useEmailTemplate(index) {
+  const t = window._emailTemplates && window._emailTemplates[index];
+  if (!t) return;
+  fillEmailTemplate(t.subject, t.body);
 }
 
 function fillEmailTemplate(subject, body) {
