@@ -159,7 +159,7 @@ function mktNav(page) {
     reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
     segments: renderSegments, greetings: renderGreetings, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
     integrations: renderIntegrations, audit: renderAudit, settings: renderSettings,
-    'web-push': renderWebPush
+    'web-push': renderWebPush, 'email': renderEmail
   };
   if (renderers[page]) renderers[page]();
   else renderComingSoon(PAGE_TITLES[page] || page);
@@ -8345,6 +8345,165 @@ async function pushToStaffFeed(titleOverride) {
 
   if (error) { showMktToast('❌ ' + error.message); return; }
   showMktToast('✅ Pushed to Staff Feed!');
+}
+
+async function renderEmail() {
+  setContent('<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading email marketing…</div>');
+
+  const [
+    {data: logs},
+    {data: customers}
+  ] = await Promise.all([
+    sb.from('email_log').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]})),
+    sb.from('customers').select('id,name,email,type').not('email','is',null).limit(500).then(r=>r,()=>({data:[]}))
+  ]);
+
+  const totalSent = (logs||[]).reduce((a,l)=>a+(l.sent_count||1),0);
+  const withEmail = (customers||[]).length;
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">'
+    + '<div><h3 style="font-size:16px;font-weight:900">✉️ Email Marketing</h3>'
+    + '<div style="font-size:12px;color:var(--text3)">Powered by Resend · ' + withEmail + ' customers with email · Free up to 3,000/month</div></div>'
+    + '<button onclick="verifyEmailConnection(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔗 Verify</button></div>';
+
+  // Stats
+  html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--gold)">' + totalSent + '</div><div style="font-size:11px;color:var(--text3)">Total Sent</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#22c55e">' + withEmail + '</div><div style="font-size:11px;color:var(--text3)">Contacts with Email</div></div>'
+    + '<div class="mkt-card" style="text-align:center"><div style="font-size:24px;font-weight:900;color:#3b82f6">' + (logs||[]).length + '</div><div style="font-size:11px;color:var(--text3)">Campaigns Sent</div></div>'
+    + '</div>';
+
+  // Compose email
+  html += '<div class="mkt-card" style="margin-bottom:14px">'
+    + '<div style="font-size:12px;font-weight:700;margin-bottom:10px">📧 Compose & Send</div>'
+    + '<div style="display:grid;gap:8px">'
+    + '<div><label class="mkt-form-label">Subject line</label><input id="email-subject" class="mkt-form-input" placeholder="e.g. Diwali Special — 15% off all tiles at V Wholesale"></div>'
+    + '<div><label class="mkt-form-label">Message body</label><textarea id="email-body" class="mkt-form-input" rows="4" placeholder="Write your email message here…"></textarea></div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    + '<div><label class="mkt-form-label">Target</label>'
+    + '<select id="email-segment" class="mkt-form-select">'
+    + '<option value="all">All with email (' + withEmail + ')</option>'
+    + '<option value="contractor">Contractors only</option>'
+    + '<option value="single">Single email</option>'
+    + '</select></div>'
+    + '<div><label class="mkt-form-label">Single email (if above = single)</label><input id="email-single" class="mkt-form-input" placeholder="customer@email.com"></div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px">'
+    + '<button onclick="generateEmailContent()" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:8px 12px">✨ AI Write</button>'
+    + '<button onclick="sendEmailCampaign(this)" class="mkt-btn mkt-btn-primary" style="flex:1;padding:8px;font-weight:700">📧 Send Email</button>'
+    + '</div></div></div>';
+
+  // Quick templates
+  html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Email Templates</div>'
+    + '<div style="display:grid;gap:6px">';
+  [
+    {icon:'🎉', label:'Festival Offer', subject:'Special Festival Offer from V Wholesale', body:'Dear Customer, Wishing you a joyous celebration! This festive season V Wholesale brings special offers on tiles, granite, marble and more. Visit NH65 Bhavanipuram Vijayawada or call 8712697930. Team V Wholesale'},
+    {icon:'⭐', label:'Review Request', subject:'How was your V Wholesale experience?', body:'Dear Customer, Thank you for your recent purchase from V Wholesale. Would you spare 2 minutes to share your experience on Google? Your feedback helps us serve you better. Call: 8712697930. Team V Wholesale'},
+    {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert — Marble, Tiles & More at V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit NH65 Bhavanipuram Vijayawada. Call: 8712697930. Team V Wholesale'},
+  ].forEach(t => {
+    html += '<div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg3);border-radius:6px">'
+      + '<span style="font-size:18px">' + t.icon + '</span>'
+      + '<div style="flex:1"><div style="font-size:11px;font-weight:600">' + t.label + '</div>'
+      + '<div style="font-size:10px;color:var(--text3)">' + t.subject + '</div></div>'
+      + '<button onclick="fillEmailTemplate(' + JSON.stringify(t.subject) + ',' + JSON.stringify(t.body) + ')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">Use</button></div>';
+  });
+  html += '</div></div>';
+
+  // Recent sends
+  if ((logs||[]).length) {
+    html += '<div class="mkt-card"><div style="font-size:12px;font-weight:700;margin-bottom:10px">📋 Recent Emails</div><div style="display:grid;gap:6px">';
+    (logs||[]).forEach(log => {
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px;background:var(--bg3);border-radius:6px">'
+        + '<div><div style="font-size:12px;font-weight:600">' + (log.subject||'') + '</div>'
+        + '<div style="font-size:10px;color:var(--text3)">' + new Date(log.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' · ' + (log.recipient||'') + '</div></div>'
+        + '<div style="font-size:11px;color:' + (log.status==='sent'?'#22c55e':'#ef4444') + '">' + (log.sent_count||1) + ' sent</div></div>';
+    });
+    html += '</div></div>';
+  }
+
+  setContent(html);
+}
+
+function fillEmailTemplate(subject, body) {
+  const s = document.getElementById('email-subject');
+  const b = document.getElementById('email-body');
+  if (s) s.value = subject;
+  if (b) b.value = body;
+}
+
+async function generateEmailContent() {
+  const subject = (document.getElementById('email-subject')?.value||'').trim() || prompt('Email topic?');
+  if (!subject) return;
+  showMktToast('✨ AI writing email…');
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'generate_text', agent:'Email Marketing',
+        prompt: 'Write a professional marketing email for V Wholesale Vijayawada. Topic: ' + subject + '. Brand: V Wholesale — premium home building materials, NH65 Bhavanipuram, 8712697930, vwholesale.in. Warm, professional tone. Include CTA. Under 200 words. Return just the email body text.',
+        context: {} })
+    });
+    const data = await res.json();
+    const content = data.output?.message || data.output?.master_text || typeof data.output === 'string' ? data.output : '';
+    if (content) {
+      const b = document.getElementById('email-body');
+      if (b) b.value = content;
+      showMktToast('✅ Email content ready');
+    }
+  } catch(e) { showMktToast('❌ ' + e.message); }
+}
+
+async function verifyEmailConnection(btn) {
+  if (btn) { btn.textContent='⏳…'; btn.disabled=true; }
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'verify' })
+    });
+    const data = await res.json();
+    if (data.connected) showMktToast('✅ Resend connected! Domains: ' + (data.domains?.join(', ')||'none added'));
+    else showMktToast('❌ ' + data.error);
+  } catch(e) { showMktToast('❌ ' + e.message); }
+  finally { if (btn) { btn.textContent='🔗 Verify'; btn.disabled=false; } }
+}
+
+async function sendEmailCampaign(btn) {
+  const subject = (document.getElementById('email-subject')?.value||'').trim();
+  const body = (document.getElementById('email-body')?.value||'').trim();
+  const segment = document.getElementById('email-segment')?.value||'all';
+  const single = (document.getElementById('email-single')?.value||'').trim();
+
+  if (!subject || !body) { showMktToast('Enter subject and message'); return; }
+  if (btn) { btn.textContent='⏳ Sending…'; btn.disabled=true; }
+
+  try {
+    if (segment === 'single') {
+      if (!single) { showMktToast('Enter email address'); return; }
+      const res = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'send_email', to:single, subject, html:'<p>' + body.split('\n').join('<br>') + '</p>' })
+      });
+      const data = await res.json();
+      if (data.ok) showMktToast('✅ Email sent to ' + single);
+      else showMktToast('❌ ' + data.error);
+    } else {
+      // Fetch emails from CRM
+      let query = sb.from('customers').select('email').not('email','is',null);
+      if (segment === 'contractor') query = query.eq('type','contractor');
+      const { data: contacts } = await query.limit(500).then(r=>r,()=>({data:[]}));
+      const emails = (contacts||[]).map(c=>c.email).filter(Boolean);
+      if (!emails.length) { showMktToast('No email contacts in this segment'); return; }
+      if (!confirm('Send to ' + emails.length + ' contacts?')) return;
+
+      const res = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'send_broadcast', emails, subject, html:'<p>' + body.split('\n').join('<br>') + '</p>', campaign_name: subject })
+      });
+      const data = await res.json();
+      showMktToast('✅ Sent to ' + data.sent + ' · Failed: ' + data.failed);
+      renderEmail();
+    }
+  } catch(e) { showMktToast('❌ ' + e.message); }
+  finally { if (btn) { btn.textContent='📧 Send Email'; btn.disabled=false; } }
 }
 
 async function renderWebPush() {
