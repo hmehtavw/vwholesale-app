@@ -6232,7 +6232,7 @@ async function connectMetaWithToken(shortToken) {
   try {
     const res = await fetch(MKT_SB_URL+'/functions/v1/meta-setup', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body: JSON.stringify({action:'exchange_token', short_token:shortToken})
+      body: JSON.stringify({action:'refresh_token', token:shortToken, app_id:'1349983417313052', app_secret:'35ea04214f2c708bd8236310f545e1c8'})
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error||'Connection failed');
