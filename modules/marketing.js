@@ -6339,7 +6339,7 @@ async function waSendSingle() {
 
   const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({ action:'send_message', phone, message })
+    body: JSON.stringify({ action:'notify', phone, message })
   });
   const d = await res.json();
   if (d.ok) showMktToast('✅ WhatsApp sent to +91' + phone.replace(/[^0-9]/g,''));
@@ -6629,7 +6629,7 @@ async function waQuickSend(btnOrType) {
 
   const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({ action:'send_message', phone, message })
+    body: JSON.stringify({ action:'notify', phone, message })
   });
   const d = await res.json();
   showMktToast(d.ok ? 'WhatsApp sent to ' + name : 'Failed: ' + (d.error||'error'));
