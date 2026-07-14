@@ -6348,7 +6348,7 @@ async function waSendSingle() {
       phone,
       template_name: 'vassure_promotional_offer',
       language_code: 'en',
-      body_values: ['Himansu', message, 'today']
+      body_values: []
     })
   });
   const d = await res.json();
@@ -6438,6 +6438,12 @@ function loadWATemplate(btn) {
   card.appendChild(preview);
 
   // Variable inputs
+  if (varCount === 0) {
+    const noVarNote = document.createElement('div');
+    noVarNote.style.cssText = 'background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:8px;font-size:11px;color:#22c55e;margin-bottom:12px';
+    noVarNote.textContent = '✅ This template has no variables — sends as-is to any number';
+    card.appendChild(noVarNote);
+  }
   if (varCount > 0) {
     const varDiv = document.createElement('div');
     varDiv.style.cssText = 'display:grid;gap:8px;margin-bottom:12px';
@@ -6642,13 +6648,14 @@ async function waQuickSend(btnOrType) {
   document.querySelectorAll('.wa-quick-modal').forEach(e=>e.remove());
 
   // Map quick action types to actual approved Interakt templates
+  // All vassure_* templates have no variables — fixed text approved by Meta
   const templateMap = {
-    quotation: { name:'vassure_order_confirmation', values:[name, document.getElementById('qa-quot')?.value||'', document.getElementById('qa-total')?.value||''] },
-    review:    { name:'vassure_feedback_request',   values:[name, document.getElementById('qa-product')?.value||'your purchase'] },
-    festival:  { name:'vassure_special_event_greetings', values:[document.getElementById('qa-festival')?.value||'Festival'] },
-    contractor:{ name:'vassure_bulk_order_assistance', values:[name, 'Contractor Club earnings update', document.getElementById('qa-earn')?.value||'0'] },
+    quotation: { name:'vassure_order_confirmation', values:[] },
+    review:    { name:'vassure_feedback_request',   values:[] },
+    festival:  { name:'vassure_special_event_greetings', values:[] },
+    contractor:{ name:'vassure_bulk_order_assistance', values:[] },
   };
-  const tmpl = templateMap[type] || { name:'vassure_promotional_offer', values:[name, message, 'today'] };
+  const tmpl = templateMap[type] || { name:'vassure_promotional_offer', values:[] };
 
   const res = await fetch(MKT_SB_URL+'/functions/v1/interakt-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
