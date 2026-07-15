@@ -2300,12 +2300,41 @@ async function waWebhookCheck(btn) {
     const flds = d.app_webhook_fields || [];
     h += '<div><span style="color:var(--text3)">messages field:</span> ' + (flds.indexOf('messages') >= 0 ? green('subscribed') : red('no')) + '</div>';
     h += '</div>';
-    h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Reinstall webhook (force re-verify)</button>';
+    h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
+    h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Reinstall webhook</button>';
+    if (apps.length > 1) {
+      h += '<button onclick="waRemoveOldApp(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">Remove old app from WABA</button>';
+    }
+    h += '</div>';
+    if (apps.length > 1) {
+      h += '<div style="font-size:10px;color:#f59e0b;margin-top:6px;line-height:1.5">'
+        + 'Two apps are subscribed to this WABA. The old app has no WhatsApp webhook, '
+        + 'so Meta may be routing inbound messages to it and they disappear. '
+        + 'Removing it should leave only V Wholesale WA receiving messages.</div>';
+    }
     if (out) out.innerHTML = h;
   } catch (e) {
     if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
   } finally {
     if (btn) { btn.textContent = '🔗 Check Webhook'; btn.disabled = false; }
+  }
+}
+
+async function waRemoveOldApp(btn) {
+  if (!confirm('Remove the old "V Wholesale" app from this WhatsApp Business Account?\n\nThis only affects WhatsApp message routing. Instagram, Facebook and Threads are unaffected — they do not use this WABA.')) return;
+  if (btn) { btn.textContent = 'Removing...'; btn.disabled = true; }
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'unsubscribe_old_app' })
+    });
+    const d = await res.json();
+    showMktToast(d.ok ? 'Old app removed from WABA' : (d.error || 'Remove failed'));
+    waWebhookCheck();
+  } catch (e) {
+    showMktToast(e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Remove old app from WABA'; btn.disabled = false; }
   }
 }
 
