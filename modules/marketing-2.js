@@ -2299,18 +2299,28 @@ async function waWebhookCheck(btn) {
 
 async function waInstallWebhook(btn) {
   if (btn) { btn.textContent = 'Installing...'; btn.disabled = true; }
+  const out = document.getElementById('wa-register-output');
   try {
-    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+    // Step 1: Install/update app-level webhook subscription
+    const r1 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
       body: JSON.stringify({ action: 'install_webhook' })
     });
-    const d = await res.json();
-    showMktToast(d.ok ? 'Webhook installed' : (d.error || 'Install failed'));
+    const d1 = await r1.json();
+    // Step 2: Subscribe app to WABA (separate call)
+    const r2 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'subscribe' })
+    });
+    const d2 = await r2.json();
+    const msg = 'Webhook: ' + (d1.ok ? 'OK' : d1.error) + ' | WABA sub: ' + (d2.ok ? 'OK' : JSON.stringify(d2));
+    showMktToast(msg);
+    if (out) out.innerHTML = '<div style="font-size:10px;background:var(--bg2);padding:6px;border-radius:4px;margin-top:6px">' + msg + '</div>';
     waWebhookCheck();
   } catch (e) {
     showMktToast(e.message);
   } finally {
-    if (btn) { btn.textContent = 'Install webhook via API'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Reinstall webhook (force re-verify)'; btn.disabled = false; }
   }
 }
 
