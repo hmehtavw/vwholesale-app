@@ -2255,6 +2255,45 @@ async function waQuickSend(btnOrType) {
 }
 
 
+async function waEvidence(btn) {
+  const out = document.getElementById('wa-register-output');
+  if (btn) { btn.textContent = 'Capturing...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Capturing all Graph API responses with timestamps...</div>';
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-evidence', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({})
+    });
+    const d = await res.json();
+    let txt = 'META SUPPORT EVIDENCE PACK\n';
+    txt += 'Captured: ' + d.captured_at_utc + ' UTC\n';
+    txt += '='.repeat(60) + '\n\n';
+    (d.results || []).forEach(function(r) {
+      txt += r.label + '\n';
+      txt += 'URL: ' + r.url + '\n';
+      txt += 'At:  ' + r.captured_at_utc + ' UTC\n';
+      txt += 'HTTP ' + r.http_status + '\n';
+      txt += r.raw + '\n\n' + '-'.repeat(60) + '\n\n';
+    });
+    let h = '<div style="background:var(--bg2);border-radius:6px;padding:8px;margin-top:6px">';
+    h += '<pre style="white-space:pre-wrap;word-break:break-all;margin:0;font-size:9px;color:var(--text2);max-height:300px;overflow-y:auto">' + txt + '</pre>';
+    h += '</div>';
+    if (out) {
+      out.innerHTML = h;
+      const b = document.createElement('button');
+      b.className = 'mkt-btn mkt-btn-primary';
+      b.style.cssText = 'font-size:11px;padding:6px 12px;margin-top:6px';
+      b.textContent = 'Copy evidence pack';
+      b.onclick = function() { navigator.clipboard.writeText(txt).then(function(){ showMktToast('Copied — paste into the Meta ticket'); }); };
+      out.appendChild(b);
+    }
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '📋 Capture Evidence'; btn.disabled = false; }
+  }
+}
+
 async function waPhoneWebhook(btn) {
   const out = document.getElementById('wa-register-output');
   if (btn) { btn.textContent = 'Reading...'; btn.disabled = true; }
