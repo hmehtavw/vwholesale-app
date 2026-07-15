@@ -2255,6 +2255,36 @@ async function waQuickSend(btnOrType) {
 }
 
 
+async function waPhoneWebhook(btn) {
+  const out = document.getElementById('wa-register-output');
+  if (btn) { btn.textContent = 'Reading...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Reading phone-level webhook config...</div>';
+  try {
+    const r1 = await fetch(MKT_SB_URL + '/functions/v1/wa-phone-webhook', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'phone_webhook' })
+    });
+    const d1 = await r1.json();
+    const r2 = await fetch(MKT_SB_URL + '/functions/v1/wa-phone-webhook', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'waba_webhook' })
+    });
+    const d2 = await r2.json();
+
+    let h = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:10px;line-height:1.6">';
+    h += '<div style="font-weight:700;color:var(--gold);margin-bottom:4px">PHONE ' + '1269550786231910' + ' (raw)</div>';
+    h += '<pre style="white-space:pre-wrap;word-break:break-all;margin:0;font-size:10px;color:var(--text2)">' + (d1.raw_json || JSON.stringify(d1)) + '</pre>';
+    h += '<div style="font-weight:700;color:var(--gold);margin:8px 0 4px">WABA (raw)</div>';
+    h += '<pre style="white-space:pre-wrap;word-break:break-all;margin:0;font-size:10px;color:var(--text2)">' + (d2.raw_json || JSON.stringify(d2)) + '</pre>';
+    h += '</div>';
+    if (out) out.innerHTML = h;
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '📞 Phone Webhook Override'; btn.disabled = false; }
+  }
+}
+
 async function waWebhookCheck(btn) {
   const out = document.getElementById('wa-register-output');
   if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }

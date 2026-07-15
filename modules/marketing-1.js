@@ -1478,6 +1478,7 @@ async function renderIntegrations() {
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="waCloudStatus(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📋 Check Status</button>
         <button onclick="waWebhookCheck(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔗 Check Webhook</button>
+        <button onclick="waPhoneWebhook(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📞 Phone Webhook Override</button>
         <input id="wa-register-pin" class="mkt-form-input" placeholder="6-digit PIN" maxlength="6" style="font-size:11px;width:110px">
         <button onclick="waCloudRegister(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">☁️ Register Number</button>
       </div>
