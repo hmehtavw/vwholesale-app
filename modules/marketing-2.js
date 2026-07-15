@@ -1930,25 +1930,22 @@ async function waSendSingle() {
   if (!phone) { showMktToast('Enter phone number'); return; }
   if (!message) { showMktToast('Enter a message or use a template above'); return; }
 
-  // WhatsApp Business API only allows TEMPLATE messages for outbound.
-  // Free text is only allowed if customer messaged you in last 24 hrs.
-  // We use vw_offer_alert template with the message as the body value.
+  // Free-form text. Meta only delivers this if the customer messaged us
+  // within the last 24 hours (customer service window).
+  // For proactive sends use an approved template via "Use Template".
   const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-    body: JSON.stringify({
-      action:'send_template',
-      phone,
-      template_name: 'vassure_promotional_offer',
-      language_code: 'en',
-      body_values: []
-    })
+    body: JSON.stringify({ action:'send_text', phone, message })
   });
   const d = await res.json();
   if (d.ok) {
-    showMktToast('✅ WhatsApp sent to +91' + phone.replace(/[^0-9]/g,''));
+    showMktToast('Sent to +91' + phone.replace(/[^0-9]/g,''));
   } else {
-    // If vw_offer_alert fails, show clear message
-    showMktToast('❌ ' + (d.error||'Send failed') + ' — Use "Use Template" buttons above to send approved templates');
+    const err = d.error || 'Send failed';
+    const is24h = /131047|24 hour|re-?engagement|outside/i.test(err);
+    showMktToast(is24h
+      ? 'Outside 24h window — customer must message you first. Use an approved template instead.'
+      : err);
   }
 }
 
