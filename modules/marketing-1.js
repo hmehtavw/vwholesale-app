@@ -1473,6 +1473,15 @@ async function renderIntegrations() {
         ? '✅ Meta Direct API · Phone: +91 8712697930 · No Interakt fees'
         : '⏳ Click Verify to test Meta WhatsApp connection'}
     </div>
+    <div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">☁️ Cloud API registration (one-time)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="waCloudStatus(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">📋 Check Status</button>
+        <input id="wa-register-pin" class="mkt-form-input" placeholder="6-digit PIN" maxlength="6" style="font-size:11px;width:110px">
+        <button onclick="waCloudRegister(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">☁️ Register Number</button>
+      </div>
+      <div id="wa-register-output" style="margin-top:8px"></div>
+    </div>
   </div>
 
   <!-- OPENAI + PEXELS -->

@@ -2258,6 +2258,64 @@ async function waQuickSend(btnOrType) {
 }
 
 
+async function waCloudStatus(btn) {
+  const out = document.getElementById('wa-register-output');
+  if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Checking Cloud API status...</div>';
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'status' })
+    });
+    const d = await res.json();
+    if (out) {
+      const rows = [
+        ['Phone', d.display_phone_number || '—'],
+        ['Name', d.verified_name || '—'],
+        ['Quality', d.quality_rating || '—'],
+        ['Status', d.status || '—'],
+        ['Verification', d.code_verification_status || '—'],
+        ['Platform', d.platform_type || '—'],
+      ];
+      out.innerHTML = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:11px">'
+        + (d.error ? '<div style="color:var(--red)">' + d.error + '</div>'
+          : rows.map(function(r) { return '<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--text3)">' + r[0] + '</span><span style="font-weight:600">' + r[1] + '</span></div>'; }).join(''))
+        + '</div>';
+    }
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '📋 Check Status'; btn.disabled = false; }
+  }
+}
+
+async function waCloudRegister(btn) {
+  const pin = (document.getElementById('wa-register-pin')?.value || '').trim();
+  const out = document.getElementById('wa-register-output');
+  if (!/^\d{6}$/.test(pin)) { showMktToast('Enter a 6-digit PIN'); return; }
+  if (btn) { btn.textContent = 'Registering...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Registering on Cloud API...</div>';
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'register', pin: pin })
+    });
+    const d = await res.json();
+    if (d.ok) {
+      showMktToast('Number registered on Cloud API');
+      if (out) out.innerHTML = '<div style="background:rgba(34,197,94,.1);border-radius:6px;padding:8px;font-size:11px;color:#22c55e">Registered. WhatsApp sending is now live.</div>';
+    } else {
+      showMktToast('Register failed');
+      if (out) out.innerHTML = '<div style="background:rgba(239,68,68,.1);border-radius:6px;padding:8px;font-size:11px;color:#ef4444">'
+        + (d.error || 'Failed') + (d.code ? '<br><span style="opacity:.7">Code: ' + d.code + '</span>' : '') + '</div>';
+    }
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '☁️ Register Number'; btn.disabled = false; }
+  }
+}
+
 async function verifyInterakt(btn) {
   if (btn) { btn.textContent='⏳ Verifying…'; btn.disabled=true; }
   try {
