@@ -2267,34 +2267,52 @@ async function waWebhookCheck(btn) {
     const d = await res.json();
     const sa = d.subscribed_apps || {};
     const as = d.app_subscriptions || {};
+    const ok = function(v) { return v ? '<span style="color:#22c55e">' + v + '</span>' : '<span style="color:#ef4444">missing</span>'; };
 
     let h = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:11px;line-height:1.8">';
     h += '<div><span style="color:var(--text3)">WABA:</span> ' + (d.waba_id || '-') + '</div>';
     h += '<div><span style="color:var(--text3)">App subscribed to WABA:</span> '
-      + (sa.count ? '<span style="color:#22c55e">yes — ' + (sa.names || []).join(', ') + '</span>'
-                  : '<span style="color:#ef4444">no</span>')
-      + (sa.error ? ' <span style="color:#ef4444">(' + sa.error + ')</span>' : '') + '</div>';
+      + (sa.count ? '<span style="color:#22c55e">yes</span>' : '<span style="color:#ef4444">no</span>') + '</div>';
 
     if (as.readable) {
-      const waSub = (as.data || []).find(function(x) { return x.object === 'whatsapp_business_account'; });
-      const fields = ((waSub || {}).fields || []).map(function(f) { return typeof f === 'string' ? f : f.name; });
       h += '<div><span style="color:var(--text3)">Callback URL:</span> '
-        + (waSub && waSub.callback_url ? '<span style="color:#22c55e">set</span>' : '<span style="color:#ef4444">missing</span>') + '</div>';
+        + (as.callback_url ? '<span style="color:#22c55e">set</span>' : '<span style="color:#ef4444">MISSING</span>') + '</div>';
+      if (as.callback_url) h += '<div style="font-size:9px;color:var(--text3);word-break:break-all">' + as.callback_url + '</div>';
+      h += '<div><span style="color:var(--text3)">Active:</span> ' + (as.active ? '<span style="color:#22c55e">yes</span>' : '<span style="color:#ef4444">no</span>') + '</div>';
       h += '<div><span style="color:var(--text3)">messages field:</span> '
-        + (fields.indexOf('messages') >= 0 ? '<span style="color:#22c55e">subscribed</span>' : '<span style="color:#ef4444">not subscribed</span>') + '</div>';
+        + (as.has_messages ? '<span style="color:#22c55e">subscribed</span>' : '<span style="color:#ef4444">NOT subscribed</span>') + '</div>';
+      if ((as.fields || []).length) h += '<div style="font-size:9px;color:var(--text3)">fields: ' + as.fields.join(', ') + '</div>';
+      if ((as.all_objects || []).length) h += '<div style="font-size:9px;color:var(--text3)">objects: ' + as.all_objects.join(', ') + '</div>';
     } else {
-      h += '<div style="color:var(--text3);margin-top:4px;padding-top:4px;border-top:1px solid var(--border)">'
-        + 'App-level webhook config: <b>cannot read</b> with this token'
-        + (as.error ? '<br><span style="font-size:10px">' + as.error + '</span>' : '')
-        + '<br><span style="font-size:10px;opacity:.8">This is expected — reading it needs an app access token. '
-        + 'It does not mean the webhook is unconfigured. Verify in the App Dashboard instead.</span></div>';
+      h += '<div style="color:#ef4444">Cannot read app config: ' + (as.error || 'unknown') + '</div>';
     }
     h += '</div>';
+
+    if (!as.callback_url || !as.has_messages) {
+      h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Install webhook via API</button>';
+    }
     if (out) out.innerHTML = h;
   } catch (e) {
     if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
   } finally {
     if (btn) { btn.textContent = '🔗 Check Webhook'; btn.disabled = false; }
+  }
+}
+
+async function waInstallWebhook(btn) {
+  if (btn) { btn.textContent = 'Installing...'; btn.disabled = true; }
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'install_webhook' })
+    });
+    const d = await res.json();
+    showMktToast(d.ok ? 'Webhook installed' : (d.error || 'Install failed'));
+    waWebhookCheck();
+  } catch (e) {
+    showMktToast(e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Install webhook via API'; btn.disabled = false; }
   }
 }
 
