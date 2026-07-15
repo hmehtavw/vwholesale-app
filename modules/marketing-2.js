@@ -2255,6 +2255,57 @@ async function waQuickSend(btnOrType) {
 }
 
 
+async function waWebhookCheck(btn) {
+  const out = document.getElementById('wa-register-output');
+  if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Checking webhook subscription...</div>';
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'check' })
+    });
+    const d = await res.json();
+    const apps = d.subscribed_apps?.data || [];
+    const subs = d.app_subscriptions?.data || [];
+    const waSub = subs.find(function(x) { return x.object === 'whatsapp_business_account'; });
+    const fields = (waSub?.fields || []).map(function(f) { return typeof f === 'string' ? f : f.name; });
+    const hasMessages = fields.indexOf('messages') >= 0;
+
+    if (out) out.innerHTML = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:11px;line-height:1.7">'
+      + '<div><span style="color:var(--text3)">WABA:</span> ' + (d.waba_id || '-') + '</div>'
+      + '<div><span style="color:var(--text3)">Apps subscribed to WABA:</span> <b>' + apps.length + '</b> '
+      + (apps.length ? '(' + apps.map(function(a) { return a.whatsapp_business_api_data?.name || a.whatsapp_business_api_data?.id || '?'; }).join(', ') + ')' : '<span style="color:#ef4444">none</span>') + '</div>'
+      + '<div><span style="color:var(--text3)">Callback URL:</span> ' + (waSub?.callback_url ? '<span style="color:#22c55e">set</span>' : '<span style="color:#ef4444">missing</span>') + '</div>'
+      + '<div><span style="color:var(--text3)">messages field:</span> ' + (hasMessages ? '<span style="color:#22c55e">subscribed</span>' : '<span style="color:#ef4444">NOT subscribed</span>') + '</div>'
+      + (fields.length ? '<div style="color:var(--text3);font-size:10px;margin-top:4px">fields: ' + fields.join(', ') + '</div>' : '')
+      + '</div>'
+      + (!apps.length || !hasMessages
+          ? '<button onclick="waWebhookSubscribe(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Subscribe app to WABA</button>'
+          : '');
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '🔗 Check Webhook'; btn.disabled = false; }
+  }
+}
+
+async function waWebhookSubscribe(btn) {
+  if (btn) { btn.textContent = 'Subscribing...'; btn.disabled = true; }
+  try {
+    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'subscribe' })
+    });
+    const d = await res.json();
+    showMktToast(d.ok ? 'App subscribed to WABA' : (d.error || 'Subscribe failed'));
+    waWebhookCheck();
+  } catch (e) {
+    showMktToast(e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Subscribe app to WABA'; btn.disabled = false; }
+  }
+}
+
 async function waCloudStatus(btn) {
   const out = document.getElementById('wa-register-output');
   if (btn) { btn.textContent = 'Checking...'; btn.disabled = true; }
