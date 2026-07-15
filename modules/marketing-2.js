@@ -2288,9 +2288,7 @@ async function waWebhookCheck(btn) {
     }
     h += '</div>';
 
-    if (!as.callback_url || !as.has_messages) {
-      h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Install webhook via API</button>';
-    }
+    h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Reinstall webhook (force re-verify)</button>';
     if (out) out.innerHTML = h;
   } catch (e) {
     if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
