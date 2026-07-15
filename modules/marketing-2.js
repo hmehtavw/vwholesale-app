@@ -2278,6 +2278,13 @@ async function waWebhookCheck(btn) {
 
     let h = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:11px;line-height:1.8">';
     h += '<div><span style="color:var(--text3)">WABA:</span> ' + (d.waba_id || '-') + '</div>';
+    if (d.token_belongs_to_app) {
+      const ta = d.token_belongs_to_app;
+      const isNew = String(ta.id) === '2156593291691763';
+      h += '<div><span style="color:var(--text3)">Our token belongs to app:</span> '
+        + (isNew ? '<span style="color:#22c55e">' : '<span style="color:#f59e0b">')
+        + (ta.name || ta.id) + ' (' + ta.id + ')</span></div>';
+    }
 
     // Check 1: app subscribed to WABA
     h += '<div><span style="color:var(--text3)">App subscribed to WABA:</span> '
@@ -2302,9 +2309,7 @@ async function waWebhookCheck(btn) {
     h += '</div>';
     h += '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">';
     h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Reinstall webhook</button>';
-    if (apps.length > 1) {
-      h += '<button onclick="waRemoveOldApp(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">Remove old app from WABA</button>';
-    }
+    h += '<button onclick="waRemoveOldApp(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">Fix app routing</button>';
     h += '</div>';
     if (apps.length > 1) {
       h += '<div style="font-size:10px;color:#f59e0b;margin-top:6px;line-height:1.5">'
@@ -2321,20 +2326,31 @@ async function waWebhookCheck(btn) {
 }
 
 async function waRemoveOldApp(btn) {
-  if (!confirm('Remove the old "V Wholesale" app from this WhatsApp Business Account?\n\nThis only affects WhatsApp message routing. Instagram, Facebook and Threads are unaffected — they do not use this WABA.')) return;
-  if (btn) { btn.textContent = 'Removing...'; btn.disabled = true; }
+  if (!confirm('Remove the app our system-user token belongs to from this WABA, then subscribe V Wholesale WA properly?\n\nThis only affects WhatsApp message routing for this WABA. Instagram, Facebook and Threads are unaffected.')) return;
+  if (btn) { btn.textContent = 'Fixing...'; btn.disabled = true; }
+  const out = document.getElementById('wa-register-output');
   try {
-    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+    // 1. Remove whichever app our system-user token represents (likely the old one)
+    const r1 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'unsubscribe_old_app' })
+      body: JSON.stringify({ action: 'unsubscribe_via_user_token' })
     });
-    const d = await res.json();
-    showMktToast(d.ok ? 'Old app removed from WABA' : (d.error || 'Remove failed'));
-    waWebhookCheck();
+    const d1 = await r1.json();
+    // 2. Subscribe the NEW app using its own app token
+    const r2 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'subscribe_new_app' })
+    });
+    const d2 = await r2.json();
+    const msg = 'Removed: ' + (d1.ok ? 'OK' : (d1.error || 'failed'))
+      + ' | Subscribed new app: ' + (d2.ok ? 'OK' : (d2.error || 'failed'));
+    showMktToast(msg);
+    if (out) out.innerHTML = '<div style="font-size:10px;background:var(--bg2);padding:6px;border-radius:4px">' + msg + '</div>';
+    setTimeout(waWebhookCheck, 1000);
   } catch (e) {
     showMktToast(e.message);
   } finally {
-    if (btn) { btn.textContent = 'Remove old app from WABA'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Fix app routing'; btn.disabled = false; }
   }
 }
 
