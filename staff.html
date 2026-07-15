@@ -1294,6 +1294,7 @@ body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !imp
         <button class="more-tile" data-page="vendor_payments" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>💸</span><span style="opacity:.5">🔒 Vendor Pay</span></button>
         <button class="more-tile" data-page="sales_targets" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>🎯</span><span style="opacity:.5">🔒 Targets</span></button>
         <button class="more-tile" data-page="broadcast" onclick="window.open('./admin.html','_blank')" title="Admin only"><span>📢</span><span style="opacity:.5">🔒 Broadcast</span></button>
+        <button class="more-tile" data-page="inbox" onclick="closeMoreMenu();navigateTo('inbox')"><span>💬</span><span>Inbox</span></button>
         <button class="more-tile" data-page="crm" onclick="closeMoreMenu();navigateTo('crm')"><span>👥</span><span>CRM</span></button>
         <button class="more-tile" data-page="quotations" onclick="closeMoreMenu();navigateTo('quotations')"><span>📋</span><span>Quotes</span></button>
         <button class="more-tile" data-page="club" onclick="closeMoreMenu();navigateTo('club')"><span>🏅</span><span>CC Club</span></button>
@@ -1485,6 +1486,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script src="./modules/quick-quote.js"></script>
 <script src="./modules/autotest.js"></script>
 <script src="./modules/shop.js"></script>
+<script src="./modules/inbox.js"></script>
 <script src="./modules/app.js"></script>
 <script src="./modules/hr.js"></script>
 <!-- rebuild Wed Jul  8 17:26:10 UTC 2026 -->

@@ -267,6 +267,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'analytics') html = await VW_ANALYTICS.renderAnalytics();
     else if (page === 'tasks') html = await VW_TASKS.renderMyTasks();
     else if (page === 'settings') html = await VW_SETTINGS.renderSettingsPage();
+    else if (page === 'inbox') html = await VW_INBOX.renderInboxPage();
     else if (page === 'club') html = await renderContractorClub();
     else if (page === 'training') html = await VW_TRAINING.renderTraining();
     else if (page === 'feedback') html = await renderFeedbackPage();

@@ -492,7 +492,7 @@ const PUBLIC_PAGES = ['shop','offers','mood_board','tile_visualizer'];  // acces
 
 const ROLE_PAGES = {
   // ── ADMIN: everything ────────────────────────────────────────────────
-  admin: ['dashboard','checkin','cart','tasks','crm','follow_ups','inventory','hr','analytics',
+  admin: ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','inventory','hr','analytics',
           'club','labor','ledger','feedback','settings','training','accounts','dispatch',
           'promotions','catalogs','eod','referrals','incentives','dedup','vendors','marketing',
           'service','employeeapp','contractor','quotations','tiles','granite','tile_quotes',
@@ -501,27 +501,27 @@ const ROLE_PAGES = {
           'my_leaves','my_salary','my_advances','my_documents','my_kpis','my_achievements'],
 
   // ── STORE MANAGER: full store ops, no admin settings/GST ─────────────
-  store_manager: ['dashboard','checkin','cart','tasks','crm','follow_ups','inventory','accounts',
+  store_manager: ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','inventory','accounts',
                   'club','labor','ledger','feedback','training','dispatch','catalogs','vendors',
                   'quotations','tiles','granite','tile_quotes','tile_inventory','returns',
                   'visualizer','wishlist','grn','analytics','quick_quote',
                   'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── FLOOR MANAGER: floor ops, inventory, TQs ─────────────────────────
-  floor_manager: ['dashboard','checkin','cart','tasks','crm','follow_ups','inventory',
+  floor_manager: ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','inventory',
                   'club','labor','ledger','feedback','training','dispatch',
                   'quotations','tiles','granite','tile_quotes','tile_inventory','returns',
                   'visualizer','wishlist','grn','quick_quote',
                   'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── TL / SR SALES: sales + CRM + TQs ────────────────────────────────
-  tl:         ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
+  tl:         ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
                 'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sr_sales:   ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
                 'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
-  sr_executive:['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
+  sr_executive:['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                 'training','quotations','tiles','granite','tile_quotes','returns','visualizer',
                 'wishlist','quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   asm:        ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
@@ -533,7 +533,7 @@ const ROLE_PAGES = {
                 'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── SALES EXECUTIVE: daily billing + TQs ─────────────────────────────
-  executive:  ['dashboard','checkin','cart','tasks','crm','follow_ups','feedback','training',
+  executive:  ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','feedback','training',
                 'quotations','tiles','granite','tile_quotes','returns','visualizer','wishlist',
                 'quick_quote','daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
   sales_executive: ['dashboard','checkin','cart','tasks','crm','follow_ups','feedback','training',
@@ -549,7 +549,7 @@ const ROLE_PAGES = {
                 'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── RECEPTION: check-in + basic ──────────────────────────────────────
-  reception:  ['dashboard','checkin','cart','tasks','feedback','training','returns','wishlist',
+  reception:  ['inbox','dashboard','checkin','cart','tasks','feedback','training','returns','wishlist',
                 'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── CONTRACTOR CLUB MANAGER ──────────────────────────────────────────
@@ -557,7 +557,7 @@ const ROLE_PAGES = {
                  'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
 
   // ── MANAGEMENT (general) ─────────────────────────────────────────────
-  management: ['dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
+  management: ['inbox','dashboard','checkin','cart','tasks','crm','follow_ups','ledger','feedback',
                'training','dispatch','quotations','tiles','granite','tile_quotes','returns',
                'visualizer','wishlist','quick_quote','analytics',
                'daily_feed','my_profile','my_hr','my_attendance','my_leaves','my_salary'],
@@ -583,6 +583,7 @@ const ROLE_PAGES = {
 // "feedback" stay always-on for every approved role — they're core to
 // doing the job, not optional add-ons.
 const PERMISSION_PAGES = {
+  inbox:          ['inbox'],
   billing:        ['cart', 'quotations', 'tiles', 'granite', 'ledger'],
   inventory:      ['inventory'],
   tile_inventory: ['tile_inventory'],
@@ -597,6 +598,7 @@ const PERMISSION_PAGES = {
   service:        ['service'],
 };
 const PERMISSION_LABELS = {
+  inbox: 'Inbox (customer chats)',
   billing: 'Billing, Quotations & Tiles/Granite',
   inventory: 'Inventory',
   tile_inventory: 'Tile Stock (Dedicated)',

@@ -119,20 +119,23 @@ async function mktLogin() {
 
     if (!profile) { showErr('Profile not found. Login with Staff Portal first.'); return; }
 
-    // Access is granted per-user in marketing_access, not by job title.
-    // profiles.role=admin implies full access so we can never lock ourselves out.
-    const { data: acc } = await sb.from('marketing_access').select('*')
-      .eq('user_id', uid).maybeSingle().then(r=>r, ()=>({data:null}));
+    // Access reuses the staff portal's permission system (profiles.permissions),
+    // which already has a 'marketing' key and an admin UI. An earlier version of
+    // this used a separate marketing_access table — that was duplication and is gone.
+    const perms = Array.isArray(profile.permissions) ? profile.permissions : [];
+    const isAdmin = profile.role === 'admin';
+    const hasMarketing = isAdmin || perms.indexOf('marketing') >= 0;
 
-    mktAccess = acc || (profile.role === 'admin'
-      ? { level:'admin', can_publish:true, can_broadcast:true, can_spend:true, can_manage_keys:true, extra_pages:[] }
-      : { level:'none', extra_pages:[] });
-
-    if (mktAccess.level === 'none') {
+    if (!hasMarketing) {
       await sb.auth.signOut();
-      showErr('You do not have marketing access. Ask an admin to grant it.');
+      showErr('You do not have marketing access. An admin can grant it in Staff Portal -> Settings -> Permissions.');
       return;
     }
+
+    // Admins get keys and spend. Everyone else gets the work, not the credentials.
+    mktAccess = isAdmin
+      ? { level: 'admin', can_publish: true, can_broadcast: true, can_spend: true, can_manage_keys: true, extra_pages: [] }
+      : { level: 'manager', can_publish: true, can_broadcast: false, can_spend: false, can_manage_keys: false, extra_pages: [] };
 
     mktProfile = profile;
     showMktApp();

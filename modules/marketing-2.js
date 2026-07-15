@@ -187,8 +187,17 @@ async function renderSettings() {
     <div style="font-size:12px;color:var(--text3)">Marketing panel configuration</div>
   </div>
 
-  <div class="mkt-card" id="mkt-team-access-card" style="margin-bottom:14px">
-    <div id="mkt-team-access"></div>
+  <div class="mkt-card" style="margin-bottom:14px">
+    <div class="mkt-card-title">Team access</div>
+    <div style="font-size:12px;color:var(--text3);line-height:1.7">
+      Marketing access is managed in the <b>Staff Portal &rarr; Settings &rarr; Permissions</b>,
+      alongside every other permission — one place, not two.<br><br>
+      Give someone the <b>Marketing</b> permission to let them in here.
+      Give <b>Inbox (customer chats)</b> instead if they only need to answer customers —
+      that opens the inbox inside the Staff Portal, where they can also see the customer's
+      orders and quotations while replying.<br><br>
+      API keys and ad spend stay restricted to <b>admins</b>.
+    </div>
   </div>
 
   <div class="mkt-card">
@@ -256,8 +265,6 @@ async function renderSettings() {
       </tr>`).join('')}
     </table>
   </div>`);
-
-  renderTeamAccess();
 }
 
 async function saveSetting(key, inputId) {
@@ -2414,95 +2421,6 @@ async function waPhoneWebhook(btn) {
   }
 }
 
-// ── TEAM ACCESS (admin only) ──
-async function renderTeamAccess() {
-  const host = document.getElementById('mkt-team-access');
-  if (!host) return;
-  if (!mktCanKeys()) { host.innerHTML = ''; return; }
-
-  host.innerHTML = '<div style="font-size:11px;color:var(--text3)">Loading team…</div>';
-
-  const [{ data: profiles }, { data: access }] = await Promise.all([
-    sb.from('profiles').select('id,name,role').order('name').then(r=>r,()=>({data:[]})),
-    sb.from('marketing_access').select('*').then(r=>r,()=>({data:[]})),
-  ]);
-  const byId = {};
-  (access || []).forEach(function (a) { byId[a.user_id] = a; });
-  window._mktProfiles = profiles || [];
-
-  let h = '<div style="font-size:12px;font-weight:700;margin-bottom:4px">Team access</div>'
-    + '<div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">'
-    + 'Levels control which pages a person sees. The four switches control what they can '
-    + '<i>do</i> — those are the ones that cost money or reach customers, so they are separate '
-    + 'from page access on purpose.</div>';
-
-  h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
-    + '<tr style="text-align:left;color:var(--text3)">'
-    + '<th style="padding:6px 4px">Person</th><th style="padding:6px 4px">Level</th>'
-    + '<th style="padding:6px 4px" title="Push content to public channels">Publish</th>'
-    + '<th style="padding:6px 4px" title="Bulk WhatsApp/email — costs money and risks the number\'s quality rating">Broadcast</th>'
-    + '<th style="padding:6px 4px" title="Spend ad budget">Ads</th>'
-    + '<th style="padding:6px 4px" title="View and edit API keys and integrations">Keys</th>'
-    + '<th></th></tr>';
-
-  (profiles || []).forEach(function (p) {
-    const a = byId[p.id] || { level: 'none', can_publish: false, can_broadcast: false, can_spend: false, can_manage_keys: false };
-    const self = mktProfile && p.id === mktProfile.id;
-    h += '<tr style="border-top:1px solid var(--border)">'
-      + '<td style="padding:7px 4px"><div style="font-weight:600">' + inboxEsc(p.name || '(no name)')
-      + (self ? ' <span style="color:var(--gold);font-size:9px">(you)</span>' : '') + '</div>'
-      + '<td style="padding:7px 4px"><select id="lvl-' + p.id + '" class="mkt-form-select" style="font-size:10px;padding:3px 6px"'
-      + (self ? ' disabled title="You cannot change your own level"' : '') + '>'
-      + Object.keys(MKT_LEVEL_LABELS).map(function (k) {
-          return '<option value="' + k + '"' + (a.level === k ? ' selected' : '') + '>' + MKT_LEVEL_LABELS[k] + '</option>';
-        }).join('')
-      + '</select></td>';
-    [['pub', 'can_publish'], ['bc', 'can_broadcast'], ['sp', 'can_spend'], ['ky', 'can_manage_keys']].forEach(function (c) {
-      h += '<td style="padding:7px 4px;text-align:center"><input type="checkbox" id="' + c[0] + '-' + p.id + '"'
-        + (a[c[1]] ? ' checked' : '') + (self ? ' disabled' : '') + '></td>';
-    });
-    h += '<td style="padding:7px 4px">'
-      + (self ? '' : '<button onclick="mktSaveAccess(\'' + p.id + '\',this)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 9px">Save</button>')
-      + '</td></tr>';
-  });
-  h += '</table></div>';
-
-  h += '<details style="margin-top:12px"><summary style="font-size:11px;color:var(--text3);cursor:pointer">What each level sees</summary>'
-    + '<div style="font-size:10px;color:var(--text3);margin-top:8px;line-height:1.9">'
-    + Object.keys(MKT_LEVEL_PAGES).map(function (k) {
-        const pages = MKT_LEVEL_PAGES[k];
-        return '<div><b style="color:var(--text2)">' + MKT_LEVEL_LABELS[k] + '</b> — '
-          + (pages === null ? 'every page, including keys'
-             : pages.length ? pages.join(', ') : 'nothing') + '</div>';
-      }).join('')
-    + '</div></details>';
-
-  host.innerHTML = h;
-}
-
-async function mktSaveAccess(userId, btn) {
-  if (btn) { btn.textContent = '…'; btn.disabled = true; }
-  try {
-    const level = document.getElementById('lvl-' + userId).value;
-    const row = {
-      user_id: userId,
-      level: level,
-      can_publish:   document.getElementById('pub-' + userId).checked,
-      can_broadcast: document.getElementById('bc-' + userId).checked,
-      can_spend:     document.getElementById('sp-' + userId).checked,
-      can_manage_keys: document.getElementById('ky-' + userId).checked,
-      granted_by: mktProfile?.id || null,
-      updated_at: new Date().toISOString(),
-    };
-    const { error } = await sb.from('marketing_access').upsert(row, { onConflict: 'user_id' });
-    if (error) { showMktToast('Failed: ' + error.message); return; }
-    showMktToast('Access updated — takes effect on their next sign-in');
-  } catch (e) {
-    showMktToast(e.message);
-  } finally {
-    if (btn) { btn.textContent = 'Save'; btn.disabled = false; }
-  }
-}
 
 async function waWebhookCheck(btn) {
   const out = document.getElementById('wa-register-output');
