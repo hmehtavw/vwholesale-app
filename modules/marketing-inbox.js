@@ -352,7 +352,55 @@ async function inboxPaintMessages(quiet) {
   const ri = document.getElementById('inbox-reply');
   if (ri && draft) { ri.value = draft; ri.style.height = Math.min(ri.scrollHeight, 90) + 'px'; }
   if (ri && !quiet) ri.focus();
+  if (ri && isWa) inboxBindPaste(ri);
   if (_inboxPendingFile) inboxShowChip();
+}
+
+// Paste a screenshot (or any copied image) straight into the reply box.
+// Ctrl+Shift+S / PrtScn puts an image on the clipboard as a File with a
+// generic name — give it something meaningful before it reaches the customer.
+function inboxBindPaste(el) {
+  if (el._vwPasteBound) return;
+  el._vwPasteBound = true;
+
+  el.addEventListener('paste', function (e) {
+    const items = (e.clipboardData || window.clipboardData)?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind !== 'file') continue;
+      const f = items[i].getAsFile();
+      if (!f || !f.type.startsWith('image/')) continue;
+      e.preventDefault();
+      if (f.size > 16 * 1024 * 1024) { showMktToast('Image too large - WhatsApp allows up to 16MB'); return; }
+      const ext = (f.type.split('/')[1] || 'png').split('+')[0];
+      _inboxPendingFile = new File([f], 'screenshot-' + Date.now() + '.' + ext, { type: f.type });
+      inboxShowChip();
+      showMktToast('Screenshot attached - add a caption or press Send');
+      return;
+    }
+  });
+
+  // Drag and drop onto the conversation pane
+  const pane = document.getElementById('inbox-conversation');
+  if (pane && !pane._vwDropBound) {
+    pane._vwDropBound = true;
+    pane.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      pane.style.outline = '2px dashed var(--gold)';
+      pane.style.outlineOffset = '-4px';
+    });
+    pane.addEventListener('dragleave', function () { pane.style.outline = 'none'; });
+    pane.addEventListener('drop', function (e) {
+      e.preventDefault();
+      pane.style.outline = 'none';
+      const f = e.dataTransfer?.files?.[0];
+      if (!f) return;
+      if (f.size > 16 * 1024 * 1024) { showMktToast('File too large - WhatsApp allows up to 16MB'); return; }
+      _inboxPendingFile = f;
+      inboxShowChip();
+      showMktToast('Attached ' + f.name);
+    });
+  }
 }
 
 function inboxSetFilter(ch) {
