@@ -2186,8 +2186,8 @@ async function waQuickAction(type) {
   const actions = {
     quotation: { title:'Quotation Notification', fields:[{l:'Customer phone',id:'qa-phone',p:'9876543210'},{l:'Customer name',id:'qa-name',p:'Ravi Kumar'},{l:'Quotation number',id:'qa-quot',p:'TQ-2026-001'},{l:'Total amount',id:'qa-total',p:'45,000'}] },
     review: { title:'Review Request', fields:[{l:'Customer phone',id:'qa-phone',p:'9876543210'},{l:'Customer name',id:'qa-name',p:'Ravi Kumar'},{l:'Product purchased',id:'qa-product',p:'Italian Marble Tiles'}] },
-    festival: { title:'Festival Greeting', fields:[{l:'Festival name',id:'qa-festival',p:'Diwali'},{l:'Target segment',id:'qa-seg',p:'all',type:'select',opts:['all','contractor','homeowner']}] },
-    contractor: { title:'Contractor Update', fields:[{l:'Contractor phone',id:'qa-phone',p:'9876543210'},{l:'Contractor name',id:'qa-name',p:'Kumar'},{l:'This month earnings',id:'qa-earn',p:'2,500'}] },
+    festival: { title:'Festival Greeting', fields:[{l:'Festival name',id:'qa-festival',p:'Diwali'},{l:'Customer phone',id:'qa-phone',p:'9876543210'},{l:'Customer name',id:'qa-name',p:'Ravi Kumar'}] },
+    contractor: { title:'Contractor Update', fields:[{l:'Contractor phone',id:'qa-phone',p:'9876543210'},{l:'Contractor name',id:'qa-name',p:'Kumar'},{l:'Update message',id:'qa-update',p:'You referred 3 new customers this month'},{l:'Referral earnings',id:'qa-earn',p:'2,500'}] },
   };
 
   const action = actions[type];
@@ -2237,14 +2237,29 @@ async function waQuickSend(btnOrType) {
   document.querySelectorAll('.wa-quick-modal').forEach(e=>e.remove());
 
   // Map quick action types to actual approved Interakt templates
-  // All vassure_* templates have no variables — fixed text approved by Meta
+  // vwholesale_* templates on WABA 1183561931509509. Variable order must match
+  // the approved template exactly — Meta rejects a mismatched parameter count.
+  const val = function(id) { return (document.getElementById(id)?.value || '').trim(); };
   const templateMap = {
-    quotation: { name:'vassure_order_confirmation', values:[] },
-    review:    { name:'vassure_feedback_request',   values:[] },
-    festival:  { name:'vassure_special_event_greetings', values:[] },
-    contractor:{ name:'vassure_bulk_order_assistance', values:[] },
+    // {{1}} name, {{2}} quotation no, {{3}} total
+    quotation: { name:'vwholesale_quotation_ready',
+                 values:[name || 'Customer', val('qa-quot'), val('qa-total')] },
+    // {{1}} name, {{2}} product
+    review:    { name:'vwholesale_feedback_request',
+                 values:[name || 'Customer', val('qa-product') || 'your purchase'] },
+    // {{1}} festival, {{2}} name
+    festival:  { name:'vwholesale_festival_greeting',
+                 values:[val('qa-festival') || 'the festival', name || 'Customer'] },
+    // {{1}} name, {{2}} update, {{3}} earnings
+    contractor:{ name:'vwholesale_contractor_update',
+                 values:[name || 'Customer', val('qa-update'), val('qa-earn')] },
   };
-  const tmpl = templateMap[type] || { name:'vassure_promotional_offer', values:[] };
+  const tmpl = templateMap[type];
+  if (!tmpl) { showMktToast('Unknown quick action: ' + type); return; }
+  if (tmpl.values.some(function(v) { return !v; })) {
+    showMktToast('Please fill every field — Meta rejects templates with empty variables');
+    return;
+  }
 
   const res = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
     method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},

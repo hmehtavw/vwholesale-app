@@ -4490,7 +4490,7 @@ async function runReviewRequestAgent(btn) {
       return;
     }
 
-    let sent = 0;
+    let sent = 0, waSent = 0, waFailed = 0;
     for (const c of customers) {
       // Send email if available
       if (c.email) {
@@ -4500,17 +4500,27 @@ async function runReviewRequestAgent(btn) {
         }).catch(()=>{});
         sent++;
       }
-      // Send WhatsApp if available (uses vassure_feedback_request template)
+      // WhatsApp via vwholesale_feedback_request on WABA 1183561931509509.
+      // {{1}} customer name, {{2}} product. Both must be non-empty or Meta rejects it.
       if (c.phone) {
-        await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
+        const r = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
           method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-          body: JSON.stringify({ action:'send_template', phone:c.phone, template_name:'vassure_feedback_request', body_values:[], language_code:'en' })
-        }).catch(()=>{});
+          body: JSON.stringify({
+            action:'send_template', phone:c.phone,
+            template_name:'vwholesale_feedback_request',
+            body_values:[c.name || 'Customer', 'your recent purchase'],
+            language_code:'en'
+          })
+        }).then(r=>r.json()).catch(()=>({ ok:false }));
+        if (r.ok) waSent++; else waFailed++;
       }
     }
 
-    showMktToast('✅ Review requests sent to ' + sent + ' customers');
-    if (out) out.innerHTML = '<div style="font-size:11px;color:#22c55e">✅ Sent to ' + customers.length + ' recent customers · ' + sent + ' via email</div>';
+    showMktToast('Email: ' + sent + ' · WhatsApp: ' + waSent + (waFailed ? ' (' + waFailed + ' failed)' : ''));
+    if (out) out.innerHTML = '<div style="font-size:11px;color:#22c55e">Sent to ' + customers.length + ' recent customers · '
+      + sent + ' email · ' + waSent + ' WhatsApp'
+      + (waFailed ? '</div><div style="font-size:10px;color:#f59e0b;margin-top:4px">' + waFailed
+         + ' WhatsApp failed — vwholesale_feedback_request may still be in review</div>' : '</div>');
   } catch(e) {
     showMktToast('❌ ' + e.message);
     if (out) out.innerHTML = '<div style="font-size:11px;color:var(--red)">❌ ' + e.message + '</div>';
