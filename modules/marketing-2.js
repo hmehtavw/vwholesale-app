@@ -2265,29 +2265,41 @@ async function waWebhookCheck(btn) {
       body: JSON.stringify({ action: 'check' })
     });
     const d = await res.json();
-    const sa = d.subscribed_apps || {};
-    const as = d.app_subscriptions || {};
-    const ok = function(v) { return v ? '<span style="color:#22c55e">' + v + '</span>' : '<span style="color:#ef4444">missing</span>'; };
+
+    // v5 field names
+    const viaUser = d.subscribed_apps_via_user_token || {};
+    const apps = viaUser.data || [];
+    const appErr = viaUser.error?.message;
+    const phones = (d.phone_numbers_in_waba || {}).data || [];
+    const phoneErr = (d.phone_numbers_in_waba || {}).error?.message;
+
+    const green = function(s) { return '<span style="color:#22c55e">' + s + '</span>'; };
+    const red = function(s) { return '<span style="color:#ef4444">' + s + '</span>'; };
 
     let h = '<div style="background:var(--bg2);border-radius:6px;padding:8px;font-size:11px;line-height:1.8">';
     h += '<div><span style="color:var(--text3)">WABA:</span> ' + (d.waba_id || '-') + '</div>';
+
+    // Check 1: app subscribed to WABA
     h += '<div><span style="color:var(--text3)">App subscribed to WABA:</span> '
-      + (sa.count ? '<span style="color:#22c55e">yes</span>' : '<span style="color:#ef4444">no</span>') + '</div>';
-
-    if (as.readable) {
-      h += '<div><span style="color:var(--text3)">Callback URL:</span> '
-        + (as.callback_url ? '<span style="color:#22c55e">set</span>' : '<span style="color:#ef4444">MISSING</span>') + '</div>';
-      if (as.callback_url) h += '<div style="font-size:9px;color:var(--text3);word-break:break-all">' + as.callback_url + '</div>';
-      h += '<div><span style="color:var(--text3)">Active:</span> ' + (as.active ? '<span style="color:#22c55e">yes</span>' : '<span style="color:#ef4444">no</span>') + '</div>';
-      h += '<div><span style="color:var(--text3)">messages field:</span> '
-        + (as.has_messages ? '<span style="color:#22c55e">subscribed</span>' : '<span style="color:#ef4444">NOT subscribed</span>') + '</div>';
-      if ((as.fields || []).length) h += '<div style="font-size:9px;color:var(--text3)">fields: ' + as.fields.join(', ') + '</div>';
-      if ((as.all_objects || []).length) h += '<div style="font-size:9px;color:var(--text3)">objects: ' + as.all_objects.join(', ') + '</div>';
-    } else {
-      h += '<div style="color:#ef4444">Cannot read app config: ' + (as.error || 'unknown') + '</div>';
+      + (apps.length ? green('yes (' + apps.length + ')') : red(appErr || 'no')) + '</div>';
+    if (apps.length) {
+      h += '<div style="font-size:9px;color:var(--text3)">'
+        + apps.map(function(a) { return a.whatsapp_business_api_data?.name || a.id || JSON.stringify(a); }).join(', ') + '</div>';
     }
-    h += '</div>';
 
+    // Check 2: phone number in WABA
+    h += '<div><span style="color:var(--text3)">Phone numbers in WABA:</span> '
+      + (phones.length ? green(phones.length + '') : red(phoneErr || '0')) + '</div>';
+    phones.forEach(function(p) {
+      h += '<div style="font-size:9px;color:var(--text3)">' + (p.display_phone_number || '?') + ' — id ' + p.id + ' — ' + (p.platform_type || '?') + '</div>';
+    });
+
+    // Check 3: app webhook
+    h += '<div><span style="color:var(--text3)">Callback URL:</span> ' + (d.app_webhook_callback ? green('set') : red('missing')) + '</div>';
+    h += '<div><span style="color:var(--text3)">Active:</span> ' + (d.app_webhook_active ? green('yes') : red('no')) + '</div>';
+    const flds = d.app_webhook_fields || [];
+    h += '<div><span style="color:var(--text3)">messages field:</span> ' + (flds.indexOf('messages') >= 0 ? green('subscribed') : red('no')) + '</div>';
+    h += '</div>';
     h += '<button onclick="waInstallWebhook(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Reinstall webhook (force re-verify)</button>';
     if (out) out.innerHTML = h;
   } catch (e) {
