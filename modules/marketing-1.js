@@ -34,6 +34,55 @@ const sb = supabase.createClient(MKT_SB_URL, MKT_SB_KEY, {
   }
 });
 let mktProfile = null;
+let mktAccess = { level: 'none', extra_pages: [] };
+
+// Page bundles per level. Deliberately small at the bottom: an inbox agent
+// should see an inbox, not a marketing suite.
+const MKT_LEVEL_PAGES = {
+  none:      [],
+  inbox:     ['inbox'],
+  creator:   ['command','content','poster','calendar','greetings','brand','brand-profile','inbox'],
+  publisher: ['command','cmo','content','poster','calendar','greetings','approvals','social','gbp','whatsapp',
+              'brand','brand-profile','inbox','email','web-push','reviews'],
+  ads:       ['command','ads','analytics','segments'],
+  analyst:   ['command','analytics','reviews','competitors','segments','audit'],
+  manager:   ['command','cmo','campaigns','poster','content','calendar','approvals','greetings','social','gbp',
+              'whatsapp','ads','local-seo','website-seo','reviews','analytics','competitors','segments',
+              'agents','brand-profile','brand','inbox','email','web-push'],
+  admin:     null, // null = everything
+};
+
+const MKT_LEVEL_LABELS = {
+  none:'No access', inbox:'Inbox agent', creator:'Content creator', publisher:'Publisher',
+  ads:'Ads manager', analyst:'Analyst (read-only)', manager:'Marketing manager', admin:'Admin (full)',
+};
+
+function mktCan(page) {
+  if (mktAccess.level === 'admin') return true;
+  const base = MKT_LEVEL_PAGES[mktAccess.level] || [];
+  return base.indexOf(page) >= 0 || (mktAccess.extra_pages || []).indexOf(page) >= 0;
+}
+function mktCanPublish()   { return mktAccess.level === 'admin' || !!mktAccess.can_publish; }
+function mktCanBroadcast() { return mktAccess.level === 'admin' || !!mktAccess.can_broadcast; }
+function mktCanSpend()     { return mktAccess.level === 'admin' || !!mktAccess.can_spend; }
+function mktCanKeys()      { return mktAccess.level === 'admin' || !!mktAccess.can_manage_keys; }
+
+// Hide nav the user cannot use, and land them somewhere they can.
+function mktApplyAccess() {
+  document.querySelectorAll('.mkt-nav-item[data-page]').forEach(function (b) {
+    if (!mktCan(b.dataset.page)) b.style.display = 'none';
+  });
+  document.querySelectorAll('.mkt-nav-section').forEach(function (sec) {
+    let n = sec.nextElementSibling, any = false;
+    while (n && !n.classList.contains('mkt-nav-section')) {
+      if (n.classList && n.classList.contains('mkt-nav-item') && n.style.display !== 'none') any = true;
+      n = n.nextElementSibling;
+    }
+    if (!any) sec.style.display = 'none';
+  });
+  const badge = document.getElementById('mkt-user-role');
+  if (badge) badge.textContent = MKT_LEVEL_LABELS[mktAccess.level] || mktAccess.level;
+}
 let aiPaused = false;
 
 // ── AUTH ──
@@ -70,10 +119,18 @@ async function mktLogin() {
 
     if (!profile) { showErr('Profile not found. Login with Staff Portal first.'); return; }
 
-    const OK_ROLES = ['admin','owner','manager','marketing','store_manager','floor_manager','sales_head'];
-    if (!OK_ROLES.includes(profile.role)) {
+    // Access is granted per-user in marketing_access, not by job title.
+    // profiles.role=admin implies full access so we can never lock ourselves out.
+    const { data: acc } = await sb.from('marketing_access').select('*')
+      .eq('user_id', uid).maybeSingle().then(r=>r, ()=>({data:null}));
+
+    mktAccess = acc || (profile.role === 'admin'
+      ? { level:'admin', can_publish:true, can_broadcast:true, can_spend:true, can_manage_keys:true, extra_pages:[] }
+      : { level:'none', extra_pages:[] });
+
+    if (mktAccess.level === 'none') {
       await sb.auth.signOut();
-      showErr('Role "' + profile.role + '" has no marketing access');
+      showErr('You do not have marketing access. Ask an admin to grant it.');
       return;
     }
 
@@ -90,7 +147,8 @@ function showMktApp() {
   document.getElementById('mkt-login').style.display = 'none';
   document.getElementById('mkt-layout').style.display = 'flex';
   const infoEl = document.getElementById('mkt-user-info');
-  if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (mktProfile?.role||'');
+  if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (MKT_LEVEL_LABELS[mktAccess.level] || mktAccess.level);
+  mktApplyAccess();
   startClock();
   // loadAIPauseStatus — reserved for future AI pause/resume control
 
@@ -150,6 +208,15 @@ const PAGE_TITLES = {
 
 function mktNav(page) {
   document.querySelectorAll('.mkt-nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+  if (!mktCan(page)) {
+    setContent('<div style="text-align:center;padding:60px 20px">'
+      + '<div style="font-size:34px;margin-bottom:10px">\uD83D\uDD12</div>'
+      + '<div style="font-size:15px;font-weight:700;margin-bottom:6px">No access to this page</div>'
+      + '<div style="font-size:12px;color:var(--text3)">Your level: <b>'
+      + (MKT_LEVEL_LABELS[mktAccess.level] || mktAccess.level) + '</b><br>Ask an admin if you need this.</div></div>');
+    document.getElementById('mkt-page-title').textContent = 'Restricted';
+    return;
+  }
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
   const renderers = {
     poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO, campaigns: renderCampaigns,
