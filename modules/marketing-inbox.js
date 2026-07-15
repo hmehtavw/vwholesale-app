@@ -1,21 +1,33 @@
 // ── UNIFIED INBOX ──
-// One inbox for WhatsApp / Instagram / Facebook / Website.
-// WhatsApp is live. The others render as soon as their webhooks deliver —
-// no code changes needed here, only permissions + App Review on Meta's side.
+// WhatsApp: live, two-way, with media.
+// Website:  live via the website-chat edge function.
+// Instagram / Facebook: webhook handlers exist, but Meta gates inbound DMs
+// behind App Review (pages_messaging / instagram_manage_messages). They render
+// as explicitly unavailable rather than pretending to work.
 
 const INBOX_CHANNELS = {
   whatsapp:  { icon: '💬', label: 'WhatsApp',  color: '#25D366' },
-  instagram: { icon: '📸', label: 'Instagram', color: '#e1306c' },
-  facebook:  { icon: '👤', label: 'Facebook',  color: '#1877f2' },
   website:   { icon: '🌐', label: 'Website',   color: '#3b82f6' },
+  instagram: { icon: '📸', label: 'Instagram', color: '#e1306c', blocked: 'Requires instagram_manage_messages + Meta App Review' },
+  facebook:  { icon: '👤', label: 'Facebook',  color: '#1877f2', blocked: 'Requires pages_messaging + Meta App Review' },
 };
 
 let _inboxFilter = 'all';
-let _inboxActive = null;   // { channel, contact_id }
+let _inboxActive = null;
 let _inboxTimer = null;
+let _inboxSearch = '';
+let _inboxLastUnread = -1;
+let _inboxPendingFile = null;
+const _inboxOrigTitle = typeof document !== 'undefined' ? document.title : '';
 
-function inboxChannelMeta(ch) {
+function inboxMeta(ch) {
   return INBOX_CHANNELS[ch] || { icon: '❓', label: ch || 'Unknown', color: 'var(--text3)' };
+}
+
+function inboxEsc(s) {
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : String(s);
+  return d.innerHTML;
 }
 
 function inboxTimeAgo(ts) {
@@ -36,194 +48,422 @@ function inboxWindowOpen(lastInboundAt) {
   return (Date.now() - new Date(lastInboundAt).getTime()) < 24 * 3600 * 1000;
 }
 
-async function renderInbox() {
-  setContent('<div style="text-align:center;padding:40px;color:var(--text3)">Loading inbox…</div>');
-  await inboxDraw();
-  // Light polling so new messages appear without a manual refresh
-  if (_inboxTimer) clearInterval(_inboxTimer);
-  _inboxTimer = setInterval(() => {
-    if (document.getElementById('inbox-thread-list')) inboxDraw(true);
-    else { clearInterval(_inboxTimer); _inboxTimer = null; }
-  }, 20000);
+function inboxWindowLeft(lastInboundAt) {
+  const ms = 24 * 3600 * 1000 - (Date.now() - new Date(lastInboundAt).getTime());
+  if (ms <= 0) return null;
+  const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
 }
 
-async function inboxDraw(quiet) {
-  let q = sb.from('inbox_contacts').select('*').order('last_message_at', { ascending: false }).limit(100);
-  if (_inboxFilter !== 'all') q = q.eq('channel', _inboxFilter);
-  const { data: threads } = await q.then(r => r, () => ({ data: [] }));
+function inboxTick(status) {
+  if (status === 'read') return '<span style="color:#53bdeb">&#10003;&#10003;</span>';
+  if (status === 'delivered') return '<span style="color:var(--text3)">&#10003;&#10003;</span>';
+  if (status === 'failed') return '<span style="color:#ef4444">&#10005;</span>';
+  return '<span style="color:var(--text3)">&#10003;</span>';
+}
 
-  const totalUnread = (threads || []).reduce((a, t) => a + (t.unread_count || 0), 0);
+function inboxNotify(total) {
+  // Chime only on a genuine increase, and never on first paint.
+  if (_inboxLastUnread >= 0 && total > _inboxLastUnread) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880; g.gain.value = 0.05;
+      o.start(); o.stop(ctx.currentTime + 0.12);
+    } catch (_) { /* autoplay blocked pre-interaction — not worth surfacing */ }
+  }
+  _inboxLastUnread = total;
+  document.title = total > 0 ? '(' + total + ') ' + _inboxOrigTitle : _inboxOrigTitle;
+  const nav = document.querySelector('[data-page="inbox"]');
+  if (nav) {
+    let b = nav.querySelector('.inbox-badge');
+    if (total > 0) {
+      if (!b) {
+        b = document.createElement('span');
+        b.className = 'inbox-badge';
+        b.style.cssText = 'background:#ef4444;color:#fff;border-radius:9px;font-size:9px;padding:1px 6px;margin-left:6px;font-weight:700';
+        nav.appendChild(b);
+      }
+      b.textContent = total;
+    } else if (b) b.remove();
+  }
+}
 
-  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
-    + '<div><h3 style="font-size:16px;font-weight:900">📥 Inbox'
-    + (totalUnread ? ' <span class="badge badge-red" style="margin-left:6px">' + totalUnread + ' unread</span>' : '')
-    + '</h3>'
-    + '<div style="font-size:12px;color:var(--text3)">All customer messages in one place</div></div>'
-    + '<button onclick="inboxDraw()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Refresh</button></div>';
+async function renderInbox() {
+  setContent('<div style="text-align:center;padding:40px;color:var(--text3)">Loading inbox...</div>');
+  await inboxDraw();
+  if (_inboxTimer) clearInterval(_inboxTimer);
+  _inboxTimer = setInterval(function () {
+    if (document.getElementById('inbox-thread-list')) inboxRefresh();
+    else { clearInterval(_inboxTimer); _inboxTimer = null; }
+  }, 15000);
+}
 
-  // Channel filter pills
+// Non-destructive update. The old version called setContent() on every poll,
+// which wiped whatever you were typing and made Refresh appear to do nothing
+// because the DOM was rebuilt identically.
+async function inboxRefresh() {
+  const threads = await inboxFetchThreads();
+  inboxPaintList(threads);
+  if (_inboxActive) await inboxPaintMessages(true);
+}
+
+async function inboxFetchThreads() {
+  const { data: all } = await sb.from('inbox_contacts').select('*')
+    .order('last_message_at', { ascending: false }).limit(300)
+    .then(function (r) { return r; }, function () { return { data: [] }; });
+  window._inboxAllThreads = all || [];
+  inboxNotify((all || []).reduce(function (a, t) { return a + (t.unread_count || 0); }, 0));
+
+  let threads = all || [];
+  if (_inboxFilter !== 'all') threads = threads.filter(function (t) { return t.channel === _inboxFilter; });
+  if (_inboxSearch) {
+    const s = _inboxSearch.toLowerCase();
+    threads = threads.filter(function (t) {
+      return (t.contact_name || '').toLowerCase().indexOf(s) >= 0 || (t.contact_id || '').indexOf(s) >= 0;
+    });
+  }
+  window._inboxThreads = threads;
+  return threads;
+}
+
+async function inboxDraw() {
+  const threads = await inboxFetchThreads();
+
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:10px;flex-wrap:wrap">'
+    + '<div><h3 style="font-size:16px;font-weight:900">Inbox</h3>'
+    + '<div style="font-size:12px;color:var(--text3)">All customer conversations in one place</div></div>'
+    + '<div style="display:flex;gap:6px;align-items:center">'
+    + '<input id="inbox-search" class="mkt-form-input" placeholder="Search name or number..." '
+    + 'value="' + inboxEsc(_inboxSearch) + '" style="font-size:11px;width:180px;padding:6px 10px">'
+    + '<button onclick="inboxDraw()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">Refresh</button>'
+    + '</div></div>';
+
+  const counts = {};
+  (window._inboxAllThreads || []).forEach(function (t) {
+    counts[t.channel] = (counts[t.channel] || 0) + (t.unread_count || 0);
+  });
+
   html += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
-  const pills = [['all', 'All', '📥']].concat(
-    Object.keys(INBOX_CHANNELS).map(k => [k, INBOX_CHANNELS[k].label, INBOX_CHANNELS[k].icon])
-  );
+  const pills = [['all', 'All', '\uD83D\uDCE5']].concat(
+    Object.keys(INBOX_CHANNELS).map(function (k) { return [k, INBOX_CHANNELS[k].label, INBOX_CHANNELS[k].icon]; }));
   pills.forEach(function (p) {
     const on = _inboxFilter === p[0];
+    const c = p[0] === 'all'
+      ? Object.keys(counts).reduce(function (a, k) { return a + counts[k]; }, 0)
+      : (counts[p[0]] || 0);
+    const blocked = INBOX_CHANNELS[p[0]] && INBOX_CHANNELS[p[0]].blocked;
     html += '<button onclick="inboxSetFilter(\'' + p[0] + '\')" class="mkt-btn ' + (on ? 'mkt-btn-primary' : 'mkt-btn-ghost') + '" '
-      + 'style="font-size:11px;padding:5px 12px">' + p[2] + ' ' + p[1] + '</button>';
+      + 'style="font-size:11px;padding:5px 12px' + (blocked ? ';opacity:.5' : '') + '"'
+      + (blocked ? ' title="' + inboxEsc(blocked) + '"' : '') + '>'
+      + p[2] + ' ' + p[1]
+      + (c ? ' <span style="background:#ef4444;color:#fff;border-radius:8px;padding:0 5px;font-size:9px;margin-left:3px">' + c + '</span>' : '')
+      + '</button>';
   });
   html += '</div>';
 
-  html += '<div style="display:grid;grid-template-columns:280px 1fr;gap:12px;align-items:start">';
-
-  // ── Thread list ──
-  html += '<div id="inbox-thread-list" class="mkt-card" style="padding:0;max-height:520px;overflow-y:auto">';
-  if (!(threads || []).length) {
-    html += '<div style="text-align:center;padding:30px 16px;color:var(--text3)">'
-      + '<div style="font-size:26px;margin-bottom:6px">📭</div>'
-      + '<div style="font-size:12px;font-weight:600;margin-bottom:4px">No messages yet</div>'
-      + '<div style="font-size:11px">When a customer messages you, it appears here</div></div>';
-  } else {
-    window._inboxThreads = threads;
-    threads.forEach(function (t, i) {
-      const m = inboxChannelMeta(t.channel);
-      const active = _inboxActive && _inboxActive.channel === t.channel && _inboxActive.contact_id === t.contact_id;
-      const unread = t.unread_count || 0;
-      html += '<div onclick="inboxOpen(' + i + ')" style="display:flex;gap:10px;padding:10px 12px;cursor:pointer;'
-        + 'border-bottom:1px solid var(--border);' + (active ? 'background:var(--bg3)' : '') + '">'
-        + '<div style="font-size:18px;flex-shrink:0">' + m.icon + '</div>'
-        + '<div style="flex:1;min-width:0">'
-        + '<div style="font-size:12px;font-weight:' + (unread ? '700' : '600') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-        + (t.contact_name || '+' + t.contact_id) + '</div>'
-        + '<div style="font-size:10px;color:' + m.color + '">' + m.label + '</div>'
-        + '</div>'
-        + '<div style="text-align:right;flex-shrink:0">'
-        + '<div style="font-size:10px;color:var(--text3)">' + inboxTimeAgo(t.last_message_at) + '</div>'
-        + (unread ? '<div style="background:#ef4444;color:#fff;border-radius:9px;font-size:9px;padding:1px 6px;margin-top:3px;display:inline-block">' + unread + '</div>' : '')
-        + '</div></div>';
-    });
-  }
-  html += '</div>';
-
-  // ── Conversation pane ──
-  html += '<div id="inbox-conversation" class="mkt-card" style="min-height:520px;display:flex;flex-direction:column">'
-    + '<div style="margin:auto;text-align:center;color:var(--text3)">'
-    + '<div style="font-size:26px;margin-bottom:6px">💬</div>'
-    + '<div style="font-size:12px">Select a conversation</div></div></div>';
-
-  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:300px 1fr;gap:12px;align-items:start">'
+    + '<div id="inbox-thread-list" class="mkt-card" style="padding:0;max-height:560px;overflow-y:auto"></div>'
+    + '<div id="inbox-conversation" class="mkt-card" style="height:560px;display:flex;flex-direction:column;padding:12px"></div>'
+    + '</div>';
 
   setContent(html);
 
-  // Re-open the active thread after a redraw so polling doesn't close it
-  if (_inboxActive) {
-    const idx = (threads || []).findIndex(t => t.channel === _inboxActive.channel && t.contact_id === _inboxActive.contact_id);
-    if (idx >= 0) await inboxOpen(idx, true);
+  const si = document.getElementById('inbox-search');
+  if (si) {
+    si.oninput = function () {
+      _inboxSearch = this.value.trim();
+      clearTimeout(window._inboxSearchT);
+      window._inboxSearchT = setTimeout(async function () {
+        inboxPaintList(await inboxFetchThreads());
+      }, 250);
+    };
   }
+
+  inboxPaintList(threads);
+  if (_inboxActive) await inboxPaintMessages();
+  else inboxEmptyPane();
 }
 
-function inboxSetFilter(ch) {
-  _inboxFilter = ch;
-  inboxDraw();
+function inboxEmptyPane() {
+  const p = document.getElementById('inbox-conversation');
+  if (p) p.innerHTML = '<div style="margin:auto;text-align:center;color:var(--text3)">'
+    + '<div style="font-size:30px;margin-bottom:8px">\uD83D\uDCAC</div>'
+    + '<div style="font-size:12px">Select a conversation</div></div>';
 }
 
-async function inboxOpen(index, keepScroll) {
+function inboxPaintList(threads) {
+  const el = document.getElementById('inbox-thread-list');
+  if (!el) return;
+  if (!threads.length) {
+    el.innerHTML = '<div style="text-align:center;padding:34px 16px;color:var(--text3)">'
+      + '<div style="font-size:28px;margin-bottom:6px">\uD83D\uDCED</div>'
+      + '<div style="font-size:12px;font-weight:600;margin-bottom:4px">'
+      + (_inboxSearch ? 'No matches' : 'No messages yet') + '</div>'
+      + (_inboxSearch ? '' : '<div style="font-size:11px">Customer messages appear here</div>') + '</div>';
+    return;
+  }
+  el.innerHTML = threads.map(function (t, i) {
+    const m = inboxMeta(t.channel);
+    const active = _inboxActive && _inboxActive.channel === t.channel && _inboxActive.contact_id === t.contact_id;
+    const unread = t.unread_count || 0;
+    return '<div onclick="inboxOpen(' + i + ')" style="display:flex;gap:10px;padding:11px 12px;cursor:pointer;'
+      + 'border-bottom:1px solid var(--border);border-left:3px solid ' + (active ? m.color : 'transparent') + ';'
+      + (active ? 'background:var(--bg3)' : (unread ? 'background:rgba(37,211,102,.05)' : '')) + '">'
+      + '<div style="width:34px;height:34px;border-radius:50%;background:' + m.color + '22;display:flex;'
+      + 'align-items:center;justify-content:center;font-size:15px;flex-shrink:0">' + m.icon + '</div>'
+      + '<div style="flex:1;min-width:0">'
+      + '<div style="font-size:12.5px;font-weight:' + (unread ? '700' : '600') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+      + inboxEsc(t.contact_name || '+' + t.contact_id) + '</div>'
+      + '<div style="font-size:10px;color:' + m.color + '">' + m.label + '</div></div>'
+      + '<div style="text-align:right;flex-shrink:0">'
+      + '<div style="font-size:9.5px;color:var(--text3)">' + inboxTimeAgo(t.last_message_at) + '</div>'
+      + (unread ? '<div style="background:#ef4444;color:#fff;border-radius:9px;font-size:9px;padding:1px 6px;margin-top:4px;display:inline-block;font-weight:700">' + unread + '</div>' : '')
+      + '</div></div>';
+  }).join('');
+}
+
+async function inboxOpen(index) {
   const t = (window._inboxThreads || [])[index];
   if (!t) return;
-  _inboxActive = { channel: t.channel, contact_id: t.contact_id };
+  _inboxActive = { channel: t.channel, contact_id: t.contact_id, id: t.id };
+  _inboxPendingFile = null;
+  await inboxPaintMessages();
+  inboxPaintList(window._inboxThreads || []);
+}
 
+async function inboxPaintMessages(quiet) {
   const pane = document.getElementById('inbox-conversation');
-  if (!pane) return;
-  if (!keepScroll) pane.innerHTML = '<div style="margin:auto;color:var(--text3);font-size:12px">Loading…</div>';
+  if (!pane || !_inboxActive) return;
+
+  const t = (window._inboxThreads || []).find(function (x) {
+    return x.channel === _inboxActive.channel && x.contact_id === _inboxActive.contact_id;
+  }) || _inboxActive;
 
   const { data: msgs } = await sb.from('inbox_messages').select('*')
-    .eq('channel', t.channel).eq('contact_id', t.contact_id)
-    .order('created_at', { ascending: true }).limit(200)
-    .then(r => r, () => ({ data: [] }));
+    .eq('channel', _inboxActive.channel).eq('contact_id', _inboxActive.contact_id)
+    .order('created_at', { ascending: true }).limit(300)
+    .then(function (r) { return r; }, function () { return { data: [] }; });
 
-  // Mark as read
-  if (t.unread_count > 0) {
+  // Keep an in-progress draft alive across a poll repaint.
+  const draft = quiet ? (document.getElementById('inbox-reply') ? document.getElementById('inbox-reply').value : '') : '';
+  const box0 = document.getElementById('inbox-msgs');
+  const wasAtBottom = !box0 || (box0.scrollHeight - box0.scrollTop - box0.clientHeight < 60);
+
+  if ((t.unread_count || 0) > 0) {
     await sb.from('inbox_messages').update({ is_read: true })
       .eq('channel', t.channel).eq('contact_id', t.contact_id).eq('is_read', false)
-      .then(() => {}, () => {});
-    await sb.from('inbox_contacts').update({ unread_count: 0 }).eq('id', t.id).then(() => {}, () => {});
+      .then(function () {}, function () {});
+    if (t.id) await sb.from('inbox_contacts').update({ unread_count: 0 }).eq('id', t.id)
+      .then(function () {}, function () {});
+    t.unread_count = 0;
   }
 
-  const m = inboxChannelMeta(t.channel);
-  const open = inboxWindowOpen(t.last_inbound_at);
+  const m = inboxMeta(t.channel);
+  const isWa = t.channel === 'whatsapp';
+  const open = isWa ? inboxWindowOpen(t.last_inbound_at) : true;
+  const left = (isWa && open) ? inboxWindowLeft(t.last_inbound_at) : null;
 
-  let h = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:10px">'
-    + '<span style="font-size:20px">' + m.icon + '</span>'
-    + '<div style="flex:1"><div style="font-size:13px;font-weight:700">' + (t.contact_name || '+' + t.contact_id) + '</div>'
-    + '<div style="font-size:10px;color:' + m.color + '">' + m.label + ' · +' + t.contact_id + '</div></div>'
-    + (t.channel === 'whatsapp'
-        ? '<span class="badge ' + (open ? 'badge-green' : 'badge-yellow') + '" style="font-size:9px">'
-          + (open ? '24h window open' : 'window closed') + '</span>'
-        : '')
+  let h = '<div style="display:flex;align-items:center;gap:10px;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:8px">'
+    + '<div style="width:36px;height:36px;border-radius:50%;background:' + m.color + '22;display:flex;align-items:center;justify-content:center;font-size:16px">' + m.icon + '</div>'
+    + '<div style="flex:1"><div style="font-size:13px;font-weight:700">' + inboxEsc(t.contact_name || '+' + t.contact_id) + '</div>'
+    + '<div style="font-size:10px;color:' + m.color + '">' + m.label + (isWa ? ' \u00B7 +' + inboxEsc(t.contact_id) : '') + '</div></div>'
+    + (isWa ? '<span class="badge ' + (open ? 'badge-green' : 'badge-yellow') + '" style="font-size:9px">'
+        + (open ? '24h window \u00B7 ' + left + ' left' : 'window closed') + '</span>' : '')
     + '</div>';
 
-  // Messages
-  h += '<div id="inbox-msgs" style="flex:1;overflow-y:auto;max-height:360px;display:flex;flex-direction:column;gap:6px;padding:4px">';
-  if (!(msgs || []).length) {
+  h += '<div id="inbox-msgs" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding:6px 2px">';
+  if (!msgs || !msgs.length) {
     h += '<div style="margin:auto;color:var(--text3);font-size:12px">No messages in this thread</div>';
   } else {
+    let lastDay = '';
     msgs.forEach(function (msg) {
+      const day = new Date(msg.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+      if (day !== lastDay) {
+        lastDay = day;
+        h += '<div style="text-align:center;margin:8px 0"><span style="background:var(--bg3);color:var(--text3);'
+          + 'font-size:9.5px;padding:3px 10px;border-radius:10px">' + day + '</span></div>';
+      }
       const out = msg.direction === 'out';
       h += '<div style="display:flex;justify-content:' + (out ? 'flex-end' : 'flex-start') + '">'
-        + '<div style="max-width:75%;background:' + (out ? 'rgba(37,211,102,.12)' : 'var(--bg3)') + ';'
-        + 'border-radius:10px;padding:8px 10px">'
-        + '<div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">'
-        + (msg.message_text || '') + '</div>'
-        + '<div style="font-size:9px;color:var(--text3);margin-top:3px;text-align:right">'
+        + '<div style="max-width:72%;background:' + (out ? 'rgba(37,211,102,.14)' : 'var(--bg3)') + ';'
+        + 'border-radius:10px;' + (out ? 'border-bottom-right-radius:3px' : 'border-bottom-left-radius:3px') + ';padding:7px 9px">';
+
+      if (msg.media_url) {
+        const mime = msg.media_mime || '';
+        if (mime.indexOf('image') === 0 || msg.media_type === 'image') {
+          h += '<img src="' + inboxEsc(msg.media_url) + '" style="max-width:220px;border-radius:6px;display:block;cursor:pointer" onclick="window.open(this.src,\'_blank\')">';
+        } else if (mime.indexOf('video') === 0 || msg.media_type === 'video') {
+          h += '<video src="' + inboxEsc(msg.media_url) + '" controls style="max-width:220px;border-radius:6px;display:block"></video>';
+        } else if (mime.indexOf('audio') === 0 || msg.media_type === 'audio') {
+          h += '<audio src="' + inboxEsc(msg.media_url) + '" controls style="max-width:215px"></audio>';
+        } else {
+          h += '<a href="' + inboxEsc(msg.media_url) + '" target="_blank" style="display:flex;align-items:center;gap:7px;color:var(--text2);text-decoration:none;padding:3px 0">'
+            + '<span style="font-size:20px">\uD83D\uDCC4</span><span style="font-size:11.5px">'
+            + inboxEsc(msg.media_filename || 'Download file') + '</span></a>';
+        }
+      } else if (msg.media_id) {
+        h += '<div style="font-size:11px;color:var(--text3);font-style:italic">Media unavailable</div>';
+      }
+
+      if (msg.message_text) {
+        h += '<div style="font-size:12.5px;color:var(--text2);line-height:1.55;white-space:pre-wrap;word-break:break-word'
+          + (msg.media_url ? ';margin-top:5px' : '') + '">' + inboxEsc(msg.message_text) + '</div>';
+      }
+
+      h += '<div style="font-size:9px;color:var(--text3);margin-top:3px;text-align:right">'
         + new Date(msg.created_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
-        + (out ? ' · ' + (msg.status || 'sent') : '') + '</div>'
-        + '</div></div>';
+        + (out ? ' ' + inboxTick(msg.status) : '') + '</div></div></div>';
     });
   }
   h += '</div>';
 
-  // Reply box
-  h += '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">';
-  if (t.channel === 'whatsapp' && !open) {
-    h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:10px;font-size:11px;color:var(--text2)">'
-      + '<b style="color:#f59e0b">Free replies unavailable</b><br>'
-      + 'Meta only allows free-form replies within 24 hours of the customer\'s last message. '
-      + 'This window has closed — send an approved template instead.'
-      + '<button onclick="mktNav(\'whatsapp\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 10px;margin-top:8px">Go to Templates</button>'
-      + '</div>';
-  } else if (t.channel === 'whatsapp') {
-    h += '<div style="display:flex;gap:6px">'
-      + '<input id="inbox-reply" class="mkt-form-input" placeholder="Type a reply…" style="flex:1;font-size:12px" '
-      + 'onkeydown="if(event.key===\'Enter\')inboxSendReply(this)">'
-      + '<button onclick="inboxSendReply(this)" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:8px 14px">Send</button>'
+  h += '<div style="border-top:1px solid var(--border);padding-top:9px;margin-top:8px">';
+  if (m.blocked) {
+    h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px;font-size:11px;color:var(--text2)">'
+      + '<b style="color:#f59e0b">Replies unavailable on ' + m.label + '</b><br>' + inboxEsc(m.blocked) + '</div>';
+  } else if (isWa && !open) {
+    h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px;font-size:11px;color:var(--text2)">'
+      + '<b style="color:#f59e0b">24-hour window closed</b><br>'
+      + 'Meta only allows free replies within 24h of the customer\'s last message. Send an approved template instead.'
+      + '<button onclick="mktNav(\'whatsapp\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 10px;margin-top:7px">Go to Templates</button>'
       + '</div>';
   } else {
-    h += '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px">'
-      + 'Replying on ' + m.label + ' is not connected yet</div>';
+    h += '<div id="inbox-file-chip" style="display:none;align-items:center;gap:7px;background:var(--bg3);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px"></div>'
+      + '<div style="display:flex;gap:6px;align-items:flex-end">';
+    if (isWa) {
+      h += '<input type="file" id="inbox-file" style="display:none" accept="image/*,application/pdf,video/mp4,.doc,.docx,.xls,.xlsx" onchange="inboxPickFile(this)">'
+        + '<button onclick="document.getElementById(\'inbox-file\').click()" class="mkt-btn mkt-btn-ghost" style="font-size:15px;padding:7px 10px" title="Attach image or file">\uD83D\uDCCE</button>';
+    }
+    h += '<textarea id="inbox-reply" class="mkt-form-input" rows="1" placeholder="Type a reply..." '
+      + 'style="flex:1;font-size:12.5px;resize:none;max-height:90px;padding:8px 10px" '
+      + 'oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,90)+\'px\'" '
+      + 'onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();inboxSendReply(this)}"></textarea>'
+      + '<button onclick="inboxSendReply(this)" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:9px 15px">Send</button></div>'
+      + '<div style="font-size:9px;color:var(--text3);margin-top:4px">Enter to send \u00B7 Shift+Enter for a new line</div>';
   }
   h += '</div>';
 
   pane.innerHTML = h;
+
   const box = document.getElementById('inbox-msgs');
-  if (box) box.scrollTop = box.scrollHeight;
+  if (box && wasAtBottom) box.scrollTop = box.scrollHeight;
+  const ri = document.getElementById('inbox-reply');
+  if (ri && draft) { ri.value = draft; ri.style.height = Math.min(ri.scrollHeight, 90) + 'px'; }
+  if (ri && !quiet) ri.focus();
+  if (_inboxPendingFile) inboxShowChip();
+}
+
+function inboxSetFilter(ch) {
+  _inboxFilter = ch;
+  _inboxActive = null;
+  inboxDraw();
+}
+
+function inboxPickFile(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  if (f.size > 16 * 1024 * 1024) {
+    showMktToast('File too large - WhatsApp allows up to 16MB');
+    input.value = '';
+    return;
+  }
+  _inboxPendingFile = f;
+  inboxShowChip();
+}
+
+function inboxShowChip() {
+  const chip = document.getElementById('inbox-file-chip');
+  if (!chip || !_inboxPendingFile) return;
+  const kb = Math.round(_inboxPendingFile.size / 1024);
+  chip.style.display = 'flex';
+  chip.innerHTML = '<span style="font-size:14px">\uD83D\uDCCE</span>'
+    + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+    + inboxEsc(_inboxPendingFile.name) + ' <span style="color:var(--text3)">(' + kb + ' KB)</span></span>';
+  const x = document.createElement('button');
+  x.className = 'mkt-btn mkt-btn-ghost';
+  x.style.cssText = 'font-size:10px;padding:2px 7px';
+  x.textContent = 'x';
+  x.onclick = function () {
+    _inboxPendingFile = null;
+    chip.style.display = 'none';
+    const fi = document.getElementById('inbox-file');
+    if (fi) fi.value = '';
+  };
+  chip.appendChild(x);
 }
 
 async function inboxSendReply(btn) {
   const input = document.getElementById('inbox-reply');
-  const message = (input?.value || '').trim();
-  if (!message || !_inboxActive) return;
+  const message = input ? input.value.trim() : '';
+  if (!_inboxActive) return;
+  if (!message && !_inboxPendingFile) return;
   if (btn) btn.disabled = true;
 
   try {
+    // Website chat: staff replies live in our own table; the widget polls for them.
+    if (_inboxActive.channel === 'website') {
+      const now = new Date().toISOString();
+      await sb.from('inbox_messages').insert({
+        channel: 'website', direction: 'out', contact_id: _inboxActive.contact_id,
+        message_text: message, status: 'sent', is_read: true,
+      });
+      await sb.from('inbox_contacts').update({ last_message_at: now })
+        .eq('channel', 'website').eq('contact_id', _inboxActive.contact_id)
+        .then(function () {}, function () {});
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+      await inboxRefresh();
+      return;
+    }
+
+    // WhatsApp media. Sent with the caption attached so it is one message, not two.
+    if (_inboxPendingFile) {
+      const f = _inboxPendingFile;
+      showMktToast('Uploading ' + f.name + '...');
+      const path = 'out/' + Date.now() + '-' + f.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const up = await sb.storage.from('inbox-media').upload(path, f, { contentType: f.type, upsert: false });
+      if (up.error) { showMktToast('Upload failed: ' + up.error.message); return; }
+      const pub = sb.storage.from('inbox-media').getPublicUrl(path);
+
+      let kind = 'document';
+      if (f.type.indexOf('image') === 0) kind = 'image';
+      else if (f.type.indexOf('video') === 0) kind = 'video';
+      else if (f.type.indexOf('audio') === 0) kind = 'audio';
+
+      const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({
+          action: 'send_media', phone: _inboxActive.contact_id,
+          media_url: pub.data.publicUrl, media_type: kind,
+          caption: message || undefined,
+          filename: kind === 'document' ? f.name : undefined,
+        })
+      });
+      const d = await res.json();
+      if (!d.ok) { showMktToast(d.error || 'Send failed'); return; }
+
+      _inboxPendingFile = null;
+      const fi = document.getElementById('inbox-file'); if (fi) fi.value = '';
+      const chip = document.getElementById('inbox-file-chip'); if (chip) chip.style.display = 'none';
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+      await inboxRefresh();
+      return;
+    }
+
     const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'send_text', phone: _inboxActive.contact_id, message })
+      body: JSON.stringify({ action: 'send_text', phone: _inboxActive.contact_id, message: message })
     });
     const d = await res.json();
     if (d.ok) {
-      if (input) input.value = '';
-      await inboxDraw(true);
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+      await inboxRefresh();
     } else {
-      showMktToast(d.error || 'Send failed');
+      const err = d.error || 'Send failed';
+      showMktToast(/131047|24 hour|re-?engagement/i.test(err)
+        ? '24h window closed - use an approved template instead'
+        : err);
     }
   } catch (e) {
     showMktToast(e.message);
