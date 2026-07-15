@@ -2294,6 +2294,75 @@ async function waEvidence(btn) {
   }
 }
 
+async function waAudit(btn) {
+  const out = document.getElementById('wa-register-output');
+  if (btn) { btn.textContent = 'Auditing...'; btn.disabled = true; }
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">Auditing token identity...</div>';
+  try {
+    const r = await fetch(MKT_SB_URL + '/functions/v1/wa-audit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'audit' })
+    });
+    const d = await r.json();
+    const match = d.MATCHES_NEW_APP;
+    let h = '<div style="background:var(--bg2);border-radius:6px;padding:10px;font-size:11px;line-height:1.9">';
+    h += '<div style="font-weight:700;color:var(--gold);margin-bottom:6px">TOKEN AUDIT</div>';
+    h += '<div><span style="color:var(--text3)">Token belongs to app:</span> '
+      + (match ? '<span style="color:#22c55e">' : '<span style="color:#ef4444">')
+      + (d.token_app_name || '?') + ' (' + (d.token_app_id || 'unknown') + ')</span></div>';
+    h += '<div><span style="color:var(--text3)">Expected app:</span> V Wholesale WA (2156593291691763)</div>';
+    h += '<div><span style="color:var(--text3)">Match:</span> '
+      + (match ? '<span style="color:#22c55e">YES</span>' : '<span style="color:#ef4444">NO — THIS IS THE PROBLEM</span>') + '</div>';
+    h += '<div><span style="color:var(--text3)">Type:</span> ' + (d.token_type || '?') + '</div>';
+    h += '<div><span style="color:var(--text3)">Valid:</span> ' + (d.is_valid ? 'yes' : 'no') + '</div>';
+    h += '<div><span style="color:var(--text3)">Expires:</span> ' + (d.expires_at === 0 ? 'never' : d.expires_at) + '</div>';
+    h += '<div><span style="color:var(--text3)">System user:</span> ' + JSON.stringify(d.system_user || {}) + '</div>';
+    h += '<div style="font-size:9px;color:var(--text3);margin-top:4px">scopes: ' + ((d.scopes || []).join(', ') || 'none') + '</div>';
+    h += '</div>';
+    if (!match) {
+      h += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:6px;padding:8px;font-size:11px;color:var(--text2);margin-top:8px;line-height:1.6">'
+        + '<b style="color:#ef4444">Root cause candidate</b><br>'
+        + 'Our system-user token was issued for a different app. Messages sent with it '
+        + 'are attributed to that app, and its webhook events route there — not to '
+        + 'V Wholesale WA. That would explain why neither inbound messages nor outbound '
+        + 'status webhooks arrive, while Meta\'s dashboard test (which targets our callback '
+        + 'directly) does.<br><br>'
+        + '<b>Fix:</b> Business Settings → Users → System users → Vwholesale api → '
+        + 'Add Assets → Apps → V Wholesale WA (Full control) → then Generate New Token '
+        + 'selecting <b>V Wholesale WA</b>, with whatsapp_business_messaging + '
+        + 'whatsapp_business_management.</div>';
+    } else {
+      h += '<button onclick="waRebind(this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;margin-top:8px">Controlled rebind (unsub + resub)</button>';
+    }
+    if (out) out.innerHTML = h;
+  } catch (e) {
+    if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.textContent = '🔬 Token Audit'; btn.disabled = false; }
+  }
+}
+
+async function waRebind(btn) {
+  if (btn) { btn.textContent = 'Rebinding...'; btn.disabled = true; }
+  const out = document.getElementById('wa-register-output');
+  try {
+    const r = await fetch(MKT_SB_URL + '/functions/v1/wa-audit', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'rebind' })
+    });
+    const d = await r.json();
+    if (d.refused) { showMktToast(d.error); return; }
+    const after = JSON.stringify(d.after_subscribe || {});
+    showMktToast('Rebind done. Subscribed now: ' + after);
+    if (out) out.innerHTML = '<pre style="white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg2);padding:8px;border-radius:6px">'
+      + JSON.stringify(d, null, 2) + '</pre>';
+  } catch (e) {
+    showMktToast(e.message);
+  } finally {
+    if (btn) { btn.textContent = 'Controlled rebind (unsub + resub)'; btn.disabled = false; }
+  }
+}
+
 async function waPhoneWebhook(btn) {
   const out = document.getElementById('wa-register-output');
   if (btn) { btn.textContent = 'Reading...'; btn.disabled = true; }
@@ -2424,47 +2493,10 @@ async function waRemoveOldApp(btn) {
 }
 
 async function waInstallWebhook(btn) {
-  if (btn) { btn.textContent = 'Installing...'; btn.disabled = true; }
-  const out = document.getElementById('wa-register-output');
-  try {
-    // Step 1: Install/update app-level webhook subscription
-    const r1 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'install_webhook' })
-    });
-    const d1 = await r1.json();
-    // Step 2: Subscribe app to WABA (separate call)
-    const r2 = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'subscribe' })
-    });
-    const d2 = await r2.json();
-    const msg = 'Webhook: ' + (d1.ok ? 'OK' : d1.error) + ' | WABA sub: ' + (d2.ok ? 'OK' : JSON.stringify(d2));
-    showMktToast(msg);
-    if (out) out.innerHTML = '<div style="font-size:10px;background:var(--bg2);padding:6px;border-radius:4px;margin-top:6px">' + msg + '</div>';
-    waWebhookCheck();
-  } catch (e) {
-    showMktToast(e.message);
-  } finally {
-    if (btn) { btn.textContent = 'Reinstall webhook (force re-verify)'; btn.disabled = false; }
-  }
-}
-
-async function waWebhookSubscribe(btn) {
-  if (btn) { btn.textContent = 'Subscribing...'; btn.disabled = true; }
-  try {
-    const res = await fetch(MKT_SB_URL + '/functions/v1/wa-webhook-check', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'subscribe' })
-    });
-    const d = await res.json();
-    showMktToast(d.ok ? 'App subscribed to WABA' : (d.error || 'Subscribe failed'));
-    waWebhookCheck();
-  } catch (e) {
-    showMktToast(e.message);
-  } finally {
-    if (btn) { btn.textContent = 'Subscribe app to WABA'; btn.disabled = false; }
-  }
+  // DISABLED: this used the system-user token, which belongs to the OLD app.
+  // Running it re-subscribed the wrong app to the WABA and undid the fix.
+  // Use Token Audit -> Rebind instead; that path refuses on app-ID mismatch.
+  showMktToast('Disabled — use Token Audit. This button used a token from the wrong app.');
 }
 
 async function waCloudStatus(btn) {
