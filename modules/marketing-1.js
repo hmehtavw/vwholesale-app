@@ -159,7 +159,7 @@ function mktNav(page) {
     reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
     segments: renderSegments, greetings: renderGreetings, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
     integrations: renderIntegrations, audit: renderAudit, settings: renderSettings,
-    'web-push': renderWebPush, 'email': renderEmail
+    'web-push': renderWebPush, 'email': renderEmail, 'inbox': renderInbox
   };
   if (renderers[page]) renderers[page]();
   else renderComingSoon(PAGE_TITLES[page] || page);
