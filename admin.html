@@ -490,7 +490,9 @@ async function impFieldVisitRun() {
   const fvLog=(msg,col)=>{ log.innerHTML+=`<div style="color:${col||'var(--t3)'}">${msg}</div>`; log.scrollTop=log.scrollHeight; };
   try {
     fvLog('Loading customer phones…');
-    const cpRes=await fetch(`${SB_URL}/rest/v1/customers?select=id,phone&phone=not.is.null&limit=2000`,{headers:H});
+    // Use anon key only — avoids expired session JWT issue
+    const anonH={'apikey':ANON,'Authorization':'Bearer '+ANON};
+    const cpRes=await fetch(`${SB_URL}/rest/v1/customers?select=id,phone&phone=not.is.null&limit=2000`,{headers:anonH});
     const cpBody=await cpRes.json();
     if(!cpRes.ok) throw new Error('Customer fetch: '+JSON.stringify(cpBody).slice(0,120));
     const cp=Array.isArray(cpBody)?cpBody:[];
@@ -505,7 +507,7 @@ async function impFieldVisitRun() {
       const batch=linked.slice(i,i+BATCH);
       const res=await fetch(`${SB_URL}/rest/v1/field_visits_import`,{
         method:'POST',
-        headers:{...H,'Prefer':'return=minimal'},
+        headers:{...anonH,'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(batch)
       });
       if(!res.ok){
