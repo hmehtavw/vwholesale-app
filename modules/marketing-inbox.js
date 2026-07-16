@@ -627,3 +627,5 @@ async function inboxSendTemplate(templateName, varCount) {
   }
 }
 window.inboxSendTemplate = inboxSendTemplate;
+
+window.renderInbox = renderInbox;

@@ -4797,3 +4797,20 @@ async function editFeedPost(id) {
   showMktToast(`Post ${newStatus}`);
   await loadFeedPosts();
 }
+
+// Expose render functions on window for lazy nav lookup
+window.renderAudit = renderAudit;
+window.renderSettings = renderSettings;
+window.renderPosterStudio = renderPosterStudio;
+window.renderCampaigns = renderCampaigns;
+window.renderSocial = renderSocial;
+window.renderWhatsApp = renderWhatsApp;
+window.renderAds = renderAds;
+window.renderLocalSEO = renderLocalSEO;
+window.renderWebsiteSEO = renderWebsiteSEO;
+window.renderReviews = renderReviews;
+window.renderCompetitors = renderCompetitors;
+window.renderSegments = renderSegments;
+window.renderGreetings = renderGreetings;
+window.renderEmail = renderEmail;
+window.renderWebPush = renderWebPush;

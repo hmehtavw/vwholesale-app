@@ -4865,3 +4865,16 @@ async function generateYouTubeSEO(btn) {
   } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
   finally { if (btn) { btn.textContent='Optimize'; btn.disabled=false; } }
 }
+// Expose render functions on window for lazy nav lookup
+window.renderComingSoon = renderComingSoon;
+window.renderApprovals = renderApprovals;
+window.renderGBP = renderGBP;
+window.renderAgents = renderAgents;
+window.renderBrandProfile = renderBrandProfile;
+window.renderBrand = renderBrand;
+window.renderIntegrations = renderIntegrations;
+window.renderCommandCentre = renderCommandCentre;
+window.renderAICMO = renderAICMO;
+window.renderContentStudio = renderContentStudio;
+window.renderCalendar = renderCalendar;
+window.renderAnalytics = renderAnalytics;
