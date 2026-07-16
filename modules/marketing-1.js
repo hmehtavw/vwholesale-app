@@ -245,16 +245,17 @@ function mktNav(page) {
   }
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
   const renderers = {
-    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO, bi: renderBI, campaigns: renderCampaigns,
-    content: renderContentStudio, calendar: renderCalendar, approvals: renderApprovals,
-    social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
-    ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
-    reviews: renderReviews, analytics: renderAnalytics, competitors: renderCompetitors,
-    segments: renderSegments, greetings: renderGreetings, agents: renderAgents, 'brand-profile': renderBrandProfile, brand: renderBrand,
-    integrations: renderIntegrations, audit: renderAudit, settings: renderSettings,
-    'web-push': renderWebPush, 'email': renderEmail, 'inbox': renderInbox
+    poster: 'renderPosterStudio', command: 'renderCommandCentre', cmo: 'renderAICMO', bi: 'renderBI', campaigns: 'renderCampaigns',
+    content: 'renderContentStudio', calendar: 'renderCalendar', approvals: 'renderApprovals',
+    social: 'renderSocial', gbp: 'renderGBP', whatsapp: 'renderWhatsApp',
+    ads: 'renderAds', 'local-seo': 'renderLocalSEO', 'website-seo': 'renderWebsiteSEO',
+    reviews: 'renderReviews', analytics: 'renderAnalytics', competitors: 'renderCompetitors',
+    segments: 'renderSegments', greetings: 'renderGreetings', agents: 'renderAgents', 'brand-profile': 'renderBrandProfile', brand: 'renderBrand',
+    integrations: 'renderIntegrations', audit: 'renderAudit', settings: 'renderSettings',
+    'web-push': 'renderWebPush', 'email': 'renderEmail', 'inbox': 'renderInbox'
   };
-  if (renderers[page]) renderers[page]();
+  const fn = renderers[page] ? window[renderers[page]] : null;
+  if (typeof fn === 'function') fn();
   else renderComingSoon(PAGE_TITLES[page] || page);
 }
 
