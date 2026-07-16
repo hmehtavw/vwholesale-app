@@ -117,7 +117,11 @@ async function mktLogin() {
     const profRes = await sb.from('profiles').select('*').eq('id', uid).single().then(r=>r, ()=>({data:null,error:'not found'}));
     const profile = profRes?.data;
 
-    if (!profile) { showErr('Profile not found. Login with Staff Portal first.'); return; }
+    if (!profile) {
+      showErr('Profile not found for this login. Sign in to the Staff Portal first. '
+        + '(uid ' + String(uid).slice(0, 8) + ')');
+      return;
+    }
 
     // Access reuses the staff portal's permission system (profiles.permissions),
     // which already has a 'marketing' key and an admin UI. An earlier version of
@@ -128,7 +132,11 @@ async function mktLogin() {
 
     if (!hasMarketing) {
       await sb.auth.signOut();
-      showErr('You do not have marketing access. An admin can grant it in Staff Portal -> Settings -> Permissions.');
+      // Say WHY, not just no — otherwise diagnosing a lockout means reading source.
+      showErr('No marketing access for ' + (profile.name || 'this user')
+        + '. Role: "' + (profile.role || 'none') + '", status: "' + (profile.status || '?') + '"'
+        + ', permissions: [' + perms.join(', ') + ']. '
+        + 'An admin can grant "Marketing" in Staff Portal -> Settings -> Permissions.');
       return;
     }
 
