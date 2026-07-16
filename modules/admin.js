@@ -3216,10 +3216,187 @@ function triggerExcelImport(entityType) {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.xlsx,.xls,.csv';
-  input.onchange = (e) => handleExcelFileSelected(e.target.files[0]);
+  input.onchange = (e) => {
+    if (entityType === 'field_visits') handleFieldVisitsFile(e.target.files[0]);
+    else handleExcelFileSelected(e.target.files[0]);
+  };
   input.click();
 }
 window.triggerExcelImport = triggerExcelImport;
+
+// ── FIELD VISITS IMPORT (Google Forms export) ──
+async function handleFieldVisitsFile(file) {
+  if (!file) return;
+  const sheet = document.getElementById('bottom-sheet');
+  sheet.innerHTML = `<div class="sheet-handle"></div><h3>🏗️ Field Visit Import</h3><p class="sheet-meta">Reading file…</p>`;
+  sheet.classList.add('open');
+  document.getElementById('sheet-overlay').classList.add('open');
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const ws = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { showToast('No data rows found', 'warn'); return; }
+
+      // Stage mapping
+      const STAGE_MAP = {
+        'Just Started Pillars': 'structure',
+        'Basement Completed': 'structure',
+        'Brick Walls Completed': 'plumbing_roughin',
+        'Slabs Completed': 'plumbing_roughin',
+        'Wiring & Plumbing Completed': 'flooring',
+        'Tiles/Marbles/Flooring Completed': 'bathroom',
+        'Almost all completed': 'painting'
+      };
+
+      const VALID_PHONE = /^[6-9][0-9]{9}$/;
+
+      // Process rows
+      const processed = rows.map(r => {
+        const rawPhone = String(r['Contact Number 1'] || '').trim().replace(/\D/g, '').slice(-10);
+        const phone = VALID_PHONE.test(rawPhone) ? rawPhone : null;
+        const stageRaw = String(r['Project Feedback'] || '').trim();
+        const stage = STAGE_MAP[stageRaw] || null;
+
+        // Parse requirements
+        const reqRaw = String(r['Client Requirement '] || r['Client Requirement'] || '').trim();
+        const requirements = reqRaw ? reqRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+        // Parse timestamp
+        let visitedAt = null;
+        try {
+          const ts = r['Timestamp'];
+          if (ts) visitedAt = new Date(ts).toISOString();
+        } catch { /**/ }
+
+        const visitDateRaw = r['DATE'] || r['Date'];
+        let visitDate = null;
+        if (visitDateRaw) {
+          try { visitDate = new Date(visitDateRaw).toISOString().split('T')[0]; } catch { /**/ }
+        }
+
+        return {
+          visited_at: visitedAt,
+          visit_date: visitDate,
+          area_name: String(r['Area Name'] || '').trim() || null,
+          contact_name: String(r['Contact Name 1'] || '').trim() || null,
+          contact_phone: phone,
+          profession: String(r['Profession'] || '').trim() || null,
+          person_onsite: String(r['Person Onsite/Offsite'] || '').toLowerCase().includes('on site'),
+          project_type: String(r['Project Details'] || '').trim() || null,
+          requirements_raw: reqRaw || null,
+          requirements: requirements.length ? requirements : null,
+          construction_stage: stage,
+          stage_raw: stageRaw || null,
+          visited_by_name: String(r['Visit done by:'] || '').trim() || null,
+          visited_by_email: String(r['Email Address'] || '').trim() || null,
+          project_name: String(r['Name of the Company, Project or Office'] || '').trim() || null,
+          city: String(r['Select City'] || 'Vijayawada').trim() || 'Vijayawada',
+          maps_url: String(r['Project Location Link'] || '').trim() || null,
+          comments: String(r['Comments '] || r['Comments'] || '').trim() || null,
+          raw: r
+        };
+      }).filter(r => r.visited_at || r.visit_date); // skip truly empty rows
+
+      // Show preview
+      const valid = processed.filter(r => r.contact_phone);
+      const withStage = processed.filter(r => r.construction_stage);
+      sheet.innerHTML = `
+        <div class="sheet-handle"></div>
+        <h3>🏗️ Field Visit Import</h3>
+        <p class="sheet-meta">Ready to import ${processed.length.toLocaleString()} visits</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0">
+          <div style="background:#1e293b;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:#22c55e">${processed.length.toLocaleString()}</div>
+            <div style="font-size:11px;color:#94a3b8">Total rows</div>
+          </div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:#f59e0b">${valid.length.toLocaleString()}</div>
+            <div style="font-size:11px;color:#94a3b8">Valid phones</div>
+          </div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:#3b82f6">${withStage.length.toLocaleString()}</div>
+            <div style="font-size:11px;color:#94a3b8">Stage mapped</div>
+          </div>
+          <div style="background:#1e293b;border-radius:8px;padding:12px;text-align:center">
+            <div style="font-size:22px;font-weight:900;color:#a78bfa">${(processed.length - valid.length).toLocaleString()}</div>
+            <div style="font-size:11px;color:#94a3b8">No phone (kept)</div>
+          </div>
+        </div>
+        <p style="font-size:11px;color:#94a3b8;margin-bottom:12px">
+          Existing rows will be skipped (import is additive). Phone numbers matched to existing customers automatically.
+        </p>
+        <button class="btn-primary full-width" id="fvi-confirm-btn">✅ Import ${processed.length.toLocaleString()} Visits</button>
+        <button class="btn-secondary full-width" style="margin-top:8px" onclick="closeSheet()">Cancel</button>
+      `;
+      sheet.classList.add('open');
+      document.getElementById('sheet-overlay').classList.add('open');
+
+      document.getElementById('fvi-confirm-btn').onclick = () => confirmFieldVisitImport(processed);
+
+    } catch (err) {
+      console.error('Field visit import error:', err);
+      showToast('Could not read file: ' + err.message, 'warn');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function confirmFieldVisitImport(rows) {
+  const btn = document.getElementById('fvi-confirm-btn');
+  if (btn) { btn.textContent = '⏳ Importing…'; btn.disabled = true; }
+
+  try {
+    // First: get customer phone map for linking
+    const { data: custPhones } = await sb.from('customers')
+      .select('id, phone').not('phone', 'is', null).limit(2000);
+    const phoneToCustomer = {};
+    for (const c of (custPhones || [])) {
+      if (c.phone) phoneToCustomer[c.phone.replace(/\D/g, '').slice(-10)] = c.id;
+    }
+
+    // Link customer IDs
+    const linked = rows.map(r => ({
+      ...r,
+      customer_id: r.contact_phone ? (phoneToCustomer[r.contact_phone] || null) : null,
+      raw: JSON.stringify(r.raw)
+    }));
+
+    // Insert in batches of 200 (sequential, not parallel)
+    let inserted = 0;
+    let errors = 0;
+    const BATCH = 200;
+    for (let i = 0; i < linked.length; i += BATCH) {
+      const batch = linked.slice(i, i + BATCH);
+      const { error } = await sb.from('field_visits_import').insert(batch);
+      if (error) { errors += batch.length; console.error('Batch error:', error); }
+      else inserted += batch.length;
+      if (btn) btn.textContent = `⏳ ${inserted + errors}/${linked.length}…`;
+    }
+
+    const linkedCount = linked.filter(r => r.customer_id).length;
+    showToast(`✅ Imported ${inserted} visits · ${linkedCount} linked to customers · ${errors} errors`, 'success');
+
+    const sheet = document.getElementById('bottom-sheet');
+    if (sheet) sheet.innerHTML = `
+      <div class="sheet-handle"></div>
+      <h3>✅ Import Complete</h3>
+      <div style="text-align:center;padding:20px">
+        <div style="font-size:40px;margin-bottom:12px">🏗️</div>
+        <div style="font-size:22px;font-weight:900;color:#22c55e;margin-bottom:4px">${inserted.toLocaleString()} visits imported</div>
+        <div style="font-size:13px;color:#94a3b8">${linkedCount} matched to existing customers</div>
+        <div style="font-size:13px;color:#94a3b8">${errors > 0 ? errors + ' rows skipped (errors)' : 'No errors'}</div>
+      </div>
+      <button class="btn-primary full-width" onclick="closeSheet()">Done</button>
+    `;
+  } catch (err) {
+    showToast('Import failed: ' + err.message, 'warn');
+    if (btn) { btn.textContent = '✅ Import'; btn.disabled = false; }
+  }
+}
 
 function handleExcelFileSelected(file) {
   if (!file) return;
@@ -3400,6 +3577,7 @@ window.VW_EXCEL = {
         <button class="btn-primary full-width" onclick="triggerExcelImport('staff')">👥 Import Staff / HR Data</button>
         <button class="btn-secondary full-width" onclick="triggerExcelImport('inventory')">📦 Import Products / Inventory</button>
         <button class="btn-secondary full-width" onclick="triggerExcelImport('customers')">🤝 Import Customers</button>
+        <button class="btn-secondary full-width" onclick="triggerExcelImport('field_visits')" style="background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff">🏗️ Import Field Visit Data (Google Forms)</button>
         <button class="btn-sm full-width" style="text-align:center" onclick="downloadImportTemplate('staff')">📥 Download Staff Template</button>
         <button class="btn-sm full-width" style="text-align:center" onclick="downloadImportTemplate('inventory')">📥 Download Inventory Template</button>
       </div>
