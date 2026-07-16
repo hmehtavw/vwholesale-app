@@ -84,3 +84,28 @@ else:
         for w in warnings[:3]:
             print(f"  🟡 {w}")
     sys.exit(0)
+
+# ── MARKETING JS SYNTAX CHECK ──
+print("\n[4] Marketing JS syntax check...")
+marketing_files = [
+    'modules/marketing-1.js',
+    'modules/marketing-2.js', 
+    'modules/marketing-inbox.js',
+    'modules/marketing-strategy.js',
+    'modules/marketing-bi.js',
+]
+root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+syntax_ok = True
+for mf in marketing_files:
+    path = os.path.join(root, mf)
+    if not os.path.exists(path):
+        continue
+    result = subprocess.run(['node', '--check', path], capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"  ❌ {mf}: {result.stdout.strip()}")
+        syntax_ok = False
+    else:
+        print(f"  ✅ {mf}")
+if not syntax_ok:
+    print("\n❌ MARKETING JS SYNTAX ERRORS — fix before pushing")
+    sys.exit(1)
