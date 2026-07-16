@@ -560,6 +560,13 @@ async function impRun() {
     if (unmatched) impLog(`  ${unmatched} lines could not be matched to a customer`, 'err');
     if (uncat) impLog(`  ${uncat} lines have an HSN code with no category mapped`, 'err');
 
+    // Link + categorise in SQL. The edge function's own name lookup silently
+    // truncated at Supabase's 1000-row default, leaving 45% of lines unmatched.
+    // SQL has no such cap.
+    impLog('Linking lines to customers and categorising…');
+    const rep = await sbFetch('rpc/repair_import', { method: 'POST', body: '{}' });
+    if (rep) impLog(`  ${rep.linked} linked · ${rep.recategorised} categorised`, 'ok');
+
     impLog('Rolling up spend and deriving construction stage…');
     res = await fetch(FN, { method: 'POST', headers: H, body: JSON.stringify({ action: 'finalise' }) });
     d = await res.json();
