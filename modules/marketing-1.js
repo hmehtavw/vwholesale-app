@@ -3539,12 +3539,31 @@ async function saveEditCalendarItem(id) {
 
   // Update the calendar item
   await sb.from('content_calendar').update({
-    topic, notes, content_type:type, is_reel:type==='reel', status:'planned', updated_at:new Date().toISOString()
+    topic, notes, content_type:type, is_reel:type==='reel',
+    platform: type==='reel'
+      ? ['instagram_feed','facebook_post','threads','youtube']
+      : ['instagram_feed','facebook_post','threads'],
+    status:'planned', updated_at:new Date().toISOString()
   }).eq('id', id);
 
-  showMktToast('✅ Saved — generating content…');
-  // Auto-generate content
-  await quickCreateFromCalendar(topic, type, 'bilingual');
+  showMktToast('⏳ Generating caption + image + sending WhatsApp approval…');
+
+  // Trigger pipeline for this specific item
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'generate_single', calendar_id: parseInt(id)})
+    });
+    const data = await res.json();
+    if(data.ok) {
+      showMktToast('✅ Done! Check WhatsApp 9038010175 for approval link');
+    } else {
+      showMktToast('⚠️ ' + (data.error||'Generation failed'));
+    }
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+  }
+  renderCalendar();
 }
 
 async function saveEditCalendarItemOnly(id) {
