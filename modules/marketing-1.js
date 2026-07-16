@@ -223,7 +223,7 @@ async function mktSignOut() {
 
 // ── NAVIGATION ──
 const PAGE_TITLES = {
-  command: 'Command Centre', cmo: 'AI CMO', campaigns: 'Campaigns',
+  command: 'Command Centre', cmo: 'AI CMO', bi: 'Business Intelligence', campaigns: 'Campaigns',
   content: 'Content Studio', calendar: 'Content Calendar', approvals: 'Approvals',
   social: 'Social Media', gbp: 'Google Business Profile', whatsapp: 'WhatsApp',
   ads: 'Advertising', 'local-seo': 'Local SEO', 'website-seo': 'Website SEO',
@@ -245,7 +245,7 @@ function mktNav(page) {
   }
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
   const renderers = {
-    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO, campaigns: renderCampaigns,
+    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO, bi: renderBI, campaigns: renderCampaigns,
     content: renderContentStudio, calendar: renderCalendar, approvals: renderApprovals,
     social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
     ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
@@ -2217,7 +2217,10 @@ async function renderCommandCentre() {
   <div class="mkt-card" id="bi-strip" style="margin-bottom:0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700">📊 Business Intelligence</div>
-      <button onclick="loadBIStrip()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">↻ Refresh</button>
+      <div style="display:flex;gap:6px">
+        <button onclick="mktNav('bi')" style="background:none;border:none;color:var(--gold);font-size:10px;cursor:pointer;font-weight:700">View Full →</button>
+        <button onclick="loadBIStrip()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">↻</button>
+      </div>
     </div>
     <div id="bi-strip-content" style="font-size:11px;color:var(--text3)">Loading…</div>
   </div>
