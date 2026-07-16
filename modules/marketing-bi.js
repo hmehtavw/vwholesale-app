@@ -431,8 +431,15 @@ async function biSendWhatsApp(stage, category) {
     let sent = 0, failed = 0;
     for (const c of customers) {
       // Build body_values — replace null (customer name) with actual name
+      // Telugu name format: "B SRIKANTH REDDY" — first token is initial, use second
+      const nameParts = (c.name || '').trim().split(/\s+/);
+      const firstName = nameParts.length > 1 && nameParts[0].length <= 2
+        ? nameParts[1]  // skip single-letter initial, use given name
+        : nameParts[0] || 'Customer';
+      const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+
       const bodyVals = (window._biVarNames||[]).map((v,i) => {
-        if (v === 'customer name') return c.name?.split(' ')[0] || 'Customer';
+        if (v === 'customer name') return displayName;
         const el = document.getElementById('wa-var-'+i);
         return el?.value || v;
       });
@@ -449,8 +456,13 @@ async function biSendWhatsApp(stage, category) {
         })
       }).then(r=>r.json()).catch(()=>({ok:false,error:'Network error'}));
 
-      if (r.ok) sent++;
-      else { failed++; waLog(`⚠️ ${c.name}: ${r.error||'failed'}`, '#f59e0b'); }
+      if (r.ok) {
+        sent++;
+        waLog(`✅ ${displayName} (${c.phone})`, '#22c55e');
+      } else {
+        failed++;
+        waLog(`⚠️ ${displayName}: ${r.error||'failed'}`, '#f59e0b');
+      }
 
       if (btn) btn.textContent = `⏳ ${sent+failed}/${customers.length}…`;
     }
