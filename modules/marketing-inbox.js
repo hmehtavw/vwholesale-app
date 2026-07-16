@@ -330,7 +330,6 @@ async function inboxPaintMessages(quiet) {
       + '<div style="display:grid;gap:6px" id="inbox-tmpl-list">Loading templates…</div>'
       + '</div>';
   } else {
-  } else {
     h += '<div id="inbox-file-chip" style="display:none;align-items:center;gap:7px;background:var(--bg3);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px"></div>'
       + '<div style="display:flex;gap:6px;align-items:flex-end">';
     if (isWa) {
