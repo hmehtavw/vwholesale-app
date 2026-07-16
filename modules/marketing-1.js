@@ -388,7 +388,7 @@ async function renderApprovals() {
       <div class="mkt-empty-icon">✅</div>
       <div class="mkt-empty-title">All Clear</div>
       <div style="font-size:12px;color:var(--text3)">No pending approvals. Run the AI CMO to generate recommendations.</div>
-      <button class="mkt-btn mkt-btn-primary" onclick="mktNav('cmo')" style="margin-top:16px">🧠 Run AI CMO</button>
+      <button class="mkt-btn mkt-btn-primary" onclick="mktNav('cmo');setTimeout(()=>generateCMOBrief(),400)" style="margin-top:16px">🧠 Run AI CMO</button>
     </div>
   </div>` : `
   <div style="display:grid;gap:10px">
