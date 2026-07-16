@@ -486,21 +486,31 @@ async function impFieldVisitRun() {
   const btn=document.getElementById('imp-fv-go');
   const log=document.getElementById('imp-fv-log');
   btn.disabled=true; btn.textContent='Importing…'; log.innerHTML='';
+  const H={'Content-Type':'application/json','apikey':ANON,'Authorization':`Bearer ${_adminSession?.access_token||ANON}`};
   const fvLog=(msg,col)=>{ log.innerHTML+=`<div style="color:${col||'var(--t3)'}">${msg}</div>`; log.scrollTop=log.scrollHeight; };
   try {
     fvLog('Loading customer phones…');
-    const {data:cp}=await sb.from('customers').select('id,phone').not('phone','is',null).limit(2000);
+    const cpRes=await fetch(`${SB_URL}/rest/v1/customers?select=id,phone&phone=not.is.null&limit=2000`,{headers:H});
+    const cp=await cpRes.json();
     const pm={};
     for(const c of (cp||[])) if(c.phone) pm[c.phone.replace(/\D/g,'').slice(-10)]=c.id;
     fvLog(`${Object.keys(pm).length} customers loaded`);
+
     let inserted=0,skipped=0;
     const linked=_impFVRows.map(r=>({...r,customer_id:r.contact_phone?(pm[r.contact_phone]||null):null}));
     const BATCH=200;
     for(let i=0;i<linked.length;i+=BATCH){
       const batch=linked.slice(i,i+BATCH);
-      const {error}=await sb.from('field_visits_import').insert(batch);
-      if(error){skipped+=batch.length;fvLog(`Batch ${Math.floor(i/BATCH)+1} error: ${error.message}`,'#f59e0b');}
-      else inserted+=batch.length;
+      const res=await fetch(`${SB_URL}/rest/v1/field_visits_import`,{
+        method:'POST',
+        headers:{...H,'Prefer':'return=minimal'},
+        body:JSON.stringify(batch)
+      });
+      if(!res.ok){
+        const err=await res.text();
+        skipped+=batch.length;
+        fvLog(`Batch ${Math.floor(i/BATCH)+1} error: ${err.slice(0,120)}`,'#f59e0b');
+      } else inserted+=batch.length;
       btn.textContent=`Importing… ${inserted+skipped}/${linked.length}`;
     }
     const linkedCount=linked.filter(r=>r.customer_id).length;
