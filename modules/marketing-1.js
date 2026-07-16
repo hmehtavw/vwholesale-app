@@ -3204,7 +3204,31 @@ async function csPublishAll() {
 
   await navigator.clipboard.writeText(text).catch(()=>{});
 
-  // Save channel posts
+  // Track per-channel results for the summary
+  const results = {}; // channel -> {ok, url, error}
+
+  // --- AUTO-PUBLISH: Threads ---
+  if (channels.includes('threads')) {
+    try {
+      const threadsText = adaptedVersions['threads']?.text || text;
+      const payload = imageUrl
+        ? { action:'publish_image', text:threadsText, image_url:imageUrl }
+        : { action:'publish_text',  text:threadsText };
+      const r = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify(payload)
+      }).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+      results['threads'] = r.ok ? {ok:true, url:r.url} : {ok:false, error:r.error||'Unknown error'};
+    } catch(e) {
+      results['threads'] = {ok:false, error:e.message};
+    }
+  }
+
+  // --- MANUAL channels: Instagram, Facebook, GBP (API pending or quota=0) ---
+  // These open in a new tab; staff posts manually
+  const manualChannels = channels.filter(ch => !['threads'].includes(ch));
+
+  // Save channel posts to DB
   if (window._csCurrentPostId) {
     const channelRows = channels.map(ch => ({
       content_post_id: window._csCurrentPostId,
@@ -3212,25 +3236,39 @@ async function csPublishAll() {
       adapted_text: adaptedVersions[ch]?.text || text,
       image_url: imageUrl,
       image_size: adaptedVersions[ch]?.size || '1:1',
-      status: 'pending'
+      status: results[ch]?.ok ? 'published' : (results[ch]?.ok === false ? 'failed' : 'pending'),
+      published_at: results[ch]?.ok ? new Date().toISOString() : null,
+      platform_post_url: results[ch]?.url || null
     }));
     await sb.from('channel_posts').insert(channelRows).then(()=>{}).catch(()=>{});
     await sb.from('content_posts').update({status:'published',approved_at:new Date().toISOString()}).eq('id',window._csCurrentPostId);
   }
 
+  // Build result summary
+  const threadsResult = results['threads'];
   const el = document.getElementById('cs-verify-result');
   if (el) el.innerHTML = `
     <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.25);border-radius:10px;padding:14px">
-      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">📋 Content saved + text copied!</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Post manually to each channel below. Image: click Open to view/download.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:11px;text-decoration:none;padding:8px 12px">📍 Open GBP ↗</a>
-        <a href="https://www.instagram.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">📸 Instagram ↗</a>
-        <a href="https://www.facebook.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">👤 Facebook ↗</a>
-        ${imageUrl?`<a href="${imageUrl}" download target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">⬇ Download Image</a>`:''}
-      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:8px">📤 Publishing complete</div>
+      ${threadsResult ? `
+        <div style="font-size:12px;margin-bottom:8px">
+          🧵 Threads: ${threadsResult.ok
+            ? `<span style="color:#22c55e">✅ Posted${threadsResult.url ? ` — <a href="${threadsResult.url}" target="_blank" style="color:var(--gold)">View post ↗</a>` : ''}</span>`
+            : `<span style="color:var(--red)">❌ Failed — ${threadsResult.error}</span>`}
+        </div>` : ''}
+      ${manualChannels.length ? `
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px">Text copied to clipboard. Post manually to:</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${manualChannels.includes('gbp')||manualChannels.includes('google_business')
+            ? `<a href="https://business.google.com/posts" target="_blank" class="mkt-btn mkt-btn-primary" style="font-size:11px;text-decoration:none;padding:8px 12px">📍 GBP ↗</a>` : ''}
+          ${manualChannels.includes('instagram_feed')
+            ? `<a href="https://www.instagram.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">📸 Instagram ↗</a>` : ''}
+          ${manualChannels.includes('facebook_post')
+            ? `<a href="https://www.facebook.com" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">👤 Facebook ↗</a>` : ''}
+          ${imageUrl ? `<a href="${imageUrl}" download target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:11px;text-decoration:none;padding:8px 12px">⬇ Download Image</a>` : ''}
+        </div>` : ''}
     </div>`;
-  showMktToast('✅ Published and saved to all channels');
+  showMktToast(threadsResult?.ok ? '✅ Threads posted! Manual channels copied.' : '✅ Content saved — post manually');
 }
 
 async function renderCalendar() {
@@ -4566,54 +4604,90 @@ function expandReview(id) {
 async function runReviewRequestAgent(btn) {
   if (btn) { btn.textContent='⏳ Running…'; btn.disabled=true; }
   const out = document.getElementById('review-request-output');
-  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Finding recent customers without review request…</div>';
+  if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">⏳ Finding eligible customers…</div>';
   try {
-    // Get customers who purchased in last 7-30 days but haven't had review request sent
-    const sevenDaysAgo = new Date(Date.now()-7*86400000).toISOString();
-    const thirtyDaysAgo = new Date(Date.now()-30*86400000).toISOString();
-    const { data: customers } = await sb.from('customers')
-      .select('id,name,email,phone,last_visit')
+    const sevenDaysAgo  = new Date(Date.now() -  7*86400000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30*86400000).toISOString();
+    const ninetyDaysAgo = new Date(Date.now() - 90*86400000).toISOString(); // dedupe window
+
+    // 1. Candidates: purchased 7-30 days ago
+    const { data: candidates } = await sb.from('customers')
+      .select('id,name,email,phone,last_visit,notes')
       .gte('last_visit', thirtyDaysAgo)
       .lte('last_visit', sevenDaysAgo)
-      .limit(20)
-      .then(r=>r,()=>({data:[]}));
+      .not('phone', 'is', null)
+      .limit(50)
+      .then(r=>r, ()=>({data:[]}));
 
-    if (!customers?.length) {
-      if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">No eligible customers found (purchased 7-30 days ago)</div>';
+    if (!candidates?.length) {
+      if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">No eligible customers found (purchased 7–30 days ago)</div>';
       return;
     }
 
-    let sent = 0, waSent = 0, waFailed = 0;
-    for (const c of customers) {
-      // Send email if available
-      if (c.email) {
-        await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
-          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-          body: JSON.stringify({ action:'send_review_request', to:c.email, customer_name:c.name||'Customer', product:'building materials' })
-        }).catch(()=>{});
-        sent++;
-      }
-      // WhatsApp via vwholesale_feedback_request on WABA 1183561931509509.
-      // {{1}} customer name, {{2}} product. Both must be non-empty or Meta rejects it.
+    // 2. Already messaged in last 90 days — fetch by phone list
+    const phones = candidates.map(c=>c.phone).filter(Boolean);
+    const { data: alreadySent } = await sb.from('review_requests_log')
+      .select('phone,sent_at')
+      .in('phone', phones)
+      .gte('sent_at', ninetyDaysAgo)
+      .then(r=>r, ()=>({data:[]}));
+    const sentPhones = new Set((alreadySent||[]).map(r=>r.phone));
+
+    // 3. Filter out: already sent + complaints/damaged notes
+    const COMPLAINT_PATTERN = /damage|broken|complaint|wrong|missing|refund|return|bad|issue|problem/i;
+    const eligible = candidates.filter(c => {
+      if (sentPhones.has(c.phone)) return false;          // already got review request
+      if (c.notes && COMPLAINT_PATTERN.test(c.notes)) return false; // has complaint note
+      return true;
+    });
+
+    if (!eligible.length) {
+      if (out) out.innerHTML = '<div style="font-size:11px;color:var(--text3)">No new eligible customers — all either already messaged (90-day window) or have complaint notes</div>';
+      return;
+    }
+
+    let waSent = 0, waFailed = 0, emailSent = 0;
+    const logRows = [];
+
+    for (const c of eligible) {
+      // WhatsApp (primary channel)
       if (c.phone) {
         const r = await fetch(MKT_SB_URL+'/functions/v1/meta-whatsapp', {
           method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
           body: JSON.stringify({
             action:'send_template', phone:c.phone,
             template_name:'vwholesale_feedback_request',
-            body_values:[c.name || 'Customer', 'your recent purchase'],
+            body_values:[c.name||'Customer', 'your recent purchase'],
             language_code:'en'
           })
-        }).then(r=>r.json()).catch(()=>({ ok:false }));
+        }).then(r=>r.json()).catch(()=>({ok:false}));
+        const status = r.ok ? 'sent' : 'failed';
         if (r.ok) waSent++; else waFailed++;
+        logRows.push({ customer_id:c.id, phone:c.phone, channel:'whatsapp', template_name:'vwholesale_feedback_request', status });
+      }
+      // Email (secondary, if available)
+      if (c.email) {
+        const er = await fetch(MKT_SB_URL+'/functions/v1/email-marketing', {
+          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body: JSON.stringify({ action:'send_review_request', to:c.email, customer_name:c.name||'Customer', product:'building materials' })
+        }).then(r=>r.json()).catch(()=>({ok:false}));
+        const status = er.ok ? 'sent' : 'failed';
+        if (er.ok) emailSent++;
+        logRows.push({ customer_id:c.id, phone:c.phone||null, channel:'email', template_name:'review_request_email', status });
       }
     }
 
-    showMktToast('Email: ' + sent + ' · WhatsApp: ' + waSent + (waFailed ? ' (' + waFailed + ' failed)' : ''));
-    if (out) out.innerHTML = '<div style="font-size:11px;color:#22c55e">Sent to ' + customers.length + ' recent customers · '
-      + sent + ' email · ' + waSent + ' WhatsApp'
-      + (waFailed ? '</div><div style="font-size:10px;color:#f59e0b;margin-top:4px">' + waFailed
-         + ' WhatsApp failed — vwholesale_feedback_request may still be in review</div>' : '</div>');
+    // 4. Write log so we never double-send
+    if (logRows.length) {
+      await sb.from('review_requests_log').insert(logRows).then(()=>{}).catch(()=>{});
+    }
+
+    const skipped = candidates.length - eligible.length;
+    showMktToast('WhatsApp: ' + waSent + ' sent · ' + skipped + ' skipped (already sent or complaints)');
+    if (out) out.innerHTML =
+      '<div style="font-size:11px;color:#22c55e">✅ Done — ' + waSent + ' WhatsApp · ' + emailSent + ' email sent</div>'
+      + (waFailed ? '<div style="font-size:10px;color:#f59e0b;margin-top:4px">⚠️ ' + waFailed + ' WhatsApp failed — template may still be in review</div>' : '')
+      + (skipped ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">ℹ️ ' + skipped + ' skipped — already messaged within 90 days or complaint note on file</div>' : '');
   } catch(e) {
     showMktToast('❌ ' + e.message);
     if (out) out.innerHTML = '<div style="font-size:11px;color:var(--red)">❌ ' + e.message + '</div>';
