@@ -404,8 +404,112 @@ async function loadImport() {
     <div class="card">
       <div style="font-weight:700;font-size:13px;margin-bottom:8px">Current data</div>
       <div id="imp-stats" style="font-size:12px;color:var(--t3)">Loading…</div>
+    </div>
+
+    <div class="card" style="margin-top:14px;border:1px solid rgba(37,99,235,0.3)">
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">🏗️ Field Visit Import</div>
+      <div style="font-size:12px;color:var(--t3);line-height:1.7;margin-bottom:12px">
+        Upload the Google Forms export — <b>Market_Visit_Responses.xlsx</b><br>
+        Maps construction stage, validates phones, links to existing customers. Safe to re-run.
+      </div>
+      <input type="file" id="imp-fv" accept=".xlsx,.xls,.csv" onchange="impFieldVisitRead(this)"
+             style="font-size:12px;margin-bottom:8px">
+      <div id="imp-fv-info" style="font-size:11px;color:var(--t3);margin-bottom:10px"></div>
+      <button id="imp-fv-go" class="btn btn-primary" onclick="impFieldVisitRun()" disabled
+              style="width:100%;padding:12px;font-weight:700">Import Field Visits</button>
+      <div id="imp-fv-log" style="margin-top:12px;font-size:11px;font-family:monospace;
+           white-space:pre-wrap;max-height:200px;overflow-y:auto"></div>
     </div>`;
   impStats();
+}
+
+let _impFVRows = [];
+
+function impFieldVisitRead(input) {
+  const f = input.files && input.files[0];
+  if (!f) return;
+  const info = document.getElementById('imp-fv-info');
+  info.textContent = 'Reading…';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { info.textContent = 'No rows found'; return; }
+      const STAGE_MAP = {
+        'Just Started Pillars':'structure','Basement Completed':'structure',
+        'Brick Walls Completed':'plumbing_roughin','Slabs Completed':'plumbing_roughin',
+        'Wiring & Plumbing Completed':'flooring',
+        'Tiles/Marbles/Flooring Completed':'bathroom','Almost all completed':'painting'
+      };
+      const VP = /^[6-9][0-9]{9}$/;
+      _impFVRows = rows.map(r => {
+        const rawP = String(r['Contact Number 1']||'').trim().replace(/\D/g,'').slice(-10);
+        const phone = VP.test(rawP) ? rawP : null;
+        const stageRaw = String(r['Project Feedback']||'').trim();
+        const reqRaw = String(r['Client Requirement ']||r['Client Requirement']||'').trim();
+        const reqs = reqRaw ? reqRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+        let visitedAt=null, visitDate=null;
+        try { if(r['Timestamp']) visitedAt=new Date(r['Timestamp']).toISOString(); } catch{}
+        try { const d=r['DATE']||r['Date']; if(d) visitDate=new Date(d).toISOString().split('T')[0]; } catch{}
+        return {
+          visited_at:visitedAt, visit_date:visitDate,
+          area_name:String(r['Area Name']||'').trim()||null,
+          contact_name:String(r['Contact Name 1']||'').trim()||null,
+          contact_phone:phone,
+          profession:String(r['Profession']||'').trim()||null,
+          person_onsite:String(r['Person Onsite/Offsite']||'').toLowerCase().includes('on site'),
+          project_type:String(r['Project Details']||'').trim()||null,
+          requirements_raw:reqRaw||null,
+          requirements:reqs.length?reqs:null,
+          construction_stage:STAGE_MAP[stageRaw]||null, stage_raw:stageRaw||null,
+          visited_by_name:String(r['Visit done by:']||'').trim()||null,
+          visited_by_email:String(r['Email Address']||'').trim()||null,
+          project_name:String(r['Name of the Company, Project or Office']||'').trim()||null,
+          city:String(r['Select City']||'Vijayawada').trim()||'Vijayawada',
+          maps_url:String(r['Project Location Link']||'').trim()||null,
+          comments:String(r['Comments ']||r['Comments']||'').trim()||null,
+          raw:JSON.stringify(r)
+        };
+      }).filter(r=>r.visited_at||r.visit_date);
+      const valid=_impFVRows.filter(r=>r.contact_phone).length;
+      const withStage=_impFVRows.filter(r=>r.construction_stage).length;
+      info.innerHTML=`<b>${_impFVRows.length}</b> rows · <b>${valid}</b> valid phones · <b>${withStage}</b> stage mapped`;
+      document.getElementById('imp-fv-go').disabled=false;
+    } catch(err) { info.innerHTML=`<span style="color:#ef4444">Error: ${err.message}</span>`; }
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+async function impFieldVisitRun() {
+  const btn=document.getElementById('imp-fv-go');
+  const log=document.getElementById('imp-fv-log');
+  btn.disabled=true; btn.textContent='Importing…'; log.innerHTML='';
+  const fvLog=(msg,col)=>{ log.innerHTML+=`<div style="color:${col||'var(--t3)'}">${msg}</div>`; log.scrollTop=log.scrollHeight; };
+  try {
+    fvLog('Loading customer phones…');
+    const {data:cp}=await sb.from('customers').select('id,phone').not('phone','is',null).limit(2000);
+    const pm={};
+    for(const c of (cp||[])) if(c.phone) pm[c.phone.replace(/\D/g,'').slice(-10)]=c.id;
+    fvLog(`${Object.keys(pm).length} customers loaded`);
+    let inserted=0,skipped=0;
+    const linked=_impFVRows.map(r=>({...r,customer_id:r.contact_phone?(pm[r.contact_phone]||null):null}));
+    const BATCH=200;
+    for(let i=0;i<linked.length;i+=BATCH){
+      const batch=linked.slice(i,i+BATCH);
+      const {error}=await sb.from('field_visits_import').insert(batch);
+      if(error){skipped+=batch.length;fvLog(`Batch ${Math.floor(i/BATCH)+1} error: ${error.message}`,'#f59e0b');}
+      else inserted+=batch.length;
+      btn.textContent=`Importing… ${inserted+skipped}/${linked.length}`;
+    }
+    const linkedCount=linked.filter(r=>r.customer_id).length;
+    fvLog(`✅ Done — ${inserted} imported · ${linkedCount} linked to customers · ${skipped} skipped`,'#22c55e');
+    btn.textContent='✅ Complete';
+  } catch(err){
+    fvLog('❌ '+err.message,'#ef4444');
+    btn.disabled=false; btn.textContent='Import Field Visits';
+  }
 }
 
 function impLog(msg, kind) {
