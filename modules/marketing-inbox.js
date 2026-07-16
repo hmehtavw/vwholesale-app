@@ -324,17 +324,19 @@ async function inboxPaintMessages(quiet) {
     h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px;font-size:11px;color:var(--text2)">'
       + '<b style="color:#f59e0b">Replies unavailable on ' + m.label + '</b><br>' + inboxEsc(m.blocked) + '</div>';
   } else if (isWa && !open) {
-    h += '<div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:8px;padding:9px;font-size:11px;color:var(--text2)">'
-      + '<b style="color:#f59e0b">24-hour window closed</b><br>'
-      + 'Meta only allows free replies within 24h of the customer\'s last message. Send an approved template instead.'
-      + '<button onclick="mktNav(\'whatsapp\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 10px;margin-top:7px">Go to Templates</button>'
+    h += '<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:12px;font-size:11px">'
+      + '<div style="font-weight:700;color:#f59e0b;margin-bottom:4px">⏰ 24-hour window closed</div>'
+      + '<div style="color:var(--text2);margin-bottom:10px">Send an approved template to restart the conversation.</div>'
+      + '<div style="display:grid;gap:6px" id="inbox-tmpl-list">Loading templates…</div>'
       + '</div>';
+  } else {
   } else {
     h += '<div id="inbox-file-chip" style="display:none;align-items:center;gap:7px;background:var(--bg3);border-radius:6px;padding:5px 8px;margin-bottom:6px;font-size:11px"></div>'
       + '<div style="display:flex;gap:6px;align-items:flex-end">';
     if (isWa) {
       h += '<input type="file" id="inbox-file" style="display:none" accept="image/*,application/pdf,video/mp4,.doc,.docx,.xls,.xlsx" onchange="inboxPickFile(this)">'
-        + '<button onclick="document.getElementById(\'inbox-file\').click()" class="mkt-btn mkt-btn-ghost" style="font-size:15px;padding:7px 10px" title="Attach image or file">\uD83D\uDCCE</button>';
+        + '<button onclick="document.getElementById(\'inbox-file\').click()" class="mkt-btn mkt-btn-ghost" style="font-size:15px;padding:7px 10px" title="Attach image or file">\uD83D\uDCCE</button>'
+        + '<button onclick="inboxSendLocation()" class="mkt-btn mkt-btn-ghost" style="font-size:15px;padding:7px 10px" title="Share store location">\uD83D\uDCCD</button>';
     }
     h += '<textarea id="inbox-reply" class="mkt-form-input" rows="1" placeholder="Type a reply..." '
       + 'style="flex:1;font-size:12.5px;resize:none;max-height:90px;padding:8px 10px" '
@@ -354,6 +356,8 @@ async function inboxPaintMessages(quiet) {
   if (ri && !quiet) ri.focus();
   if (ri && isWa) inboxBindPaste(ri);
   if (_inboxPendingFile) inboxShowChip();
+  // Auto-load templates if 24h window closed
+  if (document.getElementById('inbox-tmpl-list')) setTimeout(inboxLoadTemplates, 100);
 }
 
 // Paste a screenshot (or any copied image) straight into the reply box.
@@ -519,3 +523,107 @@ async function inboxSendReply(btn) {
     if (btn) btn.disabled = false;
   }
 }
+
+// ── SEND STORE LOCATION ──
+async function inboxSendLocation() {
+  if (!_inboxActive) return;
+  // V Wholesale exact coordinates — NH65, Bhavanipuram, Vijayawada
+  const LAT = 16.5065;
+  const LNG = 80.6383;
+  const NAME = 'V Wholesale';
+  const ADDRESS = 'NH65, Bhavanipuram, Vijayawada 520012';
+
+  const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+    body: JSON.stringify({
+      action: 'send_location',
+      phone: _inboxActive.contact_id,
+      latitude: LAT,
+      longitude: LNG,
+      name: NAME,
+      address: ADDRESS
+    })
+  }).then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
+
+  if (res.ok) {
+    showMktToast('📍 Store location sent!');
+    await inboxRefresh();
+  } else {
+    showMktToast('❌ ' + (res.error || 'Location send failed'));
+  }
+}
+window.inboxSendLocation = inboxSendLocation;
+
+// ── LOAD TEMPLATES IN 24H CLOSED BANNER ──
+async function inboxLoadTemplates() {
+  const el = document.getElementById('inbox-tmpl-list');
+  if (!el || !_inboxActive) return;
+
+  const { data: templates } = await sb.from('whatsapp_templates')
+    .select('name, body, var_count')
+    .eq('status', 'approved')
+    .not('name', 'eq', 'hello_world')
+    .order('name')
+    .limit(6)
+    .then(r => r, () => ({ data: [] }));
+
+  if (!templates?.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:11px">No approved templates found</div>';
+    return;
+  }
+
+  el.innerHTML = templates.map(t => `
+    <div style="background:var(--bg3);border-radius:8px;padding:10px">
+      <div style="font-size:11px;font-weight:700;margin-bottom:4px">${t.name.replace(/vwholesale_/,'').replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px;line-height:1.5">${t.body?.slice(0,80)}…</div>
+      ${t.var_count > 0 ? `
+        <div style="display:grid;gap:4px;margin-bottom:8px">
+          ${Array.from({length:t.var_count},(_,i)=>`
+          <input id="tmpl-var-${t.name}-${i}" class="mkt-form-input"
+            placeholder="Variable ${i+1}${i===0?' (auto-fills customer name)':''}"
+            style="font-size:11px;padding:6px 8px"
+            ${i===0?'value="'+(_inboxActive.contact_name||'Customer').split(' ').find((p,j,a)=>j>0&&a[j-1].length<=2||j===0)||'Customer'+'"':''}>
+          `).join('')}
+        </div>` : ''}
+      <button onclick="inboxSendTemplate('${t.name}',${t.var_count})"
+        class="mkt-btn mkt-btn-primary" style="width:100%;font-size:11px;padding:7px">
+        Send this template
+      </button>
+    </div>`).join('');
+}
+window.inboxLoadTemplates = inboxLoadTemplates;
+
+async function inboxSendTemplate(templateName, varCount) {
+  if (!_inboxActive) return;
+
+  // Collect variable values
+  const bodyVals = Array.from({ length: varCount }, (_, i) => {
+    const el = document.getElementById(`tmpl-var-${templateName}-${i}`);
+    return el?.value?.trim() || (i === 0 ? (_inboxActive.contact_name?.split(' ')[1] || 'Customer') : '');
+  });
+
+  const btn = document.querySelector(`[onclick="inboxSendTemplate('${templateName}',${varCount})"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+
+  const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+    body: JSON.stringify({
+      action: 'send_template',
+      phone: _inboxActive.contact_id,
+      template_name: templateName,
+      body_values: bodyVals,
+      language_code: 'en'
+    })
+  }).then(r => r.json()).catch(e => ({ ok: false, error: e.message }));
+
+  if (res.ok) {
+    showMktToast('✅ Template sent!');
+    await inboxRefresh();
+  } else {
+    showMktToast('❌ ' + (res.error || 'Failed'));
+    if (btn) { btn.disabled = false; btn.textContent = 'Send this template'; }
+  }
+}
+window.inboxSendTemplate = inboxSendTemplate;
