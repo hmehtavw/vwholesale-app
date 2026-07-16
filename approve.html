@@ -139,7 +139,7 @@ function render() {
     const noImg = document.createElement('div');
     noImg.className = 'card';
     noImg.innerHTML = '<div class="label">Image</div><div style="color:#64748b;font-size:13px">' +
-      (item.is_festival ? '🎉 Festival post — use design studio to create a poster' : '⏳ Image generation pending') + '</div>';
+      ('⏳ Image generation pending or failed — regenerate from calendar') + '</div>';
     app.appendChild(noImg);
   }
 
