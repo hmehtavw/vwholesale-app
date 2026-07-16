@@ -207,7 +207,7 @@ async function renderSettings() {
         <div style="font-weight:700">Pause All AI Actions</div>
         <div style="font-size:12px;color:var(--text3)">Emergency stop — AI switches to recommend-only mode</div>
       </div>
-      <button class="mkt-btn ${aiPaused?'mkt-btn-primary':'mkt-btn-ghost'}" onclick="toggleAIPause()" style="${aiPaused?'background:var(--red)':''}">
+      <button class="mkt-btn ${_aiPaused?'mkt-btn-primary':'mkt-btn-ghost'}" onclick="toggleAIPause()" style="${aiPaused?'background:var(--red)':''}">
         ${aiPaused?'▶ Resume AI':'🛑 Pause AI'}
       </button>
     </div>
@@ -2389,6 +2389,44 @@ async function waRebind(btn) {
   } finally {
     if (btn) { btn.textContent = 'Controlled rebind (unsub + resub)'; btn.disabled = false; }
   }
+}
+
+// ── AI KILL SWITCH ──
+// Two buttons called toggleAIPause() and nothing defined it — the emergency
+// stop was a painted button. Harmless while nothing ran unattended; not
+// harmless once cron posts to Instagram on its own.
+let _aiPaused = false;
+
+async function loadAIPauseStatus() {
+  try {
+    const { data } = await sb.from('marketing_settings').select('value')
+      .eq('key', 'AI_PAUSED').maybeSingle().then(r => r, () => ({ data: null }));
+    _aiPaused = data?.value === 'true';
+  } catch (e) { _aiPaused = false; }
+  paintAIPause();
+}
+
+function paintAIPause() {
+  const b = document.getElementById('ai-pause-btn');
+  if (!b) return;
+  b.textContent = _aiPaused ? '▶️ Resume AI  (PAUSED)' : '🛑 Pause All AI Actions';
+  b.style.background = _aiPaused ? '#ef4444' : '';
+  b.style.color = _aiPaused ? '#fff' : '';
+  b.style.fontWeight = _aiPaused ? '700' : '';
+}
+
+async function toggleAIPause() {
+  const next = !_aiPaused;
+  if (next && !confirm('Pause all AI actions?\n\nScheduled content generation and auto-posting will stop until you resume. Nothing already published is affected.')) return;
+  try {
+    const { error } = await sb.from('marketing_settings')
+      .upsert({ key: 'AI_PAUSED', value: next ? 'true' : 'false' }, { onConflict: 'key' });
+    if (error) { showMktToast('Could not change it: ' + error.message); return; }
+    _aiPaused = next;
+    paintAIPause();
+    showMktToast(next ? 'AI paused — scheduled posting stopped' : 'AI resumed');
+    if (typeof renderSettings === 'function' && document.getElementById('mkt-page-title')?.textContent === 'Settings') renderSettings();
+  } catch (e) { showMktToast(e.message); }
 }
 
 async function waPhoneWebhook(btn) {

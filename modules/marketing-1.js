@@ -166,11 +166,17 @@ async function mktLogin() {
 function showMktApp() {
   document.getElementById('mkt-login').style.display = 'none';
   document.getElementById('mkt-layout').style.display = 'flex';
+  // Repair access BEFORE painting the label — otherwise an admin whose
+  // mktAccess was still at its default reads "No access" while having full access.
+  if (mktProfile && mktProfile.role === 'admin' && mktAccess.level !== 'admin') {
+    mktAccess = { level: 'admin', can_publish: true, can_broadcast: true,
+                  can_spend: true, can_manage_keys: true, extra_pages: [] };
+  }
+  mktApplyAccess();
   const infoEl = document.getElementById('mkt-user-info');
   if (infoEl) infoEl.textContent = (mktProfile?.name||'') + ' · ' + (MKT_LEVEL_LABELS[mktAccess.level] || mktAccess.level);
-  mktApplyAccess();
   startClock();
-  // loadAIPauseStatus — reserved for future AI pause/resume control
+  loadAIPauseStatus();
 
 
   // Handle OAuth callbacks
