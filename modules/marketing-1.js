@@ -58,6 +58,15 @@ const MKT_LEVEL_LABELS = {
 };
 
 function mktCan(page) {
+  // Failsafe: an admin must never be locked out by a state bug, a stale cached
+  // build, or a half-applied migration. profiles.role is the source of truth.
+  if (mktProfile && mktProfile.role === 'admin') {
+    if (mktAccess.level !== 'admin') {
+      mktAccess = { level: 'admin', can_publish: true, can_broadcast: true,
+                    can_spend: true, can_manage_keys: true, extra_pages: [] };
+    }
+    return true;
+  }
   if (mktAccess.level === 'admin') return true;
   const base = MKT_LEVEL_PAGES[mktAccess.level] || [];
   return base.indexOf(page) >= 0 || (mktAccess.extra_pages || []).indexOf(page) >= 0;
