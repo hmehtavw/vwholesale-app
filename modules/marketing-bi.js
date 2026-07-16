@@ -280,9 +280,10 @@ async function biViewCustomers(stage, nextBuy) {
 // ── WHATSAPP COMPOSE — in-sheet compose + send ──
 async function biWhatsAppCompose(stage, category, count) {
   const TEMPLATES = [
-    { name:'vassure_promotional_offer',   label:'Promotional Offer',   vars:['customer name','offer details'] },
-    { name:'vassure_new_product_launch',  label:'New Product / Arrival', vars:['customer name','product name'] },
-    { name:'vassure_catalog_request',     label:'Catalog / Enquiry',   vars:['customer name','category'] },
+    { name:'vwholesale_offer_alert',       label:'Special Offer',        vars:['customer name','offer details','valid till date'] },
+    { name:'vwholesale_welcome',           label:'Welcome / Introduction', vars:['customer name'] },
+    { name:'vwholesale_festival_greeting', label:'Festival Greeting',    vars:['festival name','customer name'] },
+    { name:'vwholesale_feedback_request',  label:'Feedback / Review Request', vars:['customer name','product purchased'] },
   ];
 
   const stageLabel = stage ? stage.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase()) : '';
@@ -444,7 +445,7 @@ async function biSendWhatsApp(stage, category) {
           phone: c.phone,
           template_name: window._biSelectedTemplate,
           body_values: bodyVals,
-          language_code: 'en'
+          language_code: window._biSelectedTemplate === 'hello_world' ? 'en_US' : 'en'
         })
       }).then(r=>r.json()).catch(()=>({ok:false,error:'Network error'}));
 
