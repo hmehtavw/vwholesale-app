@@ -491,9 +491,11 @@ async function impFieldVisitRun() {
   try {
     fvLog('Loading customer phones…');
     const cpRes=await fetch(`${SB_URL}/rest/v1/customers?select=id,phone&phone=not.is.null&limit=2000`,{headers:H});
-    const cp=await cpRes.json();
+    const cpBody=await cpRes.json();
+    if(!cpRes.ok) throw new Error('Customer fetch: '+JSON.stringify(cpBody).slice(0,120));
+    const cp=Array.isArray(cpBody)?cpBody:[];
     const pm={};
-    for(const c of (cp||[])) if(c.phone) pm[c.phone.replace(/\D/g,'').slice(-10)]=c.id;
+    for(const c of cp) if(c.phone) pm[c.phone.replace(/\D/g,'').slice(-10)]=c.id;
     fvLog(`${Object.keys(pm).length} customers loaded`);
 
     let inserted=0,skipped=0;
