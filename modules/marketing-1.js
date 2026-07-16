@@ -2213,17 +2213,26 @@ async function renderCommandCentre() {
     </button>`).join('')}
   </div>
 
+  <!-- BUSINESS INTELLIGENCE STRIP -->
+  <div class="mkt-card" id="bi-strip" style="margin-bottom:0">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700">📊 Business Intelligence</div>
+      <button onclick="loadBIStrip()" style="background:none;border:none;color:var(--text3);font-size:10px;cursor:pointer">↻ Refresh</button>
+    </div>
+    <div id="bi-strip-content" style="font-size:11px;color:var(--text3)">Loading…</div>
+  </div>
+
   <!-- CHANNEL STATUS -->
   <div class="mkt-card">
     <div style="font-size:12px;font-weight:700;margin-bottom:10px">🔌 Channel Status</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
       ${[
-        {icon:'📍', name:'GBP', status:'API pending', color:'#f59e0b'},
+        {icon:'📍', name:'GBP', status:'Quota pending', color:'#f59e0b'},
         {icon:'📸', name:'Instagram', status:'Connected', color:'#22c55e'},
         {icon:'👤', name:'Facebook', status:'Connected', color:'#22c55e'},
         {icon:'🧵', name:'Threads', status:'Connected', color:'#22c55e'},
         {icon:'▶️', name:'YouTube', status:'Connected', color:'#22c55e'},
-        {icon:'💬', name:'WhatsApp', status:'WABA pending', color:'#f59e0b'},
+        {icon:'💬', name:'WhatsApp', status:'Connected', color:'#22c55e'},
       ].map(c=>`
       <div style="text-align:center;padding:8px;background:var(--bg3);border-radius:8px">
         <div style="font-size:18px">${c.icon}</div>
@@ -2232,6 +2241,90 @@ async function renderCommandCentre() {
       </div>`).join('')}
     </div>
   </div>`);
+  // Load BI strip async after render
+  setTimeout(loadBIStrip, 300);
+}
+
+async function loadBIStrip() {
+  const el = document.getElementById('bi-strip-content');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--text3)">Loading intelligence…</span>';
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/business-intelligence',{
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY}
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    const s = data.snapshot;
+    const momArrow = s.revenue.mom_change_pct >= 0 ? '↑' : '↓';
+    const momColor = s.revenue.mom_change_pct >= 0 ? '#22c55e' : '#ef4444';
+    const hotStage = s.hot_leads?.[0];
+    const topCat = s.top_categories?.[0];
+    const slowCat = s.slow_movers?.[0];
+
+    el.innerHTML = `
+      <!-- Revenue row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:15px;font-weight:900;color:var(--gold)">₹${s.revenue.this_month_lakhs}L</div>
+          <div style="font-size:9px;color:var(--text3)">This month</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:15px;font-weight:900;color:var(--text2)">₹${s.revenue.last_month_lakhs}L</div>
+          <div style="font-size:9px;color:var(--text3)">Last month</div>
+        </div>
+        <div style="background:var(--bg2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:15px;font-weight:900;color:${momColor}">${momArrow}${Math.abs(s.revenue.mom_change_pct)}%</div>
+          <div style="font-size:9px;color:var(--text3)">MoM</div>
+        </div>
+      </div>
+
+      <!-- Key signals row -->
+      <div style="display:grid;gap:6px">
+        ${hotStage ? `
+        <div style="display:flex;align-items:center;gap:8px;background:rgba(201,168,76,.08);border-radius:8px;padding:8px;border-left:3px solid var(--gold)">
+          <div style="font-size:16px">🔥</div>
+          <div>
+            <div style="font-weight:700;color:var(--gold);font-size:11px">Immediate opportunity</div>
+            <div style="color:var(--text2);font-size:11px">${hotStage.reachable} reachable customers → ready to buy <b>${hotStage.next_buy}</b></div>
+          </div>
+        </div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${topCat ? `
+          <div style="background:var(--bg2);border-radius:8px;padding:8px">
+            <div style="font-size:9px;color:#22c55e;font-weight:700;margin-bottom:3px">🏆 TOP SELLER</div>
+            <div style="font-size:12px;font-weight:700">${topCat.category}</div>
+            <div style="font-size:10px;color:var(--text3)">₹${topCat.revenue_lakhs}L · ${topCat.unique_customers} customers</div>
+          </div>` : ''}
+          ${slowCat ? `
+          <div style="background:var(--bg2);border-radius:8px;padding:8px">
+            <div style="font-size:9px;color:#f59e0b;font-weight:700;margin-bottom:3px">⚠️ NEEDS PUSH</div>
+            <div style="font-size:12px;font-weight:700">${slowCat}</div>
+            <div style="font-size:10px;color:var(--text3)">Low sales — content can help</div>
+          </div>` : ''}
+        </div>
+        <!-- Pipeline summary -->
+        <div style="background:var(--bg2);border-radius:8px;padding:8px">
+          <div style="font-size:9px;color:var(--text3);font-weight:700;margin-bottom:5px">👥 PIPELINE — reachable customers by stage</div>
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${(s.customer_pipeline||[]).filter(p=>p.reachable>0).slice(0,6).map(p=>`
+            <div style="background:var(--bg3);border-radius:5px;padding:3px 7px;text-align:center">
+              <div style="font-size:12px;font-weight:700;color:var(--gold)">${p.reachable}</div>
+              <div style="font-size:8px;color:var(--text3)">${p.stage.replace('_',' ')}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+        <!-- Field visits -->
+        ${s.field_intelligence?.total_visits > 0 ? `
+        <div style="background:var(--bg2);border-radius:8px;padding:8px">
+          <div style="font-size:9px;color:#3b82f6;font-weight:700;margin-bottom:3px">🏗️ FIELD INTELLIGENCE</div>
+          <div style="font-size:11px;color:var(--text2)">${s.field_intelligence.total_visits.toLocaleString()} sites visited · ${s.field_intelligence.valid_phone.toLocaleString()} with contact</div>
+        </div>` : ''}
+      </div>
+      <div style="font-size:9px;color:var(--text3);margin-top:8px;text-align:right">Updated ${new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>`;
+  } catch(e) {
+    if (el) el.innerHTML = `<span style="color:var(--red)">⚠️ Could not load — ${e.message}</span>`;
+  }
 }
 
 async function generateCMOBriefing(btn) {
