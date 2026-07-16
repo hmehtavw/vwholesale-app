@@ -527,11 +527,11 @@ async function inboxSendReply(btn) {
 // ── SEND STORE LOCATION ──
 async function inboxSendLocation() {
   if (!_inboxActive) return;
-  // V Wholesale exact coordinates — NH65, Bhavanipuram, Vijayawada
+  // V Wholesale coordinates — NH65, Bhavanipuram, Vijayawada
   const LAT = 16.5065;
   const LNG = 80.6383;
   const NAME = 'V Wholesale';
-  const ADDRESS = 'NH65, Bhavanipuram, Vijayawada 520012';
+  const ADDRESS = 'Vijayawada';
 
   const res = await fetch(MKT_SB_URL + '/functions/v1/meta-whatsapp', {
     method: 'POST',
