@@ -3457,7 +3457,7 @@ async function saveEditCalendarItemOnly(id) {
   renderCalendar();
 }
 
-async function openStrategySession() {
+async function openStrategySession_OLD() {
   // Load last session for context
   const { data: sessions } = await sb.from('strategy_sessions').select('*').order('created_at',{ascending:false}).limit(1).maybeSingle().then(r=>r,()=>({data:null}));
   const { data: calItems } = await sb.from('content_calendar').select('topic,content_type,cal_date').gte('cal_date', new Date().toISOString().split('T')[0]).order('cal_date',{ascending:true}).limit(20).then(r=>r,()=>({data:[]}));
