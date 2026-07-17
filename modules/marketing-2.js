@@ -884,8 +884,8 @@ async function generateFullPoster() {
       <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
     </div>
     <div style="font-size:14px;font-weight:700;color:var(--text2)" id="ps-status">✍️ Writing content…</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:6px">Then generating premium hero image with DALL-E 3 HD</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">~30–50 seconds</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:6px">Then generating premium hero image with gpt-image-2</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:4px">~60–120 seconds</div>
   </div>`;
 
   const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
@@ -893,8 +893,12 @@ async function generateFullPoster() {
 
   try {
     setStatus('✍️ Writing poster content…');
+    setStatus('🖼️ Generating premium hero image with gpt-image-2…');
+    const psController = new AbortController();
+    const psTimeout = setTimeout(() => psController.abort(), 150000); // 150s timeout
     const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
       method: 'POST',
+      signal: psController.signal,
       headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
       body: JSON.stringify({
         topic, template, language: lang,
@@ -905,6 +909,7 @@ async function generateFullPoster() {
         tagline: bp.tagline||'Build Better. Pay Less.',
       })
     });
+    clearTimeout(psTimeout);
 
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Generation failed');
