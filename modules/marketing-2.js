@@ -895,7 +895,7 @@ async function generateFullPoster() {
     setStatus('✍️ Writing poster content…');
     setStatus('🖼️ Generating premium hero image with gpt-image-2…');
     const psController = new AbortController();
-    const psTimeout = setTimeout(() => psController.abort(), 150000); // 150s timeout
+    const psTimeout = setTimeout(() => psController.abort(), 240000); // 150s timeout
     const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
       method: 'POST',
       signal: psController.signal,
