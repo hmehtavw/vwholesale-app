@@ -272,7 +272,7 @@ function showMktToast(msg, duration = 3000) {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'mkt-toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#F8FAFC;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
     document.body.appendChild(toast);
   }
   toast.textContent = msg;
@@ -2093,8 +2093,8 @@ async function renderCommandCentre() {
     <div style="display:flex;align-items:center;gap:14px">
       <div style="font-size:36px">🤖</div>
       <div style="flex:1">
-        <div style="font-size:18px;font-weight:900;color:#fff">${greeting}, Himansu</div>
-        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px">${todayDateStr}</div>
+        <div style="font-size:18px;font-weight:900;color:var(--text)">${greeting}, Himansu</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${todayDateStr}</div>
         <div style="font-size:12px;color:var(--gold);margin-top:6px;font-weight:600">
           ${monthPublished} posts published this month · ${(monthPosts||[]).length} created · ${pendingApprovals} pending approval
         </div>
@@ -2381,7 +2381,7 @@ Return as plain text, no JSON.`,
     const data = await res.json();
     const briefing = typeof data.output === 'string' ? data.output : (data.output?.message || data.output?.master_text || 'Ready to help you grow V Wholesale today.');
 
-    if (out) out.innerHTML = `<div style="margin-top:14px;padding:12px;background:rgba(255,255,255,.05);border-radius:8px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.8;border-left:3px solid var(--gold)">${briefing}</div>`;
+    if (out) out.innerHTML = `<div style="margin-top:14px;padding:12px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--text2);line-height:1.8;border-left:3px solid var(--gold)">${briefing}</div>`;
   } catch(e) {
     if (out) out.innerHTML = `<div style="margin-top:10px;font-size:11px;color:var(--text3)">Briefing unavailable — ${e.message}</div>`;
   } finally {
@@ -4186,7 +4186,7 @@ function showAddCalItem(dateStr) {
   m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto";
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
     <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:14px;font-weight:900;color:#fff">+ Add Post — ${new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
+      <div style="font-size:14px;font-weight:900;color:var(--text)">+ Add Post — ${new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px;display:grid;gap:10px">
@@ -4306,7 +4306,7 @@ function showCalPlanModal() {
   const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN",{month:"long",year:"numeric"});
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
     <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:14px;font-weight:900;color:#fff">🤖 AI Plan — ${monthName}</div>
+      <div style="font-size:14px;font-weight:900;color:var(--text)">🤖 AI Plan — ${monthName}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px;display:grid;gap:12px">
@@ -4360,7 +4360,7 @@ async function runAIMonthPlan() {
   modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center";
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:600px;overflow:hidden;margin-top:20px">
     <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:14px;font-weight:900;color:#fff">📋 ${monthName} Plan</div>
+      <div style="font-size:14px;font-weight:900;color:var(--text)">📋 ${monthName} Plan</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px">
@@ -4380,7 +4380,7 @@ function showMonthReview() {
   m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
     <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:14px;font-weight:900;color:#fff">📋 15th Review — Plan ${nextMonthName}</div>
+      <div style="font-size:14px;font-weight:900;color:var(--text)">📋 15th Review — Plan ${nextMonthName}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
     <div style="padding:16px;display:grid;gap:12px">
