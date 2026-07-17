@@ -1302,7 +1302,7 @@ async function viewPosterHistory(id) {
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:14px;font-weight:900;color:#fff">${h.topic||'Poster'}</div>
         <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
@@ -1505,7 +1505,7 @@ function showCampaignBuilder(existing) {
   m.id = 'camp-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">${c.id?'✏️ Edit Campaign':'📣 New Campaign'}</div>
       <button onclick="document.getElementById('camp-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -1632,7 +1632,7 @@ function updateCampaignStats(id) {
   m.id = 'stats-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:380px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">📊 Update Stats</div>
       <button onclick="document.getElementById('stats-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -1702,7 +1702,7 @@ async function getCampaignAITip(id, name) {
   const m = document.createElement('div');
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">🤖 AI Campaign Tip — ${c.name}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -3428,7 +3428,7 @@ function showNewBlogModal() {
   const m = document.createElement('div');
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:540px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">✍️ Write SEO Blog Article</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -3548,7 +3548,7 @@ async function viewBlogPost(id) {
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:720px;overflow:hidden;margin-top:20px">
 
     <!-- Header -->
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:900;color:#fff;margin-bottom:4px">${p.title}</div>
         <div style="font-size:11px;color:#64748b">🔑 ${p.target_keyword} · ${p.word_count||0} words · SEO score: ${p.seo_score||'—'}/100 · ${p.status}</div>
@@ -3787,7 +3787,7 @@ function showAddCompetitor() {
   m.id = 'add-comp-modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">🔍 Add Competitor</div>
       <button onclick="document.getElementById('add-comp-modal').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -3882,7 +3882,7 @@ async function viewFullReport(compId, compName) {
   const m = document.createElement('div');
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:620px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div><div style="font-size:15px;font-weight:900;color:#fff">📊 ${compName}</div>
       <div style="font-size:11px;color:#64748B">${new Date(r.created_at).toLocaleDateString('en-IN')} · ${reports.length} report(s) total</div></div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
@@ -4259,7 +4259,7 @@ async function generateGreetingMessage(name, type, phone) {
   const modal = document.createElement('div');
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">💬 WhatsApp Greeting — ${name}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -4449,11 +4449,11 @@ function buildEmailHTML(subject, body) {
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: Arial, sans-serif; background: #f4f4f4; color: #333; }
   .wrapper { max-width: 600px; margin: 0 auto; background: #fff; }
-  .header { background: #0A1628; padding: 0; text-align: center; }
-  .header-top { background: #0A1628; padding: 20px; }
+  .header { background:#EEF2F7; padding: 0; text-align: center; }
+  .header-top { background:#EEF2F7; padding: 20px; }
   .header-top h1 { color: #C9A84C; font-size: 28px; letter-spacing: 2px; margin-bottom: 4px; }
   .header-top p { color: rgba(255,255,255,0.6); font-size: 12px; }
-  .banner { background: linear-gradient(135deg, #0A1628, #1a3a5c); padding: 24px 30px; border-bottom: 3px solid #C9A84C; }
+  .banner { background: linear-gradient(135deg, #EEF2F7, #1a3a5c); padding: 24px 30px; border-bottom: 3px solid #C9A84C; }
   .banner h2 { color: #fff; font-size: 20px; font-weight: 700; }
   .content { padding: 30px; background: #fff; }
   .content p { line-height: 1.8; color: #444; font-size: 14px; margin-bottom: 12px; }
@@ -4462,7 +4462,7 @@ function buildEmailHTML(subject, body) {
   .store-info { background: #f9f9f9; padding: 20px 30px; border-top: 3px solid #C9A84C; }
   .store-info h3 { color: #0A1628; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
   .store-info p { font-size: 12px; color: #666; line-height: 1.6; }
-  .footer { background: #0A1628; padding: 16px 30px; text-align: center; }
+  .footer { background:#EEF2F7; padding: 16px 30px; text-align: center; }
   .footer p { color: rgba(255,255,255,0.5); font-size: 11px; line-height: 1.6; }
   .footer a { color: #C9A84C; text-decoration: none; }
   @media (max-width: 600px) { .content { padding: 20px; } .banner { padding: 16px 20px; } }
@@ -4738,7 +4738,7 @@ function showAddFeedPost() {
   const m = document.createElement('div');
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">📢 Add to Staff Feed</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>

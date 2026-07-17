@@ -272,7 +272,7 @@ function showMktToast(msg, duration = 3000) {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'mkt-toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#F8FAFC;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
     document.body.appendChild(toast);
   }
   toast.textContent = msg;
@@ -2089,7 +2089,7 @@ async function renderCommandCentre() {
 
   setContent(`
   <!-- CMO GREETING -->
-  <div style="background:linear-gradient(135deg,#0A1628,#1a2a8a);border:1px solid rgba(201,168,76,.3);border-radius:14px;padding:20px;margin-bottom:16px">
+  <div style="background:linear-gradient(135deg,#EEF2F7,#E8EDF5);border:1px solid rgba(201,168,76,.5);border-radius:14px;padding:20px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:14px">
       <div style="font-size:36px">🤖</div>
       <div style="flex:1">
@@ -4185,7 +4185,7 @@ function showAddCalItem(dateStr) {
   const m = document.createElement("div");
   m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto";
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:480px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">+ Add Post — ${new Date(dateStr+"T00:00:00").toLocaleDateString("en-IN",{day:"numeric",month:"short"})}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -4305,7 +4305,7 @@ function showCalPlanModal() {
   m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
   const monthName = new Date(_calYear, _calMonth, 1).toLocaleString("en-IN",{month:"long",year:"numeric"});
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">🤖 AI Plan — ${monthName}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -4359,7 +4359,7 @@ async function runAIMonthPlan() {
   const modal = document.createElement("div");
   modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center";
   modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:600px;overflow:hidden;margin-top:20px">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">📋 ${monthName} Plan</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
@@ -4379,7 +4379,7 @@ function showMonthReview() {
   const m = document.createElement("div");
   m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
   m.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:500px;overflow:hidden">
-    <div style="background:#0A1628;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
       <div style="font-size:14px;font-weight:900;color:#fff">📋 15th Review — Plan ${nextMonthName}</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
     </div>
