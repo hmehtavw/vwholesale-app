@@ -109,3 +109,31 @@ for mf in marketing_files:
 if not syntax_ok:
     print("\n❌ MARKETING JS SYNTAX ERRORS — fix before pushing")
     sys.exit(1)
+
+# ── MARKETING.HTML INTEGRITY CHECK ──
+print("\n[5] marketing.html integrity check...")
+mkt_path = os.path.join(root, 'marketing.html')
+if os.path.exists(mkt_path):
+    with open(mkt_path, encoding='utf-8') as f:
+        mkt = f.read()
+    # Check Supabase inline JS not corrupted (must contain these patterns)
+    checks = [
+        ('Supabase createClient', 'createClient('),
+        ('No corrupted version injection', 'let v=17' not in mkt and 'const v=17' not in mkt),
+        ('DOCTYPE present', '<!DOCTYPE html>' in mkt),
+    ]
+    mkt_ok = True
+    for name, check in checks:
+        if isinstance(check, bool):
+            ok = check
+        else:
+            ok = check in mkt
+        status = '✅' if ok else '❌'
+        print(f"  {status} {name}")
+        if not ok:
+            mkt_ok = False
+    if not mkt_ok:
+        print("\n❌ marketing.html integrity check failed — possible corruption")
+        sys.exit(1)
+else:
+    print("  ⚠️  marketing.html not found")
