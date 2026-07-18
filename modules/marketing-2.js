@@ -1881,6 +1881,22 @@ async function renderWhatsApp() {
     + '<option value="contractor">Contractors only</option>'
     + '<option value="high_value">High value (>₹50k)</option>'
     + '<option value="inactive">Inactive 90 days</option>'
+    + '<optgroup label="── By Construction Stage ──">'
+    + '<option value="stage_structure">🧱 Structure stage (pipes/wires coming)</option>'
+    + '<option value="stage_plumbing_roughin">🔧 Plumbing rough-in (tiles coming)</option>'
+    + '<option value="stage_electrical_roughin">⚡ Electrical rough-in (tiles coming)</option>'
+    + '<option value="stage_flooring">🪟 Flooring stage (sanitaryware coming)</option>'
+    + '<option value="stage_bathroom">🚿 Bathroom stage (electricals coming)</option>'
+    + '<option value="stage_electrical_fitout">💡 Electrical fit-out (plywood coming)</option>'
+    + '<option value="stage_interiors">🛋️ Interiors stage (paint coming)</option>'
+    + '<option value="stage_painting">🎨 Painting stage (furniture coming)</option>'
+    + '<option value="stage_furniture">🛏️ Furniture stage (appliances coming)</option>'
+    + '</optgroup>'
+    + '<optgroup label="── Recency + Stage ──">'
+    + '<option value="active_flooring">🔥 Active buyers at flooring (last 90 days)</option>'
+    + '<option value="active_bathroom">🔥 Active buyers at bathroom (last 90 days)</option>'
+    + '<option value="hot_leads">🎯 Hot leads — bought 60-120 days ago</option>'
+    + '</optgroup>'
     + '</select></div>'
     + '<div id="wa-segment-count" style="font-size:11px;color:var(--text3)">Select segment to see count</div>'
     + '<div><label class="mkt-form-label">Message</label>'
@@ -2003,10 +2019,30 @@ async function waSendBroadcast() {
 async function waLoadSegmentCount(segment) {
   const el = document.getElementById('wa-segment-count');
   if (!el) return;
+  el.textContent = '⏳ Counting…';
+  const ninetyDaysAgo = new Date(Date.now() - 90*86400000).toISOString();
+  const sixtyDaysAgo  = new Date(Date.now() - 60*86400000).toISOString();
+  const oneTwentyDaysAgo = new Date(Date.now() - 120*86400000).toISOString();
+
   let query = sb.from('customers').select('id', {count:'exact',head:true}).not('phone','is',null);
-  if (segment === 'contractor') query = query.eq('type','contractor');
+  if (segment === 'contractor') {
+    query = query.eq('type','contractor');
+  } else if (segment === 'high_value') {
+    query = query.gte('total_spent', 50000);
+  } else if (segment === 'inactive') {
+    query = query.lt('last_visit', ninetyDaysAgo);
+  } else if (segment && segment.startsWith('stage_')) {
+    query = query.eq('construction_stage', segment.replace('stage_',''));
+  } else if (segment === 'active_flooring') {
+    query = query.eq('construction_stage','flooring').gte('last_visit', ninetyDaysAgo);
+  } else if (segment === 'active_bathroom') {
+    query = query.eq('construction_stage','bathroom').gte('last_visit', ninetyDaysAgo);
+  } else if (segment === 'hot_leads') {
+    query = query.gte('last_visit', oneTwentyDaysAgo).lt('last_visit', sixtyDaysAgo)
+      .in('construction_stage', ['structure','plumbing_roughin','electrical_roughin','flooring','bathroom']);
+  }
   const { count } = await query.then(r=>r,()=>({count:0}));
-  el.textContent = (count||0) + ' customers with phone numbers in this segment';
+  el.textContent = (count||0) + ' reachable customers in this segment';
 }
 
 function loadWATemplate(btn) {
@@ -2176,16 +2212,30 @@ async function sendWATemplateNow(templateName, varCount, langCode) {
 }
 
 async function getSegmentPhones(segment) {
-  // Fetch phone numbers from customers table based on segment
-  let query = sb.from('customers').select('phone,type,total_spent,last_visit').not('phone','is',null);
-  
+  const ninetyDaysAgo = new Date(Date.now() - 90*86400000).toISOString();
+  const sixtyDaysAgo  = new Date(Date.now() - 60*86400000).toISOString();
+  const oneTwentyDaysAgo = new Date(Date.now() - 120*86400000).toISOString();
+
+  let query = sb.from('customers').select('phone,type,total_spent,last_visit,construction_stage').not('phone','is',null);
+
   if (segment === 'contractor') {
     query = query.eq('type','contractor');
   } else if (segment === 'high_value') {
     query = query.gte('total_spent', 50000);
   } else if (segment === 'inactive') {
-    const ninetyDaysAgo = new Date(Date.now() - 90*86400000).toISOString();
     query = query.lt('last_visit', ninetyDaysAgo);
+  } else if (segment && segment.startsWith('stage_')) {
+    // Direct stage filter — e.g. stage_flooring → construction_stage = 'flooring'
+    const stageName = segment.replace('stage_', '');
+    query = query.eq('construction_stage', stageName);
+  } else if (segment === 'active_flooring') {
+    query = query.eq('construction_stage', 'flooring').gte('last_visit', ninetyDaysAgo);
+  } else if (segment === 'active_bathroom') {
+    query = query.eq('construction_stage', 'bathroom').gte('last_visit', ninetyDaysAgo);
+  } else if (segment === 'hot_leads') {
+    // Bought 60-120 days ago — likely moving to next stage now
+    query = query.gte('last_visit', oneTwentyDaysAgo).lt('last_visit', sixtyDaysAgo)
+      .in('construction_stage', ['structure','plumbing_roughin','electrical_roughin','flooring','bathroom']);
   }
   // all = no filter
 
