@@ -3459,25 +3459,69 @@ async function renderCalendar() {
       const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
       const icon = TYPE_ICON[item.content_type||'post']||'📝';
       const statusColor = existing?.status === 'published' ? '#22c55e' : existing?.status === 'pending_approval' ? '#f59e0b' : 'var(--text3)';
+      const isReady    = item.status === 'ready';
+      const isApproved = item.status === 'approved';
+      const hasImage   = !!item.image_url;
+      const borderColor = isApproved ? '#22c55e' : isReady ? '#f59e0b' : isToday ? 'rgba(201,168,76,.3)' : 'var(--border)';
+      const bgColor     = isApproved ? 'rgba(34,197,94,.06)' : isReady ? 'rgba(245,158,11,.06)' : isToday ? 'rgba(201,168,76,.08)' : 'var(--bg3)';
+
+      const statusBadge = isApproved
+        ? `<span style="font-size:9px;background:#064e3b;color:#6ee7b7;padding:2px 6px;border-radius:4px;font-weight:700">✅ APPROVED</span>`
+        : isReady
+        ? `<span style="font-size:9px;background:#451a03;color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:700">⏳ READY</span>`
+        : existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : '';
+
+      const expandedPanel = (isReady || isApproved) ? `
+        <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:10px;display:grid;gap:8px">
+          ${item.visual_brief ? `
+          <div style="background:var(--bg1);border-radius:6px;padding:10px">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">🎨 IMAGE PROMPT — paste into ChatGPT</div>
+            <div style="font-size:11px;color:var(--text2);line-height:1.5">${(item.visual_brief||'').slice(0,200)}${(item.visual_brief||'').length>200?'…':''}</div>
+            <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;margin-top:6px">📋 Copy Prompt</button>
+          </div>` : ''}
+          ${(item.hashtags||[]).length ? `
+          <div style="font-size:11px;color:var(--gold);background:var(--bg1);border-radius:6px;padding:8px;line-height:1.7">${(item.hashtags||[]).join(' ')}
+            <button onclick="navigator.clipboard.writeText(this.dataset.h).then(()=>showMktToast('✅ Hashtags copied!'))" data-h="${(item.hashtags||[]).join(' ').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:6px">📋</button>
+          </div>` : ''}
+          ${item.caption ? `
+          <div style="background:var(--bg1);border-radius:6px;padding:8px">
+            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
+            <div style="font-size:11px;color:var(--text2);line-height:1.5">${(item.caption||'').slice(0,150)}…</div>
+          </div>` : ''}
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            ${hasImage
+              ? `<span style="font-size:10px;color:#22c55e">✅ Image uploaded</span>
+                 <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">🔄 Replace</button>`
+              : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">📸 Upload Image</button>`}
+            ${isReady && hasImage
+              ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
+              : isApproved
+              ? `<span style="font-size:10px;color:#6ee7b7">📅 Posts at ${item.post_time||'10:00'} IST on ${item.cal_date}</span>`
+              : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
+            ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
+          </div>
+          <input type="file" id="cal-img-${item.id}" accept="image/*" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
+        </div>` : '';
+
       return `
-      <div id="cal-row-${item.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${isToday?'rgba(201,168,76,.08)':'var(--bg3)'};border-radius:8px;border:1px solid ${isToday?'rgba(201,168,76,.3)':'var(--border)'}">
-        <div style="text-align:center;min-width:36px">
-          <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
-          <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
+      <div id="cal-row-${item.id}" style="padding:10px 12px;background:${bgColor};border-radius:8px;border:1px solid ${borderColor}">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="text-align:center;min-width:36px">
+            <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
+            <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
+          </div>
+          <span style="font-size:18px">${icon}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
+            <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+            ${statusBadge}
+            <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
+            ${!isApproved ? `<button onclick="saveEditCalendarItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">⚡ ${isReady?'Regen':'Create'}</button>` : ''}
+          </div>
         </div>
-        <span style="font-size:18px">${icon}</span>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
-          <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
-        </div>
-        <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-          ${existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : ''}
-          <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-          <button onclick="quickCreateFromCalendar('${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','bilingual')"
-            class="mkt-btn ${existing?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
-            ${existing?'✏️ Regen':'⚡ Create'}
-          </button>
-        </div>
+        ${expandedPanel}
       </div>`;
     }).join('') : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No posts planned — click + Add or start a Strategy Session above</div>`}
   </div>`);
@@ -4895,6 +4939,54 @@ async function generateYouTubeSEO(btn) {
   } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
   finally { if (btn) { btn.textContent='Optimize'; btn.disabled=false; } }
 }
+// ── Calendar inline image upload ──
+async function calHandleImageUpload(calendarId, input) {
+  const file = input.files[0];
+  if (!file) return;
+  showMktToast('⏳ Uploading image…');
+  try {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `calendar/${calendarId}_${Date.now()}.${ext}`;
+    const uploadRes = await fetch(
+      `${MKT_SB_URL}/storage/v1/object/calendar-images/${path}`,
+      { method:'POST', headers:{'apikey':MKT_SB_KEY,'Authorization':`Bearer ${MKT_SB_KEY}`,'Content-Type':file.type,'x-upsert':'true'}, body:file }
+    );
+    if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
+    const publicUrl = `${MKT_SB_URL}/storage/v1/object/public/calendar-images/${path}`;
+    await sb.from('content_calendar').update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', calendarId);
+    showMktToast('✅ Image uploaded — click Approve & Schedule');
+    renderCalendar();
+  } catch(e) {
+    showMktToast('❌ Upload failed: ' + e.message);
+  }
+}
+
+async function calApproveItem(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktToast('❌ Item not found'); return; }
+  if (!item.image_url) { showMktToast('❌ Upload an image first'); return; }
+  await sb.from('content_calendar').update({
+    status: 'approved',
+    approved_by: 'Himansu',
+    approved_at: new Date().toISOString(),
+    content_locked_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }).eq('id', calendarId);
+  showMktToast(`✅ Approved! Will auto-post at ${item.post_time||'10:00'} IST on ${item.cal_date}`);
+  renderCalendar();
+}
+
+async function calUnapproveItem(calendarId) {
+  if (!confirm('Undo approval? Post will not be published until re-approved.')) return;
+  await sb.from('content_calendar').update({ status:'ready', approved_at:null, content_locked_at:null, updated_at:new Date().toISOString() }).eq('id', calendarId);
+  showMktToast('↩ Approval removed');
+  renderCalendar();
+}
+
+window.calHandleImageUpload = calHandleImageUpload;
+window.calApproveItem = calApproveItem;
+window.calUnapproveItem = calUnapproveItem;
+
 window.editCalendarItemById = editCalendarItemById;
 // Expose render functions on window for lazy nav lookup
 window.renderComingSoon = renderComingSoon;
