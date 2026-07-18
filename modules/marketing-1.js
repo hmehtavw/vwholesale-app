@@ -3474,9 +3474,12 @@ async function renderCalendar() {
       const expandedPanel = (isReady || isApproved) ? `
         <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:10px;display:grid;gap:8px">
           ${item.visual_brief ? `
-          <div style="background:var(--bg1);border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div style="font-size:11px;color:var(--text3)">🎨 ChatGPT image prompt ready</div>
-            <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;flex-shrink:0">📋 Copy</button>
+          <div style="background:var(--bg1);border-radius:6px;padding:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+              <div style="font-size:11px;color:var(--text3)">🎨 ChatGPT image prompt ready</div>
+              <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;flex-shrink:0">📋 Copy</button>
+            </div>
+            <div style="font-size:10px;color:var(--gold);line-height:1.8">${buildCalSizesList(item.platform||[])}</div>
           </div>` : ''}
           ${(item.hashtags||[]).length ? `
           <div style="font-size:11px;color:var(--gold);background:var(--bg1);border-radius:6px;padding:8px;line-height:1.7">${(item.hashtags||[]).join(' ')}
@@ -5097,6 +5100,20 @@ async function calPreviewPost(calendarId) {
 
   document.body.appendChild(ov);
   ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+}
+
+// Build sizes list for display in calendar row
+function buildCalSizesList(platforms) {
+  const sizes = {};
+  for (const ch of (platforms||[])) {
+    if (ch === 'instagram_feed' || ch === 'threads') sizes['1080\u00d71080 (1:1)'] = true;
+    if (ch === 'instagram_story' || ch === 'facebook_story' || ch === 'whatsapp_story') sizes['1080\u00d71920 (9:16)'] = true;
+    if (ch === 'facebook_post') sizes['1200\u00d7630 (1.91:1)'] = true;
+    if (ch === 'youtube') sizes['1280\u00d7720 (16:9)'] = true;
+    if (ch === 'gbp') sizes['1200\u00d7900 (4:3)'] = true;
+  }
+  const list = Object.keys(sizes);
+  return list.length ? '📐 ' + list.join(' · ') : '';
 }
 
 window.calPreviewPost = calPreviewPost;
