@@ -3489,9 +3489,9 @@ async function renderCalendar() {
           </div>` : ''}
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${hasImage
-              ? `<span style="font-size:10px;color:#22c55e">✅ Image uploaded</span>
+              ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} uploaded</span>
                  <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">🔄 Replace</button>`
-              : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">📸 Upload Image</button>`}
+              : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload Image'}</button>`}
             <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
             ${isReady && hasImage
               ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
@@ -3500,7 +3500,7 @@ async function renderCalendar() {
               : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
             ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
           </div>
-          <input type="file" id="cal-img-${item.id}" accept="image/*" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
+          <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
         </div>` : '';
 
       return `
@@ -5050,13 +5050,19 @@ async function calPreviewPost(calendarId) {
 
     const iStyle = imgStyle[ch] || imgStyle['instagram_feed'];
     const noImgH = (ch.includes('story') || ch === 'whatsapp_story') ? 'aspect-ratio:9/16;width:56%' : 'height:120px;width:100%';
+    const isVideo = item.content_type === 'reel';
+    const isGif   = item.content_type === 'gif';
+
+    const mediaHtml = item.image_url
+      ? isVideo
+        ? `<video src="${item.image_url}" style="${iStyle}" controls muted playsinline></video>`
+        : `<img src="${item.image_url}" style="${iStyle}" onerror="this.style.display='none'">`
+      : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     return `
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
       <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px">${c.icon} ${c.name}</div>
-      ${item.image_url
-        ? `<img src="${item.image_url}" style="${iStyle}" onerror="this.style.display='none'">`
-        : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">📸 No image yet</div>`}
+      ${mediaHtml}
       <div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${adapted.replace(/</g,'&lt;')}</div>
     </div>`;
   }).join('');
@@ -5066,10 +5072,16 @@ async function calPreviewPost(calendarId) {
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
         <div style="font-size:16px;font-weight:900;color:var(--text1)">${item.topic}</div>
-        <div style="font-size:11px;color:var(--text3)">${postDate} · ${item.post_time||'10:00'} IST</div>
+        <div style="font-size:11px;color:var(--text3)">${postDate} · ${item.post_time||'10:00'} IST · ${item.content_type||'image'}</div>
       </div>
       <button onclick="document.getElementById('cal-preview-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="padding:6px 12px">✕ Close</button>
     </div>
+
+    ${item.reel_script ? `
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--gold);margin-bottom:8px">🎬 Reel Script</div>
+      <div style="font-size:11px;color:var(--text2);line-height:1.7;white-space:pre-wrap">${item.reel_script.replace(/</g,'&lt;')}</div>
+    </div>` : ''}
 
     <div style="display:grid;gap:12px;margin-bottom:16px">
       ${channelPreviews}
