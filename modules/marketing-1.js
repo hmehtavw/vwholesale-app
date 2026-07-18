@@ -3493,6 +3493,7 @@ async function renderCalendar() {
               ? `<span style="font-size:10px;color:#22c55e">✅ Image uploaded</span>
                  <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">🔄 Replace</button>`
               : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">📸 Upload Image</button>`}
+            <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
             ${isReady && hasImage
               ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
               : isApproved
@@ -4983,7 +4984,78 @@ async function calUnapproveItem(calendarId) {
   renderCalendar();
 }
 
-window.calHandleImageUpload = calHandleImageUpload;
+// ── Calendar post preview ──
+async function calPreviewPost(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktToast('❌ Item not found'); return; }
+
+  const channels = item.platform || ['instagram_feed','facebook_post','threads'];
+  const chMap = {
+    instagram_feed: { icon:'📸', name:'Instagram Feed' },
+    facebook_post:  { icon:'👤', name:'Facebook Page' },
+    threads:        { icon:'🧵', name:'Threads' },
+    youtube:        { icon:'▶️', name:'YouTube' },
+    gbp:            { icon:'📍', name:'Google Business' },
+  };
+  const postDate = new Date(item.cal_date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+
+  const ov = document.createElement('div');
+  ov.id = 'cal-preview-overlay';
+  ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.8);z-index:99999;overflow-y:auto;padding:20px';
+
+  const caption = item.caption || '';
+  const hashtags = (item.hashtags||[]).join(' ');
+  const fullCaption = caption + (hashtags ? '\n\n' + hashtags : '');
+  const teCaption = item.caption_te || '';
+
+  const channelPreviews = channels.map(ch => {
+    const c = chMap[ch] || { icon:'📱', name:ch };
+    // Adapt caption per channel
+    let adapted = fullCaption;
+    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP limit
+    if (ch === 'threads') adapted = caption.slice(0,200); // Threads shorter
+
+    return `
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
+      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px">${c.icon} ${c.name}</div>
+      ${item.image_url ? `<img src="${item.image_url}" style="width:100%;border-radius:8px;margin-bottom:10px;max-height:300px;object-fit:cover" onerror="this.style.display='none'">` : '<div style="background:var(--bg1);border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">📸 No image yet</div>'}
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${adapted.replace(/</g,'&lt;')}</div>
+    </div>`;
+  }).join('');
+
+  ov.innerHTML = `
+  <div style="max-width:520px;margin:0 auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:16px;font-weight:900;color:var(--text1)">${item.topic}</div>
+        <div style="font-size:11px;color:var(--text3)">${postDate} · ${item.post_time||'10:00'} IST</div>
+      </div>
+      <button onclick="document.getElementById('cal-preview-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="padding:6px 12px">✕ Close</button>
+    </div>
+
+    <div style="display:grid;gap:12px;margin-bottom:16px">
+      ${channelPreviews}
+    </div>
+
+    ${teCaption ? `
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:8px">🔤 Telugu Caption</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6">${teCaption.replace(/</g,'&lt;')}</div>
+    </div>` : ''}
+
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('cal-preview-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="flex:1;padding:10px">Close</button>
+      ${item.status === 'ready' && item.image_url
+        ? `<button onclick="document.getElementById('cal-preview-overlay').remove();calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;background:#22c55e;font-weight:700">✅ Approve & Schedule</button>`
+        : ''}
+    </div>
+  </div>`;
+
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+}
+
+window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
 window.calUnapproveItem = calUnapproveItem;
 
