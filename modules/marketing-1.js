@@ -3521,7 +3521,7 @@ async function renderCalendar() {
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
             ${statusBadge}
             <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-            ${!isApproved ? `<button onclick="saveEditCalendarItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">⚡ ${isReady?'Regen':'Create'}</button>` : ''}
+            ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">⚡ ${isReady?'Regen':'Create'}</button>` : ''}
           </div>
         </div>
         ${expandedPanel}
@@ -5244,6 +5244,27 @@ function buildCalSizesList(platforms) {
   const list = Object.keys(sizes);
   return list.length ? '📐 ' + list.join(' · ') : '';
 }
+
+// Direct regenerate — no edit form needed
+async function calRegenerateItem(calendarId) {
+  showMktToast('⏳ Generating caption + sending approval email…');
+  try {
+    const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email');
+      renderCalendar();
+    } else {
+      showMktToast('⚠️ ' + (data.error||'Generation failed'));
+    }
+  } catch(e) {
+    showMktToast('❌ ' + e.message);
+  }
+}
+window.calRegenerateItem = calRegenerateItem;
 
 window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
