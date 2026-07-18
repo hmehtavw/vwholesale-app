@@ -192,14 +192,35 @@ function render() {
     const uploadCard = document.createElement('div');
     uploadCard.className = 'card';
     uploadCard.id = 'upload-card';
-    uploadCard.innerHTML = '<div class="label">Upload Your Image</div>' +
-      '<div style="color:#94a3b8;font-size:12px;margin-bottom:12px">Upload your creative (with text/branding). Accepted: JPG, PNG, WebP.</div>' +
+
+    // Image prompt section
+    const promptHtml = item.visual_brief
+      ? '<div style="margin-bottom:14px;background:#0f172a;border-radius:8px;padding:12px">' +
+        '<div class="label" style="margin-bottom:6px">🎨 Image Generation Prompt</div>' +
+        '<div style="font-size:12px;color:#e2e8f0;line-height:1.6;font-family:monospace;white-space:pre-wrap">' + esc(item.visual_brief) + '</div>' +
+        '<div style="font-size:11px;color:#64748b;margin-top:6px">Paste into Midjourney, ChatGPT, Canva AI or any image tool. Add V Wholesale branding + text on top.</div>' +
+        '<button onclick="navigator.clipboard.writeText(' + JSON.stringify(item.visual_brief||'') + ').then(()=>this.textContent=\'✅ Copied!\').catch(()=>{})" style="margin-top:8px;padding:6px 14px;background:#1e3a5f;border:none;border-radius:6px;color:#93c5fd;font-size:11px;cursor:pointer">📋 Copy Prompt</button>' +
+        '</div>'
+      : '';
+
+    // Hashtags
+    const hashtagsHtml = item.hashtags && item.hashtags.length
+      ? '<div style="margin-bottom:14px;background:#0f172a;border-radius:8px;padding:12px">' +
+        '<div class="label" style="margin-bottom:6px">🔖 Hashtags</div>' +
+        '<div style="font-size:12px;color:#c9a84c;line-height:1.8">' + (item.hashtags||[]).join(' ') + '</div>' +
+        '<button onclick="navigator.clipboard.writeText(' + JSON.stringify((item.hashtags||[]).join(' ')) + ').then(()=>this.textContent=\'✅ Copied!\').catch(()=>{})" style="margin-top:8px;padding:6px 14px;background:#1e293b;border:none;border-radius:6px;color:#94a3b8;font-size:11px;cursor:pointer">📋 Copy Hashtags</button>' +
+        '</div>'
+      : '';
+
+    uploadCard.innerHTML = '<div class="label">📸 Upload Your Image</div>' +
+      '<div style="color:#94a3b8;font-size:12px;margin-bottom:12px">Create your image using the prompt below, add branding/text, then upload here.</div>' +
+      promptHtml +
+      hashtagsHtml +
       '<input type="file" id="img-upload" accept="image/*" style="display:none">' +
       '<div id="img-preview" style="display:none;margin-bottom:10px"><img id="img-preview-img" style="width:100%;border-radius:8px" alt="Preview"></div>' +
-      '<button onclick="document.getElementById(\'img-upload\').click()" style="width:100%;padding:12px;background:#1e293b;border:1px dashed #475569;border-radius:8px;color:#94a3b8;font-size:13px;cursor:pointer">📁 Choose Image</button>' +
+      '<button onclick="document.getElementById(\'img-upload\').click()" style="width:100%;padding:12px;background:#1e293b;border:1px dashed #475569;border-radius:8px;color:#94a3b8;font-size:13px;cursor:pointer">📁 Choose Image to Upload</button>' +
       '<div id="img-upload-status" style="font-size:12px;color:#94a3b8;margin-top:8px;text-align:center"></div>';
     app.appendChild(uploadCard);
-    // Wire up file input
     setTimeout(() => {
       const fileInput = document.getElementById('img-upload');
       if (fileInput) fileInput.addEventListener('change', handleImageUpload);
