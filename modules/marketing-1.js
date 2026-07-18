@@ -4966,8 +4966,14 @@ async function calApproveItem(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) { showMktToast('❌ Item not found'); return; }
   if (!item.image_url) { showMktToast('❌ Upload an image first'); return; }
+
+  // Build final bilingual caption: English + Telugu + hashtags
+  const parts = [item.caption, item.caption_te, (item.hashtags||[]).join(' ')].filter(Boolean);
+  const finalCaption = parts.join('\n\n');
+
   await sb.from('content_calendar').update({
     status: 'approved',
+    caption: finalCaption,          // lock combined caption for publishing
     approved_by: 'Himansu',
     approved_at: new Date().toISOString(),
     content_locked_at: new Date().toISOString(),
@@ -5005,15 +5011,16 @@ async function calPreviewPost(calendarId) {
 
   const caption = item.caption || '';
   const hashtags = (item.hashtags||[]).join(' ');
-  const fullCaption = caption + (hashtags ? '\n\n' + hashtags : '');
   const teCaption = item.caption_te || '';
+  // Full bilingual caption: English + Telugu + hashtags — all in one
+  const fullCaption = [caption, teCaption, hashtags].filter(Boolean).join('\n\n');
 
   const channelPreviews = channels.map(ch => {
     const c = chMap[ch] || { icon:'📱', name:ch };
     // Adapt caption per channel
     let adapted = fullCaption;
-    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP limit
-    if (ch === 'threads') adapted = caption.slice(0,200); // Threads shorter
+    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP limit — English only
+    if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500); // Threads — shorter
 
     return `
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
@@ -5036,12 +5043,6 @@ async function calPreviewPost(calendarId) {
     <div style="display:grid;gap:12px;margin-bottom:16px">
       ${channelPreviews}
     </div>
-
-    ${teCaption ? `
-    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border);margin-bottom:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:8px">🔤 Telugu Caption</div>
-      <div style="font-size:12px;color:var(--text2);line-height:1.6">${teCaption.replace(/</g,'&lt;')}</div>
-    </div>` : ''}
 
     <div style="display:flex;gap:8px">
       <button onclick="document.getElementById('cal-preview-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="flex:1;padding:10px">Close</button>
