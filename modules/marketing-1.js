@@ -3474,10 +3474,9 @@ async function renderCalendar() {
       const expandedPanel = (isReady || isApproved) ? `
         <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:10px;display:grid;gap:8px">
           ${item.visual_brief ? `
-          <div style="background:var(--bg1);border-radius:6px;padding:10px">
-            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">🎨 IMAGE PROMPT — paste into ChatGPT</div>
-            <div style="font-size:11px;color:var(--text2);line-height:1.5">${(item.visual_brief||'').slice(0,200)}${(item.visual_brief||'').length>200?'…':''}</div>
-            <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;margin-top:6px">📋 Copy Prompt</button>
+          <div style="background:var(--bg1);border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div style="font-size:11px;color:var(--text3)">🎨 ChatGPT image prompt ready</div>
+            <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;flex-shrink:0">📋 Copy</button>
           </div>` : ''}
           ${(item.hashtags||[]).length ? `
           <div style="font-size:11px;color:var(--gold);background:var(--bg1);border-radius:6px;padding:8px;line-height:1.7">${(item.hashtags||[]).join(' ')}
@@ -5027,20 +5026,37 @@ async function calPreviewPost(calendarId) {
   // Full bilingual caption: English + Telugu + hashtags — all in one
   const fullCaption = [caption, teCaption, hashtags].filter(Boolean).join('\n\n');
 
+  // Image dimensions per platform
+  const imgStyle = {
+    instagram_feed:  'width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    instagram_story: 'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    facebook_post:   'width:100%;aspect-ratio:1.91/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    facebook_story:  'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    threads:         'width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    youtube:         'width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    gbp:             'width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    whatsapp_story:  'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+  };
+
   const channelPreviews = channels.map(ch => {
     const c = chMap[ch] || { icon:'📱', name:ch };
     // Adapt caption per channel
     let adapted = fullCaption;
-    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP — English only, no hashtags
+    if (ch === 'gbp') adapted = caption.slice(0,300);
     if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500);
-    if (ch === 'instagram_story' || ch === 'facebook_story') adapted = item.caption?.slice(0,100) || ''; // Stories — short text or none
-    if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700); // WA Status — no hashtags
+    if (ch === 'instagram_story' || ch === 'facebook_story') adapted = item.caption?.slice(0,100) || '';
+    if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700);
     if (ch === 'youtube') adapted = fullCaption + '\n\n📍 NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in';
+
+    const iStyle = imgStyle[ch] || imgStyle['instagram_feed'];
+    const noImgH = (ch.includes('story') || ch === 'whatsapp_story') ? 'aspect-ratio:9/16;width:56%' : 'height:120px;width:100%';
 
     return `
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
       <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px">${c.icon} ${c.name}</div>
-      ${item.image_url ? `<img src="${item.image_url}" style="width:100%;border-radius:8px;margin-bottom:10px;max-height:300px;object-fit:cover" onerror="this.style.display='none'">` : '<div style="background:var(--bg1);border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">📸 No image yet</div>'}
+      ${item.image_url
+        ? `<img src="${item.image_url}" style="${iStyle}" onerror="this.style.display='none'">`
+        : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">📸 No image yet</div>`}
       <div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${adapted.replace(/</g,'&lt;')}</div>
     </div>`;
   }).join('');
