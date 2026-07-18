@@ -379,7 +379,7 @@ h3{font-size:12px;font-weight:700;color:#1B4F8A;border-bottom:1px solid #eee;pad
 .note{font-size:10px;color:#999;text-align:center;margin-top:16px}
 @media print{button{display:none}}</style></head><body>
 <div class="header">
-  <div><div class="logo">V Wholesale</div><div class="sub">Vassure Wholesale Pvt. Ltd.</div><div class="sub">NH65, Bhavanipuram, Vijayawada 520012</div><div class="sub">GSTIN: 37AAJCV5725H1ZZ · Ph: 8712697930</div></div>
+  <div><div class="logo">V Wholesale</div><div class="sub">Vassure Wholesale Pvt. Ltd.</div><div class="sub">Visit V Wholesale</div><div class="sub">GSTIN: 37AAJCV5725H1ZZ · Ph: 8712697930</div></div>
   <div style="text-align:right"><div style="font-weight:900;font-size:15px;color:#1B4F8A">SALARY SLIP</div><div class="sub">${monthLabel}</div><div class="sub">Generated: ${new Date().toLocaleDateString('en-IN')}</div></div>
 </div>
 <h3>Employee Details</h3>
@@ -412,7 +412,7 @@ ${(s.advance_deduct||0)>0?`<div class="row"><span>Advance Recovery</span><span>�
 ${(s.other_deduct||0)>0?`<div class="row"><span>Other Deductions</span><span>₹${(s.other_deduct||0).toLocaleString('en-IN')}</span></div>`:''}
 <div class="row total"><span>Total Deductions</span><span style="color:red">₹${(s.total_deductions||0).toLocaleString('en-IN')}</span></div>
 <div class="net"><span style="font-weight:900;font-size:14px">NET SALARY (Take Home)</span><span style="font-weight:900;font-size:22px;color:#1B4F8A">₹${(s.net_salary||0).toLocaleString('en-IN')}</span></div>
-<div class="note">This is a computer-generated payslip and does not require a physical signature.<br>V Wholesale — NH65, Bhavanipuram, Vijayawada 520012 · 8712697930</div>
+<div class="note">This is a computer-generated payslip and does not require a physical signature.<br>V Wholesale — Visit V Wholesale · 8712697930</div>
 <button onclick="window.print()" style="display:block;margin:16px auto 0;padding:10px 24px;background:#1B4F8A;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">🖨️ Print Payslip</button>
 <script>setTimeout(()=>window.print(),500)</script></body></html>`;
 

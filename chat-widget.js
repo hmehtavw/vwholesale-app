@@ -72,7 +72,7 @@
     +       'align-items:center;justify-content:center;font-weight:900;color:#0A1628;font-size:15px">V</div>'
     +     '<div style="flex:1">'
     +       '<div style="color:#fff;font-size:13px;font-weight:700">V Wholesale</div>'
-    +       '<div style="color:rgba(255,255,255,.6);font-size:10px">NH65, Bhavanipuram &middot; 8712697930</div>'
+    +       '<div style="color:rgba(255,255,255,.6);font-size:10px">Visit V Wholesale &middot; 8712697930</div>'
     +     '</div>'
     +     '<button id="vw-chat-x" aria-label="Close" style="background:none;border:none;'
     +       'color:rgba(255,255,255,.7);font-size:21px;cursor:pointer;line-height:1;padding:0 4px">&times;</button>'

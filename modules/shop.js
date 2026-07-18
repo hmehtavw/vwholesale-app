@@ -2580,7 +2580,7 @@ async function renderOrderTrackingPage(orderId) {
     </div>
     <div style="font-size:12px;color:var(--text2)">${itemCount} item${itemCount>1?'s':''}</div>
     <div style="font-size:11px;color:var(--text3);margin-top:3px">
-      ${o.delivery_type==='pickup'?'🏪 Store Pickup · 1-1-153 NH65 Bhavanipuram':'🚚 '+( addr?.address_line1||'')+', '+(addr?.area||addr?.city||'')}
+      ${o.delivery_type==='pickup'?'🏪 Store Pickup · 1-1-153 Visit V Wholesale':'🚚 '+( addr?.address_line1||'')+', '+(addr?.area||addr?.city||'')}
     </div>
     <div style="font-size:11px;color:var(--text3)">⏰ ${o.delivery_slot||'—'}</div>
   </div>
@@ -4214,7 +4214,7 @@ async function renderProfessionalHome() {
   </div>` : ''}
 
   <div style="margin-top:14px;padding:12px;background:var(--bg2);border-radius:10px;font-size:11px;color:var(--text3);text-align:center">
-    V Wholesale Contractor Club · NH65 Bhavanipuram, Vijayawada<br>
+    V Wholesale Contractor Club · Visit V Wholesale<br>
     Refer customers, earn on every purchase they make — for life.
   </div>
   <button onclick="VW_AUTH.signOut()" style="width:100%;margin-top:12px;padding:11px;border-radius:10px;background:none;border:1px solid var(--border);color:var(--text3);font-size:12px;cursor:pointer">Log Out</button>`;

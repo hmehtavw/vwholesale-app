@@ -409,7 +409,7 @@ Return ONLY valid JSON:
           reel_days: [3,6,9,12],
           city: 'Vijayawada',
           season: 'Monsoon — July-September',
-          store: 'V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930'
+          store: 'V Wholesale | Visit V Wholesale| 8712697930'
         }
       })
     });

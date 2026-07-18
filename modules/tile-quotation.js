@@ -5085,7 +5085,7 @@ function _buildPrintHTML(overrideState) {
   <div>
     <div class="logo-name">V Wholesale</div>
     <div class="logo-sub">Vassure Wholesale Pvt. Ltd.</div>
-    <div class="logo-sub">NH-65 Bhavanipuram, Vijayawada · 8712697930</div>
+    <div class="logo-sub">Visit V Wholesale · 8712697930</div>
     <div class="logo-sub">vassurewholesale.com · GST: 37AAFCV7043G1ZX</div>
   </div>
   <div>
@@ -6088,7 +6088,7 @@ function tqPrintAdvanceReceipt(q, txnRef) {
   <button class="print-btn" onclick="window.print()">🖨 Print Receipt</button>
   <button class="wa-btn" onclick="shareReceiptWA()">💬 Share via WhatsApp</button>
   <div class="brand">Vassure Wholesale Pvt Ltd</div>
-  <div class="brand-sub">1-1-153, NH-65, Bhavanipuram, Vijayawada · 8712697930</div>
+  <div class="brand-sub">1-1-153, Visit V Wholesale · 8712697930</div>
   <div class="receipt-title">ADVANCE RECEIPT</div>
 
   <div class="row"><span>Receipt No.</span><strong>${q.advance_receipt_no}</strong></div>

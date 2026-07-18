@@ -263,8 +263,7 @@ body{padding-bottom:var(--nav-h)}
     </div>
 
     <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--t3)">
-      V Wholesale Contractor Club · <a href="tel:8712697930" style="color:var(--b);text-decoration:none">8712697930</a><br>NH65 Bhavanipuram, Vijayawada
-    </div>
+      V Wholesale Contractor Club · <a href="tel:8712697930" style="color:var(--b);text-decoration:none">8712697930</a><br>Visit V Wholesale</div>
   </div>
 </div>
 
@@ -1022,7 +1021,7 @@ async function changePIN() {
 function shareReferral() {
   const name = _profile?.name||'';
   const phone = _profile?.phone||'';
-  const msg = `Hi! I recommend V Wholesale, Vijayawada for tiles, sanitary, electrical & all home building materials at wholesale prices.\n\nTell them ${name} (${phone}) referred you — you get the best rates!\n\n📞 Store: 8712697930\n📍 NH65, Bhavanipuram, Vijayawada`;
+  const msg = `Hi! I recommend V Wholesale, Vijayawada for tiles, sanitary, electrical & all home building materials at wholesale prices.\n\nTell them ${name} (${phone}) referred you — you get the best rates!\n\n📞 Store: 8712697930\n📍 Visit V Wholesale`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -1033,7 +1032,7 @@ async function downloadStatement() {
   const {transactions, total_points} = res.data||{};
   if (!transactions?.length) { toast('No transactions found'); return; }
   // Generate simple HTML → print
-  const html = `<html><head><title>Commission Statement</title><style>body{font-family:sans-serif;padding:20px;color:#111}h1{color:#1565C0;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1565C0;color:#fff;padding:8px;text-align:left;font-size:12px}td{padding:8px;border-bottom:1px solid #eee;font-size:12px}.total{font-weight:900;font-size:14px}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}</style></head><body><div class="header"><div><h1>V Wholesale</h1><div style="font-size:12px;color:#666">NH65, Bhavanipuram, Vijayawada · 8712697930</div></div><div style="text-align:right"><div style="font-size:12px;font-weight:700">Commission Statement</div><div style="font-size:11px;color:#666">Generated ${new Date().toLocaleDateString('en-IN')}</div></div></div><table><tr><th>Date</th><th>Description</th><th>Type</th><th>Points</th></tr>${transactions.map(t=>`<tr><td>${new Date(t.created_at).toLocaleDateString('en-IN')}</td><td>${t.description||t.transaction_type}</td><td>${t.transaction_type}</td><td style="color:${t.points>=0?'green':'red'}">${t.points>=0?'+':''}${t.points}</td></tr>`).join('')}<tr class="total"><td colspan="3">Total Points</td><td>${total_points}</td></tr></table></body></html>`;
+  const html = `<html><head><title>Commission Statement</title><style>body{font-family:sans-serif;padding:20px;color:#111}h1{color:#1565C0;font-size:18px}table{width:100%;border-collapse:collapse;margin-top:12px}th{background:#1565C0;color:#fff;padding:8px;text-align:left;font-size:12px}td{padding:8px;border-bottom:1px solid #eee;font-size:12px}.total{font-weight:900;font-size:14px}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}</style></head><body><div class="header"><div><h1>V Wholesale</h1><div style="font-size:12px;color:#666">Visit V Wholesale· 8712697930</div></div><div style="text-align:right"><div style="font-size:12px;font-weight:700">Commission Statement</div><div style="font-size:11px;color:#666">Generated ${new Date().toLocaleDateString('en-IN')}</div></div></div><table><tr><th>Date</th><th>Description</th><th>Type</th><th>Points</th></tr>${transactions.map(t=>`<tr><td>${new Date(t.created_at).toLocaleDateString('en-IN')}</td><td>${t.description||t.transaction_type}</td><td>${t.transaction_type}</td><td style="color:${t.points>=0?'green':'red'}">${t.points>=0?'+':''}${t.points}</td></tr>`).join('')}<tr class="total"><td colspan="3">Total Points</td><td>${total_points}</td></tr></table></body></html>`;
   const win = window.open('', '_blank');
   win.document.write(html);
   win.document.close();

@@ -1421,7 +1421,7 @@ function downloadMeasurementSheet() {
 <style>body{font-family:Arial;font-size:12px;margin:20mm}h1{color:#C8972B;font-size:18px}table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#f5c842;padding:6px 8px;text-align:left;font-size:11px}td{padding:7px;border:1px solid #ddd}@media print{button{display:none}}</style>
 </head><body>
 <div style="display:flex;justify-content:space-between;margin-bottom:16px">
-  <div><h1>V Wholesale — Measurement Sheet</h1><div>NH-65 Bhavanipuram, Vijayawada · 8712697930</div></div>
+  <div><h1>V Wholesale — Measurement Sheet</h1><div>Visit V Wholesale · 8712697930</div></div>
   <div style="text-align:right"><div>Date: ${new Date().toLocaleDateString('en-IN')}</div><div>Site: ___________________________</div><div>Customer: ______________________</div></div>
 </div>
 <table><tr><th>Room/Area</th><th>L(ft)</th><th>W(ft)</th><th>H(ft)</th><th>Area(sqft)</th><th>Wastage%</th><th>Notes</th></tr>
@@ -1486,7 +1486,7 @@ async function renderContractorSignupPage() {
     <div style="background:var(--header-bg);padding:20px 16px 24px;text-align:center">
       <div style="font-size:24px;font-weight:800;color:#F5C842;font-family:'Syne',sans-serif;margin-bottom:4px">V Wholesale</div>
       <div style="font-size:14px;color:rgba(255,255,255,0.7)">Contractor & Professional Registration</div>
-      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">NH-65 Bhavanipuram, Vijayawada</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px">Visit V Wholesale</div>
     </div>
 
     <!-- PROGRESS BAR -->
@@ -1980,7 +1980,7 @@ async function renderBulkWhatsApp() {
     <h3 class="card-title">Message</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       ${[
-        { label:'New Arrival', msg:'Hi {name}, exciting new arrivals at V Wholesale! Visit us for the latest tiles, sanitaryware and home improvement products. 📍 NH65, Bhavanipuram, Vijayawada. 📞 8712697930' },
+        { label:'New Arrival', msg:'Hi {name}, exciting new arrivals at V Wholesale! Visit us for the latest tiles, sanitaryware and home improvement products. 📍 Visit V Wholesale. 📞 8712697930' },
         { label:'Festival Offer', msg:'Hi {name}, special festival offers at V Wholesale! Huge discounts on tiles, electricals, paints and more. Valid this week only. 📞 8712697930' },
         { label:'Follow-up', msg:'Hi {name}, hope your home project is going well! V Wholesale is here for all your building material needs. Visit us or call 8712697930.' },
       ].map(t => `
@@ -1994,7 +1994,7 @@ async function renderBulkWhatsApp() {
       <textarea id="bwa-message" rows="4" placeholder="Type your message here..."
         style="width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box">Hi {name}, greetings from V Wholesale! 
 
-We have exciting new products and offers for you. Visit us at NH65, Bhavanipuram, Vijayawada or call 8712697930.
+We have exciting new products and offers for you. Visit us at Visit V Wholesaleor call 8712697930.
 
 Thank you for your continued support! 🙏</textarea>
     </div>

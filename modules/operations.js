@@ -2334,7 +2334,7 @@ async function renderDeliveryTrackingPage(token) {
     <!-- CONTACT -->
     <div style="text-align:center;padding:16px;font-size:13px;color:var(--text3)">
       Questions? Call us: <a href="tel:8712697930" style="color:var(--gold);font-weight:600">8712697930</a><br>
-      <span style="font-size:11px">V Wholesale · NH-65 Bhavanipuram, Vijayawada</span>
+      <span style="font-size:11px">V Wholesale · Visit V Wholesale</span>
     </div>
   </div>`;
 }
@@ -3739,7 +3739,7 @@ async function renderRFQTab() {
       <input type="date" id="rfq-date" value="${new Date(Date.now()+3*86400000).toISOString().split('T')[0]}">
     </div>
     <div class="form-group"><label>Delivery Location</label>
-      <input type="text" id="rfq-location" value="V Wholesale, NH-65 Bhavanipuram, Vijayawada" placeholder="Delivery address">
+      <input type="text" id="rfq-location" value="V Wholesale, Visit V Wholesale" placeholder="Delivery address">
     </div>
     <div class="form-group"><label>Additional Notes</label>
       <input type="text" id="rfq-notes" placeholder="e.g. ISI certified only, Brand preference if any">
@@ -4403,7 +4403,7 @@ async function printPettyCashSlip(entryId) {
       </div>
     </div>
     <div style="margin-top:20px;font-size:11px;color:#888;text-align:center">
-      V Wholesale, NH-65 Bhavanipuram, Vijayawada · This is a petty cash receipt
+      V Wholesale, Visit V Wholesale · This is a petty cash receipt
     </div>
   </div>
   </body></html>`);
@@ -4951,7 +4951,7 @@ async function generateStaffGreeting(name, type, phone) {
       topic: type==='birthday' ? `Happy Birthday ${name} — from the V Wholesale family` : `Happy Work Anniversary ${name} — thank you for your dedication`,
       template: 'festival', language: 'en',
       business_name: 'V Wholesale', phone: '8712697930',
-      website: 'vwholesale.in', address: 'NH65, Bhavanipuram, Vijayawada',
+      website: 'vwholesale.in', address: 'Visit V Wholesale',
       tagline: type==='birthday' ? 'Wishing you joy and success!' : 'Thank you for being part of our journey!'
     })
   });

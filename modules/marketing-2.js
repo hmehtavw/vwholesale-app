@@ -451,7 +451,7 @@ async function usePhotoshootImage(imageUrl, product) {
 
 async function renderPosterStudio() {
   const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
-  const bp = (bpArr||[])[0]||{business_name:'V Wholesale',tagline:'Build Better. Pay Less.',phone:'8712697930',website:'https://vwholesale.in',address:'NH65, Bhavanipuram, Vijayawada'};
+  const bp = (bpArr||[])[0]||{business_name:'V Wholesale',tagline:'Build Better. Pay Less.',phone:'8712697930',website:'https://vwholesale.in',address:'Visit V Wholesale'};
 
   setContent(`
   <div style="margin-bottom:16px">
@@ -763,7 +763,7 @@ async function psGenerateUploadCaption() {
         `✅ ${c.feature1||'Luxury Marble Looks'}\n` +
         `✅ ${c.feature2||'Glossy, Matt & Designer Finishes'}\n` +
         `✅ ${c.feature3||'Premium Quality for Modern Homes'}\n\n` +
-        `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
+        `📍 V Wholesale, Visit V Wholesale\n` +
         `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
         `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
     }
@@ -784,7 +784,7 @@ async function psGenerateUploadCaption() {
       `🏠 Transform your home with premium quality\n` +
       `💎 Elegant Designs • Modern Finishes • Lasting Quality\n` +
       `✅ Perfect for Living Rooms, Bedrooms & Bathrooms\n\n` +
-      `📍 V Wholesale, NH65, Bhavanipuram, Vijayawada\n` +
+      `📍 V Wholesale, Visit V Wholesale\n` +
       `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
       `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
 
@@ -905,7 +905,7 @@ async function generateFullPoster() {
         business_name: bp.business_name||'V Wholesale',
         phone: bp.phone||'8712697930',
         website: bp.website||'vwholesale.in',
-        address: bp.address||'NH65, Bhavanipuram, Vijayawada',
+        address: bp.address||'Visit V Wholesale',
         tagline: bp.tagline||'Build Better. Pay Less.',
       })
     });
@@ -922,7 +922,7 @@ async function generateFullPoster() {
       name: bp.business_name || 'V Wholesale',
       phone: bp.phone || '8712697930',
       website: (bp.website || 'vwholesale.in').replace('https://','').replace('http://',''),
-      address: bp.address || 'NH65, Bhavanipuram, Vijayawada',
+      address: bp.address || 'Visit V Wholesale',
       tagline: (bp.tagline || 'Beautiful Spaces. Built to Last.').toUpperCase(),
     };
 
@@ -1177,7 +1177,7 @@ async function composePosterCanvas(heroB64, content, biz) {
   ctx.fillStyle = GOLD; ctx.font = 'bold 26px Arial';
   ctx.fillText(biz.name || 'V Wholesale', 36, FOOT_Y + 33);
   ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = '11.5px Arial';
-  ctx.fillText('📍 ' + (biz.address || 'NH65, Bhavanipuram, Vijayawada'), 36, FOOT_Y + 53);
+  ctx.fillText('📍 ' + (biz.address || 'Visit V Wholesale'), 36, FOOT_Y + 53);
   ctx.fillText('📞 Call: ' + (biz.phone || '8712697930'), 36, FOOT_Y + 69);
   ctx.fillText('🌐 ' + (biz.website || 'vwholesale.in'), 36, FOOT_Y + 85);
 
@@ -2289,7 +2289,7 @@ async function waQuickSend(btnOrType) {
   if (type === 'quotation') {
     const quot = document.getElementById('qa-quot')?.value||'';
     const total = document.getElementById('qa-total')?.value||'';
-    message = 'Hi ' + name + '! Your quotation from V Wholesale is ready. Quotation: ' + quot + '. Total: Rs ' + total + '. Valid 7 days. Call: 8712697930. Visit: NH65, Bhavanipuram, Vijayawada. Team V Wholesale';
+    message = 'Hi ' + name + '! Your quotation from V Wholesale is ready. Quotation: ' + quot + '. Total: Rs ' + total + '. Valid 7 days. Call: 8712697930. Visit: Visit V Wholesale. Team V Wholesale';
   } else if (type === 'review') {
     const product = document.getElementById('qa-product')?.value||'your purchase';
     message = 'Hi ' + name + '! Thank you for shopping at V Wholesale. We hope you are loving your ' + product + '. Please rate us on Google - search V Wholesale Vijayawada. Your feedback means a lot! Team V Wholesale';
@@ -2298,7 +2298,7 @@ async function waQuickSend(btnOrType) {
     message = 'Hi ' + name + '! V Wholesale Contractor Club update: This month earnings: Rs ' + earn + '. Keep referring and earning! 2% on every referral. Call: 8712697930. Team V Wholesale';
   } else {
     const festival = document.getElementById('qa-festival')?.value||'festival';
-    message = festival + ' subhakankshalu! V Wholesale nundi meeku mariyu meeru kutumbaaniki subhasirvadalu. NH65, Bhavanipuram, Vijayawada. 8712697930. Team V Wholesale';
+    message = festival + ' subhakankshalu! V Wholesale nundi meeku mariyu meeru kutumbaaniki subhasirvadalu. Visit V Wholesale. 8712697930. Team V Wholesale';
   }
 
   if (!phone && type !== 'festival') { showMktToast('Enter phone number'); return; }
@@ -2781,7 +2781,7 @@ async function waAIWrite(btn) {
   card.style.cssText = 'background:var(--bg2);border-radius:12px;padding:20px;width:100%;max-width:400px;border:1px solid var(--border)';
   card.innerHTML = '<div style="font-size:14px;font-weight:700;margin-bottom:10px">✨ AI Write WhatsApp Message</div>'
     + '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">Describe what this message is about and AI will write it</div>'
-    + '<textarea id="wa-ai-topic" class="mkt-form-input" rows="3" placeholder="e.g. V Wholesale running 40 rs per sft tile sale this month, valid till end of July, visit NH65"></textarea>'
+    + '<textarea id="wa-ai-topic" class="mkt-form-input" rows="3" placeholder="e.g. V Wholesale running 40 rs per sft tile sale this month, valid till end of July, visit V Wholesale"></textarea>'
     + '<div style="display:flex;gap:8px;margin-top:10px">'
     + '<button id="wa-ai-generate-btn" class="mkt-btn mkt-btn-primary" style="flex:1;padding:10px;font-weight:700">✨ Generate</button>'
     + '<button id="wa-ai-cancel-btn" class="mkt-btn mkt-btn-ghost" style="padding:10px 14px">Cancel</button>'
@@ -3319,7 +3319,7 @@ function renderLocalSEO() {
     +'<div style="font-size:12px;color:var(--text3)">Dominate Google Maps · Local Search · Near Me queries</div></div>'
     +'<div class="mkt-card" style="margin-bottom:16px"><div class="mkt-card-title">🎯 Target Keywords (Vijayawada)</div>'
     +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'
-    +['tiles near me Vijayawada','granite price Vijayawada','bathroom fittings NH65','flooring shop Andhra Pradesh',
+    +['tiles near me Vijayawada','granite price Vijayawada','bathroom fittings V Wholesale','flooring shop Andhra Pradesh',
       'sanitaryware showroom Vijayawada','paint shop Bhavanipuram','home building materials Vijayawada',
       'Kajaria tiles dealer near me','Italian marble Vijayawada','contractor materials supply Vijayawada'
      ].map(k=>'<span class="badge badge-blue">'+k+'</span>').join('')
@@ -3356,7 +3356,7 @@ function renderLocalSEO() {
 }
 async function generateLocalKeywords() {
   showMktToast('🤖 Finding local keywords…');
-  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'local_keywords',language:'en',topic:'local SEO keywords',context:{business:'V Wholesale',location:'Vijayawada, Andhra Pradesh, NH65, Bhavanipuram',categories:'tiles, granite, sanitaryware, paints, electricals'}})});
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'local_keywords',language:'en',topic:'local SEO keywords',context:{business:'V Wholesale',location:'Vijayawada, Andhra Pradesh, Visit V Wholesale',categories:'tiles, granite, sanitaryware, paints, electricals'}})});
   const data = await res.json();
   const out = document.getElementById('local-kw-output');
   if (out) { out.style.display='block'; out.textContent=data.content||data.text||''; }
@@ -3500,7 +3500,7 @@ function showNewBlogModal() {
       </div>
       <div class="mkt-form-group">
         <label class="mkt-form-label">Your Ideas / Key Points to Include (optional)</label>
-        <textarea id="blog-ideas" class="mkt-form-input" rows="4" style="resize:vertical;font-size:12px;line-height:1.6" placeholder="e.g.&#10;- Mention that V Wholesale stocks 500+ tile designs&#10;- Include tips on choosing grout color&#10;- Talk about waterproofing importance&#10;- Mention our 10,000 sqft showroom on NH65&#10;- Include price range ₹30-150 per sqft"></textarea>
+        <textarea id="blog-ideas" class="mkt-form-input" rows="4" style="resize:vertical;font-size:12px;line-height:1.6" placeholder="e.g.&#10;- Mention that V Wholesale stocks 500+ tile designs&#10;- Include tips on choosing grout color&#10;- Talk about waterproofing importance&#10;- Mention our 10,000 sqft showroom at V Wholesale&#10;- Include price range ₹30-150 per sqft"></textarea>
         <div style="font-size:11px;color:var(--text3);margin-top:4px">💡 Add your expertise, specific product details, prices, or anything the AI should include</div>
       </div>
       <button class="mkt-btn mkt-btn-primary" onclick="generateBlogArticle()" style="width:100%;padding:14px;font-size:14px;font-weight:900">🤖 Generate Article (~30 seconds)</button>
@@ -3757,7 +3757,7 @@ function copyReviewReply() { navigator.clipboard.writeText(document.getElementBy
 async function generateFAQAnswer(btn) {
   const q = btn.dataset.q;
   showMktToast('🤖 Generating answer…');
-  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'faq_answer',language:'te+en',topic:'FAQ answer',context:{question:q,business:'V Wholesale',location:'NH65, Bhavanipuram, Vijayawada',timings:'10am-8pm Mon-Sat, 11am-6pm Sun',phone:'8712697930',website:'vwholesale.in'}})});
+  const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({task:'faq_answer',language:'te+en',topic:'FAQ answer',context:{question:q,business:'V Wholesale',location:'Visit V Wholesale',timings:'10am-8pm Mon-Sat, 11am-6pm Sun',phone:'8712697930',website:'vwholesale.in'}})});
   const data = await res.json();
   document.getElementById('faq-output').style.display='block';
   document.getElementById('faq-q').textContent='Q: '+q;
@@ -4248,7 +4248,7 @@ async function generateGreetingPoster(name, type, personType) {
       language: 'te+en',
       business_name: 'V Wholesale',
       phone: '8712697930', website: 'vwholesale.in',
-      address: 'NH65, Bhavanipuram, Vijayawada',
+      address: 'Visit V Wholesale',
       tagline: type === 'birthday' ? 'Wishing you joy and prosperity!' : 'Celebrating your special day!'
     })
   });
@@ -4407,9 +4407,9 @@ async function renderEmail() {
   html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">⚡ Quick Email Templates</div>'
     + '<div style="display:grid;gap:6px">';
   const emailTemplates = [
-    {icon:'🎉', label:'Festival Offer', subject:'Special Festival Offer from V Wholesale', body:'Dear Customer, Wishing you a joyous celebration! This festive season V Wholesale brings special offers on tiles, granite, marble and more. Visit NH65 Bhavanipuram Vijayawada or call 8712697930. Team V Wholesale'},
+    {icon:'🎉', label:'Festival Offer', subject:'Special Festival Offer from V Wholesale', body:'Dear Customer, Wishing you a joyous celebration! This festive season V Wholesale brings special offers on tiles, granite, marble and more. Visit Visit V Wholesaleor call 8712697930. Team V Wholesale'},
     {icon:'⭐', label:'Review Request', subject:'How was your V Wholesale experience?', body:'Dear Customer, Thank you for your recent purchase from V Wholesale. Would you spare 2 minutes to share your experience on Google? Your feedback helps us serve you better. Call 8712697930. Team V Wholesale'},
-    {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert from V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit NH65 Bhavanipuram Vijayawada. Call 8712697930. Team V Wholesale'},
+    {icon:'🆕', label:'New Arrivals', subject:'New Stock Alert from V Wholesale', body:'Dear Customer, Exciting news! New stock just arrived at V Wholesale — Italian Marble, vitrified tiles, premium sanitaryware. Visit Visit V Wholesale. Call 8712697930. Team V Wholesale'},
   ];
   // Store templates globally so buttons can access them after HTML render
   window._emailTemplates = emailTemplates;
@@ -4458,7 +4458,7 @@ async function generateEmailContent() {
     const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({ action:'generate_text', agent:'Email Marketing',
-        prompt: 'Write a professional marketing email for V Wholesale Vijayawada. Topic: ' + subject + '. Brand: V Wholesale — premium home building materials, NH65 Bhavanipuram, 8712697930, vwholesale.in. Warm, professional tone. Include CTA. Under 200 words. Return just the email body text.',
+        prompt: 'Write a professional marketing email for V Wholesale Vijayawada. Topic: ' + subject + '. Brand: V Wholesale — premium home building materials, Visit V Wholesale, 8712697930, vwholesale.in. Warm, professional tone. Include CTA. Under 200 words. Return just the email body text.',
         context: {} })
     });
     const data = await res.json();
@@ -4544,7 +4544,7 @@ function buildEmailHTML(subject, body) {
   <div class="store-info">
     <h3>📍 Visit Us</h3>
     <p>
-      NH65, Bhavanipuram, Vijayawada, Andhra Pradesh 520012<br>
+      Visit V Wholesale 520012<br>
       📞 <a href="tel:8712697930" style="color:#0A1628">8712697930</a> &nbsp;|&nbsp;
       🌐 <a href="https://vwholesale.in" style="color:#0A1628">vwholesale.in</a><br>
       🕐 Mon–Sat: 9:00 AM – 7:00 PM
@@ -4637,7 +4637,7 @@ async function renderWebPush() {
   html += '<div class="mkt-card" style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;margin-bottom:10px">📢 Send Push Notification</div>'
     + '<div style="display:grid;gap:8px">'
     + '<div><label class="mkt-form-label">Title (bold text)</label><input id="push-title" class="mkt-form-input" placeholder="e.g. Diwali Offer — 15% off all tiles"></div>'
-    + '<div><label class="mkt-form-label">Message body</label><textarea id="push-body" class="mkt-form-input" rows="2" placeholder="e.g. Visit V Wholesale today. Limited stock. NH65 Bhavanipuram."></textarea></div>'
+    + '<div><label class="mkt-form-label">Message body</label><textarea id="push-body" class="mkt-form-input" rows="2" placeholder="e.g. Visit V Wholesale today. Limited stock. Visit V Wholesale."></textarea></div>'
     + '<div><label class="mkt-form-label">Target</label>'
     + '<select id="push-target" class="mkt-form-select">'
     + '<option value="all">All subscribers (' + subCount + ')</option>'
@@ -4650,7 +4650,7 @@ async function renderWebPush() {
 
   // Quick notification templates
   const pushTemplates = [
-    {icon:'🎉', title:'Festival Offer', body:'Visit V Wholesale today — special festival prices on tiles and granite. NH65 Bhavanipuram.'},
+    {icon:'🎉', title:'Festival Offer', body:'Visit V Wholesale today — special festival prices on tiles and granite. Visit V Wholesale.'},
     {icon:'🆕', title:'New Arrival', body:'New stock just arrived — Italian marble, vitrified tiles and more. First come first served!'},
     {icon:'⏰', title:'Weekend Sale', body:'This weekend only — extra 5% on all orders above 25000. Visit V Wholesale NH65.'},
     {icon:'📞', title:'Need Help?', body:'Our tile experts are ready. Call 8712697930 or visit V Wholesale NH65 today.'},

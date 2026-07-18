@@ -308,7 +308,7 @@ async function generateReelScript(topic, event) {
         prompt: `Write a complete Instagram/YouTube Shorts reel script for V Wholesale, Vijayawada.
 
 TOPIC: ${topic}
-STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930
+STORE: V Wholesale | Visit V Wholesale| 8712697930
 
 Return JSON:
 {
@@ -940,7 +940,7 @@ async function renderBrandProfile() {
         </div>
         <div>
           <label class="mkt-form-label">Store address</label>
-          <input id="bp-address" class="mkt-form-input" value="${bp?.address||'NH65, Bhavanipuram, Vijayawada'}" placeholder="Address">
+          <input id="bp-address" class="mkt-form-input" value="${bp?.address||'Visit V Wholesale'}" placeholder="Address">
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div>
@@ -1012,7 +1012,7 @@ async function renderBrandProfile() {
       <div style="display:grid;gap:8px">
         <div>
           <label class="mkt-form-label">Default CTA (Call to Action)</label>
-          <input id="bp-cta" class="mkt-form-input" value="${bp?.default_cta||'Visit us at NH65, Bhavanipuram \u00B7 Call 8712697930 \u00B7 vwholesale.in'}" placeholder="Your standard CTA">
+          <input id="bp-cta" class="mkt-form-input" value="${bp?.default_cta||'Visit us at Visit V Wholesale \u00B7 Call 8712697930 \u00B7 vwholesale.in'}" placeholder="Your standard CTA">
         </div>
         <div>
           <label class="mkt-form-label">Always-on hashtags (added to every post)</label>
@@ -1206,7 +1206,7 @@ async function generateWhatsAppBroadcast(topic, audience) {
 Topic: ${topic}
 Audience: ${audience||'all customers'}
 Offer/Detail: ${offer||'none'}
-Store: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+Store: V Wholesale | Visit V Wholesale| 8712697930 | vwholesale.in
 
 Rules:
 - Each message max 200 characters (WhatsApp best practice)
@@ -1300,7 +1300,7 @@ async function generateContractorContent(contractorName, projectType) {
 Contractor: ${contractorName}
 Project type: ${projectType||'renovation'}
 Location: ${location}
-Materials sourced from: V Wholesale, NH65 Bhavanipuram, Vijayawada (8712697930)
+Materials sourced from: V Wholesale, Visit V Wholesale(8712697930)
 
 Generate 3 posts the contractor can copy-paste to their WhatsApp status or Instagram:
 1. Project announcement post (when starting work)
@@ -1744,7 +1744,7 @@ async function testThreadsPost() {
     const res = await fetch(MKT_SB_URL+'/functions/v1/threads-api', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify(Object.assign(
-        {text:'V Wholesale — Premium Home Building Materials in Vijayawada. Tiles, Granite, Marble & more. Visit us at NH65, Bhavanipuram. 📞 8712697930 | vwholesale.in\n\n#Vijayawada #HomeRenovation #VWholesale #Tiles #Marble'},
+        {text:'V Wholesale — Premium Home Building Materials in Vijayawada. Tiles, Granite, Marble & more. Visit us at Visit V Wholesale. 📞 8712697930 | vwholesale.in\n\n#Vijayawada #HomeRenovation #VWholesale #Tiles #Marble'},
         window._latestThreadsImageUrl ? {action:'publish_image', image_url:window._latestThreadsImageUrl} : {action:'publish_text'}
       ))
     });
@@ -2997,7 +2997,7 @@ ${postTypePrompts[postType]||''}
 
 LANGUAGE: ${langInstructions[language]}
 
-BRAND: V Wholesale | NH65, Bhavanipuram, Vijayawada | Phone: 8712697930 | vwholesale.in
+BRAND: V Wholesale | Visit V Wholesale| Phone: 8712697930 | vwholesale.in
 CATEGORIES: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals, Flooring, False Ceiling
 
 ${learningContext}
@@ -3874,7 +3874,7 @@ async function generateAndShowReelScript(topic, calId, btn, regenerate) {
         prompt: `Write a complete Instagram Reel / YouTube Shorts script for V Wholesale, Vijayawada.
 
 TOPIC: ${topic}
-STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+STORE: V Wholesale | Visit V Wholesale| 8712697930 | vwholesale.in
 CATEGORIES: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals
 
 Return JSON:
@@ -3978,7 +3978,7 @@ async function quickCreateFromCalendar(topic, type, language) {
 TOPIC: ${topic}
 FORMAT: ${type || 'image'}
 LANGUAGE: ${lang === 'bilingual' ? 'Telugu headline + English body' : lang === 'te' ? 'Full Telugu' : lang === 'hi' ? 'Hindi' : lang === 'ta' ? 'Tamil' : lang === 'kn' ? 'Kannada' : 'English'}
-STORE: V Wholesale | NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in
+STORE: V Wholesale | Visit V Wholesale| 8712697930 | vwholesale.in
 PRODUCTS: Tiles, Granite, Marble, Sanitaryware, Paints, Electricals
 
 Return JSON:
@@ -4888,7 +4888,7 @@ async function generateSEOBlogPost(btn) {
     const res = await fetch(MKT_SB_URL+'/functions/v1/marketing-ai', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({ action:'generate_text', agent:'SEO Blog',
-        prompt: 'Write a short SEO blog post (400-500 words) for V Wholesale, Vijayawada targeting the keyword "' + topic + '". Include: H1 title, 2-3 subheadings, natural keyword usage, mention V Wholesale at NH65 Bhavanipuram, call to action. Return just the blog post text.',
+        prompt: 'Write a short SEO blog post (400-500 words) for V Wholesale, Vijayawada targeting the keyword "' + topic + '". Include: H1 title, 2-3 subheadings, natural keyword usage, mention V Wholesale at Visit V Wholesale, call to action. Return just the blog post text.',
         context: {} })
     });
     const data = await res.json();
@@ -5177,7 +5177,7 @@ async function calPreviewPost(calendarId) {
     if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500);
     if (ch === 'instagram_story' || ch === 'facebook_story') adapted = item.caption?.slice(0,100) || '';
     if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700);
-    if (ch === 'youtube') adapted = fullCaption + '\n\n📍 NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in';
+    if (ch === 'youtube') adapted = fullCaption + '\n\n📍 Visit V Wholesale| 8712697930 | vwholesale.in';
 
     const platformImg = (item.platform_images && item.platform_images[ch]) || item.image_url || null;
     const iStyle = imgStyle[ch] || imgStyle['instagram_feed'];

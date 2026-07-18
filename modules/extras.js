@@ -2893,7 +2893,7 @@ async function createQuoteFromVis() {
 
 function shareResult() {
   const productName = _visSelectedProduct?.label || _visSelectedProduct?.name || 'this material';
-  const msg = `🏠 *V Wholesale Room Visualizer*\n\nI just saw how *${productName}* will look in my room!\n\nCome see it in person at V Wholesale, NH-65 Bhavanipuram, Vijayawada\n📞 8712697930`;
+  const msg = `🏠 *V Wholesale Room Visualizer*\n\nI just saw how *${productName}* will look in my room!\n\nCome see it in person at V Wholesale, Visit V Wholesale\n📞 8712697930`;
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
@@ -3241,7 +3241,7 @@ async function submitCustomerRegistration() {
         style="width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:12px;font-size:13px;cursor:pointer;color:var(--text)">
         📋 Copy Portal Link
       </button>
-      <div style="margin-top:16px;font-size:12px;color:var(--text3)">V Wholesale · NH-65 Bhavanipuram, Vijayawada</div>
+      <div style="margin-top:16px;font-size:12px;color:var(--text3)">V Wholesale · Visit V Wholesale</div>
     </div>
   </div>`;
 

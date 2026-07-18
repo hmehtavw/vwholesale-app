@@ -3772,7 +3772,7 @@ async function printDeliveryChallan(invoiceId, tqId) {
   </head><body>
   <div class="header">
     <div class="title">V Wholesale</div>
-    <div class="sub">Vassure Wholesale Pvt. Ltd. · 1-1-153, NH65, Bhavanipuram, Vijayawada · 8712697930</div>
+    <div class="sub">Vassure Wholesale Pvt. Ltd. · 1-1-153, Visit V Wholesale· 8712697930</div>
     <div style="font-size:16px;font-weight:bold;margin-top:6px">DELIVERY CHALLAN</div>
   </div>
 
