@@ -3438,9 +3438,7 @@ async function renderCalendar() {
               <div style="font-size:11px;color:var(--text3);margin-top:2px" id="cal-notes-display-${item.id}">${item.notes||''}</div>
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-              <button onclick="editCalendarItemById('${item.id}',true)"
-                class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
-                class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
+              <button onclick="editCalendarItemById('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
               ${hasScript
                 ? '<span class="badge badge-green" style="font-size:10px">✅ Script ready</span>'
                 : `<button onclick="generateAndShowReelScript('${(item.topic||'').replace(/'/g,"\'")}','${item.id}',this)" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 10px">🎬 Script</button>`}
@@ -3474,9 +3472,7 @@ async function renderCalendar() {
         </div>
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
           ${existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : ''}
-          <button onclick="editCalendarItemById('${item.id}',false)"
-            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
+          <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
           <button onclick="quickCreateFromCalendar('${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','bilingual')"
             class="mkt-btn ${existing?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
             ${existing?'✏️ Regen':'⚡ Create'}
