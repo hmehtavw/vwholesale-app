@@ -4951,26 +4951,154 @@ async function generateYouTubeSEO(btn) {
   } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
   finally { if (btn) { btn.textContent='Optimize'; btn.disabled=false; } }
 }
-// ── Calendar inline image upload ──
+// ── Platform size definitions ──
+const PLATFORM_SIZES = {
+  instagram_feed:  { w:1080, h:1080, label:'Instagram Feed (1:1)' },
+  instagram_story: { w:1080, h:1920, label:'Instagram Story (9:16)' },
+  facebook_post:   { w:1200, h:630,  label:'Facebook Post (1.91:1)' },
+  facebook_story:  { w:1080, h:1920, label:'Facebook Story (9:16)' },
+  threads:         { w:1080, h:1080, label:'Threads (1:1)' },
+  youtube:         { w:1280, h:720,  label:'YouTube (16:9)' },
+  gbp:             { w:1200, h:900,  label:'Google Business (4:3)' },
+  whatsapp_story:  { w:1080, h:1920, label:'WhatsApp Status (9:16)' },
+};
+
+// Smart crop: crop from centre of source image to target ratio
+function cropImageToSize(img, targetW, targetH) {
+  const canvas = document.createElement('canvas');
+  canvas.width  = targetW;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+
+  const srcRatio = img.naturalWidth / img.naturalHeight;
+  const dstRatio = targetW / targetH;
+
+  let sx, sy, sw, sh;
+  if (srcRatio > dstRatio) {
+    // Source is wider — crop sides
+    sh = img.naturalHeight;
+    sw = Math.round(sh * dstRatio);
+    sx = Math.round((img.naturalWidth - sw) / 2);
+    sy = 0;
+  } else {
+    // Source is taller — crop top/bottom (keep top-biased for portraits)
+    sw = img.naturalWidth;
+    sh = Math.round(sw / dstRatio);
+    sx = 0;
+    sy = Math.round((img.naturalHeight - sh) * 0.35); // 35% from top keeps faces/subjects
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+  return canvas;
+}
+
+// Upload one canvas to Supabase storage, return public URL
+async function uploadCanvasToStorage(canvas, path, mimeType) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+      try {
+        const res = await fetch(
+          `${MKT_SB_URL}/storage/v1/object/calendar-images/${path}`,
+          { method:'POST', headers:{'apikey':MKT_SB_KEY,'Authorization':`Bearer ${MKT_SB_KEY}`,'Content-Type':mimeType,'x-upsert':'true'}, body:blob }
+        );
+        if (!res.ok) { reject(new Error('Upload failed: ' + res.status)); return; }
+        resolve(`${MKT_SB_URL}/storage/v1/object/public/calendar-images/${path}`);
+      } catch(e) { reject(e); }
+    }, mimeType, 0.92);
+  });
+}
+
+// Main upload handler — auto-crops to all platform sizes
 async function calHandleImageUpload(calendarId, input) {
   const file = input.files[0];
   if (!file) return;
-  showMktToast('⏳ Uploading image…');
-  try {
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `calendar/${calendarId}_${Date.now()}.${ext}`;
-    const uploadRes = await fetch(
-      `${MKT_SB_URL}/storage/v1/object/calendar-images/${path}`,
-      { method:'POST', headers:{'apikey':MKT_SB_KEY,'Authorization':`Bearer ${MKT_SB_KEY}`,'Content-Type':file.type,'x-upsert':'true'}, body:file }
-    );
-    if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
-    const publicUrl = `${MKT_SB_URL}/storage/v1/object/public/calendar-images/${path}`;
-    await sb.from('content_calendar').update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', calendarId);
-    showMktToast('✅ Image uploaded — click Approve & Schedule');
-    renderCalendar();
-  } catch(e) {
-    showMktToast('❌ Upload failed: ' + e.message);
+
+  // Reels/videos — just upload as-is, no cropping
+  if (file.type.startsWith('video/')) {
+    showMktToast('⏳ Uploading video…');
+    try {
+      const ext = file.name.split('.').pop() || 'mp4';
+      const path = `calendar/${calendarId}_video_${Date.now()}.${ext}`;
+      const res = await fetch(
+        `${MKT_SB_URL}/storage/v1/object/calendar-images/${path}`,
+        { method:'POST', headers:{'apikey':MKT_SB_KEY,'Authorization':`Bearer ${MKT_SB_KEY}`,'Content-Type':file.type,'x-upsert':'true'}, body:file }
+      );
+      if (!res.ok) throw new Error('Upload failed: ' + res.status);
+      const url = `${MKT_SB_URL}/storage/v1/object/public/calendar-images/${path}`;
+      await sb.from('content_calendar').update({ image_url: url, updated_at: new Date().toISOString() }).eq('id', calendarId);
+      showMktToast('✅ Video uploaded — click Approve & Schedule');
+      renderCalendar();
+    } catch(e) { showMktToast('❌ Upload failed: ' + e.message); }
+    return;
   }
+
+  // Load source image to get dimensions
+  const imgEl = new Image();
+  const objectUrl = URL.createObjectURL(file);
+  imgEl.src = objectUrl;
+
+  showMktToast('⏳ Processing image for all platforms…');
+
+  await new Promise((resolve, reject) => {
+    imgEl.onload = resolve;
+    imgEl.onerror = reject;
+  });
+
+  // Get which platforms this calendar item needs
+  const { data: calItem } = await sb.from('content_calendar').select('platform').eq('id', calendarId).single();
+  const platforms = calItem?.platform || ['instagram_feed','facebook_post','threads'];
+
+  // Deduplicate by size — no need to upload same crop twice
+  const sizeMap = {}; // key: "WxH" → first platform that needs it
+  const platformToSize = {}; // platform → "WxH"
+  for (const ch of platforms) {
+    const sz = PLATFORM_SIZES[ch];
+    if (!sz) continue;
+    const key = `${sz.w}x${sz.h}`;
+    platformToSize[ch] = key;
+    if (!sizeMap[key]) sizeMap[key] = { w:sz.w, h:sz.h, platforms:[] };
+    sizeMap[key].platforms.push(ch);
+  }
+
+  const uploadedUrls = {}; // "WxH" → url
+  const platformImages = {}; // platform → url
+
+  let done = 0;
+  const total = Object.keys(sizeMap).length;
+
+  for (const [key, sz] of Object.entries(sizeMap)) {
+    try {
+      const canvas = cropImageToSize(imgEl, sz.w, sz.h);
+      const path = `calendar/${calendarId}_${sz.w}x${sz.h}_${Date.now()}.jpg`;
+      const url = await uploadCanvasToStorage(canvas, path, 'image/jpeg');
+      uploadedUrls[key] = url;
+      for (const ch of sz.platforms) platformImages[ch] = url;
+      done++;
+      showMktToast(`⏳ Processed ${done}/${total} sizes…`);
+    } catch(e) {
+      console.error(`Crop/upload failed for ${key}:`, e);
+    }
+  }
+
+  URL.revokeObjectURL(objectUrl);
+
+  if (!Object.keys(platformImages).length) {
+    showMktToast('❌ All uploads failed'); return;
+  }
+
+  // Master image = square (instagram_feed) or first available
+  const masterUrl = platformImages['instagram_feed'] || Object.values(platformImages)[0];
+
+  await sb.from('content_calendar').update({
+    image_url: masterUrl,
+    platform_images: platformImages,
+    updated_at: new Date().toISOString()
+  }).eq('id', calendarId);
+
+  const sizeCount = Object.keys(sizeMap).length;
+  showMktToast(`✅ ${sizeCount} size${sizeCount>1?'s':''} generated — click Approve & Schedule`);
+  renderCalendar();
 }
 
 async function calApproveItem(calendarId) {
@@ -5051,15 +5179,16 @@ async function calPreviewPost(calendarId) {
     if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700);
     if (ch === 'youtube') adapted = fullCaption + '\n\n📍 NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in';
 
+    const platformImg = (item.platform_images && item.platform_images[ch]) || item.image_url || null;
     const iStyle = imgStyle[ch] || imgStyle['instagram_feed'];
     const noImgH = (ch.includes('story') || ch === 'whatsapp_story') ? 'aspect-ratio:9/16;width:56%' : 'height:120px;width:100%';
     const isVideo = item.content_type === 'reel';
     const isGif   = item.content_type === 'gif';
 
-    const mediaHtml = item.image_url
+    const mediaHtml = platformImg
       ? isVideo
-        ? `<video src="${item.image_url}" style="${iStyle}" controls muted playsinline></video>`
-        : `<img src="${item.image_url}" style="${iStyle}" onerror="this.style.display='none'">`
+        ? `<video src="${platformImg}" style="${iStyle}" controls muted playsinline></video>`
+        : `<img src="${platformImg}" style="${iStyle}" onerror="this.style.display='none'">`
       : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     return `
