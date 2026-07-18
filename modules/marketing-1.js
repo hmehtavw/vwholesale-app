@@ -3438,7 +3438,8 @@ async function renderCalendar() {
               <div style="font-size:11px;color:var(--text3);margin-top:2px" id="cal-notes-display-${item.id}">${item.notes||''}</div>
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-              <button onclick="editCalendarItem('${item.id}','${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'reel'}','${(item.notes||'').replace(/'/g,"\'")}',true)"
+              <button onclick="editCalendarItemById('${item.id}',true)"
+                class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
                 class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px" title="Edit topic">✏️</button>
               ${hasScript
                 ? '<span class="badge badge-green" style="font-size:10px">✅ Script ready</span>'
@@ -3473,7 +3474,8 @@ async function renderCalendar() {
         </div>
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
           ${existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : ''}
-          <button onclick="editCalendarItem('${item.id}','${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','${(item.notes||'').replace(/'/g,"\'")}',false)"
+          <button onclick="editCalendarItemById('${item.id}',false)"
+            class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
             class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
           <button onclick="quickCreateFromCalendar('${(item.topic||'').replace(/'/g,"\'")}','${item.content_type||'image'}','bilingual')"
             class="mkt-btn ${existing?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:10px;padding:3px 8px">
@@ -3493,6 +3495,13 @@ function getNextStrategyDate() {
   // Fortnightly = 1st and 15th of each month
   if (day < 15) return new Date(year, month, 15).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
   return new Date(year, month+1, 1).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+}
+
+// Safe wrapper — looks up item by id from DB to avoid special-char issues in onclick strings
+async function editCalendarItemById(id, isReel) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', id).single();
+  if (!item) { showMktToast('❌ Could not load item'); return; }
+  editCalendarItem(item.id, item.topic || '', item.content_type || (isReel ? 'reel' : 'image'), item.notes || '', isReel);
 }
 
 function editCalendarItem(id, currentTopic, type, currentNotes, isReel) {
@@ -3556,7 +3565,7 @@ async function saveEditCalendarItem(id) {
     });
     const data = await res.json();
     if(data.ok) {
-      showMktToast('✅ Done! Check WhatsApp 9038010175 for approval link');
+      showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email');
     } else {
       showMktToast('⚠️ ' + (data.error||'Generation failed'));
     }
@@ -4890,6 +4899,7 @@ async function generateYouTubeSEO(btn) {
   } catch(e) { if (out) out.innerHTML = '<div style="color:var(--red);font-size:11px">❌ ' + e.message + '</div>'; }
   finally { if (btn) { btn.textContent='Optimize'; btn.disabled=false; } }
 }
+window.editCalendarItemById = editCalendarItemById;
 // Expose render functions on window for lazy nav lookup
 window.renderComingSoon = renderComingSoon;
 window.renderApprovals = renderApprovals;
