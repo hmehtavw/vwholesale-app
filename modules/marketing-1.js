@@ -3551,7 +3551,7 @@ async function saveEditCalendarItem(id) {
     status:'planned', updated_at:new Date().toISOString()
   }).eq('id', id);
 
-  showMktToast('⏳ Generating caption + image + sending WhatsApp approval…');
+  showMktToast('⏳ Generating caption + sending approval email…');
 
   // Trigger pipeline for this specific item
   try {

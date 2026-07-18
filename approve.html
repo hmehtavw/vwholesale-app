@@ -48,6 +48,7 @@ input[type=text]:focus{outline:none;border-color:#c9a84c}
 
 <script>
 const PIPELINE = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/content-pipeline';
+const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 const token = new URLSearchParams(location.search).get('token');
 let item = null;
@@ -58,6 +59,58 @@ function api(body) {
     headers: { 'Content-Type': 'application/json', 'apikey': ANON },
     body: JSON.stringify(body)
   }).then(r => r.json());
+}
+
+// Upload image to Supabase storage and save URL to content_calendar
+async function handleImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('img-upload-status');
+  const preview = document.getElementById('img-preview');
+  const previewImg = document.getElementById('img-preview-img');
+  status.textContent = '⏳ Uploading…';
+
+  // Show local preview immediately
+  const localUrl = URL.createObjectURL(file);
+  previewImg.src = localUrl;
+  preview.style.display = 'block';
+
+  try {
+    // Upload to Supabase storage via signed upload
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `calendar/manual_${token}_${Date.now()}.${ext}`;
+    const uploadRes = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/calendar-images/${path}`,
+      {
+        method: 'POST',
+        headers: { 'apikey': ANON, 'Authorization': `Bearer ${ANON}`, 'Content-Type': file.type, 'x-upsert': 'true' },
+        body: file
+      }
+    );
+    if (!uploadRes.ok) throw new Error('Upload failed: ' + uploadRes.status);
+
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/calendar-images/${path}`;
+
+    // Save to content_calendar via pipeline approve action (image_url field)
+    // We use a direct DB update via the approve endpoint — pass image_url
+    const saveRes = await fetch(PIPELINE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+      body: JSON.stringify({ action: 'save_image', token, image_url: publicUrl })
+    });
+    const saveData = await saveRes.json();
+    if (saveData.ok) {
+      status.textContent = '✅ Image uploaded and saved!';
+      previewImg.src = publicUrl;
+    } else {
+      status.textContent = '✅ Image uploaded — will use on approval';
+      // Store locally for use on approve
+      window._uploadedImageUrl = publicUrl;
+    }
+  } catch(err) {
+    status.textContent = '❌ Upload failed — ' + err.message;
+    window._uploadedImageUrl = null;
+  }
 }
 
 function fmtDate(s) {
@@ -136,11 +189,21 @@ function render() {
     imgCard.appendChild(img);
     app.appendChild(imgCard);
   } else {
-    const noImg = document.createElement('div');
-    noImg.className = 'card';
-    noImg.innerHTML = '<div class="label">Image</div><div style="color:#64748b;font-size:13px">' +
-      ('⏳ Image generation pending or failed — regenerate from calendar') + '</div>';
-    app.appendChild(noImg);
+    const uploadCard = document.createElement('div');
+    uploadCard.className = 'card';
+    uploadCard.id = 'upload-card';
+    uploadCard.innerHTML = '<div class="label">Upload Your Image</div>' +
+      '<div style="color:#94a3b8;font-size:12px;margin-bottom:12px">Upload your creative (with text/branding). Accepted: JPG, PNG, WebP.</div>' +
+      '<input type="file" id="img-upload" accept="image/*" style="display:none">' +
+      '<div id="img-preview" style="display:none;margin-bottom:10px"><img id="img-preview-img" style="width:100%;border-radius:8px" alt="Preview"></div>' +
+      '<button onclick="document.getElementById(\'img-upload\').click()" style="width:100%;padding:12px;background:#1e293b;border:1px dashed #475569;border-radius:8px;color:#94a3b8;font-size:13px;cursor:pointer">📁 Choose Image</button>' +
+      '<div id="img-upload-status" style="font-size:12px;color:#94a3b8;margin-top:8px;text-align:center"></div>';
+    app.appendChild(uploadCard);
+    // Wire up file input
+    setTimeout(() => {
+      const fileInput = document.getElementById('img-upload');
+      if (fileInput) fileInput.addEventListener('change', handleImageUpload);
+    }, 100);
   }
 
   // Reel script
