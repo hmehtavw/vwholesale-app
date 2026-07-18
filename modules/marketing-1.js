@@ -3494,8 +3494,10 @@ async function renderCalendar() {
             ${hasImage
               ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} uploaded</span>
                  <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">🔄 Replace</button>`
-              : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload Image'}</button>
-                 <button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Auto-generate poster for all platforms">🤖 Auto Poster</button>`}
+              : `<button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload Image'}</button>`}
+            ${item.content_type!=='reel'&&item.content_type!=='gif'
+              ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Auto-generate poster for all platforms">🤖 Auto Poster</button>`
+              : ''}
             <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
             ${isReady && hasImage
               ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
