@@ -3587,12 +3587,21 @@ async function saveEditCalendarItem(id) {
   if (!topic) { showMktToast('Enter a topic'); return; }
   document.getElementById('edit-cal-overlay')?.remove();
 
+  // Platform distribution by content type
+  const platformByType = {
+    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp'],
+    gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','whatsapp_story'],
+    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','whatsapp_story'],
+    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
+    qa:       ['instagram_feed','facebook_post','threads'],
+    post:     ['instagram_feed','facebook_post','threads'],
+  };
+  const platforms = platformByType[type] || platformByType['image'];
+
   // Update the calendar item
   await sb.from('content_calendar').update({
     topic, notes, content_type:type, is_reel:type==='reel',
-    platform: type==='reel'
-      ? ['instagram_feed','facebook_post','threads','youtube']
-      : ['instagram_feed','facebook_post','threads'],
+    platform: platforms,
     status:'planned', updated_at:new Date().toISOString()
   }).eq('id', id);
 
@@ -4997,11 +5006,14 @@ async function calPreviewPost(calendarId) {
 
   const channels = item.platform || ['instagram_feed','facebook_post','threads'];
   const chMap = {
-    instagram_feed: { icon:'📸', name:'Instagram Feed' },
-    facebook_post:  { icon:'👤', name:'Facebook Page' },
-    threads:        { icon:'🧵', name:'Threads' },
-    youtube:        { icon:'▶️', name:'YouTube' },
-    gbp:            { icon:'📍', name:'Google Business' },
+    instagram_feed:  { icon:'📸', name:'Instagram Feed' },
+    instagram_story: { icon:'📸', name:'Instagram Story' },
+    facebook_post:   { icon:'👤', name:'Facebook Post' },
+    facebook_story:  { icon:'👤', name:'Facebook Story' },
+    threads:         { icon:'🧵', name:'Threads' },
+    youtube:         { icon:'▶️', name:'YouTube' },
+    gbp:             { icon:'📍', name:'Google Business' },
+    whatsapp_story:  { icon:'💬', name:'WhatsApp Status' },
   };
   const postDate = new Date(item.cal_date+'T00:00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
 
@@ -5019,8 +5031,11 @@ async function calPreviewPost(calendarId) {
     const c = chMap[ch] || { icon:'📱', name:ch };
     // Adapt caption per channel
     let adapted = fullCaption;
-    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP limit — English only
-    if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500); // Threads — shorter
+    if (ch === 'gbp') adapted = caption.slice(0,300); // GBP — English only, no hashtags
+    if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500);
+    if (ch === 'instagram_story' || ch === 'facebook_story') adapted = item.caption?.slice(0,100) || ''; // Stories — short text or none
+    if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700); // WA Status — no hashtags
+    if (ch === 'youtube') adapted = fullCaption + '\n\n📍 NH65, Bhavanipuram, Vijayawada | 8712697930 | vwholesale.in';
 
     return `
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
