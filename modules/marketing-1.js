@@ -3525,7 +3525,7 @@ async function renderCalendar() {
           <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
             ${statusBadge}
             <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-            ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px">⚡ ${isReady?'Regen':'Create'}</button>` : ''}
+            ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px" title="${isReady?'Regenerate caption + poster':'Generate caption + poster for the first time'}">⚡ ${isReady?'Regen':'Generate'}</button>` : ''}
           </div>
         </div>
         ${expandedPanel}
