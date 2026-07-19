@@ -3595,7 +3595,7 @@ async function saveEditCalendarItem(id) {
 
   // Platform distribution by content type
   const platformByType = {
-    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp'],
+    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
     gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','whatsapp_story'],
     reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','whatsapp_story'],
     festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
@@ -5181,25 +5181,38 @@ async function calPreviewPost(calendarId) {
       // Instagram: full bilingual + hashtags, max 2200 chars
       adapted = fullCaption.slice(0, 2200);
     } else if (ch === 'threads') {
-      // Threads: full English + hashtags, max 500 chars
-      adapted = (caption + (hashtags ? '\n\n' + hashtags : '')).slice(0, 500);
+      // Threads max 500 chars — cut at sentence boundary
+      const threadsText = caption + (hashtags ? '\n\n' + hashtags : '');
+      if (threadsText.length <= 500) {
+        adapted = threadsText;
+      } else {
+        // Find last sentence end before 480 chars
+        const chunk = threadsText.slice(0, 480);
+        const lastPeriod = Math.max(chunk.lastIndexOf('. '), chunk.lastIndexOf('! '), chunk.lastIndexOf('? '));
+        adapted = lastPeriod > 100 ? chunk.slice(0, lastPeriod + 1) : chunk + '…';
+      }
     } else if (ch === 'facebook_post') {
       // Facebook: bilingual caption, no hard limit but keep reasonable
       adapted = fullCaption.slice(0, 2000);
     } else if (ch === 'instagram_story' || ch === 'facebook_story') {
-      // Stories: short hook (first 2 sentences) + strong CTA — NOT 100 chars
-      const firstPara = caption.split('\n')[0];
-      const sentences = firstPara.split(/(?<=[.!?])\s+/);
-      const hook = sentences.slice(0, 2).join(' ');
-      adapted = (hook.length > 60 ? hook : firstPara).slice(0, 220) + '\n\n👉 Visit V Wholesale';
+      // Stories: punchy 2-line hook. Take first sentence only, clean cutoff
+      const firstSentence = caption.split(/[.!?]/)[0].trim();
+      const hook = firstSentence.length > 20 ? firstSentence + '.' : caption.split('\n')[0];
+      adapted = hook.slice(0, 200) + '\n\n👉 Visit V Wholesale\n📞 +91 8712697930';
     } else if (ch === 'whatsapp_story') {
       // WhatsApp Status: bilingual short version
       const firstLine = caption.split('\n')[0].slice(0, 300);
       adapted = firstLine + (teCaption ? '\n\n' + teCaption.split('\n')[0].slice(0, 200) : '');
     } else if (ch === 'gbp') {
-      // GBP: no hashtags, max 1500 chars, local SEO focus
-      const noHashtags = caption.replace(/#[\w\u0C00-\u0C7F]+/g, '').trim();
-      adapted = noHashtags.slice(0, 1500);
+      // GBP: no hashtags, max 1500 chars, local SEO focus, cut at sentence boundary
+      const gbpText = caption.replace(/#[\w\u0C00-\u0C7F]+/g, '').trim();
+      if (gbpText.length <= 1500) {
+        adapted = gbpText;
+      } else {
+        const chunk = gbpText.slice(0, 1480);
+        const lastPeriod = Math.max(chunk.lastIndexOf('. '), chunk.lastIndexOf('! '));
+        adapted = lastPeriod > 200 ? chunk.slice(0, lastPeriod + 1) : chunk + '…';
+      }
     } else if (ch === 'youtube') {
       adapted = fullCaption + '\n\n📍 Visit V Wholesale | +91 8712697930 | vwholesale.in';
     }
