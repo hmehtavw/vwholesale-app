@@ -5165,15 +5165,15 @@ async function calPreviewPost(calendarId) {
 
   // Image dimensions per platform
   const imgStyle = {
-    instagram_feed:  'width:100%;aspect-ratio:1/1;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    instagram_story: 'width:56%;aspect-ratio:9/16;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    facebook_post:   'width:100%;aspect-ratio:1.91/1;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    facebook_story:  'width:56%;aspect-ratio:9/16;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    threads:         'width:100%;aspect-ratio:1/1;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    youtube:         'width:100%;aspect-ratio:16/9;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    youtube_shorts:  'width:56%;aspect-ratio:9/16;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    gbp:             'width:100%;aspect-ratio:4/3;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
-    whatsapp_story:  'width:56%;aspect-ratio:9/16;object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000',
+    instagram_feed:  'width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    instagram_story: 'width:60%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    facebook_post:   'width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    facebook_story:  'width:60%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    threads:         'width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    youtube:         'width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    youtube_shorts:  'width:60%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    gbp:             'width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    whatsapp_story:  'width:60%;aspect-ratio:2/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
   };
 
   const channelPreviews = channels.map(ch => {
