@@ -5175,13 +5175,34 @@ async function calPreviewPost(calendarId) {
 
   const channelPreviews = channels.map(ch => {
     const c = chMap[ch] || { icon:'📱', name:ch };
-    // Adapt caption per channel
-    let adapted = fullCaption;
-    if (ch === 'gbp') adapted = caption.slice(0,300);
-    if (ch === 'threads') adapted = (caption + (hashtags?'\n\n'+hashtags:'')).slice(0,500);
-    if (ch === 'instagram_story' || ch === 'facebook_story') adapted = item.caption?.slice(0,100) || '';
-    if (ch === 'whatsapp_story') adapted = (caption + (teCaption?'\n\n'+teCaption:'')).slice(0,700);
-    if (ch === 'youtube') adapted = fullCaption + '\n\n📍 Visit V Wholesale| 8712697930 | vwholesale.in';
+    // Adapt caption per channel with correct platform limits + bilingual
+    let adapted = fullCaption; // default: English + Telugu + hashtags
+    if (ch === 'instagram_feed') {
+      // Instagram: full bilingual + hashtags, max 2200 chars
+      adapted = fullCaption.slice(0, 2200);
+    } else if (ch === 'threads') {
+      // Threads: full English + hashtags, max 500 chars
+      adapted = (caption + (hashtags ? '\n\n' + hashtags : '')).slice(0, 500);
+    } else if (ch === 'facebook_post') {
+      // Facebook: bilingual caption, no hard limit but keep reasonable
+      adapted = fullCaption.slice(0, 2000);
+    } else if (ch === 'instagram_story' || ch === 'facebook_story') {
+      // Stories: short hook (first 2 sentences) + strong CTA — NOT 100 chars
+      const firstPara = caption.split('\n')[0];
+      const sentences = firstPara.split(/(?<=[.!?])\s+/);
+      const hook = sentences.slice(0, 2).join(' ');
+      adapted = (hook.length > 60 ? hook : firstPara).slice(0, 220) + '\n\n👉 Visit V Wholesale';
+    } else if (ch === 'whatsapp_story') {
+      // WhatsApp Status: bilingual short version
+      const firstLine = caption.split('\n')[0].slice(0, 300);
+      adapted = firstLine + (teCaption ? '\n\n' + teCaption.split('\n')[0].slice(0, 200) : '');
+    } else if (ch === 'gbp') {
+      // GBP: no hashtags, max 1500 chars, local SEO focus
+      const noHashtags = caption.replace(/#[\w\u0C00-\u0C7F]+/g, '').trim();
+      adapted = noHashtags.slice(0, 1500);
+    } else if (ch === 'youtube') {
+      adapted = fullCaption + '\n\n📍 Visit V Wholesale | +91 8712697930 | vwholesale.in';
+    }
 
     const rawImg = (item.platform_images && item.platform_images[ch]) || item.image_url || null;
     // Cache-bust SVG URLs so browser always fetches fresh version after regeneration
