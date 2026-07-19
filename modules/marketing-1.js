@@ -3595,10 +3595,10 @@ async function saveEditCalendarItem(id) {
 
   // Platform distribution by content type
   const platformByType = {
-    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
+    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube'],
     gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','whatsapp_story'],
-    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','whatsapp_story'],
-    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
+    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','youtube_shorts','whatsapp_story'],
+    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube'],
     qa:       ['instagram_feed','facebook_post','threads'],
     post:     ['instagram_feed','facebook_post','threads'],
   };
@@ -5139,6 +5139,7 @@ async function calPreviewPost(calendarId) {
   if (!item) { showMktToast('❌ Item not found'); return; }
 
   const channels = item.platform || ['instagram_feed','facebook_post','threads'];
+  const PENDING_CHANNELS = new Set(['whatsapp_story']); // pending Meta template approval
   const chMap = {
     instagram_feed:  { icon:'📸', name:'Instagram Feed' },
     instagram_story: { icon:'📸', name:'Instagram Story' },
@@ -5146,6 +5147,7 @@ async function calPreviewPost(calendarId) {
     facebook_story:  { icon:'👤', name:'Facebook Story' },
     threads:         { icon:'🧵', name:'Threads' },
     youtube:         { icon:'▶️', name:'YouTube' },
+    youtube_shorts:  { icon:'📱', name:'YouTube Shorts' },
     gbp:             { icon:'📍', name:'Google Business' },
     whatsapp_story:  { icon:'💬', name:'WhatsApp Status' },
   };
@@ -5169,6 +5171,7 @@ async function calPreviewPost(calendarId) {
     facebook_story:  'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
     threads:         'width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
     youtube:         'width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
+    youtube_shorts:  'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
     gbp:             'width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
     whatsapp_story:  'width:56%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin-bottom:10px;display:block',
   };
@@ -5215,8 +5218,13 @@ async function calPreviewPost(calendarId) {
       }
     } else if (ch === 'youtube') {
       adapted = fullCaption + '\n\n📍 Visit V Wholesale | +91 8712697930 | vwholesale.in';
+    } else if (ch === 'youtube_shorts') {
+      // YouTube Shorts: punchy hook + hashtags
+      const firstSentence = caption.split(/[.!?]/)[0].trim();
+      adapted = firstSentence + '.\n\n' + hashtags + '\n\n📍 V Wholesale | vwholesale.in';
     }
 
+    const isPending = PENDING_CHANNELS.has(ch);
     const rawImg = (item.platform_images && item.platform_images[ch]) || item.image_url || null;
     // Cache-bust SVG URLs so browser always fetches fresh version after regeneration
     const platformImg = rawImg ? (rawImg.includes('.svg') ? rawImg + '?t=' + (item.updated_at ? new Date(item.updated_at).getTime() : Date.now()) : rawImg) : null;
@@ -5232,8 +5240,8 @@ async function calPreviewPost(calendarId) {
       : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     return `
-    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid var(--border)">
-      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px">${c.icon} ${c.name}</div>
+    <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid ${isPending?'rgba(245,158,11,.4)':'var(--border)'}">
+      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px;display:flex;align-items:center;gap:6px">${c.icon} ${c.name}${isPending?'<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:600">⏳ PENDING ACTIVATION</span>':''}</div>
       ${mediaHtml}
       <div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${adapted.replace(/</g,'&lt;')}</div>
     </div>`;
