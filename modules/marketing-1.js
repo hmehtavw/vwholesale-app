@@ -5139,7 +5139,7 @@ async function calPreviewPost(calendarId) {
   if (!item) { showMktToast('❌ Item not found'); return; }
 
   const channels = item.platform || ['instagram_feed','facebook_post','threads'];
-  const PENDING_CHANNELS = new Set(['whatsapp_story']); // pending Meta template approval
+  const PENDING_CHANNELS = new Set<string>([]); // all channels active for posting
   const chMap = {
     instagram_feed:  { icon:'📸', name:'Instagram Feed' },
     instagram_story: { icon:'📸', name:'Instagram Story' },
