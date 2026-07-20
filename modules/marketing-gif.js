@@ -404,34 +404,76 @@ function gsGetDurationSec() {
 }
 
 // ── BACKGROUND GENERATION ──
+// Generate 3 full AI poster frames via generate-poster-v2 (same as calendar pipeline)
+// Stores frames as b64 images to animate between
 async function gsGenerateBackground() {
-  const topic = document.getElementById('gs-out-topic')?.value?.trim() || document.getElementById('gs-brief')?.value?.trim() || 'home building materials';
+  const topic = (document.getElementById('gs-out-topic')?.value || document.getElementById('gs-brief')?.value || '').trim();
+  const headline = document.getElementById('gs-out-headline')?.value?.trim() || topic;
+  const message = document.getElementById('gs-out-message')?.value?.trim() || '';
+
+  if (!topic) { showMktToast('Generate storyboard first to get topic and headline'); return; }
+
   const loading = document.getElementById('gs-bg-loading');
   const preview = document.getElementById('gs-bg-preview');
   loading.style.display = 'block';
   preview.style.display = 'none';
-  try {
-    const t = topic.toLowerCase();
-    const prompt = t.includes('granite') || t.includes('tile') || t.includes('marble')
-      ? 'Professional architectural photograph of a luxury Indian granite and tile showroom. Polished stone slabs displayed on right two-thirds. Calm darker wall on left third for text overlay. Warm spotlights. No text, no logos, no watermarks.'
-      : t.includes('bathroom') || t.includes('sanitaryware')
-      ? 'Professional interior photograph of a luxury modern Indian bathroom with premium sanitaryware on right two-thirds. Calm darker wall on left third. Soft spa lighting. No text, no logos.'
-      : t.includes('paint')
-      ? 'Professional interior photograph of a beautifully painted modern Indian living room in warm earthy tones on right two-thirds. Calm wall on left third. Natural daylight. No text, no logos.'
-      : 'Professional interior photograph of a premium Indian home building materials showroom. Quality displays on right two-thirds. Calm darker wall on left third. Warm spotlights. No text, no logos.';
+  loading.textContent = '🤖 Generating 3 AI poster frames via gpt-image-2… (~90 seconds)';
 
-    const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_poster_image', prompt, size: '1024x1024' })
-    });
-    const d = await res.json();
-    if (!d.ok || !d.b64) throw new Error(d.error || 'Generation failed');
-    window._gsBgB64 = d.b64;
-    document.getElementById('gs-bg-img').src = 'data:image/png;base64,' + d.b64;
-    document.getElementById('gs-bg-label').textContent = 'AI-generated background · click Generate Background to try again';
+  try {
+    // Use content-pipeline generate_poster_image for each frame
+    const t = topic.toLowerCase();
+    const scheme = t.includes('granite') || t.includes('tile') || t.includes('marble')
+      ? 'elegant cream and charcoal with natural stone textures and warm wood tones'
+      : t.includes('paint') ? 'warm terracotta and sage green'
+      : t.includes('bathroom') || t.includes('sanitaryware') ? 'clean white and chrome with soft spa lighting'
+      : 'warm professional cream and charcoal';
+
+    const prompts = [
+      // Frame 1: Brand/opening — clean with negative space for text
+      `Design a complete premium marketing poster for V Wholesale. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. Elements: "V Wholesale" at top with tagline "Build Better. Pay Less." Bold headline: "${headline}" Indian home lifestyle for: ${topic}. Message: "${message}" Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format. All text correct. No watermark.`,
+      // Frame 2: Hero product shot
+      `Design a premium product-focused marketing poster for V Wholesale. Color: ${scheme}. Editorial quality Indian interior with ${topic} as hero. Headline: "${headline}" Supporting: "${message}" V Wholesale branding top. Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format.`,
+      // Frame 3: CTA closing
+      `Design a premium CTA closing poster for V Wholesale. Color: ${scheme}. Clean premium Indian home lifestyle. "Visit V Wholesale today" as main call to action. "+91 8712697930 | vwholesale.in" prominent. "Build Better. Pay Less." tagline. Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture. Square format. Premium finish.`
+    ];
+
+    const frames = [];
+    for (let i = 0; i < prompts.length; i++) {
+      loading.textContent = `🤖 Generating frame ${i+1}/3… (~30s each)`;
+      const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_poster_image', prompt: prompts[i], size: '1024x1024' })
+      });
+      const d = await res.json();
+      if (d.ok && d.b64) frames.push(d.b64);
+      else console.log(`Frame ${i+1} failed:`, d.error);
+    }
+
+    if (!frames.length) throw new Error('All frame generation failed');
+
+    // Store all frames
+    window._gsFrameB64s = frames;
+    window._gsFrameImgCache = {}; // clear cache
+    window._gsBgB64 = frames[0];
+
+    // Show first frame preview
+    document.getElementById('gs-bg-img').src = 'data:image/png;base64,' + frames[0];
+    document.getElementById('gs-bg-label').textContent = `✅ ${frames.length}/3 AI poster frames generated — click Preview Animation to see slideshow`;
     preview.style.display = 'block';
-    showMktToast('✅ Background ready');
+
+    // Auto-populate slideshow frames from AI output
+    gsFrames = frames.map((b64, i) => ({
+      id: i+1,
+      type: ['hook','product','cta'][i],
+      headline: [headline, headline, 'Visit V Wholesale Today'][i],
+      body: [message, message, '+91 8712697930 | vwholesale.in'][i],
+      duration: [2.5, 3.0, 2.5][i],
+      b64
+    }));
+    gsRenderFrameList();
+
+    showMktToast(`✅ ${frames.length} AI poster frames ready — click ▶️ Preview Animation`);
   } catch(e) {
     showMktToast('❌ ' + e.message);
   } finally {
@@ -472,41 +514,65 @@ function gsSetCanvasSize(sizeKey) {
   canvas.dataset.realH = heights[selectedSize];
 }
 
+// Draw a frame — if AI poster frames exist, display them directly with crossfade
+// Falls back to canvas text overlay if no AI frames available
 function gsDrawFrame(ctx, w, h, bgImg, frameCfg, progress) {
-  // progress: 0→1 within this frame
   const mode = document.querySelector('input[name="gs-mode"]:checked')?.value || 'animated_text';
-  const style = document.querySelector('input[name="gs-style"]:checked')?.value || 'cinematic';
-  const GOLD = '#C9A84C';
-  const BG = '#111';
-  const scale = w / 1080;
+  const aiFrames = window._gsFrameB64s || [];
 
-  // Background
+  // If we have AI poster frames, use them directly (highest quality)
+  if (aiFrames.length > 0 && frameCfg?.b64) {
+    const img = window._gsFrameImgCache = window._gsFrameImgCache || {};
+    const key = frameCfg.b64.slice(0, 20);
+    if (!img[key]) {
+      const i = new Image();
+      i.src = 'data:image/png;base64,' + frameCfg.b64;
+      img[key] = i;
+    }
+    const frameImg = img[key];
+    if (frameImg.complete && frameImg.naturalWidth > 0) {
+      // Draw the full AI poster frame
+      ctx.drawImage(frameImg, 0, 0, w, h);
+      // Fade in/out at transitions
+      const fadeIn = Math.min(1, progress * 8);   // fade in over first 0.125
+      const fadeOut = Math.min(1, (1 - progress) * 8); // fade out last 0.125
+      const alpha = Math.min(fadeIn, fadeOut);
+      if (alpha < 1) {
+        ctx.fillStyle = `rgba(0,0,0,${1 - alpha})`;
+        ctx.fillRect(0, 0, w, h);
+      }
+    } else {
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, w, h);
+    }
+    return;
+  }
+
+  // Fallback: canvas text overlay on background image
+  const GOLD = '#C9A84C';
+  const scale = w / 1080;
   if (bgImg) {
     ctx.drawImage(bgImg, 0, 0, w, h);
-    // Dark left gradient overlay
     const grad = ctx.createLinearGradient(0, 0, w, 0);
     grad.addColorStop(0, 'rgba(17,17,17,0.88)');
-    grad.addColorStop(0.42, 'rgba(17,17,17,0.62)');
-    grad.addColorStop(0.68, 'rgba(17,17,17,0.12)');
+    grad.addColorStop(0.5, 'rgba(17,17,17,0.55)');
     grad.addColorStop(1, 'rgba(17,17,17,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
   } else {
-    ctx.fillStyle = BG;
+    ctx.fillStyle = '#111827';
     ctx.fillRect(0, 0, w, h);
   }
-
   const headline = frameCfg?.headline || document.getElementById('gs-out-headline')?.value || 'V Wholesale';
   const message = frameCfg?.body || document.getElementById('gs-out-message')?.value || '';
-  const m = Math.round(55 * scale); // margin
-
+  const m = Math.round(55 * scale);
+  const style = document.querySelector('input[name="gs-style"]:checked')?.value || 'cinematic';
   if (mode === 'animated_text') {
     gsCinematicFrame(ctx, w, h, scale, m, GOLD, progress, headline, message, style);
   } else {
     gsSlideshowFrame(ctx, w, h, scale, m, GOLD, progress, frameCfg);
   }
-
-  // Footer strip always
+  // Footer
   const fH = Math.round(h * 0.09);
   const fY = h - fH;
   ctx.fillStyle = '#F5F0E8';
@@ -702,15 +768,16 @@ async function gsPreviewAnimation() {
     const progress = (elapsed % totalSec) / totalSec; // loops
 
     let frameCfg = null;
-    if (mode === 'slideshow' && gsFrames.length) {
-      const frameDurs = gsFrames.map(f => f.duration || 2.5);
+    const frames = gsFrames.length ? gsFrames : [];
+    if (frames.length) {
+      const frameDurs = frames.map(f => f.duration || 2.5);
       const totalFrameTime = frameDurs.reduce((a, b) => a + b, 0);
       const t = (elapsed % totalFrameTime);
       let acc = 0;
-      for (let i = 0; i < gsFrames.length; i++) {
+      for (let i = 0; i < frames.length; i++) {
         if (t < acc + frameDurs[i]) {
           const localT = (t - acc) / frameDurs[i];
-          frameCfg = { ...gsFrames[i], _localT: localT };
+          frameCfg = { ...frames[i], _localT: localT };
           break;
         }
         acc += frameDurs[i];
@@ -718,7 +785,8 @@ async function gsPreviewAnimation() {
     }
 
     ctx.clearRect(0, 0, w, h);
-    gsDrawFrame(ctx, w, h, bgImg, frameCfg, mode === 'animated_text' ? progress : frameCfg?._localT || 0);
+    // Use _localT as progress for both modes when we have frames
+    gsDrawFrame(ctx, w, h, bgImg, frameCfg, frameCfg?._localT ?? progress);
     gsAnimFrame = requestAnimationFrame(loop);
   }
   loop();
@@ -769,17 +837,18 @@ async function gsRenderGif() {
   gsShowProgress(`⏳ Rendering ${totalFrames} frames for GIF…`);
 
   // Collect pixel data frames
-  const frames = [];
+  const renderedFrames = [];
+  const frames = gsFrames.length ? gsFrames : [];
   for (let i = 0; i < totalFrames; i++) {
     if (gsRenderCancelled) return;
     const t = i / totalFrames;
     let frameCfg = null;
-    if (mode === 'slideshow' && gsFrames.length) {
-      const totalFrameTime = gsFrames.reduce((a, f) => a + (f.duration || 2.5), 0);
+    if (frames.length) {
+      const totalFrameTime = frames.reduce((a, f) => a + (f.duration || 2.5), 0);
       const elapsed = t * totalSec;
       const frameT = (elapsed % totalFrameTime);
       let acc = 0;
-      for (const f of gsFrames) {
+      for (const f of frames) {
         if (frameT < acc + (f.duration || 2.5)) {
           frameCfg = { ...f, _localT: (frameT - acc) / (f.duration || 2.5) };
           break;
@@ -788,8 +857,8 @@ async function gsRenderGif() {
       }
     }
     ctx.clearRect(0, 0, w, h);
-    gsDrawFrame(ctx, w, h, bgImg, frameCfg, mode === 'animated_text' ? t : frameCfg?._localT || 0);
-    frames.push({ data: ctx.getImageData(0, 0, w, h), delay });
+    gsDrawFrame(ctx, w, h, bgImg, frameCfg, frameCfg?._localT ?? t);
+    renderedFrames.push({ data: ctx.getImageData(0, 0, w, h), delay });
     gsUpdateProgress(Math.round((i / totalFrames) * 60), `Rendering frame ${i + 1}/${totalFrames}…`);
     await new Promise(r => setTimeout(r, 0)); // yield to UI
   }
@@ -817,7 +886,7 @@ async function gsRenderGif() {
   const workerUrl = URL.createObjectURL(workerBlob);
   const worker = new Worker(workerUrl);
 
-  const frameData = frames.map(f => ({ data: Array.from(f.data.data), delay: f.delay }));
+  const frameData = renderedFrames.map(f => ({ data: Array.from(f.data.data), delay: f.delay }));
 
   await new Promise((resolve, reject) => {
     worker.onmessage = async e => {

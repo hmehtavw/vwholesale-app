@@ -3434,7 +3434,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
           : ''}
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
         ${item.content_type==='gif'
-          ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Create GIF</button>`
+          ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🎨 Open in GIF Studio</button>
+             <button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI background frames">🤖 Generate Frames</button>`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
