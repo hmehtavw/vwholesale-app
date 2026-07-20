@@ -5672,15 +5672,15 @@ async function calPreviewPost(calendarId) {
     const isStory = ch.includes('story') || ch === 'whatsapp_story' || ch === 'youtube_shorts';
 
     // Stories: centered phone-like width
-    const imgStyle = isStory
+    const chImgStyle = isStory
       ? 'width:55%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin:0 auto 8px auto;display:block'
       : 'width:100%;aspect-ratio:' + aspect + ';object-fit:cover;border-radius:8px;margin-bottom:8px;display:block';
 
     const mediaHtml = displayImg
       ? isVideo
-        ? `<video src="${displayImg}" style="${imgStyle}" controls muted playsinline></video>`
-        : `<img src="${displayImg}" style="${imgStyle}" onerror="this.style.display='none'">`
-      : `<div style="${imgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+        ? `<video src="${displayImg}" style="${chImgStyle}" controls muted playsinline></video>`
+        : `<img src="${displayImg}" style="${chImgStyle}" onerror="this.style.display='none'">`
+      : `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
     const downloadLink = displayImg
