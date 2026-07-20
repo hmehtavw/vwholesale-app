@@ -262,6 +262,9 @@ async function renderGifStudio() {
             🎬 Export WebM
           </button>
         </div>
+        <button class="mkt-btn mkt-btn-ghost" onclick="gsOpenInEditor()" style="width:100%;margin-top:8px;font-size:12px;padding:9px" title="Open current background in Poster Editor to add text, badges, shapes">
+          ✏️ Open in Poster Editor
+        </button>
         <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">
           GIF — works everywhere incl. WhatsApp · WebM — best for Instagram/Facebook (browser codec, not guaranteed MP4)
         </div>
@@ -1068,6 +1071,14 @@ function gsCopy(id) {
   navigator.clipboard.writeText(el.value || el.textContent || '').then(() => showMktToast('📋 Copied!'));
 }
 
+function gsOpenInEditor() {
+  // Get current background from GIF Studio state
+  const bgB64 = window._gsBgB64 || null;
+  const bgUrl = bgB64 ? 'data:image/png;base64,' + bgB64 : null;
+  if (!bgUrl) { showMktToast('Generate a background image first, then click Edit', 3000); return; }
+  openPosterEditor(null, { square: bgUrl, story: bgUrl, landscape: bgUrl });
+}
+window.gsOpenInEditor = gsOpenInEditor;
 window.renderGifStudio    = renderGifStudio;
 window.gsGenerateBrief    = gsGenerateBrief;
 window.gsAddFrame         = gsAddFrame;

@@ -789,6 +789,7 @@ async function psGeneratePosters() {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="mkt-btn mkt-btn-primary" onclick="psDownloadOne('${plt}','${size}','${label}')" style="font-size:11px;padding:4px 10px">⬇ PNG</button>
           <button class="mkt-btn mkt-btn-ghost" onclick="psDownloadJpg('${plt}','${size}','${label}')" style="font-size:11px;padding:4px 10px">⬇ JPG</button>
+          <button class="mkt-btn mkt-btn-ghost" onclick="psOpenInEditor('${plt}','${size}','${dataUrl}')" style="font-size:11px;padding:4px 10px" title="Open in Poster Editor to add text, badges, shapes">✏️ Edit</button>
         </div>
       </div>`;
     gridDiv.appendChild(card);
@@ -4436,6 +4437,21 @@ async function editFeedPost(id) {
 // Expose render functions on window for lazy nav lookup
 window.renderAudit = renderAudit;
 window.renderSettings = renderSettings;
+function psOpenInEditor(platform, size, dataUrl) {
+  // Convert data URL to object URL and open in poster editor
+  // Map platform to format key
+  const formatMap = {
+    instagram_feed:'square', threads:'square',
+    instagram_story:'story', facebook_story:'story', whatsapp_story:'story',
+    facebook_post:'landscape', youtube:'landscape', gbp:'landscape'
+  };
+  const key = formatMap[platform] || 'square';
+  const overrideImages = { square: null, story: null, landscape: null };
+  overrideImages[key] = dataUrl; // use data URL directly as bg
+  openPosterEditor(null, overrideImages);
+}
+window.psOpenInEditor = psOpenInEditor;
+
 window.renderPosterStudio = renderPosterStudio;
 window.renderCampaigns = renderCampaigns;
 window.renderSocial = renderSocial;

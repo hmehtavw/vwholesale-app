@@ -3535,7 +3535,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         ${item.content_type==='gif'
           ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
              ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>
-             <button onclick="calPreviewDraggableBadge('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Drag badge to reposition, add music, re-encode — zero AI cost">✏️ Edit Offer</button>` : ''}`
+             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Drag badge to reposition, add music, re-encode — zero AI cost">✏️ Edit Offer</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
@@ -6284,7 +6284,7 @@ let _editorBgImages = {}; // key → Image object
 
 function editorGetActive() { return _editorFormats[_editorActive]; }
 
-async function calPreviewDraggableBadge(calendarId) {
+async function openPosterEditor(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) return;
   const pi = item.platform_images || {};
@@ -6866,7 +6866,33 @@ function editorDownloadPNG() {
 }
 window.editorDownloadPNG = editorDownloadPNG;
 
-window.calPreviewDraggableBadge = calPreviewDraggableBadge;
+// Universal editor entry point — works for calendar, Poster Studio, GIF Studio
+async function openPosterEditor(calendarId, overrideImages) {
+  if (overrideImages) {
+    _editorCalendarId = null;
+    _editorPI = {
+      instagram_feed:  overrideImages.square    || null,
+      instagram_story: overrideImages.story     || null,
+      facebook_post:   overrideImages.landscape || null,
+      editor_elements: {}
+    };
+    for (const key of Object.keys(_editorFormats)) _editorFormats[key].elements = [];
+    _editorIdCounter = 1; _editorSelected = null;
+    for (const [key, fmt] of Object.entries(_editorFormats)) {
+      const url = _editorPI[fmt.imgKey];
+      if (url) {
+        _editorBgImages[key] = await new Promise(res => {
+          const img = new Image(); img.crossOrigin='anonymous';
+          img.onload=()=>res(img); img.onerror=()=>res(null); img.src=url;
+        });
+      }
+    }
+    buildEditorPopup();
+  } else {
+    await calPreviewDraggableBadge(calendarId);
+  }
+}
+window.openPosterEditor = openPosterEditor;
 window.calSaveBadgePosition = function(){};
 window.calApplyOfferBadgeWithPos = function(){};
 window.renderBadgeEditor = renderBadgeEditor;
