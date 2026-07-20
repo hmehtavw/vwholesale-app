@@ -6413,15 +6413,19 @@ function buildEditorPopup() {
 
         <!-- Save/Export -->
         <div style="padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px">
-          <select id="editor-music" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
-            <option value="none">🔇 No music (export GIF)</option>
-            <option value="__upload__">📁 Upload your MP3 track</option>
+          <select id="editor-music" onchange="editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
+            <option value="none">🔇 No Music (export GIF)</option>
+            <option value="/assets/track_corporate.mp3">⚡ Upbeat Corporate</option>
+            <option value="/assets/track_upbeat.mp3">⚡ Happy Energetic</option>
+            <option value="/assets/track_energetic.mp3">🔥 Energetic Drive</option>
+            <option value="/assets/track_cinematic.mp3">🎬 Soft Cinematic</option>
+            <option value="/assets/track_uplifting.mp3">✨ Uplifting</option>
+            <option value="__upload__">📁 Upload Your Own MP3</option>
           </select>
           <div id="editor-music-upload-row" style="display:none;margin-top:4px">
             <input type="file" id="editor-music-file" accept="audio/*,audio/mp3,audio/mpeg"
               style="width:100%;font-size:10px;color:#94a3b8;background:#0f172a;border:1px solid #334155;border-radius:5px;padding:4px"
               onchange="editorHandleMusicFile(this)">
-            <div style="font-size:9px;color:#22c55e;margin-top:3px">✅ Your file — no licensing issues. Use royalty-free music from pixabay.com or bensound.com</div>
           </div>
           <div id="editor-music-status" style="font-size:10px;color:#64748b;margin-top:3px"></div>
           <button onclick="editorEncode()"
@@ -6885,6 +6889,29 @@ window.editorSelectEl = editorSelectEl;
 // Scale element from display resolution to target resolution for high-quality export
 function editorHandleMusicFile(input) {
   const file = input?.files?.[0];
+  const uploadRow = document.getElementById('editor-music-upload-row');
+  const status = document.getElementById('editor-music-status');
+  if (sel.value === '__upload__') {
+    uploadRow.style.display = 'block';
+    window._editorMusicURL = null;
+  } else if (sel.value === 'none') {
+    uploadRow.style.display = 'none';
+    window._editorMusicURL = null;
+    if (status) status.textContent = '';
+  } else {
+    uploadRow.style.display = 'none';
+    window._editorMusicURL = sel.value;
+    // Preview 5s
+    if (status) status.textContent = '▶ Playing preview…';
+    const a = new Audio(sel.value); a.volume=0.5;
+    a.play().then(()=>setTimeout(()=>{a.pause();if(status)status.textContent='✅ '+sel.options[sel.selectedIndex].text;},5000)).catch(()=>{if(status)status.textContent='Track ready';});
+  }
+}
+window.editorMusicChanged = editorMusicChanged;
+
+
+function editorHandleMusicFile(input) {
+  const file = input?.files?.[0];
   if (!file) return;
   if (window._editorMusicObjectURL) URL.revokeObjectURL(window._editorMusicObjectURL);
   window._editorMusicObjectURL = URL.createObjectURL(file);
@@ -6933,7 +6960,9 @@ async function editorEncode() {
   document.getElementById('badge-editor-popup').remove();
 
   const musicSelectVal = document.getElementById('editor-music')?.value;
-  const musicURL = musicSelectVal === '__upload__' ? (window._editorMusicURL || null) : null;
+  const musicURL = musicSelectVal === '__upload__' ? (window._editorMusicURL || null)
+                 : musicSelectVal && musicSelectVal !== 'none' ? musicSelectVal
+                 : null;
   const hasMusic = !!musicURL;
 
   let secs = 0;
@@ -7506,30 +7535,31 @@ async function calRegenerateItem(calendarId) {
 
 // ── ROYALTY-FREE MUSIC TRACKS ──
 const MKT_MUSIC_TRACKS = [
-  { id:'none',   label:'No Music (export GIF)',  url:null,         mood:'silent' },
-  { id:'upload', label:'📁 Upload Your MP3',     url:'__upload__', mood:'custom' },
+  { id:'none',       label:'No Music',          url:null,                              mood:'silent'    },
+  { id:'corporate',  label:'Upbeat Corporate',   url:'/assets/track_corporate.mp3',    mood:'upbeat'    },
+  { id:'upbeat',     label:'Happy Energetic',    url:'/assets/track_upbeat.mp3',       mood:'upbeat'    },
+  { id:'energetic',  label:'Energetic Drive',    url:'/assets/track_energetic.mp3',    mood:'upbeat'    },
+  { id:'cinematic',  label:'Soft Cinematic',     url:'/assets/track_cinematic.mp3',    mood:'cinematic' },
+  { id:'uplifting',  label:'Uplifting',          url:'/assets/track_uplifting.mp3',    mood:'cinematic' },
+  { id:'upload',     label:'Upload Your Own MP3',url:'__upload__',                     mood:'custom'    },
 ];
 
 function mktMusicPickerHTML(selectedId = 'none') {
+  const icon = m => m==='upbeat'?'⚡':m==='cinematic'?'🎬':m==='custom'?'📁':'🔇';
   return `<div style="margin-bottom:16px">
-    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC</label>
+    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC <span style="font-weight:400;color:#475569">(royalty-free)</span></label>
     <div style="display:flex;flex-direction:column;gap:5px">
-      <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${selectedId==='none'?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-none">
-        <input type="radio" name="mkt-music" value="none" ${selectedId==='none'?'checked':''} style="display:none">
-        <span>🔇</span><span style="font-size:12px;color:#f1f5f9;font-weight:600">No Music — export as GIF</span>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${selectedId==='upload'?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-upload">
-        <input type="radio" name="mkt-music" value="upload" ${selectedId==='upload'?'checked':''} style="display:none">
-        <span>📁</span>
-        <div style="flex:1">
-          <div style="font-size:12px;color:#f1f5f9;font-weight:600;margin-bottom:3px">Upload MP3 → export as MP4</div>
-          <input type="file" id="music-upload-input" accept="audio/*,audio/mp3,audio/mpeg" onchange="mktHandleMusicUpload(this)"
-            style="font-size:10px;color:#64748b;width:100%">
-          <div style="font-size:9px;color:#475569;margin-top:2px">Free tracks: pixabay.com/music · bensound.com · freesound.org</div>
-        </div>
-      </label>
+      ${MKT_MUSIC_TRACKS.map(t => `
+        <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${t.id===selectedId?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-${t.id}">
+          <input type="radio" name="mkt-music" value="${t.id}" ${t.id===selectedId?'checked':''} style="display:none">
+          <span style="font-size:14px">${icon(t.mood)}</span>
+          <span style="font-size:12px;color:#f1f5f9;font-weight:600;flex:1">${t.label}</span>
+          ${t.url && t.url !== '__upload__' ? `<button onclick="event.preventDefault();mktPreviewMusic('${t.id}')" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer">▶ Preview</button>` : ''}
+          ${t.url === '__upload__' ? `<input type="file" id="music-upload-input" accept="audio/*,audio/mp3" onchange="mktHandleMusicUpload(this)" style="font-size:10px;color:#64748b;max-width:140px">` : ''}
+        </label>`).join('')}
     </div>
     <div id="mkt-music-status" style="font-size:10px;color:#22c55e;margin-top:4px"></div>
+    <div style="font-size:10px;color:#475569;margin-top:4px">With music → exports as MP4 (Instagram, Facebook, WhatsApp, YouTube)</div>
   </div>`;
 }
 
@@ -7559,7 +7589,9 @@ window.mktHandleMusicUpload = mktHandleMusicUpload;
 
 function mktGetMusicURL(trackId) {
   if (trackId === 'upload') return _uploadedMusicURL;
-  return MKT_MUSIC_TRACKS.find(t => t.id === trackId)?.url || null;
+  if (trackId === 'none') return null;
+  const track = MKT_MUSIC_TRACKS.find(t => t.id === trackId);
+  return (track?.url && track.url !== '__upload__') ? track.url : null;
 }
 
 function mktPreviewMusic(trackId) {
