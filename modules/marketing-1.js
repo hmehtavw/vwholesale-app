@@ -3434,12 +3434,12 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
           : ''}
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
         ${item.content_type==='gif'
-          ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
+          ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
              ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
-             <button onclick="calConvertToGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Convert to GIF mode (non-destructive)">✨ GIF</button>`
+`
           : ''}
         <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
         ${isReady && hasImage
@@ -5179,7 +5179,7 @@ async function calHandleImageUpload(calendarId, input) {
 // Step 4: Upload GIF to Supabase storage
 // Step 5: Save URL back to content_calendar, mark ready
 async function calGenerateGif(calendarId) {
-  const btn = [...document.querySelectorAll('button')].find(b => b.onclick?.toString().includes(`calGenerateGif('${calendarId}')`));
+  const btn = document.getElementById(`gif-btn-${calendarId}`);
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
 
   let secs = 0;
@@ -5343,6 +5343,7 @@ async function calGenerateGif(calendarId) {
     clearInterval(ticker);
     showMktToast('❌ ' + e.message, 6000);
     if (btn) { btn.innerHTML = '✨ Generate GIF'; btn.disabled = false; }
+    renderCalendar();
   }
 }
 
