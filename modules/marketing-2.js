@@ -450,897 +450,477 @@ async function usePhotoshootImage(imageUrl, product) {
 }
 
 async function renderPosterStudio() {
-  const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
-  const bp = (bpArr||[])[0]||{business_name:'V Wholesale',tagline:'Build Better. Pay Less.',phone:'8712697930',website:'https://vwholesale.in',address:'Visit V Wholesale'};
-
   setContent(`
-  <div style="margin-bottom:16px">
-    <h3 style="font-size:16px;font-weight:900">🎨 Poster Studio</h3>
-    <div style="font-size:12px;color:var(--text3)">Generate with AI or upload your own → preview → publish everywhere</div>
+  <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div>
+      <h3 style="font-size:16px;font-weight:900;margin:0">🎨 Poster Studio</h3>
+      <div style="font-size:12px;color:var(--text3)">Write your brief → AI generates everything → edit, download, publish</div>
+    </div>
+    <button class="mkt-btn mkt-btn-ghost" onclick="psShowLibrary()" style="font-size:12px">📚 Library</button>
   </div>
 
-  <div class="mkt-grid-2" style="align-items:start;gap:16px">
+  <div style="display:grid;gap:16px">
 
-    <!-- ═══ LEFT COLUMN: INPUT PANEL ═══ -->
-    <div style="display:grid;gap:12px">
-
-      <!-- MODE TOGGLE -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;background:var(--bg3);border-radius:10px;padding:4px">
-        <button id="ps-mode-ai" onclick="psSwitchMode('ai')"
-          style="padding:10px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:var(--gold);color:#000;transition:all .2s">
-          ✨ AI Generate
+    <!-- BRIEF INPUT -->
+    <div class="mkt-card">
+      <div class="mkt-card-title">📝 What do you want to post about?</div>
+      <textarea id="ps-brief" class="mkt-form-input" rows="5" style="font-size:13px;line-height:1.7;resize:vertical"
+        placeholder="Write freely — include product names, offers, prices, context, audience. Example: We got new Kajaria tiles — wood finish, marble look, anti-skid. Sizes 2x2 and 2x4. Starting ₹45/sft. 10% off this week for contractors."></textarea>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <div style="display:flex;gap:6px;align-items:center">
+          <label style="font-size:12px;color:var(--text3)">Tone:</label>
+          <select id="ps-tone" class="mkt-form-select" style="font-size:12px;padding:5px 8px">
+            <option value="product">Product Launch</option>
+            <option value="offer">Offer / Sale</option>
+            <option value="festival">Festival</option>
+            <option value="story">Story / Behind Scenes</option>
+            <option value="contractor">Contractor Club</option>
+            <option value="educational">Educational / Tips</option>
+          </select>
+        </div>
+        <button class="mkt-btn mkt-btn-primary" onclick="psGenerateBrief()" style="font-size:13px;font-weight:800;padding:9px 20px">
+          ✨ Generate Everything
         </button>
-        <button id="ps-mode-upload" onclick="psSwitchMode('upload')"
-          style="padding:10px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:700;background:none;color:var(--text3);transition:all .2s">
-          📁 Manual Upload
+        <div id="ps-brief-loading" style="display:none;font-size:12px;color:var(--gold)">⏳ AI is working…</div>
+      </div>
+    </div>
+
+    <!-- OUTPUTS — hidden until generated -->
+    <div id="ps-outputs" style="display:none;display:grid;gap:12px">
+
+      <!-- TOPIC + HEADLINE + MESSAGE -->
+      <div class="mkt-card">
+        <div class="mkt-card-title">📌 Content Fields</div>
+        <div style="display:grid;gap:10px">
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Topic / Post Title</label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-topic')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <input id="ps-out-topic" class="mkt-form-input" style="font-size:13px;font-weight:700" placeholder="AI will generate…">
+          </div>
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Poster Headline <span style="font-weight:400">(bold text on poster)</span></label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-headline')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <input id="ps-out-headline" class="mkt-form-input" style="font-size:13px;font-weight:700" placeholder="AI will generate…">
+          </div>
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Poster Message <span style="font-weight:400">(supporting line, 8–12 words)</span></label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-message')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <input id="ps-out-message" class="mkt-form-input" style="font-size:13px" placeholder="AI will generate…">
+          </div>
+
+        </div>
+      </div>
+
+      <!-- CAPTIONS -->
+      <div class="mkt-card">
+        <div class="mkt-card-title">📝 Captions</div>
+        <div style="display:grid;gap:10px">
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">English Caption <span style="font-weight:400">(150–200 words)</span></label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-caption-en')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <textarea id="ps-out-caption-en" class="mkt-form-input" rows="5" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="AI will generate…"></textarea>
+          </div>
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Telugu Caption</label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-caption-te')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <textarea id="ps-out-caption-te" class="mkt-form-input" rows="4" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="AI will generate…"></textarea>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- HASHTAGS + KEYWORDS -->
+      <div class="mkt-card">
+        <div class="mkt-card-title">🏷️ Hashtags & Keywords</div>
+        <div style="display:grid;gap:10px">
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Hashtags</label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-hashtags')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <textarea id="ps-out-hashtags" class="mkt-form-input" rows="2" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="#Vijayawada #VWholesale…"></textarea>
+          </div>
+
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">SEO Keywords <span style="font-weight:400">(for GBP + website)</span></label>
+              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-keywords')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
+            </div>
+            <textarea id="ps-out-keywords" class="mkt-form-input" rows="2" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="tiles Vijayawada, floor tiles price…"></textarea>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- POSTER GENERATION -->
+      <div class="mkt-card">
+        <div class="mkt-card-title">🖼️ Generate Poster</div>
+
+        <div style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Select Platforms / Sizes</label>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px" id="ps-platform-grid">
+            ${[
+              {id:'square',label:'Instagram Feed',size:'1080×1080',icon:'📸',checked:true},
+              {id:'story',label:'Instagram Story',size:'1080×1920',icon:'📱',checked:true},
+              {id:'landscape',label:'Facebook Post',size:'1200×630',icon:'👤',checked:true},
+              {id:'whatsapp',label:'WhatsApp Status',size:'1080×1920',icon:'💬',checked:false},
+              {id:'youtube',label:'YouTube Thumbnail',size:'1280×720',icon:'▶️',checked:false},
+              {id:'gbp',label:'Google Business',size:'1200×900',icon:'📍',checked:false},
+              {id:'print_a4',label:'Print A4',size:'2480×3508',icon:'🖨️',checked:false},
+              {id:'custom',label:'Custom Size',size:'',icon:'⚙️',checked:false},
+            ].map(p => `
+            <label style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;transition:border-color .15s" class="ps-platform-opt">
+              <input type="checkbox" name="ps-platform" value="${p.id}" ${p.checked?'checked':''} style="accent-color:var(--gold);width:14px;height:14px" onchange="psUpdateCustomSize(this)">
+              <div>
+                <div style="font-size:12px;font-weight:700">${p.icon} ${p.label}</div>
+                <div style="font-size:10px;color:var(--text3)">${p.size||'Set below'}</div>
+              </div>
+            </label>`).join('')}
+          </div>
+          <!-- Custom size inputs -->
+          <div id="ps-custom-size" style="display:none;margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div class="mkt-form-group" style="margin:0">
+              <label class="mkt-form-label">Width (px)</label>
+              <input id="ps-custom-w" type="number" class="mkt-form-input" value="1080" min="100" max="4000">
+            </div>
+            <div class="mkt-form-group" style="margin:0">
+              <label class="mkt-form-label">Height (px)</label>
+              <input id="ps-custom-h" type="number" class="mkt-form-input" value="1080" min="100" max="4000">
+            </div>
+          </div>
+        </div>
+
+        <button class="mkt-btn mkt-btn-primary" onclick="psGeneratePosters()" style="width:100%;padding:13px;font-size:14px;font-weight:900">
+          🤖 Generate Poster for Selected Platforms
         </button>
-      </div>
-
-      <!-- AI GENERATE PANEL -->
-      <div id="ps-ai-panel" class="mkt-card">
-        <div class="mkt-card-title">📋 What's the poster about?</div>
-        <div class="mkt-form-group">
-          <label class="mkt-form-label">Topic / Product / Offer *</label>
-          <input type="text" id="ps-topic" class="mkt-form-input"
-            placeholder="e.g. Sunhearrt tiles, Monsoon bathroom offer, Contractor Club"
-            onkeydown="if(event.key==='Enter') generateFullPoster()">
-        </div>
-        <div class="mkt-grid-2">
-          <div class="mkt-form-group">
-            <label class="mkt-form-label">Template</label>
-            <select id="ps-template" class="mkt-form-select">
-              <option value="product">Product Showcase</option>
-              <option value="offer">Offer / Sale</option>
-              <option value="contractor">Contractor Club</option>
-              <option value="festival">Festival Special</option>
-              <option value="store">Store Walk-in</option>
-            </select>
-          </div>
-          <div class="mkt-form-group">
-            <label class="mkt-form-label">Language</label>
-            <select id="ps-lang" class="mkt-form-select">
-              <option value="en">English</option>
-              <option value="te">Telugu</option>
-              <option value="te+en">Telugu + English</option>
-              <option value="hi">Hindi</option>
-            </select>
-          </div>
-        </div>
-        <div style="background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.25);border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:11.5px;color:var(--text3)">
-          💡 gpt-image-2 generates the background · Canvas engine overlays all text · Zero garbled words · ~₹4/poster
-        </div>
-        <button class="mkt-btn mkt-btn-primary" onclick="generateFullPoster()" style="width:100%;padding:13px;font-size:14px;font-weight:900">
-          ✨ Generate Poster
-        </button>
-      </div>
-
-      <!-- MANUAL UPLOAD PANEL -->
-      <div id="ps-upload-panel" class="mkt-card" style="display:none">
-        <div class="mkt-card-title">📁 Upload Your Poster</div>
-        <input type="file" id="ps-upload-file" accept="image/*" style="display:none" onchange="psHandleUpload()">
-        <div id="ps-upload-zone" onclick="document.getElementById('ps-upload-file').click()"
-          style="border:2px dashed var(--border);border-radius:10px;padding:28px;text-align:center;cursor:pointer;margin-bottom:12px;transition:border-color .2s"
-          onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
-          <div style="font-size:36px;margin-bottom:8px">🖼</div>
-          <div style="font-size:13px;font-weight:700;margin-bottom:4px">Click to upload poster</div>
-          <div style="font-size:11px;color:var(--text3)">JPG or PNG · 1080×1080 recommended</div>
-        </div>
-        <div class="mkt-form-group">
-          <label class="mkt-form-label">What is this poster about? *</label>
-          <input type="text" id="ps-upload-topic" class="mkt-form-input"
-            placeholder="e.g. Sunhearrt tiles available at V Wholesale"
-            onkeydown="if(event.key==='Enter') psGenerateUploadCaption()">
-        </div>
-        <div class="mkt-grid-2">
-          <div class="mkt-form-group">
-            <label class="mkt-form-label">Template</label>
-            <select id="ps-upload-template" class="mkt-form-select">
-              <option value="product">Product Showcase</option>
-              <option value="offer">Offer / Sale</option>
-              <option value="contractor">Contractor Club</option>
-              <option value="festival">Festival Special</option>
-              <option value="store">Store Walk-in</option>
-            </select>
-          </div>
-          <div class="mkt-form-group">
-            <label class="mkt-form-label">Language</label>
-            <select id="ps-upload-lang" class="mkt-form-select">
-              <option value="en">English</option>
-              <option value="te">Telugu</option>
-              <option value="te+en">Telugu + English</option>
-              <option value="hi">Hindi</option>
-            </select>
-          </div>
-        </div>
-        <button class="mkt-btn mkt-btn-primary" onclick="psGenerateUploadCaption()" style="width:100%;padding:11px;font-size:13px;font-weight:800">
-          ✨ Generate Caption + Hashtags
-        </button>
-      </div>
-
-      <!-- CAPTION BOX (shared, shown after generate or upload) -->
-      <div class="mkt-card" id="ps-caption-card" style="display:none">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div class="mkt-card-title" style="margin:0">📝 Caption</div>
-          <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="psEditCaption()">✏️ Edit</button>
-        </div>
-        <div id="ps-caption-display" style="background:var(--bg3);border-radius:8px;padding:11px;font-size:12px;line-height:1.7;white-space:pre-wrap;margin-bottom:10px;min-height:70px;cursor:pointer" onclick="psEditCaption()"></div>
-        <textarea id="ps-caption-edit" rows="5" class="mkt-form-input" style="display:none;font-size:12px;line-height:1.7;resize:vertical;margin-bottom:8px"></textarea>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="mkt-btn mkt-btn-ghost" style="font-size:12px" onclick="copyCaptionPS()">📋 Copy Caption</button>
-          <button class="mkt-btn mkt-btn-ghost" style="font-size:12px" onclick="downloadCurrentPoster()">⬇ Download PNG</button>
-          <button class="mkt-btn mkt-btn-primary" style="font-size:12px" onclick="pushToStaffFeed()">📢 Push to Staff Feed</button>
-          <button class="mkt-btn mkt-btn-ghost" style="font-size:12px;color:var(--purple)" onclick="generateFullPoster()">🔄 Regenerate</button>
+        <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px">
+          Uses the headline, message and topic from above · ~60-90 seconds
         </div>
       </div>
 
-      <!-- PUBLISH EVERYWHERE -->
-      <div class="mkt-card" id="ps-publish-card" style="display:none">
-        <div class="mkt-card-title">🚀 Publish Everywhere</div>
-        <div style="display:grid;gap:8px">
-
-          <!-- Instagram -->
-          <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px">
-            <div style="font-size:22px">📸</div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">Instagram</div>
-              <div style="font-size:11px;color:var(--text3)">Download poster → open app → paste caption</div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="downloadCurrentPoster()">⬇ Save</button>
-              <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="psPostInstagram()">Open →</button>
-            </div>
-          </div>
-
-          <!-- WhatsApp -->
-          <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px">
-            <div style="font-size:22px">💬</div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">WhatsApp Broadcast</div>
-              <div style="font-size:11px;color:var(--text3)">Caption copied → open WhatsApp → send to broadcast</div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="psPostWhatsApp()">Share →</button>
-            </div>
-          </div>
-
-          <!-- Google Business Profile -->
-          <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px">
-            <div style="font-size:22px">📍</div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">Google Business Profile</div>
-              <div style="font-size:11px;color:var(--text3)">Add update with image and caption</div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="copyCaptionPS()">📋 Copy</button>
-              <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="window.open('https://business.google.com/','_blank')">Open →</button>
-            </div>
-          </div>
-
-          <!-- Facebook -->
-          <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;align-items:center;gap:12px">
-            <div style="font-size:22px">📘</div>
-            <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">Facebook Page</div>
-              <div style="font-size:11px;color:var(--text3)">Post to V Wholesale Facebook page</div>
-            </div>
-            <div style="display:flex;gap:6px">
-              <button class="mkt-btn mkt-btn-ghost" style="font-size:11px" onclick="copyCaptionPS()">📋 Copy</button>
-              <button class="mkt-btn mkt-btn-primary" style="font-size:11px" onclick="window.open('https://www.facebook.com/','_blank')">Open →</button>
-            </div>
-          </div>
-
+      <!-- POSTER PREVIEWS + DOWNLOAD -->
+      <div id="ps-poster-results" style="display:none" class="mkt-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="mkt-card-title" style="margin:0">✅ Generated Posters</div>
+          <button class="mkt-btn mkt-btn-primary" onclick="psDownloadAll()" style="font-size:12px;padding:6px 14px">⬇ Download All (ZIP)</button>
         </div>
-
-        <!-- Save to history -->
-        <button class="mkt-btn mkt-btn-ghost" style="width:100%;margin-top:10px;font-size:12px" onclick="psSaveFinal()">
-          💾 Save to History
-        </button>
-      </div>
-
-    </div><!-- end left column -->
-
-    <!-- ═══ RIGHT COLUMN: PREVIEW ═══ -->
-    <div>
-      <div class="mkt-card" style="padding:12px;position:sticky;top:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div class="mkt-card-title" style="margin:0">Preview · 1080×1080</div>
-          <span id="ps-source-badge" style="display:none;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(201,168,76,0.15);color:var(--gold)"></span>
-        </div>
-        <div id="ps-preview" style="background:var(--bg3);border-radius:10px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;overflow:hidden">
-          <div style="text-align:center;color:var(--text3)">
-            <div style="font-size:48px;margin-bottom:8px">🎨</div>
-            <div style="font-size:12px">Generate with AI or upload your poster</div>
-          </div>
+        <div id="ps-poster-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <button class="mkt-btn mkt-btn-ghost" onclick="psSaveToLibrary()" style="font-size:12px">💾 Save to Library</button>
         </div>
       </div>
 
-      <!-- History -->
-      <div id="ps-history-card" class="mkt-card" style="display:none;margin-top:12px">
-        <div class="mkt-card-title">Recent Posters</div>
-        <div id="ps-history"></div>
+    </div>
+
+    <!-- LIBRARY (hidden by default) -->
+    <div id="ps-library" style="display:none" class="mkt-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div class="mkt-card-title" style="margin:0">📚 Poster Library</div>
+        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('ps-library').style.display='none'" style="font-size:12px">✕ Close</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+        ${['All','Social','Print','Custom'].map(f=>`<button class="mkt-btn mkt-btn-ghost ps-lib-filter" onclick="psFilterLibrary('${f.toLowerCase()}')" style="font-size:11px;padding:4px 10px">${f}</button>`).join('')}
+      </div>
+      <div id="ps-lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
+        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">Loading library…</div>
       </div>
     </div>
 
   </div>`);
 
-  loadPosterHistory();
+  // Init
+  document.getElementById('ps-outputs').style.display = 'none';
+  psLoadLibraryInBackground();
 }
 
-// ── MODE SWITCH ──
-function psSwitchMode(mode) {
-  const isAI = mode === 'ai';
-  document.getElementById('ps-ai-panel').style.display     = isAI ? '' : 'none';
-  document.getElementById('ps-upload-panel').style.display = isAI ? 'none' : '';
-  const aiBtn  = document.getElementById('ps-mode-ai');
-  const upBtn  = document.getElementById('ps-mode-upload');
-  aiBtn.style.background  = isAI ? 'var(--gold)' : 'none';
-  aiBtn.style.color       = isAI ? '#000' : 'var(--text3)';
-  upBtn.style.background  = isAI ? 'none' : 'var(--gold)';
-  upBtn.style.color       = isAI ? 'var(--text3)' : '#000';
-  // Reset publish area if switching
-  document.getElementById('ps-caption-card').style.display  = 'none';
-  document.getElementById('ps-publish-card').style.display  = 'none';
-  const preview = document.getElementById('ps-preview');
-  preview.innerHTML = `<div style="text-align:center;color:var(--text3)"><div style="font-size:48px;margin-bottom:8px">${isAI?'🎨':'📁'}</div><div style="font-size:12px">${isAI?'Enter a topic and click Generate':'Upload your poster image'}</div></div>`;
-  currentPosterB64 = null; currentCaption = '';
+function psUpdateCustomSize(cb) {
+  const customSizeDiv = document.getElementById('ps-custom-size');
+  if (!customSizeDiv) return;
+  const customChecked = document.querySelector('input[name="ps-platform"][value="custom"]')?.checked;
+  customSizeDiv.style.display = customChecked ? 'grid' : 'none';
 }
 
-// ── MANUAL UPLOAD HANDLER ──
-function psHandleUpload() {
-  const file = document.getElementById('ps-upload-file')?.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const b64 = e.target.result.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, '');
-    currentPosterB64 = b64;
-
-    // Show preview immediately
-    const preview = document.getElementById('ps-preview');
-    preview.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain;border-radius:10px;cursor:zoom-in" onclick="window.open(this.src)" title="Click to zoom">`;
-
-    // Badge
-    const badge = document.getElementById('ps-source-badge');
-    if (badge) { badge.textContent = '📁 Uploaded'; badge.style.display = ''; }
-
-    // Upload zone thumbnail
-    const zone = document.getElementById('ps-upload-zone');
-    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="max-height:72px;border-radius:6px;object-fit:contain"><div style="font-size:11px;color:var(--gold);margin-top:6px;font-weight:700">✅ ${file.name}</div>`;
-
-    // Show caption card with placeholder — user can generate or type manually
-    currentCaption = '';
-    const disp = document.getElementById('ps-caption-display');
-    const edit = document.getElementById('ps-caption-edit');
-    if (disp) { disp.style.display = 'none'; }
-    if (edit) {
-      edit.value = '';
-      edit.placeholder = 'Click "Generate Caption + Hashtags" above, or type your own caption here...';
-      edit.style.display = 'block';
-      edit.oninput = () => { currentCaption = edit.value; };
-    }
-    document.getElementById('ps-caption-card').style.display  = '';
-    document.getElementById('ps-publish-card').style.display  = '';
-    showMktToast('✅ Poster loaded — fill the topic and generate caption');
-  };
-  reader.readAsDataURL(file);
+function psCopy(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = el.value || el.textContent || '';
+  navigator.clipboard.writeText(text).then(() => showMktToast('📋 Copied!'));
 }
 
-// ── AI CAPTION GENERATION FOR UPLOADED POSTER ──
-async function psGenerateUploadCaption() {
-  const topic    = (document.getElementById('ps-upload-topic')?.value || '').trim();
-  const template = document.getElementById('ps-upload-template')?.value || 'product';
-  const lang     = document.getElementById('ps-upload-lang')?.value || 'en';
+async function psGenerateBrief() {
+  const brief = (document.getElementById('ps-brief')?.value || '').trim();
+  const tone = document.getElementById('ps-tone')?.value || 'product';
+  if (!brief) { showMktToast('Please write your brief first'); return; }
 
-  if (!topic)           { showMktToast('Enter what the poster is about first'); return; }
-  if (!currentPosterB64){ showMktToast('Upload a poster image first'); return; }
+  document.getElementById('ps-brief-loading').style.display = '';
+  document.getElementById('ps-outputs').style.display = 'none';
 
-  const edit = document.getElementById('ps-caption-edit');
-  const disp = document.getElementById('ps-caption-display');
-  if (edit) { edit.value = '⏳ Generating caption...'; edit.disabled = true; edit.style.display = 'block'; }
-  if (disp) disp.style.display = 'none';
-
-  try {
-    const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ topic, template, language: lang, caption_only: true, business_name: 'V Wholesale' })
-    });
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'API error');
-
-    const c = data.content || {};
-
-    // Use AI-generated caption directly — it's already rich with emojis + hashtags
-    // Only build manually if caption field is missing
-    let caption = c.caption || '';
-    if (!caption) {
-      // Extract clean brand name from headline_line1
-      const brand = (c.headline_line1 || topic.split(' ')[0]).replace(/\s/g,'');
-      const cat   = (c.headline_line2 || 'Tiles').replace(/\s/g,'');
-      caption =
-        `✨ ${c.headline_line1||''} ${c.headline_line2||''} — ${c.subheadline||'Now Available at V Wholesale'}\n\n` +
-        `${c.body||'Premium Wall & Floor Tile Collection'}\n\n` +
-        `💎 ${c.feature_gold||'Elegant Designs • Modern Finishes • Lasting Quality'}\n\n` +
-        `✅ ${c.feature1||'Luxury Marble Looks'}\n` +
-        `✅ ${c.feature2||'Glossy, Matt & Designer Finishes'}\n` +
-        `✅ ${c.feature3||'Premium Quality for Modern Homes'}\n\n` +
-        `📍 V Wholesale, Visit V Wholesale\n` +
-        `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
-        `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
-    }
-
-    currentCaption = caption;
-    if (edit) { edit.value = caption; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
-    showMktToast('✅ Caption generated — edit if needed, then publish!');
-
-  } catch(e) {
-    console.warn('Edge function error, using fallback:', e.message);
-    // Clean fallback — extract brand word from topic properly
-    const words  = topic.trim().split(/\s+/);
-    const brand  = words[0] || 'Brand';
-    const cat    = words.find(w => ['tiles','tile','granite','paints','paint','sanitary','bathware','electrical'].includes(w.toLowerCase())) || 'Tiles';
-
-    const fallback =
-      `✨ ${topic} — Now Available at V Wholesale, Vijayawada!\n\n` +
-      `🏠 Transform your home with premium quality\n` +
-      `💎 Elegant Designs • Modern Finishes • Lasting Quality\n` +
-      `✅ Perfect for Living Rooms, Bedrooms & Bathrooms\n\n` +
-      `📍 V Wholesale, Visit V Wholesale\n` +
-      `📞 Call: 8712697930 | 🌐 vwholesale.in\n\n` +
-      `#VWholesale #Vijayawada #${brand} #${cat} #HomeDesign #InteriorDesign #LuxuryLiving #BuildingMaterials #AndhraPradesh`;
-
-    currentCaption = fallback;
-    if (edit) { edit.value = fallback; edit.disabled = false; edit.oninput = () => { currentCaption = edit.value; }; }
-    showMktToast('Caption ready — you can edit before posting');
-  }
-}
-
-
-// ── CAPTION EDIT TOGGLE ──
-function psEditCaption() {
-  const disp = document.getElementById('ps-caption-display');
-  const edit = document.getElementById('ps-caption-edit');
-  if (!disp || !edit) return;
-  if (edit.style.display === 'none') {
-    edit.value = currentCaption;
-    edit.style.display = 'block';
-    disp.style.display = 'none';
-    edit.focus();
-    edit.oninput = () => { currentCaption = edit.value; };
-  } else {
-    currentCaption = edit.value;
-    disp.textContent = currentCaption;
-    disp.style.display = '';
-    edit.style.display = 'none';
-  }
-}
-
-// ── PUBLISH ACTIONS ──
-function psPostInstagram() {
-  copyCaptionPS();
-  downloadCurrentPoster();
-  setTimeout(() => window.open('https://www.instagram.com/', '_blank'), 600);
-  showMktToast('📋 Caption copied + poster downloading → paste in Instagram');
-}
-
-function psPostWhatsApp() {
-  const txt = currentCaption || 'Check out our latest offer at V Wholesale, Vijayawada!';
-  copyCaptionPS();
-  window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, '_blank');
-}
-
-async function psSaveFinal() {
-  const label = document.getElementById('ps-upload-topic')?.value?.trim() ||
-                document.getElementById('ps-topic')?.value?.trim() ||
-                'Poster';
-  if (!currentPosterB64) { showMktToast('No poster to save'); return; }
-
-  let image_url = null;
-  try {
-    await sb.storage.createBucket('brand-assets', { public: true }).catch(()=>{});
-    const byteArr = Uint8Array.from(atob(currentPosterB64), c => c.charCodeAt(0));
-    const blob = new Blob([byteArr], { type: 'image/png' });
-    const fname = `posters/${Date.now()}-${label.replace(/\W/g,'_').slice(0,30)}.png`;
-    const { error } = await sb.storage.from('brand-assets').upload(fname, blob, { contentType: 'image/png', upsert: true });
-    if (!error) {
-      const { data: u } = sb.storage.from('brand-assets').getPublicUrl(fname);
-      image_url = u?.publicUrl || null;
-    }
-  } catch(e) { console.warn('Upload err:', e.message); }
-
-  await sb.from('poster_history').insert({
-    topic: label, template: 'manual', language: 'en',
-    caption: currentCaption, image_url, status: 'draft',
-    created_by: mktProfile?.name
-  });
-  showMktToast('✅ Saved to history!');
-  loadPosterHistory();
-}
-
-
-
-// ── POSTER CANVAS COMPOSITOR ──
-// Hero image from DALL-E 3 HD + all text/branding composited on HTML Canvas
-// Eliminates ALL text garbling from image generation models
-
-let currentPosterB64 = null;
-let currentCaption = '';
-let currentPosterContent = null;
-
-async function generateFullPoster() {
-  const topic = (document.getElementById('ps-topic')?.value||'').trim();
-  const template = document.getElementById('ps-template')?.value||'product';
-  const lang = document.getElementById('ps-lang')?.value||'en';
-  if (!topic) { showMktToast('Enter a topic first'); return; }
-
-  const preview = document.getElementById('ps-preview');
-  const setStatus = (msg) => {
-    const el = document.getElementById('ps-status');
-    if (el) el.textContent = msg;
-  };
-
-  preview.innerHTML = `
-  <div style="text-align:center;padding:40px">
-    <div class="ai-thinking" style="justify-content:center;margin-bottom:16px">
-      <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-    </div>
-    <div style="font-size:14px;font-weight:700;color:var(--text2)" id="ps-status">✍️ Writing content…</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:6px">Then generating premium hero image with gpt-image-2</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:4px">~60–120 seconds</div>
-  </div>`;
-
-  const {data:bpArr} = await sb.from('brand_profile').select('*').limit(1).then(r=>r,()=>({data:[]}));
-  const bp = (bpArr||[])[0]||{};
-
-  try {
-    setStatus('✍️ Writing poster content…');
-    setStatus('🖼️ Generating premium hero image with gpt-image-2…');
-    const psController = new AbortController();
-    const psTimeout = setTimeout(() => psController.abort(), 240000); // 150s timeout
-    const res = await fetch(`${MKT_SB_URL}/functions/v1/generate-poster`, {
-      method: 'POST',
-      signal: psController.signal,
-      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({
-        topic, template, language: lang,
-        business_name: bp.business_name||'V Wholesale',
-        phone: bp.phone||'8712697930',
-        website: bp.website||'vwholesale.in',
-        address: bp.address||'Visit V Wholesale',
-        tagline: bp.tagline||'Build Better. Pay Less.',
-      })
-    });
-    clearTimeout(psTimeout);
-
-    const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Generation failed');
-
-    setStatus('🎨 Compositing poster with Canvas engine…');
-    currentPosterContent = data.content;
-    currentCaption = data.content?.caption || `✨ ${topic} now at V Wholesale, Vijayawada! 📞 8712697930 | vwholesale.in #VWholesale #Vijayawada`;
-
-    const bizInfo = {
-      name: bp.business_name || 'V Wholesale',
-      phone: bp.phone || '8712697930',
-      website: (bp.website || 'vwholesale.in').replace('https://','').replace('http://',''),
-      address: bp.address || 'Visit V Wholesale',
-      tagline: (bp.tagline || 'Beautiful Spaces. Built to Last.').toUpperCase(),
-    };
-
-    const posterB64 = await composePosterCanvas(data.image_b64, data.content, bizInfo);
-    currentPosterB64 = posterB64;
-
-    preview.innerHTML = `<img src="data:image/png;base64,${posterB64}" style="width:100%;height:100%;object-fit:contain;border-radius:10px;cursor:zoom-in" onclick="window.open(this.src)" title="Click to zoom">`;
-
-    // Show source badge
-    const badge = document.getElementById('ps-source-badge');
-    if (badge) { badge.textContent = `✨ ${data.image_source === 'gpt-image-2' ? 'gpt-image-2' : 'Stock Photo'}`; badge.style.display = ''; }
-
-    // Populate caption in new unified card
-    const capDisp = document.getElementById('ps-caption-display');
-    const capEdit = document.getElementById('ps-caption-edit');
-    if (capDisp) { capDisp.textContent = currentCaption; capDisp.style.display = ''; }
-    if (capEdit) { capEdit.value = currentCaption; capEdit.style.display = 'none'; }
-    document.getElementById('ps-caption-card').style.display  = '';
-    document.getElementById('ps-publish-card').style.display  = '';
-
-    // Save composited poster to Supabase Storage (upsert=true to never fail on duplicate)
-    let image_url = null;
+    // Route through edge function — keeps OpenAI key server-side
     try {
-      const byteArr = Uint8Array.from(atob(posterB64), c => c.charCodeAt(0));
-      const blob = new Blob([byteArr], { type: 'image/png' });
-      const filename = `posters/${Date.now()}-${topic.replace(/[^a-z0-9]/gi,'_').slice(0,30)}.png`;
-
-      // Ensure bucket exists (creates if missing — idempotent)
-      await sb.storage.createBucket('brand-assets', { public: true }).catch(()=>{});
-
-      const { data: upData, error: upErr } = await sb.storage.from('brand-assets').upload(filename, blob, { contentType: 'image/png', upsert: true });
-      if (upErr) {
-        console.error('Storage upload error:', upErr.message, upErr);
-      } else {
-        const { data: urlData } = sb.storage.from('brand-assets').getPublicUrl(filename);
-        image_url = urlData?.publicUrl || null;
-        console.log('Poster uploaded:', image_url);
-      }
-    } catch(uploadErr) {
-      console.error('Upload exception:', uploadErr.message);
-    }
-
-    // Insert history record and get the new ID so we can cache b64 locally
-    const { data: inserted } = await sb.from('poster_history').insert({
-      topic, template, language: lang,
-      headline: data.content?.headline_line1,
-      caption: currentCaption,
-      image_url,
-      status: 'draft',
-      created_by: mktProfile?.name
-    }).select('id').single().then(r=>r, ()=>({data:null}));
-
-    // Cache composited poster in sessionStorage by ID (survives page nav, not hard refresh)
-    if (inserted?.id) {
-      try { sessionStorage.setItem(`poster_b64_${inserted.id}`, posterB64); } catch(e) {}
-    }
-
-    loadPosterHistory();
-    showMktToast(image_url ? '✅ Poster saved! Click image to zoom or download.' : '✅ Poster ready! (Storage upload failed — download now to save)');
-
+    const fnRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_brief', brief, tone })
+    });
+    const fnData = await fnRes.json();
+    if (!fnData.ok) throw new Error(fnData.error || 'Generation failed');
+    psPopulateOutputs(fnData.content);
   } catch(e) {
-    preview.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red)">
-      <div style="font-size:32px;margin-bottom:8px">⚠️</div>
-      <div style="font-weight:700;margin-bottom:4px">Generation Failed</div>
-      <div style="font-size:12px;color:var(--text2)">${e.message}</div>
-      <div style="font-size:11px;margin-top:8px;color:var(--text3)">Check OpenAI credits &amp; OPENAI_API_KEY secret in Supabase</div>
-    </div>`;
+    showMktToast('❌ ' + e.message);
+  } finally {
+    document.getElementById('ps-brief-loading').style.display = 'none';
   }
 }
 
-// ─────────────────────────────────────────────────────────
-//  CANVAS COMPOSITOR — matches ChatGPT poster style
-//  Navy left panel + hero photo right half + full text overlay
-// ─────────────────────────────────────────────────────────
-async function composePosterCanvas(heroB64, content, biz) {
-  const S = 1080;
-  const canvas = document.createElement('canvas');
-  canvas.width = S; canvas.height = S;
-  const ctx = canvas.getContext('2d');
-
-  const NAVY  = '#1a2744';
-  const GOLD  = '#c9a84c';
-  const WHITE = '#ffffff';
-
-  // Layout constants — hard split
-  const SPLIT_X  = 442;   // left panel width
-  const HERO_TOP = 0;
-  const HERO_H   = 815;   // hero image zone height (top 75.5%)
-  const BOT_Y    = HERO_H;
-  const STRIP_Y  = S - 130;
-  const FOOT_Y   = S - 90;
-
-  // ── 1. Full navy canvas ──
-  ctx.fillStyle = NAVY;
-  ctx.fillRect(0, 0, S, S);
-
-  // ── 2. Hero image — RIGHT HALF ONLY, strictly clipped ──
-  try {
-    const img = await loadImgB64(heroB64);
-    ctx.save();
-    // Clip strictly to right panel — no overlap with left text zone
-    ctx.beginPath();
-    ctx.rect(SPLIT_X, HERO_TOP, S - SPLIT_X, HERO_H);
-    ctx.clip();
-    const sc = Math.max((S - SPLIT_X) / img.width, HERO_H / img.height);
-    const dw = img.width * sc, dh = img.height * sc;
-    ctx.drawImage(img, SPLIT_X + ((S - SPLIT_X) - dw)/2, (HERO_H - dh)/2, dw, dh);
-    ctx.restore();
-
-    // Gold curved border between left panel and hero
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(SPLIT_X + 8, HERO_H / 2, HERO_H / 2 + 16, -Math.PI / 2, Math.PI / 2, false);
-    ctx.stroke();
-
-    // Left-edge fade on hero (navy → transparent, 60px wide)
-    const grad = ctx.createLinearGradient(SPLIT_X, 0, SPLIT_X + 60, 0);
-    grad.addColorStop(0, 'rgba(26,39,68,1)');
-    grad.addColorStop(1, 'rgba(26,39,68,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(SPLIT_X, HERO_TOP, 60, HERO_H);
-  } catch(e) { console.warn('Hero image error:', e.message); }
-
-  // ── 3. Solid navy LEFT PANEL — covers any bleed from hero ──
-  ctx.fillStyle = NAVY;
-  ctx.fillRect(0, 0, SPLIT_X, HERO_H);
-
-  // ── 4. TOP-RIGHT badge ──
-  ctx.save();
-  ctx.fillStyle = GOLD;
-  ctx.beginPath();
-  ctx.moveTo(S - 132, 0); ctx.lineTo(S, 0); ctx.lineTo(S, 86); ctx.lineTo(S - 148, 86);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = NAVY; ctx.textAlign = 'center';
-  ctx.font = 'bold 10px Arial'; ctx.fillText('★ ★ ★', S - 66, 15);
-  ctx.font = 'bold 12px Arial'; ctx.fillText('AVAILABLE', S - 66, 32);
-  ctx.font = 'bold 12px Arial'; ctx.fillText('IN STORE', S - 66, 50);
-  ctx.font = 'bold 10px Arial'; ctx.fillText('★ ★ ★', S - 66, 68);
-  ctx.textAlign = 'left'; ctx.restore();
-
-  // ── 5. V WHOLESALE LOGO + NAME ──
-  psDrawVLogo(ctx, 36, 26, 50, GOLD);
-  ctx.fillStyle = WHITE;
-  ctx.font = 'bold 20px Arial';
-  ctx.fillText('V WHOLESALE', 96, 48);
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.font = '9.5px Arial';
-  ctx.fillText('TILES  •  SANITARY  •  BATHWARE', 96, 64);
-
-  // ── 6. HEADLINE LINE 1 — brand name, gold, large ──
-  const h1 = (content?.headline_line1 || 'SUNHEARRT').toUpperCase();
-  ctx.fillStyle = GOLD;
-  psFitText(ctx, h1, 'bold', 36, 215, SPLIT_X - 50, 88, 44);
-
-  // ── 7. HEADLINE LINE 2 — category, white, larger ──
-  const h2 = (content?.headline_line2 || 'TILES').toUpperCase();
-  ctx.fillStyle = WHITE;
-  psFitText(ctx, h2, 'bold', 36, 340, SPLIT_X - 50, 116, 58);
-
-  // Gold rule + diamond
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(36, 362, SPLIT_X - 70, 2.5);
-  ctx.save();
-  ctx.translate(SPLIT_X / 2, 362);
-  ctx.rotate(Math.PI / 4);
-  ctx.fillRect(-6, -6, 12, 12);
-  ctx.restore();
-
-  // ── 8. SUBHEADLINE — gold bar ──
-  const sub = content?.subheadline || 'Now Available at V Wholesale';
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(0, 374, SPLIT_X + 20, 44);
-  ctx.fillStyle = NAVY;
-  ctx.font = 'bold 16px Arial';
-  ctx.fillText(sub, 36, 402);
-
-  // ── 9. BODY TEXT ──
-  ctx.fillStyle = WHITE;
-  ctx.font = 'bold 15.5px Arial';
-  const bodyTxt = content?.body || 'Premium Wall & Floor Tile Collection';
-  ctx.fillText(bodyTxt, 36, 444);
-
-  // Gold italic features
-  ctx.fillStyle = GOLD;
-  ctx.font = 'italic 13px Arial';
-  const featLine = content?.feature_gold || 'Elegant Designs • Modern Finishes • Lasting Quality';
-  psWrapText(ctx, featLine, 36, 466, SPLIT_X - 50, 18);
-
-  // Thin gold rule
-  ctx.strokeStyle = 'rgba(201,168,76,0.45)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(36, 490); ctx.lineTo(SPLIT_X - 20, 490); ctx.stroke();
-
-  // House icon + usage line
-  psHouseIcon(ctx, 36, 500, GOLD);
-  ctx.fillStyle = 'rgba(255,255,255,0.78)';
-  ctx.font = '12.5px Arial';
-  const usageTxt = content?.usage || 'Perfect for Living Rooms, Bedrooms, Bathrooms & Outdoor Spaces';
-  psWrapText(ctx, usageTxt, 62, 508, SPLIT_X - 60, 17);
-
-  // ── 10. BOTTOM ZONE — dark band across full width ──
-  ctx.fillStyle = 'rgba(8,15,35,0.72)';
-  ctx.fillRect(0, BOT_Y, S, STRIP_Y - BOT_Y);
-
-  // ── 11. FEATURE ICONS — 3 equal columns ──
-  const iconY   = BOT_Y + 12;
-  const COL_W   = S / 3;
-  const icons   = ['◈', '⬡', '✦'];
-  const flabels = [
-    (content?.feature1 || 'Luxury Marble Looks').replace(' & ', '\n& '),
-    (content?.feature2 || 'Glossy, Matt &\nDesigner Finishes'),
-    (content?.feature3 || 'Premium Quality\nfor Modern Homes'),
-  ];
-  [0, 1, 2].forEach(i => {
-    const cx = COL_W * i + COL_W / 2;
-    ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(cx, iconY + 28, 30, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = GOLD; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
-    ctx.fillText(icons[i], cx, iconY + 36);
-    ctx.fillStyle = WHITE; ctx.font = '11.5px Arial';
-    flabels[i].split('\n').forEach((ln, li) => ctx.fillText(ln, cx, iconY + 70 + li * 15));
-    if (i < 2) {
-      ctx.strokeStyle = 'rgba(201,168,76,0.3)'; ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(COL_W * (i + 1), iconY + 8);
-      ctx.lineTo(COL_W * (i + 1), iconY + 92);
-      ctx.stroke();
-    }
-  });
-  ctx.textAlign = 'left';
-
-  // ── 12. CATEGORY STRIP — gold bar ──
-  const stripItems = content?.strip_items || ['TILES', 'GRANITE', 'SANITARYWARE', 'PAINTS', 'ELECTRICALS'];
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(0, STRIP_Y, S, 38);
-  ctx.fillStyle = NAVY;
-  ctx.font = 'bold 12.5px Arial';
-  ctx.textAlign = 'center';
-  const sw = S / stripItems.length;
-  stripItems.forEach((item, i) => ctx.fillText(item.toUpperCase(), sw * i + sw / 2, STRIP_Y + 25));
-  ctx.textAlign = 'left';
-
-  // ── 13. FOOTER — navy bar ──
-  ctx.fillStyle = NAVY;
-  ctx.fillRect(0, FOOT_Y, S, S - FOOT_Y);
-  // Gold top rule
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(0, FOOT_Y, S, 2);
-
-  // Left: business details
-  ctx.fillStyle = GOLD; ctx.font = 'bold 26px Arial';
-  ctx.fillText(biz.name || 'V Wholesale', 36, FOOT_Y + 33);
-  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = '11.5px Arial';
-  ctx.fillText('📍 ' + (biz.address || 'Visit V Wholesale'), 36, FOOT_Y + 53);
-  ctx.fillText('📞 Call: ' + (biz.phone || '8712697930'), 36, FOOT_Y + 69);
-  ctx.fillText('🌐 ' + (biz.website || 'vwholesale.in'), 36, FOOT_Y + 85);
-
-  // Right: CTA button
-  const ctaW = 258, ctaH = 48;
-  const ctaX = S - ctaW - 36;
-  const ctaY = FOOT_Y + 20;
-  ctx.fillStyle = 'rgba(201,168,76,0.1)';
-  psRoundedRect(ctx, ctaX, ctaY, ctaW, ctaH, 24, 24, 24, 24); ctx.fill();
-  ctx.strokeStyle = GOLD; ctx.lineWidth = 2;
-  psRoundedRect(ctx, ctaX, ctaY, ctaW, ctaH, 24, 24, 24, 24); ctx.stroke();
-  ctx.fillStyle = GOLD; ctx.font = 'bold 13.5px Arial'; ctx.textAlign = 'center';
-  ctx.fillText((content?.cta || 'VISIT OUR STORE TODAY').toUpperCase() + '  ›', ctaX + ctaW / 2, ctaY + 30);
-  ctx.textAlign = 'left';
-
-  // Bottom tagline centre
-  ctx.fillStyle = 'rgba(201,168,76,0.7)'; ctx.font = 'italic 11px Arial'; ctx.textAlign = 'center';
-  ctx.fillText(biz.tagline || 'BEAUTIFUL SPACES. BUILT TO LAST.', S / 2, S - 8);
-  ctx.textAlign = 'left';
-
-  return canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
+function psPopulateOutputs(content) {
+  document.getElementById('ps-out-topic').value = content.topic || '';
+  document.getElementById('ps-out-headline').value = content.headline || '';
+  document.getElementById('ps-out-message').value = content.poster_message || '';
+  document.getElementById('ps-out-caption-en').value = content.caption_en || '';
+  document.getElementById('ps-out-caption-te').value = content.caption_te || '';
+  document.getElementById('ps-out-hashtags').value = content.hashtags || '';
+  document.getElementById('ps-out-keywords').value = content.seo_keywords || '';
+  document.getElementById('ps-outputs').style.display = 'grid';
+  // Smooth scroll to outputs
+  document.getElementById('ps-outputs').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ── CANVAS UTILS ──
-function loadImgB64(b64) {
-  return new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = () => res(img);
-    img.onerror = () => rej(new Error('Image load failed'));
-    img.src = 'data:image/png;base64,' + b64;
-  });
-}
-function psRoundedRect(ctx, x, y, w, h, tl, tr, br, bl) {
-  ctx.beginPath();
-  ctx.moveTo(x+tl, y);
-  ctx.lineTo(x+w-tr, y); ctx.arcTo(x+w, y, x+w, y+tr, tr);
-  ctx.lineTo(x+w, y+h-br); ctx.arcTo(x+w, y+h, x+w-br, y+h, br);
-  ctx.lineTo(x+bl, y+h); ctx.arcTo(x, y+h, x, y+h-bl, bl);
-  ctx.lineTo(x, y+tl); ctx.arcTo(x, y, x+tl, y, tl);
-  ctx.closePath();
-}
-function psFitText(ctx, text, weight, x, y, maxW, startSz, minSz) {
-  let sz = startSz;
-  ctx.font = `${weight} ${sz}px Arial`;
-  while (ctx.measureText(text).width > maxW && sz > minSz) {
-    sz -= 4; ctx.font = `${weight} ${sz}px Arial`;
-  }
-  ctx.fillText(text, x, y);
-}
-function psWrapText(ctx, text, x, y, maxW, lineH) {
-  const words = text.split(' '); let line = '';
-  for (const w of words) {
-    const t = line + w + ' ';
-    if (ctx.measureText(t).width > maxW && line) { ctx.fillText(line.trim(), x, y); y += lineH; line = w + ' '; }
-    else line = t;
-  }
-  ctx.fillText(line.trim(), x, y);
-}
-function psDrawVLogo(ctx, x, y, sz, color) {
-  ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5;
-  // Diamond outline
-  ctx.beginPath();
-  ctx.moveTo(x+sz/2,y); ctx.lineTo(x+sz,y+sz/2); ctx.lineTo(x+sz/2,y+sz); ctx.lineTo(x,y+sz/2);
-  ctx.closePath(); ctx.stroke();
-  // V shape
-  ctx.lineWidth = 4.5;
-  ctx.beginPath();
-  ctx.moveTo(x+sz*0.24,y+sz*0.3); ctx.lineTo(x+sz*0.5,y+sz*0.72); ctx.lineTo(x+sz*0.76,y+sz*0.3);
-  ctx.stroke();
-  // Crown dots
-  [0.2,0.5,0.8].forEach(p => { ctx.beginPath(); ctx.arc(x+sz*p,y+sz*0.16,3.5,0,Math.PI*2); ctx.fill(); });
-  ctx.restore();
-}
-function psHouseIcon(ctx, x, y, color) {
-  ctx.save(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(x,y+9); ctx.lineTo(x+10,y); ctx.lineTo(x+20,y+9);
-  ctx.moveTo(x+2,y+9); ctx.lineTo(x+2,y+20); ctx.lineTo(x+18,y+20); ctx.lineTo(x+18,y+9);
-  ctx.moveTo(x+7,y+14); ctx.lineTo(x+7,y+20); ctx.lineTo(x+13,y+20); ctx.lineTo(x+13,y+14); ctx.closePath();
-  ctx.stroke(); ctx.restore();
-}
+async function psGeneratePosters() {
+  const headline = document.getElementById('ps-out-headline')?.value?.trim();
+  const message = document.getElementById('ps-out-message')?.value?.trim();
+  const topic = document.getElementById('ps-out-topic')?.value?.trim();
+  if (!topic || !headline) { showMktToast('Generate brief first or fill Topic + Headline'); return; }
 
-// ── POSTER ACTIONS ──
-function downloadCurrentPoster() {
-  if (!currentPosterB64) { showMktToast('Generate a poster first'); return; }
-  const a = document.createElement('a');
-  a.download = 'vwholesale-poster-' + Date.now() + '.png';
-  a.href = 'data:image/png;base64,' + currentPosterB64;
-  a.click();
-  showMktToast('✅ Downloaded!');
-}
-function copyCaptionPS() {
-  // Sync from edit textarea if it's open
-  const edit = document.getElementById('ps-caption-edit');
-  if (edit && edit.style.display !== 'none') currentCaption = edit.value;
-  if (!currentCaption) { showMktToast('No caption yet — write one or generate first'); return; }
-  navigator.clipboard.writeText(currentCaption).then(() => showMktToast('📋 Caption copied!'));
-}
-async function regeneratePoster(topic, template, lang) {
-  const topicEl = document.getElementById('ps-topic');
-  const tmplEl  = document.getElementById('ps-template');
-  const langEl  = document.getElementById('ps-lang');
-  if (topicEl) topicEl.value = topic;
-  if (tmplEl)  tmplEl.value  = template;
-  if (langEl)  langEl.value  = lang;
-  document.getElementById('mkt-content').scrollTo({top:0, behavior:'smooth'});
-  showMktToast('Ready — click ✨ Generate Poster');
-}
+  const selectedPlatforms = [...document.querySelectorAll('input[name="ps-platform"]:checked')].map(cb => cb.value);
+  if (!selectedPlatforms.length) { showMktToast('Select at least one platform'); return; }
 
-async function viewPosterHistory(id) {
-  const {data:h} = await sb.from('poster_history').select('*').eq('id',id).single().then(r=>r,()=>({data:null}));
-  if (!h) { showMktToast('Not found'); return; }
+  // Map platform selections to format keys for the poster function
+  const formatMap = {
+    square: { size: '1024x1024', label: 'Instagram Feed', icon: '📸' },
+    story: { size: '1024x1536', label: 'Instagram Story / WhatsApp', icon: '📱' },
+    landscape: { size: '1536x1024', label: 'Facebook Post', icon: '👤' },
+    whatsapp: { size: '1024x1536', label: 'WhatsApp Status', icon: '💬' },
+    youtube: { size: '1536x1024', label: 'YouTube Thumbnail', icon: '▶️' },
+    gbp: { size: '1536x1024', label: 'Google Business', icon: '📍' },
+    print_a4: { size: '1024x1536', label: 'Print A4', icon: '🖨️' },
+  };
 
-  // Check if we have the composited image cached in sessionStorage
-  let cachedB64 = null;
-  try { cachedB64 = sessionStorage.getItem(`poster_b64_${id}`); } catch(e) {}
-
-  // Decide what image source to show
-  const imgSrc = h.image_url || (cachedB64 ? `data:image/png;base64,${cachedB64}` : null);
-  const downloadHref = h.image_url || (cachedB64 ? `data:image/png;base64,${cachedB64}` : null);
-
-  const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;overflow-y:auto;padding:20px;display:flex;align-items:flex-start;justify-content:center';
-  modal.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;width:100%;max-width:520px;overflow:hidden;margin-top:20px">
-    <div style="background:#EEF2F7;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
-      <div>
-        <div style="font-size:14px;font-weight:900;color:var(--text)">${h.topic||'Poster'}</div>
-        <div style="font-size:11px;color:#64748B">${h.template||'product'} · ${h.language||'en'} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
-      </div>
-      <button onclick="this.closest('[style*=fixed]').remove()" style="background:none;border:none;color:#64748B;font-size:22px;cursor:pointer">✕</button>
-    </div>
-    <div style="padding:16px;display:grid;gap:12px">
-      ${imgSrc
-        ? `<img src="${imgSrc}" style="width:100%;border-radius:10px;display:block;cursor:zoom-in" loading="lazy"
-             onclick="window.open(this.src)"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='block'">`
-        : ''
-      }
-      <div style="background:var(--bg3);border-radius:10px;padding:32px;text-align:center;color:var(--text3);font-size:13px${imgSrc?';display:none':''}">
-        <div style="font-size:32px;margin-bottom:8px">🖼</div>
-        Click Regenerate to recreate this poster.
-      </div>
-      ${h.caption?`<div style="background:var(--bg3);border-radius:8px;padding:12px">
-        <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
-        <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;max-height:120px;overflow-y:auto">${h.caption}</div>
-      </div>`:''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${downloadHref?`<a href="${downloadHref}" download="vwholesale-poster-${h.id}.png" class="mkt-btn mkt-btn-ghost" style="text-decoration:none">⬇ Download</a>`:''}
-        <button class="mkt-btn mkt-btn-primary" style="flex:1"
-          onclick="this.closest('[style*=fixed]').remove();
-          document.getElementById('ps-topic').value='${(h.topic||'').replace(/'/g,"\\'")}';
-          document.getElementById('ps-template').value='${h.template||'product'}';
-          document.getElementById('ps-lang').value='${h.language||'en'}';
-          mktNav('poster')">🔄 Regenerate</button>
-        <button class="mkt-btn mkt-btn-ghost" style="color:var(--red)"
-          onclick="if(confirm('Delete?')){deletePosterHistory(${h.id});this.closest('[style*=fixed]').remove();}">🗑 Delete</button>
-        ${h.caption?`<button class="mkt-btn mkt-btn-ghost" onclick="copyPosterCaption(${h.id})">📋 Copy</button>`:''}
-      </div>
-    </div>
+  const resultsDiv = document.getElementById('ps-poster-results');
+  const gridDiv = document.getElementById('ps-poster-grid');
+  resultsDiv.style.display = 'block';
+  gridDiv.innerHTML = `<div style="text-align:center;padding:30px;color:var(--text3);grid-column:1/-1">
+    <div style="font-size:24px;margin-bottom:8px">🤖</div>
+    <div style="font-size:13px;font-weight:700">Generating ${selectedPlatforms.length} poster${selectedPlatforms.length>1?'s':''}…</div>
+    <div style="font-size:11px;margin-top:4px">~60-90 seconds</div>
   </div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', e => { if (e.target===modal) modal.remove(); });
+  resultsDiv.scrollIntoView({ behavior: 'smooth' });
+
+  // Store generated URLs for download/library
+  window._psGeneratedPosters = [];
+
+  const scheme = topic.toLowerCase().includes('granite') || topic.toLowerCase().includes('tile') || topic.toLowerCase().includes('marble')
+    ? 'elegant cream and charcoal with natural stone textures and warm wood tones'
+    : topic.toLowerCase().includes('paint') ? 'warm terracotta and sage green'
+    : 'warm professional cream and charcoal';
+
+  // Generate each unique size
+  const uniqueSizes = [...new Set(selectedPlatforms.map(p => formatMap[p]?.size || '1024x1024'))];
+  const generated = {};
+
+  for (const size of uniqueSizes) {
+    try {
+      const apiSize = size;
+      const prompt = size === '1024x1024'
+        ? `Design a complete premium marketing poster for V Wholesale. Color scheme: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality, warm and human. Elements: 1. "V Wholesale" at top with tagline "Build Better. Pay Less." 2. Bold headline: "${headline}" 3. Indian home lifestyle photo for: ${topic} 4. Message: "${message}" 5. Category strip: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture 6. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Square format. All text correct. No address. No watermark.`
+        : size === '1024x1536'
+        ? `Design a complete premium vertical Story poster for V Wholesale. Color: ${scheme}. Brand: "V Wholesale", tagline "Build Better. Pay Less.", headline "${headline}", message "${message}". Indian lifestyle photo for ${topic}. Two-row category strip: Tiles/Granite/Sanitaryware then Paints/Plywood/Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Vertical 2:3 format. All text correct. No address. No watermark.`
+        : `Design a complete premium landscape marketing poster for V Wholesale. Color: ${scheme}. Left 40%: "V Wholesale" brand, tagline "Build Better. Pay Less.", headline "${headline}", message "${message}". Right 60%: Indian lifestyle photo for ${topic}. Category strip bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Wide 3:2 format. All text correct. No address. No watermark.`;
+
+      const fnRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_poster_image', prompt, size: apiSize })
+      });
+      if (fnRes.ok) {
+        const fd = await fnRes.json();
+        if (fd.b64) generated[size] = fd.b64;
+      }
+    } catch(e) { console.log('poster gen error:', e); }
+  }
+
+  // Render results
+  if (!Object.keys(generated).length) {
+    gridDiv.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);grid-column:1/-1">Generation failed. Check OpenAI key in settings.</div>';
+    return;
+  }
+
+  gridDiv.innerHTML = '';
+  for (const plt of selectedPlatforms) {
+    const size = formatMap[plt]?.size || '1024x1024';
+    const b64 = generated[size];
+    if (!b64) continue;
+    const { label, icon } = formatMap[plt] || { label: plt, icon: '🖼' };
+    const dataUrl = 'data:image/png;base64,' + b64;
+    window._psGeneratedPosters.push({ label, size, b64, platform: plt });
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg3);border-radius:10px;overflow:hidden;border:1px solid var(--border)';
+    card.innerHTML = `
+      <img src="${dataUrl}" style="width:100%;display:block;cursor:pointer" onclick="window.open('${dataUrl}')" title="Click to zoom">
+      <div style="padding:10px">
+        <div style="font-size:12px;font-weight:700;margin-bottom:6px">${icon} ${label}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:8px">${size.replace('x','×')} px</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mkt-btn mkt-btn-primary" onclick="psDownloadOne('${plt}','${size}','${label}')" style="font-size:11px;padding:4px 10px">⬇ PNG</button>
+          <button class="mkt-btn mkt-btn-ghost" onclick="psDownloadJpg('${plt}','${size}','${label}')" style="font-size:11px;padding:4px 10px">⬇ JPG</button>
+        </div>
+      </div>`;
+    gridDiv.appendChild(card);
+  }
+
+  // Save to history
+  await psSaveToLibraryAuto(topic, headline, message, selectedPlatforms);
 }
+
+function psDownloadOne(platform, size, label) {
+  const poster = (window._psGeneratedPosters||[]).find(p => p.platform === platform);
+  if (!poster) return;
+  const a = document.createElement('a');
+  a.href = 'data:image/png;base64,' + poster.b64;
+  a.download = `vwholesale_${label.replace(/[^a-z0-9]/gi,'_').toLowerCase()}_${size}.png`;
+  a.click();
+}
+
+function psDownloadJpg(platform, size, label) {
+  const poster = (window._psGeneratedPosters||[]).find(p => p.platform === platform);
+  if (!poster) return;
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    const [w, h] = size.split('x').map(Number);
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/jpeg', 0.92);
+    a.download = `vwholesale_${label.replace(/[^a-z0-9]/gi,'_').toLowerCase()}_${size}.jpg`;
+    a.click();
+  };
+  img.src = 'data:image/png;base64,' + poster.b64;
+}
+
+async function psDownloadAll() {
+  const posters = window._psGeneratedPosters || [];
+  if (!posters.length) { showMktToast('No posters to download'); return; }
+  // Download each individually (no JSZip dependency — simple loop)
+  for (const p of posters) {
+    const a = document.createElement('a');
+    a.href = 'data:image/png;base64,' + p.b64;
+    a.download = `vwholesale_${p.label.replace(/[^a-z0-9]/gi,'_').toLowerCase()}_${p.size}.png`;
+    a.click();
+    await new Promise(r => setTimeout(r, 300));
+  }
+  showMktToast('✅ All posters downloaded');
+}
+
+async function psSaveToLibraryAuto(topic, headline, message, platforms) {
+  const caption = document.getElementById('ps-out-caption-en')?.value || '';
+  const hashtags = document.getElementById('ps-out-hashtags')?.value || '';
+  const posterUrls = {};
+  // Upload each poster to storage and save URL
+  for (const p of (window._psGeneratedPosters || [])) {
+    try {
+      const bytes = Uint8Array.from(atob(p.b64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      const filename = `poster-studio/${Date.now()}_${p.platform}.png`;
+      const { error } = await sb.storage.from('calendar-images').upload(filename, blob, { contentType: 'image/png', upsert: true });
+      if (!error) {
+        const { data: pub } = sb.storage.from('calendar-images').getPublicUrl(filename);
+        posterUrls[p.platform] = pub.publicUrl;
+      }
+    } catch(e) {}
+  }
+  // Save to poster_history
+  const masterUrl = posterUrls.square || posterUrls.story || Object.values(posterUrls)[0] || null;
+  await sb.from('poster_history').insert({
+    topic, template: 'custom', language: 'en',
+    caption, hashtags,
+    image_url: masterUrl,
+    platform_images: Object.keys(posterUrls).length ? posterUrls : null,
+    status: 'draft',
+    metadata: { headline, message, platforms }
+  }).then(() => {}, () => {});
+}
+
+async function psSaveToLibrary() {
+  await psSaveToLibraryAuto(
+    document.getElementById('ps-out-topic')?.value || '',
+    document.getElementById('ps-out-headline')?.value || '',
+    document.getElementById('ps-out-message')?.value || '',
+    (window._psGeneratedPosters || []).map(p => p.platform)
+  );
+  showMktToast('💾 Saved to library');
+  psLoadLibraryInBackground();
+}
+
+function psShowLibrary() {
+  const lib = document.getElementById('ps-library');
+  if (!lib) return;
+  lib.style.display = lib.style.display === 'none' ? 'block' : 'none';
+  if (lib.style.display === 'block') psLoadLibraryInBackground();
+}
+
+async function psLoadLibraryInBackground() {
+  const grid = document.getElementById('ps-lib-grid');
+  if (!grid) return;
+  const { data: history } = await sb.from('poster_history').select('*').order('created_at', { ascending: false }).limit(24).then(r => r, () => ({ data: [] }));
+  if (!history?.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">No posters saved yet</div>';
+    return;
+  }
+  grid.innerHTML = history.map(h => `
+    <div style="background:var(--bg3);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+      ${h.image_url
+        ? `<img src="${h.image_url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;cursor:pointer" onclick="window.open('${h.image_url}')" loading="lazy">`
+        : `<div style="width:100%;aspect-ratio:1;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:28px">🖼</div>`}
+      <div style="padding:8px">
+        <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${h.topic||'—'}</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
+        <div style="display:flex;gap:4px">
+          ${h.image_url ? `<a href="${h.image_url}" download style="font-size:10px;padding:3px 8px" class="mkt-btn mkt-btn-ghost">⬇ PNG</a>` : ''}
+          <button onclick="psDeleteHistory(${h.id})" style="font-size:10px;padding:3px 8px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text3);cursor:pointer">🗑</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+async function psFilterLibrary(filter) {
+  // For now reload all — can extend with filter logic
+  await psLoadLibraryInBackground();
+}
+
+async function psDeleteHistory(id) {
+  if (!confirm('Delete this poster?')) return;
+  await sb.from('poster_history').delete().eq('id', id);
+  showMktToast('Deleted');
+  psLoadLibraryInBackground();
+}
+
 
 async function copyPosterCaption(id) {
   const {data:h} = await sb.from('poster_history').select('caption').eq('id',id).single().then(r=>r,()=>({data:null}));
