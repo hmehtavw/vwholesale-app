@@ -5936,17 +5936,19 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
             ctx.shadowBlur = Math.round(W * 0.025);
             ctx.shadowOffsetY = Math.round(W * 0.008);
 
-            // Badge
+            // Badge — centered at origin after translate
             ctx.fillStyle = badgeColor;
             ctx.beginPath();
-            ctx.roundRect(-bW2/2, -bH2*0.65, bW2, bH2, bH2*0.35);
+            ctx.roundRect(-bW2/2, -bH2/2, bW2, bH2, bH2*0.3);
             ctx.fill();
             ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
-            // Text
+            // Text — textBaseline:middle centers vertically
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center';
-            ctx.fillText(offerText, 0, bH2*0.35);
+            ctx.textBaseline = 'middle';
+            ctx.fillText(offerText, 0, 0);
+            ctx.textBaseline = 'alphabetic';
             ctx.textAlign = 'left';
             ctx.restore();
           }
