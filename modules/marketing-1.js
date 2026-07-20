@@ -6284,7 +6284,7 @@ let _editorBgImages = {}; // key → Image object
 
 function editorGetActive() { return _editorFormats[_editorActive]; }
 
-async function openPosterEditor(calendarId) {
+async function calPreviewDraggableBadge(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) return;
   const pi = item.platform_images || {};
@@ -6659,7 +6659,7 @@ function editorDrawEl(ctx, el, W, H, isSelected) {
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
     el.w = bW; el.h = bH; // sync for hit testing
   } else if (el.type === 'text') {
-    ctx.font = (el.italic?'italic ':''+(el.bold?'bold ':'')+el.fontSize+'px '+(el.fontFamily||'Arial'));
+    ctx.font = (el.italic?'italic ':'')+( el.bold?'bold ':'')+el.fontSize+'px '+(el.fontFamily||'Arial');
     if (el.shadow) { ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=6; ctx.shadowOffsetY=2; }
     ctx.fillStyle = el.color || '#fff';
     ctx.fillText(el.text, el.x, el.y);
