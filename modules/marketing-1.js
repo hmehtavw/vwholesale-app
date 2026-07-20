@@ -5279,15 +5279,88 @@ async function calHandleImageUpload(calendarId, input) {
 // Step 3: Encode GIF in browser via gifenc Web Worker
 // Step 4: Upload GIF to Supabase storage
 // Step 5: Save URL back to content_calendar, mark ready
-async function calGenerateGif(calendarId) {
+// ── GIF Options Popup — offer text + animation style before generation ──
+function showGifOptionsPopup(calendarId) {
+  const existing = document.getElementById('gif-options-popup');
+  if (existing) existing.remove();
+
+  const pop = document.createElement('div');
+  pop.id = 'gif-options-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  pop.innerHTML = `
+    <div style="background:#1e293b;border-radius:14px;padding:24px;max-width:380px;width:100%;border:1px solid #334155">
+      <div style="font-size:16px;font-weight:900;color:#f1f5f9;margin-bottom:4px">✨ Generate Animated GIF</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:20px">Poster is generated first, then text animates on top</div>
+
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TAG <span style="color:#475569;font-weight:400">(optional)</span></label>
+        <input id="gif-offer-input" type="text" placeholder="e.g. ₹299/sq.ft · 20% OFF · Free Delivery today"
+          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
+        <div style="font-size:10px;color:#475569;margin-top:4px">Animates as a pop-up badge on the poster. Leave blank for no price.</div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎬 ANIMATION STYLE</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label id="style-cinematic" style="background:#0f172a;border:2px solid #c9a84c;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+            <input type="radio" name="gif-anim-style" value="cinematic" checked style="display:none">
+            <div style="font-size:18px;margin-bottom:4px">🎬</div>
+            <div style="font-size:11px;font-weight:700;color:#c9a84c">Cinematic</div>
+            <div style="font-size:9px;color:#64748b;margin-top:2px">Fade · Slide · Premium</div>
+          </label>
+          <label id="style-energetic" style="background:#0f172a;border:2px solid #334155;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+            <input type="radio" name="gif-anim-style" value="energetic" style="display:none">
+            <div style="font-size:18px;margin-bottom:4px">⚡</div>
+            <div style="font-size:11px;font-weight:700;color:#f1f5f9">Energetic</div>
+            <div style="font-size:9px;color:#64748b;margin-top:2px">Bounce · Pop · Offer</div>
+          </label>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('gif-options-popup').remove()" 
+          style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">
+          Cancel
+        </button>
+        <button onclick="
+          const offer = document.getElementById('gif-offer-input').value.trim();
+          const style = document.querySelector('input[name=gif-anim-style]:checked').value;
+          document.getElementById('gif-options-popup').remove();
+          calGenerateGif('${calendarId}', offer, style);
+        " style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+          ✨ Generate GIF
+        </button>
+      </div>
+    </div>`;
+
+  // Radio style toggle
+  pop.querySelectorAll('input[name="gif-anim-style"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      document.getElementById('style-cinematic').style.borderColor = '#334155';
+      document.getElementById('style-energetic').style.borderColor = '#334155';
+      document.getElementById('style-' + radio.value).style.borderColor = '#c9a84c';
+    });
+  });
+
+  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  document.body.appendChild(pop);
+  setTimeout(() => document.getElementById('gif-offer-input')?.focus(), 100);
+}
+
+async function calGenerateGif(calendarId, offerText, animStyle) {
+  // If no offerText passed, show quick popup first
+  if (offerText === undefined) {
+    return showGifOptionsPopup(calendarId);
+  }
+
   const btn = document.getElementById(`gif-btn-${calendarId}`);
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
 
   let secs = 0;
-  showMktToast('⏳ Step 1/4: Generating caption… 0s', 5000);
+  showMktToast('⏳ Generating GIF…', 5000);
   const ticker = setInterval(() => {
     secs += 3;
-    showMktToast(`⏳ Generating GIF… ${secs}s (takes ~3 minutes total)`, 5000);
+    showMktToast('⏳ Generating GIF… ' + secs + 's', 5000);
   }, 3000);
 
   try {
@@ -5399,34 +5472,122 @@ async function calGenerateGif(calendarId) {
           return out;
         };
 
-        // Ken Burns slow zoom animation — poster zooms from 100% → 108% over duration
-        // Gives cinematic motion feel without needing multiple API calls
-        const img = imgs[0]; // single consistent poster (consistent logo)
-        const TOTAL_FRAMES = HOLD + FADE * 2; // fade in + hold + fade out
-        const ZOOM_START = 1.0;
-        const ZOOM_END = 1.08; // 8% zoom over duration
-
+        const img = imgs[0];
+        const TOTAL_FRAMES = HOLD + FADE * 2;
         const frames = [];
-        for (let f = 0; f < TOTAL_FRAMES; f++) {
-          const t = f / (TOTAL_FRAMES - 1); // 0→1
-          const zoom = ZOOM_START + (ZOOM_END - ZOOM_START) * t;
+        const headline = posterItem?.topic || '';
+        const offerTxt = offerText || '';
+        const isCinematic = (animStyle || 'cinematic') === 'cinematic';
 
-          // Fade envelope: fade in first FADE frames, fade out last FADE frames
+        // Draw base poster scaled to canvas
+        const baseScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+        const baseW = img.naturalWidth * baseScale;
+        const baseH = img.naturalHeight * baseScale;
+        const baseX = (W - baseW) / 2;
+        const baseY = (H - baseH) / 2;
+
+        for (let f = 0; f < TOTAL_FRAMES; f++) {
+          const t = f / (TOTAL_FRAMES - 1); // 0→1 overall progress
+          // Fade envelope
           const fadeAlpha = f < FADE ? f / FADE : f > TOTAL_FRAMES - FADE ? (TOTAL_FRAMES - f) / FADE : 1;
+          // Text animation progress (0→1 during middle hold section)
+          const textT = f < FADE ? 0 : Math.min(1, (f - FADE) / (HOLD * 0.6));
 
           ctx.clearRect(0, 0, W, H);
           ctx.fillStyle = '#111';
           ctx.fillRect(0, 0, W, H);
 
-          // Draw zoomed image centered
-          const scale = Math.min(W / img.naturalWidth, H / img.naturalHeight) * zoom;
-          const sw = img.naturalWidth * scale;
-          const sh = img.naturalHeight * scale;
-          const dx = (W - sw) / 2;
-          const dy = (H - sh) / 2;
-          ctx.drawImage(img, dx, dy, sw, sh);
+          if (isCinematic) {
+            // Cinematic: subtle Ken Burns zoom 100→106% + text slides in from left
+            const zoom = 1.0 + 0.06 * t;
+            const sw = baseW * zoom, sh = baseH * zoom;
+            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
 
-          // Apply fade overlay
+            // Dark gradient overlay for text readability
+            if (textT > 0) {
+              const grad = ctx.createLinearGradient(0, H * 0.55, 0, H);
+              grad.addColorStop(0, 'rgba(0,0,0,0)');
+              grad.addColorStop(1, 'rgba(0,0,0,0.72)');
+              ctx.fillStyle = grad;
+              ctx.fillRect(0, 0, W, H);
+            }
+
+            // Headline slides in from left
+            if (textT > 0 && headline) {
+              const slideX = -W + W * Math.min(1, textT * 2); // slides from -W to 0
+              const eased = slideX < 0 ? slideX : 0;
+              ctx.save();
+              ctx.translate(eased, 0);
+              ctx.font = 'bold ' + Math.round(W * 0.052) + 'px Arial';
+              ctx.fillStyle = '#C9A84C';
+              ctx.fillText(headline.slice(0, 32), W * 0.06, H * 0.72);
+              ctx.restore();
+            }
+
+            // Offer badge pops up from bottom
+            if (offerTxt && textT > 0.4) {
+              const popT = Math.min(1, (textT - 0.4) / 0.3);
+              const bounce = popT < 0.7 ? popT / 0.7 : 1 + 0.15 * Math.sin((popT - 0.7) / 0.3 * Math.PI);
+              const badgeY = H * 0.82 + (1 - bounce) * H * 0.12;
+              const bW = Math.min(W * 0.72, ctx.measureText(offerTxt).width + W * 0.1);
+              const bH = Math.round(W * 0.085);
+              const bX = (W - bW) / 2;
+              ctx.fillStyle = '#C9A84C';
+              ctx.beginPath();
+              ctx.roundRect(bX, badgeY - bH * 0.7, bW, bH, bH * 0.3);
+              ctx.fill();
+              ctx.font = 'bold ' + Math.round(W * 0.048) + 'px Arial';
+              ctx.fillStyle = '#111';
+              ctx.textAlign = 'center';
+              ctx.fillText(offerTxt, W / 2, badgeY);
+              ctx.textAlign = 'left';
+            }
+
+          } else {
+            // Energetic: static poster + bouncing elements
+            ctx.drawImage(img, baseX, baseY, baseW, baseH);
+
+            // Flashing border pulse
+            const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 6);
+            ctx.strokeStyle = 'rgba(201,168,76,' + (0.3 + 0.7 * pulse) + ')';
+            ctx.lineWidth = Math.round(W * 0.012);
+            ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
+
+            // Headline bounces in from top
+            if (textT > 0 && headline) {
+              const bounce = textT < 0.5 ? 4 * textT * textT * textT : 1 - Math.pow(-2 * textT + 2, 3) / 2;
+              const y = -H * 0.12 + bounce * H * 0.12;
+              ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
+              ctx.fillStyle = '#fff';
+              ctx.strokeStyle = '#000';
+              ctx.lineWidth = Math.round(W * 0.006);
+              ctx.strokeText(headline.slice(0, 28), W * 0.05, H * 0.22 + y);
+              ctx.fillText(headline.slice(0, 28), W * 0.05, H * 0.22 + y);
+            }
+
+            // Offer badge with scale pop
+            if (offerTxt && textT > 0.3) {
+              const popT = Math.min(1, (textT - 0.3) / 0.4);
+              const scale = popT < 0.6 ? popT / 0.6 : 1 + 0.2 * Math.sin((popT - 0.6) / 0.4 * Math.PI);
+              ctx.save();
+              ctx.translate(W / 2, H * 0.78);
+              ctx.scale(scale, scale);
+              const bW = Math.min(W * 0.78, ctx.measureText(offerTxt).width + W * 0.12);
+              const bH = Math.round(W * 0.1);
+              ctx.fillStyle = '#ef4444';
+              ctx.beginPath();
+              ctx.roundRect(-bW / 2, -bH * 0.7, bW, bH, bH * 0.25);
+              ctx.fill();
+              ctx.font = 'bold ' + Math.round(W * 0.052) + 'px Arial';
+              ctx.fillStyle = '#fff';
+              ctx.textAlign = 'center';
+              ctx.fillText(offerTxt, 0, 0);
+              ctx.textAlign = 'left';
+              ctx.restore();
+            }
+          }
+
+          // Global fade in/out
           if (fadeAlpha < 1) {
             ctx.fillStyle = 'rgba(0,0,0,' + (1 - fadeAlpha) + ')';
             ctx.fillRect(0, 0, W, H);
@@ -5879,6 +6040,7 @@ window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
 window.calUnapproveItem = calUnapproveItem;
 window.calGenerateGif = calGenerateGif;
+window.showGifOptionsPopup = showGifOptionsPopup;
 
 window.editCalendarItemById = editCalendarItemById;
 // Expose render functions on window for lazy nav lookup
