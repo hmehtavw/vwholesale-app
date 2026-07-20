@@ -6261,382 +6261,614 @@ async function calApplyOfferBadge(calendarId) {
   }
 }
 
-// ── EDITOR: Multi-format poster editor with draggable text boxes + music ──
-// State: one editor session, tracks all text elements and positions per format
-window._editorState = null;
+// ── POSTER EDITOR — per-format independent layers, auto-save ──
+// Each format (square/story/landscape) has its own elements array
+// Switching formats saves current + loads target independently
+
+let _editorCalendarId = null;
+let _editorFormats = {
+  square:    { key:'square',    label:'1:1 Feed',    w:480, h:480, imgKey:'instagram_feed',  elements:[] },
+  story:     { key:'story',     label:'9:16 Story',  w:320, h:480, imgKey:'instagram_story', elements:[] },
+  landscape: { key:'landscape', label:'16:9 FB/YT',  w:480, h:320, imgKey:'facebook_post',   elements:[] },
+};
+let _editorActive = 'square';
+let _editorPI = {};
+let _editorIdCounter = 1;
+let _editorSelected = null;
+let _editorDragging = false;
+let _editorResizing = false;
+let _editorDragStart = {x:0,y:0};
+let _editorCanvas = null;
+let _editorCtx = null;
+let _editorBgImages = {}; // key → Image object
+
+function editorGetActive() { return _editorFormats[_editorActive]; }
 
 async function calPreviewDraggableBadge(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) return;
   const pi = item.platform_images || {};
 
-  const FORMATS = [
-    { key:'square',    label:'1:1 Feed',    w:480, h:480, imgKey:'instagram_feed'  },
-    { key:'story',     label:'9:16 Story',  w:320, h:480, imgKey:'instagram_story' },
-    { key:'landscape', label:'16:9 FB/YT',  w:480, h:320, imgKey:'facebook_post'   },
-  ];
+  _editorCalendarId = calendarId;
+  _editorPI = { ...pi };
+  _editorIdCounter = 1;
+  _editorSelected = null;
 
-  // Load saved text elements or create default from offer_text
-  const savedElements = pi.text_elements || [];
-  const defaultElements = savedElements.length ? savedElements : [
-    { id: 1, text: pi.offer_text || '✨ Offer Badge', color:'#111', bg:'#C9A84C', size:18, posX:50, posY:75, bold:true }
-  ];
+  // Load saved per-format elements from platform_images, or create defaults
+  const saved = pi.editor_elements || {};
+  const defaultOffer = pi.offer_text || pi.text_elements?.[0]?.text || '';
 
-  window._editorState = {
-    calendarId,
-    pi,
-    formats: FORMATS,
-    activeFormat: 'square',
-    elements: JSON.parse(JSON.stringify(defaultElements)), // deep copy
-    nextId: (defaultElements.length ? Math.max(...defaultElements.map(e=>e.id)) : 0) + 1,
-  };
+  for (const key of Object.keys(_editorFormats)) {
+    const fmt = _editorFormats[key];
+    if (saved[key] && saved[key].length) {
+      fmt.elements = JSON.parse(JSON.stringify(saved[key]));
+      // Update idCounter
+      const maxId = Math.max(...fmt.elements.map(e => e.id || 0));
+      if (maxId >= _editorIdCounter) _editorIdCounter = maxId + 1;
+    } else if (defaultOffer) {
+      // Seed with default badge from offer_text
+      fmt.elements = [{
+        id: _editorIdCounter++, type:'badge',
+        text: defaultOffer, x: fmt.w*0.1, y: fmt.h*0.75,
+        w: fmt.w*0.8, h: fmt.h*0.1,
+        fill:'#C9A84C', textColor:'#111', textSize: Math.round(fmt.w*0.048),
+        radius: fmt.h*0.04, label:'Offer Badge'
+      }];
+    } else {
+      fmt.elements = [];
+    }
+    // Load background image
+    const imgUrl = pi[fmt.imgKey];
+    if (imgUrl) {
+      _editorBgImages[key] = await new Promise(res => {
+        const img = new Image(); img.crossOrigin='anonymous';
+        img.onload=()=>res(img); img.onerror=()=>res(null); img.src=imgUrl;
+      });
+    }
+  }
 
-  const pop = document.createElement('div');
-  pop.id = 'badge-editor-popup';
-  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;flex-direction:column;overflow:hidden';
-  document.body.appendChild(pop);
-  renderBadgeEditor();
+  buildEditorPopup();
 }
 
-function renderBadgeEditor() {
-  const st = window._editorState;
-  if (!st) return;
-  const pop = document.getElementById('badge-editor-popup');
-  if (!pop) return;
-
-  const fmt = st.formats.find(f => f.key === st.activeFormat);
-  const posterUrl = st.pi[fmt.imgKey] || st.pi['instagram_feed'] || '';
+function buildEditorPopup() {
+  document.getElementById('badge-editor-popup')?.remove();
+  const pop = document.createElement('div');
+  pop.id = 'badge-editor-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:#0a0f1a;display:flex;flex-direction:column;font-family:system-ui,sans-serif';
 
   pop.innerHTML = `
-    <div style="display:flex;height:100vh;overflow:hidden">
-      <!-- LEFT: Canvas area -->
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:#0a0a0a;overflow:auto">
-        <!-- Format tabs -->
-        <div style="display:flex;gap:6px;margin-bottom:12px">
-          ${st.formats.map(f => `
-            <button onclick="editorSwitchFormat('${f.key}')"
-              style="background:${f.key===st.activeFormat?'#c9a84c':'#1e293b'};color:${f.key===st.activeFormat?'#111':'#94a3b8'};border:1px solid ${f.key===st.activeFormat?'#c9a84c':'#334155'};padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
-              ${f.label}
-            </button>`).join('')}
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0">
+      <div style="font-size:14px;font-weight:900;color:#c9a84c">✏️ V Wholesale Poster Editor</div>
+      <div style="flex:1"></div>
+      <div style="font-size:11px;color:#22c55e">✅ Auto-saves on format switch &amp; encode</div>
+      <button onclick="document.getElementById('badge-editor-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px;padding:0 4px">✕</button>
+    </div>
+
+    <!-- Format tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid #334155;flex-shrink:0">
+      ${Object.values(_editorFormats).map(f => `
+        <button id="ftab-${f.key}" onclick="editorSwitchFormat('${f.key}')"
+          style="padding:8px 20px;background:${f.key===_editorActive?'#1e293b':'transparent'};border:none;border-bottom:2px solid ${f.key===_editorActive?'#c9a84c':'transparent'};color:${f.key===_editorActive?'#c9a84c':'#64748b'};cursor:pointer;font-size:12px;font-weight:700">
+          ${f.label}
+        </button>`).join('')}
+    </div>
+
+    <div style="display:flex;flex:1;overflow:hidden">
+
+      <!-- LEFT: Canvas -->
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;background:#0a0f1a;overflow:auto;padding:20px">
+        <div id="editor-wrap" style="position:relative;box-shadow:0 0 40px rgba(0,0,0,.8)">
+          <canvas id="editor-canvas" style="display:block"></canvas>
         </div>
-        <!-- Poster canvas -->
-        <div id="editor-canvas-wrap" style="position:relative;border-radius:8px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.6)">
-          <img src="${posterUrl}" style="display:block;max-width:min(${fmt.w}px, 55vw);max-height:70vh;object-fit:contain" onerror="this.style.opacity=0.3">
-          <div id="editor-canvas-overlay" style="position:absolute;top:0;left:0;right:0;bottom:0">
-            ${st.elements.map(el => renderEditorElement(el)).join('')}
-          </div>
-        </div>
-        <div style="font-size:10px;color:#475569;margin-top:8px">Drag text boxes to reposition · Click to select · Edit in right panel</div>
       </div>
 
-      <!-- RIGHT: Controls panel -->
-      <div style="width:280px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;overflow:hidden">
-        <div style="padding:16px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:14px;font-weight:900;color:#f1f5f9">✏️ Poster Editor</div>
-          <button onclick="document.getElementById('badge-editor-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">✕</button>
-        </div>
+      <!-- RIGHT: Panel -->
+      <div style="width:260px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;overflow:hidden;flex-shrink:0">
 
-        <div style="flex:1;overflow-y:auto;padding:14px">
-          <!-- Text elements -->
-          <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px">TEXT BOXES</div>
-          <div id="editor-elements-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-            ${st.elements.map(el => `
-              <div style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #334155">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-                  <span style="font-size:11px;font-weight:700;color:#94a3b8">Text ${el.id}</span>
-                  <button onclick="editorRemoveElement(${el.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px">✕</button>
-                </div>
-                <input value="${el.text}" onchange="editorUpdateElement(${el.id},'text',this.value)"
-                  style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 8px;color:#f1f5f9;font-size:12px;box-sizing:border-box;margin-bottom:5px">
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px">
-                  <div>
-                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">BG Color</div>
-                    <input type="color" value="${el.bg||'#C9A84C'}" onchange="editorUpdateElement(${el.id},'bg',this.value)"
-                      style="width:100%;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:#0f172a">
-                  </div>
-                  <div>
-                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">Text Color</div>
-                    <input type="color" value="${el.color||'#111111'}" onchange="editorUpdateElement(${el.id},'color',this.value)"
-                      style="width:100%;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:#0f172a">
-                  </div>
-                </div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
-                  <div>
-                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">Size</div>
-                    <input type="range" min="10" max="48" value="${el.size||16}" oninput="editorUpdateElement(${el.id},'size',+this.value)"
-                      style="width:100%">
-                  </div>
-                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;margin-top:10px">
-                    <input type="checkbox" ${el.bold?'checked':''} onchange="editorUpdateElement(${el.id},'bold',this.checked)">
-                    <span style="font-size:11px;color:#94a3b8">Bold</span>
-                  </label>
-                </div>
-              </div>`).join('')}
+        <!-- Add elements -->
+        <div style="padding:12px;border-bottom:1px solid #334155">
+          <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:8px">ADD ELEMENTS</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+            <button onclick="editorAdd('badge')" style="background:#0f172a;border:1px solid #334155;color:#c9a84c;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">💰 Price Badge</button>
+            <button onclick="editorAdd('text')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">T Text</button>
+            <button onclick="editorAdd('rect')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">▬ Box</button>
+            <button onclick="editorAdd('line')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">— Line</button>
+            <button onclick="editorAdd('circle')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">● Circle</button>
+            <button onclick="editorAdd('emoji')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">😊 Emoji</button>
           </div>
-
-          <button onclick="editorAddElement()"
-            style="width:100%;background:#0f172a;border:1px dashed #334155;color:#94a3b8;padding:8px;border-radius:8px;cursor:pointer;font-size:12px;margin-bottom:16px">
-            + Add Text Box
-          </button>
-
-          <!-- Music picker -->
-          ${mktMusicPickerHTML('none')}
         </div>
 
-        <!-- Save button -->
-        <div style="padding:14px;border-top:1px solid #334155">
-          <div style="font-size:10px;color:#475569;margin-bottom:8px;text-align:center">Applies to all 3 formats (each uses its own poster)</div>
-          <button onclick="editorSaveAndEncode()"
-            style="width:100%;background:#c9a84c;border:none;color:#111;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900">
-            ✅ Save & Re-encode All Formats
+        <!-- Elements list -->
+        <div style="flex:1;overflow-y:auto;padding:12px">
+          <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:8px">LAYERS (this format only)</div>
+          <div id="editor-layers"></div>
+
+          <!-- Selected element props -->
+          <div id="editor-props" style="display:none;margin-top:12px;border-top:1px solid #334155;padding-top:12px"></div>
+        </div>
+
+        <!-- Save/Export -->
+        <div style="padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px">
+          <select id="editor-music" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
+            <option value="none">🔇 No music (export GIF)</option>
+            <option value="https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3">⚡ Upbeat Corporate</option>
+            <option value="https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-738.mp3">⚡ Happy Energetic</option>
+            <option value="https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3">🎬 Soft Cinematic</option>
+            <option value="https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3">🎬 Premium Ambient</option>
+            <option value="https://assets.mixkit.co/music/preview/mixkit-feeling-happy-5.mp3">⚡ Inspiring Rise</option>
+          </select>
+          <button onclick="editorEncode()"
+            style="background:#c9a84c;border:none;color:#111;padding:11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900;width:100%">
+            ✅ Save &amp; Encode All Formats
+          </button>
+          <button onclick="editorDownloadPNG()"
+            style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:8px;border-radius:8px;cursor:pointer;font-size:11px;width:100%">
+            ⬇ Download this format as PNG
           </button>
         </div>
       </div>
     </div>`;
 
-  // Bind music picker radio styling
-  mktBindMusicPicker();
-  // Bind drag on all elements
-  setTimeout(editorBindDrag, 50);
+  document.body.appendChild(pop);
+  editorInitCanvas();
+  editorRenderLayers();
+  editorRenderCanvas();
 }
 
-function renderEditorElement(el) {
-  return `<div id="el-${el.id}" data-elid="${el.id}"
-    style="position:absolute;left:${el.posX}%;top:${el.posY}%;transform:translate(-50%,-50%);
-           background:${el.bg||'#C9A84C'};color:${el.color||'#111'};
-           font-size:${el.size||16}px;font-weight:${el.bold?'900':'400'};
-           padding:6px 16px;border-radius:20px;cursor:grab;
-           box-shadow:0 3px 12px rgba(0,0,0,.5);white-space:nowrap;
-           border:2px solid rgba(255,255,255,.3);user-select:none;
-           max-width:90%">
-    ${el.text}
-  </div>`;
+function editorInitCanvas() {
+  const fmt = editorGetActive();
+  _editorCanvas = document.getElementById('editor-canvas');
+  _editorCtx = _editorCanvas.getContext('2d');
+  // Scale canvas to fit in view (max 60vh height)
+  const maxH = Math.min(window.innerHeight * 0.7, 560);
+  const scale = maxH / fmt.h;
+  _editorCanvas.width = fmt.w;
+  _editorCanvas.height = fmt.h;
+  _editorCanvas.style.width = Math.round(fmt.w * scale) + 'px';
+  _editorCanvas.style.height = Math.round(fmt.h * scale) + 'px';
+
+  // Bind events
+  _editorCanvas.onmousedown = editorOnDown;
+  _editorCanvas.onmousemove = editorOnMove;
+  _editorCanvas.onmouseup = () => { _editorDragging = false; _editorResizing = false; };
+  _editorCanvas.ondblclick = editorOnDblClick;
+
+  // Touch
+  _editorCanvas.ontouchstart = e => { const t=e.touches[0]; editorOnDown({clientX:t.clientX,clientY:t.clientY}); };
+  _editorCanvas.ontouchmove = e => { const t=e.touches[0]; editorOnMove({clientX:t.clientX,clientY:t.clientY}); };
+  _editorCanvas.ontouchend = () => { _editorDragging=false; _editorResizing=false; };
 }
 
-function editorBindDrag() {
-  const overlay = document.getElementById('editor-canvas-overlay');
-  const wrap = document.getElementById('editor-canvas-wrap');
-  if (!overlay || !wrap) return;
-
-  overlay.querySelectorAll('[data-elid]').forEach(el => {
-    let dragging = false, startX, startY, startPosX, startPosY;
-    const elId = parseInt(el.dataset.elid);
-
-    const onStart = (cx, cy) => {
-      dragging = true;
-      el.style.cursor = 'grabbing';
-      startX = cx; startY = cy;
-      const st = window._editorState;
-      const elem = st.elements.find(e => e.id === elId);
-      startPosX = elem.posX; startPosY = elem.posY;
-    };
-    const onMove = (cx, cy) => {
-      if (!dragging) return;
-      const rect = wrap.getBoundingClientRect();
-      const dx = ((cx - startX) / rect.width) * 100;
-      const dy = ((cy - startY) / rect.height) * 100;
-      const newX = Math.max(5, Math.min(95, startPosX + dx));
-      const newY = Math.max(5, Math.min(95, startPosY + dy));
-      el.style.left = newX + '%';
-      el.style.top  = newY + '%';
-      const elem = window._editorState.elements.find(e => e.id === elId);
-      if (elem) { elem.posX = newX; elem.posY = newY; }
-    };
-    const onEnd = () => { dragging = false; el.style.cursor = 'grab'; };
-
-    el.addEventListener('mousedown', e => { onStart(e.clientX, e.clientY); e.preventDefault(); });
-    el.addEventListener('touchstart', e => { const t=e.touches[0]; onStart(t.clientX, t.clientY); }, { passive:true });
-    document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchmove', e => { const t=e.touches[0]; onMove(t.clientX,t.clientY); }, { passive:true });
-    document.addEventListener('touchend', onEnd);
-  });
+function editorGetPos(e) {
+  const r = _editorCanvas.getBoundingClientRect();
+  const sx = _editorCanvas.width / r.width;
+  const sy = _editorCanvas.height / r.height;
+  return { x: (e.clientX - r.left) * sx, y: (e.clientY - r.top) * sy };
 }
 
-function editorSwitchFormat(key) {
-  window._editorState.activeFormat = key;
-  renderBadgeEditor();
+function editorHit(el, x, y) {
+  if (el.type === 'text') {
+    _editorCtx.font = (el.bold?'bold ':'')+el.fontSize+'px '+(el.fontFamily||'Arial');
+    const tw = _editorCtx.measureText(el.text).width;
+    return x>=el.x && x<=el.x+tw && y>=el.y-el.fontSize && y<=el.y;
+  }
+  if (el.type === 'circle') { const dx=x-el.x,dy=y-el.y; return Math.sqrt(dx*dx+dy*dy)<=el.rx; }
+  if (el.type === 'line') {
+    const len=Math.sqrt((el.x2-el.x)**2+(el.y2-el.y)**2);
+    if(!len)return false;
+    const t=Math.max(0,Math.min(1,((x-el.x)*(el.x2-el.x)+(y-el.y)*(el.y2-el.y))/(len*len)));
+    return Math.sqrt((x-el.x-t*(el.x2-el.x))**2+(y-el.y-t*(el.y2-el.y))**2)<10;
+  }
+  return x>=el.x && x<=el.x+el.w && y>=el.y && y<=el.y+el.h;
 }
 
-function editorAddElement() {
-  const st = window._editorState;
-  st.elements.push({ id: st.nextId++, text: 'New Text', color:'#fff', bg:'#1e293b', size:16, posX:50, posY:50, bold:false });
-  renderBadgeEditor();
+function editorOnDown(e) {
+  const p = editorGetPos(e);
+  const fmt = editorGetActive();
+  const elems = fmt.elements;
+  for (let i=elems.length-1; i>=0; i--) {
+    if (editorHit(elems[i], p.x, p.y)) {
+      _editorSelected = elems[i];
+      _editorDragging = true;
+      _editorDragStart = { x: p.x - elems[i].x, y: p.y - elems[i].y };
+      editorRenderLayers();
+      editorRenderProps();
+      editorRenderCanvas();
+      return;
+    }
+  }
+  _editorSelected = null;
+  editorRenderLayers();
+  editorRenderProps();
+  editorRenderCanvas();
 }
 
-function editorRemoveElement(id) {
-  window._editorState.elements = window._editorState.elements.filter(e => e.id !== id);
-  renderBadgeEditor();
+function editorOnMove(e) {
+  if (!_editorDragging || !_editorSelected) return;
+  const p = editorGetPos(e);
+  const fmt = editorGetActive();
+  const el = _editorSelected;
+  el.x = p.x - _editorDragStart.x;
+  el.y = p.y - _editorDragStart.y;
+  // Keep in bounds loosely
+  el.x = Math.max(-el.w*0.3, Math.min(fmt.w - el.w*0.2, el.x));
+  el.y = Math.max(0, Math.min(fmt.h, el.y));
+  editorRenderCanvas();
 }
 
-function editorUpdateElement(id, prop, val) {
-  const el = window._editorState.elements.find(e => e.id === id);
-  if (el) { el[prop] = val; }
-  // Re-render only the overlay element
-  const domEl = document.getElementById('el-' + id);
-  if (domEl) {
-    if (prop === 'text') domEl.textContent = val;
-    if (prop === 'bg') domEl.style.background = val;
-    if (prop === 'color') domEl.style.color = val;
-    if (prop === 'size') domEl.style.fontSize = val + 'px';
-    if (prop === 'bold') domEl.style.fontWeight = val ? '900' : '400';
+function editorOnDblClick(e) {
+  const p = editorGetPos(e);
+  const fmt = editorGetActive();
+  for (let i=fmt.elements.length-1; i>=0; i--) {
+    if (editorHit(fmt.elements[i], p.x, p.y)) {
+      const el = fmt.elements[i];
+      const newText = prompt('Edit text:', el.text);
+      if (newText !== null) { el.text = newText; editorRenderCanvas(); editorRenderLayers(); }
+      return;
+    }
   }
 }
 
-async function editorSaveAndEncode() {
-  const st = window._editorState;
-  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
-  const musicURL = mktGetMusicURL(musicId);
-  const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === musicId);
+function editorRenderCanvas() {
+  if (!_editorCanvas) return;
+  const fmt = editorGetActive();
+  const ctx = _editorCtx;
+  const W = fmt.w, H = fmt.h;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#1a1a1a'; ctx.fillRect(0,0,W,H);
+
+  // Background poster image
+  const bg = _editorBgImages[_editorActive];
+  if (bg) {
+    const s = Math.max(W/bg.width, H/bg.height);
+    ctx.drawImage(bg, (W-bg.width*s)/2, (H-bg.height*s)/2, bg.width*s, bg.height*s);
+  }
+
+  // Draw elements
+  for (const el of fmt.elements) {
+    ctx.globalAlpha = el.opacity ?? 1;
+    editorDrawEl(ctx, el, W, H, el === _editorSelected);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function editorDrawEl(ctx, el, W, H, isSelected) {
+  if (el.type === 'badge') {
+    // Pre-styled gold pill badge
+    const bH = el.h || Math.round(H * 0.1);
+    const bW = el.w || Math.round(W * 0.8);
+    const r = el.radius || bH * 0.35;
+    ctx.fillStyle = el.fill || '#C9A84C';
+    ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+    editorRoundRect(ctx, el.x, el.y, bW, bH, r); ctx.fill();
+    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+    const fs = el.textSize || Math.round(W * 0.048);
+    ctx.font = 'bold ' + fs + 'px Arial';
+    ctx.fillStyle = el.textColor || '#111';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(el.text, el.x + bW/2, el.y + bH/2);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    el.w = bW; el.h = bH; // sync for hit testing
+  } else if (el.type === 'text') {
+    ctx.font = (el.italic?'italic ':''+(el.bold?'bold ':'')+el.fontSize+'px '+(el.fontFamily||'Arial'));
+    if (el.shadow) { ctx.shadowColor='rgba(0,0,0,0.6)'; ctx.shadowBlur=6; ctx.shadowOffsetY=2; }
+    ctx.fillStyle = el.color || '#fff';
+    ctx.fillText(el.text, el.x, el.y);
+    ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+  } else if (el.type === 'rect') {
+    ctx.fillStyle = el.fill || '#C9A84C';
+    if (el.radius) { editorRoundRect(ctx, el.x, el.y, el.w, el.h, el.radius); ctx.fill(); }
+    else ctx.fillRect(el.x, el.y, el.w, el.h);
+    if (el.strokeWidth > 0) { ctx.strokeStyle = el.stroke; ctx.lineWidth = el.strokeWidth; ctx.strokeRect(el.x,el.y,el.w,el.h); }
+    if (el.text) {
+      ctx.font = 'bold ' + (el.textSize||16) + 'px Arial';
+      ctx.fillStyle = el.textColor || '#111';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(el.text, el.x+el.w/2, el.y+el.h/2);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    }
+  } else if (el.type === 'circle') {
+    ctx.beginPath(); ctx.arc(el.x, el.y, el.rx, 0, Math.PI*2);
+    ctx.fillStyle = el.fill || '#C9A84C'; ctx.fill();
+    if (el.strokeWidth>0) { ctx.strokeStyle=el.stroke; ctx.lineWidth=el.strokeWidth; ctx.stroke(); }
+  } else if (el.type === 'line') {
+    ctx.beginPath(); ctx.moveTo(el.x,el.y); ctx.lineTo(el.x2,el.y2);
+    ctx.strokeStyle = el.stroke || '#C9A84C'; ctx.lineWidth = el.strokeWidth || 2; ctx.stroke();
+  }
+
+  // Selection outline
+  if (isSelected) {
+    const bx = el.x, by = el.type==='text' ? el.y-el.fontSize : el.y;
+    const bw = el.w || (el.type==='circle'?el.rx*2:80);
+    const bh = el.h || (el.type==='text'?el.fontSize:el.type==='circle'?el.rx*2:40);
+    ctx.strokeStyle = '#c9a84c'; ctx.lineWidth = 2;
+    ctx.setLineDash([4,3]); ctx.strokeRect(bx-2, by-2, bw+4, bh+4); ctx.setLineDash([]);
+    // Resize handle bottom-right
+    ctx.fillStyle = '#c9a84c'; ctx.beginPath();
+    ctx.arc(bx+bw, by+bh, 6, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function editorRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+}
+
+function editorAdd(type) {
+  const fmt = editorGetActive();
+  const W = fmt.w, H = fmt.h;
+  let el;
+  if (type === 'badge') el = { id:_editorIdCounter++, type:'badge', text:'Starts @ ₹59/SFT', x:W*0.1, y:H*0.72, w:W*0.8, h:H*0.1, fill:'#C9A84C', textColor:'#111', textSize:Math.round(W*0.048), radius:H*0.04, label:'Price Badge' };
+  else if (type === 'text') el = { id:_editorIdCounter++, type:'text', text:'Edit this text', x:W*0.08, y:H*0.4, fontSize:Math.round(W*0.06), fontFamily:'Arial', bold:true, italic:false, color:'#fff', shadow:true, label:'Text' };
+  else if (type === 'rect') el = { id:_editorIdCounter++, type:'rect', x:W*0.1, y:H*0.3, w:W*0.5, h:H*0.12, fill:'rgba(0,0,0,0.6)', stroke:'', strokeWidth:0, radius:6, label:'Box' };
+  else if (type === 'line') el = { id:_editorIdCounter++, type:'line', x:W*0.08, y:H*0.5, x2:W*0.92, y2:H*0.5, stroke:'#C9A84C', strokeWidth:3, label:'Line' };
+  else if (type === 'circle') el = { id:_editorIdCounter++, type:'circle', x:W*0.5, y:H*0.5, rx:50, fill:'rgba(201,168,76,0.3)', stroke:'#C9A84C', strokeWidth:2, label:'Circle' };
+  else if (type === 'emoji') {
+    const emoji = prompt('Enter emoji:', '🏠'); if (!emoji) return;
+    el = { id:_editorIdCounter++, type:'text', text:emoji, x:W*0.4, y:H*0.5, fontSize:Math.round(W*0.12), fontFamily:'Arial', bold:false, italic:false, color:'#fff', shadow:false, label:'Emoji' };
+  }
+  if (el) { fmt.elements.push(el); _editorSelected = el; editorRenderCanvas(); editorRenderLayers(); editorRenderProps(); }
+}
+
+function editorDelete(id) {
+  const fmt = editorGetActive();
+  fmt.elements = fmt.elements.filter(e => e.id !== id);
+  if (_editorSelected?.id === id) _editorSelected = null;
+  editorRenderCanvas(); editorRenderLayers(); editorRenderProps();
+}
+
+function editorRenderLayers() {
+  const fmt = editorGetActive();
+  const div = document.getElementById('editor-layers');
+  if (!div) return;
+  if (!fmt.elements.length) { div.innerHTML = '<div style="font-size:11px;color:#475569;text-align:center;padding:12px">No elements — add some from above</div>'; return; }
+  div.innerHTML = [...fmt.elements].reverse().map(el => `
+    <div onclick="editorSelectEl(${el.id})"
+      style="background:#0f172a;border:1px solid ${_editorSelected?.id===el.id?'#c9a84c':'#334155'};border-radius:6px;padding:8px;margin-bottom:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#f1f5f9">${el.label||el.type}</div>
+        <div style="font-size:10px;color:#475569">${(el.text||'').slice(0,28)}</div>
+      </div>
+      <button onclick="event.stopPropagation();editorDelete(${el.id})"
+        style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+    </div>`).join('');
+}
+
+function editorSelectEl(id) {
+  const fmt = editorGetActive();
+  _editorSelected = fmt.elements.find(e => e.id === id) || null;
+  editorRenderCanvas(); editorRenderLayers(); editorRenderProps();
+}
+
+function editorRenderProps() {
+  const div = document.getElementById('editor-props');
+  if (!div) return;
+  if (!_editorSelected) { div.style.display='none'; return; }
+  div.style.display = 'block';
+  const el = _editorSelected;
+  const row = (label, html) => `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:10px;color:#64748b;font-weight:700">${label}</span>${html}</div>`;
+  const inp = (prop, val, type='text', extra='') => `<input type="${type}" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.${type==='checkbox'?'checked':'value'})" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:4px;font-size:11px;width:120px" ${extra}>`;
+  const col = (prop, val) => `<input type="color" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:36px;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:none">`;
+
+  let html = `<div style="font-size:10px;font-weight:700;color:#c9a84c;margin-bottom:10px">✏️ ${el.label||el.type}</div>`;
+
+  if (el.type === 'badge' || (el.type === 'rect' && el.text !== undefined)) {
+    html += row('Text', inp('text', el.text));
+    html += row('BG Color', col('fill', el.fill||'#C9A84C'));
+    html += row('Text Color', col('textColor', el.textColor||'#111'));
+    html += row('Font Size', inp('textSize', el.textSize||16, 'number', 'style="width:60px"'));
+    html += row('Width', inp('w', Math.round(el.w||100), 'number', 'style="width:60px"'));
+    html += row('Height', inp('h', Math.round(el.h||50), 'number', 'style="width:60px"'));
+    html += row('Corner R', inp('radius', Math.round(el.radius||0), 'number', 'style="width:60px"'));
+  } else if (el.type === 'text') {
+    html += row('Text', inp('text', el.text));
+    html += row('Color', col('color', el.color||'#fff'));
+    html += row('Font Size', inp('fontSize', el.fontSize||24, 'number', 'style="width:60px"'));
+    html += row('Bold', `<input type="checkbox" ${el.bold?'checked':''} onchange="editorUpdateProp(${el.id},'bold',this.checked)">`);
+    html += row('Italic', `<input type="checkbox" ${el.italic?'checked':''} onchange="editorUpdateProp(${el.id},'italic',this.checked)">`);
+    html += row('Shadow', `<input type="checkbox" ${el.shadow?'checked':''} onchange="editorUpdateProp(${el.id},'shadow',this.checked)">`);
+  } else if (el.type === 'rect') {
+    html += row('Fill', col('fill', el.fill||'#333'));
+    html += row('Border', col('stroke', el.stroke||'#fff'));
+    html += row('Border W', inp('strokeWidth', el.strokeWidth||0, 'number', 'style="width:60px"'));
+    html += row('Width', inp('w', Math.round(el.w||100), 'number', 'style="width:60px"'));
+    html += row('Height', inp('h', Math.round(el.h||50), 'number', 'style="width:60px"'));
+    html += row('Corner R', inp('radius', Math.round(el.radius||0), 'number', 'style="width:60px"'));
+  } else if (el.type === 'circle') {
+    html += row('Fill', col('fill', el.fill||'#C9A84C'));
+    html += row('Border', col('stroke', el.stroke||'#fff'));
+    html += row('Border W', inp('strokeWidth', el.strokeWidth||0, 'number', 'style="width:60px"'));
+    html += row('Radius', inp('rx', Math.round(el.rx||50), 'number', 'style="width:60px"'));
+  } else if (el.type === 'line') {
+    html += row('Color', col('stroke', el.stroke||'#C9A84C'));
+    html += row('Width', inp('strokeWidth', el.strokeWidth||2, 'number', 'style="width:60px"'));
+  }
+  html += row('Opacity', `<input type="range" min="0" max="100" value="${Math.round((el.opacity??1)*100)}" oninput="editorUpdateProp(${el.id},'opacity',this.value/100)" style="width:100px;accent-color:#c9a84c">`);
+  div.innerHTML = html;
+}
+
+function editorUpdateProp(id, prop, val) {
+  const fmt = editorGetActive();
+  const el = fmt.elements.find(e => e.id === id);
+  if (!el) return;
+  if (['fontSize','textSize','w','h','rx','strokeWidth','radius'].includes(prop)) val = +val;
+  if (prop === 'opacity') val = +val;
+  el[prop] = val;
+  editorRenderCanvas();
+}
+window.editorUpdateProp = editorUpdateProp;
+
+function editorSwitchFormat(key) {
+  // Save current state implicitly (elements are mutated in-place)
+  _editorActive = key;
+  _editorSelected = null;
+
+  // Update format tabs
+  Object.keys(_editorFormats).forEach(k => {
+    const btn = document.getElementById('ftab-' + k);
+    if (btn) {
+      btn.style.background = k===key ? '#1e293b' : 'transparent';
+      btn.style.borderBottom = k===key ? '2px solid #c9a84c' : '2px solid transparent';
+      btn.style.color = k===key ? '#c9a84c' : '#64748b';
+    }
+  });
+
+  // Re-init canvas for new format dimensions
+  editorInitCanvas();
+  editorRenderCanvas();
+  editorRenderLayers();
+  document.getElementById('editor-props').style.display = 'none';
+}
+window.editorSwitchFormat = editorSwitchFormat;
+
+window.editorAdd = editorAdd;
+window.editorDelete = editorDelete;
+window.editorSelectEl = editorSelectEl;
+
+async function editorEncode() {
+  // Save all formats' elements to platform_images
+  const editorElements = {};
+  let totalKb = 0;
+  const newPI = { ..._editorPI };
+
+  for (const key of Object.keys(_editorFormats)) {
+    editorElements[key] = _editorFormats[key].elements;
+  }
+  newPI.editor_elements = editorElements;
+  // Set offer_text from first badge element if any
+  const firstBadge = Object.values(_editorFormats).flatMap(f=>f.elements).find(e=>e.type==='badge'||e.text);
+  if (firstBadge) newPI.offer_text = firstBadge.text;
+
+  // Close editor
   document.getElementById('badge-editor-popup').remove();
 
-  const calendarId = st.calendarId;
-  const pi = st.pi;
-  const elements = st.elements;
-  const animStyle = pi.anim_style || 'cinematic';
-  const isCinematic = animStyle === 'cinematic';
+  const musicURL = document.getElementById('editor-music')?.value;
+  const hasMusic = musicURL && musicURL !== 'none';
 
   let secs = 0;
-  const hasMusic = !!musicURL;
-  showMktToast('⏳ Re-encoding all formats… 0s (zero AI cost)', 5000);
-  const ticker = setInterval(() => { secs+=3; showMktToast('⏳ Re-encoding… '+secs+'s', 5000); }, 3000);
+  showMktToast('⏳ Encoding all formats… 0s', 5000);
+  const ticker = setInterval(()=>{ secs+=3; showMktToast('⏳ Encoding… '+secs+'s', 5000); }, 3000);
 
   try {
     const libResp = await fetch('/assets/gifenc-worker.js');
     const libSrc = await libResp.text();
-    const loadImgUrl = url => new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+    const loadImgUrl = url => new Promise((res,rej)=>{ const i=new Image(); i.crossOrigin='anonymous'; i.onload=()=>res(i); i.onerror=rej; i.src=url; });
 
-    const FORMATS = [
-      {key:'square',gifW:480,gifH:480,staticKey:'instagram_feed'},
-      {key:'story',gifW:320,gifH:480,staticKey:'instagram_story'},
-      {key:'landscape',gifW:480,gifH:320,staticKey:'facebook_post'},
-    ];
+    for (const key of Object.keys(_editorFormats)) {
+      const fmt = _editorFormats[key];
+      const srcUrl = _editorPI[fmt.imgKey]; if (!srcUrl) continue;
+      showMktToast('⏳ Encoding '+fmt.label+'…', 5000);
 
-    const ts = Date.now();
-    const newPI = { ...pi, text_elements: elements, anim_style: animStyle };
-    // Set offer_text from first element for backward compat
-    if (elements.length) newPI.offer_text = elements[0].text;
-    let totalKb = 0;
+      const bgImg = _editorBgImages[key] || await loadImgUrl(srcUrl).catch(()=>null);
+      const W=fmt.w, H=fmt.h;
+      const elements = fmt.elements;
 
-    const drawFrame = (ctx, img, W, H, elements, t, textT, isCinematic) => {
-      ctx.clearRect(0,0,W,H);
-      const bs=Math.min(W/img.naturalWidth,H/img.naturalHeight);
-      const bW=img.naturalWidth*bs,bH=img.naturalHeight*bs;
-      const bX=(W-bW)/2,bY=(H-bH)/2;
-      const zoom=isCinematic?1.0+0.05*t:1.0;
-      ctx.drawImage(img,bX-(bW*(zoom-1)/2),bY-(bH*(zoom-1)/2),bW*zoom,bH*zoom);
-      if(!isCinematic){
-        const pulse=0.4+0.6*Math.sin(t*Math.PI*6);
-        ctx.strokeStyle='rgba(201,168,76,'+(0.3+0.7*pulse)+')';
-        ctx.lineWidth=Math.round(W*0.01);
-        ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);
+      // Draw a single frame with all elements (for PNG reference)
+      const refCan = document.createElement('canvas'); refCan.width=W; refCan.height=H;
+      const refCtx = refCan.getContext('2d');
+      refCtx.fillStyle='#1a1a1a'; refCtx.fillRect(0,0,W,H);
+      if (bgImg) { const s=Math.max(W/bgImg.width,H/bgImg.height); refCtx.drawImage(bgImg,(W-bgImg.width*s)/2,(H-bgImg.height*s)/2,bgImg.width*s,bgImg.height*s); }
+      for (const el of elements) editorDrawEl(refCtx, el, W, H, false);
+
+      // Upload static PNG
+      const pngBlob = await new Promise(res=>refCan.toBlob(res,'image/png'));
+      const pngBytes=new Uint8Array(await pngBlob.arrayBuffer());
+      const ts=Date.now();
+      const {error:pe}=await sb.storage.from('calendar-images').upload('calendar/'+_editorCalendarId+'_ed_'+key+'_'+ts+'.png',pngBytes,{contentType:'image/png',upsert:true});
+      if(!pe){
+        const{data:pp}=sb.storage.from('calendar-images').getPublicUrl('calendar/'+_editorCalendarId+'_ed_'+key+'_'+ts+'.png');
+        if(key==='square'){newPI['instagram_feed']=pp.publicUrl;newPI['threads']=pp.publicUrl;}
+        if(key==='story'){newPI['instagram_story']=pp.publicUrl;newPI['facebook_story']=pp.publicUrl;newPI['whatsapp_story']=pp.publicUrl;}
+        if(key==='landscape'){newPI['facebook_post']=pp.publicUrl;newPI['youtube']=pp.publicUrl;newPI['gbp']=pp.publicUrl;}
       }
-      // Draw each text element
-      elements.forEach((el, ei) => {
-        const elDelay = ei * 0.2; // stagger each element
-        const elT = Math.max(0, Math.min(1, (textT - elDelay) / 0.6));
-        if (elT <= 0) return;
-        const bounce = elT < 0.65 ? elT/0.65 : 1 + 0.08*Math.sin((elT-0.65)/0.35*Math.PI);
-        const cx = (el.posX/100)*W;
-        const cy = (el.posY/100)*H;
-        ctx.save();
-        ctx.font=(el.bold?'bold ':'')+Math.round((el.size||16)*(W/480))+'px Arial';
-        const tw=ctx.measureText(el.text).width;
-        const bW2=tw+W*0.06, bH2=(el.size||16)*(W/480)*1.6;
-        ctx.translate(cx, cy+(1-bounce)*H*0.05);
-        ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
-        ctx.shadowColor='rgba(0,0,0,0.4)';ctx.shadowBlur=Math.round(W*0.02);ctx.shadowOffsetY=Math.round(W*0.006);
-        ctx.fillStyle=el.bg||'#C9A84C';
-        ctx.beginPath();ctx.roundRect(-bW2/2,-bH2/2,bW2,bH2,bH2*0.35);ctx.fill();
-        ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-        ctx.fillStyle=el.color||'#111';ctx.textAlign='center';ctx.textBaseline='middle';
-        ctx.fillText(el.text,0,0);ctx.textBaseline='alphabetic';ctx.textAlign='left';
-        ctx.restore();
+
+      // Encode GIF (fade in → hold → fade out with all elements)
+      const DELAY=80, FADE=8, HOLD=36, TOTAL=HOLD+FADE*2;
+      const can=document.createElement('canvas');can.width=W;can.height=H;
+      const ctx=can.getContext('2d');
+      const frames=[];
+
+      for(let f=0;f<TOTAL;f++){
+        const t=f/(TOTAL-1);
+        const fadeAlpha=f<FADE?f/FADE:f>TOTAL-FADE?(TOTAL-f)/FADE:1;
+        const textT=f<FADE?0:Math.min(1,(f-FADE)/(HOLD*0.6));
+
+        ctx.clearRect(0,0,W,H);
+        ctx.fillStyle='#1a1a1a';ctx.fillRect(0,0,W,H);
+        // Background
+        if(bgImg){const s=Math.max(W/bgImg.width,H/bgImg.height);const zoom=1+0.04*t;ctx.drawImage(bgImg,(W-bgImg.width*s*zoom)/2,(H-bgImg.height*s*zoom)/2,bgImg.width*s*zoom,bgImg.height*s*zoom);}
+        // Elements with stagger animation
+        for(let ei=0;ei<elements.length;ei++){
+          const el=elements[ei];
+          const elDelay=ei*0.18;
+          const elT=Math.max(0,Math.min(1,(textT-elDelay)/0.55));
+          if(elT<=0)continue;
+          const bounce=elT<0.6?elT/0.6:1+0.08*Math.sin((elT-0.6)/0.4*Math.PI);
+          ctx.save();
+          const cx=el.x+(el.w||0)/2, cy=el.y+(el.h||0)/2;
+          ctx.translate(cx,cy+(1-bounce)*H*0.06);
+          ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
+          ctx.translate(-cx,-cy);
+          editorDrawEl(ctx,el,W,H,false);
+          ctx.restore();
+        }
+        if(fadeAlpha<1){ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')';ctx.fillRect(0,0,W,H);}
+        frames.push({data:Array.from(ctx.getImageData(0,0,W,H).data),delay:DELAY});
+      }
+
+      const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+      const lUrl=URL.createObjectURL(new Blob([libSrc],{type:'application/javascript'}));
+      const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
+      const gifBlob=await new Promise((resolve,reject)=>{
+        const worker=new Worker(wUrl);
+        worker.onmessage=e=>{if(e.data.type==='progress')showMktToast('⏳ GIF '+fmt.label+' '+e.data.pct+'%',3000);else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}};
+        worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
+        worker.postMessage({frames,width:W,height:H});
       });
-    };
-
-    for (const fmt of FORMATS) {
-      const srcUrl = pi[fmt.staticKey]; if (!srcUrl) continue;
-      showMktToast('⏳ Encoding '+fmt.label+'…',5000);
-      const img = await loadImgUrl(srcUrl);
-      const W=fmt.gifW,H=fmt.gifH;
-
-      if (hasMusic) {
-        // Export as MP4 with audio for this format
-        showMktToast('⏳ Recording MP4 with music ('+fmt.key+')…',5000);
-        const mp4Blob = await mktExportMP4WithMusic(srcUrl, elements, animStyle, musicURL, W, H, drawFrame);
-        if (mp4Blob) {
-          const mp4Bytes=new Uint8Array(await mp4Blob.arrayBuffer());
-          const ext=mp4Blob.type.includes('mp4')?'mp4':'webm';
-          const path='gif-calendar/'+calendarId+'_mp4_'+fmt.key+'_'+ts+'.'+ext;
-          const {error:me}=await sb.storage.from('calendar-images').upload(path,mp4Bytes,{contentType:mp4Blob.type,upsert:true});
-          if(!me){
-            const {data:mp}=sb.storage.from('calendar-images').getPublicUrl(path);
-            newPI[fmt.key+'_mp4']=mp.publicUrl;
-            if(fmt.key==='square')newPI['mp4_music']=mp.publicUrl;
-            totalKb+=Math.round(mp4Blob.size/1024);
-          }
-        }
-      } else {
-        // Export as GIF
-        const DELAY=80,FADE=8,HOLD=36,TOTAL=HOLD+FADE*2;
-        const can=document.createElement('canvas');can.width=W;can.height=H;
-        const ctx=can.getContext('2d');
-        const frames=[];
-        for(let f=0;f<TOTAL;f++){
-          const t=f/(TOTAL-1);
-          const fadeAlpha=f<FADE?f/FADE:f>TOTAL-FADE?(TOTAL-f)/FADE:1;
-          const textT=f<FADE?0:Math.min(1,(f-FADE)/(HOLD*0.6));
-          drawFrame(ctx,img,W,H,elements,t,textT,isCinematic);
-          if(fadeAlpha<1){ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')';ctx.fillRect(0,0,W,H);}
-          frames.push({data:Array.from(ctx.getImageData(0,0,W,H).data),delay:DELAY});
-        }
-        const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-        const lUrl=URL.createObjectURL(new Blob([libSrc],{type:'application/javascript'}));
-        const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
-        const gifBlob=await new Promise((resolve,reject)=>{
-          const worker=new Worker(wUrl);
-          worker.onmessage=e=>{if(e.data.type==='progress')showMktToast('⏳ GIF '+fmt.key+' '+e.data.pct+'%',3000);else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}};
-          worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
-          worker.postMessage({frames,width:W,height:H});
-        });
-        const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
-        const path='gif-calendar/'+calendarId+'_ed_'+fmt.key+'_'+ts+'.gif';
-        const {error:ge}=await sb.storage.from('calendar-images').upload(path,gifBytes,{contentType:'image/gif',upsert:true});
-        if(!ge){
-          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl(path);
-          newPI[fmt.key+'_gif']=gp.publicUrl;
-          if(fmt.key==='square'){newPI['gif']=gp.publicUrl;newPI['square_gif']=gp.publicUrl;}
-          if(fmt.key==='story')newPI['story_gif']=gp.publicUrl;
-          if(fmt.key==='landscape')newPI['landscape_gif']=gp.publicUrl;
-          totalKb+=Math.round(gifBlob.size/1024);
-        }
+      const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
+      const gifPath='gif-calendar/'+_editorCalendarId+'_ed_'+key+'_'+ts+'.gif';
+      const{error:ge}=await sb.storage.from('calendar-images').upload(gifPath,gifBytes,{contentType:'image/gif',upsert:true});
+      if(!ge){
+        const{data:gp}=sb.storage.from('calendar-images').getPublicUrl(gifPath);
+        newPI[key+'_gif']=gp.publicUrl;
+        if(key==='square'){newPI['gif']=gp.publicUrl;newPI['square_gif']=gp.publicUrl;}
+        if(key==='story')newPI['story_gif']=gp.publicUrl;
+        if(key==='landscape')newPI['landscape_gif']=gp.publicUrl;
+        totalKb+=Math.round(gifBlob.size/1024);
       }
     }
 
     await sb.from('content_calendar').update({
-      image_url:newPI['mp4_music']||newPI['gif']||newPI['instagram_feed'],
+      image_url:newPI['gif']||newPI['instagram_feed'],
       platform_images:newPI, updated_at:new Date().toISOString()
-    }).eq('id',calendarId);
+    }).eq('id',_editorCalendarId);
 
     clearInterval(ticker);
-    const msg = hasMusic
-      ? '✅ MP4 with '+musicTrack.label+' ready ('+totalKb+' KB) — all 3 formats'
-      : '✅ GIF re-encoded ('+totalKb+' KB) — all 3 formats with correct positions';
-    showMktNotif(msg);
-    saveToHistory(calendarId,'gif_animated',{
-      image_url:newPI['mp4_music']||newPI['gif'],platform_images:newPI,
-      anim_style:animStyle,offer_text:elements[0]?.text,
-      prompt_summary:'Editor: '+(hasMusic?musicTrack.label+' MP4':'GIF')+' — '+elements.length+' text element(s)'
-    });
+    showMktNotif('✅ All 3 formats encoded & saved ('+totalKb+' KB total)');
+    saveToHistory(_editorCalendarId,'gif_animated',{image_url:newPI['gif'],platform_images:newPI,prompt_summary:'Poster editor — '+Object.keys(_editorFormats).join(', ')});
     renderCalendar();
   } catch(e) {
     clearInterval(ticker);
     showMktNotif('❌ Encode failed: '+e.message);
   }
 }
+window.editorEncode = editorEncode;
+
+function editorDownloadPNG() {
+  if (!_editorCanvas) return;
+  const link = document.createElement('a');
+  link.download = 'vwholesale-'+_editorActive+'.png';
+  link.href = _editorCanvas.toDataURL('image/png');
+  link.click();
+}
+window.editorDownloadPNG = editorDownloadPNG;
 
 window.calPreviewDraggableBadge = calPreviewDraggableBadge;
+window.calSaveBadgePosition = function(){};
+window.calApplyOfferBadgeWithPos = function(){};
 window.renderBadgeEditor = renderBadgeEditor;
 window.editorSwitchFormat = editorSwitchFormat;
 window.editorAddElement = editorAddElement;
