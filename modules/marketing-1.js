@@ -5399,23 +5399,31 @@ async function calRegenerateItem(calendarId) {
   const origText = btn ? btn.innerHTML : '';
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
 
-  showMktToast('⏳ Generating caption + AI poster… (~90 seconds, please wait)', 120000);
+  // Ticking counter so user sees it's running
+  let secs = 0;
+  showMktToast('⏳ Generating AI poster… 0s (takes ~90s)', 5000);
+  const ticker = setInterval(() => {
+    secs += 3;
+    showMktToast(`⏳ Generating AI poster… ${secs}s (takes ~90s)`, 5000);
+  }, 3000);
 
   try {
     const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
     });
+    clearInterval(ticker);
     const data = await res.json();
     if (data.ok) {
-      showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email');
+      showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email', 6000);
       renderCalendar();
     } else {
-      showMktToast('⚠️ ' + (data.error||'Generation failed'));
+      showMktToast('⚠️ ' + (data.error||'Generation failed'), 6000);
       if (btn) { btn.innerHTML = origText; btn.disabled = false; }
     }
   } catch(e) {
-    showMktToast('❌ ' + e.message);
+    clearInterval(ticker);
+    showMktToast('❌ ' + e.message, 6000);
     if (btn) { btn.innerHTML = origText; btn.disabled = false; }
   }
 }
