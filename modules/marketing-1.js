@@ -3434,6 +3434,30 @@ async function csPublishAll() {
   showMktToast(threadsResult?.ok ? '✅ Threads posted! Manual channels copied.' : '✅ Content saved — post manually');
 }
 
+function openMktLightbox(src, label, dlSrc, dlName) {
+  const existing = document.getElementById('mkt-lightbox');
+  if (existing) existing.remove();
+  const lb = document.createElement('div');
+  lb.id = 'mkt-lightbox';
+  lb.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.92);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+  lb.innerHTML = `
+    <div style="position:absolute;top:16px;right:16px;display:flex;gap:10px;align-items:center">
+      <a href="${dlSrc}" download="${dlName}" target="_blank"
+         style="background:var(--gold);color:#111;font-size:13px;font-weight:700;padding:8px 16px;border-radius:8px;text-decoration:none">
+        ⬇ Download
+      </a>
+      <button onclick="document.getElementById('mkt-lightbox').remove()"
+              style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:20px;font-weight:700;width:36px;height:36px;border-radius:50%;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:12px;font-weight:600">${label}</div>
+    <img src="${src}" style="max-width:90vw;max-height:80vh;object-fit:contain;border-radius:10px;display:block">
+  `;
+  lb.addEventListener('click', e => { if (e.target === lb) lb.remove(); });
+  document.body.appendChild(lb);
+}
+window.openMktLightbox = openMktLightbox;
+
+
 function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
   const existing = contentByTopic[item.topic];
   const date = new Date(item.cal_date);
@@ -3476,8 +3500,9 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
               const gifSrc = platformImages[gifKey] || null;
               const staticSrc = platformImages[staticKey] || null;
               const src = gifSrc || staticSrc;
-              return src ? `<div style="flex-shrink:0;text-align:center">
-                <img src="${src}" style="width:${w};height:${h};object-fit:contain;border-radius:5px;border:1px solid ${gifSrc?'var(--gold)':'var(--border)'};display:block;background:#f5f0e8" title="${label}">
+              const dlName = gifSrc ? gifKey + '.gif' : staticKey + '.png';
+              return src ? `<div style="flex-shrink:0;text-align:center;cursor:pointer" onclick="openMktLightbox('${src}','${label}','${src}','${dlName}')" title="Click to expand">
+                <img src="${src}" style="width:${w};height:${h};object-fit:contain;border-radius:5px;border:1px solid ${gifSrc?'var(--gold)':'var(--border)'};display:block;background:#f5f0e8">
                 <div style="font-size:9px;color:${gifSrc?'var(--gold)':'var(--text3)'};margin-top:2px">${gifSrc?'✨':''} ${label}</div>
               </div>` : '';
             }).join('')
@@ -3487,7 +3512,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
               {key:'landscape',label:'16:9',aspect:'16/9'},
             ].map(({key,label,aspect}) => {
               const url = platformImages[key === 'square' ? 'instagram_feed' : key === 'story' ? 'instagram_story' : 'facebook_post'] || (key === 'square' ? item.image_url : null);
-              return url ? `<div style="flex-shrink:0;text-align:center">
+              return url ? `<div style="flex-shrink:0;text-align:center;cursor:pointer" onclick="openMktLightbox('${url}','${label}','${url}','${key}_poster.png')" title="Click to expand">
                 <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:contain;border-radius:5px;border:1px solid var(--border);display:block;background:#f5f0e8">
                 <div style="font-size:9px;color:var(--text3);margin-top:2px">${label}</div>
               </div>` : '';
