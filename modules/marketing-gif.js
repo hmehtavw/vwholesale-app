@@ -876,22 +876,8 @@ async function gsRenderGif() {
     gsHideProgress();
     return;
   }
-  const workerCode = gifencSrc + `
-    self.onmessage = function(e) {
-      const { frames, width, height } = e.data;
-      const gif = GIFEncoder();
-      frames.forEach((f, i) => {
-        const data = new Uint8ClampedArray(f.data);
-        const palette = quantize(data, 256);
-        const indexed = applyPalette(data, palette);
-        gif.writeFrame(indexed, width, height, { palette, delay: f.delay, dispose: 2 });
-        self.postMessage({ type: 'progress', pct: 65 + Math.round((i / frames.length) * 30) });
-      });
-      gif.finish();
-      const bytes = gif.bytes();
-      self.postMessage({ type: 'done', buffer: bytes.buffer }, [bytes.buffer]);
-    };
-  `;
+  const workerFn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:65+Math.round(i/f.length*30)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);}';
+  const workerCode = gifencSrc + ';' + workerFn;
   const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
   const workerUrl = URL.createObjectURL(workerBlob);
   const worker = new Worker(workerUrl);

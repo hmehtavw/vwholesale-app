@@ -5272,27 +5272,22 @@ async function calGenerateGif(calendarId) {
       : t.includes('electrical') || t.includes('wire') ? 'modern dark slate with gold accents'
       : 'warm professional cream and charcoal';
 
-    const prompts = [
-      `Design a complete premium marketing poster for V Wholesale. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. "V Wholesale" at top with tagline "Build Better. Pay Less." Bold headline: "${headline}" Indian home lifestyle for: ${topic}. Message: "${message}" Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format. No watermark.`,
-      `Design a premium product-focused marketing poster for V Wholesale. Color: ${scheme}. Editorial quality Indian interior with ${topic} as hero. Headline: "${headline}" Supporting: "${message}" V Wholesale branding. Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format.`,
-      `Design a premium CTA closing poster for V Wholesale. Color: ${scheme}. Clean premium Indian home lifestyle. "Visit V Wholesale Today" as main CTA. "+91 8712697930 | vwholesale.in" prominent. "Build Better. Pay Less." tagline. Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture. Square 1:1. Premium finish.`
-    ];
+    // Generate 1 full poster frame (~90s) — stays within edge fn timeout
+    // GIF animates text overlay on this single background (fade in/out effect)
+    const prompt = `Design a complete premium marketing poster for V Wholesale. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. "V Wholesale" at top with tagline "Build Better. Pay Less." Bold headline: "${headline}" Indian home lifestyle for: ${topic}. Message: "${message}" Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format. No watermark.`;
 
-    const frameB64s = [];
-    for (let i = 0; i < prompts.length; i++) {
-      showMktToast(`⏳ Step 2/4: Generating frame ${i+1}/3…`, 5000);
-      const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action: 'generate_poster_image', prompt: prompts[i], size: '1024x1024' })
-      });
-      const d = await res.json();
-      if (d.ok && d.b64) frameB64s.push(d.b64);
-    }
-    if (!frameB64s.length) throw new Error('AI frame generation failed');
+    showMktToast('⏳ Step 2/4: Generating AI poster frame… (~90s)', 5000);
+    const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_poster_image', prompt, size: '1024x1024' })
+    });
+    const frameData = await res.json();
+    if (!frameData.ok || !frameData.b64) throw new Error('AI frame generation failed: ' + (frameData.error || ''));
+    const frameB64s = [frameData.b64]; // single frame — GIF adds animation via canvas
 
     showMktToast(`⏳ Step 3/4: Encoding GIF from ${frameB64s.length} frames…`, 5000);
 
-    // STEP 3: Load images and encode GIF
+    // STEP 3: Animate single AI frame with text overlay across GIF frames
     const loadImg = (b64) => new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
@@ -5300,32 +5295,35 @@ async function calGenerateGif(calendarId) {
       img.src = 'data:image/png;base64,' + b64;
     });
 
-    const imgs = await Promise.all(frameB64s.map(loadImg));
-    const GIF_SIZE = 540; // 540x540 for reasonable file size
-    const FPS = 8;        // 8fps for GIF
+    const bgImg = await loadImg(frameB64s[0]);
+    const GIF_SIZE = 480; // smaller = faster encode + smaller file
+    const FPS = 8;
     const FRAME_DELAY = Math.round(1000 / FPS);
-    const HOLD_FRAMES = Math.round(2.5 * FPS); // 2.5 seconds per frame
+    const TOTAL_SEC = 6; // 6 second GIF
+    const TOTAL_FRAMES = FPS * TOTAL_SEC;
 
-    // Draw each frame to canvas
     const canvas = document.createElement('canvas');
     canvas.width = GIF_SIZE; canvas.height = GIF_SIZE;
     const ctx = canvas.getContext('2d');
     const pixelFrames = [];
 
-    for (const img of imgs) {
-      // Hold each frame for 2.5 seconds
-      for (let f = 0; f < HOLD_FRAMES; f++) {
-        // Add crossfade at start/end of each frame hold
-        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
-        const fadeFrames = Math.round(FPS * 0.4); // 0.4s fade
-        if (f < fadeFrames || f > HOLD_FRAMES - fadeFrames) {
-          const alpha = f < fadeFrames ? f / fadeFrames : (HOLD_FRAMES - f) / fadeFrames;
-          ctx.fillStyle = `rgba(0,0,0,${1 - alpha})`;
-          ctx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
-        }
-        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+    // Animation: poster fades in (0-1.5s), holds (1.5-4.5s), fades out (4.5-6s)
+    for (let f = 0; f < TOTAL_FRAMES; f++) {
+      const t = f / TOTAL_FRAMES; // 0→1
+      const fadeSec = 1.5 / TOTAL_SEC;
+      const alpha = t < fadeSec ? t / fadeSec : t > (1 - fadeSec) ? (1 - t) / fadeSec : 1;
+
+      ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(bgImg, 0, 0, GIF_SIZE, GIF_SIZE);
+
+      // Black fade overlay
+      if (alpha < 1) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (1 - alpha) + ')';
+        ctx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
       }
+
+      pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
     }
 
     // Encode via gifenc Web Worker — fetch library first to avoid importScripts CDN block
@@ -5336,21 +5334,8 @@ async function calGenerateGif(calendarId) {
         gifencSrc = await r.text();
       } catch(e) { reject(new Error('Failed to load GIF encoder library: ' + e.message)); return; }
 
-      const workerCode = gifencSrc + `
-        self.onmessage = function(e) {
-          const { frames, width, height } = e.data;
-          const gif = GIFEncoder();
-          frames.forEach((f, i) => {
-            const data = new Uint8ClampedArray(f.data);
-            const palette = quantize(data, 256);
-            const indexed = applyPalette(data, palette);
-            gif.writeFrame(indexed, width, height, { palette, delay: f.delay, dispose: 2 });
-            if (i % 5 === 0) self.postMessage({ type: 'progress', pct: Math.round((i / frames.length) * 100) });
-          });
-          gif.finish();
-          const bytes = gif.bytes();
-          self.postMessage({ type: 'done', buffer: bytes.buffer }, [bytes.buffer]);
-        };`;
+      const workerFn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);}';
+      const workerCode = gifencSrc + ';' + workerFn;
       const blob = new Blob([workerCode], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
       const worker = new Worker(url);
