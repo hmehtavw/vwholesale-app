@@ -5649,13 +5649,20 @@ async function calPreviewPost(calendarId) {
     const isVideo = item.content_type === 'reel';
     const isGif   = item.content_type === 'gif';
 
-    // Use correct image per platform
+    // Pick the right image for each channel
     const gifUrl = item.platform_images?.gif || null;
-    const displayImg = isGif
-      ? (gifUrl || platformImg)       // GIF posts: show the actual GIF
-      : platformImg;
+    const staticUrl = item.platform_images?.[ch]
+      || item.platform_images?.instagram_feed
+      || item.image_url
+      || null;
 
-    // Correct aspect ratio per channel — show full image, no cropping
+    // GIF channels get the GIF, size-specific channels get their static poster
+    const gifChannels = ['instagram_feed','threads','whatsapp_story'];
+    const displayImg = isGif
+      ? (gifChannels.includes(ch) ? (gifUrl || staticUrl) : staticUrl)
+      : (item.platform_images?.[ch] || item.image_url || null);
+
+    // Aspect ratio per channel
     const aspectMap = {
       instagram_feed: '1/1', threads: '1/1',
       instagram_story: '9/16', facebook_story: '9/16', youtube_shorts: '9/16', whatsapp_story: '9/16',
@@ -5663,16 +5670,18 @@ async function calPreviewPost(calendarId) {
     };
     const aspect = aspectMap[ch] || '1/1';
     const isStory = ch.includes('story') || ch === 'whatsapp_story' || ch === 'youtube_shorts';
-    const imgW = isStory ? '56%' : '100%';
+    const imgW = isStory ? '60%' : '100%';
+    const isThisGif = isGif && gifChannels.includes(ch) && !!gifUrl;
 
     const mediaHtml = displayImg
       ? isVideo
-        ? `<video src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000" controls muted playsinline></video>`
-        : `<img src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#f5f0e8" onerror="this.style.display='none'">`
-      : `<div style="width:${imgW};aspect-ratio:${aspect};background:var(--bg2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+        ? `<video src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:cover;border-radius:8px;margin-bottom:8px;display:block" controls muted playsinline></video>`
+        : `<img src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:cover;border-radius:8px;margin-bottom:8px;display:block" onerror="this.style.display='none'">`
+      : `<div style="width:${imgW};aspect-ratio:${aspect};background:var(--bg2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:8px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
+    const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
     const downloadLink = displayImg
-      ? `<a href="${displayImg}" download target="_blank" style="font-size:10px;color:var(--gold);text-decoration:none;display:inline-block;margin-top:6px">⬇ Download ${isGif?'GIF':'Image'}</a>`
+      ? `<a href="${displayImg}" download target="_blank" style="font-size:10px;color:var(--gold);text-decoration:none">${dlLabel}</a>`
       : '';
 
     return `
