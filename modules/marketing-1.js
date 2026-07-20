@@ -5816,13 +5816,13 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
     // Generate 3 format posters via content-pipeline (fast, ~90s each, no timeout)
     const GIF_FORMATS_ANIM = [
       { key:'square', size:'1024x1024', gifW:480, gifH:480,
-        prompt:`Design a COMPLETE premium marketing poster for V Wholesale, Vijayawada. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. INCLUDE: 1. "V Wholesale" brand top-left, tagline "Build Better. Pay Less." 2. Headline: "${headline}" 3. Indian home interior for: ${cleanTopic} 4. Message: "${posterMsg}" 5. Category strip bottom: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture 6. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. IMPORTANT: Do NOT include the word "GIF" anywhere. Square 1:1. All text spelled correctly.`
+        prompt:`Premium marketing poster for V Wholesale home building store, Vijayawada India. ${scheme}. Indian lifestyle interior photo for ${cleanTopic}. Include: V Wholesale brand, Build Better Pay Less tagline, headline ${headline}, Tiles Granite Sanitaryware Paints Plywood Furniture category icons, phone +91 8712697930 vwholesale.in footer. Square format.`
       },
       { key:'story', size:'1024x1536', gifW:320, gifH:480,
-        prompt:`Design a COMPLETE premium vertical Story poster for V Wholesale, Vijayawada. Tall 9:16. Color: ${scheme}. Indian lifestyle interior for: ${cleanTopic}. "V Wholesale" + "Build Better. Pay Less." top. Headline: "${headline}" Message: "${posterMsg}" Category strip: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Do NOT include the word "GIF". All text correct.`
+        prompt:`Premium vertical Instagram Story poster for V Wholesale, Vijayawada. ${scheme}. Indian interior for ${cleanTopic}. V Wholesale branding top, headline ${headline}, category strip, +91 8712697930 vwholesale.in footer. 9:16 vertical format.`
       },
       { key:'landscape', size:'1536x1024', gifW:480, gifH:320,
-        prompt:`Design a COMPLETE premium landscape poster for V Wholesale, Vijayawada. Wide 16:9. Color: ${scheme}. Left: "V Wholesale", "Build Better. Pay Less.", headline "${headline}", message "${posterMsg}". Right: Indian interior for ${cleanTopic}. Category strip bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Do NOT include the word "GIF". All text correct.`
+        prompt:`Premium landscape Facebook poster for V Wholesale, Vijayawada. ${scheme}. Text left side: V Wholesale, headline ${headline}. Indian interior photo right side for ${cleanTopic}. Category strip, +91 8712697930 vwholesale.in footer. 16:9 landscape.`
       },
     ]
     const animPosterB64s = {};
