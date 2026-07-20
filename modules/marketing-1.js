@@ -6482,8 +6482,20 @@ function editorInitCanvas() {
 
   // Bind events
   _editorCanvas.onmousedown = editorOnDown;
-  _editorCanvas.onmousemove = editorOnMove;
-  _editorCanvas.onmouseup = () => { _editorDragging = false; _editorResizing = false; };
+  _editorCanvas.onmousemove = e => {
+    editorOnMove(e);
+    // Update cursor
+    if (!_editorDragging && !_editorResizing && _editorSelected) {
+      const p2 = editorGetPos(e);
+      const h = editorGetHandlePos(_editorSelected);
+      const dist = Math.sqrt((p2.x - h.x)**2 + (p2.y - h.y)**2);
+      _editorCanvas.style.cursor = dist < 12 ? 'se-resize' : editorHit(_editorSelected, p2.x, p2.y) ? 'move' : 'default';
+    } else if (!_editorDragging && !_editorResizing) {
+      _editorCanvas.style.cursor = 'default';
+    }
+  };
+  _editorCanvas.onmouseup = () => { _editorDragging = false; _editorResizing = false; if (_editorSelected) editorRenderProps(); };
+  document.onmouseup = () => { _editorDragging = false; _editorResizing = false; };
   _editorCanvas.ondblclick = editorOnDblClick;
 
   // Touch
@@ -6515,14 +6527,36 @@ function editorHit(el, x, y) {
   return x>=el.x && x<=el.x+el.w && y>=el.y && y<=el.y+el.h;
 }
 
+function editorGetHandlePos(el) {
+  // Returns bottom-right handle position for resize
+  const bx = el.x;
+  const by = el.type === 'text' ? el.y - (el.fontSize || 24) : el.y;
+  const bw = el.w || (el.type === 'circle' ? el.rx * 2 : el.type === 'text' ? 100 : 80);
+  const bh = el.h || (el.type === 'text' ? (el.fontSize || 24) : el.type === 'circle' ? el.rx * 2 : 40);
+  return { x: bx + bw, y: by + bh };
+}
+
 function editorOnDown(e) {
   const p = editorGetPos(e);
   const fmt = editorGetActive();
   const elems = fmt.elements;
-  for (let i=elems.length-1; i>=0; i--) {
+
+  // Check resize handle on selected element first
+  if (_editorSelected) {
+    const h = editorGetHandlePos(_editorSelected);
+    const dist = Math.sqrt((p.x - h.x) ** 2 + (p.y - h.y) ** 2);
+    if (dist < 12) {
+      _editorResizing = true;
+      _editorDragStart = { x: p.x, y: p.y, origW: _editorSelected.w || _editorSelected.rx * 2 || 80, origH: _editorSelected.h || _editorSelected.rx * 2 || 40, origSize: _editorSelected.fontSize || 24 };
+      return;
+    }
+  }
+
+  for (let i = elems.length - 1; i >= 0; i--) {
     if (editorHit(elems[i], p.x, p.y)) {
       _editorSelected = elems[i];
       _editorDragging = true;
+      _editorResizing = false;
       _editorDragStart = { x: p.x - elems[i].x, y: p.y - elems[i].y };
       editorRenderLayers();
       editorRenderProps();
@@ -6531,22 +6565,44 @@ function editorOnDown(e) {
     }
   }
   _editorSelected = null;
+  _editorResizing = false;
   editorRenderLayers();
   editorRenderProps();
   editorRenderCanvas();
 }
 
 function editorOnMove(e) {
-  if (!_editorDragging || !_editorSelected) return;
+  if (!_editorSelected) return;
   const p = editorGetPos(e);
   const fmt = editorGetActive();
   const el = _editorSelected;
-  el.x = p.x - _editorDragStart.x;
-  el.y = p.y - _editorDragStart.y;
-  // Keep in bounds loosely
-  el.x = Math.max(-el.w*0.3, Math.min(fmt.w - el.w*0.2, el.x));
-  el.y = Math.max(0, Math.min(fmt.h, el.y));
-  editorRenderCanvas();
+
+  if (_editorResizing) {
+    const dx = p.x - _editorDragStart.x;
+    const dy = p.y - _editorDragStart.y;
+    if (el.type === 'text') {
+      el.fontSize = Math.max(8, Math.round(_editorDragStart.origSize + dy * 0.5));
+    } else if (el.type === 'circle') {
+      el.rx = Math.max(10, Math.round((_editorDragStart.origW + dx) / 2));
+    } else {
+      el.w = Math.max(20, Math.round(_editorDragStart.origW + dx));
+      el.h = Math.max(10, Math.round(_editorDragStart.origH + dy));
+      // Sync textSize for badges proportionally
+      if ((el.type === 'badge' || el.textSize) && el.w) {
+        el.textSize = Math.round(el.w * 0.048);
+      }
+    }
+    editorRenderCanvas();
+    return;
+  }
+
+  if (_editorDragging) {
+    el.x = p.x - _editorDragStart.x;
+    el.y = p.y - _editorDragStart.y;
+    el.x = Math.max(-(el.w || 0) * 0.3, Math.min(fmt.w - (el.w || 0) * 0.2, el.x));
+    el.y = Math.max(0, Math.min(fmt.h, el.y));
+    editorRenderCanvas();
+  }
 }
 
 function editorOnDblClick(e) {
