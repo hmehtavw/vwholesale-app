@@ -6410,11 +6410,12 @@ window.calUnapproveItem = calUnapproveItem;
 // ── GENERATION HISTORY ──────────────────────────────────────────────────
 
 async function saveToHistory(calendarId, type, data) {
-  // data: { image_url, platform_images, caption_en, caption_te, hashtags, poster_message, anim_style, offer_text, prompt_summary, generation_ms }
   try {
     const { data: item } = await sb.from('content_calendar').select('topic,content_type').eq('id', calendarId).single();
-    await sb.from('generation_history').insert({
-      calendar_id:    calendarId,
+    
+    // Insert new history row
+    const { data: inserted, error: insertErr } = await sb.from('generation_history').insert({
+      calendar_id:    parseInt(calendarId),
       topic:          item?.topic || '',
       content_type:   type,
       anim_style:     data.anim_style || null,
@@ -6429,14 +6430,21 @@ async function saveToHistory(calendarId, type, data) {
       generation_ms:  data.generation_ms || null,
       is_active:      true,
       created_at:     new Date().toISOString()
-    });
-    // Mark previous versions inactive
-    await sb.from('generation_history')
-      .update({ is_active: false })
-      .eq('calendar_id', calendarId)
-      .lt('created_at', new Date().toISOString())
-      .neq('is_active', false);
-  } catch(e) { console.warn('saveToHistory failed:', e); }
+    }).select('id').single();
+
+    if (insertErr) {
+      console.error('saveToHistory insert failed:', insertErr);
+      return;
+    }
+
+    // Mark all OTHER rows for this calendar_id as inactive
+    if (inserted?.id) {
+      await sb.from('generation_history')
+        .update({ is_active: false })
+        .eq('calendar_id', parseInt(calendarId))
+        .neq('id', inserted.id);
+    }
+  } catch(e) { console.error('saveToHistory error:', e); }
 }
 
 async function openHistoryDrawer(calendarId) {
