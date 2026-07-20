@@ -5810,14 +5810,16 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
 
     // Generate 3 format posters via content-pipeline (fast, ~90s each, no timeout)
     const GIF_FORMATS_ANIM = [
-      { key:'square',    size:'1024x1024', gifW:480, gifH:480,
-        prompt:`Premium marketing poster background for V Wholesale. ${scheme}. Clean Indian lifestyle interior photography for: ${item.topic}. V Wholesale brand top. No text overlays in center — leave space for animated text. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Square 1:1.` },
-      { key:'story',     size:'1024x1536', gifW:320, gifH:480,
-        prompt:`Premium vertical Story poster background for V Wholesale. ${scheme}. Tall 9:16. Indian lifestyle photo for: ${item.topic}. V Wholesale brand top. Leave center open for animated text overlay. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale.` },
+      { key:'square', size:'1024x1024', gifW:480, gifH:480,
+        prompt:`Design a COMPLETE, FULLY FINISHED premium marketing poster for V Wholesale, a home building materials store in Vijayawada, India. Color scheme: ${scheme}. Style: real Indian lifestyle interior photography, editorial magazine quality. REQUIRED elements ALL RENDERED FULLY: 1. "V Wholesale" brand name top-left with tagline "Build Better. Pay Less." 2. Bold headline: "${headline}" 3. Real Indian home interior lifestyle photo as background for: ${item.topic} 4. Supporting line: "${posterMsg}" 5. Product category strip at bottom with icons for: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture 6. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Square 1:1 format. ALL text spelled correctly. No gibberish. No watermark. This is a COMPLETE finished design.`
+      },
+      { key:'story', size:'1024x1536', gifW:320, gifH:480,
+        prompt:`Design a COMPLETE, FULLY FINISHED premium vertical Story poster for V Wholesale. Tall 9:16 for Instagram Story, WhatsApp Status. Color: ${scheme}. Real Indian lifestyle interior for: ${item.topic}. REQUIRED: "V Wholesale" and "Build Better. Pay Less." at top. Headline: "${headline}" Message: "${posterMsg}" Category strip: Tiles Granite Sanitaryware Paints Plywood Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. Complete finished design.`
+      },
       { key:'landscape', size:'1536x1024', gifW:480, gifH:320,
-        prompt:`Premium landscape poster background for V Wholesale. ${scheme}. Wide 16:9. Indian lifestyle photo right side for: ${item.topic}. V Wholesale brand left. Leave left area open for animated text. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale.` },
-    ];
-
+        prompt:`Design a COMPLETE, FULLY FINISHED premium landscape poster for V Wholesale. Wide 16:9 for Facebook YouTube GBP. Color: ${scheme}. Left 40%: "V Wholesale", "Build Better. Pay Less.", headline "${headline}", message "${posterMsg}". Right 60%: Indian interior photo for ${item.topic}. Category strip bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. Complete finished design.`
+      },
+    ]
     const animPosterB64s = {};
     for (const fmt of GIF_FORMATS_ANIM) {
       showMktToast('⏳ Generating ' + fmt.key + ' background…', 5000);
@@ -5876,63 +5878,60 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
           const textT = f<FADE ? 0 : Math.min(1,(f-FADE)/(HOLD*0.6));
 
           ctx.clearRect(0,0,W,H);
-          ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
 
-          if (isCinematic) {
-            const zoom = 1.0 + 0.06*t;
-            ctx.drawImage(img, bX-(bW*(zoom-1)/2), bY-(bH*(zoom-1)/2), bW*zoom, bH*zoom);
-            if (textT>0) {
-              const grad=ctx.createLinearGradient(0,H*0.5,0,H);
-              grad.addColorStop(0,'rgba(0,0,0,0)'); grad.addColorStop(1,'rgba(0,0,0,0.75)');
-              ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
-            }
-            if (textT>0 && headline) {
-              const slideX = W*(-1+Math.min(1,textT*2.5));
-              ctx.save(); ctx.translate(Math.min(0,slideX),0);
-              ctx.font='bold '+Math.round(W*0.052)+'px Arial';
-              ctx.fillStyle='#C9A84C';
-              const lines = headline.length>28 ? [headline.slice(0,24)+'…'] : [headline];
-              lines.forEach((l,i)=>ctx.fillText(l, W*0.06, H*0.72+i*Math.round(W*0.06)));
-              ctx.restore();
-            }
-            if (offerText && textT>0.45) {
-              const popT = Math.min(1,(textT-0.45)/0.35);
-              const bounce = popT<0.65 ? popT/0.65 : 1+0.12*Math.sin((popT-0.65)/0.35*Math.PI);
-              const badgeY = H*0.84+(1-bounce)*H*0.1;
-              ctx.font='bold '+Math.round(W*0.046)+'px Arial';
-              const bW2=Math.min(W*0.82,ctx.measureText(offerText).width+W*0.1);
-              const bH2=Math.round(W*0.082);
-              ctx.fillStyle='#C9A84C';
-              ctx.beginPath(); ctx.roundRect((W-bW2)/2,badgeY-bH2*0.72,bW2,bH2,bH2*0.28); ctx.fill();
-              ctx.fillStyle='#111'; ctx.textAlign='center';
-              ctx.fillText(offerText,W/2,badgeY); ctx.textAlign='left';
-            }
-          } else {
-            ctx.drawImage(img,bX,bY,bW,bH);
-            const pulse=0.5+0.5*Math.sin(t*Math.PI*7);
-            ctx.strokeStyle='rgba(201,168,76,'+(0.25+0.75*pulse)+')';
-            ctx.lineWidth=Math.round(W*0.011); ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);
-            if (textT>0 && headline) {
-              const b=textT<0.5?4*textT*textT*textT:1-Math.pow(-2*textT+2,3)/2;
-              ctx.font='bold '+Math.round(W*0.053)+'px Arial';
-              ctx.strokeStyle='rgba(0,0,0,0.8)'; ctx.lineWidth=Math.round(W*0.007);
-              ctx.strokeText(headline.slice(0,26),W*0.05,H*0.24-(1-b)*H*0.15);
-              ctx.fillStyle='#fff'; ctx.fillText(headline.slice(0,26),W*0.05,H*0.24-(1-b)*H*0.15);
-            }
-            if (offerText && textT>0.35) {
-              const popT=Math.min(1,(textT-0.35)/0.4);
-              const sc=popT<0.6?popT/0.6:1+0.18*Math.sin((popT-0.6)/0.4*Math.PI);
-              ctx.save(); ctx.translate(W/2,H*0.8); ctx.scale(sc,sc);
-              ctx.font='bold '+Math.round(W*0.05)+'px Arial';
-              const bW2=Math.min(W*0.8,ctx.measureText(offerText).width+W*0.12);
-              const bH2=Math.round(W*0.096);
-              ctx.fillStyle='#ef4444'; ctx.beginPath();
-              ctx.roundRect(-bW2/2,-bH2*0.72,bW2,bH2,bH2*0.25); ctx.fill();
-              ctx.fillStyle='#fff'; ctx.textAlign='center';
-              ctx.fillText(offerText,0,0); ctx.textAlign='left'; ctx.restore();
-            }
+          // Draw full AI poster with Ken Burns zoom (poster IS the complete design)
+          const zoom = isCinematic ? (1.0 + 0.05*t) : 1.0;
+          const sw = bW*zoom, sh = bH*zoom;
+          ctx.drawImage(img, bX-(sw-bW)/2, bY-(sh-bH)/2, sw, sh);
+
+          // Energetic: pulsing gold border
+          if (!isCinematic) {
+            const pulse = 0.4 + 0.6*Math.sin(t*Math.PI*6);
+            ctx.strokeStyle = 'rgba(201,168,76,' + (0.3+0.7*pulse) + ')';
+            ctx.lineWidth = Math.round(W*0.01);
+            ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, W-ctx.lineWidth, H-ctx.lineWidth);
           }
-          if (fadeAlpha<1) { ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')'; ctx.fillRect(0,0,W,H); }
+
+          // Offer/price badge pops up — ONLY this animates, poster design untouched
+          if (offerText && textT > 0.35) {
+            const popT = Math.min(1, (textT-0.35)/0.4);
+            const bounce = isCinematic
+              ? (popT < 0.65 ? popT/0.65 : 1 + 0.1*Math.sin((popT-0.65)/0.35*Math.PI))
+              : (popT < 0.6 ? popT/0.6 : 1 + 0.2*Math.sin((popT-0.6)/0.4*Math.PI));
+            const badgeColor = isCinematic ? '#C9A84C' : '#ef4444';
+            const textColor  = isCinematic ? '#111' : '#fff';
+
+            ctx.save();
+            ctx.font = 'bold ' + Math.round(W*0.052) + 'px Arial';
+            const bW2 = Math.min(W*0.78, ctx.measureText(offerText).width + W*0.1);
+            const bH2 = Math.round(W*0.092);
+            const badgeCenterY = H * 0.82;
+
+            ctx.translate(W/2, badgeCenterY + (1-bounce)*H*0.1);
+            ctx.scale(bounce < 1 ? bounce : 1, bounce < 1 ? bounce : 1);
+
+            // Shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.4)';
+            ctx.shadowBlur = Math.round(W*0.02);
+            ctx.fillStyle = badgeColor;
+            ctx.beginPath();
+            ctx.roundRect(-bW2/2, -bH2*0.7, bW2, bH2, bH2*0.3);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center';
+            ctx.fillText(offerText, 0, bH2*0.3);
+            ctx.textAlign = 'left';
+            ctx.restore();
+          }
+
+          // Global fade in/out
+          if (fadeAlpha < 1) {
+            ctx.fillStyle = 'rgba(0,0,0,' + (1-fadeAlpha) + ')';
+            ctx.fillRect(0,0,W,H);
+          }
+
           frames.push({ data:Array.from(ctx.getImageData(0,0,W,H).data), delay:DELAY });
         }
 
