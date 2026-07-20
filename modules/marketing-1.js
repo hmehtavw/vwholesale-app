@@ -5339,6 +5339,7 @@ function showGifOptionsPopup(calendarId) {
             </label>
           </div>
         </div>
+        <div id="gif-music-picker">${mktMusicPickerHTML('none')}</div>
       </div>
 
       <!-- ACTIONS -->
@@ -5365,6 +5366,7 @@ function showGifOptionsPopup(calendarId) {
 
   pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
   document.body.appendChild(pop);
+  mktBindMusicPicker();
 }
 
 function gifSelectMode(mode) {
@@ -5398,8 +5400,9 @@ function gifStartGenerate(calendarId) {
   const mode = btn?.dataset.mode || 'slideshow';
   const offer = mode === 'animated' ? (document.getElementById('gif-offer-input')?.value.trim() || '') : '';
   const style = mode === 'animated' ? (document.querySelector('input[name=gif-anim-style]:checked')?.value || 'cinematic') : '';
+  const musicId = mode === 'animated' ? (document.querySelector('input[name="mkt-music"]:checked')?.value || 'none') : 'none';
   document.getElementById('gif-options-popup').remove();
-  calGenerateGif(calendarId, mode === 'slideshow' ? null : offer, mode === 'slideshow' ? 'slideshow' : style);
+  calGenerateGif(calendarId, mode === 'slideshow' ? null : offer, mode === 'slideshow' ? 'slideshow' : style, musicId);
 }
 
 
@@ -6080,6 +6083,7 @@ async function calEditOfferBadge(calendarId) {
           </label>
         </div>
       </div>
+      <div id="eo-music-picker">${mktMusicPickerHTML('none')}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('edit-offer-popup').remove()"
           style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
@@ -6097,12 +6101,16 @@ async function calEditOfferBadge(calendarId) {
   });
   pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
   document.body.appendChild(pop);
+  mktBindMusicPicker();
   setTimeout(() => document.getElementById('edit-offer-input')?.focus(), 100);
 }
 
 async function calApplyOfferBadge(calendarId) {
   const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
   const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
+  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
+  const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === musicId);
+  const hasMusic = !!musicTrack?.url;
   document.getElementById('edit-offer-popup')?.remove();
 
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
@@ -6114,8 +6122,9 @@ async function calApplyOfferBadge(calendarId) {
   }
 
   let secs = 0;
-  showMktToast('⏳ Re-encoding GIF… 0s (no API cost)', 5000);
-  const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Re-encoding… ' + secs + 's', 5000); }, 3000);
+  const exportLabel = hasMusic ? 'MP4 video with music' : 'GIF';
+  showMktToast('⏳ Re-encoding ' + exportLabel + '… 0s (zero AI cost)', 5000);
+  const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Re-encoding ' + exportLabel + '… ' + secs + 's', 5000); }, 3000);
 
   try {
     const libResp = await fetch('/assets/gifenc-worker.js');
@@ -6215,8 +6224,30 @@ async function calApplyOfferBadge(calendarId) {
       platform_images: newPI, updated_at: new Date().toISOString()
     }).eq('id',calendarId);
 
+    // If music selected, also export MP4 for square format
+    if (hasMusic && newPI['instagram_feed']) {
+      showMktToast('⏳ Exporting MP4 with music…', 5000);
+      try {
+        const mp4Blob = await mktExportMP4WithMusic(newPI['instagram_feed'], newOffer, animStyle, musicTrack.url, 480, 480);
+        if (mp4Blob) {
+          const mp4Bytes = new Uint8Array(await mp4Blob.arrayBuffer());
+          const mp4Path = 'gif-calendar/' + calendarId + '_music_' + ts + '.' + (mp4Blob.type.includes('mp4') ? 'mp4' : 'webm');
+          const { error: me } = await sb.storage.from('calendar-images').upload(mp4Path, mp4Bytes, { contentType: mp4Blob.type, upsert: true });
+          if (!me) {
+            const { data: mp } = sb.storage.from('calendar-images').getPublicUrl(mp4Path);
+            newPI['mp4_music'] = mp.publicUrl;
+            await sb.from('content_calendar').update({ platform_images: newPI, updated_at: new Date().toISOString() }).eq('id', calendarId);
+            totalKb += Math.round(mp4Blob.size / 1024);
+          }
+        }
+      } catch(e) { console.warn('MP4 export failed:', e); }
+    }
+
     clearInterval(ticker);
-    showMktNotif('✅ GIF re-encoded ('+totalKb+' KB) — badge updated. Zero API cost.');
+    const msg = hasMusic
+      ? '✅ MP4 with ' + musicTrack.label + ' ready (' + totalKb + ' KB) — zero AI cost'
+      : '✅ GIF re-encoded (' + totalKb + ' KB) — zero AI cost';
+    showMktNotif(msg);
     saveToHistory(calendarId,'gif_animated',{
       image_url:newPI['gif'], platform_images:newPI,
       anim_style:animStyle, offer_text:newOffer,
@@ -6231,6 +6262,119 @@ async function calApplyOfferBadge(calendarId) {
 
 window.calEditOfferBadge = calEditOfferBadge;
 window.calApplyOfferBadge = calApplyOfferBadge;
+
+// ── MP4 EXPORT WITH MUSIC via MediaRecorder + AudioContext ──
+async function mktExportMP4WithMusic(posterUrl, offerText, animStyle, musicUrl, W, H) {
+  // Load poster image
+  const img = await new Promise((res, rej) => {
+    const i = new Image(); i.crossOrigin = 'anonymous';
+    i.onload = () => res(i); i.onerror = rej; i.src = posterUrl;
+  });
+
+  // Load music audio buffer
+  const audioCtx = new AudioContext();
+  const musicResp = await fetch(musicUrl);
+  if (!musicResp.ok) throw new Error('Music fetch failed');
+  const musicBuffer = await audioCtx.decodeAudioData(await musicResp.arrayBuffer());
+
+  // Set up canvas
+  const can = document.createElement('canvas'); can.width = W; can.height = H;
+  const ctx = can.getContext('2d');
+
+  // Mix canvas stream + audio into MediaRecorder
+  const videoStream = can.captureStream(30);
+  const audioDest = audioCtx.createMediaStreamDestination();
+  const musicSource = audioCtx.createBufferSource();
+  musicSource.buffer = musicBuffer;
+  musicSource.loop = true;
+
+  // Fade out music at end
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+  musicSource.connect(gainNode);
+  gainNode.connect(audioDest);
+  musicSource.start();
+
+  const combined = new MediaStream([
+    ...videoStream.getVideoTracks(),
+    ...audioDest.stream.getAudioTracks()
+  ]);
+
+  const mimeTypes = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  const mimeType = mimeTypes.find(m => MediaRecorder.isTypeSupported(m));
+  if (!mimeType) { musicSource.stop(); audioCtx.close(); throw new Error('MediaRecorder not supported'); }
+
+  const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 2500000 });
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  const TOTAL_SEC = 8; // ~10s animation
+  const FADE = 8, HOLD = 36 * 2, TOTAL_FRAMES = HOLD + FADE * 4;
+  const isCinematic = animStyle === 'cinematic';
+  const bScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+  const bW = img.naturalWidth * bScale, bH = img.naturalHeight * bScale;
+  const bX = (W - bW) / 2, bY = (H - bH) / 2;
+
+  // Fade out music last 2s
+  gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime + TOTAL_SEC - 2);
+  gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + TOTAL_SEC);
+
+  const startTime = performance.now();
+  recorder.start(100);
+
+  await new Promise(resolve => {
+    let frameIdx = 0;
+    function draw() {
+      const elapsed = (performance.now() - startTime) / 1000;
+      if (elapsed >= TOTAL_SEC) { recorder.stop(); resolve(); return; }
+      const t = elapsed / TOTAL_SEC;
+      const fadeAlpha = elapsed < 0.6 ? elapsed / 0.6 : elapsed > TOTAL_SEC - 0.6 ? (TOTAL_SEC - elapsed) / 0.6 : 1;
+      const textT = elapsed < 0.6 ? 0 : Math.min(1, (elapsed - 0.6) / (TOTAL_SEC * 0.5));
+
+      ctx.clearRect(0, 0, W, H);
+      const zoom = isCinematic ? 1.0 + 0.05 * t : 1.0;
+      ctx.drawImage(img, bX - (bW * (zoom-1) / 2), bY - (bH * (zoom-1) / 2), bW * zoom, bH * zoom);
+
+      if (!isCinematic) {
+        const pulse = 0.4 + 0.6 * Math.sin(t * Math.PI * 6);
+        ctx.strokeStyle = 'rgba(201,168,76,' + (0.3 + 0.7 * pulse) + ')';
+        ctx.lineWidth = Math.round(W * 0.01);
+        ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
+      }
+
+      if (offerText && textT > 0.35) {
+        const popT = Math.min(1, (textT - 0.35) / 0.4);
+        const bounce = isCinematic
+          ? (popT < 0.65 ? popT / 0.65 : 1 + 0.1 * Math.sin((popT - 0.65) / 0.35 * Math.PI))
+          : (popT < 0.6 ? popT / 0.6 : 1 + 0.2 * Math.sin((popT - 0.6) / 0.4 * Math.PI));
+        ctx.save();
+        ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
+        const bW2 = Math.min(W * 0.72, ctx.measureText(offerText).width + W * 0.1);
+        const bH2 = Math.round(W * 0.1);
+        ctx.translate(W / 2, H * 0.75 + (1 - bounce) * H * 0.08);
+        ctx.scale(bounce < 1 ? bounce : 1, bounce < 1 ? bounce : 1);
+        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = Math.round(W * 0.025); ctx.shadowOffsetY = Math.round(W * 0.008);
+        ctx.fillStyle = '#C9A84C'; ctx.beginPath(); ctx.roundRect(-bW2/2, -bH2/2, bW2, bH2, bH2 * 0.3); ctx.fill();
+        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+        ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(offerText, 0, 0); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+        ctx.restore();
+      }
+
+      if (fadeAlpha < 1) { ctx.fillStyle = 'rgba(0,0,0,' + (1 - fadeAlpha) + ')'; ctx.fillRect(0, 0, W, H); }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  });
+
+  musicSource.stop();
+  await audioCtx.close();
+
+  return new Blob(chunks, { type: mimeType });
+}
+window.mktExportMP4WithMusic = mktExportMP4WithMusic;
+
+
 
 async function calOpenGifStudio(calendarId) {
   // Navigate to GIF Studio with calendar context pre-filled
@@ -6539,6 +6683,55 @@ async function calRegenerateItem(calendarId) {
     if (btn) { btn.innerHTML = origText; btn.disabled = false; }
   }
 }
+
+// ── ROYALTY-FREE MUSIC TRACKS ──
+const MKT_MUSIC_TRACKS = [
+  { id:'none',       label:'No Music',          url:null,              mood:'silent' },
+  { id:'upbeat1',    label:'Upbeat Corporate',   url:'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3', mood:'upbeat' },
+  { id:'upbeat2',    label:'Happy & Energetic',  url:'https://cdn.pixabay.com/download/audio/2022/03/15/audio_8cb3e8d07f.mp3', mood:'upbeat' },
+  { id:'cinematic1', label:'Soft Cinematic',     url:'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1cca.mp3', mood:'cinematic' },
+  { id:'cinematic2', label:'Premium Ambient',    url:'https://cdn.pixabay.com/download/audio/2021/11/13/audio_9e4e298ae6.mp3', mood:'cinematic' },
+  { id:'inspire1',   label:'Inspiring Rise',     url:'https://cdn.pixabay.com/download/audio/2022/10/25/audio_913fb13a2b.mp3', mood:'upbeat' },
+];
+
+function mktMusicPickerHTML(selectedId = 'none') {
+  return `<div style="margin-bottom:16px">
+    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC <span style="font-weight:400;color:#475569">(optional)</span></label>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${MKT_MUSIC_TRACKS.map(t => `
+        <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${t.id===selectedId?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-${t.id}">
+          <input type="radio" name="mkt-music" value="${t.id}" ${t.id===selectedId?'checked':''} style="display:none">
+          <span style="font-size:16px">${t.id==='none'?'🔇':t.mood==='upbeat'?'⚡':'🎬'}</span>
+          <span style="font-size:12px;color:#f1f5f9;font-weight:600;flex:1">${t.label}</span>
+          ${t.url ? `<button onclick="event.preventDefault();mktPreviewMusic('${t.id}')" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer">▶ Preview</button>` : ''}
+        </label>`).join('')}
+    </div>
+    <div style="font-size:10px;color:#475569;margin-top:6px">Music exports as MP4 video (not GIF) — works on Instagram, Facebook, WhatsApp</div>
+  </div>`;
+}
+
+let _musicPreviewAudio = null;
+function mktPreviewMusic(trackId) {
+  if (_musicPreviewAudio) { _musicPreviewAudio.pause(); _musicPreviewAudio = null; }
+  const track = MKT_MUSIC_TRACKS.find(t => t.id === trackId);
+  if (!track?.url) return;
+  _musicPreviewAudio = new Audio(track.url);
+  _musicPreviewAudio.volume = 0.5;
+  _musicPreviewAudio.play().catch(() => {});
+  setTimeout(() => { if (_musicPreviewAudio) { _musicPreviewAudio.pause(); _musicPreviewAudio = null; } }, 8000);
+}
+window.mktPreviewMusic = mktPreviewMusic;
+
+// Wire up music radio button styling
+function mktBindMusicPicker() {
+  document.querySelectorAll('input[name="mkt-music"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('[id^="music-opt-"]').forEach(el => el.style.borderColor = '#334155');
+      document.getElementById('music-opt-' + r.value)?.style.setProperty('border-color', '#c9a84c');
+    });
+  });
+}
+
 window.calRegenerateItem = calRegenerateItem;
 
 
