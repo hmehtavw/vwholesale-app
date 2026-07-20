@@ -3434,8 +3434,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
           : ''}
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
         ${item.content_type==='gif'
-          ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🎨 Open in GIF Studio</button>
-             <button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI background frames">🤖 Generate Frames</button>`
+          ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
+             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
@@ -5172,6 +5172,180 @@ async function calHandleImageUpload(calendarId, input) {
   renderCalendar();
 }
 
+// ── FULLY AUTOMATIC GIF GENERATION FROM CALENDAR ──
+// Step 1: Generate caption via content-pipeline
+// Step 2: Generate 3 AI poster frames via content-pipeline
+// Step 3: Encode GIF in browser via gifenc Web Worker
+// Step 4: Upload GIF to Supabase storage
+// Step 5: Save URL back to content_calendar, mark ready
+async function calGenerateGif(calendarId) {
+  const btn = [...document.querySelectorAll('button')].find(b => b.onclick?.toString().includes(`calGenerateGif('${calendarId}')`));
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+
+  let secs = 0;
+  showMktToast('⏳ Step 1/4: Generating caption… 0s', 5000);
+  const ticker = setInterval(() => {
+    secs += 3;
+    showMktToast(`⏳ Generating GIF… ${secs}s (takes ~3 minutes total)`, 5000);
+  }, 3000);
+
+  try {
+    // STEP 1: Generate caption
+    const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    if (!item) throw new Error('Calendar item not found');
+
+    const capRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_single', calendar_id: parseInt(calendarId) })
+    });
+    const capData = await capRes.json();
+    if (!capData.ok) throw new Error('Caption generation failed: ' + (capData.error || ''));
+
+    // Reload item with generated data
+    const { data: updatedItem } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    const topic = updatedItem.topic || item.topic;
+    const headline = updatedItem.poster_message || updatedItem.topic;
+    const message = updatedItem.poster_message || '';
+
+    showMktToast('⏳ Step 2/4: Generating 3 AI poster frames… (~90s each)', 5000);
+
+    // STEP 2: Generate 3 full AI poster frames
+    const t = topic.toLowerCase();
+    const scheme = t.includes('granite') || t.includes('tile') || t.includes('marble')
+      ? 'elegant cream and charcoal with natural stone textures and warm wood tones'
+      : t.includes('paint') ? 'warm terracotta and sage green palette'
+      : t.includes('bathroom') || t.includes('sanitaryware') ? 'clean white and chrome with soft spa lighting'
+      : t.includes('electrical') || t.includes('wire') ? 'modern dark slate with gold accents'
+      : 'warm professional cream and charcoal';
+
+    const prompts = [
+      `Design a complete premium marketing poster for V Wholesale. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. "V Wholesale" at top with tagline "Build Better. Pay Less." Bold headline: "${headline}" Indian home lifestyle for: ${topic}. Message: "${message}" Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format. No watermark.`,
+      `Design a premium product-focused marketing poster for V Wholesale. Color: ${scheme}. Editorial quality Indian interior with ${topic} as hero. Headline: "${headline}" Supporting: "${message}" V Wholesale branding. Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format.`,
+      `Design a premium CTA closing poster for V Wholesale. Color: ${scheme}. Clean premium Indian home lifestyle. "Visit V Wholesale Today" as main CTA. "+91 8712697930 | vwholesale.in" prominent. "Build Better. Pay Less." tagline. Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture. Square 1:1. Premium finish.`
+    ];
+
+    const frameB64s = [];
+    for (let i = 0; i < prompts.length; i++) {
+      showMktToast(`⏳ Step 2/4: Generating frame ${i+1}/3…`, 5000);
+      const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_poster_image', prompt: prompts[i], size: '1024x1024' })
+      });
+      const d = await res.json();
+      if (d.ok && d.b64) frameB64s.push(d.b64);
+    }
+    if (!frameB64s.length) throw new Error('AI frame generation failed');
+
+    showMktToast(`⏳ Step 3/4: Encoding GIF from ${frameB64s.length} frames…`, 5000);
+
+    // STEP 3: Load images and encode GIF
+    const loadImg = (b64) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = 'data:image/png;base64,' + b64;
+    });
+
+    const imgs = await Promise.all(frameB64s.map(loadImg));
+    const GIF_SIZE = 540; // 540x540 for reasonable file size
+    const FPS = 8;        // 8fps for GIF
+    const FRAME_DELAY = Math.round(1000 / FPS);
+    const HOLD_FRAMES = Math.round(2.5 * FPS); // 2.5 seconds per frame
+
+    // Draw each frame to canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = GIF_SIZE; canvas.height = GIF_SIZE;
+    const ctx = canvas.getContext('2d');
+    const pixelFrames = [];
+
+    for (const img of imgs) {
+      // Hold each frame for 2.5 seconds
+      for (let f = 0; f < HOLD_FRAMES; f++) {
+        // Add crossfade at start/end of each frame hold
+        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+        ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
+        const fadeFrames = Math.round(FPS * 0.4); // 0.4s fade
+        if (f < fadeFrames || f > HOLD_FRAMES - fadeFrames) {
+          const alpha = f < fadeFrames ? f / fadeFrames : (HOLD_FRAMES - f) / fadeFrames;
+          ctx.fillStyle = `rgba(0,0,0,${1 - alpha})`;
+          ctx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
+        }
+        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+      }
+    }
+
+    // Encode via gifenc Web Worker
+    const gifBlob = await new Promise((resolve, reject) => {
+      const workerCode = `
+        importScripts('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
+        self.onmessage = function(e) {
+          const { frames, width, height } = e.data;
+          const gif = GIFEncoder();
+          frames.forEach((f, i) => {
+            const data = new Uint8ClampedArray(f.data);
+            const palette = quantize(data, 256);
+            const indexed = applyPalette(data, palette);
+            gif.writeFrame(indexed, width, height, { palette, delay: f.delay, dispose: 2 });
+            if (i % 5 === 0) self.postMessage({ type: 'progress', pct: Math.round((i / frames.length) * 100) });
+          });
+          gif.finish();
+          const bytes = gif.bytes();
+          self.postMessage({ type: 'done', buffer: bytes.buffer }, [bytes.buffer]);
+        };`;
+      const blob = new Blob([workerCode], { type: 'application/javascript' });
+      const url = URL.createObjectURL(blob);
+      const worker = new Worker(url);
+      worker.onmessage = e => {
+        if (e.data.type === 'progress') {
+          showMktToast(`⏳ Step 3/4: Encoding GIF… ${e.data.pct}%`, 5000);
+        } else if (e.data.type === 'done') {
+          worker.terminate();
+          URL.revokeObjectURL(url);
+          resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
+        }
+      };
+      worker.onerror = e => { worker.terminate(); reject(new Error(e.message)); };
+      worker.postMessage({ frames: pixelFrames, width: GIF_SIZE, height: GIF_SIZE });
+    });
+
+    showMktToast('⏳ Step 4/4: Uploading GIF…', 5000);
+
+    // STEP 4: Upload GIF to Supabase storage
+    const gifBytes = new Uint8Array(await gifBlob.arrayBuffer());
+    const filename = `gif-calendar/${calendarId}_${Date.now()}.gif`;
+    const { error: upErr } = await sb.storage.from('calendar-images').upload(filename, gifBytes, {
+      contentType: 'image/gif', upsert: true
+    });
+    if (upErr) throw new Error('Upload failed: ' + upErr.message);
+
+    const { data: pub } = sb.storage.from('calendar-images').getPublicUrl(filename);
+    const gifUrl = pub.publicUrl;
+
+    // Also upload first frame as static poster preview (for approval email)
+    const frame1Bytes = Uint8Array.from(atob(frameB64s[0]), c => c.charCodeAt(0));
+    const posterPath = `calendar/${calendarId}_poster_square_${Date.now()}.png`;
+    await sb.storage.from('calendar-images').upload(posterPath, frame1Bytes, { contentType: 'image/png', upsert: true });
+    const { data: posterPub } = sb.storage.from('calendar-images').getPublicUrl(posterPath);
+
+    // STEP 5: Save back to calendar — image_url = GIF, platform_images has static poster too
+    await sb.from('content_calendar').update({
+      image_url: gifUrl,
+      platform_images: { instagram_feed: posterPub.publicUrl, gif: gifUrl },
+      status: 'ready',
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
+
+    clearInterval(ticker);
+    showMktToast(`✅ GIF ready! (${(gifBlob.size / 1024).toFixed(0)} KB) — check email and approve`, 8000);
+    renderCalendar();
+
+  } catch(e) {
+    clearInterval(ticker);
+    showMktToast('❌ ' + e.message, 6000);
+    if (btn) { btn.innerHTML = '✨ Generate GIF'; btn.disabled = false; }
+  }
+}
+
 // ── GIF STUDIO CALENDAR INTEGRATION ──
 // Non-destructive: original poster always preserved
 // primary_content_type tracks what to show; static_poster_id preserved
@@ -5476,6 +5650,7 @@ window.calGeneratePosters = calGeneratePosters;
 window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
 window.calUnapproveItem = calUnapproveItem;
+window.calGenerateGif = calGenerateGif;
 
 window.editCalendarItemById = editCalendarItemById;
 // Expose render functions on window for lazy nav lookup
