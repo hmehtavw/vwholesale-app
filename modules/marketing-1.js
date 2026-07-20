@@ -5642,17 +5642,25 @@ async function calPreviewPost(calendarId) {
     const isGif   = item.content_type === 'gif';
 
     // Pick the right image for each channel
-    const gifUrl = item.platform_images?.gif || null;
-    const staticUrl = item.platform_images?.[ch]
-      || item.platform_images?.instagram_feed
-      || item.image_url
-      || null;
+    const pi = item.platform_images || {};
 
-    // GIF channels get the GIF, size-specific channels get their static poster
-    const gifChannels = ['instagram_feed','threads','whatsapp_story'];
-    const displayImg = isGif
-      ? (gifChannels.includes(ch) ? (gifUrl || staticUrl) : staticUrl)
-      : (item.platform_images?.[ch] || item.image_url || null);
+    // Map each channel to the correct image/GIF
+    // GIF keys in platform_images: square_gif, story_gif, landscape_gif
+    const channelGifKey = {
+      instagram_feed: 'square_gif', threads: 'square_gif',
+      instagram_story: 'story_gif', facebook_story: 'story_gif', whatsapp_story: 'story_gif',
+      facebook_post: 'landscape_gif', youtube: 'landscape_gif', gbp: 'landscape_gif', youtube_shorts: 'story_gif'
+    };
+    const channelStaticKey = {
+      instagram_feed: 'instagram_feed', threads: 'threads',
+      instagram_story: 'instagram_story', facebook_story: 'facebook_story', whatsapp_story: 'whatsapp_story',
+      facebook_post: 'facebook_post', youtube: 'youtube', gbp: 'gbp', youtube_shorts: 'instagram_story'
+    };
+
+    const gifForChannel = isGif ? (pi[channelGifKey[ch]] || null) : null;
+    const staticForChannel = pi[channelStaticKey[ch]] || pi['instagram_feed'] || item.image_url || null;
+    const displayImg = gifForChannel || staticForChannel;
+    const isThisGif = !!gifForChannel;
 
     // Aspect ratio per channel
     const aspectMap = {
@@ -5662,9 +5670,8 @@ async function calPreviewPost(calendarId) {
     };
     const aspect = aspectMap[ch] || '1/1';
     const isStory = ch.includes('story') || ch === 'whatsapp_story' || ch === 'youtube_shorts';
-    const isThisGif = isGif && gifChannels.includes(ch) && !!gifUrl;
 
-    // Stories: show centered at phone-like width, not cut off
+    // Stories: centered phone-like width
     const imgStyle = isStory
       ? 'width:55%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin:0 auto 8px auto;display:block'
       : 'width:100%;aspect-ratio:' + aspect + ';object-fit:cover;border-radius:8px;margin-bottom:8px;display:block';
