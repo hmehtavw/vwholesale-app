@@ -268,19 +268,46 @@ function mktNav(page) {
 
 function setContent(html) { document.getElementById('mkt-content').innerHTML = html; }
 
-function showMktToast(msg, duration = 3000) {
+function showMktToast(msg, duration = 3000, sticky = false) {
   let toast = document.getElementById('mkt-toast');
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'mkt-toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;max-width:90vw';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px 10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;max-width:90vw;display:flex;align-items:center;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.4)';
     document.body.appendChild(toast);
   }
-  toast.textContent = msg;
+  // Clear old close button
+  toast.innerHTML = '';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = msg;
+  toast.appendChild(msgSpan);
+
+  // Determine if sticky — errors and done messages always sticky
+  const isError = msg.startsWith('❌') || msg.startsWith('⚠️');
+  const isDone  = msg.startsWith('✅');
+  const isSticky = sticky || isError || isDone;
+
+  if (isSticky) {
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0 0 0 4px;flex-shrink:0;line-height:1';
+    closeBtn.onclick = () => { toast.style.opacity = '0'; };
+    toast.appendChild(closeBtn);
+    // Color by type
+    toast.style.background = isError ? '#7f1d1d' : isDone ? '#14532d' : '#111827';
+    toast.style.borderLeft = isError ? '3px solid #ef4444' : isDone ? '3px solid #22c55e' : 'none';
+    clearTimeout(toast._t);
+    toast._t = null;
+  } else {
+    toast.style.background = '#111827';
+    toast.style.borderLeft = 'none';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+  }
   toast.style.opacity = '1';
-  clearTimeout(toast._t);
-  toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
+
 
 function renderComingSoon(title) {
   setContent(`<div class="mkt-empty">
@@ -3403,21 +3430,31 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
     ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${(item.hashtags||[]).slice(0,8).map(h=>`<span style="font-size:9px;background:rgba(201,168,76,.12);color:var(--gold);padding:2px 5px;border-radius:4px">${h}</span>`).join('')} <button onclick="navigator.clipboard.writeText('${(item.hashtags||[]).join(' ').replace(/'/g,"\\'")}').then(()=>showMktToast('📋 Hashtags copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:9px;padding:2px 6px">📋 Copy</button></div>`
     : '';
   const platformImages = item.platform_images || {};
+  const isGif = item.content_type === 'gif';
   const imagePreviewSection = !isReel && hasImage ? `
     <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">POSTER PREVIEW</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">${isGif ? 'GIF PREVIEW' : 'POSTER PREVIEW'}</div>
       <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
-        ${[
-          {key:'square',label:'1:1',aspect:'1/1'},
-          {key:'story',label:'9:16',aspect:'9/16'},
-          {key:'landscape',label:'16:9',aspect:'16/9'},
-        ].map(({key,label,aspect}) => {
-          const url = platformImages[key === 'square' ? 'instagram_feed' : key === 'story' ? 'instagram_story' : 'facebook_post'] || (key === 'square' ? item.image_url : null);
-          return url ? `<div style="flex-shrink:0;text-align:center">
-            <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
-            <div style="font-size:9px;color:var(--text3);margin-top:2px">${label}</div>
-          </div>` : '';
-        }).join('')}
+        ${isGif
+          ? `<div style="flex-shrink:0;text-align:center">
+               <img src="${item.image_url}" style="height:120px;width:120px;object-fit:cover;border-radius:5px;border:1px solid var(--gold);display:block" title="Animated GIF">
+               <div style="font-size:9px;color:var(--gold);margin-top:2px">✨ GIF</div>
+             </div>
+             ${platformImages.instagram_feed ? `<div style="flex-shrink:0;text-align:center">
+               <img src="${platformImages.instagram_feed}" style="height:120px;width:120px;object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
+               <div style="font-size:9px;color:var(--text3);margin-top:2px">Static poster</div>
+             </div>` : ''}`
+          : [
+              {key:'square',label:'1:1',aspect:'1/1'},
+              {key:'story',label:'9:16',aspect:'9/16'},
+              {key:'landscape',label:'16:9',aspect:'16/9'},
+            ].map(({key,label,aspect}) => {
+              const url = platformImages[key === 'square' ? 'instagram_feed' : key === 'story' ? 'instagram_story' : 'facebook_post'] || (key === 'square' ? item.image_url : null);
+              return url ? `<div style="flex-shrink:0;text-align:center">
+                <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
+                <div style="font-size:9px;color:var(--text3);margin-top:2px">${label}</div>
+              </div>` : '';
+            }).join('')}
       </div>
     </div>` : '';
 
@@ -3446,6 +3483,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
           ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
           : isApproved
           ? `<span style="font-size:10px;color:#6ee7b7">📅 Posts at ${item.post_time||'10:00'} IST on ${item.cal_date}</span>`
+          : isGif
+          ? `<span style="font-size:10px;color:var(--text3)">Click ✨ Generate GIF to create</span>`
           : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
         ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
       </div>
