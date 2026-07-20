@@ -5331,33 +5331,53 @@ async function calGenerateGif(calendarId) {
       img.src = 'data:image/png;base64,' + b64;
     });
     const imgs = await Promise.all(frameB64s.map(loadImg));
-    const GIF_SIZE = 540;
-    const FPS = 10;
+    const GIF_SIZE = 480;  // 480 = good quality, manageable file size
+    const FPS = 12;
     const FRAME_DELAY = Math.round(1000 / FPS);
-    const HOLD_FRAMES = Math.round(2.5 * FPS);  // 2.5s hold per frame
-    const FADE_FRAMES = Math.round(0.5 * FPS);   // 0.5s crossfade
+    const HOLD_FRAMES = Math.round(2.0 * FPS);   // 2s per frame
+    const FADE_FRAMES = Math.round(0.8 * FPS);   // 0.8s smooth crossfade
 
+    // Two canvases for proper alpha blending between frames
     const canvas = document.createElement('canvas');
     canvas.width = GIF_SIZE; canvas.height = GIF_SIZE;
     const ctx = canvas.getContext('2d');
+
+    const offscreen = document.createElement('canvas');
+    offscreen.width = GIF_SIZE; offscreen.height = GIF_SIZE;
+    const octx = offscreen.getContext('2d');
+
     const pixelFrames = [];
 
     for (let fi = 0; fi < imgs.length; fi++) {
       const img = imgs[fi];
       const nextImg = imgs[(fi + 1) % imgs.length];
+
+      // Hold: current frame static
       for (let f = 0; f < HOLD_FRAMES; f++) {
         ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.globalAlpha = 1;
         ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
         pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
       }
+
+      // Crossfade: blend current → next using pixel interpolation
+      // Draw both to separate canvases, mix pixel by pixel
+      ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+      ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
+      const pixA = ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data;
+
+      octx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+      octx.drawImage(nextImg, 0, 0, GIF_SIZE, GIF_SIZE);
+      const pixB = octx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data;
+
       for (let f = 0; f < FADE_FRAMES; f++) {
-        const alpha = (f + 1) / (FADE_FRAMES + 1);
-        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.globalAlpha = 1; ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.globalAlpha = alpha; ctx.drawImage(nextImg, 0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.globalAlpha = 1;
-        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+        const t = (f + 1) / (FADE_FRAMES + 1); // 0→1
+        const blended = new Uint8ClampedArray(pixA.length);
+        for (let p = 0; p < pixA.length; p++) {
+          blended[p] = Math.round(pixA[p] * (1 - t) + pixB[p] * t);
+        }
+        const imgData = new ImageData(blended, GIF_SIZE, GIF_SIZE);
+        ctx.putImageData(imgData, 0, 0);
+        pixelFrames.push({ data: Array.from(blended), delay: FRAME_DELAY });
       }
     }
 
@@ -5629,15 +5649,38 @@ async function calPreviewPost(calendarId) {
     const isVideo = item.content_type === 'reel';
     const isGif   = item.content_type === 'gif';
 
-    const mediaHtml = platformImg
+    // Use correct image per platform
+    const gifUrl = item.platform_images?.gif || null;
+    const displayImg = isGif
+      ? (gifUrl || platformImg)       // GIF posts: show the actual GIF
+      : platformImg;
+
+    // Correct aspect ratio per channel — show full image, no cropping
+    const aspectMap = {
+      instagram_feed: '1/1', threads: '1/1',
+      instagram_story: '9/16', facebook_story: '9/16', youtube_shorts: '9/16', whatsapp_story: '9/16',
+      facebook_post: '1.91/1', youtube: '16/9', gbp: '4/3'
+    };
+    const aspect = aspectMap[ch] || '1/1';
+    const isStory = ch.includes('story') || ch === 'whatsapp_story' || ch === 'youtube_shorts';
+    const imgW = isStory ? '56%' : '100%';
+
+    const mediaHtml = displayImg
       ? isVideo
-        ? `<video src="${platformImg}" style="${iStyle}" controls muted playsinline></video>`
-        : `<img src="${platformImg}" style="${iStyle}" onerror="this.style.display='none'">`
-      : `<div style="background:var(--bg1);border-radius:8px;${noImgH};display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+        ? `<video src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#000" controls muted playsinline></video>`
+        : `<img src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:contain;border-radius:8px;margin-bottom:10px;display:block;background:#f5f0e8" onerror="this.style.display='none'">`
+      : `<div style="width:${imgW};aspect-ratio:${aspect};background:var(--bg2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:10px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+
+    const downloadLink = displayImg
+      ? `<a href="${displayImg}" download target="_blank" style="font-size:10px;color:var(--gold);text-decoration:none;display:inline-block;margin-top:6px">⬇ Download ${isGif?'GIF':'Image'}</a>`
+      : '';
 
     return `
     <div style="background:var(--bg3);border-radius:10px;padding:14px;border:1px solid ${isPending?'rgba(245,158,11,.4)':'var(--border)'}">
-      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px;display:flex;align-items:center;gap:6px">${c.icon} ${c.name}${isPending?'<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:600">⏳ PENDING ACTIVATION</span>':''}</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text1);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+        <span>${c.icon} ${c.name}${isPending?'<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:600;margin-left:6px">⏳ PENDING</span>':''}</span>
+        ${downloadLink}
+      </div>
       ${mediaHtml}
       <div style="font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-wrap">${adapted.replace(/</g,'&lt;')}</div>
     </div>`;
