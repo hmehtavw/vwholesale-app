@@ -3535,7 +3535,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         ${item.content_type==='gif'
           ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
              ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>
-             <button onclick="calEditOfferBadge('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Re-encode GIF with different offer text — FREE, no API cost">✏️ Edit Offer</button>` : ''}`
+             <button onclick="calPreviewDraggableBadge('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Drag badge to reposition, add music, re-encode — zero AI cost">✏️ Edit Offer</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
@@ -6110,7 +6110,8 @@ async function calApplyOfferBadge(calendarId) {
   const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
   const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
   const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === musicId);
-  const hasMusic = !!musicTrack?.url;
+  const musicURL = mktGetMusicURL(musicId);
+  const hasMusic = !!musicURL;
   document.getElementById('edit-offer-popup')?.remove();
 
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
@@ -6228,7 +6229,7 @@ async function calApplyOfferBadge(calendarId) {
     if (hasMusic && newPI['instagram_feed']) {
       showMktToast('⏳ Exporting MP4 with music…', 5000);
       try {
-        const mp4Blob = await mktExportMP4WithMusic(newPI['instagram_feed'], newOffer, animStyle, musicTrack.url, 480, 480);
+        const mp4Blob = await mktExportMP4WithMusic(newPI['instagram_feed'], newOffer, animStyle, musicURL, 480, 480);
         if (mp4Blob) {
           const mp4Bytes = new Uint8Array(await mp4Blob.arrayBuffer());
           const mp4Path = 'gif-calendar/' + calendarId + '_music_' + ts + '.' + (mp4Blob.type.includes('mp4') ? 'mp4' : 'webm');
@@ -6260,10 +6261,238 @@ async function calApplyOfferBadge(calendarId) {
   }
 }
 
-window.calEditOfferBadge = calEditOfferBadge;
-window.calApplyOfferBadge = calApplyOfferBadge;
+// ── DRAGGABLE OFFER BADGE PREVIEW ──
+// Shows poster with draggable badge — saves position then re-encodes
+async function calPreviewDraggableBadge(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) return;
+  const pi = item.platform_images || {};
+  const posterUrl = pi.instagram_feed || item.image_url;
+  if (!posterUrl) { showMktNotif('❌ No poster image found'); return; }
 
-// ── MP4 EXPORT WITH MUSIC via MediaRecorder + AudioContext ──
+  const currentOffer = pi.offer_text || '';
+  // Default badge position as percentage of poster size
+  let badgePosX = pi.badge_pos_x ?? 50; // % from left
+  let badgePosY = pi.badge_pos_y ?? 75; // % from top
+
+  const pop = document.createElement('div');
+  pop.id = 'badge-preview-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+
+  pop.innerHTML = `
+    <div style="background:#1e293b;border-radius:14px;padding:20px;max-width:560px;width:100%;border:1px solid #334155">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div>
+          <div style="font-size:15px;font-weight:900;color:#f1f5f9">🎯 Position Offer Badge</div>
+          <div style="font-size:10px;color:#64748b;margin-top:2px">Drag the gold badge to reposition it on the poster</div>
+        </div>
+        <button onclick="document.getElementById('badge-preview-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:4px">OFFER TEXT</label>
+        <input id="badge-offer-text" value="${currentOffer}" placeholder="e.g. Starts @ ₹59/SFT"
+          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box">
+      </div>
+
+      <!-- Poster with draggable badge -->
+      <div id="badge-poster-container" style="position:relative;display:inline-block;width:100%;margin-bottom:14px;border-radius:8px;overflow:hidden;cursor:crosshair">
+        <img id="badge-poster-img" src="${posterUrl}" style="width:100%;display:block;border-radius:8px">
+        <div id="draggable-badge" style="position:absolute;left:${badgePosX}%;top:${badgePosY}%;transform:translate(-50%,-50%);background:#C9A84C;color:#111;font-weight:900;font-size:13px;padding:8px 18px;border-radius:20px;cursor:grab;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap;user-select:none;border:2px solid #fff">
+          ${currentOffer || '💰 Offer Badge'}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('badge-preview-popup').remove()"
+          style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
+        <button onclick="calSaveBadgePosition('${calendarId}')"
+          style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">✅ Save & Re-encode</button>
+      </div>
+    </div>`;
+
+  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  document.body.appendChild(pop);
+
+  // Update badge text live as user types
+  document.getElementById('badge-offer-text').addEventListener('input', e => {
+    document.getElementById('draggable-badge').textContent = e.target.value || '💰 Offer Badge';
+  });
+
+  // Make badge draggable
+  const badge = document.getElementById('draggable-badge');
+  const container = document.getElementById('badge-poster-container');
+  let dragging = false, startX, startY, startLeft, startTop;
+
+  badge.addEventListener('mousedown', e => {
+    dragging = true;
+    badge.style.cursor = 'grabbing';
+    const rect = badge.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = parseFloat(badge.style.left); startTop = parseFloat(badge.style.top);
+    e.preventDefault();
+  });
+
+  // Touch support
+  badge.addEventListener('touchstart', e => {
+    dragging = true;
+    const t = e.touches[0];
+    startX = t.clientX; startY = t.clientY;
+    startLeft = parseFloat(badge.style.left); startTop = parseFloat(badge.style.top);
+    e.preventDefault();
+  }, { passive: false });
+
+  const onMove = (clientX, clientY) => {
+    if (!dragging) return;
+    const cRect = container.getBoundingClientRect();
+    const dx = ((clientX - startX) / cRect.width) * 100;
+    const dy = ((clientY - startY) / cRect.height) * 100;
+    const newLeft = Math.max(10, Math.min(90, startLeft + dx));
+    const newTop  = Math.max(5,  Math.min(95, startTop + dy));
+    badge.style.left = newLeft + '%';
+    badge.style.top  = newTop + '%';
+    badgePosX = newLeft; badgePosY = newTop;
+  };
+
+  document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  document.addEventListener('mouseup', () => { dragging = false; badge.style.cursor = 'grab'; });
+  document.addEventListener('touchmove', e => { const t = e.touches[0]; onMove(t.clientX, t.clientY); }, { passive: true });
+  document.addEventListener('touchend', () => { dragging = false; });
+
+  // Store final position on save
+  badge._getPosX = () => badgePosX;
+  badge._getPosY = () => badgePosY;
+}
+
+async function calSaveBadgePosition(calendarId) {
+  const badge = document.getElementById('draggable-badge');
+  const newOffer = document.getElementById('badge-offer-text')?.value.trim() || '';
+  const posX = parseFloat(badge.style.left); // % from left
+  const posY = parseFloat(badge.style.top);  // % from top
+  document.getElementById('badge-preview-popup').remove();
+
+  // Get current anim style from item
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  const animStyle = item?.platform_images?.anim_style || 'cinematic';
+
+  // Re-encode with saved position
+  await calApplyOfferBadgeWithPos(calendarId, newOffer, animStyle, posX, posY);
+}
+window.calPreviewDraggableBadge = calPreviewDraggableBadge;
+window.calSaveBadgePosition = calSaveBadgePosition;
+
+
+
+// Re-encode with explicit badge position (posX, posY as % of canvas)
+async function calApplyOfferBadgeWithPos(calendarId, newOffer, animStyle, posXPct, posYPct) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktNotif('❌ Post not found'); return; }
+  const pi = item.platform_images || {};
+  if (!pi.instagram_feed && !pi.instagram_story && !pi.facebook_post) {
+    showMktNotif('❌ No poster images — generate animated GIF first'); return;
+  }
+
+  let secs = 0;
+  showMktToast('⏳ Re-encoding with new badge position… 0s', 5000);
+  const ticker = setInterval(() => { secs+=3; showMktToast('⏳ Re-encoding… '+secs+'s', 5000); }, 3000);
+
+  try {
+    const libResp = await fetch('/assets/gifenc-worker.js');
+    const libSrc = await libResp.text();
+    const loadImgUrl = url => new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+    const FORMATS = [
+      {key:'square',gifW:480,gifH:480,staticKey:'instagram_feed'},
+      {key:'story',gifW:320,gifH:480,staticKey:'instagram_story'},
+      {key:'landscape',gifW:480,gifH:320,staticKey:'facebook_post'},
+    ];
+    const ts=Date.now();
+    const newPI={...pi,offer_text:newOffer,badge_pos_x:posXPct,badge_pos_y:posYPct,anim_style:animStyle};
+    let totalKb=0;
+    const isCinematic=animStyle==='cinematic';
+
+    for (const fmt of FORMATS) {
+      const srcUrl=pi[fmt.staticKey]; if(!srcUrl) continue;
+      showMktToast('⏳ Re-encoding '+fmt.key+'…',5000);
+      try {
+        const img=await loadImgUrl(srcUrl);
+        const W=fmt.gifW,H=fmt.gifH;
+        const DELAY=80,FADE=8,HOLD=36,TOTAL=HOLD+FADE*2;
+        const bs=Math.min(W/img.naturalWidth,H/img.naturalHeight);
+        const bW=img.naturalWidth*bs,bH=img.naturalHeight*bs;
+        const bX=(W-bW)/2,bY=(H-bH)/2;
+        const can=document.createElement('canvas');can.width=W;can.height=H;
+        const ctx=can.getContext('2d');
+        const frames=[];
+
+        // Badge position in canvas pixels from percentages
+        const badgeCX = (posXPct / 100) * W;
+        const badgeCY = (posYPct / 100) * H;
+
+        for (let f=0;f<TOTAL;f++) {
+          const t=f/(TOTAL-1);
+          const fadeAlpha=f<FADE?f/FADE:f>TOTAL-FADE?(TOTAL-f)/FADE:1;
+          const textT=f<FADE?0:Math.min(1,(f-FADE)/(HOLD*0.6));
+          ctx.clearRect(0,0,W,H);
+          const zoom=isCinematic?1.0+0.05*t:1.0;
+          ctx.drawImage(img,bX-(bW*(zoom-1)/2),bY-(bH*(zoom-1)/2),bW*zoom,bH*zoom);
+          if(!isCinematic){const pulse=0.4+0.6*Math.sin(t*Math.PI*6);ctx.strokeStyle='rgba(201,168,76,'+(0.3+0.7*pulse)+')';ctx.lineWidth=Math.round(W*0.01);ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);}
+
+          if(newOffer&&textT>0.35){
+            const popT=Math.min(1,(textT-0.35)/0.4);
+            const bounce=isCinematic?(popT<0.65?popT/0.65:1+0.1*Math.sin((popT-0.65)/0.35*Math.PI)):(popT<0.6?popT/0.6:1+0.2*Math.sin((popT-0.6)/0.4*Math.PI));
+            ctx.save();
+            ctx.font='bold '+Math.round(W*0.055)+'px Arial';
+            const bW2=Math.min(W*0.72,ctx.measureText(newOffer).width+W*0.1);
+            const bH2=Math.round(W*0.1);
+            // Use saved position
+            ctx.translate(badgeCX,badgeCY+(1-bounce)*H*0.05);
+            ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
+            ctx.shadowColor='rgba(0,0,0,0.5)';ctx.shadowBlur=Math.round(W*0.025);ctx.shadowOffsetY=Math.round(W*0.008);
+            ctx.fillStyle='#C9A84C';ctx.beginPath();ctx.roundRect(-bW2/2,-bH2/2,bW2,bH2,bH2*0.3);ctx.fill();
+            ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+            ctx.fillStyle='#111';ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillText(newOffer,0,0);ctx.textBaseline='alphabetic';ctx.textAlign='left';ctx.restore();
+          }
+          if(fadeAlpha<1){ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')';ctx.fillRect(0,0,W,H);}
+          frames.push({data:Array.from(ctx.getImageData(0,0,W,H).data),delay:DELAY});
+        }
+
+        const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+        const lUrl=URL.createObjectURL(new Blob([libSrc],{type:'application/javascript'}));
+        const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
+        const gifBlob=await new Promise((resolve,reject)=>{
+          const worker=new Worker(wUrl);
+          worker.onmessage=e=>{if(e.data.type==='progress')showMktToast('⏳ '+fmt.key+' '+e.data.pct+'%',3000);else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}};
+          worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
+          worker.postMessage({frames,width:W,height:H});
+        });
+
+        const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
+        const {error:ge}=await sb.storage.from('calendar-images').upload('gif-calendar/'+calendarId+'_pos_'+fmt.key+'_'+ts+'.gif',gifBytes,{contentType:'image/gif',upsert:true});
+        if(!ge){
+          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl('gif-calendar/'+calendarId+'_pos_'+fmt.key+'_'+ts+'.gif');
+          newPI[fmt.key+'_gif']=gp.publicUrl;
+          if(fmt.key==='square'){newPI['gif']=gp.publicUrl;newPI['square_gif']=gp.publicUrl;}
+          if(fmt.key==='story')newPI['story_gif']=gp.publicUrl;
+          if(fmt.key==='landscape')newPI['landscape_gif']=gp.publicUrl;
+          totalKb+=Math.round(gifBlob.size/1024);
+        }
+      } catch(e){console.warn('pos re-encode failed',fmt.key,e);}
+    }
+
+    await sb.from('content_calendar').update({image_url:newPI['gif']||newPI['instagram_feed'],platform_images:newPI,updated_at:new Date().toISOString()}).eq('id',calendarId);
+    clearInterval(ticker);
+    showMktNotif('✅ Badge repositioned & GIF re-encoded ('+totalKb+' KB)');
+    saveToHistory(calendarId,'gif_animated',{image_url:newPI['gif'],platform_images:newPI,anim_style:animStyle,offer_text:newOffer,prompt_summary:'Badge repositioned to '+Math.round(posXPct)+'%,'+Math.round(posYPct)+'%'});
+    renderCalendar();
+  } catch(e){
+    clearInterval(ticker);
+    showMktNotif('❌ Re-encode failed: '+e.message);
+  }
+}
+window.calApplyOfferBadgeWithPos = calApplyOfferBadgeWithPos;
+
+
 async function mktExportMP4WithMusic(posterUrl, offerText, animStyle, musicUrl, W, H) {
   // Load poster image
   const img = await new Promise((res, rej) => {
@@ -6686,38 +6915,61 @@ async function calRegenerateItem(calendarId) {
 
 // ── ROYALTY-FREE MUSIC TRACKS ──
 const MKT_MUSIC_TRACKS = [
-  { id:'none',       label:'No Music',          url:null,              mood:'silent' },
-  { id:'upbeat1',    label:'Upbeat Corporate',   url:'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3', mood:'upbeat' },
-  { id:'upbeat2',    label:'Happy & Energetic',  url:'https://cdn.pixabay.com/download/audio/2022/03/15/audio_8cb3e8d07f.mp3', mood:'upbeat' },
-  { id:'cinematic1', label:'Soft Cinematic',     url:'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c6ff1cca.mp3', mood:'cinematic' },
-  { id:'cinematic2', label:'Premium Ambient',    url:'https://cdn.pixabay.com/download/audio/2021/11/13/audio_9e4e298ae6.mp3', mood:'cinematic' },
-  { id:'inspire1',   label:'Inspiring Rise',     url:'https://cdn.pixabay.com/download/audio/2022/10/25/audio_913fb13a2b.mp3', mood:'upbeat' },
+  { id:'none',       label:'No Music',            url:null,  mood:'silent' },
+  { id:'upbeat1',    label:'Upbeat Corporate',     url:'https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3', mood:'upbeat' },
+  { id:'upbeat2',    label:'Happy & Energetic',    url:'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3', mood:'upbeat' },
+  { id:'upbeat3',    label:'Positive Motivation',  url:'https://assets.mixkit.co/music/preview/mixkit-hip-hop-02-738.mp3', mood:'upbeat' },
+  { id:'cinematic1', label:'Soft Cinematic',       url:'https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3', mood:'cinematic' },
+  { id:'cinematic2', label:'Premium Ambient',      url:'https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3', mood:'cinematic' },
+  { id:'inspire1',   label:'Inspiring Rise',       url:'https://assets.mixkit.co/music/preview/mixkit-feeling-happy-5.mp3', mood:'upbeat' },
+  { id:'upload',     label:'Upload Your Track',    url:'__upload__', mood:'custom' },
 ];
 
 function mktMusicPickerHTML(selectedId = 'none') {
+  const moodIcon = m => m==='upbeat'?'⚡':m==='cinematic'?'🎬':m==='custom'?'📁':'🔇';
   return `<div style="margin-bottom:16px">
-    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC <span style="font-weight:400;color:#475569">(optional)</span></label>
-    <div style="display:flex;flex-direction:column;gap:6px">
+    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC <span style="font-weight:400;color:#475569">(optional — license-free)</span></label>
+    <div style="display:flex;flex-direction:column;gap:5px">
       ${MKT_MUSIC_TRACKS.map(t => `
         <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${t.id===selectedId?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-${t.id}">
           <input type="radio" name="mkt-music" value="${t.id}" ${t.id===selectedId?'checked':''} style="display:none">
-          <span style="font-size:16px">${t.id==='none'?'🔇':t.mood==='upbeat'?'⚡':'🎬'}</span>
+          <span style="font-size:15px">${moodIcon(t.mood)}</span>
           <span style="font-size:12px;color:#f1f5f9;font-weight:600;flex:1">${t.label}</span>
-          ${t.url ? `<button onclick="event.preventDefault();mktPreviewMusic('${t.id}')" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer">▶ Preview</button>` : ''}
+          ${t.url && t.url !== '__upload__' ? `<button onclick="event.preventDefault();mktPreviewMusic('${t.id}')" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer">▶ Preview</button>` : ''}
+          ${t.url === '__upload__' ? `<input type="file" id="music-upload-input" accept="audio/*" onchange="mktHandleMusicUpload(this)" style="font-size:10px;color:#64748b;width:120px">` : ''}
         </label>`).join('')}
     </div>
-    <div style="font-size:10px;color:#475569;margin-top:6px">Music exports as MP4 video (not GIF) — works on Instagram, Facebook, WhatsApp</div>
+    <div style="font-size:10px;color:#475569;margin-top:6px">With music → exports as MP4 (works on Instagram, Facebook, WhatsApp, YouTube)</div>
   </div>`;
 }
 
 let _musicPreviewAudio = null;
+let _uploadedMusicURL = null; // blob URL for uploaded track
+
+function mktHandleMusicUpload(input) {
+  const file = input?.files?.[0];
+  if (!file) return;
+  if (_uploadedMusicURL) URL.revokeObjectURL(_uploadedMusicURL);
+  _uploadedMusicURL = URL.createObjectURL(file);
+  // Auto-select the upload option
+  const radio = document.querySelector('input[name="mkt-music"][value="upload"]');
+  if (radio) { radio.checked = true; mktBindMusicPicker(); }
+  showMktToast('✅ Track loaded: ' + file.name.slice(0, 30), 3000);
+}
+window.mktHandleMusicUpload = mktHandleMusicUpload;
+
+function mktGetMusicURL(trackId) {
+  if (trackId === 'upload') return _uploadedMusicURL;
+  return MKT_MUSIC_TRACKS.find(t => t.id === trackId)?.url || null;
+}
+
 function mktPreviewMusic(trackId) {
   if (_musicPreviewAudio) { _musicPreviewAudio.pause(); _musicPreviewAudio = null; }
-  const track = MKT_MUSIC_TRACKS.find(t => t.id === trackId);
-  if (!track?.url) return;
-  _musicPreviewAudio = new Audio(track.url);
-  _musicPreviewAudio.volume = 0.5;
-  _musicPreviewAudio.play().catch(() => {});
+  const url = mktGetMusicURL(trackId);
+  if (!url) return;
+  _musicPreviewAudio = new Audio(url);
+  _musicPreviewAudio.volume = 0.6;
+  _musicPreviewAudio.play().catch(e => showMktToast('❌ Preview failed: ' + e.message, 3000));
   setTimeout(() => { if (_musicPreviewAudio) { _musicPreviewAudio.pause(); _musicPreviewAudio = null; } }, 8000);
 }
 window.mktPreviewMusic = mktPreviewMusic;
