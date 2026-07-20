@@ -5286,54 +5286,73 @@ function showGifOptionsPopup(calendarId) {
 
   const pop = document.createElement('div');
   pop.id = 'gif-options-popup';
-  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
-  pop.innerHTML = `
-    <div style="background:#1e293b;border-radius:14px;padding:24px;max-width:380px;width:100%;border:1px solid #334155">
-      <div style="font-size:16px;font-weight:900;color:#f1f5f9;margin-bottom:4px">✨ Generate Animated GIF</div>
-      <div style="font-size:11px;color:#64748b;margin-bottom:20px">Poster is generated first, then text animates on top</div>
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
 
-      <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TAG <span style="color:#475569;font-weight:400">(optional)</span></label>
-        <input id="gif-offer-input" type="text" placeholder="e.g. ₹299/sq.ft · 20% OFF · Free Delivery today"
-          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
-        <div style="font-size:10px;color:#475569;margin-top:4px">Animates as a pop-up badge on the poster. Leave blank for no price.</div>
+  pop.innerHTML = `
+    <div style="background:#1e293b;border-radius:16px;padding:24px;max-width:420px;width:100%;border:1px solid #334155">
+      <div style="font-size:17px;font-weight:900;color:#f1f5f9;margin-bottom:4px">✨ Generate GIF</div>
+      <div style="font-size:11px;color:#64748b;margin-bottom:20px">Choose what type of GIF you want to create</div>
+
+      <!-- MODE CHOOSER -->
+      <div id="gif-mode-section" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
+
+        <button id="gif-mode-slideshow" onclick="gifSelectMode('slideshow')"
+          style="background:#0f172a;border:2px solid #c9a84c;border-radius:12px;padding:16px 10px;cursor:pointer;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">🎞️</div>
+          <div style="font-size:12px;font-weight:800;color:#c9a84c;margin-bottom:4px">Poster Slideshow</div>
+          <div style="font-size:9px;color:#64748b;line-height:1.4">3 AI posters generated<br>crossfade slideshow GIF</div>
+        </button>
+
+        <button id="gif-mode-animated" onclick="gifSelectMode('animated')"
+          style="background:#0f172a;border:2px solid #334155;border-radius:12px;padding:16px 10px;cursor:pointer;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">🎬</div>
+          <div style="font-size:12px;font-weight:800;color:#f1f5f9;margin-bottom:4px">Animated Poster</div>
+          <div style="font-size:9px;color:#64748b;line-height:1.4">1 poster + text & offer<br>animates on top</div>
+        </button>
+
       </div>
 
-      <div style="margin-bottom:20px">
-        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎬 ANIMATION STYLE</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <label id="style-cinematic" style="background:#0f172a;border:2px solid #c9a84c;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
-            <input type="radio" name="gif-anim-style" value="cinematic" checked style="display:none">
-            <div style="font-size:18px;margin-bottom:4px">🎬</div>
-            <div style="font-size:11px;font-weight:700;color:#c9a84c">Cinematic</div>
-            <div style="font-size:9px;color:#64748b;margin-top:2px">Fade · Slide · Premium</div>
-          </label>
-          <label id="style-energetic" style="background:#0f172a;border:2px solid #334155;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
-            <input type="radio" name="gif-anim-style" value="energetic" style="display:none">
-            <div style="font-size:18px;margin-bottom:4px">⚡</div>
-            <div style="font-size:11px;font-weight:700;color:#f1f5f9">Energetic</div>
-            <div style="font-size:9px;color:#64748b;margin-top:2px">Bounce · Pop · Offer</div>
-          </label>
+      <!-- ANIMATED POSTER OPTIONS (hidden by default) -->
+      <div id="gif-animated-opts" style="display:none">
+        <div style="border-top:1px solid #334155;padding-top:16px;margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TAG <span style="font-weight:400;color:#475569">(optional)</span></label>
+          <input id="gif-offer-input" type="text" placeholder="e.g. ₹299/sq.ft  ·  20% OFF today  ·  Free Delivery"
+            style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
+          <div style="font-size:10px;color:#475569;margin-top:4px">Animates as a pop-up badge. Leave blank for no price overlay.</div>
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎨 ANIMATION STYLE</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label id="style-cinematic" style="background:#0f172a;border:2px solid #c9a84c;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+              <input type="radio" name="gif-anim-style" value="cinematic" checked style="display:none">
+              <div style="font-size:18px;margin-bottom:3px">🎬</div>
+              <div style="font-size:11px;font-weight:700;color:#c9a84c">Cinematic</div>
+              <div style="font-size:9px;color:#64748b;margin-top:2px">Fade · Slide · Premium</div>
+            </label>
+            <label id="style-energetic" style="background:#0f172a;border:2px solid #334155;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+              <input type="radio" name="gif-anim-style" value="energetic" style="display:none">
+              <div style="font-size:18px;margin-bottom:3px">⚡</div>
+              <div style="font-size:11px;font-weight:700;color:#f1f5f9">Energetic</div>
+              <div style="font-size:9px;color:#64748b;margin-top:2px">Bounce · Pop · Offer</div>
+            </label>
+          </div>
         </div>
       </div>
 
+      <!-- ACTIONS -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button onclick="document.getElementById('gif-options-popup').remove()" 
+        <button onclick="document.getElementById('gif-options-popup').remove()"
           style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">
           Cancel
         </button>
-        <button onclick="
-          const offer = document.getElementById('gif-offer-input').value.trim();
-          const style = document.querySelector('input[name=gif-anim-style]:checked').value;
-          document.getElementById('gif-options-popup').remove();
-          calGenerateGif('${calendarId}', offer, style);
-        " style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-          ✨ Generate GIF
+        <button id="gif-generate-btn" onclick="gifStartGenerate('${calendarId}')"
+          style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+          ✨ Generate Slideshow GIF
         </button>
       </div>
     </div>`;
 
-  // Radio style toggle
+  // Mode toggle logic
   pop.querySelectorAll('input[name="gif-anim-style"]').forEach(radio => {
     radio.addEventListener('change', () => {
       document.getElementById('style-cinematic').style.borderColor = '#334155';
@@ -5344,14 +5363,60 @@ function showGifOptionsPopup(calendarId) {
 
   pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
   document.body.appendChild(pop);
-  setTimeout(() => document.getElementById('gif-offer-input')?.focus(), 100);
 }
 
+function gifSelectMode(mode) {
+  const slideshowBtn = document.getElementById('gif-mode-slideshow');
+  const animatedBtn  = document.getElementById('gif-mode-animated');
+  const animOpts     = document.getElementById('gif-animated-opts');
+  const generateBtn  = document.getElementById('gif-generate-btn');
+
+  if (mode === 'slideshow') {
+    slideshowBtn.style.borderColor = '#c9a84c';
+    slideshowBtn.querySelector('div:nth-child(2)').style.color = '#c9a84c';
+    animatedBtn.style.borderColor  = '#334155';
+    animatedBtn.querySelector('div:nth-child(2)').style.color = '#f1f5f9';
+    animOpts.style.display = 'none';
+    generateBtn.textContent = '✨ Generate Slideshow GIF';
+    generateBtn.dataset.mode = 'slideshow';
+  } else {
+    animatedBtn.style.borderColor = '#c9a84c';
+    animatedBtn.querySelector('div:nth-child(2)').style.color = '#c9a84c';
+    slideshowBtn.style.borderColor  = '#334155';
+    slideshowBtn.querySelector('div:nth-child(2)').style.color = '#c9a84c';
+    animOpts.style.display = 'block';
+    generateBtn.textContent = '🎬 Generate Animated GIF';
+    generateBtn.dataset.mode = 'animated';
+    setTimeout(() => document.getElementById('gif-offer-input')?.focus(), 50);
+  }
+}
+
+function gifStartGenerate(calendarId) {
+  const btn = document.getElementById('gif-generate-btn');
+  const mode = btn?.dataset.mode || 'slideshow';
+  const offer = mode === 'animated' ? (document.getElementById('gif-offer-input')?.value.trim() || '') : '';
+  const style = mode === 'animated' ? (document.querySelector('input[name=gif-anim-style]:checked')?.value || 'cinematic') : '';
+  document.getElementById('gif-options-popup').remove();
+  calGenerateGif(calendarId, mode === 'slideshow' ? null : offer, mode === 'slideshow' ? 'slideshow' : style);
+}
+
+
 async function calGenerateGif(calendarId, offerText, animStyle) {
-  // If no offerText passed, show quick popup first
-  if (offerText === undefined) {
+  // If not called from popup yet, show chooser first
+  if (offerText === undefined && animStyle === undefined) {
     return showGifOptionsPopup(calendarId);
   }
+
+  // Route to correct mode
+  const isSlideshow = animStyle === 'slideshow' || offerText === null;
+  if (isSlideshow) {
+    return calGenerateGifSlideshow(calendarId);
+  } else {
+    return calGenerateGifAnimated(calendarId, offerText || '', animStyle || 'cinematic');
+  }
+}
+
+async function calGenerateGifSlideshow(calendarId) {
 
   const btn = document.getElementById(`gif-btn-${calendarId}`);
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
@@ -5692,7 +5757,204 @@ async function calGenerateGif(calendarId, offerText, animStyle) {
   }
 }
 
-// ── GIF STUDIO CALENDAR INTEGRATION ──
+async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
+  const btn = document.getElementById(`gif-btn-${calendarId}`);
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+  let secs = 0;
+  showMktToast('⏳ Generating Animated Poster GIF…', 5000);
+  const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Animated GIF… ' + secs + 's', 5000); }, 3000);
+
+  try {
+    // Generate captions
+    const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    if (!item) throw new Error('Item not found');
+
+    if (!item.caption) {
+      showMktToast('⏳ Generating caption…', 5000);
+      const br = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'generate_brief', brief:[item.topic,item.notes].filter(Boolean).join('. '), tone:'product' })
+      });
+      const bd = await br.json();
+      if (bd.ok) await sb.from('content_calendar').update({
+        caption:bd.content.caption_en, caption_te:bd.content.caption_te,
+        hashtags:(bd.content.hashtags||'').split(' ').filter(h=>h.startsWith('#')),
+        poster_message:bd.content.poster_message||'', updated_at:new Date().toISOString()
+      }).eq('id',calendarId);
+    }
+
+    // Generate posters via generate-poster-v2 (consistent logo)
+    showMktToast('⏳ Generating poster (~3 min)…', 5000);
+    const pr = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body: JSON.stringify({ action:'generate_posters', calendar_id:parseInt(calendarId) })
+    });
+    const pd = await pr.json();
+    if (!pd.ok) throw new Error('Poster generation failed: ' + (pd.error||''));
+
+    const { data: pi_item } = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
+    const pi = pi_item?.platform_images || {};
+
+    // Load gifenc
+    const libResp = await fetch('/assets/gifenc-worker.js');
+    if (!libResp.ok) throw new Error('gifenc load failed');
+    const libSrc = await libResp.text();
+
+    const loadImg = url => new Promise((res,rej) => {
+      const i = new Image(); i.crossOrigin='anonymous';
+      i.onload=()=>res(i); i.onerror=rej; i.src=url;
+    });
+
+    const GIF_FORMATS = [
+      { key:'square',    gifW:480, gifH:480, staticKey:'instagram_feed'  },
+      { key:'story',     gifW:320, gifH:480, staticKey:'instagram_story' },
+      { key:'landscape', gifW:480, gifH:320, staticKey:'facebook_post'   },
+    ];
+
+    const ts = Date.now();
+    const platformImages = { ...pi };
+    let totalKb = 0;
+
+    for (const fmt of GIF_FORMATS) {
+      const url = pi[fmt.staticKey]; if (!url) continue;
+      showMktToast('⏳ Animating ' + fmt.key + ' GIF…', 5000);
+
+      try {
+        const img = await loadImg(url);
+        const W = fmt.gifW, H = fmt.gifH;
+        const DELAY = 80; // ~12fps
+        const FADE = 8, HOLD = 36; // 0.64s fade, 2.88s hold
+        const TOTAL = HOLD + FADE * 2;
+
+        const can = document.createElement('canvas'); can.width=W; can.height=H;
+        const ctx = can.getContext('2d');
+        const headline = pi_item?.topic||'';
+        const isCinematic = (animStyle||'cinematic') === 'cinematic';
+        const baseScale = Math.min(W/img.naturalWidth, H/img.naturalHeight);
+        const bW = img.naturalWidth*baseScale, bH = img.naturalHeight*baseScale;
+        const bX = (W-bW)/2, bY = (H-bH)/2;
+
+        const frames = [];
+        for (let f = 0; f < TOTAL; f++) {
+          const t = f/(TOTAL-1);
+          const fadeAlpha = f<FADE ? f/FADE : f>TOTAL-FADE ? (TOTAL-f)/FADE : 1;
+          const textT = f<FADE ? 0 : Math.min(1,(f-FADE)/(HOLD*0.6));
+
+          ctx.clearRect(0,0,W,H);
+          ctx.fillStyle='#111'; ctx.fillRect(0,0,W,H);
+
+          if (isCinematic) {
+            const zoom = 1.0 + 0.06*t;
+            ctx.drawImage(img, bX-(bW*(zoom-1)/2), bY-(bH*(zoom-1)/2), bW*zoom, bH*zoom);
+            if (textT>0) {
+              const grad=ctx.createLinearGradient(0,H*0.5,0,H);
+              grad.addColorStop(0,'rgba(0,0,0,0)'); grad.addColorStop(1,'rgba(0,0,0,0.75)');
+              ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+            }
+            if (textT>0 && headline) {
+              const slideX = W*(-1+Math.min(1,textT*2.5));
+              ctx.save(); ctx.translate(Math.min(0,slideX),0);
+              ctx.font='bold '+Math.round(W*0.052)+'px Arial';
+              ctx.fillStyle='#C9A84C';
+              const lines = headline.length>28 ? [headline.slice(0,24)+'…'] : [headline];
+              lines.forEach((l,i)=>ctx.fillText(l, W*0.06, H*0.72+i*Math.round(W*0.06)));
+              ctx.restore();
+            }
+            if (offerText && textT>0.45) {
+              const popT = Math.min(1,(textT-0.45)/0.35);
+              const bounce = popT<0.65 ? popT/0.65 : 1+0.12*Math.sin((popT-0.65)/0.35*Math.PI);
+              const badgeY = H*0.84+(1-bounce)*H*0.1;
+              ctx.font='bold '+Math.round(W*0.046)+'px Arial';
+              const bW2=Math.min(W*0.82,ctx.measureText(offerText).width+W*0.1);
+              const bH2=Math.round(W*0.082);
+              ctx.fillStyle='#C9A84C';
+              ctx.beginPath(); ctx.roundRect((W-bW2)/2,badgeY-bH2*0.72,bW2,bH2,bH2*0.28); ctx.fill();
+              ctx.fillStyle='#111'; ctx.textAlign='center';
+              ctx.fillText(offerText,W/2,badgeY); ctx.textAlign='left';
+            }
+          } else {
+            ctx.drawImage(img,bX,bY,bW,bH);
+            const pulse=0.5+0.5*Math.sin(t*Math.PI*7);
+            ctx.strokeStyle='rgba(201,168,76,'+(0.25+0.75*pulse)+')';
+            ctx.lineWidth=Math.round(W*0.011); ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);
+            if (textT>0 && headline) {
+              const b=textT<0.5?4*textT*textT*textT:1-Math.pow(-2*textT+2,3)/2;
+              ctx.font='bold '+Math.round(W*0.053)+'px Arial';
+              ctx.strokeStyle='rgba(0,0,0,0.8)'; ctx.lineWidth=Math.round(W*0.007);
+              ctx.strokeText(headline.slice(0,26),W*0.05,H*0.24-(1-b)*H*0.15);
+              ctx.fillStyle='#fff'; ctx.fillText(headline.slice(0,26),W*0.05,H*0.24-(1-b)*H*0.15);
+            }
+            if (offerText && textT>0.35) {
+              const popT=Math.min(1,(textT-0.35)/0.4);
+              const sc=popT<0.6?popT/0.6:1+0.18*Math.sin((popT-0.6)/0.4*Math.PI);
+              ctx.save(); ctx.translate(W/2,H*0.8); ctx.scale(sc,sc);
+              ctx.font='bold '+Math.round(W*0.05)+'px Arial';
+              const bW2=Math.min(W*0.8,ctx.measureText(offerText).width+W*0.12);
+              const bH2=Math.round(W*0.096);
+              ctx.fillStyle='#ef4444'; ctx.beginPath();
+              ctx.roundRect(-bW2/2,-bH2*0.72,bW2,bH2,bH2*0.25); ctx.fill();
+              ctx.fillStyle='#fff'; ctx.textAlign='center';
+              ctx.fillText(offerText,0,0); ctx.textAlign='left'; ctx.restore();
+            }
+          }
+          if (fadeAlpha<1) { ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')'; ctx.fillRect(0,0,W,H); }
+          frames.push({ data:Array.from(ctx.getImageData(0,0,W,H).data), delay:DELAY });
+        }
+
+        // Encode
+        const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+        const lBlob=new Blob([libSrc],{type:'application/javascript'});
+        const lUrl=URL.createObjectURL(lBlob);
+        const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
+        const gifBlob = await new Promise((resolve,reject) => {
+          const worker=new Worker(wUrl);
+          worker.onmessage=e=>{
+            if(e.data.type==='progress') showMktToast('⏳ Encoding '+fmt.key+'… '+e.data.pct+'%',3000);
+            else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}
+          };
+          worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
+          worker.postMessage({frames,width:W,height:H});
+        });
+
+        const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
+        const gifPath='gif-calendar/'+calendarId+'_animated_'+fmt.key+'_'+ts+'.gif';
+        const {error:ge}=await sb.storage.from('calendar-images').upload(gifPath,gifBytes,{contentType:'image/gif',upsert:true});
+        if (!ge) {
+          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl(gifPath);
+          platformImages[fmt.key+'_gif']=gp.publicUrl;
+          if (fmt.key==='square') platformImages['gif']=gp.publicUrl;
+          totalKb+=Math.round(gifBlob.size/1024);
+        }
+      } catch(e) { console.warn('Animated GIF failed for',fmt.key,e); }
+    }
+
+    // Save
+    const token=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
+    const expires=new Date(Date.now()+48*3600*1000).toISOString();
+    await sb.from('content_calendar').update({
+      image_url:platformImages['gif']||platformImages['instagram_feed'],
+      platform_images:platformImages, status:'ready',
+      approval_token:token, approval_token_expires_at:expires,
+      post_time:'10:00', updated_at:new Date().toISOString()
+    }).eq('id',calendarId);
+
+    try {
+      await fetch(MKT_SB_URL+'/functions/v1/content-pipeline',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'send_approval_notification',calendar_id:parseInt(calendarId)})});
+    } catch(e) {}
+
+    clearInterval(ticker);
+    showMktNotif('✅ Animated GIF ready! ('+totalKb+' KB) — '+animStyle+' style — approval email sent');
+    renderCalendar();
+
+  } catch(e) {
+    clearInterval(ticker);
+    showMktNotif('❌ Animated GIF failed: '+e.message);
+    if (btn) { btn.innerHTML='✨ Generate GIF'; btn.disabled=false; }
+    renderCalendar();
+  }
+}
+
+
 // Non-destructive: original poster always preserved
 // primary_content_type tracks what to show; static_poster_id preserved
 async function calOpenGifStudio(calendarId) {
@@ -6041,6 +6303,8 @@ window.calApproveItem = calApproveItem;
 window.calUnapproveItem = calUnapproveItem;
 window.calGenerateGif = calGenerateGif;
 window.showGifOptionsPopup = showGifOptionsPopup;
+window.gifSelectMode = gifSelectMode;
+window.gifStartGenerate = gifStartGenerate;
 
 window.editCalendarItemById = editCalendarItemById;
 // Expose render functions on window for lazy nav lookup
