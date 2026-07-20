@@ -5795,54 +5795,67 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
       }).eq('id',calendarId);
     }
 
-    // Use existing posters if already generated, otherwise generate
-    let pi_item_check = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
-    let pi = pi_item_check.data?.platform_images || {};
-    const hasPosters = pi.instagram_feed && pi.instagram_story && pi.facebook_post;
+    // Animated GIF: ALWAYS generate a fresh poster as the background
+    // This ensures a clean new design — not the old poster with overlaid text
+    const { data: reloadedItem } = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
+    const posterMsg = reloadedItem?.poster_message || reloadedItem?.topic || item.topic;
+    const headline = posterMsg;
 
-    if (!hasPosters) {
-      showMktToast('⏳ Generating posters (~3 min)…', 5000);
-      const pr = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
-        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({ action:'generate_posters', calendar_id:parseInt(calendarId) })
-      });
-      const pd = await pr.json();
-      if (!pd.ok) throw new Error('Poster generation failed: ' + (pd.error||''));
-      // Reload
-      pi_item_check = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
-      pi = pi_item_check.data?.platform_images || {};
-    } else {
-      showMktToast('⏳ Using existing posters — encoding animated GIF…', 4000);
+    const tl = item.topic.toLowerCase();
+    const scheme = tl.includes('granite')||tl.includes('tile')||tl.includes('marble')
+      ? 'elegant cream and charcoal with natural stone textures and warm wood tones'
+      : tl.includes('paint') ? 'warm terracotta and sage green palette'
+      : tl.includes('bathroom')||tl.includes('sanitaryware') ? 'clean white and chrome with soft spa lighting'
+      : 'warm professional cream and charcoal';
+
+    // Generate 3 format posters via content-pipeline (fast, ~90s each, no timeout)
+    const GIF_FORMATS_ANIM = [
+      { key:'square',    size:'1024x1024', gifW:480, gifH:480,
+        prompt:`Premium marketing poster background for V Wholesale. ${scheme}. Clean Indian lifestyle interior photography for: ${item.topic}. V Wholesale brand top. No text overlays in center — leave space for animated text. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Square 1:1.` },
+      { key:'story',     size:'1024x1536', gifW:320, gifH:480,
+        prompt:`Premium vertical Story poster background for V Wholesale. ${scheme}. Tall 9:16. Indian lifestyle photo for: ${item.topic}. V Wholesale brand top. Leave center open for animated text overlay. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale.` },
+      { key:'landscape', size:'1536x1024', gifW:480, gifH:320,
+        prompt:`Premium landscape poster background for V Wholesale. ${scheme}. Wide 16:9. Indian lifestyle photo right side for: ${item.topic}. V Wholesale brand left. Leave left area open for animated text. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale.` },
+    ];
+
+    const animPosterB64s = {};
+    for (const fmt of GIF_FORMATS_ANIM) {
+      showMktToast('⏳ Generating ' + fmt.key + ' background…', 5000);
+      try {
+        const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+          method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body: JSON.stringify({ action:'generate_poster_image', prompt:fmt.prompt, size:fmt.size })
+        });
+        const d = await res.json();
+        if (d.ok && d.b64) animPosterB64s[fmt.key] = { b64:d.b64, fmt };
+      } catch(e) { console.warn('Background failed for', fmt.key, e); }
     }
 
-    const pi_item = pi_item_check.data;
+    if (!Object.keys(animPosterB64s).length) throw new Error('Background generation failed for all formats');
+
+    const pi_item = reloadedItem;
 
     // Load gifenc
     const libResp = await fetch('/assets/gifenc-worker.js');
     if (!libResp.ok) throw new Error('gifenc load failed');
     const libSrc = await libResp.text();
 
-    const loadImg = url => new Promise((res,rej) => {
-      const i = new Image(); i.crossOrigin='anonymous';
-      i.onload=()=>res(i); i.onerror=rej; i.src=url;
+    const loadImgB64 = b64 => new Promise((res,rej) => {
+      const i = new Image();
+      i.onload=()=>res(i); i.onerror=rej;
+      i.src='data:image/png;base64,' + b64;
     });
 
-    const GIF_FORMATS = [
-      { key:'square',    gifW:480, gifH:480, staticKey:'instagram_feed'  },
-      { key:'story',     gifW:320, gifH:480, staticKey:'instagram_story' },
-      { key:'landscape', gifW:480, gifH:320, staticKey:'facebook_post'   },
-    ];
-
     const ts = Date.now();
-    const platformImages = { ...pi };
+    const platformImages = { ...(pi_item?.platform_images||{}) };
     let totalKb = 0;
 
-    for (const fmt of GIF_FORMATS) {
-      const url = pi[fmt.staticKey]; if (!url) continue;
-      showMktToast('⏳ Animating ' + fmt.key + ' GIF…', 5000);
+    for (const key of Object.keys(animPosterB64s)) {
+      const { b64, fmt } = animPosterB64s[key];
+      showMktToast('⏳ Animating ' + key + ' GIF…', 5000);
 
       try {
-        const img = await loadImg(url);
+        const img = await loadImgB64(b64);
         const W = fmt.gifW, H = fmt.gifH;
         const DELAY = 80; // ~12fps
         const FADE = 8, HOLD = 36; // 0.64s fade, 2.88s hold
@@ -5850,7 +5863,7 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
 
         const can = document.createElement('canvas'); can.width=W; can.height=H;
         const ctx = can.getContext('2d');
-        const headline = pi_item?.topic||'';
+        const headline = pi_item?.poster_message || pi_item?.topic || item.topic || '';
         const isCinematic = (animStyle||'cinematic') === 'cinematic';
         const baseScale = Math.min(W/img.naturalWidth, H/img.naturalHeight);
         const bW = img.naturalWidth*baseScale, bH = img.naturalHeight*baseScale;
@@ -5931,7 +5944,7 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
         const gifBlob = await new Promise((resolve,reject) => {
           const worker=new Worker(wUrl);
           worker.onmessage=e=>{
-            if(e.data.type==='progress') showMktToast('⏳ Encoding '+fmt.key+'… '+e.data.pct+'%',3000);
+            if(e.data.type==='progress') showMktToast('⏳ Encoding '+key+'… '+e.data.pct+'%',3000);
             else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}
           };
           worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
@@ -5939,14 +5952,32 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
         });
 
         const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
-        const gifPath='gif-calendar/'+calendarId+'_animated_'+fmt.key+'_'+ts+'.gif';
+        const gifPath='gif-calendar/'+calendarId+'_animated_'+key+'_'+ts+'.gif';
         const {error:ge}=await sb.storage.from('calendar-images').upload(gifPath,gifBytes,{contentType:'image/gif',upsert:true});
         if (!ge) {
           const {data:gp}=sb.storage.from('calendar-images').getPublicUrl(gifPath);
-          platformImages[fmt.key+'_gif']=gp.publicUrl;
-          if (fmt.key==='square') platformImages['gif']=gp.publicUrl;
+          platformImages[key+'_gif']=gp.publicUrl;
+          if (key==='square') {
+            platformImages['gif']=gp.publicUrl;
+            platformImages['square_gif']=gp.publicUrl;
+          }
+          if (key==='story') platformImages['story_gif']=gp.publicUrl;
+          if (key==='landscape') platformImages['landscape_gif']=gp.publicUrl;
           totalKb+=Math.round(gifBlob.size/1024);
         }
+
+        // Also upload static PNG for non-GIF channels
+        try {
+          const pngBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+          const pngPath = 'calendar/'+calendarId+'_anim_'+key+'_'+ts+'.png';
+          const {error:pe}=await sb.storage.from('calendar-images').upload(pngPath,pngBytes,{contentType:'image/png',upsert:true});
+          if (!pe) {
+            const {data:pp}=sb.storage.from('calendar-images').getPublicUrl(pngPath);
+            if (key==='square') { platformImages['instagram_feed']=pp.publicUrl; platformImages['threads']=pp.publicUrl; }
+            if (key==='story') { platformImages['instagram_story']=pp.publicUrl; platformImages['facebook_story']=pp.publicUrl; platformImages['whatsapp_story']=pp.publicUrl; }
+            if (key==='landscape') { platformImages['facebook_post']=pp.publicUrl; platformImages['youtube']=pp.publicUrl; platformImages['gbp']=pp.publicUrl; }
+          }
+        } catch(e) { console.warn('PNG upload failed', key, e); }
       } catch(e) { console.warn('Animated GIF failed for',fmt.key,e); }
     }
 
