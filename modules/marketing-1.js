@@ -6261,290 +6261,433 @@ async function calApplyOfferBadge(calendarId) {
   }
 }
 
-// ── DRAGGABLE OFFER BADGE PREVIEW ──
-// Shows poster with draggable badge — saves position then re-encodes
+// ── EDITOR: Multi-format poster editor with draggable text boxes + music ──
+// State: one editor session, tracks all text elements and positions per format
+window._editorState = null;
+
 async function calPreviewDraggableBadge(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) return;
   const pi = item.platform_images || {};
-  const posterUrl = pi.instagram_feed || item.image_url;
-  if (!posterUrl) { showMktNotif('❌ No poster image found'); return; }
 
-  const currentOffer = pi.offer_text || '';
-  // Default badge position as percentage of poster size
-  let badgePosX = pi.badge_pos_x ?? 50; // % from left
-  let badgePosY = pi.badge_pos_y ?? 75; // % from top
+  const FORMATS = [
+    { key:'square',    label:'1:1 Feed',    w:480, h:480, imgKey:'instagram_feed'  },
+    { key:'story',     label:'9:16 Story',  w:320, h:480, imgKey:'instagram_story' },
+    { key:'landscape', label:'16:9 FB/YT',  w:480, h:320, imgKey:'facebook_post'   },
+  ];
+
+  // Load saved text elements or create default from offer_text
+  const savedElements = pi.text_elements || [];
+  const defaultElements = savedElements.length ? savedElements : [
+    { id: 1, text: pi.offer_text || '✨ Offer Badge', color:'#111', bg:'#C9A84C', size:18, posX:50, posY:75, bold:true }
+  ];
+
+  window._editorState = {
+    calendarId,
+    pi,
+    formats: FORMATS,
+    activeFormat: 'square',
+    elements: JSON.parse(JSON.stringify(defaultElements)), // deep copy
+    nextId: (defaultElements.length ? Math.max(...defaultElements.map(e=>e.id)) : 0) + 1,
+  };
 
   const pop = document.createElement('div');
-  pop.id = 'badge-preview-popup';
-  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  pop.id = 'badge-editor-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:99999;display:flex;flex-direction:column;overflow:hidden';
+  document.body.appendChild(pop);
+  renderBadgeEditor();
+}
+
+function renderBadgeEditor() {
+  const st = window._editorState;
+  if (!st) return;
+  const pop = document.getElementById('badge-editor-popup');
+  if (!pop) return;
+
+  const fmt = st.formats.find(f => f.key === st.activeFormat);
+  const posterUrl = st.pi[fmt.imgKey] || st.pi['instagram_feed'] || '';
 
   pop.innerHTML = `
-    <div style="background:#1e293b;border-radius:14px;padding:20px;max-width:560px;width:100%;border:1px solid #334155">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div>
-          <div style="font-size:15px;font-weight:900;color:#f1f5f9">🎯 Position Offer Badge</div>
-          <div style="font-size:10px;color:#64748b;margin-top:2px">Drag the gold badge to reposition it on the poster</div>
+    <div style="display:flex;height:100vh;overflow:hidden">
+      <!-- LEFT: Canvas area -->
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:#0a0a0a;overflow:auto">
+        <!-- Format tabs -->
+        <div style="display:flex;gap:6px;margin-bottom:12px">
+          ${st.formats.map(f => `
+            <button onclick="editorSwitchFormat('${f.key}')"
+              style="background:${f.key===st.activeFormat?'#c9a84c':'#1e293b'};color:${f.key===st.activeFormat?'#111':'#94a3b8'};border:1px solid ${f.key===st.activeFormat?'#c9a84c':'#334155'};padding:5px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700">
+              ${f.label}
+            </button>`).join('')}
         </div>
-        <button onclick="document.getElementById('badge-preview-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>
-      </div>
-
-      <div style="margin-bottom:10px">
-        <label style="font-size:10px;font-weight:700;color:#94a3b8;display:block;margin-bottom:4px">OFFER TEXT</label>
-        <input id="badge-offer-text" value="${currentOffer}" placeholder="e.g. Starts @ ₹59/SFT"
-          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:6px;padding:8px 10px;color:#f1f5f9;font-size:13px;box-sizing:border-box">
-      </div>
-
-      <!-- Poster with draggable badge -->
-      <div id="badge-poster-container" style="position:relative;display:inline-block;width:100%;margin-bottom:14px;border-radius:8px;overflow:hidden;cursor:crosshair">
-        <img id="badge-poster-img" src="${posterUrl}" style="width:100%;display:block;border-radius:8px">
-        <div id="draggable-badge" style="position:absolute;left:${badgePosX}%;top:${badgePosY}%;transform:translate(-50%,-50%);background:#C9A84C;color:#111;font-weight:900;font-size:13px;padding:8px 18px;border-radius:20px;cursor:grab;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap;user-select:none;border:2px solid #fff">
-          ${currentOffer || '💰 Offer Badge'}
+        <!-- Poster canvas -->
+        <div id="editor-canvas-wrap" style="position:relative;border-radius:8px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.6)">
+          <img src="${posterUrl}" style="display:block;max-width:min(${fmt.w}px, 55vw);max-height:70vh;object-fit:contain" onerror="this.style.opacity=0.3">
+          <div id="editor-canvas-overlay" style="position:absolute;top:0;left:0;right:0;bottom:0">
+            ${st.elements.map(el => renderEditorElement(el)).join('')}
+          </div>
         </div>
+        <div style="font-size:10px;color:#475569;margin-top:8px">Drag text boxes to reposition · Click to select · Edit in right panel</div>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <button onclick="document.getElementById('badge-preview-popup').remove()"
-          style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
-        <button onclick="calSaveBadgePosition('${calendarId}')"
-          style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">✅ Save & Re-encode</button>
+      <!-- RIGHT: Controls panel -->
+      <div style="width:280px;background:#1e293b;border-left:1px solid #334155;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:16px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;font-weight:900;color:#f1f5f9">✏️ Poster Editor</div>
+          <button onclick="document.getElementById('badge-editor-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:18px">✕</button>
+        </div>
+
+        <div style="flex:1;overflow-y:auto;padding:14px">
+          <!-- Text elements -->
+          <div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:8px">TEXT BOXES</div>
+          <div id="editor-elements-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            ${st.elements.map(el => `
+              <div style="background:#0f172a;border-radius:8px;padding:10px;border:1px solid #334155">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                  <span style="font-size:11px;font-weight:700;color:#94a3b8">Text ${el.id}</span>
+                  <button onclick="editorRemoveElement(${el.id})" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px">✕</button>
+                </div>
+                <input value="${el.text}" onchange="editorUpdateElement(${el.id},'text',this.value)"
+                  style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:5px;padding:5px 8px;color:#f1f5f9;font-size:12px;box-sizing:border-box;margin-bottom:5px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:5px">
+                  <div>
+                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">BG Color</div>
+                    <input type="color" value="${el.bg||'#C9A84C'}" onchange="editorUpdateElement(${el.id},'bg',this.value)"
+                      style="width:100%;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:#0f172a">
+                  </div>
+                  <div>
+                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">Text Color</div>
+                    <input type="color" value="${el.color||'#111111'}" onchange="editorUpdateElement(${el.id},'color',this.value)"
+                      style="width:100%;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:#0f172a">
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
+                  <div>
+                    <div style="font-size:9px;color:#64748b;margin-bottom:2px">Size</div>
+                    <input type="range" min="10" max="48" value="${el.size||16}" oninput="editorUpdateElement(${el.id},'size',+this.value)"
+                      style="width:100%">
+                  </div>
+                  <label style="display:flex;align-items:center;gap:4px;cursor:pointer;margin-top:10px">
+                    <input type="checkbox" ${el.bold?'checked':''} onchange="editorUpdateElement(${el.id},'bold',this.checked)">
+                    <span style="font-size:11px;color:#94a3b8">Bold</span>
+                  </label>
+                </div>
+              </div>`).join('')}
+          </div>
+
+          <button onclick="editorAddElement()"
+            style="width:100%;background:#0f172a;border:1px dashed #334155;color:#94a3b8;padding:8px;border-radius:8px;cursor:pointer;font-size:12px;margin-bottom:16px">
+            + Add Text Box
+          </button>
+
+          <!-- Music picker -->
+          ${mktMusicPickerHTML('none')}
+        </div>
+
+        <!-- Save button -->
+        <div style="padding:14px;border-top:1px solid #334155">
+          <div style="font-size:10px;color:#475569;margin-bottom:8px;text-align:center">Applies to all 3 formats (each uses its own poster)</div>
+          <button onclick="editorSaveAndEncode()"
+            style="width:100%;background:#c9a84c;border:none;color:#111;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900">
+            ✅ Save & Re-encode All Formats
+          </button>
+        </div>
       </div>
     </div>`;
 
-  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
-  document.body.appendChild(pop);
-
-  // Update badge text live as user types
-  document.getElementById('badge-offer-text').addEventListener('input', e => {
-    document.getElementById('draggable-badge').textContent = e.target.value || '💰 Offer Badge';
-  });
-
-  // Make badge draggable
-  const badge = document.getElementById('draggable-badge');
-  const container = document.getElementById('badge-poster-container');
-  let dragging = false, startX, startY, startLeft, startTop;
-
-  badge.addEventListener('mousedown', e => {
-    dragging = true;
-    badge.style.cursor = 'grabbing';
-    const rect = badge.getBoundingClientRect();
-    startX = e.clientX; startY = e.clientY;
-    startLeft = parseFloat(badge.style.left); startTop = parseFloat(badge.style.top);
-    e.preventDefault();
-  });
-
-  // Touch support
-  badge.addEventListener('touchstart', e => {
-    dragging = true;
-    const t = e.touches[0];
-    startX = t.clientX; startY = t.clientY;
-    startLeft = parseFloat(badge.style.left); startTop = parseFloat(badge.style.top);
-    e.preventDefault();
-  }, { passive: false });
-
-  const onMove = (clientX, clientY) => {
-    if (!dragging) return;
-    const cRect = container.getBoundingClientRect();
-    const dx = ((clientX - startX) / cRect.width) * 100;
-    const dy = ((clientY - startY) / cRect.height) * 100;
-    const newLeft = Math.max(10, Math.min(90, startLeft + dx));
-    const newTop  = Math.max(5,  Math.min(95, startTop + dy));
-    badge.style.left = newLeft + '%';
-    badge.style.top  = newTop + '%';
-    badgePosX = newLeft; badgePosY = newTop;
-  };
-
-  document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
-  document.addEventListener('mouseup', () => { dragging = false; badge.style.cursor = 'grab'; });
-  document.addEventListener('touchmove', e => { const t = e.touches[0]; onMove(t.clientX, t.clientY); }, { passive: true });
-  document.addEventListener('touchend', () => { dragging = false; });
-
-  // Store final position on save
-  badge._getPosX = () => badgePosX;
-  badge._getPosY = () => badgePosY;
+  // Bind music picker radio styling
+  mktBindMusicPicker();
+  // Bind drag on all elements
+  setTimeout(editorBindDrag, 50);
 }
 
-async function calSaveBadgePosition(calendarId) {
-  const badge = document.getElementById('draggable-badge');
-  const newOffer = document.getElementById('badge-offer-text')?.value.trim() || '';
-  const posX = parseFloat(badge.style.left); // % from left
-  const posY = parseFloat(badge.style.top);  // % from top
-  document.getElementById('badge-preview-popup').remove();
-
-  // Get current anim style from item
-  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-  const animStyle = item?.platform_images?.anim_style || 'cinematic';
-
-  // Re-encode with saved position
-  await calApplyOfferBadgeWithPos(calendarId, newOffer, animStyle, posX, posY);
+function renderEditorElement(el) {
+  return `<div id="el-${el.id}" data-elid="${el.id}"
+    style="position:absolute;left:${el.posX}%;top:${el.posY}%;transform:translate(-50%,-50%);
+           background:${el.bg||'#C9A84C'};color:${el.color||'#111'};
+           font-size:${el.size||16}px;font-weight:${el.bold?'900':'400'};
+           padding:6px 16px;border-radius:20px;cursor:grab;
+           box-shadow:0 3px 12px rgba(0,0,0,.5);white-space:nowrap;
+           border:2px solid rgba(255,255,255,.3);user-select:none;
+           max-width:90%">
+    ${el.text}
+  </div>`;
 }
-window.calPreviewDraggableBadge = calPreviewDraggableBadge;
-window.calSaveBadgePosition = calSaveBadgePosition;
 
+function editorBindDrag() {
+  const overlay = document.getElementById('editor-canvas-overlay');
+  const wrap = document.getElementById('editor-canvas-wrap');
+  if (!overlay || !wrap) return;
 
+  overlay.querySelectorAll('[data-elid]').forEach(el => {
+    let dragging = false, startX, startY, startPosX, startPosY;
+    const elId = parseInt(el.dataset.elid);
 
-// Re-encode with explicit badge position (posX, posY as % of canvas)
-async function calApplyOfferBadgeWithPos(calendarId, newOffer, animStyle, posXPct, posYPct) {
-  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-  if (!item) { showMktNotif('❌ Post not found'); return; }
-  const pi = item.platform_images || {};
-  if (!pi.instagram_feed && !pi.instagram_story && !pi.facebook_post) {
-    showMktNotif('❌ No poster images — generate animated GIF first'); return;
+    const onStart = (cx, cy) => {
+      dragging = true;
+      el.style.cursor = 'grabbing';
+      startX = cx; startY = cy;
+      const st = window._editorState;
+      const elem = st.elements.find(e => e.id === elId);
+      startPosX = elem.posX; startPosY = elem.posY;
+    };
+    const onMove = (cx, cy) => {
+      if (!dragging) return;
+      const rect = wrap.getBoundingClientRect();
+      const dx = ((cx - startX) / rect.width) * 100;
+      const dy = ((cy - startY) / rect.height) * 100;
+      const newX = Math.max(5, Math.min(95, startPosX + dx));
+      const newY = Math.max(5, Math.min(95, startPosY + dy));
+      el.style.left = newX + '%';
+      el.style.top  = newY + '%';
+      const elem = window._editorState.elements.find(e => e.id === elId);
+      if (elem) { elem.posX = newX; elem.posY = newY; }
+    };
+    const onEnd = () => { dragging = false; el.style.cursor = 'grab'; };
+
+    el.addEventListener('mousedown', e => { onStart(e.clientX, e.clientY); e.preventDefault(); });
+    el.addEventListener('touchstart', e => { const t=e.touches[0]; onStart(t.clientX, t.clientY); }, { passive:true });
+    document.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+    document.addEventListener('mouseup', onEnd);
+    document.addEventListener('touchmove', e => { const t=e.touches[0]; onMove(t.clientX,t.clientY); }, { passive:true });
+    document.addEventListener('touchend', onEnd);
+  });
+}
+
+function editorSwitchFormat(key) {
+  window._editorState.activeFormat = key;
+  renderBadgeEditor();
+}
+
+function editorAddElement() {
+  const st = window._editorState;
+  st.elements.push({ id: st.nextId++, text: 'New Text', color:'#fff', bg:'#1e293b', size:16, posX:50, posY:50, bold:false });
+  renderBadgeEditor();
+}
+
+function editorRemoveElement(id) {
+  window._editorState.elements = window._editorState.elements.filter(e => e.id !== id);
+  renderBadgeEditor();
+}
+
+function editorUpdateElement(id, prop, val) {
+  const el = window._editorState.elements.find(e => e.id === id);
+  if (el) { el[prop] = val; }
+  // Re-render only the overlay element
+  const domEl = document.getElementById('el-' + id);
+  if (domEl) {
+    if (prop === 'text') domEl.textContent = val;
+    if (prop === 'bg') domEl.style.background = val;
+    if (prop === 'color') domEl.style.color = val;
+    if (prop === 'size') domEl.style.fontSize = val + 'px';
+    if (prop === 'bold') domEl.style.fontWeight = val ? '900' : '400';
   }
+}
+
+async function editorSaveAndEncode() {
+  const st = window._editorState;
+  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
+  const musicURL = mktGetMusicURL(musicId);
+  const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === musicId);
+  document.getElementById('badge-editor-popup').remove();
+
+  const calendarId = st.calendarId;
+  const pi = st.pi;
+  const elements = st.elements;
+  const animStyle = pi.anim_style || 'cinematic';
+  const isCinematic = animStyle === 'cinematic';
 
   let secs = 0;
-  showMktToast('⏳ Re-encoding with new badge position… 0s', 5000);
+  const hasMusic = !!musicURL;
+  showMktToast('⏳ Re-encoding all formats… 0s (zero AI cost)', 5000);
   const ticker = setInterval(() => { secs+=3; showMktToast('⏳ Re-encoding… '+secs+'s', 5000); }, 3000);
 
   try {
     const libResp = await fetch('/assets/gifenc-worker.js');
     const libSrc = await libResp.text();
     const loadImgUrl = url => new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=rej;i.src=url;});
+
     const FORMATS = [
       {key:'square',gifW:480,gifH:480,staticKey:'instagram_feed'},
       {key:'story',gifW:320,gifH:480,staticKey:'instagram_story'},
       {key:'landscape',gifW:480,gifH:320,staticKey:'facebook_post'},
     ];
-    const ts=Date.now();
-    const newPI={...pi,offer_text:newOffer,badge_pos_x:posXPct,badge_pos_y:posYPct,anim_style:animStyle};
-    let totalKb=0;
-    const isCinematic=animStyle==='cinematic';
+
+    const ts = Date.now();
+    const newPI = { ...pi, text_elements: elements, anim_style: animStyle };
+    // Set offer_text from first element for backward compat
+    if (elements.length) newPI.offer_text = elements[0].text;
+    let totalKb = 0;
+
+    const drawFrame = (ctx, img, W, H, elements, t, textT, isCinematic) => {
+      ctx.clearRect(0,0,W,H);
+      const bs=Math.min(W/img.naturalWidth,H/img.naturalHeight);
+      const bW=img.naturalWidth*bs,bH=img.naturalHeight*bs;
+      const bX=(W-bW)/2,bY=(H-bH)/2;
+      const zoom=isCinematic?1.0+0.05*t:1.0;
+      ctx.drawImage(img,bX-(bW*(zoom-1)/2),bY-(bH*(zoom-1)/2),bW*zoom,bH*zoom);
+      if(!isCinematic){
+        const pulse=0.4+0.6*Math.sin(t*Math.PI*6);
+        ctx.strokeStyle='rgba(201,168,76,'+(0.3+0.7*pulse)+')';
+        ctx.lineWidth=Math.round(W*0.01);
+        ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);
+      }
+      // Draw each text element
+      elements.forEach((el, ei) => {
+        const elDelay = ei * 0.2; // stagger each element
+        const elT = Math.max(0, Math.min(1, (textT - elDelay) / 0.6));
+        if (elT <= 0) return;
+        const bounce = elT < 0.65 ? elT/0.65 : 1 + 0.08*Math.sin((elT-0.65)/0.35*Math.PI);
+        const cx = (el.posX/100)*W;
+        const cy = (el.posY/100)*H;
+        ctx.save();
+        ctx.font=(el.bold?'bold ':'')+Math.round((el.size||16)*(W/480))+'px Arial';
+        const tw=ctx.measureText(el.text).width;
+        const bW2=tw+W*0.06, bH2=(el.size||16)*(W/480)*1.6;
+        ctx.translate(cx, cy+(1-bounce)*H*0.05);
+        ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
+        ctx.shadowColor='rgba(0,0,0,0.4)';ctx.shadowBlur=Math.round(W*0.02);ctx.shadowOffsetY=Math.round(W*0.006);
+        ctx.fillStyle=el.bg||'#C9A84C';
+        ctx.beginPath();ctx.roundRect(-bW2/2,-bH2/2,bW2,bH2,bH2*0.35);ctx.fill();
+        ctx.shadowBlur=0;ctx.shadowOffsetY=0;
+        ctx.fillStyle=el.color||'#111';ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(el.text,0,0);ctx.textBaseline='alphabetic';ctx.textAlign='left';
+        ctx.restore();
+      });
+    };
 
     for (const fmt of FORMATS) {
-      const srcUrl=pi[fmt.staticKey]; if(!srcUrl) continue;
-      showMktToast('⏳ Re-encoding '+fmt.key+'…',5000);
-      try {
-        const img=await loadImgUrl(srcUrl);
-        const W=fmt.gifW,H=fmt.gifH;
+      const srcUrl = pi[fmt.staticKey]; if (!srcUrl) continue;
+      showMktToast('⏳ Encoding '+fmt.label+'…',5000);
+      const img = await loadImgUrl(srcUrl);
+      const W=fmt.gifW,H=fmt.gifH;
+
+      if (hasMusic) {
+        // Export as MP4 with audio for this format
+        showMktToast('⏳ Recording MP4 with music ('+fmt.key+')…',5000);
+        const mp4Blob = await mktExportMP4WithMusic(srcUrl, elements, animStyle, musicURL, W, H, drawFrame);
+        if (mp4Blob) {
+          const mp4Bytes=new Uint8Array(await mp4Blob.arrayBuffer());
+          const ext=mp4Blob.type.includes('mp4')?'mp4':'webm';
+          const path='gif-calendar/'+calendarId+'_mp4_'+fmt.key+'_'+ts+'.'+ext;
+          const {error:me}=await sb.storage.from('calendar-images').upload(path,mp4Bytes,{contentType:mp4Blob.type,upsert:true});
+          if(!me){
+            const {data:mp}=sb.storage.from('calendar-images').getPublicUrl(path);
+            newPI[fmt.key+'_mp4']=mp.publicUrl;
+            if(fmt.key==='square')newPI['mp4_music']=mp.publicUrl;
+            totalKb+=Math.round(mp4Blob.size/1024);
+          }
+        }
+      } else {
+        // Export as GIF
         const DELAY=80,FADE=8,HOLD=36,TOTAL=HOLD+FADE*2;
-        const bs=Math.min(W/img.naturalWidth,H/img.naturalHeight);
-        const bW=img.naturalWidth*bs,bH=img.naturalHeight*bs;
-        const bX=(W-bW)/2,bY=(H-bH)/2;
         const can=document.createElement('canvas');can.width=W;can.height=H;
         const ctx=can.getContext('2d');
         const frames=[];
-
-        // Badge position in canvas pixels from percentages
-        const badgeCX = (posXPct / 100) * W;
-        const badgeCY = (posYPct / 100) * H;
-
-        for (let f=0;f<TOTAL;f++) {
+        for(let f=0;f<TOTAL;f++){
           const t=f/(TOTAL-1);
           const fadeAlpha=f<FADE?f/FADE:f>TOTAL-FADE?(TOTAL-f)/FADE:1;
           const textT=f<FADE?0:Math.min(1,(f-FADE)/(HOLD*0.6));
-          ctx.clearRect(0,0,W,H);
-          const zoom=isCinematic?1.0+0.05*t:1.0;
-          ctx.drawImage(img,bX-(bW*(zoom-1)/2),bY-(bH*(zoom-1)/2),bW*zoom,bH*zoom);
-          if(!isCinematic){const pulse=0.4+0.6*Math.sin(t*Math.PI*6);ctx.strokeStyle='rgba(201,168,76,'+(0.3+0.7*pulse)+')';ctx.lineWidth=Math.round(W*0.01);ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);}
-
-          if(newOffer&&textT>0.35){
-            const popT=Math.min(1,(textT-0.35)/0.4);
-            const bounce=isCinematic?(popT<0.65?popT/0.65:1+0.1*Math.sin((popT-0.65)/0.35*Math.PI)):(popT<0.6?popT/0.6:1+0.2*Math.sin((popT-0.6)/0.4*Math.PI));
-            ctx.save();
-            ctx.font='bold '+Math.round(W*0.055)+'px Arial';
-            const bW2=Math.min(W*0.72,ctx.measureText(newOffer).width+W*0.1);
-            const bH2=Math.round(W*0.1);
-            // Use saved position
-            ctx.translate(badgeCX,badgeCY+(1-bounce)*H*0.05);
-            ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
-            ctx.shadowColor='rgba(0,0,0,0.5)';ctx.shadowBlur=Math.round(W*0.025);ctx.shadowOffsetY=Math.round(W*0.008);
-            ctx.fillStyle='#C9A84C';ctx.beginPath();ctx.roundRect(-bW2/2,-bH2/2,bW2,bH2,bH2*0.3);ctx.fill();
-            ctx.shadowBlur=0;ctx.shadowOffsetY=0;
-            ctx.fillStyle='#111';ctx.textAlign='center';ctx.textBaseline='middle';
-            ctx.fillText(newOffer,0,0);ctx.textBaseline='alphabetic';ctx.textAlign='left';ctx.restore();
-          }
+          drawFrame(ctx,img,W,H,elements,t,textT,isCinematic);
           if(fadeAlpha<1){ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')';ctx.fillRect(0,0,W,H);}
           frames.push({data:Array.from(ctx.getImageData(0,0,W,H).data),delay:DELAY});
         }
-
         const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
         const lUrl=URL.createObjectURL(new Blob([libSrc],{type:'application/javascript'}));
         const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
         const gifBlob=await new Promise((resolve,reject)=>{
           const worker=new Worker(wUrl);
-          worker.onmessage=e=>{if(e.data.type==='progress')showMktToast('⏳ '+fmt.key+' '+e.data.pct+'%',3000);else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}};
+          worker.onmessage=e=>{if(e.data.type==='progress')showMktToast('⏳ GIF '+fmt.key+' '+e.data.pct+'%',3000);else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}};
           worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
           worker.postMessage({frames,width:W,height:H});
         });
-
         const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
-        const {error:ge}=await sb.storage.from('calendar-images').upload('gif-calendar/'+calendarId+'_pos_'+fmt.key+'_'+ts+'.gif',gifBytes,{contentType:'image/gif',upsert:true});
+        const path='gif-calendar/'+calendarId+'_ed_'+fmt.key+'_'+ts+'.gif';
+        const {error:ge}=await sb.storage.from('calendar-images').upload(path,gifBytes,{contentType:'image/gif',upsert:true});
         if(!ge){
-          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl('gif-calendar/'+calendarId+'_pos_'+fmt.key+'_'+ts+'.gif');
+          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl(path);
           newPI[fmt.key+'_gif']=gp.publicUrl;
           if(fmt.key==='square'){newPI['gif']=gp.publicUrl;newPI['square_gif']=gp.publicUrl;}
           if(fmt.key==='story')newPI['story_gif']=gp.publicUrl;
           if(fmt.key==='landscape')newPI['landscape_gif']=gp.publicUrl;
           totalKb+=Math.round(gifBlob.size/1024);
         }
-      } catch(e){console.warn('pos re-encode failed',fmt.key,e);}
+      }
     }
 
-    await sb.from('content_calendar').update({image_url:newPI['gif']||newPI['instagram_feed'],platform_images:newPI,updated_at:new Date().toISOString()}).eq('id',calendarId);
+    await sb.from('content_calendar').update({
+      image_url:newPI['mp4_music']||newPI['gif']||newPI['instagram_feed'],
+      platform_images:newPI, updated_at:new Date().toISOString()
+    }).eq('id',calendarId);
+
     clearInterval(ticker);
-    showMktNotif('✅ Badge repositioned & GIF re-encoded ('+totalKb+' KB)');
-    saveToHistory(calendarId,'gif_animated',{image_url:newPI['gif'],platform_images:newPI,anim_style:animStyle,offer_text:newOffer,prompt_summary:'Badge repositioned to '+Math.round(posXPct)+'%,'+Math.round(posYPct)+'%'});
+    const msg = hasMusic
+      ? '✅ MP4 with '+musicTrack.label+' ready ('+totalKb+' KB) — all 3 formats'
+      : '✅ GIF re-encoded ('+totalKb+' KB) — all 3 formats with correct positions';
+    showMktNotif(msg);
+    saveToHistory(calendarId,'gif_animated',{
+      image_url:newPI['mp4_music']||newPI['gif'],platform_images:newPI,
+      anim_style:animStyle,offer_text:elements[0]?.text,
+      prompt_summary:'Editor: '+(hasMusic?musicTrack.label+' MP4':'GIF')+' — '+elements.length+' text element(s)'
+    });
     renderCalendar();
-  } catch(e){
+  } catch(e) {
     clearInterval(ticker);
-    showMktNotif('❌ Re-encode failed: '+e.message);
+    showMktNotif('❌ Encode failed: '+e.message);
   }
 }
-window.calApplyOfferBadgeWithPos = calApplyOfferBadgeWithPos;
+
+window.calPreviewDraggableBadge = calPreviewDraggableBadge;
+window.renderBadgeEditor = renderBadgeEditor;
+window.editorSwitchFormat = editorSwitchFormat;
+window.editorAddElement = editorAddElement;
+window.editorRemoveElement = editorRemoveElement;
+window.editorUpdateElement = editorUpdateElement;
+window.editorSaveAndEncode = editorSaveAndEncode;
+window.calSaveBadgePosition = function(){}; // legacy no-op
+window.calApplyOfferBadgeWithPos = function(){}; // legacy no-op
 
 
-async function mktExportMP4WithMusic(posterUrl, offerText, animStyle, musicUrl, W, H) {
-  // Load poster image
-  const img = await new Promise((res, rej) => {
+
+async function mktExportMP4WithMusic(posterUrl, elementsOrOffer, animStyle, musicUrl, W, H, drawFrameFn) {
+  const img = await new Promise((res,rej) => {
     const i = new Image(); i.crossOrigin = 'anonymous';
     i.onload = () => res(i); i.onerror = rej; i.src = posterUrl;
   });
 
-  // Load music audio buffer
   const audioCtx = new AudioContext();
   const musicResp = await fetch(musicUrl);
-  if (!musicResp.ok) throw new Error('Music fetch failed');
+  if (!musicResp.ok) throw new Error('Music fetch failed: ' + musicResp.status);
   const musicBuffer = await audioCtx.decodeAudioData(await musicResp.arrayBuffer());
 
-  // Set up canvas
   const can = document.createElement('canvas'); can.width = W; can.height = H;
   const ctx = can.getContext('2d');
-
-  // Mix canvas stream + audio into MediaRecorder
   const videoStream = can.captureStream(30);
   const audioDest = audioCtx.createMediaStreamDestination();
   const musicSource = audioCtx.createBufferSource();
   musicSource.buffer = musicBuffer;
   musicSource.loop = true;
-
-  // Fade out music at end
   const gainNode = audioCtx.createGain();
   gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
   musicSource.connect(gainNode);
   gainNode.connect(audioDest);
   musicSource.start();
 
-  const combined = new MediaStream([
-    ...videoStream.getVideoTracks(),
-    ...audioDest.stream.getAudioTracks()
-  ]);
-
+  const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
   const mimeTypes = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
   const mimeType = mimeTypes.find(m => MediaRecorder.isTypeSupported(m));
-  if (!mimeType) { musicSource.stop(); audioCtx.close(); throw new Error('MediaRecorder not supported'); }
+  if (!mimeType) { musicSource.stop(); await audioCtx.close(); throw new Error('MediaRecorder not supported'); }
 
   const recorder = new MediaRecorder(combined, { mimeType, videoBitsPerSecond: 2500000 });
   const chunks = [];
   recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-  const TOTAL_SEC = 8; // ~10s animation
-  const FADE = 8, HOLD = 36 * 2, TOTAL_FRAMES = HOLD + FADE * 4;
-  const isCinematic = animStyle === 'cinematic';
-  const bScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
-  const bW = img.naturalWidth * bScale, bH = img.naturalHeight * bScale;
-  const bX = (W - bW) / 2, bY = (H - bH) / 2;
+  const TOTAL_SEC = 8;
+  const isCinematic = (animStyle || 'cinematic') === 'cinematic';
+  // Support both old string offer and new elements array
+  const elements = Array.isArray(elementsOrOffer)
+    ? elementsOrOffer
+    : [{ id:1, text:elementsOrOffer||'', color:'#111', bg:'#C9A84C', size:18, posX:50, posY:75, bold:true }];
 
-  // Fade out music last 2s
   gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime + TOTAL_SEC - 2);
   gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + TOTAL_SEC);
 
@@ -6552,45 +6695,22 @@ async function mktExportMP4WithMusic(posterUrl, offerText, animStyle, musicUrl, 
   recorder.start(100);
 
   await new Promise(resolve => {
-    let frameIdx = 0;
     function draw() {
       const elapsed = (performance.now() - startTime) / 1000;
       if (elapsed >= TOTAL_SEC) { recorder.stop(); resolve(); return; }
       const t = elapsed / TOTAL_SEC;
-      const fadeAlpha = elapsed < 0.6 ? elapsed / 0.6 : elapsed > TOTAL_SEC - 0.6 ? (TOTAL_SEC - elapsed) / 0.6 : 1;
-      const textT = elapsed < 0.6 ? 0 : Math.min(1, (elapsed - 0.6) / (TOTAL_SEC * 0.5));
+      const fadeAlpha = elapsed < 0.6 ? elapsed/0.6 : elapsed > TOTAL_SEC-0.6 ? (TOTAL_SEC-elapsed)/0.6 : 1;
+      const textT = elapsed < 0.6 ? 0 : Math.min(1, (elapsed-0.6)/(TOTAL_SEC*0.5));
 
-      ctx.clearRect(0, 0, W, H);
-      const zoom = isCinematic ? 1.0 + 0.05 * t : 1.0;
-      ctx.drawImage(img, bX - (bW * (zoom-1) / 2), bY - (bH * (zoom-1) / 2), bW * zoom, bH * zoom);
-
-      if (!isCinematic) {
-        const pulse = 0.4 + 0.6 * Math.sin(t * Math.PI * 6);
-        ctx.strokeStyle = 'rgba(201,168,76,' + (0.3 + 0.7 * pulse) + ')';
-        ctx.lineWidth = Math.round(W * 0.01);
-        ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
+      if (drawFrameFn) {
+        drawFrameFn(ctx, img, W, H, elements, t, textT, isCinematic);
+      } else {
+        // Fallback simple draw
+        ctx.clearRect(0,0,W,H);
+        const bs=Math.min(W/img.naturalWidth,H/img.naturalHeight);
+        ctx.drawImage(img,(W-img.naturalWidth*bs)/2,(H-img.naturalHeight*bs)/2,img.naturalWidth*bs,img.naturalHeight*bs);
       }
-
-      if (offerText && textT > 0.35) {
-        const popT = Math.min(1, (textT - 0.35) / 0.4);
-        const bounce = isCinematic
-          ? (popT < 0.65 ? popT / 0.65 : 1 + 0.1 * Math.sin((popT - 0.65) / 0.35 * Math.PI))
-          : (popT < 0.6 ? popT / 0.6 : 1 + 0.2 * Math.sin((popT - 0.6) / 0.4 * Math.PI));
-        ctx.save();
-        ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
-        const bW2 = Math.min(W * 0.72, ctx.measureText(offerText).width + W * 0.1);
-        const bH2 = Math.round(W * 0.1);
-        ctx.translate(W / 2, H * 0.75 + (1 - bounce) * H * 0.08);
-        ctx.scale(bounce < 1 ? bounce : 1, bounce < 1 ? bounce : 1);
-        ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = Math.round(W * 0.025); ctx.shadowOffsetY = Math.round(W * 0.008);
-        ctx.fillStyle = '#C9A84C'; ctx.beginPath(); ctx.roundRect(-bW2/2, -bH2/2, bW2, bH2, bH2 * 0.3); ctx.fill();
-        ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-        ctx.fillStyle = '#111'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(offerText, 0, 0); ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
-        ctx.restore();
-      }
-
-      if (fadeAlpha < 1) { ctx.fillStyle = 'rgba(0,0,0,' + (1 - fadeAlpha) + ')'; ctx.fillRect(0, 0, W, H); }
+      if (fadeAlpha < 1) { ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')'; ctx.fillRect(0,0,W,H); }
       requestAnimationFrame(draw);
     }
     draw();
@@ -6598,7 +6718,6 @@ async function mktExportMP4WithMusic(posterUrl, offerText, animStyle, musicUrl, 
 
   musicSource.stop();
   await audioCtx.close();
-
   return new Blob(chunks, { type: mimeType });
 }
 window.mktExportMP4WithMusic = mktExportMP4WithMusic;
