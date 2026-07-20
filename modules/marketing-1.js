@@ -5799,7 +5799,12 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
     // This ensures a clean new design — not the old poster with overlaid text
     const { data: reloadedItem } = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
     const posterMsg = reloadedItem?.poster_message || reloadedItem?.topic || item.topic;
-    const headline = posterMsg;
+    // Clean topic — remove "GIF", "Comparison", "Slideshow" etc from prompt to avoid AI rendering it as text
+    const cleanTopic = item.topic
+      .replace(/\s*[—–-]\s*(GIF|Slideshow|Comparison|Animation|Animated|Video|Reel)\s*/gi, '')
+      .replace(/\b(GIF|Slideshow|Comparison|Animation|Animated)\b/gi, '')
+      .replace(/\s{2,}/g, ' ').trim();
+    const headline = reloadedItem?.poster_message || cleanTopic;
 
     const tl = item.topic.toLowerCase();
     const scheme = tl.includes('granite')||tl.includes('tile')||tl.includes('marble')
@@ -5811,13 +5816,13 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
     // Generate 3 format posters via content-pipeline (fast, ~90s each, no timeout)
     const GIF_FORMATS_ANIM = [
       { key:'square', size:'1024x1024', gifW:480, gifH:480,
-        prompt:`Design a COMPLETE, FULLY FINISHED premium marketing poster for V Wholesale, a home building materials store in Vijayawada, India. Color scheme: ${scheme}. Style: real Indian lifestyle interior photography, editorial magazine quality. REQUIRED elements ALL RENDERED FULLY: 1. "V Wholesale" brand name top-left with tagline "Build Better. Pay Less." 2. Bold headline: "${headline}" 3. Real Indian home interior lifestyle photo as background for: ${item.topic} 4. Supporting line: "${posterMsg}" 5. Product category strip at bottom with icons for: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture 6. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Square 1:1 format. ALL text spelled correctly. No gibberish. No watermark. This is a COMPLETE finished design.`
+        prompt:`Design a COMPLETE premium marketing poster for V Wholesale, Vijayawada. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. INCLUDE: 1. "V Wholesale" brand top-left, tagline "Build Better. Pay Less." 2. Headline: "${headline}" 3. Indian home interior for: ${cleanTopic} 4. Message: "${posterMsg}" 5. Category strip bottom: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture 6. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. IMPORTANT: Do NOT include the word "GIF" anywhere. Square 1:1. All text spelled correctly.`
       },
       { key:'story', size:'1024x1536', gifW:320, gifH:480,
-        prompt:`Design a COMPLETE, FULLY FINISHED premium vertical Story poster for V Wholesale. Tall 9:16 for Instagram Story, WhatsApp Status. Color: ${scheme}. Real Indian lifestyle interior for: ${item.topic}. REQUIRED: "V Wholesale" and "Build Better. Pay Less." at top. Headline: "${headline}" Message: "${posterMsg}" Category strip: Tiles Granite Sanitaryware Paints Plywood Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. Complete finished design.`
+        prompt:`Design a COMPLETE premium vertical Story poster for V Wholesale, Vijayawada. Tall 9:16. Color: ${scheme}. Indian lifestyle interior for: ${cleanTopic}. "V Wholesale" + "Build Better. Pay Less." top. Headline: "${headline}" Message: "${posterMsg}" Category strip: Tiles | Granite | Sanitaryware | Paints | Plywood | Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Do NOT include the word "GIF". All text correct.`
       },
       { key:'landscape', size:'1536x1024', gifW:480, gifH:320,
-        prompt:`Design a COMPLETE, FULLY FINISHED premium landscape poster for V Wholesale. Wide 16:9 for Facebook YouTube GBP. Color: ${scheme}. Left 40%: "V Wholesale", "Build Better. Pay Less.", headline "${headline}", message "${posterMsg}". Right 60%: Indian interior photo for ${item.topic}. Category strip bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. Complete finished design.`
+        prompt:`Design a COMPLETE premium landscape poster for V Wholesale, Vijayawada. Wide 16:9. Color: ${scheme}. Left: "V Wholesale", "Build Better. Pay Less.", headline "${headline}", message "${posterMsg}". Right: Indian interior for ${cleanTopic}. Category strip bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. Do NOT include the word "GIF". All text correct.`
       },
     ]
     const animPosterB64s = {};
@@ -5892,36 +5897,44 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
             ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, W-ctx.lineWidth, H-ctx.lineWidth);
           }
 
-          // Offer/price badge pops up — ONLY this animates, poster design untouched
+          // Offer/price badge — positioned above category strip (bottom 22% area)
+          // Matches poster gold color scheme
           if (offerText && textT > 0.35) {
             const popT = Math.min(1, (textT-0.35)/0.4);
             const bounce = isCinematic
               ? (popT < 0.65 ? popT/0.65 : 1 + 0.1*Math.sin((popT-0.65)/0.35*Math.PI))
               : (popT < 0.6 ? popT/0.6 : 1 + 0.2*Math.sin((popT-0.6)/0.4*Math.PI));
-            const badgeColor = isCinematic ? '#C9A84C' : '#ef4444';
-            const textColor  = isCinematic ? '#111' : '#fff';
+
+            // Position: sits at 75% height — above the category strip (which is ~85-92%)
+            const badgeCenterY = H * 0.75;
+            const badgeColor = '#C9A84C'; // always gold to match poster
+            const textColor  = '#111';
 
             ctx.save();
-            ctx.font = 'bold ' + Math.round(W*0.052) + 'px Arial';
-            const bW2 = Math.min(W*0.78, ctx.measureText(offerText).width + W*0.1);
-            const bH2 = Math.round(W*0.092);
-            const badgeCenterY = H * 0.82;
+            ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
+            const metrics = ctx.measureText(offerText);
+            const bW2 = Math.min(W * 0.72, metrics.width + W * 0.1);
+            const bH2 = Math.round(W * 0.1);
 
-            ctx.translate(W/2, badgeCenterY + (1-bounce)*H*0.1);
+            ctx.translate(W/2, badgeCenterY + (1-bounce)*H*0.08);
             ctx.scale(bounce < 1 ? bounce : 1, bounce < 1 ? bounce : 1);
 
-            // Shadow
-            ctx.shadowColor = 'rgba(0,0,0,0.4)';
-            ctx.shadowBlur = Math.round(W*0.02);
+            // Drop shadow
+            ctx.shadowColor = 'rgba(0,0,0,0.5)';
+            ctx.shadowBlur = Math.round(W * 0.025);
+            ctx.shadowOffsetY = Math.round(W * 0.008);
+
+            // Badge
             ctx.fillStyle = badgeColor;
             ctx.beginPath();
-            ctx.roundRect(-bW2/2, -bH2*0.7, bW2, bH2, bH2*0.3);
+            ctx.roundRect(-bW2/2, -bH2*0.65, bW2, bH2, bH2*0.35);
             ctx.fill();
-            ctx.shadowBlur = 0;
+            ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
 
+            // Text
             ctx.fillStyle = textColor;
             ctx.textAlign = 'center';
-            ctx.fillText(offerText, 0, bH2*0.3);
+            ctx.fillText(offerText, 0, bH2*0.35);
             ctx.textAlign = 'left';
             ctx.restore();
           }
