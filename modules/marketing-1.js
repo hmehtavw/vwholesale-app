@@ -3375,21 +3375,152 @@ async function csPublishAll() {
   showMktToast(threadsResult?.ok ? '✅ Threads posted! Manual channels copied.' : '✅ Content saved — post manually');
 }
 
-async function renderCalendar() {
+function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
+  const existing = contentByTopic[item.topic];
+  const date = new Date(item.cal_date);
+  const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
+  const icon = TYPE_ICON[item.content_type||'post']||'📝';
+  const isReady    = item.status === 'ready';
+  const isApproved = item.status === 'approved';
+  const hasImage   = !!item.image_url;
+  const borderColor = isApproved ? '#22c55e' : isReady ? '#f59e0b' : isToday ? 'rgba(201,168,76,.3)' : 'var(--border)';
+  const bgColor     = isApproved ? 'rgba(34,197,94,.06)' : isReady ? 'rgba(245,158,11,.06)' : isToday ? 'rgba(201,168,76,.08)' : 'var(--bg3)';
+
+  const statusBadge = isApproved
+    ? `<span style="font-size:9px;background:#064e3b;color:#6ee7b7;padding:2px 6px;border-radius:4px;font-weight:700">✅ APPROVED</span>`
+    : isReady
+    ? `<span style="font-size:9px;background:rgba(245,158,11,.15);color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:700">⏳ READY</span>`
+    : '';
+
+  const isReel = item.is_reel || item.content_type === 'reel';
+  const hasCaption = !!item.caption;
+  const hasScript  = isReel && existing?.reel_script;
+  const posterMsg  = item.poster_message ? `<div style="font-size:10px;color:var(--gold);margin-top:3px;font-style:italic">"${item.poster_message.slice(0,60)}${item.poster_message.length>60?'…':''}"</div>` : '';
+  const captionPreview = !isReel && hasCaption
+    ? `<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-top:6px;border-top:1px solid var(--border);padding-top:8px">${item.caption.slice(0,120)}${item.caption.length>120?'…':''}</div>`
+    : '';
+  const hashtagPreview = (item.hashtags||[]).length
+    ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${(item.hashtags||[]).slice(0,8).map(h=>`<span style="font-size:9px;background:rgba(201,168,76,.12);color:var(--gold);padding:2px 5px;border-radius:4px">${h}</span>`).join('')} <button onclick="navigator.clipboard.writeText('${(item.hashtags||[]).join(' ').replace(/'/g,"\\'")}').then(()=>showMktToast('📋 Hashtags copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:9px;padding:2px 6px">📋 Copy</button></div>`
+    : '';
+  const platformImages = item.platform_images || {};
+  const imagePreviewSection = !isReel && hasImage ? `
+    <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">POSTER PREVIEW</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
+        ${[
+          {key:'square',label:'1:1',aspect:'1/1'},
+          {key:'story',label:'9:16',aspect:'9/16'},
+          {key:'landscape',label:'16:9',aspect:'16/9'},
+        ].map(({key,label,aspect}) => {
+          const url = platformImages[key === 'square' ? 'instagram_feed' : key === 'story' ? 'instagram_story' : 'facebook_post'] || (key === 'square' ? item.image_url : null);
+          return url ? `<div style="flex-shrink:0;text-align:center">
+            <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
+            <div style="font-size:9px;color:var(--text3);margin-top:2px">${label}</div>
+          </div>` : '';
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  const expandedPanel = (isReady || isApproved || hasImage) ? `
+    <div style="padding:10px 12px;background:${bgColor};border-radius:0 0 8px 8px;border:1px solid ${borderColor};border-top:none">
+      ${imagePreviewSection}
+      ${posterMsg}
+      ${captionPreview}
+      ${hashtagPreview}
+      ${isReel && item.reel_script ? `<div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">${renderReelScriptInline(item.reel_script, item.id, existing?.id)}</div>` : ''}
+      <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+        ${hasImage
+          ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} ready</span>`
+          : ''}
+        <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
+        ${item.content_type==='gif'
+          ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Create GIF</button>`
+          : item.content_type!=='reel'
+          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
+             ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
+             <button onclick="calConvertToGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Convert to GIF mode (non-destructive)">✨ GIF</button>`
+          : ''}
+        <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
+        ${isReady && hasImage
+          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
+          : isApproved
+          ? `<span style="font-size:10px;color:#6ee7b7">📅 Posts at ${item.post_time||'10:00'} IST on ${item.cal_date}</span>`
+          : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
+        ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
+      </div>
+      <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
+    </div>` : '';
+
+  return `
+  <div id="cal-row-${item.id}" style="padding:10px 12px;background:${bgColor};border-radius:8px;border:1px solid ${borderColor}">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="min-width:32px;text-align:center">
+        <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
+        <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
+      </div>
+      <span style="font-size:18px">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
+        <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+        ${statusBadge}
+        <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
+        ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px" title="${isReady?'Regenerate caption + poster':'Generate caption + poster for the first time'}">⚡ ${isReady?'Regen':'Generate'}</button>` : ''}
+      </div>
+    </div>
+    ${expandedPanel}
+  </div>`;
+}
+
+function buildCalMonthGroups(itemsByMonth, monthLabels, contentByTopic, now, TYPE_ICON) {
+  return itemsByMonth.map((mItems, mi) => {
+    const mLabel = monthLabels[mi];
+    if (!mItems.length) return `
+      <div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--gold);display:flex;justify-content:space-between">
+          <span>${mLabel}</span><span style="font-size:11px;font-weight:400;color:var(--text3)">0 posts</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3);padding:12px;background:var(--bg3);border-radius:8px;text-align:center">
+          No posts planned — <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:3px 10px">+ Add</button>
+        </div>
+      </div>`;
+    const rows = mItems.map(item => calBuildItemRow(item, contentByTopic, now, TYPE_ICON)).join('');
+    return `
+      <div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:8px;padding-bottom:6px;border-bottom:2px solid var(--gold);display:flex;justify-content:space-between">
+          <span>${mLabel}</span><span style="font-size:11px;font-weight:400;color:var(--text3)">${mItems.length} posts</span>
+        </div>
+        <div style="display:grid;gap:6px">${rows}</div>
+      </div>`;
+  }).join('');
+}
+
+async function renderCalendar(offsetMonths) {
+  // Support month navigation — default to current month
+  if (typeof offsetMonths !== 'number') offsetMonths = window._calOffset || 0;
+  window._calOffset = offsetMonths;
+
   setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading calendar…</div>`);
 
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const monthEnd = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
-  const monthLabel = now.toLocaleString('en-IN', {month:'long', year:'numeric'});
+  const baseMonth = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
+  // Show 3 months: baseMonth, baseMonth+1, baseMonth+2
+  const viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
+  const viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 3, 0).toISOString().split('T')[0];
+
+  const monthLabels = [0,1,2].map(i =>
+    new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i, 1)
+      .toLocaleString('en-IN', { month: 'long', year: 'numeric' })
+  );
   const nextStrategyDate = getNextStrategyDate();
 
   const [
     {data: calItems},
     {data: contentPosts}
   ] = await Promise.all([
-    sb.from('content_calendar').select('*').gte('cal_date', monthStart).lte('cal_date', monthEnd).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]})),
-    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', monthStart+'T00:00:00').then(r=>r,()=>({data:[]}))
+    sb.from('content_calendar').select('*').gte('cal_date', viewStart).lte('cal_date', viewEnd).order('cal_date',{ascending:true}).then(r=>r,()=>({data:[]})),
+    sb.from('content_posts').select('id,topic,post_type,status,master_text,reel_script,created_at').gte('created_at', viewStart+'T00:00:00').then(r=>r,()=>({data:[]}))
   ]);
   const strategySessions = null;
 
@@ -3407,13 +3538,25 @@ async function renderCalendar() {
     : 999;
   const sessionDue = daysSinceSession >= 12;
 
+  // Group items by month for display
+  const itemsByMonth = [0,1,2].map(i => {
+    const mStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+i, 1).toISOString().split('T')[0];
+    const mEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+i+1, 0).toISOString().split('T')[0];
+    return (calItems||[]).filter(item => item.cal_date >= mStart && item.cal_date <= mEnd);
+  });
+
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">📅 ${monthLabel}</h3>
-      <div style="font-size:12px;color:var(--text3)">${(calItems||[]).length} posts planned · ${reelDays.length} reels · ${otherDays.length} other</div>
+      <h3 style="font-size:16px;font-weight:900">📅 Content Calendar</h3>
+      <div style="font-size:12px;color:var(--text3)">${monthLabels[0]} – ${monthLabels[2]} · ${(calItems||[]).length} posts</div>
     </div>
-    <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button onclick="renderCalendar(${offsetMonths-3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px">← Prev 3 months</button>
+      <button onclick="renderCalendar(0)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px" title="Jump to today">Today</button>
+      <button onclick="renderCalendar(${offsetMonths+3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px">Next 3 months →</button>
+      <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
+    </div>
   </div>
 
   <!-- REEL DAYS -->
@@ -3451,89 +3594,9 @@ async function renderCalendar() {
     </div>
   </div>` : ''}
 
-  <!-- ALL PLANNED POSTS -->
-  <div style="font-size:13px;font-weight:700;margin-bottom:10px">All planned posts</div>
-  <div style="display:grid;gap:6px">
-    ${(calItems||[]).length ? (calItems||[]).map(item => {
-      const existing = contentByTopic[item.topic];
-      const date = new Date(item.cal_date);
-      const isToday = date.toISOString().split('T')[0] === now.toISOString().split('T')[0];
-      const icon = TYPE_ICON[item.content_type||'post']||'📝';
-      const statusColor = existing?.status === 'published' ? '#22c55e' : existing?.status === 'pending_approval' ? '#f59e0b' : 'var(--text3)';
-      const isReady    = item.status === 'ready';
-      const isApproved = item.status === 'approved';
-      const hasImage   = !!item.image_url;
-      const borderColor = isApproved ? '#22c55e' : isReady ? '#f59e0b' : isToday ? 'rgba(201,168,76,.3)' : 'var(--border)';
-      const bgColor     = isApproved ? 'rgba(34,197,94,.06)' : isReady ? 'rgba(245,158,11,.06)' : isToday ? 'rgba(201,168,76,.08)' : 'var(--bg3)';
-
-      const statusBadge = isApproved
-        ? `<span style="font-size:9px;background:#064e3b;color:#6ee7b7;padding:2px 6px;border-radius:4px;font-weight:700">✅ APPROVED</span>`
-        : isReady
-        ? `<span style="font-size:9px;background:#451a03;color:#f59e0b;padding:2px 6px;border-radius:4px;font-weight:700">⏳ READY</span>`
-        : existing ? `<span style="font-size:9px;color:${statusColor};font-weight:600">${existing.status}</span>` : '';
-
-      const expandedPanel = (isReady || isApproved) ? `
-        <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:10px;display:grid;gap:8px">
-          ${item.visual_brief ? `
-          <div style="background:var(--bg1);border-radius:6px;padding:8px">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-              <div style="font-size:11px;color:var(--text3)">🎨 ChatGPT image prompt ready</div>
-              <button onclick="navigator.clipboard.writeText(this.dataset.p).then(()=>showMktToast('✅ Prompt copied!'))" data-p="${(item.visual_brief||'').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;flex-shrink:0">📋 Copy</button>
-            </div>
-            <div style="font-size:10px;color:var(--gold);line-height:1.8">${buildCalSizesList(item.platform||[])}</div>
-          </div>` : ''}
-          ${(item.hashtags||[]).length ? `
-          <div style="font-size:11px;color:var(--gold);background:var(--bg1);border-radius:6px;padding:8px;line-height:1.7">${(item.hashtags||[]).join(' ')}
-            <button onclick="navigator.clipboard.writeText(this.dataset.h).then(()=>showMktToast('✅ Hashtags copied!'))" data-h="${(item.hashtags||[]).join(' ').replace(/"/g,'&quot;')}" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:2px 6px;margin-left:6px">📋</button>
-          </div>` : ''}
-          ${item.caption ? `
-          <div style="background:var(--bg1);border-radius:6px;padding:8px">
-            <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px">CAPTION</div>
-            <div style="font-size:11px;color:var(--text2);line-height:1.5">${(item.caption||'').slice(0,150)}…</div>
-          </div>` : ''}
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-            ${hasImage
-              ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} ready</span>`
-              : ''}\n            <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':hasImage?'📸 Upload':'📸 Upload'}</button>
-            ${item.content_type==='gif'
-              ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Create GIF</button>`
-              : item.content_type!=='reel'
-              ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
-                 ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
-                 <button onclick="calConvertToGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Convert this post to GIF (non-destructive — keeps original poster)">✨ GIF</button>`
-              : ''}
-            <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
-            ${isReady && hasImage
-              ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
-              : isApproved
-              ? `<span style="font-size:10px;color:#6ee7b7">📅 Posts at ${item.post_time||'10:00'} IST on ${item.cal_date}</span>`
-              : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
-            ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
-          </div>
-          <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
-        </div>` : '';
-
-      return `
-      <div id="cal-row-${item.id}" style="padding:10px 12px;background:${bgColor};border-radius:8px;border:1px solid ${borderColor}">
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="text-align:center;min-width:36px">
-            <div style="font-size:16px;font-weight:700;color:${isToday?'var(--gold)':'var(--text1)'}">${date.getDate()}</div>
-            <div style="font-size:9px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short'})}</div>
-          </div>
-          <span style="font-size:18px">${icon}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
-            <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
-          </div>
-          <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
-            ${statusBadge}
-            <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-            ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px" title="${isReady?'Regenerate caption + poster':'Generate caption + poster for the first time'}">⚡ ${isReady?'Regen':'Generate'}</button>` : ''}
-          </div>
-        </div>
-        ${expandedPanel}
-      </div>`;
-    }).join('') : `<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">No posts planned — click + Add or start a Strategy Session above</div>`}
+  <!-- ALL PLANNED POSTS — grouped by month -->
+  <div style="display:grid;gap:20px">
+    ${buildCalMonthGroups(itemsByMonth, monthLabels, contentByTopic, now, TYPE_ICON)}
   </div>`);
 }
 
