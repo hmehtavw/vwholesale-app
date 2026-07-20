@@ -5662,14 +5662,18 @@ async function calPreviewPost(calendarId) {
     };
     const aspect = aspectMap[ch] || '1/1';
     const isStory = ch.includes('story') || ch === 'whatsapp_story' || ch === 'youtube_shorts';
-    const imgW = isStory ? '60%' : '100%';
     const isThisGif = isGif && gifChannels.includes(ch) && !!gifUrl;
+
+    // Stories: show centered at phone-like width, not cut off
+    const imgStyle = isStory
+      ? 'width:55%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin:0 auto 8px auto;display:block'
+      : 'width:100%;aspect-ratio:' + aspect + ';object-fit:cover;border-radius:8px;margin-bottom:8px;display:block';
 
     const mediaHtml = displayImg
       ? isVideo
-        ? `<video src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:cover;border-radius:8px;margin-bottom:8px;display:block" controls muted playsinline></video>`
-        : `<img src="${displayImg}" style="width:${imgW};aspect-ratio:${aspect};object-fit:cover;border-radius:8px;margin-bottom:8px;display:block" onerror="this.style.display='none'">`
-      : `<div style="width:${imgW};aspect-ratio:${aspect};background:var(--bg2);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px;margin-bottom:8px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+        ? `<video src="${displayImg}" style="${imgStyle}" controls muted playsinline></video>`
+        : `<img src="${displayImg}" style="${imgStyle}" onerror="this.style.display='none'">`
+      : `<div style="${imgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
     const downloadLink = displayImg
