@@ -3534,7 +3534,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
         ${item.content_type==='gif'
           ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
-             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>` : ''}`
+             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>
+             <button onclick="calEditOfferBadge('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Re-encode GIF with different offer text — FREE, no API cost">✏️ Edit Offer</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
@@ -6043,6 +6044,194 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
 
 // Non-destructive: original poster always preserved
 // primary_content_type tracks what to show; static_poster_id preserved
+
+// ── EDIT OFFER BADGE — re-encode from existing posters, ZERO API cost ──
+async function calEditOfferBadge(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktNotif('❌ Post not found'); return; }
+  const currentOffer = item.platform_images?.offer_text || '';
+
+  const pop = document.createElement('div');
+  pop.id = 'edit-offer-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+  pop.innerHTML = `
+    <div style="background:#1e293b;border-radius:14px;padding:24px;max-width:380px;width:100%;border:1px solid #334155">
+      <div style="font-size:16px;font-weight:900;color:#f1f5f9;margin-bottom:4px">✏️ Edit Offer Badge</div>
+      <div style="font-size:11px;color:#22c55e;margin-bottom:16px">✅ FREE — re-encodes from existing poster, zero AI cost</div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TEXT</label>
+        <input id="edit-offer-input" type="text" value="${currentOffer}"
+          placeholder="e.g. Starts @ ₹59/SFT  ·  20% OFF  ·  Free Delivery"
+          style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
+        <div style="font-size:10px;color:#475569;margin-top:4px">Leave blank to remove badge</div>
+      </div>
+      <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎨 ANIMATION STYLE</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label id="eo-cinematic" style="background:#0f172a;border:2px solid #c9a84c;border-radius:8px;padding:8px;cursor:pointer;text-align:center">
+            <input type="radio" name="eo-style" value="cinematic" checked style="display:none">
+            <div style="font-size:13px;margin-bottom:2px">🎬</div>
+            <div style="font-size:10px;font-weight:700;color:#c9a84c">Cinematic</div>
+          </label>
+          <label id="eo-energetic" style="background:#0f172a;border:2px solid #334155;border-radius:8px;padding:8px;cursor:pointer;text-align:center">
+            <input type="radio" name="eo-style" value="energetic" style="display:none">
+            <div style="font-size:13px;margin-bottom:2px">⚡</div>
+            <div style="font-size:10px;font-weight:700;color:#f1f5f9">Energetic</div>
+          </label>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <button onclick="document.getElementById('edit-offer-popup').remove()"
+          style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
+        <button onclick="calApplyOfferBadge('${calendarId}')"
+          style="background:#c9a84c;border:none;color:#111;padding:10px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">✨ Re-encode GIF</button>
+      </div>
+    </div>`;
+
+  pop.querySelectorAll('input[name="eo-style"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('eo-cinematic').style.borderColor = '#334155';
+      document.getElementById('eo-energetic').style.borderColor = '#334155';
+      document.getElementById('eo-' + r.value).style.borderColor = '#c9a84c';
+    });
+  });
+  pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
+  document.body.appendChild(pop);
+  setTimeout(() => document.getElementById('edit-offer-input')?.focus(), 100);
+}
+
+async function calApplyOfferBadge(calendarId) {
+  const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
+  const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
+  document.getElementById('edit-offer-popup')?.remove();
+
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktNotif('❌ Post not found'); return; }
+  const pi = item.platform_images || {};
+  if (!pi.instagram_feed && !pi.instagram_story && !pi.facebook_post) {
+    showMktNotif('❌ No poster images found — generate the animated GIF first');
+    return;
+  }
+
+  let secs = 0;
+  showMktToast('⏳ Re-encoding GIF… 0s (no API cost)', 5000);
+  const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Re-encoding… ' + secs + 's', 5000); }, 3000);
+
+  try {
+    const libResp = await fetch('/assets/gifenc-worker.js');
+    if (!libResp.ok) throw new Error('gifenc load failed');
+    const libSrc = await libResp.text();
+    const loadImgUrl = url => new Promise((res, rej) => {
+      const i = new Image(); i.crossOrigin = 'anonymous';
+      i.onload = () => res(i); i.onerror = rej; i.src = url;
+    });
+
+    const FORMATS = [
+      { key:'square',    gifW:480, gifH:480, staticKey:'instagram_feed',  gifKey:'square_gif'    },
+      { key:'story',     gifW:320, gifH:480, staticKey:'instagram_story', gifKey:'story_gif'     },
+      { key:'landscape', gifW:480, gifH:320, staticKey:'facebook_post',   gifKey:'landscape_gif' },
+    ];
+
+    const ts = Date.now();
+    const newPI = { ...pi, offer_text: newOffer };
+    let totalKb = 0;
+    const isCinematic = animStyle === 'cinematic';
+
+    for (const fmt of FORMATS) {
+      const srcUrl = pi[fmt.staticKey]; if (!srcUrl) continue;
+      showMktToast('⏳ Re-encoding ' + fmt.key + '…', 5000);
+      try {
+        const img = await loadImgUrl(srcUrl);
+        const W = fmt.gifW, H = fmt.gifH;
+        const DELAY=80, FADE=8, HOLD=36, TOTAL=HOLD+FADE*2;
+        const bs = Math.min(W/img.naturalWidth, H/img.naturalHeight);
+        const bW=img.naturalWidth*bs, bH=img.naturalHeight*bs;
+        const bX=(W-bW)/2, bY=(H-bH)/2;
+        const can=document.createElement('canvas'); can.width=W; can.height=H;
+        const ctx=can.getContext('2d');
+        const frames=[];
+
+        for (let f=0; f<TOTAL; f++) {
+          const t=f/(TOTAL-1);
+          const fadeAlpha=f<FADE?f/FADE:f>TOTAL-FADE?(TOTAL-f)/FADE:1;
+          const textT=f<FADE?0:Math.min(1,(f-FADE)/(HOLD*0.6));
+          ctx.clearRect(0,0,W,H);
+          const zoom=isCinematic?1.0+0.05*t:1.0;
+          ctx.drawImage(img, bX-(bW*(zoom-1)/2), bY-(bH*(zoom-1)/2), bW*zoom, bH*zoom);
+          if (!isCinematic) {
+            const pulse=0.4+0.6*Math.sin(t*Math.PI*6);
+            ctx.strokeStyle='rgba(201,168,76,'+(0.3+0.7*pulse)+')';
+            ctx.lineWidth=Math.round(W*0.01);
+            ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,W-ctx.lineWidth,H-ctx.lineWidth);
+          }
+          if (newOffer && textT>0.35) {
+            const popT=Math.min(1,(textT-0.35)/0.4);
+            const bounce=isCinematic?(popT<0.65?popT/0.65:1+0.1*Math.sin((popT-0.65)/0.35*Math.PI)):(popT<0.6?popT/0.6:1+0.2*Math.sin((popT-0.6)/0.4*Math.PI));
+            ctx.save();
+            ctx.font='bold '+Math.round(W*0.055)+'px Arial';
+            const bW2=Math.min(W*0.72,ctx.measureText(newOffer).width+W*0.1);
+            const bH2=Math.round(W*0.1);
+            ctx.translate(W/2, H*0.75+(1-bounce)*H*0.08);
+            ctx.scale(bounce<1?bounce:1,bounce<1?bounce:1);
+            ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=Math.round(W*0.025); ctx.shadowOffsetY=Math.round(W*0.008);
+            ctx.fillStyle='#C9A84C'; ctx.beginPath(); ctx.roundRect(-bW2/2,-bH2/2,bW2,bH2,bH2*0.3); ctx.fill();
+            ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+            ctx.fillStyle='#111'; ctx.textAlign='center'; ctx.textBaseline='middle';
+            ctx.fillText(newOffer,0,0); ctx.textBaseline='alphabetic'; ctx.textAlign='left'; ctx.restore();
+          }
+          if (fadeAlpha<1) { ctx.fillStyle='rgba(0,0,0,'+(1-fadeAlpha)+')'; ctx.fillRect(0,0,W,H); }
+          frames.push({ data:Array.from(ctx.getImageData(0,0,W,H).data), delay:DELAY });
+        }
+
+        const wfn='self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+        const lUrl=URL.createObjectURL(new Blob([libSrc],{type:'application/javascript'}));
+        const wUrl=URL.createObjectURL(new Blob(['importScripts("'+lUrl+'");\n'+wfn],{type:'application/javascript'}));
+        const gifBlob = await new Promise((resolve,reject)=>{
+          const worker=new Worker(wUrl);
+          worker.onmessage=e=>{
+            if(e.data.type==='progress') showMktToast('⏳ Encoding '+fmt.key+'… '+e.data.pct+'%',3000);
+            else if(e.data.type==='done'){worker.terminate();URL.revokeObjectURL(wUrl);URL.revokeObjectURL(lUrl);resolve(new Blob([e.data.buffer],{type:'image/gif'}));}
+          };
+          worker.onerror=e=>{worker.terminate();reject(new Error(e.message));};
+          worker.postMessage({frames,width:W,height:H});
+        });
+
+        const gifBytes=new Uint8Array(await gifBlob.arrayBuffer());
+        const gifPath='gif-calendar/'+calendarId+'_edited_'+fmt.key+'_'+ts+'.gif';
+        const {error:ge}=await sb.storage.from('calendar-images').upload(gifPath,gifBytes,{contentType:'image/gif',upsert:true});
+        if(!ge){
+          const {data:gp}=sb.storage.from('calendar-images').getPublicUrl(gifPath);
+          newPI[fmt.key+'_gif']=gp.publicUrl;
+          if(fmt.key==='square'){newPI['gif']=gp.publicUrl; newPI['square_gif']=gp.publicUrl;}
+          if(fmt.key==='story') newPI['story_gif']=gp.publicUrl;
+          if(fmt.key==='landscape') newPI['landscape_gif']=gp.publicUrl;
+          totalKb+=Math.round(gifBlob.size/1024);
+        }
+      } catch(e){ console.warn('Re-encode failed for',fmt.key,e); }
+    }
+
+    await sb.from('content_calendar').update({
+      image_url: newPI['gif']||newPI['instagram_feed'],
+      platform_images: newPI, updated_at: new Date().toISOString()
+    }).eq('id',calendarId);
+
+    clearInterval(ticker);
+    showMktNotif('✅ GIF re-encoded ('+totalKb+' KB) — badge updated. Zero API cost.');
+    saveToHistory(calendarId,'gif_animated',{
+      image_url:newPI['gif'], platform_images:newPI,
+      anim_style:animStyle, offer_text:newOffer,
+      prompt_summary:'Edited offer badge: '+(newOffer||'removed')
+    });
+    renderCalendar();
+  } catch(e) {
+    clearInterval(ticker);
+    showMktNotif('❌ Re-encode failed: '+e.message);
+  }
+}
+
+window.calEditOfferBadge = calEditOfferBadge;
+window.calApplyOfferBadge = calApplyOfferBadge;
+
 async function calOpenGifStudio(calendarId) {
   // Navigate to GIF Studio with calendar context pre-filled
   const { data: item } = await sb.from('content_calendar').select('topic,caption,notes,poster_message').eq('id', calendarId).single().then(r=>r,()=>({data:null}));
