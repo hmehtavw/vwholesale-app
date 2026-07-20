@@ -6758,44 +6758,69 @@ function editorRenderProps() {
   if (!_editorSelected) { div.style.display='none'; return; }
   div.style.display = 'block';
   const el = _editorSelected;
-  const row = (label, html) => `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:10px;color:#64748b;font-weight:700">${label}</span>${html}</div>`;
-  const inp = (prop, val, type='text', extra='') => `<input type="${type}" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.${type==='checkbox'?'checked':'value'})" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:4px;font-size:11px;width:120px" ${extra}>`;
-  const col = (prop, val) => `<input type="color" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:36px;height:28px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:none">`;
 
-  let html = `<div style="font-size:10px;font-weight:700;color:#c9a84c;margin-bottom:10px">✏️ ${el.label||el.type}</div>`;
+  const row = (label, html) => `<div style="margin-bottom:10px"><div style="font-size:9px;color:#64748b;font-weight:700;margin-bottom:4px">${label}</div>${html}</div>`;
+  const col = (prop, val) => `<input type="color" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;height:30px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:none">`;
+  const txt = (prop, val) => `<input type="text" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:5px 8px;border-radius:5px;font-size:12px;box-sizing:border-box">`;
+  // Slider with number — key for size controls
+  const slide = (prop, val, min, max, step=1) => `
+    <div style="display:flex;align-items:center;gap:6px">
+      <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
+        oninput="editorUpdateProp(${el.id},'${prop}',+this.value);this.nextElementSibling.value=this.value"
+        style="flex:1;accent-color:#c9a84c">
+      <input type="number" min="${min}" max="${max}" step="${step}" value="${val}"
+        onchange="editorUpdateProp(${el.id},'${prop}',+this.value);this.previousElementSibling.value=this.value"
+        style="width:52px;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:3px 5px;border-radius:4px;font-size:11px">
+    </div>`;
+  const chk = (prop, val, label) => `<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${val?'checked':''} onchange="editorUpdateProp(${el.id},'${prop}',this.checked)"><span style="font-size:11px;color:#94a3b8">${label}</span></label>`;
 
-  if (el.type === 'badge' || (el.type === 'rect' && el.text !== undefined)) {
-    html += row('Text', inp('text', el.text));
-    html += row('BG Color', col('fill', el.fill||'#C9A84C'));
-    html += row('Text Color', col('textColor', el.textColor||'#111'));
-    html += row('Font Size', inp('textSize', el.textSize||16, 'number', 'style="width:60px"'));
-    html += row('Width', inp('w', Math.round(el.w||100), 'number', 'style="width:60px"'));
-    html += row('Height', inp('h', Math.round(el.h||50), 'number', 'style="width:60px"'));
-    html += row('Corner R', inp('radius', Math.round(el.radius||0), 'number', 'style="width:60px"'));
+  let html = `<div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:10px">✏️ ${el.label||el.type}</div>`;
+
+  if (el.type === 'badge') {
+    html += row('TEXT', txt('text', el.text));
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+      ${row('BG COLOR', col('fill', el.fill||'#C9A84C'))}
+      ${row('TEXT COLOR', col('textColor', el.textColor||'#111'))}
+    </div>`;
+    html += row('FONT SIZE', slide('textSize', el.textSize||20, 8, 80));
+    html += row('WIDTH', slide('w', Math.round(el.w||200), 40, 600));
+    html += row('HEIGHT', slide('h', Math.round(el.h||50), 20, 200));
+    html += row('CORNER RADIUS', slide('radius', Math.round(el.radius||0), 0, 100));
   } else if (el.type === 'text') {
-    html += row('Text', inp('text', el.text));
-    html += row('Color', col('color', el.color||'#fff'));
-    html += row('Font Size', inp('fontSize', el.fontSize||24, 'number', 'style="width:60px"'));
-    html += row('Bold', `<input type="checkbox" ${el.bold?'checked':''} onchange="editorUpdateProp(${el.id},'bold',this.checked)">`);
-    html += row('Italic', `<input type="checkbox" ${el.italic?'checked':''} onchange="editorUpdateProp(${el.id},'italic',this.checked)">`);
-    html += row('Shadow', `<input type="checkbox" ${el.shadow?'checked':''} onchange="editorUpdateProp(${el.id},'shadow',this.checked)">`);
+    html += row('TEXT', txt('text', el.text));
+    html += row('COLOR', col('color', el.color||'#fff'));
+    html += row('FONT SIZE', slide('fontSize', el.fontSize||24, 8, 120));
+    html += `<div style="display:flex;gap:12px;margin-bottom:10px">${chk('bold',el.bold,'Bold')}${chk('italic',el.italic,'Italic')}${chk('shadow',el.shadow,'Shadow')}</div>`;
   } else if (el.type === 'rect') {
-    html += row('Fill', col('fill', el.fill||'#333'));
-    html += row('Border', col('stroke', el.stroke||'#fff'));
-    html += row('Border W', inp('strokeWidth', el.strokeWidth||0, 'number', 'style="width:60px"'));
-    html += row('Width', inp('w', Math.round(el.w||100), 'number', 'style="width:60px"'));
-    html += row('Height', inp('h', Math.round(el.h||50), 'number', 'style="width:60px"'));
-    html += row('Corner R', inp('radius', Math.round(el.radius||0), 'number', 'style="width:60px"'));
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+      ${row('FILL', col('fill', el.fill||'#333'))}
+      ${row('BORDER', col('stroke', el.stroke||'#fff'))}
+    </div>`;
+    html += row('BORDER WIDTH', slide('strokeWidth', el.strokeWidth||0, 0, 20));
+    html += row('WIDTH', slide('w', Math.round(el.w||100), 20, 600));
+    html += row('HEIGHT', slide('h', Math.round(el.h||50), 10, 400));
+    html += row('CORNER RADIUS', slide('radius', Math.round(el.radius||0), 0, 100));
+    if (el.text !== undefined) {
+      html += row('TEXT', txt('text', el.text||''));
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        ${row('TEXT COLOR', col('textColor', el.textColor||'#fff'))}
+      </div>`;
+      html += row('TEXT SIZE', slide('textSize', el.textSize||16, 8, 80));
+    }
   } else if (el.type === 'circle') {
-    html += row('Fill', col('fill', el.fill||'#C9A84C'));
-    html += row('Border', col('stroke', el.stroke||'#fff'));
-    html += row('Border W', inp('strokeWidth', el.strokeWidth||0, 'number', 'style="width:60px"'));
-    html += row('Radius', inp('rx', Math.round(el.rx||50), 'number', 'style="width:60px"'));
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+      ${row('FILL', col('fill', el.fill||'#C9A84C'))}
+      ${row('BORDER', col('stroke', el.stroke||'#fff'))}
+    </div>`;
+    html += row('BORDER WIDTH', slide('strokeWidth', el.strokeWidth||0, 0, 20));
+    html += row('RADIUS', slide('rx', Math.round(el.rx||50), 10, 300));
   } else if (el.type === 'line') {
-    html += row('Color', col('stroke', el.stroke||'#C9A84C'));
-    html += row('Width', inp('strokeWidth', el.strokeWidth||2, 'number', 'style="width:60px"'));
+    html += row('COLOR', col('stroke', el.stroke||'#C9A84C'));
+    html += row('THICKNESS', slide('strokeWidth', el.strokeWidth||2, 1, 30));
   }
-  html += row('Opacity', `<input type="range" min="0" max="100" value="${Math.round((el.opacity??1)*100)}" oninput="editorUpdateProp(${el.id},'opacity',this.value/100)" style="width:100px;accent-color:#c9a84c">`);
+
+  html += row('OPACITY', slide('opacity', Math.round((el.opacity??1)*100), 0, 100) + '<span id="opacity-disp" style="font-size:9px;color:#64748b"></span>');
+
   div.innerHTML = html;
 }
 
@@ -6804,7 +6829,8 @@ function editorUpdateProp(id, prop, val) {
   const el = fmt.elements.find(e => e.id === id);
   if (!el) return;
   if (['fontSize','textSize','w','h','rx','strokeWidth','radius'].includes(prop)) val = +val;
-  if (prop === 'opacity') val = +val;
+  if (prop === 'opacity') val = +val / 100; // slider sends 0-100, store as 0-1
+  if (prop === 'bold' || prop === 'italic' || prop === 'shadow') val = !!val;
   el[prop] = val;
   editorRenderCanvas();
 }
