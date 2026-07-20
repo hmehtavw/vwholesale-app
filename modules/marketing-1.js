@@ -6309,6 +6309,17 @@ async function calGeneratePosters(calendarId, reuseBg) {
     });
     const data = await res.json();
     if (data.ok) {
+      // Save to history
+      const { data: updItem } = await sb.from('content_calendar').select('image_url,platform_images,caption,caption_te,hashtags,poster_message').eq('id', calendarId).single();
+      if (updItem?.image_url) saveToHistory(calendarId, 'poster', {
+        image_url: updItem.image_url,
+        platform_images: updItem.platform_images,
+        caption_en: updItem.caption,
+        caption_te: updItem.caption_te,
+        hashtags: updItem.hashtags,
+        poster_message: updItem.poster_message,
+        prompt_summary: reuseBg ? 'Re-applied layout (free)' : (data.summary || 'AI Poster — all formats')
+      });
       showMktToast(`✅ ${data.summary || 'Posters generated'} — click Preview to review`);
       renderCalendar();
     } else {
