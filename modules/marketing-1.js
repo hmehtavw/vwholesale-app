@@ -5460,19 +5460,25 @@ async function calGenerateGifSlideshow(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    // STEP 2: Use generate-poster-v2 for consistent logo + validated layout across all 3 formats
-    // This is the same pipeline used for regular poster generation — logo consistency guaranteed
-    showMktToast('⏳ Step 2: Generating posters via poster pipeline (~3 min)…', 5000);
-    const posterRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_posters', calendar_id: parseInt(calendarId) })
-    });
-    const posterData = await posterRes.json();
-    if (!posterData.ok) throw new Error('Poster generation failed: ' + (posterData.error || ''));
+    // STEP 2: Use generate-poster-v2 — skip if posters already exist
+    let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    let pi = posterItem_check.data?.platform_images || {};
+    const hasPosters = pi.instagram_feed && pi.instagram_story && pi.facebook_post;
 
-    // Reload item — generate-poster-v2 saves platform_images to DB
-    const { data: posterItem } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-    const pi = posterItem?.platform_images || {};
+    if (!hasPosters) {
+      showMktToast('⏳ Step 2: Generating posters (~3 min)…', 5000);
+      const posterRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_posters', calendar_id: parseInt(calendarId) })
+      });
+      const posterData = await posterRes.json();
+      if (!posterData.ok) throw new Error('Poster generation failed: ' + (posterData.error || ''));
+      posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+      pi = posterItem_check.data?.platform_images || {};
+    } else {
+      showMktToast('⏳ Using existing posters — encoding GIF…', 4000);
+    }
+    const posterItem = posterItem_check.data;
 
     // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
@@ -5789,17 +5795,27 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
       }).eq('id',calendarId);
     }
 
-    // Generate posters via generate-poster-v2 (consistent logo)
-    showMktToast('⏳ Generating poster (~3 min)…', 5000);
-    const pr = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
-      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body: JSON.stringify({ action:'generate_posters', calendar_id:parseInt(calendarId) })
-    });
-    const pd = await pr.json();
-    if (!pd.ok) throw new Error('Poster generation failed: ' + (pd.error||''));
+    // Use existing posters if already generated, otherwise generate
+    let pi_item_check = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
+    let pi = pi_item_check.data?.platform_images || {};
+    const hasPosters = pi.instagram_feed && pi.instagram_story && pi.facebook_post;
 
-    const { data: pi_item } = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
-    const pi = pi_item?.platform_images || {};
+    if (!hasPosters) {
+      showMktToast('⏳ Generating posters (~3 min)…', 5000);
+      const pr = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({ action:'generate_posters', calendar_id:parseInt(calendarId) })
+      });
+      const pd = await pr.json();
+      if (!pd.ok) throw new Error('Poster generation failed: ' + (pd.error||''));
+      // Reload
+      pi_item_check = await sb.from('content_calendar').select('*').eq('id',calendarId).single();
+      pi = pi_item_check.data?.platform_images || {};
+    } else {
+      showMktToast('⏳ Using existing posters — encoding animated GIF…', 4000);
+    }
+
+    const pi_item = pi_item_check.data;
 
     // Load gifenc
     const libResp = await fetch('/assets/gifenc-worker.js');
