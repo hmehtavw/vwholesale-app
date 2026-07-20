@@ -3537,9 +3537,9 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
              ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>
              <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Drag badge to reposition, add music, re-encode — zero AI cost">✏️ Edit Offer</button>` : ''}`
           : item.content_type!=='reel'
-          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
-             ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
-`
+          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🤖 Auto Poster</button>
+             ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">🎨</button>`:''}
+             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Open poster editor">✏️ Edit</button>`
           : ''}
         <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
         <button onclick="openHistoryDrawer('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="View all past generations">🕐</button>
