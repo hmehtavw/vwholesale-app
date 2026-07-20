@@ -3541,6 +3541,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
 `
           : ''}
         <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
+        <button onclick="openHistoryDrawer('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="View all past generations">🕐</button>
         ${isReady && hasImage
           ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
           : isApproved
@@ -5747,6 +5748,11 @@ async function calGenerateGifSlideshow(calendarId) {
 
     clearInterval(ticker);
     showMktNotif('✅ GIFs ready! (' + totalKb + ' KB total across ' + Object.keys(formatResults).length + ' formats) — approval email sent');
+    saveToHistory(calendarId, 'gif_slideshow', {
+      image_url: primaryGifUrl,
+      platform_images: platformImages,
+      prompt_summary: 'Poster Slideshow GIF — ' + Object.keys(formatResults).length + ' formats'
+    });
     renderCalendar();
 
   } catch(e) {
@@ -5944,6 +5950,13 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
 
     clearInterval(ticker);
     showMktNotif('✅ Animated GIF ready! ('+totalKb+' KB) — '+animStyle+' style — approval email sent');
+    saveToHistory(calendarId, 'gif_animated', {
+      image_url: platformImages['gif'] || platformImages['instagram_feed'],
+      platform_images: platformImages,
+      anim_style: animStyle,
+      offer_text: offerText,
+      prompt_summary: 'Animated Poster GIF — ' + animStyle + (offerText ? ' — offer: ' + offerText : '')
+    });
     renderCalendar();
 
   } catch(e) {
@@ -6241,6 +6254,17 @@ async function calRegenerateItem(calendarId) {
     clearInterval(ticker);
     const data = await res.json();
     if (data.ok) {
+      // Save to history after successful generation
+      const { data: updItem } = await sb.from('content_calendar').select('image_url,platform_images,caption,caption_te,hashtags,poster_message').eq('id', calendarId).single();
+      if (updItem) saveToHistory(calendarId, 'poster', {
+        image_url: updItem.image_url,
+        platform_images: updItem.platform_images,
+        caption_en: updItem.caption,
+        caption_te: updItem.caption_te,
+        hashtags: updItem.hashtags,
+        poster_message: updItem.poster_message,
+        prompt_summary: 'AI Poster — caption + image generated'
+      });
       showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email', 6000);
       renderCalendar();
     } else {
@@ -6301,6 +6325,129 @@ window.calGeneratePosters = calGeneratePosters;
 window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
 window.calUnapproveItem = calUnapproveItem;
+// ── GENERATION HISTORY ──────────────────────────────────────────────────
+
+async function saveToHistory(calendarId, type, data) {
+  // data: { image_url, platform_images, caption_en, caption_te, hashtags, poster_message, anim_style, offer_text, prompt_summary, generation_ms }
+  try {
+    const { data: item } = await sb.from('content_calendar').select('topic,content_type').eq('id', calendarId).single();
+    await sb.from('generation_history').insert({
+      calendar_id:    calendarId,
+      topic:          item?.topic || '',
+      content_type:   type,
+      anim_style:     data.anim_style || null,
+      offer_text:     data.offer_text || null,
+      image_url:      data.image_url || null,
+      platform_images: data.platform_images || null,
+      caption_en:     data.caption_en || null,
+      caption_te:     data.caption_te || null,
+      hashtags:       data.hashtags || null,
+      poster_message: data.poster_message || null,
+      prompt_summary: data.prompt_summary || type,
+      generation_ms:  data.generation_ms || null,
+      is_active:      true,
+      created_at:     new Date().toISOString()
+    });
+    // Mark previous versions inactive
+    await sb.from('generation_history')
+      .update({ is_active: false })
+      .eq('calendar_id', calendarId)
+      .lt('created_at', new Date().toISOString())
+      .neq('is_active', false);
+  } catch(e) { console.warn('saveToHistory failed:', e); }
+}
+
+async function openHistoryDrawer(calendarId) {
+  const drawerId = 'hist-drawer-' + calendarId;
+  const existing = document.getElementById(drawerId);
+  if (existing) { existing.remove(); return; } // toggle
+
+  const container = document.getElementById('cal-row-' + calendarId);
+  if (!container) return;
+
+  // Fetch history
+  const { data: rows } = await sb.from('generation_history')
+    .select('*').eq('calendar_id', calendarId)
+    .order('created_at', { ascending: false }).limit(50);
+
+  if (!rows?.length) {
+    showMktToast('No history yet for this post', 3000);
+    return;
+  }
+
+  const drawer = document.createElement('div');
+  drawer.id = drawerId;
+  drawer.style.cssText = 'margin-top:8px;background:#0f172a;border-radius:10px;padding:14px;border:1px solid #334155';
+
+  const TYPE_LABEL = { poster:'🖼️ Poster', gif_slideshow:'🎞️ Slideshow GIF', gif_animated:'🎬 Animated GIF', caption:'📝 Caption' };
+
+  drawer.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#94a3b8">🕐 Generation History — ${rows.length} version${rows.length>1?'s':''}</div>
+      <button onclick="document.getElementById('${drawerId}').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${rows.map((r, i) => {
+        const date = new Date(r.created_at).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+        const thumbUrl = r.platform_images?.instagram_feed || r.platform_images?.square_gif || r.image_url;
+        const gifUrl = r.platform_images?.square_gif || r.platform_images?.gif;
+        const displayUrl = gifUrl || thumbUrl;
+        const label = TYPE_LABEL[r.content_type] || r.content_type;
+        const isActive = r.is_active;
+        return `
+        <div style="background:#1e293b;border-radius:8px;padding:10px;border:1px solid ${isActive?'#c9a84c':'#334155'};display:flex;gap:10px;align-items:flex-start">
+          ${displayUrl ? `<img src="${displayUrl}" onclick="openMktLightbox('${displayUrl}','${label} — ${date}','${displayUrl}','history_${r.id}.${gifUrl?'gif':'png'}')" style="width:60px;height:60px;object-fit:contain;border-radius:6px;cursor:pointer;background:#0f172a;flex-shrink:0" title="Click to expand">` : '<div style="width:60px;height:60px;background:#0f172a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#475569;font-size:10px">No img</div>'}
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+              <span style="font-size:11px;font-weight:700;color:#f1f5f9">${label}</span>
+              ${isActive ? '<span style="font-size:9px;background:rgba(201,168,76,.2);color:#c9a84c;padding:1px 6px;border-radius:4px;font-weight:700">ACTIVE</span>' : ''}
+              ${r.anim_style ? '<span style="font-size:9px;background:#1e293b;color:#64748b;padding:1px 5px;border-radius:3px">'+r.anim_style+'</span>' : ''}
+            </div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:4px">${date}</div>
+            ${r.offer_text ? '<div style="font-size:10px;color:#c9a84c">💰 '+r.offer_text+'</div>' : ''}
+            ${r.poster_message ? '<div style="font-size:10px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.poster_message.slice(0,60)+'</div>' : ''}
+            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+              ${!isActive ? `<button onclick="useHistoryVersion(${r.id},${calendarId})" style="background:#c9a84c;border:none;color:#111;font-size:10px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer">✅ Use This</button>` : '<span style="font-size:10px;color:#c9a84c">✓ Currently active</span>'}
+              ${displayUrl ? `<a href="${displayUrl}" download target="_blank" style="font-size:10px;color:#64748b;padding:4px 8px;border:1px solid #334155;border-radius:5px;text-decoration:none">⬇ Download</a>` : ''}
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  container.appendChild(drawer);
+}
+
+async function useHistoryVersion(historyId, calendarId) {
+  const { data: row } = await sb.from('generation_history').select('*').eq('id', historyId).single();
+  if (!row) { showMktNotif('❌ History version not found'); return; }
+
+  // Restore this version to the calendar
+  const update = { updated_at: new Date().toISOString() };
+  if (row.image_url) update.image_url = row.image_url;
+  if (row.platform_images) update.platform_images = row.platform_images;
+  if (row.caption_en) update.caption = row.caption_en;
+  if (row.caption_te) update.caption_te = row.caption_te;
+  if (row.hashtags) update.hashtags = row.hashtags;
+  if (row.poster_message) update.poster_message = row.poster_message;
+  update.status = 'ready';
+
+  await sb.from('content_calendar').update(update).eq('id', calendarId);
+
+  // Mark this as active in history
+  await sb.from('generation_history').update({ is_active: false }).eq('calendar_id', calendarId);
+  await sb.from('generation_history').update({ is_active: true }).eq('id', historyId);
+
+  // Remove drawer and refresh
+  document.getElementById('hist-drawer-' + calendarId)?.remove();
+  showMktNotif('✅ Version restored — ' + (row.content_type || 'output') + ' from ' + new Date(row.created_at).toLocaleDateString('en-IN'));
+  renderCalendar();
+}
+
+window.openHistoryDrawer = openHistoryDrawer;
+window.useHistoryVersion = useHistoryVersion;
+window.saveToHistory = saveToHistory;
+
 window.calGenerateGif = calGenerateGif;
 window.showGifOptionsPopup = showGifOptionsPopup;
 window.gifSelectMode = gifSelectMode;
