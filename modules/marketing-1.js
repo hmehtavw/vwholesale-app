@@ -268,6 +268,36 @@ function mktNav(page) {
 
 function setContent(html) { document.getElementById('mkt-content').innerHTML = html; }
 
+
+// Stacked sticky notifications for errors and success (separate from progress toasts)
+function showMktNotif(msg) {
+  let container = document.getElementById('mkt-notif-stack');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'mkt-notif-stack';
+    container.style.cssText = 'position:fixed;bottom:24px;right:20px;z-index:9999;display:flex;flex-direction:column-reverse;gap:8px;max-width:360px';
+    document.body.appendChild(container);
+  }
+  const isError = msg.startsWith('❌') || msg.startsWith('⚠️');
+  const isDone  = msg.startsWith('✅');
+  const bg = isError ? '#7f1d1d' : isDone ? '#14532d' : '#1e293b';
+  const border = isError ? '#ef4444' : isDone ? '#22c55e' : '#475569';
+  const notif = document.createElement('div');
+  notif.style.cssText = 'background:' + bg + ';color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;display:flex;align-items:flex-start;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,.5);border-left:3px solid ' + border + ';opacity:0;transition:opacity .3s;pointer-events:auto;word-break:break-word';
+  const msgSpan = document.createElement('span');
+  msgSpan.style.flex = '1';
+  msgSpan.textContent = msg;
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;font-weight:700;padding:0;flex-shrink:0;line-height:1;margin-top:1px';
+  closeBtn.onclick = () => { notif.style.opacity = '0'; setTimeout(() => notif.remove(), 300); };
+  notif.appendChild(msgSpan);
+  notif.appendChild(closeBtn);
+  container.appendChild(notif);
+  requestAnimationFrame(() => { notif.style.opacity = '1'; });
+}
+
+
 function showMktToast(msg, duration = 3000, sticky = false) {
   let toast = document.getElementById('mkt-toast');
   if (!toast) {
@@ -5272,58 +5302,63 @@ async function calGenerateGif(calendarId) {
       : t.includes('electrical') || t.includes('wire') ? 'modern dark slate with gold accents'
       : 'warm professional cream and charcoal';
 
-    // Generate 1 full poster frame (~90s) — stays within edge fn timeout
-    // GIF animates text overlay on this single background (fade in/out effect)
-    const prompt = `Design a complete premium marketing poster for V Wholesale. Color: ${scheme}. Style: real Indian lifestyle interior photography, editorial quality. "V Wholesale" at top with tagline "Build Better. Pay Less." Bold headline: "${headline}" Indian home lifestyle for: ${topic}. Message: "${message}" Category strip: Tiles|Granite|Sanitaryware|Paints|Plywood|Furniture Footer: +91 8712697930|vwholesale.in|Visit V Wholesale. Square format. No watermark.`;
-
-    showMktToast('⏳ Step 2/4: Generating AI poster frame… (~90s)', 5000);
-    const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_poster_image', prompt, size: '1024x1024' })
-    });
-    const frameData = await res.json();
-    if (!frameData.ok || !frameData.b64) throw new Error('AI frame generation failed: ' + (frameData.error || ''));
-    const frameB64s = [frameData.b64]; // single frame — GIF adds animation via canvas
+    // Generate 3 AI poster frames for best quality GIF (~5 mins total)
+    const prompts = [
+      `Premium V Wholesale marketing poster. ${scheme}. Indian lifestyle interior. V Wholesale branding, tagline Build Better Pay Less, headline "${headline}", message "${message}". Category strip Tiles Granite Sanitaryware Paints Plywood Furniture. Footer +91 8712697930 vwholesale.in Visit V Wholesale. Square format.`,
+      `Premium product poster V Wholesale. ${scheme}. Indian interior ${topic} as hero. Headline "${headline}". Message "${message}". V Wholesale branding. Footer +91 8712697930 vwholesale.in Visit V Wholesale. Square 1:1.`,
+      `Premium CTA closing poster V Wholesale. ${scheme}. Indian home lifestyle. CTA Visit V Wholesale Today. Phone +91 8712697930. Website vwholesale.in. Tagline Build Better Pay Less. Category strip Tiles Granite Sanitaryware Paints Plywood Furniture. Square.`
+    ];
+    const frameB64s = [];
+    for (let i = 0; i < prompts.length; i++) {
+      showMktToast('⏳ Step 2/4: Generating frame ' + (i+1) + '/3 (90s each)…', 5000);
+      const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_poster_image', prompt: prompts[i], size: '1024x1024' })
+      });
+      const d = await res.json();
+      if (d.ok && d.b64) frameB64s.push(d.b64);
+    }
+    if (!frameB64s.length) throw new Error('AI frame generation failed');
 
     showMktToast(`⏳ Step 3/4: Encoding GIF from ${frameB64s.length} frames…`, 5000);
 
-    // STEP 3: Animate single AI frame with text overlay across GIF frames
+    // STEP 3: Load frames + encode crossfade slideshow GIF
+    showMktToast('⏳ Step 3/4: Encoding GIF slideshow…', 5000);
     const loadImg = (b64) => new Promise((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
       img.onerror = reject;
       img.src = 'data:image/png;base64,' + b64;
     });
-
-    const bgImg = await loadImg(frameB64s[0]);
-    const GIF_SIZE = 480; // smaller = faster encode + smaller file
-    const FPS = 8;
+    const imgs = await Promise.all(frameB64s.map(loadImg));
+    const GIF_SIZE = 540;
+    const FPS = 10;
     const FRAME_DELAY = Math.round(1000 / FPS);
-    const TOTAL_SEC = 6; // 6 second GIF
-    const TOTAL_FRAMES = FPS * TOTAL_SEC;
+    const HOLD_FRAMES = Math.round(2.5 * FPS);  // 2.5s hold per frame
+    const FADE_FRAMES = Math.round(0.5 * FPS);   // 0.5s crossfade
 
     const canvas = document.createElement('canvas');
     canvas.width = GIF_SIZE; canvas.height = GIF_SIZE;
     const ctx = canvas.getContext('2d');
     const pixelFrames = [];
 
-    // Animation: poster fades in (0-1.5s), holds (1.5-4.5s), fades out (4.5-6s)
-    for (let f = 0; f < TOTAL_FRAMES; f++) {
-      const t = f / TOTAL_FRAMES; // 0→1
-      const fadeSec = 1.5 / TOTAL_SEC;
-      const alpha = t < fadeSec ? t / fadeSec : t > (1 - fadeSec) ? (1 - t) / fadeSec : 1;
-
-      ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-      ctx.globalAlpha = 1;
-      ctx.drawImage(bgImg, 0, 0, GIF_SIZE, GIF_SIZE);
-
-      // Black fade overlay
-      if (alpha < 1) {
-        ctx.fillStyle = 'rgba(0,0,0,' + (1 - alpha) + ')';
-        ctx.fillRect(0, 0, GIF_SIZE, GIF_SIZE);
+    for (let fi = 0; fi < imgs.length; fi++) {
+      const img = imgs[fi];
+      const nextImg = imgs[(fi + 1) % imgs.length];
+      for (let f = 0; f < HOLD_FRAMES; f++) {
+        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
+        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
       }
-
-      pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+      for (let f = 0; f < FADE_FRAMES; f++) {
+        const alpha = (f + 1) / (FADE_FRAMES + 1);
+        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
+        ctx.globalAlpha = 1; ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
+        ctx.globalAlpha = alpha; ctx.drawImage(nextImg, 0, 0, GIF_SIZE, GIF_SIZE);
+        ctx.globalAlpha = 1;
+        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+      }
     }
 
     // Encode via gifenc Web Worker — fetch library first to avoid importScripts CDN block
@@ -5334,8 +5369,8 @@ async function calGenerateGif(calendarId) {
         gifencSrc = await r.text();
       } catch(e) { reject(new Error('Failed to load GIF encoder library: ' + e.message)); return; }
 
-      const workerFn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);}';
-      const workerCode = gifencSrc + ';' + workerFn;
+      const _wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+      const workerCode = gifencSrc + '\n' + _wfn;
       const blob = new Blob([workerCode], { type: 'application/javascript' });
       const url = URL.createObjectURL(blob);
       const worker = new Worker(url);
@@ -5394,12 +5429,12 @@ async function calGenerateGif(calendarId) {
     } catch(e) { console.log('Email send failed:', e); }
 
     clearInterval(ticker);
-    showMktToast(`✅ GIF ready! (${(gifBlob.size / 1024).toFixed(0)} KB) — approval email sent to hmehta@vwholesale.in`);
+    showMktNotif('✅ GIF ready! (' + Math.round(gifBlob.size/1024) + ' KB) — approval email sent to hmehta@vwholesale.in');
     renderCalendar();
 
   } catch(e) {
     clearInterval(ticker);
-    showMktToast('❌ ' + e.message, 6000);
+    showMktNotif('❌ GIF generation failed: ' + e.message);
     if (btn) { btn.innerHTML = '✨ Generate GIF'; btn.disabled = false; }
     renderCalendar();
   }
