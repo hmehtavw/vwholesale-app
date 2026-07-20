@@ -5321,47 +5321,41 @@ async function calGenerateGif(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    // STEP 2: Generate native-size posters for each format (no resizing/cropping)
-    const tl = topic.toLowerCase();
-    const scheme = tl.includes('granite') || tl.includes('tile') || tl.includes('marble')
-      ? 'elegant cream and charcoal with natural stone textures'
-      : tl.includes('paint') ? 'warm terracotta and sage green'
-      : tl.includes('bathroom') || tl.includes('sanitaryware') ? 'clean white chrome soft spa'
-      : 'warm professional cream and charcoal';
+    // STEP 2: Use generate-poster-v2 for consistent logo + validated layout across all 3 formats
+    // This is the same pipeline used for regular poster generation — logo consistency guaranteed
+    showMktToast('⏳ Step 2: Generating posters via poster pipeline (~3 min)…', 5000);
+    const posterRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_posters', calendar_id: parseInt(calendarId) })
+    });
+    const posterData = await posterRes.json();
+    if (!posterData.ok) throw new Error('Poster generation failed: ' + (posterData.error || ''));
 
+    // Reload item — generate-poster-v2 saves platform_images to DB
+    const { data: posterItem } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    const pi = posterItem?.platform_images || {};
+
+    // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
-      {
-        key: 'square', apiSize: '1024x1024', gifW: 480, gifH: 480,
-        channels: ['instagram_feed','threads'],
-        prompt: `Complete premium marketing poster for V Wholesale. SQUARE 1:1 FORMAT. ${scheme}. Real Indian home lifestyle interior photography. "V Wholesale" brand top with tagline "Build Better. Pay Less." Headline: "${headline}" Message: "${message}" Category icons strip bottom: Tiles Granite Sanitaryware Paints Plywood Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. No watermark.`
-      },
-      {
-        key: 'story', apiSize: '1024x1536', gifW: 320, gifH: 480,
-        channels: ['instagram_story','facebook_story','whatsapp_story'],
-        prompt: `Complete premium VERTICAL STORY POSTER for V Wholesale. TALL 9:16 VERTICAL FORMAT — designed for Instagram Story, Facebook Story, WhatsApp Status. ${scheme}. Top 15%: V Wholesale brand and tagline. Middle: large Indian lifestyle photo for ${topic} fills most of frame. Headline "${headline}" overlaid. Message "${message}" below photo. Two-row category strip near bottom: Tiles Granite Sanitaryware / Paints Plywood Furniture. Full-width footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text fits, nothing cut off.`
-      },
-      {
-        key: 'landscape', apiSize: '1536x1024', gifW: 480, gifH: 320,
-        channels: ['facebook_post','youtube','gbp'],
-        prompt: `Complete premium LANDSCAPE POSTER for V Wholesale. WIDE 16:9 FORMAT — for Facebook Post, YouTube, Google Business. ${scheme}. Left third: editorial text — V Wholesale brand, tagline "Build Better. Pay Less.", headline "${headline}", message "${message}". Right two-thirds: Indian lifestyle photo for ${topic}. Category strip along bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct, nothing cropped.`
-      }
-    ];
-
+      { key: 'square',    gifW: 480, gifH: 480, staticKey: 'instagram_feed',  channels: ['instagram_feed','threads'] },
+      { key: 'story',     gifW: 320, gifH: 480, staticKey: 'instagram_story', channels: ['instagram_story','facebook_story','whatsapp_story'] },
+      { key: 'landscape', gifW: 480, gifH: 320, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
+    ]
     const formatResults = {};
-    for (let fi = 0; fi < GIF_FORMATS.length; fi++) {
-      const fmt = GIF_FORMATS[fi];
-      showMktToast('⏳ Generating ' + fmt.key + ' poster (' + (fi+1) + '/' + GIF_FORMATS.length + ')… (~90s)', 5000);
+    for (const fmt of GIF_FORMATS) {
+      const url = pi[fmt.staticKey] || null;
+      if (!url) { console.warn('No poster URL for', fmt.key); continue; }
+      showMktToast('⏳ Loading ' + fmt.key + ' poster for GIF encoding…', 3000);
       try {
-        const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-          body: JSON.stringify({ action: 'generate_poster_image', prompt: fmt.prompt, size: fmt.apiSize })
-        });
-        const d = await res.json();
-        if (d.ok && d.b64) formatResults[fmt.key] = { b64: d.b64, fmt };
-        else console.warn(fmt.key + ' failed:', d.error);
-      } catch(e) { console.warn(fmt.key + ' error:', e); }
+        // Fetch the poster PNG as blob, convert to b64 for canvas
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Fetch failed: ' + resp.status);
+        const buf = await resp.arrayBuffer();
+        const b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+        formatResults[fmt.key] = { b64, fmt };
+      } catch(e) { console.warn(fmt.key + ' fetch error:', e); }
     }
-    if (!Object.keys(formatResults).length) throw new Error('All formats failed to generate');
+    if (!Object.keys(formatResults).length) throw new Error('Could not load any poster images for GIF encoding');
 
     // STEP 3: Encode each format as its own GIF (fade in → hold → fade out)
     const loadImg = b64 => new Promise((res, rej) => {
@@ -5380,23 +5374,9 @@ async function calGenerateGif(calendarId) {
       const r = formatResults[key];
       const fmt = r.fmt;
 
-      // Generate 2 more frames for this format (r.b64 is already frame 1)
-      showMktToast('⏳ Generating additional frames for ' + fmt.label + '…', 5000);
-      const extraPrompts = [
-        fmt.prompt.replace('Complete premium marketing poster', 'Premium product-showcase poster').replace('Complete premium', 'Premium product-focused'),
-        fmt.prompt.replace('Complete premium marketing poster', 'Premium CTA closing poster — "Visit V Wholesale Today" as dominant call to action')
-      ];
-      const allB64s = [r.b64];
-      for (const ep of extraPrompts) {
-        try {
-          const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-            body: JSON.stringify({ action: 'generate_poster_image', prompt: ep, size: fmt.apiSize })
-          });
-          const d = await res.json();
-          if (d.ok && d.b64) allB64s.push(d.b64);
-        } catch(e) { console.warn('Extra frame failed', e); }
-      }
+      // Use single poster with Ken Burns slow zoom effect for smooth GIF animation
+      // No extra API calls needed — consistent logo, consistent design
+      const allB64s = [r.b64]; // single source poster
 
       showMktToast('⏳ Encoding ' + fmt.label + ' GIF (' + allB64s.length + ' frames)…', 5000);
 
@@ -5419,32 +5399,40 @@ async function calGenerateGif(calendarId) {
           return out;
         };
 
-        // Get pixel data for each frame (drawn to fit exactly W×H — no cropping)
-        const pixDatas = imgs.map(img => {
-          oct.clearRect(0, 0, W, H);
-          // Draw image to fit exactly — contain within canvas
-          const scale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+        // Ken Burns slow zoom animation — poster zooms from 100% → 108% over duration
+        // Gives cinematic motion feel without needing multiple API calls
+        const img = imgs[0]; // single consistent poster (consistent logo)
+        const TOTAL_FRAMES = HOLD + FADE * 2; // fade in + hold + fade out
+        const ZOOM_START = 1.0;
+        const ZOOM_END = 1.08; // 8% zoom over duration
+
+        const frames = [];
+        for (let f = 0; f < TOTAL_FRAMES; f++) {
+          const t = f / (TOTAL_FRAMES - 1); // 0→1
+          const zoom = ZOOM_START + (ZOOM_END - ZOOM_START) * t;
+
+          // Fade envelope: fade in first FADE frames, fade out last FADE frames
+          const fadeAlpha = f < FADE ? f / FADE : f > TOTAL_FRAMES - FADE ? (TOTAL_FRAMES - f) / FADE : 1;
+
+          ctx.clearRect(0, 0, W, H);
+          ctx.fillStyle = '#111';
+          ctx.fillRect(0, 0, W, H);
+
+          // Draw zoomed image centered
+          const scale = Math.min(W / img.naturalWidth, H / img.naturalHeight) * zoom;
           const sw = img.naturalWidth * scale;
           const sh = img.naturalHeight * scale;
           const dx = (W - sw) / 2;
           const dy = (H - sh) / 2;
-          oct.fillStyle = '#111';
-          oct.fillRect(0, 0, W, H);
-          oct.drawImage(img, dx, dy, sw, sh);
-          return oct.getImageData(0, 0, W, H).data;
-        });
+          ctx.drawImage(img, dx, dy, sw, sh);
 
-        const frames = [];
-        for (let fi = 0; fi < pixDatas.length; fi++) {
-          const cur = pixDatas[fi];
-          const nxt = pixDatas[(fi + 1) % pixDatas.length];
-          // Hold
-          const curArr = Array.from(cur);
-          for (let f = 0; f < HOLD; f++) frames.push({ data: curArr, delay: DELAY });
-          // Crossfade to next
-          for (let f = 0; f < FADE; f++) {
-            frames.push({ data: Array.from(blend(cur, nxt, (f+1)/(FADE+1))), delay: DELAY });
+          // Apply fade overlay
+          if (fadeAlpha < 1) {
+            ctx.fillStyle = 'rgba(0,0,0,' + (1 - fadeAlpha) + ')';
+            ctx.fillRect(0, 0, W, H);
           }
+
+          frames.push({ data: Array.from(ctx.getImageData(0, 0, W, H).data), delay: DELAY });
         }
 
         // Encode GIF
