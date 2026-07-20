@@ -5826,19 +5826,31 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
       },
     ]
     const animPosterB64s = {};
+    const animErrors = [];
     for (const fmt of GIF_FORMATS_ANIM) {
-      showMktToast('⏳ Generating ' + fmt.key + ' background…', 5000);
+      showMktToast('⏳ Generating ' + fmt.key + ' poster…', 5000);
       try {
         const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
           method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
           body: JSON.stringify({ action:'generate_poster_image', prompt:fmt.prompt, size:fmt.size })
         });
         const d = await res.json();
-        if (d.ok && d.b64) animPosterB64s[fmt.key] = { b64:d.b64, fmt };
-      } catch(e) { console.warn('Background failed for', fmt.key, e); }
+        if (d.ok && d.b64) {
+          animPosterB64s[fmt.key] = { b64:d.b64, fmt };
+        } else {
+          const err = (d.error || 'No image returned') + ' (HTTP ' + res.status + ')';
+          animErrors.push(fmt.key + ': ' + err);
+          console.warn('Poster failed for', fmt.key, err);
+        }
+      } catch(e) {
+        animErrors.push(fmt.key + ': ' + e.message);
+        console.warn('Poster error for', fmt.key, e);
+      }
     }
 
-    if (!Object.keys(animPosterB64s).length) throw new Error('Background generation failed for all formats');
+    if (!Object.keys(animPosterB64s).length) {
+      throw new Error('Poster generation failed: ' + animErrors.join('; '));
+    }
 
     const pi_item = reloadedItem;
 
