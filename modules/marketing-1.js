@@ -5229,22 +5229,35 @@ async function calGenerateGif(calendarId) {
   }, 3000);
 
   try {
-    // STEP 1: Generate caption
+    // STEP 1: Load item + generate brief (caption, headline, message)
     const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     if (!item) throw new Error('Calendar item not found');
 
-    const capRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+    showMktToast('⏳ Step 1/4: Generating content brief…', 5000);
+    const briefRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_single', calendar_id: parseInt(calendarId) })
+      body: JSON.stringify({
+        action: 'generate_brief',
+        brief: [item.topic, item.notes].filter(Boolean).join('. '),
+        tone: 'product'
+      })
     });
-    const capData = await capRes.json();
-    if (!capData.ok) throw new Error('Caption generation failed: ' + (capData.error || ''));
+    const briefData = await briefRes.json();
+    if (!briefData.ok) throw new Error('Brief generation failed: ' + (briefData.error || ''));
 
-    // Reload item with generated data
-    const { data: updatedItem } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-    const topic = updatedItem.topic || item.topic;
-    const headline = updatedItem.poster_message || updatedItem.topic;
-    const message = updatedItem.poster_message || '';
+    const brief = briefData.content;
+    const topic = item.topic;
+    const headline = brief.headline || item.topic;
+    const message = brief.poster_message || '';
+
+    // Save caption back to calendar
+    await sb.from('content_calendar').update({
+      caption: brief.caption_en,
+      caption_te: brief.caption_te,
+      hashtags: (brief.hashtags || '').split(' ').filter(h => h.startsWith('#')),
+      poster_message: message,
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
 
     showMktToast('⏳ Step 2/4: Generating 3 AI poster frames… (~90s each)', 5000);
 
@@ -5367,15 +5380,29 @@ async function calGenerateGif(calendarId) {
     const { data: posterPub } = sb.storage.from('calendar-images').getPublicUrl(posterPath);
 
     // STEP 5: Save back to calendar — image_url = GIF, platform_images has static poster too
+    // Generate approval token
+    const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    const expires = new Date(Date.now() + 48*3600*1000).toISOString();
     await sb.from('content_calendar').update({
       image_url: gifUrl,
       platform_images: { instagram_feed: posterPub.publicUrl, gif: gifUrl },
       status: 'ready',
+      approval_token: token,
+      approval_token_expires_at: expires,
+      post_time: '10:00',
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
+    // Send approval email
+    try {
+      await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'send_approval_notification', calendar_id: parseInt(calendarId) })
+      });
+    } catch(e) { console.log('Email send failed:', e); }
+
     clearInterval(ticker);
-    showMktToast(`✅ GIF ready! (${(gifBlob.size / 1024).toFixed(0)} KB) — check email and approve`, 8000);
+    showMktToast(`✅ GIF ready! (${(gifBlob.size / 1024).toFixed(0)} KB) — approval email sent to hmehta@vwholesale.in`);
     renderCalendar();
 
   } catch(e) {
