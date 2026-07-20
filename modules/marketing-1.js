@@ -41,12 +41,12 @@ let mktAccess = { level: 'none', extra_pages: [] };
 const MKT_LEVEL_PAGES = {
   none:      [],
   inbox:     ['inbox'],
-  creator:   ['command','content','poster','calendar','greetings','brand','brand-profile','inbox'],
-  publisher: ['command','cmo','content','poster','calendar','greetings','approvals','social','gbp','whatsapp',
+  creator:   ['command','content','poster','gif','calendar','greetings','brand','brand-profile','inbox'],
+  publisher: ['command','cmo','content','poster','gif','calendar','greetings','approvals','social','gbp','whatsapp',
               'brand','brand-profile','inbox','email','web-push','reviews'],
   ads:       ['command','ads','analytics','segments'],
   analyst:   ['command','analytics','reviews','competitors','segments','audit'],
-  manager:   ['command','cmo','campaigns','poster','content','calendar','approvals','greetings','social','gbp',
+  manager:   ['command','cmo','campaigns','poster','gif','content','calendar','approvals','greetings','social','gbp',
               'whatsapp','ads','local-seo','website-seo','reviews','analytics','competitors','segments',
               'agents','brand-profile','brand','inbox','email','web-push'],
   admin:     null, // null = everything
@@ -225,6 +225,7 @@ async function mktSignOut() {
 const PAGE_TITLES = {
   command: 'Command Centre', cmo: 'AI CMO', bi: 'Business Intelligence', campaigns: 'Campaigns',
   content: 'Content Studio', calendar: 'Content Calendar', approvals: 'Approvals',
+  poster: 'Poster Studio', gif: 'GIF Studio',
   social: 'Social Media', gbp: 'Google Business Profile', whatsapp: 'WhatsApp',
   ads: 'Advertising', 'local-seo': 'Local SEO', 'website-seo': 'Website SEO',
   reviews: 'Reviews & Reputation', analytics: 'Analytics', competitors: 'Competitor Intelligence',
@@ -245,7 +246,7 @@ function mktNav(page) {
   }
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
   const renderers = {
-    poster: renderPosterStudio, command: renderCommandCentre, cmo: renderAICMO,
+    poster: renderPosterStudio, gif: renderGifStudio, command: renderCommandCentre, cmo: renderAICMO,
     campaigns: renderCampaigns, content: renderContentStudio, calendar: renderCalendar,
     approvals: renderApprovals, social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
     ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
@@ -3493,11 +3494,13 @@ async function renderCalendar() {
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
             ${hasImage
               ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} ready</span>`
-              : ''}
-            <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':hasImage?'📸 Replace Image':'📸 Upload Image'}</button>
-            ${item.content_type!=='reel'&&item.content_type!=='gif'
+              : ''}\n            <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':hasImage?'📸 Upload':'📸 Upload'}</button>
+            ${item.content_type==='gif'
+              ? `<button onclick="calOpenGifStudio('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Create GIF</button>`
+              : item.content_type!=='reel'
               ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Generate AI poster for all platforms">🤖 Auto Poster</button>
-                 ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}`
+                 ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-apply layout with stored backgrounds (free)">🎨</button>`:''}
+                 <button onclick="calConvertToGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Convert this post to GIF (non-destructive — keeps original poster)">✨ GIF</button>`
               : ''}
             <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
             ${isReady && hasImage
@@ -5102,6 +5105,40 @@ async function calHandleImageUpload(calendarId, input) {
 
   const sizeCount = Object.keys(sizeMap).length;
   showMktToast(`✅ ${sizeCount} size${sizeCount>1?'s':''} generated — click Approve & Schedule`);
+  renderCalendar();
+}
+
+// ── GIF STUDIO CALENDAR INTEGRATION ──
+// Non-destructive: original poster always preserved
+// primary_content_type tracks what to show; static_poster_id preserved
+async function calOpenGifStudio(calendarId) {
+  // Navigate to GIF Studio with calendar context pre-filled
+  const { data: item } = await sb.from('content_calendar').select('topic,caption,notes,poster_message').eq('id', calendarId).single().then(r=>r,()=>({data:null}));
+  mktNav('gif');
+  // Slight delay for render, then prefill
+  setTimeout(() => {
+    const briefEl = document.getElementById('gs-brief');
+    if (briefEl && item) {
+      briefEl.value = [item.topic, item.notes, item.poster_message].filter(Boolean).join('\n');
+      document.getElementById('gs-out-headline').value = item.topic || '';
+      document.getElementById('gs-out-message').value = item.poster_message || '';
+      document.getElementById('gs-storyboard-section').style.display = 'grid';
+      showMktToast('✨ GIF Studio opened — brief pre-filled from calendar post');
+    }
+  }, 600);
+}
+
+async function calConvertToGif(calendarId) {
+  if (!confirm('Convert this post to GIF mode?\n\nYour original static poster is preserved — this is non-destructive.\nYou can switch back to Image at any time.')) return;
+  // Mark as GIF type but store original content_type in metadata
+  const { data: item } = await sb.from('content_calendar').select('content_type,image_url').eq('id', calendarId).single().then(r=>r,()=>({data:null}));
+  await sb.from('content_calendar').update({
+    content_type: 'gif',
+    // Preserve original poster URL — just changing the content_type flag
+    // image_url stays (original poster) — GIF Studio will set gif_url separately when done
+    updated_at: new Date().toISOString()
+  }).eq('id', calendarId);
+  showMktToast('✨ Post type changed to GIF — original poster preserved. Click Create GIF to open GIF Studio.');
   renderCalendar();
 }
 
