@@ -866,18 +866,15 @@ async function gsRenderGif() {
   gsUpdateProgress(65, 'Encoding GIF (this may take a moment)…');
 
   // Encode GIF using gifenc loaded from CDN via Worker
-  let gifencSrc;
-  try {
-    const _r = await fetch('/assets/gifenc-worker.js');
-    if (!_r.ok) throw new Error('HTTP ' + _r.status);
-    gifencSrc = await _r.text();
-  } catch(e) {
-    throw new Error('Failed to load GIF encoder: ' + e.message);
-  }
-  const _wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:65+Math.round(i/f.length*30)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-    const _wfn2 = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:65+Math.round(i/f.length*30)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-  const workerCode = gifencSrc + '\n' + _wfn2;
-  const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
+  const _libResp2 = await fetch('/assets/gifenc-worker.js');
+  if (!_libResp2.ok) { showMktToast('❌ gifenc load failed'); gsHideProgress(); return; }
+  const _libBlob2 = new Blob([await _libResp2.text()], { type: 'application/javascript' });
+  const _libUrl2 = URL.createObjectURL(_libBlob2);
+  const _ws = [
+    'importScripts("' + _libUrl2 + '");',
+    'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:65+Math.round(i/f.length*30)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};'
+  ].join('\n');
+  const workerBlob = new Blob([_ws], { type: 'application/javascript' });
   const workerUrl = URL.createObjectURL(workerBlob);
   const worker = new Worker(workerUrl);
 

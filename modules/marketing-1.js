@@ -5361,31 +5361,58 @@ async function calGenerateGif(calendarId) {
       }
     }
 
-    // Encode via gifenc Web Worker — fetch library first to avoid importScripts CDN block
-    const gifBlob = await new Promise(async (resolve, reject) => {
-      let gifencSrc;
-      try {
-        const r = await fetch('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
-        gifencSrc = await r.text();
-      } catch(e) { reject(new Error('Failed to load GIF encoder library: ' + e.message)); return; }
+    // Encode via gifenc — fetch local bundle, create two blob URLs
+    // (gifenc blob URL + worker that imports it) to avoid any string escaping issues
+    const gifBlob = await (async () => {
+      // Step A: fetch local gifenc bundle → blob URL
+      const libResp = await fetch('/assets/gifenc-worker.js');
+      if (!libResp.ok) throw new Error('gifenc load failed: HTTP ' + libResp.status);
+      const libBlob = new Blob([await libResp.text()], { type: 'application/javascript' });
+      const libUrl = URL.createObjectURL(libBlob);
 
-      const _wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-      const workerCode = gifencSrc + '\n' + _wfn;
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      const url = URL.createObjectURL(blob);
-      const worker = new Worker(url);
-      worker.onmessage = e => {
-        if (e.data.type === 'progress') {
-          showMktToast(`⏳ Step 3/4: Encoding GIF… ${e.data.pct}%`, 5000);
-        } else if (e.data.type === 'done') {
+      // Step B: worker script imports that blob URL (same-origin blob URLs work in workers)
+      const workerScript = [
+        'importScripts("' + libUrl + '");',
+        'self.onmessage=function(e){',
+        '  var f=e.data.frames,w=e.data.width,h=e.data.height;',
+        '  var g=GIFEncoder();',
+        '  f.forEach(function(fr,i){',
+        '    var d=new Uint8ClampedArray(fr.data);',
+        '    var p=quantize(d,256);',
+        '    var ix=applyPalette(d,p);',
+        '    g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});',
+        '    if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});',
+        '  });',
+        '  g.finish();',
+        '  var b=g.bytes();',
+        '  self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);',
+        '};'
+      ].join('\n');
+
+      const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(workerBlob);
+
+      return new Promise((resolve, reject) => {
+        const worker = new Worker(workerUrl);
+        worker.onmessage = e => {
+          if (e.data.type === 'progress') {
+            showMktToast('⏳ Step 3/4: Encoding GIF… ' + e.data.pct + '%', 5000);
+          } else if (e.data.type === 'done') {
+            worker.terminate();
+            URL.revokeObjectURL(workerUrl);
+            URL.revokeObjectURL(libUrl);
+            resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
+          }
+        };
+        worker.onerror = e => {
           worker.terminate();
-          URL.revokeObjectURL(url);
-          resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
-        }
-      };
-      worker.onerror = e => { worker.terminate(); reject(new Error(e.message)); };
-      worker.postMessage({ frames: pixelFrames, width: GIF_SIZE, height: GIF_SIZE });
-    });
+          URL.revokeObjectURL(workerUrl);
+          URL.revokeObjectURL(libUrl);
+          reject(new Error('GIF encoding failed: ' + (e.message || e.type)));
+        };
+        worker.postMessage({ frames: pixelFrames, width: GIF_SIZE, height: GIF_SIZE });
+      });
+    })();
 
     showMktToast('⏳ Step 4/4: Uploading GIF…', 5000);
 
