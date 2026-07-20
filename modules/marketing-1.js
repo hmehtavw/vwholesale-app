@@ -6376,6 +6376,26 @@ function buildEditorPopup() {
             <button onclick="editorAdd('circle')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">● Circle</button>
             <button onclick="editorAdd('emoji')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">😊 Emoji</button>
           </div>
+          <div style="margin-top:10px;border-top:1px solid #334155;padding-top:10px">
+            <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:6px">CANVAS SIZE</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
+              <div>
+                <div style="font-size:9px;color:#475569;margin-bottom:2px">Width</div>
+                <input type="number" id="editor-cw" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="editorResizeCanvas(+this.value, +document.getElementById('editor-ch').value)">
+              </div>
+              <div>
+                <div style="font-size:9px;color:#475569;margin-bottom:2px">Height</div>
+                <input type="number" id="editor-ch" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="editorResizeCanvas(+document.getElementById('editor-cw').value, +this.value)">
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <button onclick="editorResizeCanvas(480,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Square 1:1 — 480×480</button>
+              <button onclick="editorResizeCanvas(320,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Story 9:16 — 320×480</button>
+              <button onclick="editorResizeCanvas(480,320)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Landscape 16:9 — 480×320</button>
+              <button onclick="editorResizeCanvas(540,540)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ HD Square — 540×540</button>
+              <button onclick="editorResizeCanvas(1080,1080)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Full HD 1:1 — 1080×1080</button>
+            </div>
+          </div>
         </div>
 
         <!-- Elements list -->
@@ -6415,6 +6435,33 @@ function buildEditorPopup() {
   editorRenderCanvas();
 }
 
+function editorResizeCanvas(w, h) {
+  if (!w || !h || w < 50 || h < 50) return;
+  const fmt = editorGetActive();
+  fmt.w = w; fmt.h = h;
+  _editorCanvas.width = w; _editorCanvas.height = h;
+  // Update size display
+  const cw = document.getElementById('editor-cw');
+  const ch = document.getElementById('editor-ch');
+  if (cw) cw.value = w;
+  if (ch) ch.value = h;
+  // Rescale canvas display
+  const maxH = Math.min(window.innerHeight * 0.7, 560);
+  const scale = maxH / h;
+  _editorCanvas.style.width  = Math.round(w * scale) + 'px';
+  _editorCanvas.style.height = Math.round(h * scale) + 'px';
+  // Update BG image for new format
+  const srcUrl = _editorPI[fmt.imgKey];
+  if (srcUrl && !_editorBgImages[_editorActive]) {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => { _editorBgImages[_editorActive] = img; editorRenderCanvas(); };
+    img.src = srcUrl;
+  } else {
+    editorRenderCanvas();
+  }
+}
+window.editorResizeCanvas = editorResizeCanvas;
+
 function editorInitCanvas() {
   const fmt = editorGetActive();
   _editorCanvas = document.getElementById('editor-canvas');
@@ -6426,6 +6473,12 @@ function editorInitCanvas() {
   _editorCanvas.height = fmt.h;
   _editorCanvas.style.width = Math.round(fmt.w * scale) + 'px';
   _editorCanvas.style.height = Math.round(fmt.h * scale) + 'px';
+
+  // Populate size fields
+  const cwEl = document.getElementById('editor-cw');
+  const chEl = document.getElementById('editor-ch');
+  if (cwEl) cwEl.value = fmt.w;
+  if (chEl) chEl.value = fmt.h;
 
   // Bind events
   _editorCanvas.onmousedown = editorOnDown;
