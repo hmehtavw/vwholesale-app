@@ -5395,7 +5395,12 @@ function buildCalSizesList(platforms) {
 
 // Direct regenerate — no edit form needed
 async function calRegenerateItem(calendarId) {
-  showMktToast('⏳ Generating caption + sending approval email…');
+  const btn = document.querySelector(`button[onclick="calRegenerateItem('${calendarId}')"]`);
+  const origText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
+
+  showMktToast('⏳ Generating caption + AI poster… (~90 seconds, please wait)', 120000);
+
   try {
     const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
@@ -5407,9 +5412,11 @@ async function calRegenerateItem(calendarId) {
       renderCalendar();
     } else {
       showMktToast('⚠️ ' + (data.error||'Generation failed'));
+      if (btn) { btn.innerHTML = origText; btn.disabled = false; }
     }
   } catch(e) {
     showMktToast('❌ ' + e.message);
+    if (btn) { btn.innerHTML = origText; btn.disabled = false; }
   }
 }
 window.calRegenerateItem = calRegenerateItem;
