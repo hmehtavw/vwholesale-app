@@ -5326,10 +5326,15 @@ async function calGenerateGif(calendarId) {
       }
     }
 
-    // Encode via gifenc Web Worker
-    const gifBlob = await new Promise((resolve, reject) => {
-      const workerCode = `
-        importScripts('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
+    // Encode via gifenc Web Worker — fetch library first to avoid importScripts CDN block
+    const gifBlob = await new Promise(async (resolve, reject) => {
+      let gifencSrc;
+      try {
+        const r = await fetch('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
+        gifencSrc = await r.text();
+      } catch(e) { reject(new Error('Failed to load GIF encoder library: ' + e.message)); return; }
+
+      const workerCode = gifencSrc + `
         self.onmessage = function(e) {
           const { frames, width, height } = e.data;
           const gif = GIFEncoder();

@@ -866,14 +866,24 @@ async function gsRenderGif() {
   gsUpdateProgress(65, 'Encoding GIF (this may take a moment)…');
 
   // Encode GIF using gifenc loaded from CDN via Worker
-  const workerCode = `
-    importScripts('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
+  // Fetch gifenc first — importScripts CDN blocked in blob workers on GitHub Pages
+  let gifencSrc;
+  try {
+    const r = await fetch('https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.umd.js');
+    gifencSrc = await r.text();
+  } catch(e) {
+    showMktToast('❌ Failed to load GIF encoder: ' + e.message);
+    gsHideProgress();
+    return;
+  }
+  const workerCode = gifencSrc + `
     self.onmessage = function(e) {
       const { frames, width, height } = e.data;
       const gif = GIFEncoder();
       frames.forEach((f, i) => {
-        const palette = quantize(f.data, 256);
-        const indexed = applyPalette(f.data, palette);
+        const data = new Uint8ClampedArray(f.data);
+        const palette = quantize(data, 256);
+        const indexed = applyPalette(data, palette);
         gif.writeFrame(indexed, width, height, { palette, delay: f.delay, dispose: 2 });
         self.postMessage({ type: 'progress', pct: 65 + Math.round((i / frames.length) * 30) });
       });
