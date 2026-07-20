@@ -3465,17 +3465,22 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
   const isGif = item.content_type === 'gif';
   const imagePreviewSection = !isReel && hasImage ? `
     <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">${isGif ? 'GIF PREVIEW' : 'POSTER PREVIEW'}</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:6px;font-weight:600">${isGif ? '✨ GIF PREVIEW' : 'POSTER PREVIEW'}</div>
       <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
         ${isGif
-          ? `<div style="flex-shrink:0;text-align:center">
-               <img src="${item.image_url}" style="height:120px;width:120px;object-fit:cover;border-radius:5px;border:1px solid var(--gold);display:block" title="Animated GIF">
-               <div style="font-size:9px;color:var(--gold);margin-top:2px">✨ GIF</div>
-             </div>
-             ${platformImages.instagram_feed ? `<div style="flex-shrink:0;text-align:center">
-               <img src="${platformImages.instagram_feed}" style="height:120px;width:120px;object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
-               <div style="font-size:9px;color:var(--text3);margin-top:2px">Static poster</div>
-             </div>` : ''}`
+          ? [
+              { gifKey:'square_gif',  staticKey:'instagram_feed',  label:'1:1 Feed',    w:'90px',  h:'90px'  },
+              { gifKey:'story_gif',   staticKey:'instagram_story', label:'9:16 Story',  w:'56px',  h:'99px'  },
+              { gifKey:'landscape_gif',staticKey:'facebook_post',  label:'16:9 FB/YT', w:'120px', h:'68px'  },
+            ].map(({gifKey,staticKey,label,w,h}) => {
+              const gifSrc = platformImages[gifKey] || null;
+              const staticSrc = platformImages[staticKey] || null;
+              const src = gifSrc || staticSrc;
+              return src ? `<div style="flex-shrink:0;text-align:center">
+                <img src="${src}" style="width:${w};height:${h};object-fit:contain;border-radius:5px;border:1px solid ${gifSrc?'var(--gold)':'var(--border)'};display:block;background:#f5f0e8" title="${label}">
+                <div style="font-size:9px;color:${gifSrc?'var(--gold)':'var(--text3)'};margin-top:2px">${gifSrc?'✨':''} ${label}</div>
+              </div>` : '';
+            }).join('')
           : [
               {key:'square',label:'1:1',aspect:'1/1'},
               {key:'story',label:'9:16',aspect:'9/16'},
@@ -3483,7 +3488,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
             ].map(({key,label,aspect}) => {
               const url = platformImages[key === 'square' ? 'instagram_feed' : key === 'story' ? 'instagram_story' : 'facebook_post'] || (key === 'square' ? item.image_url : null);
               return url ? `<div style="flex-shrink:0;text-align:center">
-                <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:cover;border-radius:5px;border:1px solid var(--border);display:block">
+                <img src="${url}" style="height:72px;aspect-ratio:${aspect};object-fit:contain;border-radius:5px;border:1px solid var(--border);display:block;background:#f5f0e8">
                 <div style="font-size:9px;color:var(--text3);margin-top:2px">${label}</div>
               </div>` : '';
             }).join('')}
@@ -5340,67 +5345,101 @@ async function calGenerateGif(calendarId) {
     });
 
     // Load gifenc once
-    const libResp = await fetch('/assets/gifenc-worker.js');
-    if (!libResp.ok) throw new Error('gifenc load failed');
-    const libSrc = await libResp.text();
+    // Load gifenc lib once for all formats
+    const _gifencResp = await fetch('/assets/gifenc-worker.js');
+    if (!_gifencResp.ok) throw new Error('gifenc load failed: HTTP ' + _gifencResp.status);
+    const libSrc = await _gifencResp.text();
 
-    const encodeFormatGif = async (b64, W, H) => {
-      const img = await loadImg(b64);
-      const FPS = 10, DELAY = 100; // 10fps = 100ms delay
-      const HOLD = 30;   // 3s hold
-      const FADE = 6;    // 0.6s fade
-
-      const can = document.createElement('canvas'); can.width = W; can.height = H;
-      const ctx = can.getContext('2d');
-      const off = document.createElement('canvas'); off.width = W; off.height = H;
-      const oct = off.getContext('2d');
-      oct.drawImage(img, 0, 0, W, H);
-      const base = oct.getImageData(0, 0, W, H).data;
-      const black = new Uint8ClampedArray(base.length); // zeros
-
-      const frames = [];
-      const blend = (a, b, t) => {
-        const out = new Uint8ClampedArray(a.length);
-        for (let p = 0; p < a.length; p++) out[p] = Math.round(a[p]*(1-t) + b[p]*t);
-        return out;
-      };
-      // Fade in
-      for (let f = 0; f < FADE; f++) {
-        frames.push({ data: Array.from(blend(black, base, (f+1)/(FADE+1))), delay: DELAY });
-      }
-      // Hold
-      const baseArr = Array.from(base);
-      for (let f = 0; f < HOLD; f++) frames.push({ data: baseArr, delay: DELAY });
-      // Fade out
-      for (let f = 0; f < FADE; f++) {
-        frames.push({ data: Array.from(blend(base, black, (f+1)/(FADE+1))), delay: DELAY });
-      }
-
-      const wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-      const libBlob = new Blob([libSrc], { type: 'application/javascript' });
-      const libUrl = URL.createObjectURL(libBlob);
-      const workerCode = ['importScripts("'+libUrl+'");', wfn].join('\n');
-      const workerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
-
-      return new Promise((resolve, reject) => {
-        const worker = new Worker(workerUrl);
-        worker.onmessage = e => {
-          if (e.data.type === 'progress') showMktToast('⏳ Encoding GIF… ' + e.data.pct + '%', 3000);
-          else if (e.data.type === 'done') {
-            worker.terminate(); URL.revokeObjectURL(workerUrl); URL.revokeObjectURL(libUrl);
-            resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
-          }
-        };
-        worker.onerror = e => { worker.terminate(); reject(new Error('GIF encode: ' + (e.message||e.type))); };
-        worker.postMessage({ frames, width: W, height: H });
-      });
-    };
-
+    // For each format: generate 3 content-different frames at native size, then crossfade GIF
     for (const key of Object.keys(formatResults)) {
       const r = formatResults[key];
-      showMktToast('⏳ Encoding ' + key + ' GIF…', 5000);
+      const fmt = r.fmt;
+
+      // Generate 2 more frames for this format (r.b64 is already frame 1)
+      showMktToast('⏳ Generating additional frames for ' + fmt.label + '…', 5000);
+      const extraPrompts = [
+        fmt.prompt.replace('Complete premium marketing poster', 'Premium product-showcase poster').replace('Complete premium', 'Premium product-focused'),
+        fmt.prompt.replace('Complete premium marketing poster', 'Premium CTA closing poster — "Visit V Wholesale Today" as dominant call to action')
+      ];
+      const allB64s = [r.b64];
+      for (const ep of extraPrompts) {
+        try {
+          const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+            body: JSON.stringify({ action: 'generate_poster_image', prompt: ep, size: fmt.apiSize })
+          });
+          const d = await res.json();
+          if (d.ok && d.b64) allB64s.push(d.b64);
+        } catch(e) { console.warn('Extra frame failed', e); }
+      }
+
+      showMktToast('⏳ Encoding ' + fmt.label + ' GIF (' + allB64s.length + ' frames)…', 5000);
+
       try {
-        r.gifBlob = await encodeFormatGif(r.b64, r.fmt.gifW, r.fmt.gifH);
+        // Load all frames as images
+        const imgs = await Promise.all(allB64s.map(b64 => loadImg(b64)));
+        const W = fmt.gifW, H = fmt.gifH;
+        const FPS = 10, DELAY = 100;
+        const HOLD = 25;   // 2.5s hold
+        const FADE = 6;    // 0.6s crossfade
+
+        const can = document.createElement('canvas'); can.width = W; can.height = H;
+        const ctx = can.getContext('2d');
+        const off = document.createElement('canvas'); off.width = W; off.height = H;
+        const oct = off.getContext('2d');
+
+        const blend = (a, b, t) => {
+          const out = new Uint8ClampedArray(a.length);
+          for (let p = 0; p < a.length; p++) out[p] = Math.round(a[p]*(1-t) + b[p]*t);
+          return out;
+        };
+
+        // Get pixel data for each frame (drawn to fit exactly W×H — no cropping)
+        const pixDatas = imgs.map(img => {
+          oct.clearRect(0, 0, W, H);
+          // Draw image to fit exactly — contain within canvas
+          const scale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+          const sw = img.naturalWidth * scale;
+          const sh = img.naturalHeight * scale;
+          const dx = (W - sw) / 2;
+          const dy = (H - sh) / 2;
+          oct.fillStyle = '#111';
+          oct.fillRect(0, 0, W, H);
+          oct.drawImage(img, dx, dy, sw, sh);
+          return oct.getImageData(0, 0, W, H).data;
+        });
+
+        const frames = [];
+        for (let fi = 0; fi < pixDatas.length; fi++) {
+          const cur = pixDatas[fi];
+          const nxt = pixDatas[(fi + 1) % pixDatas.length];
+          // Hold
+          const curArr = Array.from(cur);
+          for (let f = 0; f < HOLD; f++) frames.push({ data: curArr, delay: DELAY });
+          // Crossfade to next
+          for (let f = 0; f < FADE; f++) {
+            frames.push({ data: Array.from(blend(cur, nxt, (f+1)/(FADE+1))), delay: DELAY });
+          }
+        }
+
+        // Encode GIF
+        const wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+        const libBlob = new Blob([libSrc], { type: 'application/javascript' });
+        const libUrl = URL.createObjectURL(libBlob);
+        const workerUrl = URL.createObjectURL(new Blob(['importScripts("'+libUrl+'");\n'+wfn], { type: 'application/javascript' }));
+
+        r.gifBlob = await new Promise((resolve, reject) => {
+          const worker = new Worker(workerUrl);
+          worker.onmessage = e => {
+            if (e.data.type === 'progress') showMktToast('⏳ ' + fmt.label + ' GIF ' + e.data.pct + '%…', 3000);
+            else if (e.data.type === 'done') {
+              worker.terminate(); URL.revokeObjectURL(workerUrl); URL.revokeObjectURL(libUrl);
+              resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
+            }
+          };
+          worker.onerror = e => { worker.terminate(); reject(new Error('GIF encode: ' + (e.message||e.type))); };
+          worker.postMessage({ frames, width: W, height: H });
+        });
       } catch(e) { console.warn('GIF encode failed for', key, e); }
     }
 
@@ -5678,8 +5717,8 @@ async function calPreviewPost(calendarId) {
 
     const mediaHtml = displayImg
       ? isVideo
-        ? `<video src="${displayImg}" style="${chImgStyle}" controls muted playsinline></video>`
-        : `<img src="${displayImg}" style="${chImgStyle}" onerror="this.style.display='none'">`
+        ? `<video src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')}" controls muted playsinline></video>`
+        : `<img src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')};background:#f5f0e8" onerror="this.style.display='none'">`
       : `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
