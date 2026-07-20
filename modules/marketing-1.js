@@ -273,10 +273,10 @@ function showMktToast(msg, duration = 3000, sticky = false) {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = 'mkt-toast';
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px 10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;max-width:90vw;display:flex;align-items:center;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.4)';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;max-width:90vw;display:flex;align-items:center;gap:10px;box-shadow:0 4px 24px rgba(0,0,0,.4);pointer-events:none';
     document.body.appendChild(toast);
   }
-  // Clear old close button
+  // Clear old content
   toast.innerHTML = '';
   const msgSpan = document.createElement('span');
   msgSpan.textContent = msg;
@@ -288,11 +288,12 @@ function showMktToast(msg, duration = 3000, sticky = false) {
   const isSticky = sticky || isError || isDone;
 
   if (isSticky) {
+    toast.style.pointerEvents = 'auto'; // enable clicks for close button
     // Add close button
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
-    closeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:14px;padding:0 0 0 4px;flex-shrink:0;line-height:1';
-    closeBtn.onclick = () => { toast.style.opacity = '0'; };
+    closeBtn.style.cssText = 'background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;padding:0 0 0 8px;flex-shrink:0;line-height:1;font-weight:700';
+    closeBtn.onclick = () => { toast.style.opacity = '0'; toast.style.pointerEvents = 'none'; };
     toast.appendChild(closeBtn);
     // Color by type
     toast.style.background = isError ? '#7f1d1d' : isDone ? '#14532d' : '#111827';
@@ -302,6 +303,7 @@ function showMktToast(msg, duration = 3000, sticky = false) {
   } else {
     toast.style.background = '#111827';
     toast.style.borderLeft = 'none';
+    toast.style.pointerEvents = 'none';
     clearTimeout(toast._t);
     toast._t = setTimeout(() => { toast.style.opacity = '0'; }, duration);
   }
