@@ -6271,9 +6271,9 @@ async function calApplyOfferBadge(calendarId) {
 
 let _editorCalendarId = null;
 let _editorFormats = {
-  square:    { key:'square',    label:'1:1 Feed',    w:480, h:480, imgKey:'instagram_feed',  elements:[] },
-  story:     { key:'story',     label:'9:16 Story',  w:320, h:480, imgKey:'instagram_story', elements:[] },
-  landscape: { key:'landscape', label:'16:9 FB/YT',  w:480, h:320, imgKey:'facebook_post',   elements:[] },
+  square:    { key:'square',    label:'1:1 Feed',    w:480, h:480,  nativeW:1024, nativeH:1024, imgKey:'instagram_feed',  elements:[] },
+  story:     { key:'story',     label:'9:16 Story',  w:320, h:480,  nativeW:1024, nativeH:1536, imgKey:'instagram_story', elements:[] },
+  landscape: { key:'landscape', label:'16:9 FB/YT',  w:480, h:320,  nativeW:1536, nativeH:1024, imgKey:'facebook_post',   elements:[] },
 };
 let _editorActive = 'square';
 let _editorPI = {};
@@ -6867,6 +6867,24 @@ window.editorAdd = editorAdd;
 window.editorDelete = editorDelete;
 window.editorSelectEl = editorSelectEl;
 
+// Scale element from display resolution to target resolution for high-quality export
+function editorScaleEl(el, scale) {
+  if (scale === 1) return el;
+  const s = e => typeof e === 'number' ? Math.round(e * scale) : e;
+  return { ...el,
+    x: s(el.x), y: s(el.y),
+    w: el.w ? s(el.w) : el.w,
+    h: el.h ? s(el.h) : el.h,
+    rx: el.rx ? s(el.rx) : el.rx,
+    x2: el.x2 ? s(el.x2) : el.x2,
+    y2: el.y2 ? s(el.y2) : el.y2,
+    fontSize: el.fontSize ? s(el.fontSize) : el.fontSize,
+    textSize: el.textSize ? s(el.textSize) : el.textSize,
+    strokeWidth: el.strokeWidth ? Math.max(1, s(el.strokeWidth)) : el.strokeWidth,
+    radius: el.radius ? s(el.radius) : el.radius,
+  };
+}
+
 async function editorEncode() {
   // Save all formats' elements to platform_images
   const editorElements = {};
@@ -6902,17 +6920,26 @@ async function editorEncode() {
       showMktToast('⏳ Encoding '+fmt.label+'…', 5000);
 
       const bgImg = _editorBgImages[key] || await loadImgUrl(srcUrl).catch(()=>null);
-      const W=fmt.w, H=fmt.h;
+      // PNG export at NATIVE resolution (1024×1024, 1024×1536, 1536×1024)
+      // GIF encoded at display resolution (480px) for file size
+      const NW = fmt.nativeW || fmt.w;
+      const NH = fmt.nativeH || fmt.h;
+      const W  = fmt.w, H = fmt.h; // display size for GIF
+      const scale = NW / W; // scale factor from display → native
       const elements = fmt.elements;
 
-      // Draw a single frame with all elements (for PNG reference)
-      const refCan = document.createElement('canvas'); refCan.width=W; refCan.height=H;
+      // Draw at NATIVE resolution for PNG
+      const refCan = document.createElement('canvas'); refCan.width=NW; refCan.height=NH;
       const refCtx = refCan.getContext('2d');
-      refCtx.fillStyle='#1a1a1a'; refCtx.fillRect(0,0,W,H);
-      if (bgImg) { const s=Math.max(W/bgImg.width,H/bgImg.height); refCtx.drawImage(bgImg,(W-bgImg.width*s)/2,(H-bgImg.height*s)/2,bgImg.width*s,bgImg.height*s); }
-      for (const el of elements) editorDrawEl(refCtx, el, W, H, false);
+      refCtx.fillStyle='#1a1a1a'; refCtx.fillRect(0,0,NW,NH);
+      if (bgImg) {
+        const s=Math.max(NW/bgImg.width,NH/bgImg.height);
+        refCtx.drawImage(bgImg,(NW-bgImg.width*s)/2,(NH-bgImg.height*s)/2,bgImg.width*s,bgImg.height*s);
+      }
+      // Draw elements scaled to native res
+      for (const el of elements) editorDrawEl(refCtx, editorScaleEl(el, scale), NW, NH, false);
 
-      // Upload static PNG
+      // Upload native PNG
       const pngBlob = await new Promise(res=>refCan.toBlob(res,'image/png'));
       const pngBytes=new Uint8Array(await pngBlob.arrayBuffer());
       const ts=Date.now();
@@ -6924,7 +6951,7 @@ async function editorEncode() {
         if(key==='landscape'){newPI['facebook_post']=pp.publicUrl;newPI['youtube']=pp.publicUrl;newPI['gbp']=pp.publicUrl;}
       }
 
-      // Encode GIF (fade in → hold → fade out with all elements)
+      // Encode GIF at display resolution (480px — good quality, manageable size)
       const DELAY=80, FADE=8, HOLD=36, TOTAL=HOLD+FADE*2;
       const can=document.createElement('canvas');can.width=W;can.height=H;
       const ctx=can.getContext('2d');
@@ -6997,10 +7024,27 @@ async function editorEncode() {
 window.editorEncode = editorEncode;
 
 function editorDownloadPNG() {
-  if (!_editorCanvas) return;
+  const fmt = editorGetActive();
+  const NW = fmt.nativeW || fmt.w;
+  const NH = fmt.nativeH || fmt.h;
+  const W  = fmt.w, H = fmt.h;
+  const scale = NW / W;
+
+  // Render at native resolution
+  const nativeCan = document.createElement('canvas');
+  nativeCan.width = NW; nativeCan.height = NH;
+  const nCtx = nativeCan.getContext('2d');
+  nCtx.fillStyle = '#1a1a1a'; nCtx.fillRect(0,0,NW,NH);
+  const bgImg = _editorBgImages[_editorActive];
+  if (bgImg) {
+    const s = Math.max(NW/bgImg.width, NH/bgImg.height);
+    nCtx.drawImage(bgImg, (NW-bgImg.width*s)/2, (NH-bgImg.height*s)/2, bgImg.width*s, bgImg.height*s);
+  }
+  for (const el of fmt.elements) editorDrawEl(nCtx, editorScaleEl(el, scale), NW, NH, false);
+
   const link = document.createElement('a');
-  link.download = 'vwholesale-'+_editorActive+'.png';
-  link.href = _editorCanvas.toDataURL('image/png');
+  link.download = 'vwholesale-' + _editorActive + '-' + NW + 'x' + NH + '.png';
+  link.href = nativeCan.toDataURL('image/png');
   link.click();
 }
 window.editorDownloadPNG = editorDownloadPNG;
