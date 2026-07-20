@@ -5291,175 +5291,167 @@ async function calGenerateGif(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    showMktToast('⏳ Step 2/4: Generating 3 AI poster frames… (~90s each)', 5000);
-
-    // STEP 2: Generate 3 full AI poster frames
-    const t = topic.toLowerCase();
-    const scheme = t.includes('granite') || t.includes('tile') || t.includes('marble')
-      ? 'elegant cream and charcoal with natural stone textures and warm wood tones'
-      : t.includes('paint') ? 'warm terracotta and sage green palette'
-      : t.includes('bathroom') || t.includes('sanitaryware') ? 'clean white and chrome with soft spa lighting'
-      : t.includes('electrical') || t.includes('wire') ? 'modern dark slate with gold accents'
+    // STEP 2: Generate native-size posters for each format (no resizing/cropping)
+    const tl = topic.toLowerCase();
+    const scheme = tl.includes('granite') || tl.includes('tile') || tl.includes('marble')
+      ? 'elegant cream and charcoal with natural stone textures'
+      : tl.includes('paint') ? 'warm terracotta and sage green'
+      : tl.includes('bathroom') || tl.includes('sanitaryware') ? 'clean white chrome soft spa'
       : 'warm professional cream and charcoal';
 
-    // Generate 3 AI poster frames for best quality GIF (~5 mins total)
-    const prompts = [
-      `Premium V Wholesale marketing poster. ${scheme}. Indian lifestyle interior. V Wholesale branding, tagline Build Better Pay Less, headline "${headline}", message "${message}". Category strip Tiles Granite Sanitaryware Paints Plywood Furniture. Footer +91 8712697930 vwholesale.in Visit V Wholesale. Square format.`,
-      `Premium product poster V Wholesale. ${scheme}. Indian interior ${topic} as hero. Headline "${headline}". Message "${message}". V Wholesale branding. Footer +91 8712697930 vwholesale.in Visit V Wholesale. Square 1:1.`,
-      `Premium CTA closing poster V Wholesale. ${scheme}. Indian home lifestyle. CTA Visit V Wholesale Today. Phone +91 8712697930. Website vwholesale.in. Tagline Build Better Pay Less. Category strip Tiles Granite Sanitaryware Paints Plywood Furniture. Square.`
+    const GIF_FORMATS = [
+      {
+        key: 'square', apiSize: '1024x1024', gifW: 480, gifH: 480,
+        channels: ['instagram_feed','threads'],
+        prompt: `Complete premium marketing poster for V Wholesale. SQUARE 1:1 FORMAT. ${scheme}. Real Indian home lifestyle interior photography. "V Wholesale" brand top with tagline "Build Better. Pay Less." Headline: "${headline}" Message: "${message}" Category icons strip bottom: Tiles Granite Sanitaryware Paints Plywood Furniture. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct. No watermark.`
+      },
+      {
+        key: 'story', apiSize: '1024x1536', gifW: 320, gifH: 480,
+        channels: ['instagram_story','facebook_story','whatsapp_story'],
+        prompt: `Complete premium VERTICAL STORY POSTER for V Wholesale. TALL 9:16 VERTICAL FORMAT — designed for Instagram Story, Facebook Story, WhatsApp Status. ${scheme}. Top 15%: V Wholesale brand and tagline. Middle: large Indian lifestyle photo for ${topic} fills most of frame. Headline "${headline}" overlaid. Message "${message}" below photo. Two-row category strip near bottom: Tiles Granite Sanitaryware / Paints Plywood Furniture. Full-width footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text fits, nothing cut off.`
+      },
+      {
+        key: 'landscape', apiSize: '1536x1024', gifW: 480, gifH: 320,
+        channels: ['facebook_post','youtube','gbp'],
+        prompt: `Complete premium LANDSCAPE POSTER for V Wholesale. WIDE 16:9 FORMAT — for Facebook Post, YouTube, Google Business. ${scheme}. Left third: editorial text — V Wholesale brand, tagline "Build Better. Pay Less.", headline "${headline}", message "${message}". Right two-thirds: Indian lifestyle photo for ${topic}. Category strip along bottom. Footer: +91 8712697930 | vwholesale.in | Visit V Wholesale. All text correct, nothing cropped.`
+      }
     ];
-    const frameB64s = [];
-    for (let i = 0; i < prompts.length; i++) {
-      showMktToast('⏳ Step 2/4: Generating frame ' + (i+1) + '/3 (90s each)…', 5000);
-      const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action: 'generate_poster_image', prompt: prompts[i], size: '1024x1024' })
-      });
-      const d = await res.json();
-      if (d.ok && d.b64) frameB64s.push(d.b64);
+
+    const formatResults = {};
+    for (let fi = 0; fi < GIF_FORMATS.length; fi++) {
+      const fmt = GIF_FORMATS[fi];
+      showMktToast('⏳ Generating ' + fmt.key + ' poster (' + (fi+1) + '/' + GIF_FORMATS.length + ')… (~90s)', 5000);
+      try {
+        const res = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+          body: JSON.stringify({ action: 'generate_poster_image', prompt: fmt.prompt, size: fmt.apiSize })
+        });
+        const d = await res.json();
+        if (d.ok && d.b64) formatResults[fmt.key] = { b64: d.b64, fmt };
+        else console.warn(fmt.key + ' failed:', d.error);
+      } catch(e) { console.warn(fmt.key + ' error:', e); }
     }
-    if (!frameB64s.length) throw new Error('AI frame generation failed');
+    if (!Object.keys(formatResults).length) throw new Error('All formats failed to generate');
 
-    showMktToast(`⏳ Step 3/4: Encoding GIF from ${frameB64s.length} frames…`, 5000);
-
-    // STEP 3: Load frames + encode crossfade slideshow GIF
-    showMktToast('⏳ Step 3/4: Encoding GIF slideshow…', 5000);
-    const loadImg = (b64) => new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = reject;
-      img.src = 'data:image/png;base64,' + b64;
+    // STEP 3: Encode each format as its own GIF (fade in → hold → fade out)
+    const loadImg = b64 => new Promise((res, rej) => {
+      const i = new Image(); i.onload = () => res(i); i.onerror = rej;
+      i.src = 'data:image/png;base64,' + b64;
     });
-    const imgs = await Promise.all(frameB64s.map(loadImg));
-    const GIF_SIZE = 480;  // 480 = good quality, manageable file size
-    const FPS = 12;
-    const FRAME_DELAY = Math.round(1000 / FPS);
-    const HOLD_FRAMES = Math.round(2.0 * FPS);   // 2s per frame
-    const FADE_FRAMES = Math.round(0.8 * FPS);   // 0.8s smooth crossfade
 
-    // Two canvases for proper alpha blending between frames
-    const canvas = document.createElement('canvas');
-    canvas.width = GIF_SIZE; canvas.height = GIF_SIZE;
-    const ctx = canvas.getContext('2d');
+    // Load gifenc once
+    const libResp = await fetch('/assets/gifenc-worker.js');
+    if (!libResp.ok) throw new Error('gifenc load failed');
+    const libSrc = await libResp.text();
 
-    const offscreen = document.createElement('canvas');
-    offscreen.width = GIF_SIZE; offscreen.height = GIF_SIZE;
-    const octx = offscreen.getContext('2d');
+    const encodeFormatGif = async (b64, W, H) => {
+      const img = await loadImg(b64);
+      const FPS = 10, DELAY = 100; // 10fps = 100ms delay
+      const HOLD = 30;   // 3s hold
+      const FADE = 6;    // 0.6s fade
 
-    const pixelFrames = [];
+      const can = document.createElement('canvas'); can.width = W; can.height = H;
+      const ctx = can.getContext('2d');
+      const off = document.createElement('canvas'); off.width = W; off.height = H;
+      const oct = off.getContext('2d');
+      oct.drawImage(img, 0, 0, W, H);
+      const base = oct.getImageData(0, 0, W, H).data;
+      const black = new Uint8ClampedArray(base.length); // zeros
 
-    for (let fi = 0; fi < imgs.length; fi++) {
-      const img = imgs[fi];
-      const nextImg = imgs[(fi + 1) % imgs.length];
-
-      // Hold: current frame static
-      for (let f = 0; f < HOLD_FRAMES; f++) {
-        ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-        ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
-        pixelFrames.push({ data: Array.from(ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data), delay: FRAME_DELAY });
+      const frames = [];
+      const blend = (a, b, t) => {
+        const out = new Uint8ClampedArray(a.length);
+        for (let p = 0; p < a.length; p++) out[p] = Math.round(a[p]*(1-t) + b[p]*t);
+        return out;
+      };
+      // Fade in
+      for (let f = 0; f < FADE; f++) {
+        frames.push({ data: Array.from(blend(black, base, (f+1)/(FADE+1))), delay: DELAY });
+      }
+      // Hold
+      const baseArr = Array.from(base);
+      for (let f = 0; f < HOLD; f++) frames.push({ data: baseArr, delay: DELAY });
+      // Fade out
+      for (let f = 0; f < FADE; f++) {
+        frames.push({ data: Array.from(blend(base, black, (f+1)/(FADE+1))), delay: DELAY });
       }
 
-      // Crossfade: blend current → next using pixel interpolation
-      // Draw both to separate canvases, mix pixel by pixel
-      ctx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-      ctx.drawImage(img, 0, 0, GIF_SIZE, GIF_SIZE);
-      const pixA = ctx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data;
-
-      octx.clearRect(0, 0, GIF_SIZE, GIF_SIZE);
-      octx.drawImage(nextImg, 0, 0, GIF_SIZE, GIF_SIZE);
-      const pixB = octx.getImageData(0, 0, GIF_SIZE, GIF_SIZE).data;
-
-      for (let f = 0; f < FADE_FRAMES; f++) {
-        const t = (f + 1) / (FADE_FRAMES + 1); // 0→1
-        const blended = new Uint8ClampedArray(pixA.length);
-        for (let p = 0; p < pixA.length; p++) {
-          blended[p] = Math.round(pixA[p] * (1 - t) + pixB[p] * t);
-        }
-        const imgData = new ImageData(blended, GIF_SIZE, GIF_SIZE);
-        ctx.putImageData(imgData, 0, 0);
-        pixelFrames.push({ data: Array.from(blended), delay: FRAME_DELAY });
-      }
-    }
-
-    // Encode via gifenc — fetch local bundle, create two blob URLs
-    // (gifenc blob URL + worker that imports it) to avoid any string escaping issues
-    const gifBlob = await (async () => {
-      // Step A: fetch local gifenc bundle → blob URL
-      const libResp = await fetch('/assets/gifenc-worker.js');
-      if (!libResp.ok) throw new Error('gifenc load failed: HTTP ' + libResp.status);
-      const libBlob = new Blob([await libResp.text()], { type: 'application/javascript' });
+      const wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
+      const libBlob = new Blob([libSrc], { type: 'application/javascript' });
       const libUrl = URL.createObjectURL(libBlob);
-
-      // Step B: worker script imports that blob URL (same-origin blob URLs work in workers)
-      const workerScript = [
-        'importScripts("' + libUrl + '");',
-        'self.onmessage=function(e){',
-        '  var f=e.data.frames,w=e.data.width,h=e.data.height;',
-        '  var g=GIFEncoder();',
-        '  f.forEach(function(fr,i){',
-        '    var d=new Uint8ClampedArray(fr.data);',
-        '    var p=quantize(d,256);',
-        '    var ix=applyPalette(d,p);',
-        '    g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});',
-        '    if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});',
-        '  });',
-        '  g.finish();',
-        '  var b=g.bytes();',
-        '  self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);',
-        '};'
-      ].join('\n');
-
-      const workerBlob = new Blob([workerScript], { type: 'application/javascript' });
-      const workerUrl = URL.createObjectURL(workerBlob);
+      const workerCode = ['importScripts("'+libUrl+'");', wfn].join('\n');
+      const workerUrl = URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' }));
 
       return new Promise((resolve, reject) => {
         const worker = new Worker(workerUrl);
         worker.onmessage = e => {
-          if (e.data.type === 'progress') {
-            showMktToast('⏳ Step 3/4: Encoding GIF… ' + e.data.pct + '%', 5000);
-          } else if (e.data.type === 'done') {
-            worker.terminate();
-            URL.revokeObjectURL(workerUrl);
-            URL.revokeObjectURL(libUrl);
+          if (e.data.type === 'progress') showMktToast('⏳ Encoding GIF… ' + e.data.pct + '%', 3000);
+          else if (e.data.type === 'done') {
+            worker.terminate(); URL.revokeObjectURL(workerUrl); URL.revokeObjectURL(libUrl);
             resolve(new Blob([e.data.buffer], { type: 'image/gif' }));
           }
         };
-        worker.onerror = e => {
-          worker.terminate();
-          URL.revokeObjectURL(workerUrl);
-          URL.revokeObjectURL(libUrl);
-          reject(new Error('GIF encoding failed: ' + (e.message || e.type)));
-        };
-        worker.postMessage({ frames: pixelFrames, width: GIF_SIZE, height: GIF_SIZE });
+        worker.onerror = e => { worker.terminate(); reject(new Error('GIF encode: ' + (e.message||e.type))); };
+        worker.postMessage({ frames, width: W, height: H });
       });
-    })();
+    };
 
-    showMktToast('⏳ Step 4/4: Uploading GIF…', 5000);
+    for (const key of Object.keys(formatResults)) {
+      const r = formatResults[key];
+      showMktToast('⏳ Encoding ' + key + ' GIF…', 5000);
+      try {
+        r.gifBlob = await encodeFormatGif(r.b64, r.fmt.gifW, r.fmt.gifH);
+      } catch(e) { console.warn('GIF encode failed for', key, e); }
+    }
 
-    // STEP 4: Upload GIF to Supabase storage
-    const gifBytes = new Uint8Array(await gifBlob.arrayBuffer());
-    const filename = `gif-calendar/${calendarId}_${Date.now()}.gif`;
-    const { error: upErr } = await sb.storage.from('calendar-images').upload(filename, gifBytes, {
-      contentType: 'image/gif', upsert: true
-    });
-    if (upErr) throw new Error('Upload failed: ' + upErr.message);
+    // STEP 4+5: Upload each format GIF + static posters, save all URLs to platform_images
+    showMktToast('⏳ Uploading…', 5000);
+    const ts = Date.now();
+    const platformImages = {};
+    let primaryGifUrl = null;
+    let totalKb = 0;
 
-    const { data: pub } = sb.storage.from('calendar-images').getPublicUrl(filename);
-    const gifUrl = pub.publicUrl;
+    for (const key of Object.keys(formatResults)) {
+      const r = formatResults[key];
+      const fmt = r.fmt;
 
-    // Also upload first frame as static poster preview (for approval email)
-    const frame1Bytes = Uint8Array.from(atob(frameB64s[0]), c => c.charCodeAt(0));
-    const posterPath = `calendar/${calendarId}_poster_square_${Date.now()}.png`;
-    await sb.storage.from('calendar-images').upload(posterPath, frame1Bytes, { contentType: 'image/png', upsert: true });
-    const { data: posterPub } = sb.storage.from('calendar-images').getPublicUrl(posterPath);
+      // Upload static poster (PNG)
+      try {
+        const pngBytes = Uint8Array.from(atob(r.b64), c => c.charCodeAt(0));
+        const pngPath = 'calendar/' + calendarId + '_gif_' + key + '_' + ts + '.png';
+        const { error: pe } = await sb.storage.from('calendar-images').upload(pngPath, pngBytes, { contentType: 'image/png', upsert: true });
+        if (!pe) {
+          const { data: pp } = sb.storage.from('calendar-images').getPublicUrl(pngPath);
+          fmt.channels.forEach(ch => { platformImages[ch] = pp.publicUrl; });
+        }
+      } catch(e) { console.warn('PNG upload failed', key, e); }
 
-    // STEP 5: Save back to calendar — image_url = GIF, platform_images has static poster too
-    // Generate approval token
+      // Upload GIF
+      if (r.gifBlob) {
+        try {
+          const gifBytes = new Uint8Array(await r.gifBlob.arrayBuffer());
+          const gifPath = 'gif-calendar/' + calendarId + '_' + key + '_' + ts + '.gif';
+          const { error: ge } = await sb.storage.from('calendar-images').upload(gifPath, gifBytes, { contentType: 'image/gif', upsert: true });
+          if (!ge) {
+            const { data: gp } = sb.storage.from('calendar-images').getPublicUrl(gifPath);
+            platformImages[key + '_gif'] = gp.publicUrl;
+            if (key === 'square') primaryGifUrl = gp.publicUrl;
+            totalKb += Math.round(r.gifBlob.size / 1024);
+          }
+        } catch(e) { console.warn('GIF upload failed', key, e); }
+      }
+    }
+
+    if (!primaryGifUrl) primaryGifUrl = platformImages['instagram_feed'] || Object.values(platformImages)[0];
+
+    // Save to calendar with all format URLs
     const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     const expires = new Date(Date.now() + 48*3600*1000).toISOString();
+    platformImages['gif'] = primaryGifUrl; // primary GIF reference
+
     await sb.from('content_calendar').update({
-      image_url: gifUrl,
-      platform_images: { instagram_feed: posterPub.publicUrl, gif: gifUrl },
+      image_url: primaryGifUrl,
+      platform_images: platformImages,
       status: 'ready',
       approval_token: token,
       approval_token_expires_at: expires,
@@ -5476,7 +5468,7 @@ async function calGenerateGif(calendarId) {
     } catch(e) { console.log('Email send failed:', e); }
 
     clearInterval(ticker);
-    showMktNotif('✅ GIF ready! (' + Math.round(gifBlob.size/1024) + ' KB) — approval email sent to hmehta@vwholesale.in');
+    showMktNotif('✅ GIFs ready! (' + totalKb + ' KB total across ' + Object.keys(formatResults).length + ' formats) — approval email sent');
     renderCalendar();
 
   } catch(e) {
