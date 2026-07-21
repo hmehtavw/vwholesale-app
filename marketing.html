@@ -452,36 +452,36 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 // Stub: ensures mktLogin is available even before marketing-1.js finishes parsing
 // Real implementation in marketing-1.js overwrites this on load
+// Wait for real mktLogin to be ready, then call it
 window.mktLogin = function() {
+  if (window._mktLoginReady) {
+    window._mktLoginReady();
+    return;
+  }
   var btn = document.getElementById('mkt-login-btn');
-  if (btn) btn.textContent = 'Loading portal…';
+  if (btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
   var attempts = 0;
   var wait = setInterval(function() {
     attempts++;
     if (window._mktLoginReady) {
       clearInterval(wait);
+      if (btn) { btn.textContent = 'Sign In to Marketing →'; btn.disabled = false; }
       window._mktLoginReady();
-    } else if (attempts > 150) {
+    } else if (attempts > 200) {
       clearInterval(wait);
+      if (btn) { btn.textContent = 'Sign In to Marketing →'; btn.disabled = false; }
       var err = document.getElementById('mkt-login-err');
-      if (err) { err.textContent = 'Portal failed to load. Hard refresh (Ctrl+Shift+R) and try again.'; err.style.display='block'; }
-      if (btn) btn.textContent = 'Sign In to Marketing →';
+      if (err) { err.textContent = 'Portal still loading — please wait a moment and try again.'; err.style.display='block'; setTimeout(function(){if(err)err.style.display='none';},3000); }
     }
-  }, 200);
+  }, 100);
 };
-// Also try immediately on window load
-window.addEventListener('load', function() {
-  if (window._mktLoginReady && document.getElementById('mkt-login-btn')?.textContent === 'Loading portal…') {
-    window._mktLoginReady();
-  }
-});
 </script>
-<script src="/modules/marketing-1.js?v=1784628978"></script>
-<script src="/modules/marketing-2.js?v=1784628978"></script>
-<script src="/modules/marketing-gif.js?v=1784628978"></script>
-<script src="/modules/marketing-inbox.js?v=1784628978"></script>
-<script src="/modules/marketing-strategy.js?v=1784628978"></script>
-<script src="/modules/marketing-bi.js?v=1784628978"></script>
+<script src="/modules/marketing-1.js?v=1784629042"></script>
+<script src="/modules/marketing-2.js?v=1784629042"></script>
+<script src="/modules/marketing-gif.js?v=1784629042"></script>
+<script src="/modules/marketing-inbox.js?v=1784629042"></script>
+<script src="/modules/marketing-strategy.js?v=1784629042"></script>
+<script src="/modules/marketing-bi.js?v=1784629042"></script>
 <script>
 // Error capture — shows JS errors visibly
 window.onerror = function(msg, src, line, col, err) {
