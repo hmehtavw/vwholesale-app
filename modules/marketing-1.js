@@ -3581,12 +3581,18 @@ function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
   if (hasImage) html += btnG('👁', "calPreviewPost('"+id+"')", false, '9px');
 
   // Approval / posting
-  if (isReady && hasImage) {
-    html += btnG('✅ Approve', "calApproveItem('"+id+"')", true, '12px;background:#22c55e');
-    html += btnG('🚀 Post Now', "calPostNow('"+id+"')", true, '12px;background:#3b82f6');
-  } else if (isApproved) {
+  if (isApproved) {
     html += btnG('🚀 Post Now', "calPostNow('"+id+"')", true, '14px;background:#3b82f6');
     html += btnG('↩', "calUnapproveItem('"+id+"')", false, '8px');
+  } else if (hasImage) {
+    // GIF posts: skip approve step — Post Now directly
+    // Image posts: need Approve first (unless already ready)
+    if (ct === 'gif' || isReady) {
+      if (isReady && ct !== 'gif') html += btnG('✅ Approve', "calApproveItem('"+id+"')", true, '12px;background:#22c55e');
+      html += btnG('🚀 Post Now', "calPostNow('"+id+"')", true, '12px;background:#3b82f6');
+    } else {
+      html += btnG('✅ Approve', "calApproveItem('"+id+"')", true, '12px;background:#22c55e');
+    }
   }
 
   return html;
