@@ -3602,10 +3602,10 @@ function openMktLightbox(src, label, dlSrc, dlName) {
   lb.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.92);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
   lb.innerHTML = `
     <div style="position:absolute;top:16px;right:16px;display:flex;gap:10px;align-items:center">
-      <a href="${dlSrc}" download="${dlName}" target="_blank"
-         style="background:var(--gold);color:#111;font-size:13px;font-weight:700;padding:8px 16px;border-radius:8px;text-decoration:none">
+      <button onclick="mktForceDownload('${dlSrc}','${dlName}')"
+         style="background:var(--gold);color:#111;font-size:13px;font-weight:700;padding:8px 16px;border-radius:8px;text-decoration:none;border:none;cursor:pointer">
         ⬇ Download
-      </a>
+      </button>
       <button onclick="document.getElementById('mkt-lightbox').remove()"
               style="background:rgba(255,255,255,.15);border:none;color:#fff;font-size:20px;font-weight:700;width:36px;height:36px;border-radius:50%;cursor:pointer;line-height:1">✕</button>
     </div>
