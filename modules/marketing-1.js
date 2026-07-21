@@ -8000,6 +8000,7 @@ async function calPostNow(calendarId) {
         🔍 Debug
       </button>
     </div>
+  </div>`;
 
   pop.addEventListener('click', e => { if (e.target===pop) pop.remove(); });
   document.body.appendChild(pop);
@@ -8307,63 +8308,140 @@ async function saveToHistory(calendarId, type, data) {
 async function openHistoryDrawer(calendarId) {
   const drawerId = 'hist-drawer-' + calendarId;
   const existing = document.getElementById(drawerId);
-  if (existing) { existing.remove(); return; } // toggle
+  if (existing) { existing.remove(); return; }
 
   const container = document.getElementById('cal-row-' + calendarId);
   if (!container) return;
 
-  // Fetch history
   const { data: rows } = await sb.from('generation_history')
     .select('*').eq('calendar_id', calendarId)
     .order('created_at', { ascending: false }).limit(50);
 
-  if (!rows?.length) {
-    showMktToast('No history yet for this post', 3000);
-    return;
-  }
+  if (!rows?.length) { showMktToast('No history yet for this post', 3000); return; }
+
+  const TYPE_LABEL = { poster:'🖼️ Poster', gif_slideshow:'🎞️ Slideshow GIF', gif_animated:'🎬 Animated GIF', caption:'📝 Caption' };
 
   const drawer = document.createElement('div');
   drawer.id = drawerId;
   drawer.style.cssText = 'margin-top:8px;background:#0f172a;border-radius:10px;padding:14px;border:1px solid #334155';
 
-  const TYPE_LABEL = { poster:'🖼️ Poster', gif_slideshow:'🎞️ Slideshow GIF', gif_animated:'🎬 Animated GIF', caption:'📝 Caption' };
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-size:12px;font-weight:700;color:#94a3b8';
+  title.textContent = '🕐 Generation History — ' + rows.length + ' version' + (rows.length>1?'s':'');
+  const closeBtn = document.createElement('button');
+  closeBtn.style.cssText = 'background:none;border:none;color:#64748b;cursor:pointer;font-size:16px';
+  closeBtn.textContent = '✕';
+  closeBtn.onclick = () => drawer.remove();
+  header.appendChild(title); header.appendChild(closeBtn);
+  drawer.appendChild(header);
 
-  drawer.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:#94a3b8">🕐 Generation History — ${rows.length} version${rows.length>1?'s':''}</div>
-      <button onclick="document.getElementById('${drawerId}').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:16px">✕</button>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:10px">
-      ${rows.map((r, i) => {
-        const date = new Date(r.created_at).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
-        const thumbUrl = r.platform_images?.instagram_feed || r.platform_images?.square_gif || r.image_url;
-        const gifUrl = r.platform_images?.square_gif || r.platform_images?.gif;
-        const displayUrl = gifUrl || thumbUrl;
-        const label = TYPE_LABEL[r.content_type] || r.content_type;
-        const isActive = r.is_active;
-        return `
-        <div style="background:#1e293b;border-radius:8px;padding:10px;border:1px solid ${isActive?'#c9a84c':'#334155'};display:flex;gap:10px;align-items:flex-start">
-          ${displayUrl ? `<img src="${displayUrl}" onclick="openMktLightbox('${displayUrl}','${label} — ${date}','${displayUrl}','history_${r.id}.${gifUrl?'gif':'png'}')" style="width:60px;height:60px;object-fit:contain;border-radius:6px;cursor:pointer;background:#0f172a;flex-shrink:0" title="Click to expand">` : '<div style="width:60px;height:60px;background:#0f172a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#475569;font-size:10px">No img</div>'}
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-              <span style="font-size:11px;font-weight:700;color:#f1f5f9">${label}</span>
-              ${isActive ? '<span style="font-size:9px;background:rgba(201,168,76,.2);color:#c9a84c;padding:1px 6px;border-radius:4px;font-weight:700">ACTIVE</span>' : ''}
-              ${r.anim_style ? '<span style="font-size:9px;background:#1e293b;color:#64748b;padding:1px 5px;border-radius:3px">'+r.anim_style+'</span>' : ''}
-            </div>
-            <div style="font-size:10px;color:#64748b;margin-bottom:4px">${date}</div>
-            ${r.offer_text ? '<div style="font-size:10px;color:#c9a84c">💰 '+r.offer_text+'</div>' : ''}
-            ${r.poster_message ? '<div style="font-size:10px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+r.poster_message.slice(0,60)+'</div>' : ''}
-            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-              ${!isActive ? `<button onclick="useHistoryVersion(${r.id},${calendarId})" style="background:#c9a84c;border:none;color:#111;font-size:10px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer">✅ Use This</button>` : '<span style="font-size:10px;color:#c9a84c">✓ Currently active</span>'}
-              ${displayUrl ? `<a href="${displayUrl}" download target="_blank" style="font-size:10px;color:#64748b;padding:4px 8px;border:1px solid #334155;border-radius:5px;text-decoration:none">⬇ Download</a>` : ''}
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`;
+  // Items
+  const list = document.createElement('div');
+  list.style.cssText = 'display:flex;flex-direction:column;gap:10px';
 
+  rows.forEach(function(r) {
+    const date = new Date(r.created_at).toLocaleString('en-IN', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    const thumbUrl = (r.platform_images && (r.platform_images.instagram_feed || r.platform_images.square_gif)) || r.image_url;
+    const gifUrl = r.platform_images && (r.platform_images.square_gif || r.platform_images.gif);
+    const displayUrl = gifUrl || thumbUrl;
+    const label = TYPE_LABEL[r.content_type] || r.content_type;
+    const isActive = r.is_active;
+
+    const item = document.createElement('div');
+    item.style.cssText = 'background:#1e293b;border-radius:8px;padding:10px;border:1px solid ' + (isActive?'#c9a84c':'#334155') + ';display:flex;gap:10px;align-items:flex-start';
+
+    // Thumbnail
+    if (displayUrl) {
+      const img = document.createElement('img');
+      img.src = displayUrl;
+      img.style.cssText = 'width:60px;height:60px;object-fit:contain;border-radius:6px;cursor:pointer;background:#0f172a;flex-shrink:0';
+      img.title = 'Click to expand';
+      img.onclick = function() { openMktLightbox(displayUrl, label + ' — ' + date, displayUrl, 'history_' + r.id + '.' + (gifUrl?'gif':'png')); };
+      item.appendChild(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.style.cssText = 'width:60px;height:60px;background:#0f172a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#475569;font-size:10px';
+      ph.textContent = 'No img';
+      item.appendChild(ph);
+    }
+
+    // Info
+    const info = document.createElement('div');
+    info.style.cssText = 'flex:1;min-width:0';
+
+    const meta = document.createElement('div');
+    meta.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:3px';
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:11px;font-weight:700;color:#f1f5f9';
+    lbl.textContent = label;
+    meta.appendChild(lbl);
+    if (isActive) {
+      const badge = document.createElement('span');
+      badge.style.cssText = 'font-size:9px;background:rgba(201,168,76,.2);color:#c9a84c;padding:1px 6px;border-radius:4px;font-weight:700';
+      badge.textContent = 'ACTIVE';
+      meta.appendChild(badge);
+    }
+    if (r.anim_style) {
+      const styleTag = document.createElement('span');
+      styleTag.style.cssText = 'font-size:9px;background:#1e293b;color:#64748b;padding:1px 5px;border-radius:3px';
+      styleTag.textContent = r.anim_style;
+      meta.appendChild(styleTag);
+    }
+    info.appendChild(meta);
+
+    const dateEl = document.createElement('div');
+    dateEl.style.cssText = 'font-size:10px;color:#64748b;margin-bottom:4px';
+    dateEl.textContent = date;
+    info.appendChild(dateEl);
+
+    if (r.offer_text) {
+      const offer = document.createElement('div');
+      offer.style.cssText = 'font-size:10px;color:#c9a84c';
+      offer.textContent = '💰 ' + r.offer_text;
+      info.appendChild(offer);
+    }
+    if (r.poster_message) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'font-size:10px;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      msg.textContent = r.poster_message.slice(0, 60);
+      info.appendChild(msg);
+    }
+
+    const actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:6px;margin-top:6px;flex-wrap:wrap';
+    if (!isActive) {
+      const useBtn = document.createElement('button');
+      useBtn.style.cssText = 'background:#c9a84c;border:none;color:#111;font-size:10px;font-weight:700;padding:4px 10px;border-radius:5px;cursor:pointer';
+      useBtn.textContent = '✅ Use This';
+      useBtn.onclick = function() { useHistoryVersion(r.id, calendarId); };
+      actions.appendChild(useBtn);
+    } else {
+      const activeLabel = document.createElement('span');
+      activeLabel.style.cssText = 'font-size:10px;color:#c9a84c';
+      activeLabel.textContent = '✓ Currently active';
+      actions.appendChild(activeLabel);
+    }
+    if (displayUrl) {
+      const dl = document.createElement('a');
+      dl.href = displayUrl;
+      dl.download = '';
+      dl.target = '_blank';
+      dl.style.cssText = 'font-size:10px;color:#64748b;padding:4px 8px;border:1px solid #334155;border-radius:5px;text-decoration:none';
+      dl.textContent = '⬇ Download';
+      actions.appendChild(dl);
+    }
+    info.appendChild(actions);
+    item.appendChild(info);
+    list.appendChild(item);
+  });
+
+  drawer.appendChild(list);
   container.appendChild(drawer);
 }
+
 
 async function useHistoryVersion(historyId, calendarId) {
   const { data: row } = await sb.from('generation_history').select('*').eq('id', historyId).single();
