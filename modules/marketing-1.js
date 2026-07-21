@@ -8395,17 +8395,21 @@ async function calPostNowExecute(calendarId) {
 
 
 async function calPostNowDebug(calendarId) {
+  try {
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
     .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN','META_WA_OWNER_PHONE']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
   const st = cfg['META_SYSTEM_USER_TOKEN'];
   const META = 'https://graph.facebook.com/v25.0';
 
-  const popContent = document.querySelector('#postnow-popup > div');
+  const popContent = document.querySelector('#postnow-popup > div') || document.getElementById('postnow-popup');
+  if (!popContent) { showMktToast('❌ Popup not found — open Post Now first'); return; }
+  document.getElementById('postnow-debug-div')?.remove();
   const debugDiv = document.createElement('div');
-  debugDiv.style.cssText = 'margin-top:12px;background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155;font-size:10px;color:#94a3b8';
+  debugDiv.id = 'postnow-debug-div';
+  debugDiv.style.cssText = 'margin-top:12px;background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155;font-size:10px;color:#94a3b8;max-height:300px;overflow-y:auto';
   debugDiv.innerHTML = '<div style="color:#c9a84c;font-weight:700;margin-bottom:8px">🔍 Running diagnostics…</div>';
-  popContent?.appendChild(debugDiv);
+  popContent.appendChild(debugDiv);
 
   const log = (msg, color) => {
     const c = color || '#94a3b8';
@@ -8466,6 +8470,7 @@ async function calPostNowDebug(calendarId) {
   } catch(e) { log('❌ WA check: '+e.message, '#ef4444'); }
 
   log('─── Diagnostics complete ───', '#334155');
+  } catch(e) { showMktToast('❌ Debug error: '+e.message, 5000); console.error('Debug error:', e); }
 }
 window.calPostNowDebug = calPostNowDebug;
 
