@@ -3553,7 +3553,47 @@ async function csPublishAll() {
   showMktToast(threadsResult?.ok ? '✅ Threads posted! Manual channels copied.' : '✅ Content saved — post manually');
 }
 
-function openMktLightbox(src, label, dlSrc, dlName) {
+function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
+  const id = item.id;
+  const ct = item.content_type;
+  const btnG = (label, onclick, primary, extra) =>
+    '<button onclick="'+onclick+'" class="mkt-btn '+(primary?'mkt-btn-primary':'mkt-btn-ghost')+'" style="font-size:11px;padding:6px '+(extra||'10px')+'">'+label+'</button>';
+
+  let html = '';
+
+  // Upload button
+  html += btnG(ct==='reel'?'⬆ Video':ct==='gif'?'⬆ GIF':'⬆ Image',
+    "document.getElementById('cal-img-"+id+"').click()", false, '10px');
+
+  // Content-type specific
+  if (ct === 'gif') {
+    html += btnG(hasImage ? '✨ Regen' : '✨ Generate GIF', "calGenerateGif('"+id+"')", !hasImage, '12px');
+    if (hasImage) {
+      html += btnG('🧹', "calReencodeClean('"+id+"')", false, '9px');
+      html += btnG('✏️', "openPosterEditor('"+id+"')", false, '9px');
+    }
+  } else if (ct !== 'reel') {
+    html += btnG(hasImage ? '🎨 Regen' : '🤖 Generate', "calGeneratePosters('"+id+"')", !hasImage, '12px');
+    if (hasImage) html += btnG('✏️', "openPosterEditor('"+id+"')", false, '9px');
+  }
+
+  // Preview
+  if (hasImage) html += btnG('👁', "calPreviewPost('"+id+"')", false, '9px');
+
+  // Approval / posting
+  if (isReady && hasImage) {
+    html += btnG('✅ Approve', "calApproveItem('"+id+"')", true, '12px;background:#22c55e');
+    html += btnG('🚀 Post Now', "calPostNow('"+id+"')", true, '12px;background:#3b82f6');
+  } else if (isApproved) {
+    html += btnG('🚀 Post Now', "calPostNow('"+id+"')", true, '14px;background:#3b82f6');
+    html += btnG('↩', "calUnapproveItem('"+id+"')", false, '8px');
+  }
+
+  return html;
+}
+window.calCardButtons = calCardButtons;
+
+
   const existing = document.getElementById('mkt-lightbox');
   if (existing) existing.remove();
   const lb = document.createElement('div');
@@ -3647,23 +3687,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
       ${hashtagPreview}
       ${isReel && item.reel_script ? `<div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">${renderReelScriptInline(item.reel_script, item.id, existing?.id)}</div>` : ''}
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">${item.content_type==='reel'?'⬆ Video':item.content_type==='gif'?'⬆ GIF':'⬆ Image'}</button>
-        ${(()=>{
-          const id='${item.id}';
-          if(item.content_type==='gif'){
-            const genBtn='<button id="gif-btn-'+id+'" onclick="calGenerateGif(\''+id+'\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ '+(hasImage?'Regen':'Generate GIF')+'</button>';
-            const extras=hasImage?'<button onclick="calReencodeClean(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Clean re-encode">🧹</button><button onclick="openPosterEditor(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">✏️</button>':'';
-            return genBtn+extras;
-          }
-          if(item.content_type!=='reel'){
-            const genBtn='<button onclick="calGeneratePosters(\''+id+'\')" class="mkt-btn '+(hasImage?'mkt-btn-ghost':'mkt-btn-primary')+'" style="font-size:11px;padding:6px 12px">'+(hasImage?'🎨 Regen':'🤖 Generate')+'</button>';
-            const editBtn=hasImage?'<button onclick="openPosterEditor(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">✏️</button>':'';
-            return genBtn+editBtn;
-          }
-          return '';
-        })()}
-        ${hasImage?'<button onclick="calPreviewPost(\'${item.id}\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">👁</button>':''}
-        ${isReady&&hasImage?'<button onclick="calApproveItem(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve</button><button onclick="calPostNow(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#3b82f6">🚀 Post Now</button>':isApproved?'<button onclick="calPostNow(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px;background:#3b82f6">🚀 Post Now</button><button onclick="calUnapproveItem(\'${item.id}\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩</button>':''}
+        ${calCardButtons(item, hasImage, isReady, isApproved, isGif)}
       </div>
       <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
     </div>` : '';
