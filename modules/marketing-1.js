@@ -6046,7 +6046,6 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
           }
 
           // Badge removed — AI poster already has price baked in
-          }
 
           // Global fade in/out
           if (fadeAlpha < 1) {
