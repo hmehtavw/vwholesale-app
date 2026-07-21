@@ -7065,6 +7065,53 @@ async function editorEncode() {
         if(key==='landscape')newPI['landscape_gif']=gp.publicUrl;
         totalKb+=Math.round(gifBlob.size/1024);
       }
+
+      // Also generate MP4 for this format (with music if selected, silent otherwise)
+      // MP4 is used for Instagram, Facebook, auto-posting pipeline
+      showMktToast('⏳ Encoding '+fmt.label+' MP4…', 5000);
+      try {
+        const drawFn = (ctx2, img2, W2, H2, els, t, textT) => {
+          ctx2.clearRect(0,0,W2,H2);
+          ctx2.fillStyle='#1a1a1a'; ctx2.fillRect(0,0,W2,H2);
+          if(img2){const s=Math.max(W2/img2.width,H2/img2.height);const zoom=1+0.04*t;ctx2.drawImage(img2,(W2-img2.width*s*zoom)/2,(H2-img2.height*s*zoom)/2,img2.width*s*zoom,img2.height*s*zoom);}
+          for(let ei=0;ei<els.length;ei++){
+            const el=els[ei];const elDelay=ei*0.18;
+            const elT=Math.max(0,Math.min(1,(textT-elDelay)/0.55));if(elT<=0)continue;
+            const bounce=elT<0.6?elT/0.6:1+0.08*Math.sin((elT-0.6)/0.4*Math.PI);
+            ctx2.save();const cx=el.x+(el.w||0)/2,cy=el.y+(el.h||0)/2;
+            ctx2.translate(cx,cy+(1-bounce)*H2*0.06);ctx2.scale(bounce<1?bounce:1,bounce<1?bounce:1);ctx2.translate(-cx,-cy);
+            editorDrawEl(ctx2,el,W2,H2,false);ctx2.restore();
+          }
+        };
+        const mp4Blob = await mktExportMP4WithMusic(srcUrl, elements, 'cinematic', musicURL, W, H, drawFn);
+        if(mp4Blob){
+          const mp4Bytes=new Uint8Array(await mp4Blob.arrayBuffer());
+          const ext=mp4Blob.type.includes('mp4')?'mp4':'webm';
+          const mp4Path='gif-calendar/'+_editorCalendarId+'_ed_'+key+'_'+ts+'.'+ext;
+          const{error:me}=await sb.storage.from('calendar-images').upload(mp4Path,mp4Bytes,{contentType:mp4Blob.type,upsert:true});
+          if(!me){
+            const{data:mp}=sb.storage.from('calendar-images').getPublicUrl(mp4Path);
+            newPI[key+'_mp4']=mp.publicUrl;
+            // Platform routing: MP4 for Instagram/Facebook/YouTube, GIF for WhatsApp
+            if(key==='square'){
+              newPI['instagram_feed_mp4']=mp.publicUrl;  // Instagram: use MP4
+              newPI['threads_mp4']=mp.publicUrl;
+              newPI['mp4_music']=mp.publicUrl;           // primary MP4
+            }
+            if(key==='story'){
+              newPI['instagram_story_mp4']=mp.publicUrl;
+              newPI['facebook_story_mp4']=mp.publicUrl;
+              // WhatsApp story keeps GIF (already set above)
+            }
+            if(key==='landscape'){
+              newPI['facebook_post_mp4']=mp.publicUrl;  // Facebook: use MP4
+              newPI['youtube_mp4']=mp.publicUrl;
+              newPI['gbp_mp4']=mp.publicUrl;
+            }
+            totalKb+=Math.round(mp4Blob.size/1024);
+          }
+        }
+      } catch(mp4Err){ console.warn('MP4 encode failed for', key, mp4Err); }
     }
 
     await sb.from('content_calendar').update({
