@@ -8270,21 +8270,13 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
-          const TH_API = 'https://graph.threads.net/v1.0';
           const thImg = pi['square_gif']||pi['instagram_feed']||item.image_url;
-          const pl = {text:cap.slice(0,500), media_type:thImg?'IMAGE':'TEXT'};
-          if(thImg) pl.image_url = thImg;
-          const cr = await(await fetch(TH_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
-            headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
-            body:JSON.stringify(pl)})).json();
-          if(cr.id){
-            await new Promise(r=>setTimeout(r,3000));
-            const pr = await(await fetch(TH_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
-              headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
-              body:JSON.stringify({creation_id:cr.id})})).json();
-            if(pr.id){ok=true;postId=pr.id;}
-            else error='Threads publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,100));
-          } else error='Threads container: '+(cr.error?.message||JSON.stringify(cr).slice(0,100));
+          const pr = await(await fetch(MKT_SB_URL+'/functions/v1/social-proxy',{method:'POST',
+            headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+            body:JSON.stringify({action:'post_threads',token:cfg.THREADS_ACCESS_TOKEN,
+              numeric_id:cfg.THREADS_NUMERIC_ID,image_url:thImg,text:cap.slice(0,500)})})).json();
+          if(pr.ok){ok=true;postId=pr.post_id;}
+          else error='Threads: '+(pr.error||'Post failed');
         }
       }
       else if (ch==='whatsapp_story') {
@@ -8449,21 +8441,27 @@ async function calPostNowDebug(calendarId) {
 
   // 3. Threads token check
   try {
-    const THREADS_API = 'https://graph.threads.net/v1.0';
-    const thMe = await (await fetch(THREADS_API+'/me?fields=id,username', {headers:{'Authorization':'Bearer '+cfg['THREADS_ACCESS_TOKEN']}})).json();
-    log(thMe.id ? '✅ Threads token valid — @'+thMe.username+' ('+thMe.id+')' : '❌ Threads: '+(thMe.error?.message||JSON.stringify(thMe).slice(0,80)), thMe.id?'#22c55e':'#ef4444');
+    const thProxy = await (await fetch(MKT_SB_URL+'/functions/v1/social-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({action:'verify_threads',token:cfg['THREADS_ACCESS_TOKEN'],numeric_id:cfg['THREADS_NUMERIC_ID']})
+    })).json();
+    log(thProxy.id ? '✅ Threads token valid — @'+thProxy.username+' ('+thProxy.id+')' : '❌ Threads: '+(thProxy.error||JSON.stringify(thProxy).slice(0,80)), thProxy.id?'#22c55e':'#ef4444');
   } catch(e) { log('❌ Threads check: '+e.message, '#ef4444'); }
 
   // 4. WhatsApp check
   try {
     const wa = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'?fields=id,display_phone_number,verified_name', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
     log(wa.id ? '✅ WhatsApp: '+wa.verified_name+' ('+wa.display_phone_number+')' : '❌ WA: '+(wa.error?.message||JSON.stringify(wa).slice(0,80)), wa.id?'#22c55e':'#ef4444');
-    const tmpl = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'/message_templates', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
-    const templates = tmpl.data || [];
-    if (templates.length) {
-      log('✅ WA Templates: '+templates.map(t=>t.name+' ('+t.status+')').join(', '), '#22c55e');
+    const waTemplRes = await (await fetch(MKT_SB_URL+'/functions/v1/social-proxy', {
+      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+      body:JSON.stringify({action:'wa_templates',wa_phone_id:cfg['META_WA_PHONE_ID'],wa_token:cfg['META_WA_TOKEN']})
+    })).json();
+    const templates = waTemplRes.data || [];
+    const approved = templates.filter(t=>t.status==='APPROVED'||t.status==='Active - Quality pending'||t.name);
+    if (approved.length) {
+      log('✅ WA Templates ('+approved.length+'): '+approved.map(t=>t.name).slice(0,5).join(', '), '#22c55e');
     } else {
-      log('ℹ️ No WA templates — image sends to specific numbers work without templates', '#f59e0b');
+      log('ℹ️ No WA templates found — image sends work without templates', '#f59e0b');
     }
   } catch(e) { log('❌ WA check: '+e.message, '#ef4444'); }
 
