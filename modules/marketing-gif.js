@@ -174,7 +174,7 @@ async function renderGifStudio() {
       </div>
     </div>
 
-  </div>\`);
+  </div>`);
 
   // Wire radio/checkbox label borders
   setTimeout(() => {
