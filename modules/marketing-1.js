@@ -3535,7 +3535,7 @@ async function csPublishAll() {
       ${threadsResult ? `
         <div style="font-size:12px;margin-bottom:8px">
           🧵 Threads: ${threadsResult.ok
-            ? `<span style="color:#22c55e">✅ Posted${threadsResult.url ? ` — <a href="${threadsResult.url}" target="_blank" style="color:var(--gold)">View post ↗</a>` : ''}</span>`
+            ? '<span style="color:#22c55e">✅ Posted'+(threadsResult.url?' — <a href="'+threadsResult.url+'" target="_blank" style="color:var(--gold)">View post ↗</a>':'')+'</span>'
             : `<span style="color:var(--red)">❌ Failed — ${threadsResult.error}</span>`}
         </div>` : ''}
       ${manualChannels.length ? `
@@ -3642,7 +3642,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
     ? `<div style="font-size:11px;color:var(--text2);line-height:1.5;margin-top:6px;border-top:1px solid var(--border);padding-top:8px">${item.caption.slice(0,120)}${item.caption.length>120?'…':''}</div>`
     : '';
   const hashtagPreview = (item.hashtags||[]).length
-    ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${(item.hashtags||[]).slice(0,8).map(h=>`<span style="font-size:9px;background:rgba(201,168,76,.12);color:var(--gold);padding:2px 5px;border-radius:4px">${h}</span>`).join('')} <button onclick="navigator.clipboard.writeText('${(item.hashtags||[]).join(' ').replace(/'/g,"\\'")}').then(()=>showMktToast('📋 Hashtags copied!'))" class="mkt-btn mkt-btn-ghost" style="font-size:9px;padding:2px 6px">📋 Copy</button></div>`
+    ? '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">'+(item.hashtags||[]).slice(0,8).map(h=>'<span style="font-size:9px;background:rgba(201,168,76,.12);color:var(--gold);padding:2px 5px;border-radius:4px">'+h+'</span>').join('')+' <button onclick="navigator.clipboard.writeText(\''+((item.hashtags||[]).join(' ').replace(/\'/g,"\\\'"))+'\'). then(()=>showMktToast(\'📋 Hashtags copied!\'))" class="mkt-btn mkt-btn-ghost" style="font-size:9px;padding:2px 6px">📋 Copy</button></div>'
     : '';
   const platformImages = item.platform_images || {};
   const isGif = item.content_type === 'gif';
@@ -4096,7 +4096,7 @@ Based on everything above, create a smart content plan. Return JSON:
         <div style="background:rgba(201,168,76,.08);border:1px solid rgba(201,168,76,.2);border-radius:8px;padding:12px;margin-bottom:12px">
           <div style="font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px">STRATEGY SUMMARY</div>
           <div style="font-size:12px;color:var(--text2);line-height:1.8">${plan.summary||''}</div>
-          ${plan.key_themes?.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${plan.key_themes.map(t=>`<span style="background:var(--bg3);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--gold)">${t}</span>`).join('')}</div>` : ''}
+          ${plan.key_themes?.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">'+plan.key_themes.map(t=>'<span style="background:var(--bg3);border-radius:12px;padding:3px 10px;font-size:11px;color:var(--gold)">'+t+'</span>').join('')+'</div>' : ''}
         </div>
 
         <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:8px;text-transform:uppercase">SUGGESTED POSTS (${(plan.suggested_posts||[]).length})</div>
@@ -7887,7 +7887,7 @@ function mktMusicPickerHTML(selectedId = 'none') {
     { label:'✨ Uplifting', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='major').slice(0,5) },
     { label:'📁 Custom', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='custom') },
   ];
-  const optgroups = grouped.map(g => g.options.length ? `<optgroup label="${g.label}">${g.options.map(t=>`<option value="${t.id}" ${t.id===selectedId?'selected':''}>${t.label}</option>`).join('')}</optgroup>` : '').join('');
+  const optgroups = grouped.map(g => g.options.length ? '<optgroup label="'+g.label+'">'+ g.options.map(t=>'<option value="'+t.id+'" '+(t.id===selectedId?'selected':'')+'>'+t.label+'</option>').join('')+'</optgroup>' : '').join('');
   return `<div style="margin-bottom:12px">
     <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">🎵 MUSIC <span style="font-weight:400;color:#475569">(royalty-free · with music → MP4)</span></label>
     <div style="display:flex;gap:8px;align-items:center">
