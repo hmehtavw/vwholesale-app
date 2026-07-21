@@ -2703,7 +2703,7 @@ async function loadAdCampaigns() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:${c.insights?'8px':'0'}">
         <div style="flex:1"><div style="font-size:12px;font-weight:700">${c.name}</div><div style="font-size:10px;color:var(--text3)">${c.objective||''}</div></div>
         <span style="background:${SC[c.status]||'#94a3b8'}22;color:${SC[c.status]||'#94a3b8'};border-radius:12px;padding:2px 8px;font-size:10px;font-weight:700">${c.status}</span>
-        ${c.status==='ACTIVE'?`<button onclick="pauseCampaign('${c.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">⏸</button>`:`<button onclick="resumeCampaign('${c.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">▶</button>`}
+        ${c.status==='ACTIVE'?'<button onclick="pauseCampaign(\''+c.id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">⏸</button>':'<button onclick="resumeCampaign(\''+c.id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">▶</button>'}
       </div>
       ${c.insights?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
         ${[{l:'Reach',v:c.insights.reach||'—'},{l:'Impressions',v:c.insights.impressions||'—'},{l:'Clicks',v:c.insights.clicks||'—'},{l:'Spend',v:c.insights.spend?'₹'+Math.round(c.insights.spend):'—'}]
@@ -2867,7 +2867,7 @@ async function loadBlogList() {
         ${(p.tags||[]).length ? '<div style="display:flex;flex-wrap:wrap;gap:3px">' + (p.tags||[]).slice(0,5).map(t=>'<span class="badge badge-gray" style="font-size:9px">#'+t+'</span>').join('') + '</div>' : ''}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">
-        ${!p.github_committed?`<button class="mkt-btn mkt-btn-primary" onclick="publishBlog(${p.id})" style="font-size:10px;padding:3px 8px">🚀 Publish</button>`:`<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">Live ↗</a>`}
+        ${!p.github_committed?'<button class="mkt-btn mkt-btn-primary" onclick="publishBlog('+p.id+')" style="font-size:10px;padding:3px 8px">🚀 Publish</button>':'<a href="https://vwholesale.in/blog/'+p.slug+'/" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px;text-decoration:none">Live ↗</a>'}
         <button class="mkt-btn mkt-btn-ghost" onclick="deleteBlog(${p.id})" style="font-size:10px;padding:3px 8px;color:var(--red)">🗑</button>
       </div>
     </div>
@@ -3063,7 +3063,7 @@ async function viewBlogPost(id) {
 
       <!-- Actions -->
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(\`${cleanContent.replace(/`/g,"'")}\`).then(()=>showMktToast('Article copied!'))" style="flex:1">📋 Copy Article</button>
+        <button class="mkt-btn mkt-btn-ghost" onclick="navigator.clipboard.writeText(document.getElementById('seo-article-content')?.innerText||'').then(()=>showMktToast('Article copied!'))" style="flex:1">📋 Copy Article</button>
         ${!p.github_committed
           ? `<button class="mkt-btn mkt-btn-primary" style="flex:1" onclick="publishBlog(${p.id});this.closest('[style*=fixed]').remove()">🚀 Publish to vwholesale.in</button>`
           : `<a href="https://vwholesale.in/blog/${p.slug}/" target="_blank" class="mkt-btn mkt-btn-primary" style="flex:1;text-decoration:none;text-align:center">🌐 View Live Article ↗</a>`}
@@ -3707,7 +3707,7 @@ async function generateGreetingMessage(name, type, phone) {
     headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
     body: JSON.stringify({
       task: 'whatsapp_message', platform: 'WhatsApp', language: 'te+en',
-      topic: type === 'birthday' ? `Birthday greeting for ${name}` : `Anniversary greeting for ${name}`,
+      topic: type === 'birthday' ? 'Birthday greeting for '+name : 'Anniversary greeting for '+name,
       context: { business: 'V Wholesale', location: 'Vijayawada', person_name: name, type }
     })
   });
@@ -4175,7 +4175,7 @@ async function loadFeedPosts() {
         ${byDate[date].map(p => `
         <div class="mkt-card" style="padding:14px">
           <div style="display:flex;gap:12px">
-            ${p.image_url ? `<img src="${p.image_url}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0">` : `<div style="width:72px;height:72px;background:var(--bg3);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px">📝</div>`}
+            ${p.image_url ? '<img src="'+p.image_url+'" style="width:72px;height:72px;object-fit:cover;border-radius:8px;flex-shrink:0">' : '<div style="width:72px;height:72px;background:var(--bg3);border-radius:8px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:24px">📝</div>'}
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:700;margin-bottom:3px">${p.title}</div>
               <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${(p.platforms||[]).join(' · ')||'—'} · ${p.post_type}</div>
