@@ -3545,8 +3545,9 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
         ${item.content_type==='gif'
           ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
-             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regenerate GIF</button>
-             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px" title="Drag badge to reposition, add music, re-encode — zero AI cost">✏️ Edit Offer</button>` : ''}`
+             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regen GIF</button>
+             <button onclick="calReencodeClean('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-encode from existing posters — no badge overlay">🧹 Clean</button>
+             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Open poster editor">✏️ Edit</button>` : ''}`
           : item.content_type!=='reel'
           ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🤖 Auto Poster</button>
              ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">🎨</button>`:''}
@@ -6119,7 +6120,31 @@ async function calEditOfferBadge(calendarId) {
   setTimeout(() => document.getElementById('edit-offer-input')?.focus(), 100);
 }
 
+// Re-encode GIF from existing poster frames with NO badge overlay — cleans double-badge issue
+async function calReencodeClean(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktNotif('❌ Post not found'); return; }
+  const pi = item.platform_images || {};
+  if (!pi.instagram_feed && !pi.instagram_story && !pi.facebook_post) {
+    showMktNotif('❌ No poster images found'); return;
+  }
+  showMktToast('⏳ Re-encoding clean GIF (no badge)…', 5000);
+  // Call calApplyOfferBadge with empty offer = no badge drawn
+  await calApplyOfferBadge_internal(calendarId, '', 'cinematic');
+}
+window.calReencodeClean = calReencodeClean;
+
+// Internal: re-encode with specific offer text (empty = no badge)
 async function calApplyOfferBadge(calendarId) {
+  const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
+  const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
+  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
+  document.getElementById('edit-offer-popup')?.remove();
+  await calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musicId);
+}
+window.calApplyOfferBadge = calApplyOfferBadge;
+
+async function calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musicId) {
   const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
   const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
   const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
