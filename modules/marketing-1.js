@@ -8449,7 +8449,8 @@ async function calPostNowDebug(calendarId) {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body:JSON.stringify({action:'verify_threads',token:cfg['THREADS_ACCESS_TOKEN'],numeric_id:cfg['THREADS_NUMERIC_ID']})
     })).json();
-    log(thProxy.id ? '✅ Threads token valid — @'+thProxy.username+' ('+thProxy.id+')' : '❌ Threads: '+(thProxy.error||JSON.stringify(thProxy).slice(0,80)), thProxy.id?'#22c55e':'#ef4444');
+    const thErr = thProxy.error?.message || thProxy.error || (typeof thProxy.error_description==='string'?thProxy.error_description:null) || JSON.stringify(thProxy).slice(0,100);
+    log(thProxy.id ? '✅ Threads token valid — @'+thProxy.username+' ('+thProxy.id+')' : '❌ Threads: '+thErr, thProxy.id?'#22c55e':'#ef4444');
   } catch(e) { log('❌ Threads check: '+e.message, '#ef4444'); }
 
   // 4. WhatsApp check
@@ -8460,10 +8461,10 @@ async function calPostNowDebug(calendarId) {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body:JSON.stringify({action:'wa_templates',wa_phone_id:cfg['META_WA_PHONE_ID'],wa_token:cfg['META_WA_TOKEN']})
     })).json();
-    const templates = waTemplRes.data || [];
-    const approved = templates.filter(t=>t.status==='APPROVED'||t.status==='Active - Quality pending'||t.name);
-    if (approved.length) {
-      log('✅ WA Templates ('+approved.length+'): '+approved.map(t=>t.name).slice(0,5).join(', '), '#22c55e');
+    if (waTemplRes.ok && waTemplRes.data?.length) {
+      log('✅ WA Templates ('+waTemplRes.data.length+'): '+waTemplRes.data.map((t:any)=>t.name+' ('+t.status+')').slice(0,5).join(', '), '#22c55e');
+    } else if (!waTemplRes.ok) {
+      log('❌ WA Templates: '+(waTemplRes.error||'Failed to load'), '#ef4444');
     } else {
       log('ℹ️ No WA templates found — image sends work without templates', '#f59e0b');
     }
