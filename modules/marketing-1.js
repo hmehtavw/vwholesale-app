@@ -3615,7 +3615,25 @@ function openMktLightbox(src, label, dlSrc, dlName) {
   lb.addEventListener('click', e => { if (e.target === lb) lb.remove(); });
   document.body.appendChild(lb);
 }
-window.openMktLightbox = openMktLightbox;
+async function mktForceDownload(url, filename) {
+  try {
+    showMktToast('⏳ Preparing download…', 3000);
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
+  } catch(e) {
+    // Fallback: open in new tab
+    window.open(url, '_blank');
+  }
+}
+window.mktForceDownload = mktForceDownload;
+
+
 
 
 function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
@@ -5625,9 +5643,9 @@ async function calGenerateGifSlideshow(calendarId) {
 
     // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
-      { key: 'square',    gifW: 480, gifH: 480, staticKey: 'instagram_feed',  channels: ['instagram_feed','threads'] },
-      { key: 'story',     gifW: 320, gifH: 480, staticKey: 'instagram_story', channels: ['instagram_story','facebook_story','whatsapp_story'] },
-      { key: 'landscape', gifW: 480, gifH: 320, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
+      { key: 'square',    gifW: 720, gifH: 720, staticKey: 'instagram_feed',  channels: ['instagram_feed','threads'] },
+      { key: 'story',     gifW: 480, gifH: 720, staticKey: 'instagram_story', channels: ['instagram_story','facebook_story','whatsapp_story'] },
+      { key: 'landscape', gifW: 720, gifH: 480, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
     ]
     const formatResults = {};
     for (const fmt of GIF_FORMATS) {
@@ -5958,13 +5976,13 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
 
     // Generate 3 format posters via content-pipeline (fast, ~90s each, no timeout)
     const GIF_FORMATS_ANIM = [
-      { key:'square', size:'1024x1024', gifW:480, gifH:480,
+      { key:'square', size:'1024x1024', gifW:720, gifH:720,
         prompt:`Premium marketing poster for V Wholesale home building store, Vijayawada India. ${scheme}. Indian lifestyle interior photo for ${cleanTopic}. Include: V Wholesale brand, Build Better Pay Less tagline, headline ${headline}, Tiles Granite Sanitaryware Paints Plywood Furniture category icons, phone +91 8712697930 vwholesale.in footer. Square format.`
       },
-      { key:'story', size:'1024x1536', gifW:320, gifH:480,
+      { key:'story', size:'1024x1536', gifW:480, gifH:720,
         prompt:`Premium vertical Instagram Story poster for V Wholesale, Vijayawada. ${scheme}. Indian interior for ${cleanTopic}. V Wholesale branding top, headline ${headline}, category strip, +91 8712697930 vwholesale.in footer. 9:16 vertical format.`
       },
-      { key:'landscape', size:'1536x1024', gifW:480, gifH:320,
+      { key:'landscape', size:'1536x1024', gifW:720, gifH:480,
         prompt:`Premium landscape Facebook poster for V Wholesale, Vijayawada. ${scheme}. Text left side: V Wholesale, headline ${headline}. Indian interior photo right side for ${cleanTopic}. Category strip, +91 8712697930 vwholesale.in footer. 16:9 landscape.`
       },
     ]
@@ -6297,9 +6315,9 @@ async function calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musi
     });
 
     const FORMATS = [
-      { key:'square',    gifW:480, gifH:480, staticKey:'instagram_feed',  gifKey:'square_gif'    },
-      { key:'story',     gifW:320, gifH:480, staticKey:'instagram_story', gifKey:'story_gif'     },
-      { key:'landscape', gifW:480, gifH:320, staticKey:'facebook_post',   gifKey:'landscape_gif' },
+      { key:'square',    gifW:720, gifH:720, staticKey:'instagram_feed',  gifKey:'square_gif'    },
+      { key:'story',     gifW:480, gifH:720, staticKey:'instagram_story', gifKey:'story_gif'     },
+      { key:'landscape', gifW:720, gifH:480, staticKey:'facebook_post',   gifKey:'landscape_gif' },
     ];
 
     const ts = Date.now();
@@ -6389,7 +6407,7 @@ async function calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musi
     if (hasMusic && newPI['instagram_feed']) {
       showMktToast('⏳ Exporting MP4 with music…', 5000);
       try {
-        const mp4Blob = await mktExportMP4WithMusic(newPI['instagram_feed'], newOffer, animStyle, musicURL, 480, 480);
+        const mp4Blob = await mktExportMP4WithMusic(newPI['instagram_feed'], newOffer, animStyle, musicURL, 720, 720);
         if (mp4Blob) {
           const mp4Bytes = new Uint8Array(await mp4Blob.arrayBuffer());
           const mp4Path = 'gif-calendar/' + calendarId + '_music_' + ts + '.' + (mp4Blob.type.includes('mp4') ? 'mp4' : 'webm');
@@ -7769,8 +7787,9 @@ async function calPreviewPost(calendarId) {
       : `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
+    const dlFilename = isThisGif ? 'vwholesale.gif' : 'vwholesale.png';
     const downloadLink = displayImg
-      ? `<a href="${displayImg}" download target="_blank" style="font-size:10px;color:var(--gold);text-decoration:none">${dlLabel}</a>`
+      ? `<a href="javascript:void(0)" onclick="mktForceDownload('${displayImg}','${dlFilename}')" style="font-size:10px;color:var(--gold);text-decoration:none;cursor:pointer">${dlLabel}</a>`
       : '';
 
     return `
