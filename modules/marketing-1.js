@@ -8459,7 +8459,7 @@ async function calPostNowDebug(calendarId) {
     log(wa.id ? '✅ WhatsApp: '+wa.verified_name+' ('+wa.display_phone_number+')' : '❌ WA: '+(wa.error?.message||JSON.stringify(wa).slice(0,80)), wa.id?'#22c55e':'#ef4444');
     const waTemplRes = await (await fetch(MKT_SB_URL+'/functions/v1/social-proxy', {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body:JSON.stringify({action:'wa_templates',wa_phone_id:cfg['META_WA_PHONE_ID'],wa_token:cfg['META_WA_TOKEN']})
+      body:JSON.stringify({action:'wa_templates',waba_id:'1183561931509509',wa_phone_id:cfg['META_WA_PHONE_ID'],wa_token:cfg['META_WA_TOKEN']})
     })).json();
     if (waTemplRes.ok && waTemplRes.data?.length) {
       log('✅ WA Templates ('+waTemplRes.data.length+'): '+waTemplRes.data.map(function(t){return t.name+' ('+t.status+')';}).slice(0,5).join(', '), '#22c55e');
