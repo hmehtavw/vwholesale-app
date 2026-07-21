@@ -137,3 +137,14 @@ if os.path.exists(mkt_path):
         sys.exit(1)
 else:
     print("  ⚠️  marketing.html not found")
+
+# Check for deeply nested template literals (browser parse killers)
+import re
+for fname in ['modules/marketing-1.js', 'modules/marketing-2.js']:
+    try:
+        with open(fname) as f:
+            content = f.read()
+        # Simple heuristic: backtick inside ${} inside backtick inside ${}
+        if re.search(r'\$\{[^}]*`[^`]*\$\{[^}]*`', content):
+            print(f"  ⚠️  {fname}: possible deeply nested template literal")
+    except: pass
