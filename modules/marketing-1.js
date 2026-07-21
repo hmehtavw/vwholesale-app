@@ -8117,7 +8117,7 @@ async function calPostNow(calendarId) {
       // Who to send to
       +'<div style="font-size:10px;color:#94a3b8;margin-bottom:5px">SEND TO</div>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
-      +'<input type="radio" name="wa-target" value="owner" checked style="accent-color:#22c55e"> My number (+91 90380 10175) — I'll forward manually</label>'
+      +'<input type="radio" name="wa-target" value="owner" checked style="accent-color:#22c55e"> My number (+91 90380 10175) — I will forward manually</label>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
       +'<input type="radio" name="wa-target" value="select" style="accent-color:#22c55e"> Specific numbers</label>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9">'
