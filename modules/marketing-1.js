@@ -6909,6 +6909,31 @@ function editorHandleMusicFile(input) {
     a.play().then(()=>setTimeout(()=>{a.pause();if(status)status.textContent='✅ '+sel.options[sel.selectedIndex].text;},5000)).catch(()=>{if(status)status.textContent='Track ready';});
   }
 }
+function editorMusicChanged(sel) {
+  const uploadRow = document.getElementById('editor-music-upload-row');
+  const status = document.getElementById('editor-music-status');
+  if (!sel) return;
+  if (sel.value === '__upload__') {
+    if (uploadRow) uploadRow.style.display = 'block';
+    window._editorMusicURL = null;
+  } else if (sel.value === 'none') {
+    if (uploadRow) uploadRow.style.display = 'none';
+    window._editorMusicURL = null;
+    if (status) status.textContent = '';
+  } else {
+    if (uploadRow) uploadRow.style.display = 'none';
+    window._editorMusicURL = sel.value;
+    if (status) status.textContent = '▶ Playing preview…';
+    const a = new Audio(sel.value);
+    a.volume = 0.5;
+    a.play()
+      .then(() => setTimeout(() => {
+        a.pause();
+        if (status) status.textContent = '✅ ' + sel.options[sel.selectedIndex].text + ' — ready';
+      }, 5000))
+      .catch(() => { if (status) status.textContent = '✅ Track selected'; });
+  }
+}
 window.editorMusicChanged = editorMusicChanged;
 
 
