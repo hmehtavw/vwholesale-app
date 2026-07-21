@@ -5331,8 +5331,9 @@ function showGifOptionsPopup(calendarId) {
       <div id="gif-animated-opts" style="display:none">
         <div style="border-top:1px solid #334155;padding-top:16px;margin-bottom:16px">
           <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TAG <span style="font-weight:400;color:#475569">(optional)</span></label>
-          <input id="gif-offer-input" type="text" placeholder="e.g. ₹299/sq.ft  ·  20% OFF today  ·  Free Delivery"
+          <input id="gif-offer-input" type="text" placeholder="Optional extra badge (poster already has price baked in)"
             style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
+          <div style="font-size:10px;color:#475569;margin-top:4px">⚠️ Leave blank if poster already shows the price — adding text here will overlay a second badge</div>
           <div style="font-size:10px;color:#475569;margin-top:4px">Animates as a pop-up badge. Leave blank for no price overlay.</div>
         </div>
         <div style="margin-bottom:16px">
@@ -6315,19 +6316,11 @@ async function calPreviewDraggableBadge(calendarId) {
     const fmt = _editorFormats[key];
     if (saved[key] && saved[key].length) {
       fmt.elements = JSON.parse(JSON.stringify(saved[key]));
-      // Update idCounter
       const maxId = Math.max(...fmt.elements.map(e => e.id || 0));
       if (maxId >= _editorIdCounter) _editorIdCounter = maxId + 1;
-    } else if (defaultOffer) {
-      // Seed with default badge from offer_text
-      fmt.elements = [{
-        id: _editorIdCounter++, type:'badge',
-        text: defaultOffer, x: fmt.w*0.1, y: fmt.h*0.75,
-        w: fmt.w*0.8, h: fmt.h*0.1,
-        fill:'#C9A84C', textColor:'#111', textSize: Math.round(fmt.w*0.048),
-        radius: fmt.h*0.04, label:'Offer Badge'
-      }];
     } else {
+      // Start empty — poster already has the design baked in
+      // User can add badges/text via the Add Elements panel
       fmt.elements = [];
     }
     // Load background image
@@ -6631,7 +6624,7 @@ function editorInitCanvas() {
       _editorCanvas.style.cursor = 'default';
     }
   };
-  _editorCanvas.onmouseup = () => { _editorDragging = false; _editorResizing = false; if (_editorSelected) editorRenderProps(); };
+  _editorCanvas.onmouseup = () => { _editorDragging = false; _editorResizing = false; if (_editorSelected) { editorRenderProps(); editorAutoSave(); } };
   document.onmouseup = () => { _editorDragging = false; _editorResizing = false; };
   _editorCanvas.ondblclick = editorOnDblClick;
 
@@ -6856,14 +6849,23 @@ function editorAdd(type) {
     const emoji = prompt('Enter emoji:', '🏠'); if (!emoji) return;
     el = { id:_editorIdCounter++, type:'text', text:emoji, x:W*0.4, y:H*0.5, fontSize:Math.round(W*0.12), fontFamily:'Arial', bold:false, italic:false, color:'#fff', shadow:false, label:'Emoji' };
   }
-  if (el) { fmt.elements.push(el); _editorSelected = el; editorRenderCanvas(); editorRenderLayers(); editorRenderProps(); }
+  if (el) { fmt.elements.push(el); _editorSelected = el; editorRenderCanvas(); editorRenderLayers(); editorRenderProps(); editorAutoSave(); }
 }
 
 function editorDelete(id) {
   const fmt = editorGetActive();
   fmt.elements = fmt.elements.filter(e => e.id !== id);
   if (_editorSelected?.id === id) _editorSelected = null;
-  editorRenderCanvas(); editorRenderLayers(); editorRenderProps();
+  editorRenderCanvas(); editorRenderLayers(); editorRenderProps(); editorAutoSave();
+}
+
+function editorAutoSave() {
+  if (!_editorCalendarId) return;
+  const editorElements = {};
+  Object.keys(_editorFormats).forEach(k => { editorElements[k] = _editorFormats[k].elements; });
+  const newPI = { ..._editorPI, editor_elements: editorElements };
+  sb.from('content_calendar').update({ platform_images: newPI, updated_at: new Date().toISOString() })
+    .eq('id', _editorCalendarId).then(() => { _editorPI = newPI; }, () => {});
 }
 
 function editorRenderLayers() {
@@ -6974,7 +6976,16 @@ function editorUpdateProp(id, prop, val) {
 window.editorUpdateProp = editorUpdateProp;
 
 function editorSwitchFormat(key) {
-  // Save current state implicitly (elements are mutated in-place)
+  // Auto-save current format elements to DB before switching
+  const editorElements = {};
+  Object.keys(_editorFormats).forEach(k => { editorElements[k] = _editorFormats[k].elements; });
+  if (_editorCalendarId) {
+    const newPI = { ..._editorPI, editor_elements: editorElements };
+    sb.from('content_calendar').update({ platform_images: newPI, updated_at: new Date().toISOString() })
+      .eq('id', _editorCalendarId).then(() => {}, () => {});
+    _editorPI = newPI;
+  }
+
   _editorActive = key;
   _editorSelected = null;
 

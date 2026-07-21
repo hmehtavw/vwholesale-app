@@ -978,9 +978,8 @@ async function studioSaveToCalendar(calendarId) {
 window.studioGenerate = studioGenerate;
 async function gsAnimateWithSettings(calendarId) {
   const s = window._gsSettings || { mode:'animated_text', animStyle:'cinematic', duration:6, sizes:['square'] };
-  const offerText = prompt('Add offer/price badge? (leave blank to skip)', '') || '';
-  // Use the calendar GIF generation with the stored settings
-  await calGenerateGif(calendarId, offerText || null, s.animStyle);
+  // No prompt - offer badge is added via the poster editor (✏️ Open in Editor)
+  await calGenerateGif(calendarId, null, s.animStyle);
 }
 window.gsAnimateWithSettings = gsAnimateWithSettings;
 
