@@ -7506,7 +7506,7 @@ async function openPosterEditor(calendarId, overrideImages) {
 window.openPosterEditor = openPosterEditor;
 window.calSaveBadgePosition = function(){};
 window.calApplyOfferBadgeWithPos = function(){};
-window.renderBadgeEditor = renderBadgeEditor;
+window.renderBadgeEditor = function(){}; // legacy no-op
 window.editorSwitchFormat = editorSwitchFormat;
 window.editorAddElement = editorAddElement;
 window.editorRemoveElement = editorRemoveElement;
