@@ -166,6 +166,7 @@ async function mktLogin() {
   }
 }
 window.mktLogin = mktLogin;
+window._mktLoginReady = mktLogin; // signals stub that real function is ready
 
 
 function showMktApp() {
