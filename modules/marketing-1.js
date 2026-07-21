@@ -7919,7 +7919,7 @@ function mktPreviewMusicFromSelect() {
 window.mktPreviewMusicFromSelect = mktPreviewMusicFromSelect;
 
 
-let _uploadedMusicURL = null; // blob URL for uploaded track
+// _uploadedMusicURL declared at top of file
 
 function mktHandleMusicUpload(input) {
   const file = input?.files?.[0];
