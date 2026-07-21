@@ -7977,7 +7977,7 @@ async function calPostNow(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) { showMktNotif('No post found'); return; }
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
-    .in('key', ['META_IG_ID','META_PAGE_ID','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
 
   // Quick credential check
@@ -8112,23 +8112,28 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='facebook_post') {
         if (!cfg.META_PAGE_ID||!st) { error='Facebook Page not configured'; }
         else {
-          // First get Page Access Token from System User Token
-          const ptRes=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'?fields=access_token',{
-            headers:{'Authorization':'Bearer '+st}})).json();
-          const pageToken=ptRes.access_token||st;
-          if(isVideo){
-            const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',
-              headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
-              body:JSON.stringify({file_url:img,description:cap})})).json();
-            if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Video failed';
-          } else {
-            const fbImg=pi['facebook_post']||pi['landscape_gif']||pi['instagram_feed']||item.image_url;
-            const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',
-              headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
-              body:JSON.stringify({url:fbImg,caption:cap,published:true})})).json();
-            if(fr.id){ok=true;postId=fr.id;}
-            else error='FB: '+(fr.error?.message||JSON.stringify(fr).slice(0,100));
+          const pageIds = [cfg.META_PAGE_ID];
+          if (cfg.META_PAGE_ID_2) pageIds.push(cfg.META_PAGE_ID_2);
+          let anyOk = false;
+          for (const pageId of pageIds) {
+            const ptRes=await(await fetch(META_API+'/'+pageId+'?fields=access_token',{
+              headers:{'Authorization':'Bearer '+st}})).json();
+            const pageToken=ptRes.access_token||st;
+            if(isVideo){
+              const vr=await(await fetch(META_API+'/'+pageId+'/videos',{method:'POST',
+                headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
+                body:JSON.stringify({file_url:img,description:cap})})).json();
+              if(vr.id){anyOk=true;postId=vr.id;}else error=(error?error+' | ':'')+pageId+': '+(vr.error?.message||'Video failed');
+            } else {
+              const fr=await(await fetch(META_API+'/'+pageId+'/photos',{method:'POST',
+                headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
+                body:JSON.stringify({url:img,caption:cap,published:true})})).json();
+              if(fr.id){anyOk=true;postId=fr.id;}
+              else error=(error?error+' | ':'')+pageId+': '+(fr.error?.message||JSON.stringify(fr).slice(0,80));
+            }
           }
+          ok = anyOk;
+          if (ok) error = '';
         }
       }
       else if (ch==='facebook_story') {
@@ -8233,7 +8238,7 @@ async function calPostNowExecute(calendarId) {
 
 async function calPostNowDebug(calendarId) {
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
-    .in('key', ['META_IG_ID','META_PAGE_ID','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
   const st = cfg['META_SYSTEM_USER_TOKEN'];
   const META = 'https://graph.facebook.com/v25.0';
