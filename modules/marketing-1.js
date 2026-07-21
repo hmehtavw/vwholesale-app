@@ -7726,6 +7726,12 @@ async function calPostNow(calendarId) {
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
     .in('key', ['META_IG_ID','META_PAGE_ID','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
+
+  // Quick credential check
+  if (!cfg['META_SYSTEM_USER_TOKEN']) {
+    showMktNotif('❌ Cannot read credentials — check RLS. Keys loaded: ' + (settings?.length||0));
+    return;
+  }
   const channels = item.platform || ['instagram_feed','facebook_post','threads'];
   const pi = item.platform_images || {};
   const caption = [item.caption, item.caption_te, (item.hashtags||[]).join(' ')].filter(Boolean).join('\n\n');
