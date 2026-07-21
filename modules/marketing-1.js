@@ -7999,37 +7999,61 @@ async function calPostNow(calendarId) {
 
   const rows = channels.map(ch => {
     const img = pi[ch+'_mp4']||pi['mp4_music']||pi[ch+'_gif']||pi['gif']||pi[ch]||item.image_url;
-    return `<div id="ch-row-${ch}" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">
-      <div style="font-size:18px">${(chLabels[ch]||ch).split(' ')[0]}</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:700;color:#f1f5f9">${chLabels[ch]||ch}</div>
-        <div style="font-size:10px;color:#475569">${img?'✅ Media ready':'⚠️ No image'}</div>
-      </div>
-      <div id="ch-status-${ch}" style="font-size:11px;color:#64748b">Waiting…</div>
-    </div>`;
+    return '<div id="ch-row-'+ch+'" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">'
+      +'<div style="font-size:18px">'+(chLabels[ch]||ch).split(' ')[0]+'</div>'
+      +'<div style="flex:1">'
+      +'<div style="font-size:12px;font-weight:700;color:#f1f5f9">'+(chLabels[ch]||ch)+'</div>'
+      +'<div style="font-size:10px;color:#475569">'+(img?'✅ Media ready':'⚠️ No image')+'</div>'
+      +'</div>'
+      +'<div id="ch-status-'+ch+'" style="font-size:11px;color:#64748b">Waiting…</div>'
+      +'</div>';
   }).join('');
 
-  pop.innerHTML = `<div style="background:#1e293b;border-radius:14px;padding:24px;max-width:480px;width:100%;border:1px solid #334155;max-height:90vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:900;color:#f1f5f9">🚀 Post Now — ${item.topic.slice(0,40)}</div>
-      <button onclick="document.getElementById('postnow-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>
-    </div>
-    <div style="font-size:11px;color:#64748b;margin-bottom:14px">Posts from your browser directly — no scheduling</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rows}</div>
-    <div style="display:flex;gap:8px">
-      <button id="postnow-start" onclick="calPostNowExecute('${calendarId}')"
-        style="flex:1;background:#3b82f6;border:none;color:#fff;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-        🚀 Post to All ${channels.length} Platforms Now
-      </button>
-      <button onclick="calPostNowDebug('${calendarId}')"
-        style="background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:12px 14px;border-radius:8px;cursor:pointer;font-size:12px" title="Diagnose what\'s wrong with each channel">
-        🔍 Debug
-      </button>
-    </div>
-  </div>`;
+  const hasWA = channels.includes('whatsapp_story');
+  const waSection = hasWA
+    ? '<div style="background:#0d2818;border:1px solid #166534;border-radius:8px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:8px">💬 WhatsApp — Who to send to?</div>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
+      +'<input type="radio" name="wa-target" value="owner" checked style="accent-color:#22c55e"> My number only (+91 90380 10175) — broadcast manually from WhatsApp</label>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
+      +'<input type="radio" name="wa-target" value="select" style="accent-color:#22c55e"> Type specific numbers</label>'
+      +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9">'
+      +'<input type="radio" name="wa-target" value="all" style="accent-color:#22c55e"> All opted-in customers (template required ~₹0.78/msg)</label>'
+      +'<div id="wa-customer-select" style="display:none;margin-top:8px">'
+      +'<input id="wa-phone-input" type="text" placeholder="9876543210, 9123456789, …" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box">'
+      +'<div style="font-size:10px;color:#64748b;margin-top:4px">Comma-separated 10-digit numbers. Sends image directly.</div>'
+      +'</div>'
+      +'</div>'
+    : '';
+
+  const btnHtml = '<div style="display:flex;gap:8px">'
+    +'<button id="postnow-start" onclick="calPostNowExecute(\''+calendarId+'\')" style="flex:1;background:#3b82f6;border:none;color:#fff;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🚀 Post to All '+channels.length+' Platforms Now</button>'
+    +'<button onclick="calPostNowDebug(\''+calendarId+'\')" style="background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:12px 14px;border-radius:8px;cursor:pointer;font-size:12px">🔍 Debug</button>'
+    +'</div>';
+
+  pop.innerHTML = '<div style="background:#1e293b;border-radius:14px;padding:24px;max-width:480px;width:100%;border:1px solid #334155;max-height:90vh;overflow-y:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:900;color:#f1f5f9">🚀 Post Now — '+item.topic.slice(0,40)+'</div>'
+    +'<button onclick="document.getElementById(\'postnow-popup\').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>'
+    +'</div>'
+    +'<div style="font-size:11px;color:#64748b;margin-bottom:12px">Posts from your browser directly — no scheduling</div>'
+    +waSection
+    +'<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">'+rows+'</div>'
+    +btnHtml
+    +'</div>';
 
   pop.addEventListener('click', e => { if (e.target===pop) pop.remove(); });
   document.body.appendChild(pop);
+
+  if (hasWA) {
+    pop.querySelectorAll('input[name="wa-target"]').forEach(r => {
+      r.addEventListener('change', () => {
+        const sel = document.getElementById('wa-customer-select');
+        if (sel) sel.style.display = r.value === 'select' ? 'block' : 'none';
+      });
+    });
+  }
+
   window._postNowCtx = { item, cfg, channels, pi, caption, META_API, st };
 }
 
@@ -8163,40 +8187,56 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='whatsapp_story') {
         if (!cfg.META_WA_PHONE_ID||!cfg.META_WA_TOKEN) { error='WhatsApp not configured'; }
         else {
-          // Strategy: Send to owner number (9038010175) with image + caption
-          // Owner can then manually broadcast from WhatsApp Business app
-          // This avoids per-message charges for bulk broadcast
-          const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
-          const waImg = img; // already set to story_gif or story poster
+          const waTarget = document.querySelector('input[name="wa-target"]:checked')?.value || 'owner';
+          const waImg = img;
 
-          // Send image message (not template — sending to own number doesn't need template)
-          const waPayload = {
-            messaging_product: 'whatsapp',
-            recipient_type: 'individual',
-            to: ownerNum,
-            type: 'image',
-            image: { link: waImg, caption: cap.slice(0, 1024) }
-          };
-          const wr = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
-            method:'POST',
-            headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-            body: JSON.stringify(waPayload)
-          })).json();
-
-          if (wr.messages?.[0]?.id) {
-            ok=true; postId='wa_owner_'+wr.messages[0].id;
-          } else {
-            // Fallback: try text message with image URL
-            const wr2 = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
-              method:'POST',
-              headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-              body: JSON.stringify({
-                messaging_product:'whatsapp', to:ownerNum, type:'text',
-                text:{ body: '📢 New post ready to broadcast:\n\n'+cap.slice(0,500)+'\n\n🖼 '+waImg }
-              })
+          const sendWAImage = async (to) => {
+            const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
+              method:'POST', headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+              body: JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to,type:'image',image:{link:waImg,caption:cap.slice(0,1024)}})
             })).json();
-            if (wr2.messages?.[0]?.id) { ok=true; postId='wa_text_'+wr2.messages[0].id; }
-            else error='WA: '+(wr.error?.message||wr2.error?.message||JSON.stringify(wr).slice(0,100));
+            return r.messages?.[0]?.id || null;
+          };
+
+          if (waTarget === 'owner') {
+            const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
+            const msgId = await sendWAImage(ownerNum);
+            if (msgId) { ok=true; postId='wa_owner_'+msgId; }
+            else error='WA send to owner failed';
+
+          } else if (waTarget === 'select') {
+            const rawNums = (document.getElementById('wa-phone-input')?.value || '').trim();
+            if (!rawNums) { error='Enter at least one phone number'; }
+            else {
+              const nums = rawNums.split(/[,\s]+/).map(n => '91'+n.replace(/[^0-9]/g,'').slice(-10)).filter(n => n.length === 12);
+              if (!nums.length) { error='No valid numbers found'; }
+              else {
+                let sent = 0;
+                for (const num of nums) {
+                  const msgId = await sendWAImage(num);
+                  if (msgId) sent++;
+                  await new Promise(r=>setTimeout(r,300));
+                }
+                if (sent > 0) { ok=true; postId='wa_'+sent+'_sent'; }
+                else error='All WA sends failed';
+              }
+            }
+
+          } else { // all opted-in
+            const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(200);
+            if (!waCusts?.length) { error='No opted-in customers (set wa_opted_in=true in CRM)'; }
+            else {
+              let sent = 0, lastErr = '';
+              for (const c of waCusts) {
+                const num = '91'+c.phone.replace(/[^0-9]/g,'').slice(-10);
+                if (num.length !== 12) continue;
+                const msgId = await sendWAImage(num);
+                if (msgId) sent++; else lastErr = 'Some sends failed';
+                await new Promise(r=>setTimeout(r,300));
+              }
+              if (sent > 0) { ok=true; postId='wa_'+sent+'_sent'; }
+              else error='WA bulk failed: '+lastErr;
+            }
           }
         }
       }
