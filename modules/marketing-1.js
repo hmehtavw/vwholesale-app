@@ -8412,3 +8412,10 @@ window.renderAICMO = renderAICMO;
 window.renderContentStudio = renderContentStudio;
 window.renderCalendar = renderCalendar;
 window.renderAnalytics = renderAnalytics;
+
+// ── STUDIO STUBS (overridden by marketing-gif.js at load time) ──
+window.studioGenerate = window.studioGenerate || async function(brief, tone, mode) {
+  showMktToast('⏳ Loading studio… please wait', 2000);
+  setTimeout(() => window.studioGenerate && window.studioGenerate(brief, tone, mode), 2000);
+};
+window.studioSaveToCalendar = window.studioSaveToCalendar || async function() {};

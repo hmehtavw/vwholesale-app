@@ -39,11 +39,15 @@ class BrowserAnimationRenderer {
 // RENDER GIF STUDIO
 // ══════════════════════════════════════════
 async function renderGifStudio() {
+  // Reset studio temp state for new session
+  window._studioCalendarId = null;
+  window._studioMode = 'gif';
+
   setContent(`
   <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
     <div>
       <h3 style="font-size:16px;font-weight:900;margin:0">✨ GIF Studio</h3>
-      <div style="font-size:12px;color:var(--text3)">Brief → Storyboard → Animate → Export GIF + WebM</div>
+      <div style="font-size:12px;color:var(--text3)">Brief → AI Poster → Editor → Export GIF/MP4</div>
     </div>
     <button class="mkt-btn mkt-btn-ghost" onclick="gsShowLibrary()" style="font-size:12px">📚 Library</button>
   </div>
@@ -66,253 +70,28 @@ async function renderGifStudio() {
             <option value="contractor">Contractor Club</option>
           </select>
         </div>
-        <button class="mkt-btn mkt-btn-primary" onclick="gsGenerateBrief()" style="font-size:13px;font-weight:800;padding:9px 20px">
-          ✨ Generate Storyboard
+        <button id="studio-generate-btn" class="mkt-btn mkt-btn-primary" onclick="studioGenerate(document.getElementById('gs-brief').value, document.getElementById('gs-tone').value, 'gif')" style="font-size:13px;font-weight:800;padding:9px 20px">
+          ✨ Generate GIF
         </button>
-        <div id="gs-brief-loading" style="display:none;font-size:12px;color:var(--gold)">⏳ AI writing storyboard…</div>
+        <div style="font-size:11px;color:var(--text3)">AI generates poster → open editor → add badge/music → export GIF/MP4</div>
       </div>
     </div>
 
-    <!-- STORYBOARD + SETTINGS — hidden until generated -->
-    <div id="gs-storyboard-section" style="display:none;display:grid;gap:12px">
-
-      <!-- CONTENT FIELDS -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">📌 Content</div>
-        <div style="display:grid;gap:10px">
-          ${[
-            { id:'gs-out-topic', label:'Topic', single:true },
-            { id:'gs-out-headline', label:'Headline (appears on GIF)', single:true },
-            { id:'gs-out-message', label:'Supporting Message (8–12 words)', single:true },
-          ].map(f=>`
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">${f.label}</label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="gsCopy('${f.id}')" style="font-size:10px;padding:2px 8px">📋</button>
-            </div>
-            <input id="${f.id}" class="mkt-form-input" style="font-size:13px;font-weight:700" placeholder="AI will generate…">
-          </div>`).join('')}
-          ${[
-            { id:'gs-out-caption-en', label:'Caption (English)', rows:4 },
-            { id:'gs-out-caption-te', label:'Caption (Telugu)', rows:3 },
-            { id:'gs-out-hashtags', label:'Hashtags', rows:2 },
-            { id:'gs-out-keywords', label:'SEO Keywords', rows:2 },
-          ].map(f=>`
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">${f.label}</label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="gsCopy('${f.id}')" style="font-size:10px;padding:2px 8px">📋</button>
-            </div>
-            <textarea id="${f.id}" class="mkt-form-input" rows="${f.rows}" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="AI will generate…"></textarea>
-          </div>`).join('')}
-        </div>
-      </div>
-
-      <!-- GIF SETTINGS -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">⚙️ GIF Settings</div>
-        <div style="display:grid;gap:14px">
-
-          <!-- Mode -->
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Mode</label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-              <label style="display:flex;align-items:flex-start;gap:8px;background:var(--bg3);border:2px solid var(--gold);border-radius:8px;padding:10px 12px;cursor:pointer">
-                <input type="radio" name="gs-mode" value="animated_text" checked style="margin-top:2px;accent-color:var(--gold)">
-                <div>
-                  <div style="font-size:12px;font-weight:700">🎬 Animated Text</div>
-                  <div style="font-size:10px;color:var(--text3)">Text animates over a photo background</div>
-                </div>
-              </label>
-              <label style="display:flex;align-items:flex-start;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer">
-                <input type="radio" name="gs-mode" value="slideshow" style="margin-top:2px;accent-color:var(--gold)">
-                <div>
-                  <div style="font-size:12px;font-weight:700">🖼️ Slideshow</div>
-                  <div style="font-size:10px;color:var(--text3)">Multiple frames fade/slide between them</div>
-                </div>
-              </label>
-            </div>
-          </div>
-
-          <!-- Animation Style -->
-          <div id="gs-style-section">
-            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Animation Style</label>
-            <div style="display:grid;gap:6px">
-              ${[
-                { id:'cinematic', label:'🎞️ Cinematic', desc:'Logo fade → headline slide → gold line draw → message fade → CTA settle. Default for premium posts.', default:true },
-                { id:'typewriter', label:'⌨️ Typewriter', desc:'Text types in character by character. Best for educational or informative posts.' },
-                { id:'bold_reveal', label:'💥 Bold Reveal', desc:'Headline zooms in then settles. High energy — best for offers and sales.' },
-              ].map(s=>`
-              <label style="display:flex;align-items:flex-start;gap:8px;background:var(--bg3);border:${s.default?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:8px;padding:10px 12px;cursor:pointer">
-                <input type="radio" name="gs-style" value="${s.id}" ${s.default?'checked':''} style="margin-top:2px;accent-color:var(--gold)">
-                <div>
-                  <div style="font-size:12px;font-weight:700">${s.label}</div>
-                  <div style="font-size:10px;color:var(--text3)">${s.desc}</div>
-                </div>
-              </label>`).join('')}
-            </div>
-          </div>
-
-          <!-- Duration -->
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Duration</label>
-            <div style="display:flex;gap:8px;flex-wrap:wrap">
-              ${[
-                { id:'short', label:'Short', desc:'6s', sub:'Stories, Status' },
-                { id:'medium', label:'Medium', desc:'12s', sub:'Facebook, GBP' },
-                { id:'custom', label:'Custom', desc:'', sub:'3–30s' },
-              ].map((d,i)=>`
-              <label style="flex:1;min-width:90px;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--bg3);border:${i===0?'2px solid var(--gold)':'1px solid var(--border)'};border-radius:8px;padding:10px 8px;cursor:pointer;text-align:center" onclick="gsToggleDuration(this,'${d.id}')">
-                <input type="radio" name="gs-duration" value="${d.id}" ${i===0?'checked':''} style="display:none">
-                <div style="font-size:13px;font-weight:800">${d.label}</div>
-                <div style="font-size:11px;color:var(--gold);font-weight:700">${d.desc}</div>
-                <div style="font-size:10px;color:var(--text3)">${d.sub}</div>
-              </label>`).join('')}
-            </div>
-            <div id="gs-custom-duration" style="display:none;margin-top:10px;display:flex;align-items:center;gap:8px">
-              <input id="gs-custom-sec" type="number" class="mkt-form-input" value="10" min="3" max="30" style="width:80px">
-              <span style="font-size:12px;color:var(--text3)">seconds (3–30)</span>
-            </div>
-          </div>
-
-          <!-- Slideshow frames (shown only in slideshow mode) -->
-          <div id="gs-frames-section" style="display:none">
-            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Frames</label>
-            <div id="gs-frames-list" style="display:grid;gap:8px"></div>
-            <button class="mkt-btn mkt-btn-ghost" onclick="gsAddFrame()" style="font-size:12px;margin-top:8px;width:100%">+ Add Frame</button>
-          </div>
-
-          <!-- Output size -->
-          <div>
-            <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Output Size</label>
-            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">
-              ${[
-                { id:'square', label:'Square', size:'1080×1080', ch:'Instagram Feed, Threads', checked:true },
-                { id:'story', label:'Story', size:'1080×1920', ch:'Instagram Story, WhatsApp' },
-                { id:'portrait_feed', label:'Feed Portrait', size:'1080×1350', ch:'Instagram Feed' },
-                { id:'landscape', label:'Landscape', size:'1920×1080', ch:'Facebook, YouTube' },
-              ].map(s=>`
-              <label style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer">
-                <input type="checkbox" name="gs-size" value="${s.id}" ${s.checked?'checked':''} style="accent-color:var(--gold)">
-                <div>
-                  <div style="font-size:11px;font-weight:700">${s.label}</div>
-                  <div style="font-size:10px;color:var(--gold)">${s.size}</div>
-                  <div style="font-size:10px;color:var(--text3)">${s.ch}</div>
-                </div>
-              </label>`).join('')}
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- BACKGROUND -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">🖼️ Background</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-          <button class="mkt-btn mkt-btn-primary" onclick="gsGenerateBackground()" style="font-size:12px;padding:10px">
-            🤖 AI Generate Background
-          </button>
-          <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('gs-bg-upload').click()" style="font-size:12px;padding:10px">
-            📁 Upload Your Own
-          </button>
-          <input type="file" id="gs-bg-upload" accept="image/*" style="display:none" onchange="gsHandleBgUpload(this)">
-        </div>
-        <div id="gs-bg-preview" style="display:none;margin-top:8px">
-          <img id="gs-bg-img" style="width:100%;border-radius:8px;max-height:200px;object-fit:cover;display:block">
-          <div style="font-size:11px;color:var(--text3);margin-top:4px" id="gs-bg-label"></div>
-        </div>
-        <div id="gs-bg-loading" style="display:none;font-size:12px;color:var(--gold);text-align:center;padding:16px">🤖 Generating background image…</div>
-      </div>
-
-      <!-- PREVIEW + RENDER -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">▶️ Preview & Export</div>
-
-        <!-- Canvas preview -->
-        <div style="text-align:center;margin-bottom:12px">
-          <canvas id="gs-canvas" width="540" height="540"
-            style="border-radius:10px;max-width:100%;background:#111;display:block;margin:0 auto"></canvas>
-        </div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="mkt-btn mkt-btn-ghost" onclick="gsPreviewAnimation()" style="font-size:12px;flex:1">
-            ▶️ Preview Animation
-          </button>
-          <button class="mkt-btn mkt-btn-ghost" onclick="gsStopAnimation()" style="font-size:12px">
-            ⏹ Stop
-          </button>
-        </div>
-
-        <!-- Progress -->
-        <div id="gs-render-progress" style="display:none;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;margin-bottom:6px" id="gs-render-status">Rendering…</div>
-          <div style="background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
-            <div id="gs-render-bar" style="background:var(--gold);height:6px;width:0%;transition:width .3s"></div>
-          </div>
-          <button class="mkt-btn mkt-btn-ghost" onclick="gsCancelRender()" style="font-size:11px;margin-top:6px">✕ Cancel</button>
-        </div>
-
-        <!-- Export buttons -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <button class="mkt-btn mkt-btn-primary" onclick="gsRenderGif()" style="font-size:13px;font-weight:800;padding:11px">
-            ✨ Export GIF
-          </button>
-          <button class="mkt-btn mkt-btn-ghost" onclick="gsRenderVideo()" style="font-size:13px;padding:11px">
-            🎬 Export WebM
-          </button>
-        </div>
-        <button class="mkt-btn mkt-btn-ghost" onclick="gsOpenInEditor()" style="width:100%;margin-top:8px;font-size:12px;padding:9px" title="Open current background in Poster Editor to add text, badges, shapes">
-          ✏️ Open in Poster Editor
-        </button>
-        <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">
-          GIF — works everywhere incl. WhatsApp · WebM — best for Instagram/Facebook (browser codec, not guaranteed MP4)
-        </div>
-
-        <!-- Download links (shown after render) -->
-        <div id="gs-download-links" style="display:none;margin-top:12px;display:grid;gap:8px"></div>
-
-        <!-- Save -->
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-          <button class="mkt-btn mkt-btn-ghost" onclick="gsSaveCampaign()" style="font-size:12px;width:100%">
-            💾 Save to Library
-          </button>
-        </div>
-      </div>
-
-    </div>
+    <!-- RESULTS (shown after generation) -->
+    <div id="studio-results" style="display:none"></div>
 
     <!-- LIBRARY -->
-    <div id="gs-library" style="display:none" class="mkt-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="mkt-card-title" style="margin:0">📚 GIF Library</div>
-        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('gs-library').style.display='none'" style="font-size:12px">✕</button>
-      </div>
-      <div id="gs-lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
-        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">Loading…</div>
+    <div id="gs-library-section" style="display:none">
+      <div class="mkt-card">
+        <div class="mkt-card-title">📚 GIF Library</div>
+        <div id="gs-library-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px"></div>
       </div>
     </div>
 
   </div>`);
-
-  // Init
-  document.getElementById('gs-storyboard-section').style.display = 'none';
-  document.getElementById('gs-download-links').style.display = 'none';
-
-  // Mode toggle listener
-  document.querySelectorAll('input[name="gs-mode"]').forEach(r => {
-    r.addEventListener('change', () => {
-      const isSlideshow = r.value === 'slideshow';
-      document.getElementById('gs-frames-section').style.display = isSlideshow ? 'block' : 'none';
-      document.getElementById('gs-style-section').style.display = isSlideshow ? 'none' : 'block';
-      if (isSlideshow && !document.getElementById('gs-frames-list').children.length) gsInitDefaultFrames();
-    });
-  });
-
-  gsLoadLibraryInBackground();
 }
 
-// ── BRIEF GENERATION ──
+
 async function gsGenerateBrief() {
   const brief = (document.getElementById('gs-brief')?.value || '').trim();
   const tone = document.getElementById('gs-tone')?.value || 'product';
@@ -903,6 +682,181 @@ async function gsRenderGif() {
     gsHideProgress();
   });
 }
+
+// ── UNIFIED STUDIO FLOW ──
+// Both Poster Studio and GIF Studio use this same flow:
+// 1. Enter brief → AI generates caption + poster (like calendar generate_single)
+// 2. See generated poster + caption + hashtags
+// 3. Open poster editor to customize
+// 4. Export GIF/MP4 (GIF Studio) or PNG/JPG (Poster Studio) + optionally save to calendar
+
+// Shared state
+window._studioCalendarId = null; // temp calendar entry ID
+window._studioMode = 'poster'; // 'poster' or 'gif'
+
+async function studioGenerate(brief, tone, mode) {
+  window._studioMode = mode;
+  const loadEl = document.getElementById('studio-generate-btn');
+  if (loadEl) { loadEl.disabled = true; loadEl.textContent = '⏳ Generating…'; }
+
+  try {
+    showMktToast('⏳ AI generating brief…', 5000);
+
+    // Step 1: Generate brief via content-pipeline
+    const briefRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_brief', brief, tone })
+    });
+    const briefData = await briefRes.json();
+    if (!briefData.ok) throw new Error(briefData.error || 'Brief generation failed');
+    const content = briefData.content;
+
+    // Step 2: Create temp calendar entry with tomorrow's date
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split('T')[0];
+
+    let calendarId = window._studioCalendarId;
+    
+    if (!calendarId) {
+      // Create new temp entry
+      const { data: newItem, error } = await sb.from('content_calendar').insert({
+        cal_date: dateStr,
+        topic: content.topic || brief.slice(0, 60),
+        content_type: mode === 'gif' ? 'gif' : 'image',
+        status: 'planned',
+        notes: brief,
+        caption: content.caption_en,
+        caption_te: content.caption_te,
+        hashtags: content.hashtags ? (typeof content.hashtags === 'string' ? content.hashtags.split(' ') : content.hashtags) : [],
+        poster_message: content.poster_message,
+        is_studio_temp: true,
+        post_time: '10:00',
+        updated_at: new Date().toISOString()
+      }).select().single();
+      
+      if (error) throw new Error('Failed to create entry: ' + error.message);
+      calendarId = newItem.id;
+      window._studioCalendarId = calendarId;
+    } else {
+      // Update existing temp entry
+      await sb.from('content_calendar').update({
+        topic: content.topic || brief.slice(0, 60),
+        notes: brief,
+        caption: content.caption_en,
+        caption_te: content.caption_te,
+        hashtags: content.hashtags ? (typeof content.hashtags === 'string' ? content.hashtags.split(' ') : content.hashtags) : [],
+        poster_message: content.poster_message,
+        image_url: null,
+        platform_images: null,
+        status: 'planned',
+        updated_at: new Date().toISOString()
+      }).eq('id', calendarId);
+    }
+
+    // Step 3: Generate poster via generate-poster-v2
+    showMktToast('⏳ Generating poster… (~2 min)', 10000);
+    const posterRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_posters', calendar_id: calendarId })
+    });
+    const posterData = await posterRes.json();
+    
+    // Step 4: Load updated item
+    const { data: updatedItem } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    
+    // Step 5: Show results in studio
+    studioShowResults(updatedItem, mode);
+    
+    showMktToast('✅ Poster generated — edit or export below', 5000);
+    
+  } catch(e) {
+    showMktToast('❌ ' + e.message, 6000);
+    if (loadEl) { loadEl.disabled = false; loadEl.textContent = mode === 'gif' ? '✨ Generate GIF' : '✨ Generate Poster'; }
+  }
+}
+
+function studioShowResults(item, mode) {
+  const pi = item.platform_images || {};
+  const squareUrl = pi.instagram_feed || item.image_url;
+  const storyUrl = pi.instagram_story;
+  const landscapeUrl = pi.facebook_post;
+
+  const resultsEl = document.getElementById('studio-results');
+  if (!resultsEl) return;
+  resultsEl.style.display = 'block';
+
+  resultsEl.innerHTML = `
+    <div class="mkt-card" style="margin-top:16px">
+      <div class="mkt-card-title">✅ Generated — ${item.topic}</div>
+      
+      <!-- Poster previews -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        ${[
+          { label:'📸 Square 1:1', url: squareUrl },
+          { label:'📱 Story 9:16', url: storyUrl },
+          { label:'📘 Landscape 16:9', url: landscapeUrl }
+        ].map(f => f.url ? `
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${f.label}</div>
+            <img src="${f.url}" style="width:100%;border-radius:8px;cursor:pointer" onclick="openMktLightbox('${f.url}','${f.label}','${f.url}','poster.png')" title="Click to zoom">
+          </div>` : `
+          <div style="text-align:center;background:var(--bg3);border-radius:8px;padding:20px;font-size:10px;color:var(--text3)">${f.label}<br>Not generated</div>`
+        ).join('')}
+      </div>
+
+      <!-- Caption preview -->
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;margin-bottom:6px">📝 Caption</div>
+        <div style="font-size:12px;color:var(--text1);line-height:1.6;max-height:80px;overflow-y:auto">${item.caption || ''}</div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:9px 16px">
+          ✏️ Open in Editor ${mode==='gif'?'(add badges, music, export GIF)':'(customize & download)'}
+        </button>
+        ${squareUrl ? `<a href="${squareUrl}" download="vwholesale-square.png" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:9px 14px;text-decoration:none">⬇ PNG Square</a>` : ''}
+        ${landscapeUrl ? `<a href="${landscapeUrl}" download="vwholesale-landscape.png" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:9px 14px;text-decoration:none">⬇ PNG Landscape</a>` : ''}
+        <button onclick="studioSaveToCalendar('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:9px 14px">
+          📅 Save to Calendar
+        </button>
+        ${mode==='gif' ? `
+        <button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:9px 14px">
+          🎬 Generate Animated GIF
+        </button>` : ''}
+      </div>
+    </div>`;
+
+  resultsEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function studioSaveToCalendar(calendarId) {
+  // Remove the is_studio_temp flag and set to ready
+  const { data: item } = await sb.from('content_calendar').select('cal_date').eq('id', calendarId).single();
+  
+  // Let user pick date
+  const dateStr = prompt('Save to calendar date (YYYY-MM-DD):', item?.cal_date || new Date().toISOString().split('T')[0]);
+  if (!dateStr) return;
+  
+  await sb.from('content_calendar').update({
+    cal_date: dateStr,
+    is_studio_temp: false,
+    status: 'ready',
+    updated_at: new Date().toISOString()
+  }).eq('id', calendarId);
+  
+  showMktNotif('✅ Saved to calendar — ' + dateStr);
+  // Refresh calendar if visible
+  if (typeof renderCalendar === 'function') renderCalendar();
+}
+
+window.studioGenerate = studioGenerate;
+window.studioShowResults = studioShowResults;
+window.studioSaveToCalendar = studioSaveToCalendar;
+
 
 // ── WebM EXPORT (MediaRecorder) ──
 async function gsRenderVideo() {

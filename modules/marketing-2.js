@@ -450,22 +450,23 @@ async function usePhotoshootImage(imageUrl, product) {
 }
 
 async function renderPosterStudio() {
+  // Reset studio temp state
+  window._studioCalendarId = null;
+  window._studioMode = 'poster';
+
   setContent(`
-  <div style="margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <div>
-      <h3 style="font-size:16px;font-weight:900;margin:0">🎨 Poster Studio</h3>
-      <div style="font-size:12px;color:var(--text3)">Write your brief → AI generates everything → edit, download, publish</div>
-    </div>
-    <button class="mkt-btn mkt-btn-ghost" onclick="psShowLibrary()" style="font-size:12px">📚 Library</button>
+  <div style="margin-bottom:16px">
+    <h3 style="font-size:16px;font-weight:900;margin:0">🎨 Poster Studio</h3>
+    <div style="font-size:12px;color:var(--text3)">Brief → AI Poster (all 3 formats) → Editor → Download/Save</div>
   </div>
 
   <div style="display:grid;gap:16px">
 
-    <!-- BRIEF INPUT -->
+    <!-- BRIEF -->
     <div class="mkt-card">
-      <div class="mkt-card-title">📝 What do you want to post about?</div>
-      <textarea id="ps-brief" class="mkt-form-input" rows="5" style="font-size:13px;line-height:1.7;resize:vertical"
-        placeholder="Write freely — include product names, offers, prices, context, audience. Example: We got new Kajaria tiles — wood finish, marble look, anti-skid. Sizes 2x2 and 2x4. Starting ₹45/sft. 10% off this week for contractors."></textarea>
+      <div class="mkt-card-title">📝 What's this poster about?</div>
+      <textarea id="ps-brief" class="mkt-form-input" rows="4" style="font-size:13px;line-height:1.7;resize:vertical"
+        placeholder="Write freely — product, offer, event, festival. Example: Introducing Asian Paints Royale — premium interior paint now at V Wholesale. Free colour consultation."></textarea>
       <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
         <div style="display:flex;gap:6px;align-items:center">
           <label style="font-size:12px;color:var(--text3)">Tone:</label>
@@ -473,195 +474,23 @@ async function renderPosterStudio() {
             <option value="product">Product Launch</option>
             <option value="offer">Offer / Sale</option>
             <option value="festival">Festival</option>
-            <option value="story">Story / Behind Scenes</option>
+            <option value="educational">Educational</option>
             <option value="contractor">Contractor Club</option>
-            <option value="educational">Educational / Tips</option>
           </select>
         </div>
-        <button class="mkt-btn mkt-btn-primary" onclick="psGenerateBrief()" style="font-size:13px;font-weight:800;padding:9px 20px">
-          ✨ Generate Everything
+        <button id="studio-generate-btn" class="mkt-btn mkt-btn-primary" onclick="studioGenerate(document.getElementById('ps-brief').value, document.getElementById('ps-tone').value, 'poster')" style="font-size:13px;font-weight:800;padding:9px 20px">
+          ✨ Generate Poster
         </button>
-        <div id="ps-brief-loading" style="display:none;font-size:12px;color:var(--gold)">⏳ AI is working…</div>
+        <div style="font-size:11px;color:var(--text3)">AI generates all 3 formats → edit → download PNG/JPG or save to calendar</div>
       </div>
     </div>
 
-    <!-- OUTPUTS — hidden until generated -->
-    <div id="ps-outputs" style="display:none;display:grid;gap:12px">
-
-      <!-- TOPIC + HEADLINE + MESSAGE -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">📌 Content Fields</div>
-        <div style="display:grid;gap:10px">
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Topic / Post Title</label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-topic')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <input id="ps-out-topic" class="mkt-form-input" style="font-size:13px;font-weight:700" placeholder="AI will generate…">
-          </div>
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Poster Headline <span style="font-weight:400">(bold text on poster)</span></label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-headline')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <input id="ps-out-headline" class="mkt-form-input" style="font-size:13px;font-weight:700" placeholder="AI will generate…">
-          </div>
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Poster Message <span style="font-weight:400">(supporting line, 8–12 words)</span></label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-message')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <input id="ps-out-message" class="mkt-form-input" style="font-size:13px" placeholder="AI will generate…">
-          </div>
-
-        </div>
-      </div>
-
-      <!-- CAPTIONS -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">📝 Captions</div>
-        <div style="display:grid;gap:10px">
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">English Caption <span style="font-weight:400">(150–200 words)</span></label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-caption-en')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <textarea id="ps-out-caption-en" class="mkt-form-input" rows="5" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="AI will generate…"></textarea>
-          </div>
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Telugu Caption</label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-caption-te')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <textarea id="ps-out-caption-te" class="mkt-form-input" rows="4" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="AI will generate…"></textarea>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- HASHTAGS + KEYWORDS -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">🏷️ Hashtags & Keywords</div>
-        <div style="display:grid;gap:10px">
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Hashtags</label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-hashtags')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <textarea id="ps-out-hashtags" class="mkt-form-input" rows="2" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="#Vijayawada #VWholesale…"></textarea>
-          </div>
-
-          <div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-              <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">SEO Keywords <span style="font-weight:400">(for GBP + website)</span></label>
-              <button class="mkt-btn mkt-btn-ghost" onclick="psCopy('ps-out-keywords')" style="font-size:10px;padding:2px 8px">📋 Copy</button>
-            </div>
-            <textarea id="ps-out-keywords" class="mkt-form-input" rows="2" style="font-size:12px;line-height:1.7;resize:vertical" placeholder="tiles Vijayawada, floor tiles price…"></textarea>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- POSTER GENERATION -->
-      <div class="mkt-card">
-        <div class="mkt-card-title">🖼️ Generate Poster</div>
-
-        <div style="margin-bottom:12px">
-          <label style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:8px">Select Platforms / Sizes</label>
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px" id="ps-platform-grid">
-            ${[
-              {id:'square',label:'Instagram Feed',size:'1080×1080',icon:'📸',checked:true},
-              {id:'story',label:'Instagram Story',size:'1080×1920',icon:'📱',checked:true},
-              {id:'landscape',label:'Facebook Post',size:'1200×630',icon:'👤',checked:true},
-              {id:'whatsapp',label:'WhatsApp Status',size:'1080×1920',icon:'💬',checked:false},
-              {id:'youtube',label:'YouTube Thumbnail',size:'1280×720',icon:'▶️',checked:false},
-              {id:'gbp',label:'Google Business',size:'1200×900',icon:'📍',checked:false},
-              {id:'print_a4',label:'Print A4',size:'2480×3508',icon:'🖨️',checked:false},
-              {id:'custom',label:'Custom Size',size:'',icon:'⚙️',checked:false},
-            ].map(p => `
-            <label style="display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;transition:border-color .15s" class="ps-platform-opt">
-              <input type="checkbox" name="ps-platform" value="${p.id}" ${p.checked?'checked':''} style="accent-color:var(--gold);width:14px;height:14px" onchange="psUpdateCustomSize(this)">
-              <div>
-                <div style="font-size:12px;font-weight:700">${p.icon} ${p.label}</div>
-                <div style="font-size:10px;color:var(--text3)">${p.size||'Set below'}</div>
-              </div>
-            </label>`).join('')}
-          </div>
-          <!-- Custom size inputs -->
-          <div id="ps-custom-size" style="display:none;margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            <div class="mkt-form-group" style="margin:0">
-              <label class="mkt-form-label">Width (px)</label>
-              <input id="ps-custom-w" type="number" class="mkt-form-input" value="1080" min="100" max="4000">
-            </div>
-            <div class="mkt-form-group" style="margin:0">
-              <label class="mkt-form-label">Height (px)</label>
-              <input id="ps-custom-h" type="number" class="mkt-form-input" value="1080" min="100" max="4000">
-            </div>
-          </div>
-        </div>
-
-        <button class="mkt-btn mkt-btn-primary" onclick="psGeneratePosters()" style="width:100%;padding:13px;font-size:14px;font-weight:900">
-          🤖 Generate Poster for Selected Platforms
-        </button>
-        <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:6px">
-          Uses the headline, message and topic from above · ~60-90 seconds
-        </div>
-      </div>
-
-      <!-- POSTER PREVIEWS + DOWNLOAD -->
-      <div id="ps-poster-results" style="display:none" class="mkt-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div class="mkt-card-title" style="margin:0">✅ Generated Posters</div>
-          <button class="mkt-btn mkt-btn-primary" onclick="psDownloadAll()" style="font-size:12px;padding:6px 14px">⬇ Download All (ZIP)</button>
-        </div>
-        <div id="ps-poster-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px"></div>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-          <button class="mkt-btn mkt-btn-ghost" onclick="psSaveToLibrary()" style="font-size:12px">💾 Save to Library</button>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- LIBRARY (hidden by default) -->
-    <div id="ps-library" style="display:none" class="mkt-card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div class="mkt-card-title" style="margin:0">📚 Poster Library</div>
-        <button class="mkt-btn mkt-btn-ghost" onclick="document.getElementById('ps-library').style.display='none'" style="font-size:12px">✕ Close</button>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        ${['All','Social','Print','Custom'].map(f=>`<button class="mkt-btn mkt-btn-ghost ps-lib-filter" onclick="psFilterLibrary('${f.toLowerCase()}')" style="font-size:11px;padding:4px 10px">${f}</button>`).join('')}
-      </div>
-      <div id="ps-lib-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px">
-        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">Loading library…</div>
-      </div>
-    </div>
+    <!-- RESULTS -->
+    <div id="studio-results" style="display:none"></div>
 
   </div>`);
-
-  // Init
-  document.getElementById('ps-outputs').style.display = 'none';
-  psLoadLibraryInBackground();
 }
 
-function psUpdateCustomSize(cb) {
-  const customSizeDiv = document.getElementById('ps-custom-size');
-  if (!customSizeDiv) return;
-  const customChecked = document.querySelector('input[name="ps-platform"][value="custom"]')?.checked;
-  customSizeDiv.style.display = customChecked ? 'grid' : 'none';
-}
-
-function psCopy(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const text = el.value || el.textContent || '';
-  navigator.clipboard.writeText(text).then(() => showMktToast('📋 Copied!'));
-}
 
 async function psGenerateBrief() {
   const brief = (document.getElementById('ps-brief')?.value || '').trim();
