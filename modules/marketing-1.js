@@ -6250,11 +6250,8 @@ async function calApplyOfferBadge(calendarId) {
 window.calApplyOfferBadge = calApplyOfferBadge;
 
 async function calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musicId) {
-  const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
-  const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
-  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
-  const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === musicId);
-  const musicURL = mktGetMusicURL(musicId);
+  const musicTrack = MKT_MUSIC_TRACKS.find(t => t.id === (musicId||'none'));
+  const musicURL = mktGetMusicURL(musicId||'none');
   const hasMusic = !!musicURL;
   document.getElementById('edit-offer-popup')?.remove();
 
