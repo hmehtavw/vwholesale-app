@@ -459,6 +459,7 @@ window.mktLogin = function() {
     return;
   }
   var btn = document.getElementById('mkt-login-btn');
+  var err = document.getElementById('mkt-login-err');
   if (btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
   var attempts = 0;
   var wait = setInterval(function() {
@@ -467,32 +468,47 @@ window.mktLogin = function() {
       clearInterval(wait);
       if (btn) { btn.textContent = 'Sign In to Marketing →'; btn.disabled = false; }
       window._mktLoginReady();
-    } else if (attempts > 200) {
+    } else if (attempts === 20) {
+      if (err) { err.textContent = 'Still loading (' + attempts*100 + 'ms)…'; err.style.display='block'; }
+    } else if (attempts === 50) {
+      if (err) { err.textContent = 'Taking longer than usual (5s). Check console for errors.'; err.style.display='block'; }
+    } else if (attempts > 100) {
       clearInterval(wait);
       if (btn) { btn.textContent = 'Sign In to Marketing →'; btn.disabled = false; }
-      var err = document.getElementById('mkt-login-err');
-      if (err) { err.textContent = 'Portal still loading — please wait a moment and try again.'; err.style.display='block'; setTimeout(function(){if(err)err.style.display='none';},3000); }
+      if (err) { err.textContent = 'JS failed to load. Open F12 Console and share the red errors.'; err.style.display='block'; }
     }
   }, 100);
 };
 </script>
-<script src="/modules/marketing-1.js?v=178463606199"></script>
-<script src="/modules/marketing-2.js?v=178463606199"></script>
-<script src="/modules/marketing-gif.js?v=178463606199"></script>
-<script src="/modules/marketing-inbox.js?v=178463606199"></script>
-<script src="/modules/marketing-strategy.js?v=178463606199"></script>
-<script src="/modules/marketing-bi.js?v=178463606199"></script>
+<script src="/modules/marketing-1.js?v=1784636241"></script>
+<script src="/modules/marketing-2.js?v=1784636241"></script>
+<script src="/modules/marketing-gif.js?v=1784636241"></script>
+<script src="/modules/marketing-inbox.js?v=1784636241"></script>
+<script src="/modules/marketing-strategy.js?v=1784636241"></script>
+<script src="/modules/marketing-bi.js?v=1784636241"></script>
 <script>
 // Error capture — shows JS errors visibly
 window.onerror = function(msg, src, line, col, err) {
+  // Show error on LOGIN SCREEN directly
+  var errEl = document.getElementById('mkt-login-err');
+  if (errEl) {
+    errEl.textContent = '❌ JS Error: ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']';
+    errEl.style.display = 'block';
+  }
+  var btn = document.getElementById('mkt-login-btn');
+  if (btn && btn.textContent === 'Loading…') {
+    btn.textContent = 'Sign In to Marketing →';
+    btn.disabled = false;
+  }
+  // Also show in red bar at bottom
   var div = document.getElementById('js-error-display');
   if (!div) {
     div = document.createElement('div');
     div.id = 'js-error-display';
-    div.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px;font-size:12px;z-index:99999;font-family:monospace;max-height:200px;overflow-y:auto';
+    div.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px;font-size:12px;z-index:99999;font-family:monospace;max-height:120px;overflow-y:auto';
     document.body.appendChild(div);
   }
-  div.innerHTML += '<div>❌ ' + msg + ' [' + src.split('/').pop() + ':' + line + ']</div>';
+  div.innerHTML += '<div>❌ ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']</div>';
   return false;
 };
 window.addEventListener('unhandledrejection', function(e) {
