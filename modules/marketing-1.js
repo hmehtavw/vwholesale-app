@@ -8462,7 +8462,7 @@ async function calPostNowDebug(calendarId) {
       body:JSON.stringify({action:'wa_templates',wa_phone_id:cfg['META_WA_PHONE_ID'],wa_token:cfg['META_WA_TOKEN']})
     })).json();
     if (waTemplRes.ok && waTemplRes.data?.length) {
-      log('✅ WA Templates ('+waTemplRes.data.length+'): '+waTemplRes.data.map((t:any)=>t.name+' ('+t.status+')').slice(0,5).join(', '), '#22c55e');
+      log('✅ WA Templates ('+waTemplRes.data.length+'): '+waTemplRes.data.map(function(t){return t.name+' ('+t.status+')';}).slice(0,5).join(', '), '#22c55e');
     } else if (!waTemplRes.ok) {
       log('❌ WA Templates: '+(waTemplRes.error||'Failed to load'), '#ef4444');
     } else {
