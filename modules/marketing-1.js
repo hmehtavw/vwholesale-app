@@ -3550,7 +3550,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         ${isReady && hasImage
           ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
           : isApproved
-          ? `<span style="font-size:10px;color:#6ee7b7">📅 Posts at ${item.post_time||'10:00'} IST on ${item.cal_date}</span>`
+          ? `<span style="font-size:10px;color:#6ee7b7">📅 Scheduled ${item.post_time||'10:00'} IST · ${item.cal_date}</span>
+             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6;margin-left:4px" title="Post immediately to all platforms from your browser">🚀 Post Now</button>`
           : isGif
           ? `<span style="font-size:10px;color:var(--text3)">Click ✨ Generate GIF to create</span>`
           : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
@@ -7715,6 +7716,132 @@ async function calGeneratePosters(calendarId, reuseBg) {
   }
 }
 window.calGeneratePosters = calGeneratePosters;
+
+
+// ── BROWSER-SIDE PUBLISHER — posts directly from browser, no Supabase egress needed ──
+async function calPostNow(calendarId) {
+  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+  if (!item) { showMktNotif('No post found'); return; }
+  const { data: settings } = await sb.from('marketing_settings').select('key,value')
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+  const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
+  const channels = item.platform || ['instagram_feed','facebook_post','threads'];
+  const pi = item.platform_images || {};
+  const caption = [item.caption, item.caption_te, (item.hashtags||[]).join(' ')].filter(Boolean).join('\n\n');
+  const META_API = 'https://graph.facebook.com/v25.0';
+  const st = cfg['META_SYSTEM_USER_TOKEN'];
+
+  const pop = document.createElement('div');
+  pop.id = 'postnow-popup';
+  pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
+
+  const chLabels = {instagram_feed:'📸 Instagram Feed',instagram_story:'📱 IG Story',facebook_post:'📘 Facebook Post',facebook_story:'📱 FB Story',threads:'🧵 Threads',whatsapp_story:'💬 WhatsApp Broadcast',gbp:'📍 Google Business',youtube:'▶️ YouTube'};
+
+  const rows = channels.map(ch => {
+    const img = pi[ch+'_mp4']||pi['mp4_music']||pi[ch+'_gif']||pi['gif']||pi[ch]||item.image_url;
+    return `<div id="ch-row-${ch}" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">
+      <div style="font-size:18px">${(chLabels[ch]||ch).split(' ')[0]}</div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700;color:#f1f5f9">${chLabels[ch]||ch}</div>
+        <div style="font-size:10px;color:#475569">${img?'✅ Media ready':'⚠️ No image'}</div>
+      </div>
+      <div id="ch-status-${ch}" style="font-size:11px;color:#64748b">Waiting…</div>
+    </div>`;
+  }).join('');
+
+  pop.innerHTML = `<div style="background:#1e293b;border-radius:14px;padding:24px;max-width:480px;width:100%;border:1px solid #334155;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:900;color:#f1f5f9">🚀 Post Now — ${item.topic.slice(0,40)}</div>
+      <button onclick="document.getElementById('postnow-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>
+    </div>
+    <div style="font-size:11px;color:#64748b;margin-bottom:14px">Posts from your browser directly — no scheduling</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rows}</div>
+    <button id="postnow-start" onclick="calPostNowExecute('${calendarId}')"
+      style="width:100%;background:#3b82f6;border:none;color:#fff;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+      🚀 Post to All ${channels.length} Platforms Now
+    </button>
+  </div>`;
+
+  pop.addEventListener('click', e => { if (e.target===pop) pop.remove(); });
+  document.body.appendChild(pop);
+  window._postNowCtx = { item, cfg, channels, pi, caption, META_API, st };
+}
+
+async function calPostNowExecute(calendarId) {
+  const btn = document.getElementById('postnow-start');
+  if (btn) { btn.disabled=true; btn.textContent='⏳ Posting…'; }
+  const { item, cfg, channels, pi, caption, META_API, st } = window._postNowCtx;
+  const results = {};
+
+  const setStatus = (ch, icon, msg, color='#94a3b8') => {
+    const el = document.getElementById('ch-status-'+ch);
+    if (el) { el.innerHTML = icon+' '+msg; el.style.color = color; }
+    const row = document.getElementById('ch-row-'+ch);
+    if (row) row.style.borderColor = color==='#22c55e'?'rgba(34,197,94,.5)':color==='#ef4444'?'rgba(239,68,68,.5)':'#334155';
+  };
+
+  for (const ch of channels) {
+    setStatus(ch, '⏳', 'Posting…', '#f59e0b');
+    const img = pi[ch+'_mp4']||pi['mp4_music']||pi[ch+'_gif']||pi['gif']||pi[ch]||item.image_url;
+    const isVideo = !!(img&&(img.includes('.mp4')||img.includes('.webm')));
+    const cap = caption.slice(0, ch==='threads'?500:2200);
+    let ok=false, postId='', error='';
+
+    try {
+      if (ch==='instagram_feed') {
+        if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
+        else {
+          const payload = isVideo?{video_url:img,caption:cap,media_type:'REELS'}:{image_url:img,caption:cap,media_type:'IMAGE'};
+          const cr = await (await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify(payload)})).json();
+          if (cr.id) {
+            if (isVideo) { setStatus(ch,'⏳','Processing video…','#f59e0b'); for(let i=0;i<15;i++){await new Promise(r=>setTimeout(r,3000));const s=await(await fetch(META_API+'/'+cr.id+'?fields=status_code',{headers:{'Authorization':'Bearer '+st}})).json();if(s.status_code==='FINISHED')break;if(s.status_code==='ERROR'){error='Video processing failed';break;}} }
+            if (!error) { const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({creation_id:cr.id})})).json(); if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Publish failed'; }
+          } else error=cr.error?.message||'Container failed';
+        }
+      }
+      else if (ch==='facebook_post') {
+        if (!cfg.META_PAGE_ID||!st) { error='Facebook not configured'; }
+        else if (isVideo) { const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({file_url:img,description:cap})})).json(); if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Failed'; }
+        else { const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({url:img,message:cap})})).json(); if(fr.id){ok=true;postId=fr.id;}else error=fr.error?.message||'Failed'; }
+      }
+      else if (ch==='threads') {
+        if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
+        else {
+          const pl={text:cap,media_type:img?'IMAGE':'TEXT'};if(img)pl.image_url=img;
+          const cr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify(pl)})).json();
+          if(cr.id){await new Promise(r=>setTimeout(r,2000));const pr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({creation_id:cr.id})})).json();if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Publish failed';}
+          else error=cr.error?.message||'Container failed';
+        }
+      }
+      else if (ch==='whatsapp_story') {
+        const res=await fetch(MKT_SB_URL+'/functions/v1/content-pipeline',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'publish_channel',calendar_id:parseInt(calendarId),channel:'whatsapp_story'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+        if(res.ok){ok=true;postId='wa_batch';}else error=res.error||'WA send failed';
+      }
+      else if (ch==='gbp'||ch==='google_business') { error='GBP API pending (~Aug 1)'; }
+      else { error='Channel not yet wired'; }
+    } catch(e) { error=e.message||'Unknown error'; }
+
+    results[ch]={ok,postId,error};
+    if(ok){
+      setStatus(ch,'✅','Posted!','#22c55e');
+      await sb.from('channel_deliveries').upsert({calendar_id:parseInt(calendarId),channel:ch,status:'published',platform_post_id:postId,published_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'calendar_id,channel'});
+    } else {
+      setStatus(ch,'❌',error||'Failed','#ef4444');
+      await sb.from('channel_deliveries').upsert({calendar_id:parseInt(calendarId),channel:ch,status:'failed',error_message:error,updated_at:new Date().toISOString()},{onConflict:'calendar_id,channel'});
+    }
+    await new Promise(r=>setTimeout(r,400));
+  }
+
+  const succeeded = Object.values(results).filter(r=>r.ok).length;
+  if(btn){btn.textContent='✅ Done — '+succeeded+'/'+channels.length+' posted';btn.style.background=succeeded>0?'#166534':'#7f1d1d';}
+  if(succeeded>0){
+    await sb.from('content_calendar').update({status:'published',published_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',calendarId);
+    setTimeout(()=>{document.getElementById('postnow-popup')?.remove();renderCalendar();},3000);
+  }
+}
+
+window.calPostNow = calPostNow;
+window.calPostNowExecute = calPostNowExecute;
 
 window.calPreviewPost = calPreviewPost;
 window.calApproveItem = calApproveItem;
