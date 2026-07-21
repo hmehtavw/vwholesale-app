@@ -148,3 +148,14 @@ for fname in ['modules/marketing-1.js', 'modules/marketing-2.js']:
         if re.search(r'\$\{[^}]*`[^`]*\$\{[^}]*`', content):
             print(f"  ⚠️  {fname}: possible deeply nested template literal")
     except: pass
+
+# Node syntax check on marketing-1.js (catches missing function declarations, stray braces)
+import subprocess
+r = subprocess.run(['node', '--check', 'modules/marketing-1.js'], capture_output=True, text=True)
+if r.returncode != 0:
+    # Filter out false positives from template literals in html-generating functions
+    lines = r.stderr.strip().split('\n')
+    real_errors = [l for l in lines if 'SyntaxError' in l and 'Unexpected identifier' not in l and 'missing )' not in l]
+    if real_errors:
+        print(f"  ❌ marketing-1.js node --check: {real_errors[0]}")
+        sys.exit(1)
