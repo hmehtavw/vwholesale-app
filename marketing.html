@@ -483,10 +483,15 @@ window.mktLogin = function() {
 <script>
 // Error capture — shows JS errors visibly
 window.onerror = function(msg, src, line, col, err) {
-  // Show error on LOGIN SCREEN directly
+  var srcFile = (src||'').split('/').pop().split('?')[0];
+  var ver = (src||'').split('v=')[1] || '';
+  var currentVer = '1784641365';
+  // Ignore errors from old cached versions
+  if (ver && ver !== currentVer) return false;
+  // Show error on login screen
   var errEl = document.getElementById('mkt-login-err');
   if (errEl) {
-    errEl.textContent = '❌ JS Error: ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']';
+    errEl.textContent = '❌ JS Error: ' + msg + ' [' + srcFile + ':' + line + ']';
     errEl.style.display = 'block';
   }
   var btn = document.getElementById('mkt-login-btn');
@@ -494,15 +499,6 @@ window.onerror = function(msg, src, line, col, err) {
     btn.textContent = 'Sign In to Marketing →';
     btn.disabled = false;
   }
-  // Also show in red bar at bottom
-  var div = document.getElementById('js-error-display');
-  if (!div) {
-    div = document.createElement('div');
-    div.id = 'js-error-display';
-    div.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#7f1d1d;color:#fff;padding:10px;font-size:12px;z-index:99999;font-family:monospace;max-height:120px;overflow-y:auto';
-    document.body.appendChild(div);
-  }
-  div.innerHTML += '<div>❌ ' + msg + ' [' + (src||'').split('/').pop() + ':' + line + ']</div>';
   return false;
 };
 window.addEventListener('unhandledrejection', function(e) {
@@ -534,12 +530,12 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
-<script src="/modules/marketing-1.js?v=1784641319"></script>
-<script src="/modules/marketing-2.js?v=1784641319"></script>
-<script src="/modules/marketing-gif.js?v=1784641319"></script>
-<script src="/modules/marketing-inbox.js?v=1784641319"></script>
-<script src="/modules/marketing-strategy.js?v=1784641319"></script>
-<script src="/modules/marketing-bi.js?v=1784641319"></script>
+<script src="/modules/marketing-1.js?v=1784641365"></script>
+<script src="/modules/marketing-2.js?v=1784641365"></script>
+<script src="/modules/marketing-gif.js?v=1784641365"></script>
+<script src="/modules/marketing-inbox.js?v=1784641365"></script>
+<script src="/modules/marketing-strategy.js?v=1784641365"></script>
+<script src="/modules/marketing-bi.js?v=1784641365"></script>
 
 </body>
 </html>
