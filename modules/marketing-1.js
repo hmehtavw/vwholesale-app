@@ -3548,7 +3548,8 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
         <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
         <button onclick="openHistoryDrawer('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="View all past generations">🕐</button>
         ${isReady && hasImage
-          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>`
+          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>
+             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6" title="Post immediately without scheduling">🚀 Post Now</button>`
           : isApproved
           ? `<span style="font-size:10px;color:#6ee7b7">📅 Scheduled ${item.post_time||'10:00'} IST · ${item.cal_date}</span>
              <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6;margin-left:4px" title="Post immediately to all platforms from your browser">🚀 Post Now</button>`
