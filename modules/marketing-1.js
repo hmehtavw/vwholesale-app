@@ -6417,11 +6417,116 @@ function buildEditorPopup() {
         <div style="padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px">
           <select id="editor-music" onchange="window.editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
             <option value="none">🔇 No Music (export GIF)</option>
-            <option value="/assets/track_corporate.mp3">⚡ Upbeat Corporate</option>
-            <option value="/assets/track_upbeat.mp3">⚡ Happy Energetic</option>
-            <option value="/assets/track_energetic.mp3">🔥 Energetic Drive</option>
-            <option value="/assets/track_cinematic.mp3">🎬 Soft Cinematic</option>
-            <option value="/assets/track_uplifting.mp3">✨ Uplifting</option>
+            <optgroup label="⚡ Upbeat Corporate (20 tracks)">
+              <option value="/assets/music/01_upbeat_rise.mp3">Upbeat Rise</option>
+              <option value="/assets/music/02_corporate_drive.mp3">Corporate Drive</option>
+              <option value="/assets/music/03_positive_morning.mp3">Positive Morning</option>
+              <option value="/assets/music/04_business_bright.mp3">Business Bright</option>
+              <option value="/assets/music/05_success_steps.mp3">Success Steps</option>
+              <option value="/assets/music/06_confident_march.mp3">Confident March</option>
+              <option value="/assets/music/07_team_spirit.mp3">Team Spirit</option>
+              <option value="/assets/music/08_achievement.mp3">Achievement</option>
+              <option value="/assets/music/09_brand_power.mp3">Brand Power</option>
+              <option value="/assets/music/10_work_flow.mp3">Work Flow</option>
+              <option value="/assets/music/11_monday_motivation.mp3">Monday Motivation</option>
+              <option value="/assets/music/12_creative_spark.mp3">Creative Spark</option>
+              <option value="/assets/music/13_launch_ready.mp3">Launch Ready</option>
+              <option value="/assets/music/14_deal_maker.mp3">Deal Maker</option>
+              <option value="/assets/music/15_office_vibes.mp3">Office Vibes</option>
+              <option value="/assets/music/16_startup_hustle.mp3">Startup Hustle</option>
+              <option value="/assets/music/17_clean_corporate.mp3">Clean Corporate</option>
+              <option value="/assets/music/18_positive_results.mp3">Positive Results</option>
+              <option value="/assets/music/19_new_beginnings.mp3">New Beginnings</option>
+              <option value="/assets/music/20_bright_future.mp3">Bright Future</option>
+            </optgroup>
+            <optgroup label="🔥 Energetic (20 tracks)">
+              <option value="/assets/music/21_energetic_drive.mp3">Energetic Drive</option>
+              <option value="/assets/music/22_power_up.mp3">Power Up</option>
+              <option value="/assets/music/23_unstoppable.mp3">Unstoppable</option>
+              <option value="/assets/music/24_maximum_effort.mp3">Maximum Effort</option>
+              <option value="/assets/music/25_hype_builder.mp3">Hype Builder</option>
+              <option value="/assets/music/26_action_mode.mp3">Action Mode</option>
+              <option value="/assets/music/27_fast_forward.mp3">Fast Forward</option>
+              <option value="/assets/music/28_energy_surge.mp3">Energy Surge</option>
+              <option value="/assets/music/29_peak_performance.mp3">Peak Performance</option>
+              <option value="/assets/music/30_game_changer.mp3">Game Changer</option>
+              <option value="/assets/music/31_breakout.mp3">Breakout</option>
+              <option value="/assets/music/32_fire_starter.mp3">Fire Starter</option>
+              <option value="/assets/music/33_charge_up.mp3">Charge Up</option>
+              <option value="/assets/music/34_overdrive.mp3">Overdrive</option>
+              <option value="/assets/music/35_turbo_boost.mp3">Turbo Boost</option>
+              <option value="/assets/music/36_impact.mp3">Impact</option>
+              <option value="/assets/music/37_momentum.mp3">Momentum</option>
+              <option value="/assets/music/38_rocket_launch.mp3">Rocket Launch</option>
+              <option value="/assets/music/39_power_move.mp3">Power Move</option>
+              <option value="/assets/music/40_full_throttle.mp3">Full Throttle</option>
+            </optgroup>
+            <optgroup label="🎬 Cinematic (20 tracks)">
+              <option value="/assets/music/41_soft_cinematic.mp3">Soft Cinematic</option>
+              <option value="/assets/music/42_emotional_rise.mp3">Emotional Rise</option>
+              <option value="/assets/music/43_epic_moment.mp3">Epic Moment</option>
+              <option value="/assets/music/44_premium_feel.mp3">Premium Feel</option>
+              <option value="/assets/music/45_luxury_brand.mp3">Luxury Brand</option>
+              <option value="/assets/music/46_grand_opening.mp3">Grand Opening</option>
+              <option value="/assets/music/47_heritage_story.mp3">Heritage Story</option>
+              <option value="/assets/music/48_trust_built.mp3">Trust Built</option>
+              <option value="/assets/music/49_craftsmanship.mp3">Craftsmanship</option>
+              <option value="/assets/music/50_timeless_quality.mp3">Timeless Quality</option>
+              <option value="/assets/music/51_deep_impression.mp3">Deep Impression</option>
+              <option value="/assets/music/52_soulful_moment.mp3">Soulful Moment</option>
+              <option value="/assets/music/53_moving_forward.mp3">Moving Forward</option>
+              <option value="/assets/music/54_milestone.mp3">Milestone</option>
+              <option value="/assets/music/55_proud_legacy.mp3">Proud Legacy</option>
+              <option value="/assets/music/56_touching_story.mp3">Touching Story</option>
+              <option value="/assets/music/57_inspire_dream.mp3">Inspire Dream</option>
+              <option value="/assets/music/58_believe_achieve.mp3">Believe Achieve</option>
+              <option value="/assets/music/59_rise_together.mp3">Rise Together</option>
+              <option value="/assets/music/60_future_vision.mp3">Future Vision</option>
+            </optgroup>
+            <optgroup label="🌊 Ambient Calm (20 tracks)">
+              <option value="/assets/music/61_premium_ambient.mp3">Premium Ambient</option>
+              <option value="/assets/music/62_calm_confidence.mp3">Calm Confidence</option>
+              <option value="/assets/music/63_serene_space.mp3">Serene Space</option>
+              <option value="/assets/music/64_peaceful_home.mp3">Peaceful Home</option>
+              <option value="/assets/music/65_tranquil_morning.mp3">Tranquil Morning</option>
+              <option value="/assets/music/66_zen_workspace.mp3">Zen Workspace</option>
+              <option value="/assets/music/67_mindful_moment.mp3">Mindful Moment</option>
+              <option value="/assets/music/68_gentle_flow.mp3">Gentle Flow</option>
+              <option value="/assets/music/69_soft_glow.mp3">Soft Glow</option>
+              <option value="/assets/music/70_morning_light.mp3">Morning Light</option>
+              <option value="/assets/music/71_clear_sky.mp3">Clear Sky</option>
+              <option value="/assets/music/72_ocean_breeze.mp3">Ocean Breeze</option>
+              <option value="/assets/music/73_sunday_morning.mp3">Sunday Morning</option>
+              <option value="/assets/music/74_fresh_start.mp3">Fresh Start</option>
+              <option value="/assets/music/75_open_spaces.mp3">Open Spaces</option>
+              <option value="/assets/music/76_luxury_lounge.mp3">Luxury Lounge</option>
+              <option value="/assets/music/77_spa_vibes.mp3">Spa Vibes</option>
+              <option value="/assets/music/78_breathe_easy.mp3">Breathe Easy</option>
+              <option value="/assets/music/79_evening_calm.mp3">Evening Calm</option>
+              <option value="/assets/music/80_dream_space.mp3">Dream Space</option>
+            </optgroup>
+            <optgroup label="✨ Uplifting (20 tracks)">
+              <option value="/assets/music/100_v_wholesale_anthem.mp3">V Wholesale Anthem</option>
+              <option value="/assets/music/81_uplifting_hope.mp3">Uplifting Hope</option>
+              <option value="/assets/music/82_new_chapter.mp3">New Chapter</option>
+              <option value="/assets/music/83_possibilities.mp3">Possibilities</option>
+              <option value="/assets/music/84_together_strong.mp3">Together Strong</option>
+              <option value="/assets/music/85_community_love.mp3">Community Love</option>
+              <option value="/assets/music/86_local_pride.mp3">Local Pride</option>
+              <option value="/assets/music/87_vijayawada_vibes.mp3">Vijayawada Vibes</option>
+              <option value="/assets/music/88_city_of_victory.mp3">City Of Victory</option>
+              <option value="/assets/music/89_build_better.mp3">Build Better</option>
+              <option value="/assets/music/90_home_sweet_home.mp3">Home Sweet Home</option>
+              <option value="/assets/music/91_family_first.mp3">Family First</option>
+              <option value="/assets/music/92_growing_together.mp3">Growing Together</option>
+              <option value="/assets/music/93_dream_home.mp3">Dream Home</option>
+              <option value="/assets/music/94_new_beginnings2.mp3">New Beginnings2</option>
+              <option value="/assets/music/95_celebrate_life.mp3">Celebrate Life</option>
+              <option value="/assets/music/96_joy_of_home.mp3">Joy Of Home</option>
+              <option value="/assets/music/97_warm_welcome.mp3">Warm Welcome</option>
+              <option value="/assets/music/98_happy_place.mp3">Happy Place</option>
+              <option value="/assets/music/99_perfect_home.mp3">Perfect Home</option>
+            </optgroup>
             <option value="__upload__">📁 Upload Your Own MP3</option>
           </select>
           <div id="editor-music-upload-row" style="display:none;margin-top:4px">
@@ -7609,13 +7714,108 @@ async function calRegenerateItem(calendarId) {
 
 // ── ROYALTY-FREE MUSIC TRACKS ──
 const MKT_MUSIC_TRACKS = [
-  { id:'none',       label:'No Music',          url:null,                              mood:'silent'    },
-  { id:'corporate',  label:'Upbeat Corporate',   url:'/assets/track_corporate.mp3',    mood:'upbeat'    },
-  { id:'upbeat',     label:'Happy Energetic',    url:'/assets/track_upbeat.mp3',       mood:'upbeat'    },
-  { id:'energetic',  label:'Energetic Drive',    url:'/assets/track_energetic.mp3',    mood:'upbeat'    },
-  { id:'cinematic',  label:'Soft Cinematic',     url:'/assets/track_cinematic.mp3',    mood:'cinematic' },
-  { id:'uplifting',  label:'Uplifting',          url:'/assets/track_uplifting.mp3',    mood:'cinematic' },
-  { id:'upload',     label:'Upload Your Own MP3',url:'__upload__',                     mood:'custom'    },
+  { id:'none',   label:'No Music (export GIF)', url:null,         mood:'silent' },
+  { id:'upload', label:'📁 Upload Your MP3',    url:'__upload__', mood:'custom' },
+  { id:'01_upbeat_rise', label:'Upbeat Rise', url:'/assets/music/01_upbeat_rise.mp3', mood:'upbeat' },
+  { id:'02_corporate_drive', label:'Corporate Drive', url:'/assets/music/02_corporate_drive.mp3', mood:'upbeat' },
+  { id:'03_positive_morning', label:'Positive Morning', url:'/assets/music/03_positive_morning.mp3', mood:'upbeat' },
+  { id:'04_business_bright', label:'Business Bright', url:'/assets/music/04_business_bright.mp3', mood:'upbeat' },
+  { id:'05_success_steps', label:'Success Steps', url:'/assets/music/05_success_steps.mp3', mood:'upbeat' },
+  { id:'06_confident_march', label:'Confident March', url:'/assets/music/06_confident_march.mp3', mood:'upbeat' },
+  { id:'07_team_spirit', label:'Team Spirit', url:'/assets/music/07_team_spirit.mp3', mood:'upbeat' },
+  { id:'08_achievement', label:'Achievement', url:'/assets/music/08_achievement.mp3', mood:'upbeat' },
+  { id:'09_brand_power', label:'Brand Power', url:'/assets/music/09_brand_power.mp3', mood:'upbeat' },
+  { id:'100_v_wholesale_anthem', label:'V Wholesale Anthem', url:'/assets/music/100_v_wholesale_anthem.mp3', mood:'major' },
+  { id:'10_work_flow', label:'Work Flow', url:'/assets/music/10_work_flow.mp3', mood:'upbeat' },
+  { id:'11_monday_motivation', label:'Monday Motivation', url:'/assets/music/11_monday_motivation.mp3', mood:'upbeat' },
+  { id:'12_creative_spark', label:'Creative Spark', url:'/assets/music/12_creative_spark.mp3', mood:'upbeat' },
+  { id:'13_launch_ready', label:'Launch Ready', url:'/assets/music/13_launch_ready.mp3', mood:'upbeat' },
+  { id:'14_deal_maker', label:'Deal Maker', url:'/assets/music/14_deal_maker.mp3', mood:'upbeat' },
+  { id:'15_office_vibes', label:'Office Vibes', url:'/assets/music/15_office_vibes.mp3', mood:'upbeat' },
+  { id:'16_startup_hustle', label:'Startup Hustle', url:'/assets/music/16_startup_hustle.mp3', mood:'upbeat' },
+  { id:'17_clean_corporate', label:'Clean Corporate', url:'/assets/music/17_clean_corporate.mp3', mood:'upbeat' },
+  { id:'18_positive_results', label:'Positive Results', url:'/assets/music/18_positive_results.mp3', mood:'upbeat' },
+  { id:'19_new_beginnings', label:'New Beginnings', url:'/assets/music/19_new_beginnings.mp3', mood:'upbeat' },
+  { id:'20_bright_future', label:'Bright Future', url:'/assets/music/20_bright_future.mp3', mood:'upbeat' },
+  { id:'21_energetic_drive', label:'Energetic Drive', url:'/assets/music/21_energetic_drive.mp3', mood:'energetic' },
+  { id:'22_power_up', label:'Power Up', url:'/assets/music/22_power_up.mp3', mood:'energetic' },
+  { id:'23_unstoppable', label:'Unstoppable', url:'/assets/music/23_unstoppable.mp3', mood:'energetic' },
+  { id:'24_maximum_effort', label:'Maximum Effort', url:'/assets/music/24_maximum_effort.mp3', mood:'energetic' },
+  { id:'25_hype_builder', label:'Hype Builder', url:'/assets/music/25_hype_builder.mp3', mood:'energetic' },
+  { id:'26_action_mode', label:'Action Mode', url:'/assets/music/26_action_mode.mp3', mood:'energetic' },
+  { id:'27_fast_forward', label:'Fast Forward', url:'/assets/music/27_fast_forward.mp3', mood:'energetic' },
+  { id:'28_energy_surge', label:'Energy Surge', url:'/assets/music/28_energy_surge.mp3', mood:'energetic' },
+  { id:'29_peak_performance', label:'Peak Performance', url:'/assets/music/29_peak_performance.mp3', mood:'energetic' },
+  { id:'30_game_changer', label:'Game Changer', url:'/assets/music/30_game_changer.mp3', mood:'energetic' },
+  { id:'31_breakout', label:'Breakout', url:'/assets/music/31_breakout.mp3', mood:'energetic' },
+  { id:'32_fire_starter', label:'Fire Starter', url:'/assets/music/32_fire_starter.mp3', mood:'energetic' },
+  { id:'33_charge_up', label:'Charge Up', url:'/assets/music/33_charge_up.mp3', mood:'energetic' },
+  { id:'34_overdrive', label:'Overdrive', url:'/assets/music/34_overdrive.mp3', mood:'energetic' },
+  { id:'35_turbo_boost', label:'Turbo Boost', url:'/assets/music/35_turbo_boost.mp3', mood:'energetic' },
+  { id:'36_impact', label:'Impact', url:'/assets/music/36_impact.mp3', mood:'energetic' },
+  { id:'37_momentum', label:'Momentum', url:'/assets/music/37_momentum.mp3', mood:'energetic' },
+  { id:'38_rocket_launch', label:'Rocket Launch', url:'/assets/music/38_rocket_launch.mp3', mood:'energetic' },
+  { id:'39_power_move', label:'Power Move', url:'/assets/music/39_power_move.mp3', mood:'energetic' },
+  { id:'40_full_throttle', label:'Full Throttle', url:'/assets/music/40_full_throttle.mp3', mood:'energetic' },
+  { id:'41_soft_cinematic', label:'Soft Cinematic', url:'/assets/music/41_soft_cinematic.mp3', mood:'cinematic' },
+  { id:'42_emotional_rise', label:'Emotional Rise', url:'/assets/music/42_emotional_rise.mp3', mood:'cinematic' },
+  { id:'43_epic_moment', label:'Epic Moment', url:'/assets/music/43_epic_moment.mp3', mood:'cinematic' },
+  { id:'44_premium_feel', label:'Premium Feel', url:'/assets/music/44_premium_feel.mp3', mood:'cinematic' },
+  { id:'45_luxury_brand', label:'Luxury Brand', url:'/assets/music/45_luxury_brand.mp3', mood:'cinematic' },
+  { id:'46_grand_opening', label:'Grand Opening', url:'/assets/music/46_grand_opening.mp3', mood:'cinematic' },
+  { id:'47_heritage_story', label:'Heritage Story', url:'/assets/music/47_heritage_story.mp3', mood:'cinematic' },
+  { id:'48_trust_built', label:'Trust Built', url:'/assets/music/48_trust_built.mp3', mood:'cinematic' },
+  { id:'49_craftsmanship', label:'Craftsmanship', url:'/assets/music/49_craftsmanship.mp3', mood:'cinematic' },
+  { id:'50_timeless_quality', label:'Timeless Quality', url:'/assets/music/50_timeless_quality.mp3', mood:'cinematic' },
+  { id:'51_deep_impression', label:'Deep Impression', url:'/assets/music/51_deep_impression.mp3', mood:'cinematic' },
+  { id:'52_soulful_moment', label:'Soulful Moment', url:'/assets/music/52_soulful_moment.mp3', mood:'cinematic' },
+  { id:'53_moving_forward', label:'Moving Forward', url:'/assets/music/53_moving_forward.mp3', mood:'cinematic' },
+  { id:'54_milestone', label:'Milestone', url:'/assets/music/54_milestone.mp3', mood:'cinematic' },
+  { id:'55_proud_legacy', label:'Proud Legacy', url:'/assets/music/55_proud_legacy.mp3', mood:'cinematic' },
+  { id:'56_touching_story', label:'Touching Story', url:'/assets/music/56_touching_story.mp3', mood:'cinematic' },
+  { id:'57_inspire_dream', label:'Inspire Dream', url:'/assets/music/57_inspire_dream.mp3', mood:'cinematic' },
+  { id:'58_believe_achieve', label:'Believe Achieve', url:'/assets/music/58_believe_achieve.mp3', mood:'cinematic' },
+  { id:'59_rise_together', label:'Rise Together', url:'/assets/music/59_rise_together.mp3', mood:'cinematic' },
+  { id:'60_future_vision', label:'Future Vision', url:'/assets/music/60_future_vision.mp3', mood:'cinematic' },
+  { id:'61_premium_ambient', label:'Premium Ambient', url:'/assets/music/61_premium_ambient.mp3', mood:'ambient' },
+  { id:'62_calm_confidence', label:'Calm Confidence', url:'/assets/music/62_calm_confidence.mp3', mood:'ambient' },
+  { id:'63_serene_space', label:'Serene Space', url:'/assets/music/63_serene_space.mp3', mood:'ambient' },
+  { id:'64_peaceful_home', label:'Peaceful Home', url:'/assets/music/64_peaceful_home.mp3', mood:'ambient' },
+  { id:'65_tranquil_morning', label:'Tranquil Morning', url:'/assets/music/65_tranquil_morning.mp3', mood:'ambient' },
+  { id:'66_zen_workspace', label:'Zen Workspace', url:'/assets/music/66_zen_workspace.mp3', mood:'ambient' },
+  { id:'67_mindful_moment', label:'Mindful Moment', url:'/assets/music/67_mindful_moment.mp3', mood:'ambient' },
+  { id:'68_gentle_flow', label:'Gentle Flow', url:'/assets/music/68_gentle_flow.mp3', mood:'ambient' },
+  { id:'69_soft_glow', label:'Soft Glow', url:'/assets/music/69_soft_glow.mp3', mood:'ambient' },
+  { id:'70_morning_light', label:'Morning Light', url:'/assets/music/70_morning_light.mp3', mood:'ambient' },
+  { id:'71_clear_sky', label:'Clear Sky', url:'/assets/music/71_clear_sky.mp3', mood:'ambient' },
+  { id:'72_ocean_breeze', label:'Ocean Breeze', url:'/assets/music/72_ocean_breeze.mp3', mood:'ambient' },
+  { id:'73_sunday_morning', label:'Sunday Morning', url:'/assets/music/73_sunday_morning.mp3', mood:'ambient' },
+  { id:'74_fresh_start', label:'Fresh Start', url:'/assets/music/74_fresh_start.mp3', mood:'ambient' },
+  { id:'75_open_spaces', label:'Open Spaces', url:'/assets/music/75_open_spaces.mp3', mood:'ambient' },
+  { id:'76_luxury_lounge', label:'Luxury Lounge', url:'/assets/music/76_luxury_lounge.mp3', mood:'ambient' },
+  { id:'77_spa_vibes', label:'Spa Vibes', url:'/assets/music/77_spa_vibes.mp3', mood:'ambient' },
+  { id:'78_breathe_easy', label:'Breathe Easy', url:'/assets/music/78_breathe_easy.mp3', mood:'ambient' },
+  { id:'79_evening_calm', label:'Evening Calm', url:'/assets/music/79_evening_calm.mp3', mood:'ambient' },
+  { id:'80_dream_space', label:'Dream Space', url:'/assets/music/80_dream_space.mp3', mood:'ambient' },
+  { id:'81_uplifting_hope', label:'Uplifting Hope', url:'/assets/music/81_uplifting_hope.mp3', mood:'major' },
+  { id:'82_new_chapter', label:'New Chapter', url:'/assets/music/82_new_chapter.mp3', mood:'major' },
+  { id:'83_possibilities', label:'Possibilities', url:'/assets/music/83_possibilities.mp3', mood:'major' },
+  { id:'84_together_strong', label:'Together Strong', url:'/assets/music/84_together_strong.mp3', mood:'major' },
+  { id:'85_community_love', label:'Community Love', url:'/assets/music/85_community_love.mp3', mood:'major' },
+  { id:'86_local_pride', label:'Local Pride', url:'/assets/music/86_local_pride.mp3', mood:'major' },
+  { id:'87_vijayawada_vibes', label:'Vijayawada Vibes', url:'/assets/music/87_vijayawada_vibes.mp3', mood:'major' },
+  { id:'88_city_of_victory', label:'City Of Victory', url:'/assets/music/88_city_of_victory.mp3', mood:'major' },
+  { id:'89_build_better', label:'Build Better', url:'/assets/music/89_build_better.mp3', mood:'major' },
+  { id:'90_home_sweet_home', label:'Home Sweet Home', url:'/assets/music/90_home_sweet_home.mp3', mood:'major' },
+  { id:'91_family_first', label:'Family First', url:'/assets/music/91_family_first.mp3', mood:'major' },
+  { id:'92_growing_together', label:'Growing Together', url:'/assets/music/92_growing_together.mp3', mood:'major' },
+  { id:'93_dream_home', label:'Dream Home', url:'/assets/music/93_dream_home.mp3', mood:'major' },
+  { id:'94_new_beginnings2', label:'New Beginnings2', url:'/assets/music/94_new_beginnings2.mp3', mood:'major' },
+  { id:'95_celebrate_life', label:'Celebrate Life', url:'/assets/music/95_celebrate_life.mp3', mood:'major' },
+  { id:'96_joy_of_home', label:'Joy Of Home', url:'/assets/music/96_joy_of_home.mp3', mood:'major' },
+  { id:'97_warm_welcome', label:'Warm Welcome', url:'/assets/music/97_warm_welcome.mp3', mood:'major' },
+  { id:'98_happy_place', label:'Happy Place', url:'/assets/music/98_happy_place.mp3', mood:'major' },
+  { id:'99_perfect_home', label:'Perfect Home', url:'/assets/music/99_perfect_home.mp3', mood:'major' },
 ];
 
 function mktMusicPickerHTML(selectedId = 'none') {
