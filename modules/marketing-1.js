@@ -6392,10 +6392,8 @@ async function calPreviewDraggableBadge(calendarId) {
   _editorIdCounter = 1;
   _editorSelected = null;
 
-  // Load saved per-format elements from platform_images, or create defaults
+  // Load saved elements
   const saved = pi.editor_elements || {};
-  const defaultOffer = pi.offer_text || pi.text_elements?.[0]?.text || '';
-
   for (const key of Object.keys(_editorFormats)) {
     const fmt = _editorFormats[key];
     if (saved[key] && saved[key].length) {
@@ -6403,21 +6401,25 @@ async function calPreviewDraggableBadge(calendarId) {
       const maxId = Math.max(...fmt.elements.map(e => e.id || 0));
       if (maxId >= _editorIdCounter) _editorIdCounter = maxId + 1;
     } else {
-      // Start empty — poster already has the design baked in
-      // User can add badges/text via the Add Elements panel
       fmt.elements = [];
-    }
-    // Load background image
-    const imgUrl = pi[fmt.imgKey];
-    if (imgUrl) {
-      _editorBgImages[key] = await new Promise(res => {
-        const img = new Image(); img.crossOrigin='anonymous';
-        img.onload=()=>res(img); img.onerror=()=>res(null); img.src=imgUrl;
-      });
     }
   }
 
+  // Show editor immediately — images load in parallel in background
   buildEditorPopup();
+
+  // Load all background images in parallel (non-blocking)
+  const loadImg = (url) => new Promise(res => {
+    const img = new Image(); img.crossOrigin = 'anonymous';
+    img.onload = () => res(img); img.onerror = () => res(null); img.src = url;
+  });
+  const keys = Object.keys(_editorFormats);
+  const urls = keys.map(k => pi[_editorFormats[k].imgKey] || null);
+  const imgs = await Promise.all(urls.map(u => u ? loadImg(u) : Promise.resolve(null)));
+  keys.forEach((k, i) => { if (imgs[i]) _editorBgImages[k] = imgs[i]; });
+
+  // Render canvas now that images are loaded
+  editorRenderCanvas();
 }
 
 function buildEditorPopup() {
@@ -7402,15 +7404,18 @@ async function openPosterEditor(calendarId, overrideImages) {
     };
     for (const key of Object.keys(_editorFormats)) _editorFormats[key].elements = [];
     _editorIdCounter = 1; _editorSelected = null;
-    for (const [key, fmt] of Object.entries(_editorFormats)) {
+
+    // Load all images in parallel
+    const loadImg = (url) => new Promise(res => {
+      const img = new Image(); img.crossOrigin='anonymous';
+      img.onload=()=>res(img); img.onerror=()=>res(null); img.src=url;
+    });
+    const keys = Object.entries(_editorFormats);
+    const imgs = await Promise.all(keys.map(([,fmt]) => {
       const url = _editorPI[fmt.imgKey];
-      if (url) {
-        _editorBgImages[key] = await new Promise(res => {
-          const img = new Image(); img.crossOrigin='anonymous';
-          img.onload=()=>res(img); img.onerror=()=>res(null); img.src=url;
-        });
-      }
-    }
+      return url ? loadImg(url) : Promise.resolve(null);
+    }));
+    keys.forEach(([k], i) => { if (imgs[i]) _editorBgImages[k] = imgs[i]; });
     buildEditorPopup();
   } else {
     await calPreviewDraggableBadge(calendarId);
