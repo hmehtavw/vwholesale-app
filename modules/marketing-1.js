@@ -3648,24 +3648,22 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
       ${isReel && item.reel_script ? `<div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">${renderReelScriptInline(item.reel_script, item.id, existing?.id)}</div>` : ''}
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
         <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">${item.content_type==='reel'?'⬆ Video':item.content_type==='gif'?'⬆ GIF':'⬆ Image'}</button>
-        ${item.content_type==='gif'
-          ? `${!hasImage
-              ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>`
-              : `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Regen</button>
-                 <button onclick="calReencodeClean('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Clean re-encode — no badge">🧹</button>
-                 <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Edit">✏️</button>`}`
-          : item.content_type!=='reel'
-          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${hasImage?'🎨 Regen':'🤖 Generate'}</button>
-             ${hasImage?`<button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Edit">✏️</button>`:''}`
-          : ''}
-        ${hasImage?`<button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Preview">👁</button>`:''}
-        ${isReady && hasImage
-          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve</button>
-             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#3b82f6">🚀 Post Now</button>`
-          : isApproved
-          ? `<button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px;background:#3b82f6">🚀 Post Now</button>
-             <button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩</button>`
-          : ''}
+        ${(()=>{
+          const id='${item.id}';
+          if(item.content_type==='gif'){
+            const genBtn='<button id="gif-btn-'+id+'" onclick="calGenerateGif(\''+id+'\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ '+(hasImage?'Regen':'Generate GIF')+'</button>';
+            const extras=hasImage?'<button onclick="calReencodeClean(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Clean re-encode">🧹</button><button onclick="openPosterEditor(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">✏️</button>':'';
+            return genBtn+extras;
+          }
+          if(item.content_type!=='reel'){
+            const genBtn='<button onclick="calGeneratePosters(\''+id+'\')" class="mkt-btn '+(hasImage?'mkt-btn-ghost':'mkt-btn-primary')+'" style="font-size:11px;padding:6px 12px">'+(hasImage?'🎨 Regen':'🤖 Generate')+'</button>';
+            const editBtn=hasImage?'<button onclick="openPosterEditor(\''+id+'\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">✏️</button>':'';
+            return genBtn+editBtn;
+          }
+          return '';
+        })()}
+        ${hasImage?'<button onclick="calPreviewPost(\'${item.id}\')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px">👁</button>':''}
+        ${isReady&&hasImage?'<button onclick="calApproveItem(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve</button><button onclick="calPostNow(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#3b82f6">🚀 Post Now</button>':isApproved?'<button onclick="calPostNow(\'${item.id}\')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px;background:#3b82f6">🚀 Post Now</button><button onclick="calUnapproveItem(\'${item.id}\')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩</button>':''}
       </div>
       <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
     </div>` : '';
