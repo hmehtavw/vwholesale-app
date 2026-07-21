@@ -7977,7 +7977,7 @@ async function calPostNow(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) { showMktNotif('No post found'); return; }
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
-    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN','META_WA_OWNER_PHONE']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
 
   // Quick credential check
@@ -8163,37 +8163,40 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='whatsapp_story') {
         if (!cfg.META_WA_PHONE_ID||!cfg.META_WA_TOKEN) { error='WhatsApp not configured'; }
         else {
-          const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(5);
-          if (!waCusts?.length) { error='No opted-in WhatsApp customers'; }
-          else {
-            const clean = p => '91'+p.replace(/[^0-9]/g,'').slice(-10);
-            let sent=0, lastErr='';
-            // Validate: clean() returns '91' + 10 digits = 12 chars total
-            const testCust = waCusts[0];
-            const testNum = clean(testCust.phone||'');
-            if (!testNum || testNum.length!==12) { error='Invalid phone: '+testCust.phone; }
-            else {
-              for (const c of waCusts) {
-                const num = clean(c.phone||'');
-                if (!num||num.length!==10) continue;
-                try {
-                  const wr=await(await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{method:'POST',
-                    headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-                    body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',
-                      to:'91'+num,type:'template',
-                      template:{name:'vwholesale_new_arrival',language:{code:'en'},
-                        components:[{type:'body',parameters:[
-                          {type:'text',text:(c.name||'there').slice(0,60)},
-                          {type:'text',text:item.topic.slice(0,60)}
-                        ]}]}})})).json();
-                  if(wr.messages?.[0]?.id)sent++;
-                  else lastErr=JSON.stringify(wr).slice(0,120);
-                } catch(e){lastErr=e.message;}
-                await new Promise(r=>setTimeout(r,200));
-              }
-              if(sent>0){ok=true;postId='wa_'+sent+'_sent';}
-              else error='WA failed: '+lastErr;
-            }
+          // Strategy: Send to owner number (9038010175) with image + caption
+          // Owner can then manually broadcast from WhatsApp Business app
+          // This avoids per-message charges for bulk broadcast
+          const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
+          const waImg = img; // already set to story_gif or story poster
+
+          // Send image message (not template — sending to own number doesn't need template)
+          const waPayload = {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: ownerNum,
+            type: 'image',
+            image: { link: waImg, caption: cap.slice(0, 1024) }
+          };
+          const wr = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
+            method:'POST',
+            headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+            body: JSON.stringify(waPayload)
+          })).json();
+
+          if (wr.messages?.[0]?.id) {
+            ok=true; postId='wa_owner_'+wr.messages[0].id;
+          } else {
+            // Fallback: try text message with image URL
+            const wr2 = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
+              method:'POST',
+              headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+              body: JSON.stringify({
+                messaging_product:'whatsapp', to:ownerNum, type:'text',
+                text:{ body: '📢 New post ready to broadcast:\n\n'+cap.slice(0,500)+'\n\n🖼 '+waImg }
+              })
+            })).json();
+            if (wr2.messages?.[0]?.id) { ok=true; postId='wa_text_'+wr2.messages[0].id; }
+            else error='WA: '+(wr.error?.message||wr2.error?.message||JSON.stringify(wr).slice(0,100));
           }
         }
       }
@@ -8238,7 +8241,7 @@ async function calPostNowExecute(calendarId) {
 
 async function calPostNowDebug(calendarId) {
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
-    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN','META_WA_OWNER_PHONE']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
   const st = cfg['META_SYSTEM_USER_TOKEN'];
   const META = 'https://graph.facebook.com/v25.0';
