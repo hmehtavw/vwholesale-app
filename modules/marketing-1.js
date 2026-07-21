@@ -8048,7 +8048,16 @@ async function calPostNowExecute(calendarId) {
 
   for (const ch of channels) {
     setStatus(ch, '⏳', 'Posting…', '#f59e0b');
-    const img = pi[ch+'_mp4']||pi['mp4_music']||pi[ch+'_gif']||pi['gif']||pi[ch]||item.image_url;
+    const isGifPost = item.content_type === 'gif';
+    // For GIF posts: use the GIF file per channel; for others use static image
+    const gifKeyMap = {
+      instagram_feed:'square_gif', instagram_story:'story_gif', facebook_story:'story_gif',
+      threads:'square_gif', facebook_post:'landscape_gif', whatsapp_story:'story_gif',
+      youtube:'landscape_gif', gbp:'landscape_gif'
+    };
+    const img = isGifPost
+      ? (pi[gifKeyMap[ch]] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
     const isVideo = !!(img&&(img.includes('.mp4')||img.includes('.webm')));
     const cap = caption.slice(0, ch==='threads'?500:2200);
     let ok=false, postId='', error='';
@@ -8086,8 +8095,9 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
-          // IG Story: create container with media_type IMAGE (not STORIES - that's deprecated)
-          const storyImg = pi['instagram_story']||pi['story_gif']||pi['instagram_feed']||item.image_url;
+          // IG Story: GIFs not supported via API - use static story poster
+          // If no story image, use square feed image
+          const storyImg = pi['instagram_story'] || pi['story_gif'] || pi['instagram_feed'] || item.image_url;
           const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
             body:JSON.stringify({image_url:storyImg,media_type:'IMAGE',is_carousel_item:false})})).json();
@@ -8153,10 +8163,10 @@ async function calPostNowExecute(calendarId) {
           else {
             const clean = p => '91'+p.replace(/[^0-9]/g,'').slice(-10);
             let sent=0, lastErr='';
-            // Test with first customer first
+            // Validate: clean() returns '91' + 10 digits = 12 chars total
             const testCust = waCusts[0];
             const testNum = clean(testCust.phone||'');
-            if (!testNum || testNum.length!==10) { error='Invalid phone: '+testCust.phone; }
+            if (!testNum || testNum.length!==12) { error='Invalid phone: '+testCust.phone; }
             else {
               for (const c of waCusts) {
                 const num = clean(c.phone||'');
