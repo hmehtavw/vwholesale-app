@@ -4829,12 +4829,32 @@ async function renderAnalytics() {
     {data: contentPosts},
     {data: channelPosts},
     {data: performance},
-    {data: reviews}
+    {data: reviews},
+    {data: spendData},
+    {data: spendMonthly}
   ] = await Promise.all([
     sb.from('content_posts').select('*').gte('created_at', lastMonthStart).order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
     sb.from('channel_posts').select('*').gte('created_at', lastMonthStart).then(r=>r,()=>({data:[]})),
     sb.from('post_performance').select('*').gte('recorded_at', lastMonthStart).then(r=>r,()=>({data:[]})),
-    sb.from('monthly_reviews').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]}))
+    sb.from('monthly_reviews').select('*').order('created_at',{ascending:false}).limit(10).then(r=>r,()=>({data:[]})),
+    sb.from('generation_history').select('content_type,cost_usd,cost_inr,api_provider,created_at').order('created_at',{ascending:false}).then(r=>r,()=>({data:[]})),
+    sb.from('generation_history').select('content_type,cost_inr,created_at').gte('created_at', monthStart).then(r=>r,()=>({data:[]}))
+  ]);
+
+  // Spend calculations
+  const allSpend = spendData || [];
+  const thisMonthSpend = spendMonthly || [];
+  const totalSpendINR = allSpend.reduce((a,r) => a+(+r.cost_inr||0), 0);
+  const thisMonthINR = thisMonthSpend.reduce((a,r) => a+(+r.cost_inr||0), 0);
+  const spendByType = {};
+  allSpend.forEach(r => {
+    const t = r.content_type || 'other';
+    spendByType[t] = (spendByType[t]||{count:0,inr:0});
+    spendByType[t].count++;
+    spendByType[t].inr += +r.cost_inr||0;
+  });
+  const costPerItem = {poster:'₹10.20/poster (3 AI images)', gif_animated:'₹3.40/GIF (1 AI image)', gif_slideshow:'₹10.20/slideshow (3 frames)', caption:'₹0.17/caption (GPT-4o)'};
+  const maxSpend = Math.max(...Object.values(spendByType).map(v=>v.inr), 1);
   ]);
 
   const totalPosts = (contentPosts||[]).length;
@@ -4856,8 +4876,48 @@ async function renderAnalytics() {
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
     <div>
-      <h3 style="font-size:16px;font-weight:900">📈 Analytics & Reviews</h3>
-      <div style="font-size:12px;color:var(--text3)">Performance data + AI-powered reviews</div>
+      <h3 style="font-size:16px;font-weight:900">📈 Analytics & Spend</h3>
+      <div style="font-size:12px;color:var(--text3)">AI spend tracking + performance data</div>
+    </div>
+  </div>
+
+  <!-- SPEND ANALYSIS -->
+  <div class="mkt-card" style="margin-bottom:16px;border:1px solid rgba(201,168,76,.3)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="mkt-card-title" style="margin:0">💰 AI Spend Analysis</div>
+      <div style="text-align:right">
+        <div style="font-size:18px;font-weight:900;color:var(--gold)">₹${thisMonthINR.toFixed(2)}</div>
+        <div style="font-size:10px;color:var(--text3)">this month · ₹${totalSpendINR.toFixed(2)} all time</div>
+      </div>
+    </div>
+    <div style="display:grid;gap:8px;margin-bottom:14px">
+      ${Object.entries(spendByType).sort((a,b)=>b[1].inr-a[1].inr).map(([type,v]) => {
+        const bar = Math.round((v.inr/maxSpend)*100);
+        const labels = {poster:'🖼️ Poster',gif_animated:'✨ Animated GIF',gif_slideshow:'🖼️ Slideshow GIF',caption:'📝 Caption'};
+        return '<div>'
+          +'<div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">'
+          +'<span style="color:var(--text1)">'+(labels[type]||type)+' <span style="color:var(--text3)">×'+v.count+'</span></span>'
+          +'<span style="color:var(--gold);font-weight:700">₹'+v.inr.toFixed(2)+'</span>'
+          +'</div>'
+          +'<div style="background:var(--bg3);border-radius:4px;height:6px">'
+          +'<div style="background:var(--gold);border-radius:4px;height:6px;width:'+bar+'%"></div>'
+          +'</div>'
+          +'</div>';
+      }).join('')}
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:6px">UNIT COSTS (OpenAI gpt-image-2)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        ${Object.entries(costPerItem).map(([k,v]) => {
+          const labels = {poster:'Poster',gif_animated:'Animated GIF',gif_slideshow:'Slideshow GIF',caption:'Caption'};
+          return '<div style="font-size:10px;color:var(--text3)"><span style="color:var(--text2)">'+(labels[k]||k)+':</span> '+v+'</div>';
+        }).join('')}
+      </div>
+    </div>
+    <div style="margin-top:10px;background:rgba(201,168,76,.08);border-radius:6px;padding:8px;font-size:11px;color:var(--text3)">
+      💡 <strong style="color:var(--text1)">Cost control tips:</strong>
+      Use ✨ Regen only when poster quality is poor. Caption + slideshow mode is cheapest (₹0.17 vs ₹10.20).
+      Target: ₹500/month = ~49 posters or ~147 GIFs.
     </div>
   </div>
 
