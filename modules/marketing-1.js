@@ -4855,7 +4855,6 @@ async function renderAnalytics() {
   });
   const costPerItem = {poster:'₹10.20/poster (3 AI images)', gif_animated:'₹3.40/GIF (1 AI image)', gif_slideshow:'₹10.20/slideshow (3 frames)', caption:'₹0.17/caption (GPT-4o)'};
   const maxSpend = Math.max(...Object.values(spendByType).map(v=>v.inr), 1);
-  ]);
 
   const totalPosts = (contentPosts||[]).length;
   const thisMonth = (contentPosts||[]).filter(p => p.created_at >= new Date(now.getFullYear(), now.getMonth(), 1).toISOString());
