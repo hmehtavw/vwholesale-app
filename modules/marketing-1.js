@@ -6353,7 +6353,7 @@ function buildEditorPopup() {
     <!-- Format tabs -->
     <div style="display:flex;gap:0;border-bottom:1px solid #334155;flex-shrink:0">
       ${Object.values(_editorFormats).map(f => `
-        <button id="ftab-${f.key}" onclick="editorSwitchFormat('${f.key}')"
+        <button id="ftab-${f.key}" onclick="window.editorSwitchFormat('${f.key}')"
           style="padding:8px 20px;background:${f.key===_editorActive?'#1e293b':'transparent'};border:none;border-bottom:2px solid ${f.key===_editorActive?'#c9a84c':'transparent'};color:${f.key===_editorActive?'#c9a84c':'#64748b'};cursor:pointer;font-size:12px;font-weight:700">
           ${f.label}
         </button>`).join('')}
@@ -6375,31 +6375,31 @@ function buildEditorPopup() {
         <div style="padding:12px;border-bottom:1px solid #334155">
           <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:8px">ADD ELEMENTS</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
-            <button onclick="editorAdd('badge')" style="background:#0f172a;border:1px solid #334155;color:#c9a84c;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">💰 Price Badge</button>
-            <button onclick="editorAdd('text')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">T Text</button>
-            <button onclick="editorAdd('rect')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">▬ Box</button>
-            <button onclick="editorAdd('line')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">— Line</button>
-            <button onclick="editorAdd('circle')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">● Circle</button>
-            <button onclick="editorAdd('emoji')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">😊 Emoji</button>
+            <button onclick="window.editorAdd('badge')" style="background:#0f172a;border:1px solid #334155;color:#c9a84c;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">💰 Price Badge</button>
+            <button onclick="window.editorAdd('text')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">T Text</button>
+            <button onclick="window.editorAdd('rect')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">▬ Box</button>
+            <button onclick="window.editorAdd('line')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">— Line</button>
+            <button onclick="window.editorAdd('circle')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">● Circle</button>
+            <button onclick="window.editorAdd('emoji')" style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:7px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">😊 Emoji</button>
           </div>
           <div style="margin-top:10px;border-top:1px solid #334155;padding-top:10px">
             <div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:6px">CANVAS SIZE</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:6px">
               <div>
                 <div style="font-size:9px;color:#475569;margin-bottom:2px">Width</div>
-                <input type="number" id="editor-cw" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="editorResizeCanvas(+this.value, +document.getElementById('editor-ch').value)">
+                <input type="number" id="editor-cw" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="window.editorResizeCanvas(+this.value, +document.getElementById('editor-ch').value)">
               </div>
               <div>
                 <div style="font-size:9px;color:#475569;margin-bottom:2px">Height</div>
-                <input type="number" id="editor-ch" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="editorResizeCanvas(+document.getElementById('editor-cw').value, +this.value)">
+                <input type="number" id="editor-ch" value="" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:4px 6px;border-radius:5px;font-size:11px" onchange="window.editorResizeCanvas(+document.getElementById('editor-cw').value, +this.value)">
               </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:3px">
-              <button onclick="editorResizeCanvas(480,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Square 1:1 — 480×480</button>
-              <button onclick="editorResizeCanvas(320,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Story 9:16 — 320×480</button>
-              <button onclick="editorResizeCanvas(480,320)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Landscape 16:9 — 480×320</button>
-              <button onclick="editorResizeCanvas(540,540)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ HD Square — 540×540</button>
-              <button onclick="editorResizeCanvas(1080,1080)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Full HD 1:1 — 1080×1080</button>
+              <button onclick="window.editorResizeCanvas(480,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Square 1:1 — 480×480</button>
+              <button onclick="window.editorResizeCanvas(320,480)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Story 9:16 — 320×480</button>
+              <button onclick="window.editorResizeCanvas(480,320)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Landscape 16:9 — 480×320</button>
+              <button onclick="window.editorResizeCanvas(540,540)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ HD Square — 540×540</button>
+              <button onclick="window.editorResizeCanvas(1080,1080)" style="background:#0f172a;border:1px solid #334155;color:#64748b;padding:4px;border-radius:5px;cursor:pointer;font-size:10px;text-align:left;padding:5px 8px">▪ Full HD 1:1 — 1080×1080</button>
             </div>
           </div>
         </div>
@@ -6415,7 +6415,7 @@ function buildEditorPopup() {
 
         <!-- Save/Export -->
         <div style="padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px">
-          <select id="editor-music" onchange="editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
+          <select id="editor-music" onchange="window.editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
             <option value="none">🔇 No Music (export GIF)</option>
             <option value="/assets/track_corporate.mp3">⚡ Upbeat Corporate</option>
             <option value="/assets/track_upbeat.mp3">⚡ Happy Energetic</option>
@@ -6427,14 +6427,14 @@ function buildEditorPopup() {
           <div id="editor-music-upload-row" style="display:none;margin-top:4px">
             <input type="file" id="editor-music-file" accept="audio/*,audio/mp3,audio/mpeg"
               style="width:100%;font-size:10px;color:#94a3b8;background:#0f172a;border:1px solid #334155;border-radius:5px;padding:4px"
-              onchange="editorHandleMusicFile(this)">
+              onchange="window.editorHandleMusicFile(this)">
           </div>
           <div id="editor-music-status" style="font-size:10px;color:#64748b;margin-top:3px"></div>
-          <button onclick="editorEncode()"
+          <button onclick="window.editorEncode()"
             style="background:#c9a84c;border:none;color:#111;padding:11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:900;width:100%">
             ✅ Save &amp; Encode All Formats
           </button>
-          <button onclick="editorDownloadPNG()"
+          <button onclick="window.editorDownloadPNG()"
             style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:8px;border-radius:8px;cursor:pointer;font-size:11px;width:100%">
             ⬇ Download this format as PNG
           </button>
@@ -6760,7 +6760,7 @@ function editorRenderLayers() {
   if (!div) return;
   if (!fmt.elements.length) { div.innerHTML = '<div style="font-size:11px;color:#475569;text-align:center;padding:12px">No elements — add some from above</div>'; return; }
   div.innerHTML = [...fmt.elements].reverse().map(el => `
-    <div onclick="editorSelectEl(${el.id})"
+    <div onclick="window.editorSelectEl(${el.id})"
       style="background:#0f172a;border:1px solid ${_editorSelected?.id===el.id?'#c9a84c':'#334155'};border-radius:6px;padding:8px;margin-bottom:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
       <div>
         <div style="font-size:11px;font-weight:700;color:#f1f5f9">${el.label||el.type}</div>
@@ -6785,19 +6785,19 @@ function editorRenderProps() {
   const el = _editorSelected;
 
   const row = (label, html) => `<div style="margin-bottom:10px"><div style="font-size:9px;color:#64748b;font-weight:700;margin-bottom:4px">${label}</div>${html}</div>`;
-  const col = (prop, val) => `<input type="color" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;height:30px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:none">`;
-  const txt = (prop, val) => `<input type="text" value="${val}" onchange="editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:5px 8px;border-radius:5px;font-size:12px;box-sizing:border-box">`;
+  const col = (prop, val) => `<input type="color" value="${val}" onchange="window.editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;height:30px;border:1px solid #334155;border-radius:4px;cursor:pointer;background:none">`;
+  const txt = (prop, val) => `<input type="text" value="${val}" onchange="window.editorUpdateProp(${el.id},'${prop}',this.value)" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:5px 8px;border-radius:5px;font-size:12px;box-sizing:border-box">`;
   // Slider with number — key for size controls
   const slide = (prop, val, min, max, step=1) => `
     <div style="display:flex;align-items:center;gap:6px">
       <input type="range" min="${min}" max="${max}" step="${step}" value="${val}"
-        oninput="editorUpdateProp(${el.id},'${prop}',+this.value);this.nextElementSibling.value=this.value"
+        oninput="window.editorUpdateProp(${el.id},'${prop}',+this.value);this.nextElementSibling.value=this.value"
         style="flex:1;accent-color:#c9a84c">
       <input type="number" min="${min}" max="${max}" step="${step}" value="${val}"
-        onchange="editorUpdateProp(${el.id},'${prop}',+this.value);this.previousElementSibling.value=this.value"
+        onchange="window.editorUpdateProp(${el.id},'${prop}',+this.value);this.previousElementSibling.value=this.value"
         style="width:52px;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:3px 5px;border-radius:4px;font-size:11px">
     </div>`;
-  const chk = (prop, val, label) => `<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${val?'checked':''} onchange="editorUpdateProp(${el.id},'${prop}',this.checked)"><span style="font-size:11px;color:#94a3b8">${label}</span></label>`;
+  const chk = (prop, val, label) => `<label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" ${val?'checked':''} onchange="window.editorUpdateProp(${el.id},'${prop}',this.checked)"><span style="font-size:11px;color:#94a3b8">${label}</span></label>`;
 
   let html = `<div style="font-size:11px;font-weight:700;color:#c9a84c;margin-bottom:10px">✏️ ${el.label||el.type}</div>`;
 
