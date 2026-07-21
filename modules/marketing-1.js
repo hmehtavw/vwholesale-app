@@ -3594,6 +3594,7 @@ function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
 window.calCardButtons = calCardButtons;
 
 
+function openMktLightbox(src, label, dlSrc, dlName) {
   const existing = document.getElementById('mkt-lightbox');
   if (existing) existing.remove();
   const lb = document.createElement('div');
