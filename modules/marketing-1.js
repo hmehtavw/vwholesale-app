@@ -2101,6 +2101,7 @@ async function checkAndRunTrendScout() {
 
 async function renderCommandCentre() {
   setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading your AI CMO briefing…</div>`);
+  try {
 
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
@@ -2319,6 +2320,10 @@ async function renderCommandCentre() {
   </div>`);
   // Load BI strip async after render
   setTimeout(loadBIStrip, 300);
+  } catch(e) {
+    console.error('renderCommandCentre error:', e);
+    setContent(`<div style="text-align:center;padding:40px;color:#ef4444">❌ Command Centre failed to load: ${e.message}<br><br><button onclick="renderCommandCentre()" class="mkt-btn mkt-btn-primary">Retry</button></div>`);
+  }
 }
 
 async function loadBIStrip() {
