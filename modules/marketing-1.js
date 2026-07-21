@@ -8092,19 +8092,40 @@ async function calPostNow(calendarId) {
       +'</div>';
   }).join('');
 
+  const WA_TEMPLATES = [
+    {id:'image', label:'📸 Send Image/GIF directly (no template)', params:[]},
+    {id:'vwholesale_offer_alert', label:'🔥 Offer Alert — Hi {name}! Special offer: {topic}. Valid till {date}', params:['name','topic','date']},
+    {id:'vwholesale_new_arrival', label:'✨ New Arrival — Hi {name}! New {topic} arrivals at V Wholesale', params:['name','topic']},
+    {id:'vwholesale_visit_invite', label:'🏪 Visit Invite — Hi {name}! 5000+ products, come visit us', params:['name']},
+    {id:'vwholesale_contractor_invite', label:'🔧 Contractor Club — Hi {name}! Earn 2% on every referral', params:['name']},
+    {id:'vwholesale_festival_greeting', label:'🎉 Festival Greeting — {festival} wishes to {name}', params:['festival','name']},
+    {id:'vwholesale_feedback_request', label:'⭐ Feedback Request — Hi {name}, rate us on Google Maps', params:['name','product']},
+    {id:'vwholesale_welcome', label:'👋 Welcome — Welcome {name} to V Wholesale!', params:['name']},
+    {id:'vwholesale_quotation_ready', label:'📋 Quotation Ready — Hi {name}, quote #{no} ₹{amount} ready', params:['name','no','amount']},
+    {id:'vwholesale_contractor_update', label:'📊 Contractor Update — Hi {name}, your earnings: ₹{amount}', params:['name','update','amount']},
+  ];
   const hasWA = channels.includes('whatsapp_story');
   const waSection = hasWA
     ? '<div style="background:#0d2818;border:1px solid #166534;border-radius:8px;padding:12px;margin-bottom:12px">'
-      +'<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:8px">💬 WhatsApp — Who to send to?</div>'
+      +'<div style="font-size:11px;font-weight:700;color:#22c55e;margin-bottom:8px">💬 WhatsApp — How to send?</div>'
+      // Template picker
+      +'<div style="margin-bottom:10px">'
+      +'<label style="font-size:10px;color:#94a3b8;display:block;margin-bottom:4px">TEMPLATE / MESSAGE TYPE</label>'
+      +'<select id="wa-template-select" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:6px;font-size:11px">'
+      +WA_TEMPLATES.map(t=>'<option value="'+t.id+'">'+t.label+'</option>').join('')
+      +'</select>'
+      +'</div>'
+      // Who to send to
+      +'<div style="font-size:10px;color:#94a3b8;margin-bottom:5px">SEND TO</div>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
-      +'<input type="radio" name="wa-target" value="owner" checked style="accent-color:#22c55e"> My number only (+91 90380 10175) — broadcast manually from WhatsApp</label>'
+      +'<input type="radio" name="wa-target" value="owner" checked style="accent-color:#22c55e"> My number (+91 90380 10175) — I'll forward manually</label>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
-      +'<input type="radio" name="wa-target" value="select" style="accent-color:#22c55e"> Type specific numbers</label>'
+      +'<input type="radio" name="wa-target" value="select" style="accent-color:#22c55e"> Specific numbers</label>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9">'
-      +'<input type="radio" name="wa-target" value="all" style="accent-color:#22c55e"> All opted-in customers (template: vwholesale_offer_alert · ~₹0.78/msg)</label>'
+      +'<input type="radio" name="wa-target" value="all" style="accent-color:#22c55e"> All opted-in customers (~₹0.78/msg for templates)</label>'
       +'<div id="wa-customer-select" style="display:none;margin-top:8px">'
       +'<input id="wa-phone-input" type="text" placeholder="9876543210, 9123456789, …" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box">'
-      +'<div style="font-size:10px;color:#64748b;margin-top:4px">Comma-separated 10-digit numbers. Sends image directly.</div>'
+      +'<div style="font-size:10px;color:#64748b;margin-top:4px">Comma-separated 10-digit numbers.</div>'
       +'</div>'
       +'</div>'
     : '';
@@ -8271,67 +8292,74 @@ async function calPostNowExecute(calendarId) {
         if (!cfg.META_WA_PHONE_ID||!cfg.META_WA_TOKEN) { error='WhatsApp not configured'; }
         else {
           const waTarget = document.querySelector('input[name="wa-target"]:checked')?.value || 'owner';
+          const waTemplate = document.getElementById('wa-template-select')?.value || 'image';
           const waImg = img;
+          const today = new Date();
+          const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 
-          const sendWAImage = async (to) => {
-            const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages', {
-              method:'POST', headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-              body: JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to,type:'image',image:{link:waImg,caption:cap.slice(0,1024)}})
-            })).json();
-            return r.messages?.[0]?.id || null;
+          // Build message payload based on selected template
+          const buildPayload = (to, name) => {
+            if (waTemplate === 'image') {
+              return {messaging_product:'whatsapp',recipient_type:'individual',to,type:'image',
+                image:{link:waImg,caption:cap.slice(0,1024)}};
+            }
+            // Template params mapping
+            const paramMap = {
+              vwholesale_offer_alert: [(name||'there'),(item.topic||'').slice(0,60),validTill],
+              vwholesale_new_arrival: [(name||'there'),(item.topic||'').slice(0,60)],
+              vwholesale_visit_invite: [(name||'there')],
+              vwholesale_contractor_invite: [(name||'there')],
+              vwholesale_festival_greeting: [(item.topic||'this occasion').slice(0,60),(name||'there')],
+              vwholesale_feedback_request: [(name||'there'),(item.topic||'products').slice(0,60)],
+              vwholesale_welcome: [(name||'there')],
+              vwholesale_quotation_ready: [(name||'there'),'QT'+Date.now().toString().slice(-4),'as discussed'],
+              vwholesale_contractor_update: [(name||'there'),(item.topic||'').slice(0,60),'0'],
+            };
+            const params = (paramMap[waTemplate]||[(name||'there')]).map(text=>({type:'text',text:String(text).slice(0,60)}));
+            return {messaging_product:'whatsapp',recipient_type:'individual',to,type:'template',
+              template:{name:waTemplate,language:{code:'en'},
+                components:[{type:'body',parameters:params}]}};
+          };
+
+          const sendWA = async (to, name) => {
+            const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
+              method:'POST',headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+              body:JSON.stringify(buildPayload(to,name))})).json();
+            return r.messages?.[0]?.id||null;
           };
 
           if (waTarget === 'owner') {
             const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
-            const msgId = await sendWAImage(ownerNum);
+            const msgId = await sendWA(ownerNum, 'Himansu');
             if (msgId) { ok=true; postId='wa_owner_'+msgId; }
-            else error='WA send to owner failed';
+            else error='WA send failed — check WA token';
 
           } else if (waTarget === 'select') {
-            const rawNums = (document.getElementById('wa-phone-input')?.value || '').trim();
+            const rawNums = (document.getElementById('wa-phone-input')?.value||'').trim();
             if (!rawNums) { error='Enter at least one phone number'; }
             else {
-              const nums = rawNums.split(/[,\s]+/).map(n => '91'+n.replace(/[^0-9]/g,'').slice(-10)).filter(n => n.length === 12);
-              if (!nums.length) { error='No valid numbers found'; }
+              const nums = rawNums.split(/[,\s]+/).map(n=>'91'+n.replace(/[^0-9]/g,'').slice(-10)).filter(n=>n.length===12);
+              if (!nums.length) { error='No valid 10-digit numbers found'; }
               else {
-                let sent = 0;
-                for (const num of nums) {
-                  const msgId = await sendWAImage(num);
-                  if (msgId) sent++;
-                  await new Promise(r=>setTimeout(r,300));
-                }
-                if (sent > 0) { ok=true; postId='wa_'+sent+'_sent'; }
-                else error='All WA sends failed';
+                let sent=0;
+                for (const num of nums) { if(await sendWA(num,''))sent++; await new Promise(r=>setTimeout(r,300)); }
+                if(sent>0){ok=true;postId='wa_'+sent+'_sent';}else error='All WA sends failed';
               }
             }
 
-          } else { // all opted-in - use approved template
+          } else { // all opted-in
             const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(200);
-            if (!waCusts?.length) { error='No opted-in customers (set wa_opted_in=true in CRM)'; }
+            if (!waCusts?.length) { error='No opted-in customers — set wa_opted_in=true in CRM first'; }
             else {
-              const today = new Date();
-              const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
-              const offerText = item.topic.slice(0,60);
-              let sent = 0, lastErr = '';
+              let sent=0, lastErr='';
               for (const c of waCusts) {
-                const num = '91'+c.phone.replace(/[^0-9]/g,'').slice(-10);
-                if (num.length !== 12) continue;
-                const wr = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
-                  method:'POST', headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-                  body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to:num,type:'template',
-                    template:{name:'vwholesale_offer_alert',language:{code:'en'},
-                      components:[{type:'body',parameters:[
-                        {type:'text',text:(c.name||'there').slice(0,60)},
-                        {type:'text',text:offerText},
-                        {type:'text',text:validTill}
-                      ]}]}})
-                })).json();
-                if (wr.messages?.[0]?.id) sent++;
-                else lastErr = wr.error?.message||JSON.stringify(wr).slice(0,80);
+                const num='91'+c.phone.replace(/[^0-9]/g,'').slice(-10);
+                if(num.length!==12)continue;
+                const msgId=await sendWA(num,c.name||'');
+                if(msgId)sent++;else lastErr='Some sends failed';
                 await new Promise(r=>setTimeout(r,300));
               }
-              if (sent > 0) { ok=true; postId='wa_'+sent+'_sent'; }
-              else error='WA bulk failed: '+lastErr;
+              if(sent>0){ok=true;postId='wa_'+sent+'_sent';}else error='WA bulk failed: '+lastErr;
             }
           }
         }
