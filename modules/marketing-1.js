@@ -7832,13 +7832,29 @@ async function calPostNowExecute(calendarId) {
     await new Promise(r=>setTimeout(r,400));
   }
 
+
   const succeeded = Object.values(results).filter(r=>r.ok).length;
-  if(btn){btn.textContent='✅ Done — '+succeeded+'/'+channels.length+' posted';btn.style.background=succeeded>0?'#166534':'#7f1d1d';}
+  const errLog = Object.entries(results).filter(([,r])=>!r.ok).map(([ch,r])=>ch+': '+r.error).join('\n');
+  if(btn){
+    btn.textContent = succeeded+'/'+channels.length+' channels posted';
+    btn.style.background = succeeded>0?'#166534':'#7f1d1d';
+  }
+  // Show error log in popup — stays open so you can read it
+  const popContent = document.querySelector('#postnow-popup > div');
+  if(popContent) {
+    const logDiv = document.createElement('div');
+    logDiv.style.cssText = 'margin-top:12px;background:#0f172a;border-radius:8px;padding:10px;border:1px solid '+(errLog?'#ef4444':'#22c55e');
+    logDiv.innerHTML = succeeded===channels.length
+      ? '<div style="font-size:12px;color:#22c55e;font-weight:700">✅ All channels posted successfully!</div>'
+      : '<div style="font-size:10px;font-weight:700;color:#ef4444;margin-bottom:6px">❌ ERRORS — tap to copy all</div><pre style="font-size:10px;color:#94a3b8;white-space:pre-wrap;word-break:break-all;margin:0;cursor:pointer" onclick="navigator.clipboard.writeText(this.textContent).then(()=>showMktToast(\'Copied\',2000))">'+errLog+'</pre>';
+    popContent.appendChild(logDiv);
+  }
   if(succeeded>0){
     await sb.from('content_calendar').update({status:'published',published_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',calendarId);
-    setTimeout(()=>{document.getElementById('postnow-popup')?.remove();renderCalendar();},3000);
+    renderCalendar();
   }
 }
+
 
 window.calPostNow = calPostNow;
 window.calPostNowExecute = calPostNowExecute;
