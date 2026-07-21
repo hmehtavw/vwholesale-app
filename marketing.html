@@ -461,7 +461,7 @@ window.mktLogin = function() {
     if (window._mktLoginReady) {
       clearInterval(wait);
       window._mktLoginReady();
-    } else if (attempts > 20) {
+    } else if (attempts > 150) {
       clearInterval(wait);
       var err = document.getElementById('mkt-login-err');
       if (err) { err.textContent = 'Portal failed to load. Hard refresh (Ctrl+Shift+R) and try again.'; err.style.display='block'; }
@@ -469,13 +469,19 @@ window.mktLogin = function() {
     }
   }, 200);
 };
+// Also try immediately on window load
+window.addEventListener('load', function() {
+  if (window._mktLoginReady && document.getElementById('mkt-login-btn')?.textContent === 'Loading portal…') {
+    window._mktLoginReady();
+  }
+});
 </script>
-<script src="/modules/marketing-1.js?v=1784628780"></script>
-<script src="/modules/marketing-2.js?v=1784628780"></script>
-<script src="/modules/marketing-gif.js?v=1784628780"></script>
-<script src="/modules/marketing-inbox.js?v=1784628780"></script>
-<script src="/modules/marketing-strategy.js?v=1784628780"></script>
-<script src="/modules/marketing-bi.js?v=1784628780"></script>
+<script src="/modules/marketing-1.js?v=1784628978"></script>
+<script src="/modules/marketing-2.js?v=1784628978"></script>
+<script src="/modules/marketing-gif.js?v=1784628978"></script>
+<script src="/modules/marketing-inbox.js?v=1784628978"></script>
+<script src="/modules/marketing-strategy.js?v=1784628978"></script>
+<script src="/modules/marketing-bi.js?v=1784628978"></script>
 <script>
 // Error capture — shows JS errors visibly
 window.onerror = function(msg, src, line, col, err) {
