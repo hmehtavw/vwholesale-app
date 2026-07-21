@@ -8449,8 +8449,17 @@ async function calPostNowDebug(calendarId) {
       method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
       body:JSON.stringify({action:'verify_threads',token:cfg['THREADS_ACCESS_TOKEN'],numeric_id:cfg['THREADS_NUMERIC_ID']})
     })).json();
-    const thErr = thProxy.error?.message || thProxy.error || (typeof thProxy.error_description==='string'?thProxy.error_description:null) || JSON.stringify(thProxy).slice(0,100);
-    log(thProxy.id ? '✅ Threads token valid — @'+thProxy.username+' ('+thProxy.id+')' : '❌ Threads: '+thErr, thProxy.id?'#22c55e':'#ef4444');
+    const thErr = thProxy.error || JSON.stringify(thProxy).slice(0,100);
+    if (thProxy.ok) {
+      log('✅ Threads token valid — @'+thProxy.username+' ('+thProxy.id+')', '#22c55e');
+      if (thProxy.id !== cfg['THREADS_NUMERIC_ID']) {
+        log('⚠️ Stored THREADS_NUMERIC_ID ('+cfg['THREADS_NUMERIC_ID']+') ≠ actual ('+thProxy.id+') — updating…', '#f59e0b');
+        await sb.from('marketing_settings').upsert({key:'THREADS_NUMERIC_ID',value:thProxy.id,updated_at:new Date().toISOString()},{onConflict:'key'});
+        log('✅ THREADS_NUMERIC_ID auto-updated to '+thProxy.id, '#22c55e');
+      }
+    } else {
+      log('❌ Threads: '+thErr, '#ef4444');
+    }
   } catch(e) { log('❌ Threads check: '+e.message, '#ef4444'); }
 
   // 4. WhatsApp check
