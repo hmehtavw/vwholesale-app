@@ -8250,16 +8250,16 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
-          // Threads uses graph.facebook.com (not graph.threads.net - CORS blocked)
-          const thImg=pi['threads']||pi['instagram_feed']||item.image_url;
-          const pl={text:cap.slice(0,500),media_type:thImg?'IMAGE':'TEXT'};
-          if(thImg)pl.image_url=thImg;
-          const cr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
+          const TH_API = 'https://graph.threads.net/v1.0';
+          const thImg = pi['square_gif']||pi['instagram_feed']||item.image_url;
+          const pl = {text:cap.slice(0,500), media_type:thImg?'IMAGE':'TEXT'};
+          if(thImg) pl.image_url = thImg;
+          const cr = await(await fetch(TH_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
             headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
             body:JSON.stringify(pl)})).json();
           if(cr.id){
-            await new Promise(r=>setTimeout(r,2500));
-            const pr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
+            await new Promise(r=>setTimeout(r,3000));
+            const pr = await(await fetch(TH_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
               headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
             if(pr.id){ok=true;postId=pr.id;}
@@ -8409,7 +8409,8 @@ async function calPostNowDebug(calendarId) {
 
   // 3. Threads token check
   try {
-    const thMe = await (await fetch(META+'/'+cfg['THREADS_NUMERIC_ID']+'?fields=id,name,username', {headers:{'Authorization':'Bearer '+cfg['THREADS_ACCESS_TOKEN']}})).json();
+    const THREADS_API = 'https://graph.threads.net/v1.0';
+    const thMe = await (await fetch(THREADS_API+'/me?fields=id,username', {headers:{'Authorization':'Bearer '+cfg['THREADS_ACCESS_TOKEN']}})).json();
     log(thMe.id ? '✅ Threads token valid — @'+thMe.username+' ('+thMe.id+')' : '❌ Threads: '+(thMe.error?.message||JSON.stringify(thMe).slice(0,80)), thMe.id?'#22c55e':'#ef4444');
   } catch(e) { log('❌ Threads check: '+e.message, '#ef4444'); }
 
@@ -8417,9 +8418,13 @@ async function calPostNowDebug(calendarId) {
   try {
     const wa = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'?fields=id,display_phone_number,verified_name', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
     log(wa.id ? '✅ WhatsApp: '+wa.verified_name+' ('+wa.display_phone_number+')' : '❌ WA: '+(wa.error?.message||JSON.stringify(wa).slice(0,80)), wa.id?'#22c55e':'#ef4444');
-    const tmpl = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'/message_templates?name=vwholesale_new_arrival', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
-    const t = tmpl.data?.[0];
-    log(t ? '✅ WA Template: '+t.status : '❌ Template "vwholesale_new_arrival" not found', t?.status==='APPROVED'?'#22c55e':'#f59e0b');
+    const tmpl = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'/message_templates', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
+    const templates = tmpl.data || [];
+    if (templates.length) {
+      log('✅ WA Templates: '+templates.map(t=>t.name+' ('+t.status+')').join(', '), '#22c55e');
+    } else {
+      log('ℹ️ No WA templates — image sends to specific numbers work without templates', '#f59e0b');
+    }
   } catch(e) { log('❌ WA check: '+e.message, '#ef4444'); }
 
   log('─── Diagnostics complete ───', '#334155');
