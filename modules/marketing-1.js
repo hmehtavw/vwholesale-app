@@ -3569,7 +3569,7 @@ function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
   if (ct === 'gif') {
     html += btnG(hasImage ? '✨ Regen' : '✨ Generate GIF', "calGenerateGif('"+id+"')", !hasImage, '12px');
     if (hasImage) {
-      html += btnG('🧹', "calReencodeClean('"+id+"')", false, '9px');
+  
       html += btnG('✏️', "openPosterEditor('"+id+"')", false, '9px');
     }
   } else if (ct !== 'reel') {
@@ -5473,13 +5473,6 @@ function showGifOptionsPopup(calendarId) {
       <!-- ANIMATED POSTER OPTIONS (hidden by default) -->
       <div id="gif-animated-opts" style="display:none">
         <div style="border-top:1px solid #334155;padding-top:16px;margin-bottom:16px">
-          <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">💰 OFFER / PRICE TAG <span style="font-weight:400;color:#475569">(optional)</span></label>
-          <input id="gif-offer-input" type="text" placeholder="Optional extra badge (poster already has price baked in)"
-            style="width:100%;background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px 12px;color:#f1f5f9;font-size:13px;box-sizing:border-box;outline:none">
-          <div style="font-size:10px;color:#475569;margin-top:4px">⚠️ Leave blank if poster already shows the price — adding text here will overlay a second badge</div>
-          <div style="font-size:10px;color:#475569;margin-top:4px">Animates as a pop-up badge. Leave blank for no price overlay.</div>
-        </div>
-        <div style="margin-bottom:16px">
           <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎨 ANIMATION STYLE</label>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <label id="style-cinematic" style="background:#0f172a;border:2px solid #c9a84c;border-radius:8px;padding:10px;cursor:pointer;text-align:center">
@@ -5548,14 +5541,13 @@ function gifSelectMode(mode) {
     animOpts.style.display = 'block';
     generateBtn.textContent = '🎬 Generate Animated GIF';
     generateBtn.dataset.mode = 'animated';
-    setTimeout(() => document.getElementById('gif-offer-input')?.focus(), 50);
   }
 }
 
 function gifStartGenerate(calendarId) {
   const btn = document.getElementById('gif-generate-btn');
   const mode = btn?.dataset.mode || 'slideshow';
-  const offer = mode === 'animated' ? (document.getElementById('gif-offer-input')?.value.trim() || '') : '';
+  const offer = ''; // Badge removed — AI poster has design baked in
   const style = mode === 'animated' ? (document.querySelector('input[name=gif-anim-style]:checked')?.value || 'cinematic') : '';
   const musicId = mode === 'animated' ? ((document.getElementById('mkt-music-value')?.value || document.getElementById('mkt-music-select')?.value || 'none')) : 'none';
   document.getElementById('gif-options-popup').remove();
@@ -5757,24 +5749,7 @@ async function calGenerateGifSlideshow(calendarId) {
               ctx.restore();
             }
 
-            // Offer badge pops up from bottom
-            if (offerTxt && textT > 0.4) {
-              const popT = Math.min(1, (textT - 0.4) / 0.3);
-              const bounce = popT < 0.7 ? popT / 0.7 : 1 + 0.15 * Math.sin((popT - 0.7) / 0.3 * Math.PI);
-              const badgeY = H * 0.82 + (1 - bounce) * H * 0.12;
-              const bW = Math.min(W * 0.72, ctx.measureText(offerTxt).width + W * 0.1);
-              const bH = Math.round(W * 0.085);
-              const bX = (W - bW) / 2;
-              ctx.fillStyle = '#C9A84C';
-              ctx.beginPath();
-              ctx.roundRect(bX, badgeY - bH * 0.7, bW, bH, bH * 0.3);
-              ctx.fill();
-              ctx.font = 'bold ' + Math.round(W * 0.048) + 'px Arial';
-              ctx.fillStyle = '#111';
-              ctx.textAlign = 'center';
-              ctx.fillText(offerTxt, W / 2, badgeY);
-              ctx.textAlign = 'left';
-            }
+            // Badge removed — AI poster already has price baked in
 
           } else {
             // Energetic: static poster + bouncing elements
@@ -6070,48 +6045,7 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
             ctx.strokeRect(ctx.lineWidth/2, ctx.lineWidth/2, W-ctx.lineWidth, H-ctx.lineWidth);
           }
 
-          // Offer/price badge — positioned above category strip (bottom 22% area)
-          // Matches poster gold color scheme
-          if (offerText && textT > 0.35) {
-            const popT = Math.min(1, (textT-0.35)/0.4);
-            const bounce = isCinematic
-              ? (popT < 0.65 ? popT/0.65 : 1 + 0.1*Math.sin((popT-0.65)/0.35*Math.PI))
-              : (popT < 0.6 ? popT/0.6 : 1 + 0.2*Math.sin((popT-0.6)/0.4*Math.PI));
-
-            // Position: sits at 75% height — above the category strip (which is ~85-92%)
-            const badgeCenterY = H * 0.75;
-            const badgeColor = '#C9A84C'; // always gold to match poster
-            const textColor  = '#111';
-
-            ctx.save();
-            ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
-            const metrics = ctx.measureText(offerText);
-            const bW2 = Math.min(W * 0.72, metrics.width + W * 0.1);
-            const bH2 = Math.round(W * 0.1);
-
-            ctx.translate(W/2, badgeCenterY + (1-bounce)*H*0.08);
-            ctx.scale(bounce < 1 ? bounce : 1, bounce < 1 ? bounce : 1);
-
-            // Drop shadow
-            ctx.shadowColor = 'rgba(0,0,0,0.5)';
-            ctx.shadowBlur = Math.round(W * 0.025);
-            ctx.shadowOffsetY = Math.round(W * 0.008);
-
-            // Badge — centered at origin after translate
-            ctx.fillStyle = badgeColor;
-            ctx.beginPath();
-            ctx.roundRect(-bW2/2, -bH2/2, bW2, bH2, bH2*0.3);
-            ctx.fill();
-            ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-
-            // Text — textBaseline:middle centers vertically
-            ctx.fillStyle = textColor;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(offerText, 0, 0);
-            ctx.textBaseline = 'alphabetic';
-            ctx.textAlign = 'left';
-            ctx.restore();
+          // Badge removed — AI poster already has price baked in
           }
 
           // Global fade in/out
@@ -6263,19 +6197,6 @@ async function calEditOfferBadge(calendarId) {
 }
 
 // Re-encode GIF from existing poster frames with NO badge overlay — cleans double-badge issue
-async function calReencodeClean(calendarId) {
-  const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-  if (!item) { showMktNotif('❌ Post not found'); return; }
-  const pi = item.platform_images || {};
-  if (!pi.instagram_feed && !pi.instagram_story && !pi.facebook_post) {
-    showMktNotif('❌ No poster images found'); return;
-  }
-  showMktToast('⏳ Re-encoding clean GIF (no badge)…', 5000);
-  // Call calApplyOfferBadge with empty offer = no badge drawn
-  await calApplyOfferBadge_internal(calendarId, '', 'cinematic');
-}
-window.calReencodeClean = calReencodeClean;
-
 // Internal: re-encode with specific offer text (empty = no badge)
 async function calApplyOfferBadge(calendarId) {
   const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
