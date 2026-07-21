@@ -7827,87 +7827,99 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
+          // IG Story: create container with media_type IMAGE (not STORIES - that's deprecated)
+          const storyImg = pi['instagram_story']||pi['story_gif']||pi['instagram_feed']||item.image_url;
           const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({image_url:img,media_type:'STORIES'})})).json();
+            body:JSON.stringify({image_url:storyImg,media_type:'IMAGE',is_carousel_item:false})})).json();
           if(cr.id){
             const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
               headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
             if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Story publish failed';
-          } else error=cr.error?.message||'Story container failed';
+          } else error=cr.error?.message||'Story container: '+JSON.stringify(cr).slice(0,80);
         }
       }
       else if (ch==='facebook_post') {
         if (!cfg.META_PAGE_ID||!st) { error='Facebook Page not configured'; }
-        else if (isVideo) {
-          const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',
-            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({file_url:img,description:cap})})).json();
-          if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Video failed';
-        } else {
-          // Use /photos with published=true — correct endpoint for page photo posts
-          const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',
-            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({url:img,caption:cap,published:true})})).json();
-          if(fr.id){ok=true;postId=fr.id;}
-          else {
-            // Fallback: post as link with OG image
-            const ff=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/feed',{method:'POST',
-              headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-              body:JSON.stringify({message:cap})})).json();
-            if(ff.id){ok=true;postId=ff.id;}else error=(fr.error?.message||'')+'|'+(ff.error?.message||'feed also failed');
+        else {
+          // First get Page Access Token from System User Token
+          const ptRes=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'?fields=access_token',{
+            headers:{'Authorization':'Bearer '+st}})).json();
+          const pageToken=ptRes.access_token||st;
+          if(isVideo){
+            const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',
+              headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
+              body:JSON.stringify({file_url:img,description:cap})})).json();
+            if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Video failed';
+          } else {
+            const fbImg=pi['facebook_post']||pi['landscape_gif']||pi['instagram_feed']||item.image_url;
+            const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',
+              headers:{'Authorization':'Bearer '+pageToken,'Content-Type':'application/json'},
+              body:JSON.stringify({url:fbImg,caption:cap,published:true})})).json();
+            if(fr.id){ok=true;postId=fr.id;}
+            else error='FB: '+(fr.error?.message||JSON.stringify(fr).slice(0,100));
           }
         }
       }
       else if (ch==='facebook_story') {
-        if (!cfg.META_PAGE_ID||!st) { error='Facebook not configured'; }
-        else {
-          const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photo_stories',{method:'POST',
-            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({photo_id:img})})).json();
-          if(fr.id){ok=true;postId=fr.id;}else error=fr.error?.message||'FB Story needs Page Story permission';
-        }
+        // FB Story requires special Pages Story permission — skip for now
+        error='FB Story: requires pages_manage_posts + story permission (not yet enabled in your app)';
       }
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
-          const THREADS_API='https://graph.threads.net/v1.0';
-          const pl={text:cap,media_type:img?'IMAGE':'TEXT'};if(img)pl.image_url=img;
-          const cr=await(await fetch(THREADS_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
+          // Threads uses graph.facebook.com (not graph.threads.net - CORS blocked)
+          const thImg=pi['threads']||pi['instagram_feed']||item.image_url;
+          const pl={text:cap.slice(0,500),media_type:thImg?'IMAGE':'TEXT'};
+          if(thImg)pl.image_url=thImg;
+          const cr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
             headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
             body:JSON.stringify(pl)})).json();
           if(cr.id){
-            await new Promise(r=>setTimeout(r,2000));
-            const pr=await(await fetch(THREADS_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
+            await new Promise(r=>setTimeout(r,2500));
+            const pr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
               headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
-            if(pr.id){ok=true;postId=pr.id;}else error='Publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,100));
-          } else error='Container: '+(cr.error?.message||JSON.stringify(cr).slice(0,100));
+            if(pr.id){ok=true;postId=pr.id;}
+            else error='Threads publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,100));
+          } else error='Threads container: '+(cr.error?.message||JSON.stringify(cr).slice(0,100));
         }
       }
       else if (ch==='whatsapp_story') {
-        // WhatsApp broadcast via WA Business API
         if (!cfg.META_WA_PHONE_ID||!cfg.META_WA_TOKEN) { error='WhatsApp not configured'; }
         else {
-          // Get opted-in customers
-          const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(20);
+          const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(5);
           if (!waCusts?.length) { error='No opted-in WhatsApp customers'; }
           else {
-            const clean = p => '91'+p.replace(/^\+91|^91/,'').replace(/\D/g,'').slice(-10);
-            let sent=0, failed=0;
-            for (const c of waCusts) {
-              try {
-                const wr=await(await fetch('https://graph.facebook.com/v25.0/'+cfg.META_WA_PHONE_ID+'/messages',{method:'POST',
-                  headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-                  body:JSON.stringify({messaging_product:'whatsapp',to:clean(c.phone),type:'template',
-                    template:{name:'vwholesale_new_arrival',language:{code:'en'},
-                      components:[{type:'body',parameters:[{type:'text',text:c.name||'there'},{type:'text',text:item.topic}]}]}})})).json();
-                if(wr.messages?.[0]?.id)sent++;else failed++;
-              } catch(e){failed++;}
-              await new Promise(r=>setTimeout(r,100));
+            const clean = p => '91'+p.replace(/[^0-9]/g,'').slice(-10);
+            let sent=0, lastErr='';
+            // Test with first customer first
+            const testCust = waCusts[0];
+            const testNum = clean(testCust.phone||'');
+            if (!testNum || testNum.length!==10) { error='Invalid phone: '+testCust.phone; }
+            else {
+              for (const c of waCusts) {
+                const num = clean(c.phone||'');
+                if (!num||num.length!==10) continue;
+                try {
+                  const wr=await(await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{method:'POST',
+                    headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+                    body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',
+                      to:'91'+num,type:'template',
+                      template:{name:'vwholesale_new_arrival',language:{code:'en'},
+                        components:[{type:'body',parameters:[
+                          {type:'text',text:(c.name||'there').slice(0,60)},
+                          {type:'text',text:item.topic.slice(0,60)}
+                        ]}]}})})).json();
+                  if(wr.messages?.[0]?.id)sent++;
+                  else lastErr=JSON.stringify(wr).slice(0,120);
+                } catch(e){lastErr=e.message;}
+                await new Promise(r=>setTimeout(r,200));
+              }
+              if(sent>0){ok=true;postId='wa_'+sent+'_sent';}
+              else error='WA failed: '+lastErr;
             }
-            if(sent>0){ok=true;postId='wa_'+sent+'_sent';}else error='All '+failed+' WA sends failed';
           }
         }
       }
