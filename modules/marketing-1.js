@@ -26,6 +26,9 @@
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
+let _musicPreviewAudio = null;
+let _uploadedMusicURL = null;
+
 const MKT_MUSIC_TRACKS = [
   { id:'none',   label:'No Music (export GIF)', url:null,         mood:'silent' },
   { id:'upload', label:'📁 Upload Your MP3',    url:'__upload__', mood:'custom' },
@@ -3644,32 +3647,25 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
       ${hashtagPreview}
       ${isReel && item.reel_script ? `<div id="reel-script-${item.id}" style="border-top:1px solid var(--border);padding-top:10px">${renderReelScriptInline(item.reel_script, item.id, existing?.id)}</div>` : ''}
       <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-        ${hasImage
-          ? `<span style="font-size:10px;color:#22c55e">✅ ${item.content_type==='reel'?'Video':'Image'} ready</span>`
-          : ''}
-        <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${item.content_type==='reel'?'🎬 Upload Video':item.content_type==='gif'?'✨ Upload GIF':'📸 Upload'}</button>
+        <button onclick="document.getElementById('cal-img-${item.id}').click()" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">${item.content_type==='reel'?'⬆ Video':item.content_type==='gif'?'⬆ GIF':'⬆ Image'}</button>
         ${item.content_type==='gif'
-          ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>
-             ${hasImage ? `<button onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🔄 Regen GIF</button>
-             <button onclick="calReencodeClean('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Re-encode from existing posters — no badge overlay">🧹 Clean</button>
-             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Open poster editor">✏️ Edit</button>` : ''}`
+          ? `${!hasImage
+              ? `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">✨ Generate GIF</button>`
+              : `<button id="gif-btn-${item.id}" onclick="calGenerateGif('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px">✨ Regen</button>
+                 <button onclick="calReencodeClean('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Clean re-encode — no badge">🧹</button>
+                 <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Edit">✏️</button>`}`
           : item.content_type!=='reel'
-          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">🤖 Auto Poster</button>
-             ${hasImage?`<button onclick="calGeneratePosters('${item.id}',true)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px">🎨</button>`:''}
-             <button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="Open poster editor">✏️ Edit</button>`
+          ? `<button onclick="calGeneratePosters('${item.id}')" class="mkt-btn ${hasImage?'mkt-btn-ghost':'mkt-btn-primary'}" style="font-size:11px;padding:6px 12px">${hasImage?'🎨 Regen':'🤖 Generate'}</button>
+             ${hasImage?`<button onclick="openPosterEditor('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Edit">✏️</button>`:''}`
           : ''}
-        <button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 12px">👁 Preview</button>
-        <button onclick="openHistoryDrawer('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 10px" title="View all past generations">🕐</button>
+        ${hasImage?`<button onclick="calPreviewPost('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:6px 9px" title="Preview">👁</button>`:''}
         ${isReady && hasImage
-          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve & Schedule</button>
-             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6" title="Post immediately without scheduling">🚀 Post Now</button>`
+          ? `<button onclick="calApproveItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#22c55e">✅ Approve</button>
+             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 12px;background:#3b82f6">🚀 Post Now</button>`
           : isApproved
-          ? `<span style="font-size:10px;color:#6ee7b7">📅 Scheduled ${item.post_time||'10:00'} IST · ${item.cal_date}</span>
-             <button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6;margin-left:4px" title="Post immediately to all platforms from your browser">🚀 Post Now</button>`
-          : isGif
-          ? `<span style="font-size:10px;color:var(--text3)">Click ✨ Generate GIF to create</span>`
-          : `<span style="font-size:10px;color:var(--text3)">Upload image first</span>`}
-        ${isApproved ? `<button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩ Undo</button>` : ''}
+          ? `<button onclick="calPostNow('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px;background:#3b82f6">🚀 Post Now</button>
+             <button onclick="calUnapproveItem('${item.id}')" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:4px 8px">↩</button>`
+          : ''}
       </div>
       <input type="file" id="cal-img-${item.id}" accept="${item.content_type==='reel'?'video/*':'image/*,image/gif'}" style="display:none" onchange="calHandleImageUpload('${item.id}',this)">
     </div>` : '';
@@ -5520,7 +5516,7 @@ function gifStartGenerate(calendarId) {
   const mode = btn?.dataset.mode || 'slideshow';
   const offer = mode === 'animated' ? (document.getElementById('gif-offer-input')?.value.trim() || '') : '';
   const style = mode === 'animated' ? (document.querySelector('input[name=gif-anim-style]:checked')?.value || 'cinematic') : '';
-  const musicId = mode === 'animated' ? (document.querySelector('input[name="mkt-music"]:checked')?.value || 'none') : 'none';
+  const musicId = mode === 'animated' ? ((document.getElementById('mkt-music-value')?.value || document.getElementById('mkt-music-select')?.value || 'none')) : 'none';
   document.getElementById('gif-options-popup').remove();
   calGenerateGif(calendarId, mode === 'slideshow' ? null : offer, mode === 'slideshow' ? 'slideshow' : style, musicId);
 }
@@ -6243,7 +6239,7 @@ window.calReencodeClean = calReencodeClean;
 async function calApplyOfferBadge(calendarId) {
   const newOffer = document.getElementById('edit-offer-input')?.value.trim() || '';
   const animStyle = document.querySelector('input[name="eo-style"]:checked')?.value || 'cinematic';
-  const musicId = document.querySelector('input[name="mkt-music"]:checked')?.value || 'none';
+  const musicId = (document.getElementById('mkt-music-value')?.value || document.getElementById('mkt-music-select')?.value || 'none');
   document.getElementById('edit-offer-popup')?.remove();
   await calApplyOfferBadge_internal(calendarId, newOffer, animStyle, musicId);
 }
@@ -7860,25 +7856,47 @@ async function calRegenerateItem(calendarId) {
 // ── ROYALTY-FREE MUSIC TRACKS ──
 
 function mktMusicPickerHTML(selectedId = 'none') {
-  const icon = m => m==='upbeat'?'⚡':m==='cinematic'?'🎬':m==='custom'?'📁':'🔇';
-  return `<div style="margin-bottom:16px">
-    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:8px">🎵 BACKGROUND MUSIC <span style="font-weight:400;color:#475569">(royalty-free)</span></label>
-    <div style="display:flex;flex-direction:column;gap:5px">
-      ${MKT_MUSIC_TRACKS.map(t => `
-        <label style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid ${t.id===selectedId?'#c9a84c':'#334155'};border-radius:8px;padding:8px 12px;cursor:pointer" id="music-opt-${t.id}">
-          <input type="radio" name="mkt-music" value="${t.id}" ${t.id===selectedId?'checked':''} style="display:none">
-          <span style="font-size:14px">${icon(t.mood)}</span>
-          <span style="font-size:12px;color:#f1f5f9;font-weight:600;flex:1">${t.label}</span>
-          ${t.url && t.url !== '__upload__' ? `<button onclick="event.preventDefault();mktPreviewMusic('${t.id}')" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.3);color:#c9a84c;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer">▶ Preview</button>` : ''}
-          ${t.url === '__upload__' ? `<input type="file" id="music-upload-input" accept="audio/*,audio/mp3" onchange="mktHandleMusicUpload(this)" style="font-size:10px;color:#64748b;max-width:140px">` : ''}
-        </label>`).join('')}
+  const grouped = [
+    { label:'🔇 No Music (export GIF)', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='silent') },
+    { label:'⚡ Upbeat Corporate', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='upbeat').slice(0,5) },
+    { label:'🔥 Energetic', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='energetic').slice(0,5) },
+    { label:'🎬 Cinematic', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='cinematic').slice(0,5) },
+    { label:'🌊 Ambient', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='ambient').slice(0,5) },
+    { label:'✨ Uplifting', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='major').slice(0,5) },
+    { label:'📁 Custom', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='custom') },
+  ];
+  const optgroups = grouped.map(g => g.options.length ? `<optgroup label="${g.label}">${g.options.map(t=>`<option value="${t.id}" ${t.id===selectedId?'selected':''}>${t.label}</option>`).join('')}</optgroup>` : '').join('');
+  return `<div style="margin-bottom:12px">
+    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">🎵 MUSIC <span style="font-weight:400;color:#475569">(royalty-free · with music → MP4)</span></label>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="mkt-music-select" name="mkt-music-select" onchange="mktMusicSelectChange(this)"
+        style="flex:1;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:8px;font-size:12px">
+        ${optgroups}
+      </select>
+      <button onclick="mktPreviewMusicFromSelect()" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);color:#c9a84c;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;white-space:nowrap">▶ Preview</button>
     </div>
     <div id="mkt-music-status" style="font-size:10px;color:#22c55e;margin-top:4px"></div>
-    <div style="font-size:10px;color:#475569;margin-top:4px">With music → exports as MP4 (Instagram, Facebook, WhatsApp, YouTube)</div>
+    <div id="mkt-music-upload-wrap" style="display:none;margin-top:6px">
+      <input type="file" id="music-upload-input" accept="audio/*,audio/mp3" onchange="mktHandleMusicUpload(this)" style="font-size:11px;color:#64748b;width:100%">
+    </div>
+    <input type="hidden" id="mkt-music-value" name="mkt-music" value="${selectedId}">
   </div>`;
 }
+function mktMusicSelectChange(sel) {
+  const val = sel.value;
+  document.getElementById('mkt-music-value').value = val;
+  const wrap = document.getElementById('mkt-music-upload-wrap');
+  if (wrap) wrap.style.display = val === 'upload' ? 'block' : 'none';
+}
+window.mktMusicSelectChange = mktMusicSelectChange;
+function mktPreviewMusicFromSelect() {
+  const sel = document.getElementById('mkt-music-select');
+  if (!sel) return;
+  mktPreviewMusic(sel.value);
+}
+window.mktPreviewMusicFromSelect = mktPreviewMusicFromSelect;
 
-let _musicPreviewAudio = null;
+
 let _uploadedMusicURL = null; // blob URL for uploaded track
 
 function mktHandleMusicUpload(input) {
@@ -7887,8 +7905,10 @@ function mktHandleMusicUpload(input) {
   if (_uploadedMusicURL) URL.revokeObjectURL(_uploadedMusicURL);
   _uploadedMusicURL = URL.createObjectURL(file);
   // Auto-select upload radio
-  const radio = document.querySelector('input[name="mkt-music"][value="upload"]');
-  if (radio) { radio.checked = true; mktBindMusicPicker(); }
+  const hiddenInput = document.getElementById('mkt-music-value');
+  if (hiddenInput) { hiddenInput.value = 'upload'; }
+  const sel = document.getElementById('mkt-music-select');
+  if (sel) { sel.value = 'upload'; mktMusicSelectChange(sel); }
   // Show status
   const status = document.getElementById('mkt-music-status');
   if (status) status.textContent = '✅ ' + file.name.slice(0,35) + ' (' + Math.round(file.size/1024) + ' KB) — playing preview…';
