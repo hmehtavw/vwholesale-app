@@ -252,7 +252,7 @@ function mktNav(page) {
   }
   document.getElementById('mkt-page-title').textContent = PAGE_TITLES[page] || page;
   const renderers = {
-    poster: renderPosterStudio, gif: renderGifStudio, command: renderCommandCentre, cmo: renderAICMO,
+    poster: window.renderPosterStudio, gif: window.renderGifStudio, command: renderCommandCentre, cmo: renderAICMO,
     campaigns: renderCampaigns, content: renderContentStudio, calendar: renderCalendar,
     approvals: renderApprovals, social: renderSocial, gbp: renderGBP, whatsapp: renderWhatsApp,
     ads: renderAds, 'local-seo': renderLocalSEO, 'website-seo': renderWebsiteSEO,
