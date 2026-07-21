@@ -4919,6 +4919,23 @@ async function renderAnalytics() {
       Use ✨ Regen only when poster quality is poor. Caption + slideshow mode is cheapest (₹0.17 vs ₹10.20).
       Target: ₹500/month = ~49 posters or ~147 GIFs.
     </div>
+    <div style="margin-top:10px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:10px">
+      <div style="font-size:11px;font-weight:700;color:#f87171;margin-bottom:6px">📊 Actual OpenAI Spend (from dashboard)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;font-size:11px">
+        <div style="text-align:center"><div style="font-size:15px;font-weight:900;color:#f87171">$9.24</div><div style="color:var(--text3)">V Wholesale Marketing (active)</div></div>
+        <div style="text-align:center"><div style="font-size:15px;font-weight:900;color:#f59e0b">$0.87</div><div style="color:var(--text3)">V Wholesale Marketing (old)</div></div>
+        <div style="text-align:center"><div style="font-size:15px;font-weight:900;color:#94a3b8">$0.13</div><div style="color:var(--text3)">V Wholesale (first key)</div></div>
+        <div style="text-align:center"><div style="font-size:15px;font-weight:900;color:#ef4444">$10.24</div><div style="color:var(--text3)">≈ ₹870 total (Jul 2026)</div></div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3)">
+        Most spend is from <strong style="color:#f1f5f9">gpt-image-2</strong> — ₹3.40 per image generated. 
+        At current rate (~${allSpend.length} generations = ₹870), monthly run rate ≈ <strong style="color:#f87171">₹870/month</strong> during learning phase.
+        Production target: <strong style="color:#22c55e">₹300-500/month</strong> (30-50 posts × ₹10 avg).
+        <br><br>
+        ⚠️ <strong style="color:#f1f5f9">Action:</strong> Delete the 2 old inactive API keys from OpenAI dashboard to keep tracking clean.
+        <a href="https://platform.openai.com/api-keys" target="_blank" style="color:var(--gold)">Open OpenAI Dashboard →</a>
+      </div>
+    </div>
   </div>
 
   <!-- KPI CARDS -->
