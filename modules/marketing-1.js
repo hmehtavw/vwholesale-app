@@ -165,6 +165,7 @@ async function mktLogin() {
     showErr('Error: ' + (e.message || String(e)));
   }
 }
+window.mktLogin = mktLogin;
 
 
 function showMktApp() {
