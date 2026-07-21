@@ -7790,36 +7790,123 @@ async function calPostNowExecute(calendarId) {
 
     try {
       if (ch==='instagram_feed') {
+        if (!cfg.META_IG_ID||!st) { error='META_IG_ID not set in settings'; }
+        else {
+          const payload = isVideo
+            ? {video_url:img, caption:cap, media_type:'REELS'}
+            : {image_url:img, caption:cap, media_type:'IMAGE'};
+          const cr = await (await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
+            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+            body:JSON.stringify(payload)})).json();
+          if (cr.id) {
+            if (isVideo) {
+              setStatus(ch,'⏳','Processing video…','#f59e0b');
+              for(let i=0;i<15;i++){
+                await new Promise(r=>setTimeout(r,3000));
+                const s=await(await fetch(META_API+'/'+cr.id+'?fields=status_code',{headers:{'Authorization':'Bearer '+st}})).json();
+                if(s.status_code==='FINISHED')break;
+                if(s.status_code==='ERROR'){error='Video processing failed';break;}
+              }
+            }
+            if (!error) {
+              const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
+                headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+                body:JSON.stringify({creation_id:cr.id})})).json();
+              if(pr.id){ok=true;postId=pr.id;}
+              else error='Publish failed: '+(pr.error?.message||JSON.stringify(pr));
+            }
+          } else error='Container: '+(cr.error?.message||JSON.stringify(cr).slice(0,120));
+        }
+      }
+      else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
-          const payload = isVideo?{video_url:img,caption:cap,media_type:'REELS'}:{image_url:img,caption:cap,media_type:'IMAGE'};
-          const cr = await (await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify(payload)})).json();
-          if (cr.id) {
-            if (isVideo) { setStatus(ch,'⏳','Processing video…','#f59e0b'); for(let i=0;i<15;i++){await new Promise(r=>setTimeout(r,3000));const s=await(await fetch(META_API+'/'+cr.id+'?fields=status_code',{headers:{'Authorization':'Bearer '+st}})).json();if(s.status_code==='FINISHED')break;if(s.status_code==='ERROR'){error='Video processing failed';break;}} }
-            if (!error) { const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({creation_id:cr.id})})).json(); if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Publish failed'; }
-          } else error=cr.error?.message||'Container failed';
+          const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
+            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+            body:JSON.stringify({image_url:img,media_type:'STORIES'})})).json();
+          if(cr.id){
+            const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
+              headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+              body:JSON.stringify({creation_id:cr.id})})).json();
+            if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Story publish failed';
+          } else error=cr.error?.message||'Story container failed';
         }
       }
       else if (ch==='facebook_post') {
+        if (!cfg.META_PAGE_ID||!st) { error='Facebook Page not configured'; }
+        else if (isVideo) {
+          const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',
+            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+            body:JSON.stringify({file_url:img,description:cap})})).json();
+          if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Video failed';
+        } else {
+          // Use /photos with published=true — correct endpoint for page photo posts
+          const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',
+            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+            body:JSON.stringify({url:img,caption:cap,published:true})})).json();
+          if(fr.id){ok=true;postId=fr.id;}
+          else {
+            // Fallback: post as link with OG image
+            const ff=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/feed',{method:'POST',
+              headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+              body:JSON.stringify({message:cap})})).json();
+            if(ff.id){ok=true;postId=ff.id;}else error=(fr.error?.message||'')+'|'+(ff.error?.message||'feed also failed');
+          }
+        }
+      }
+      else if (ch==='facebook_story') {
         if (!cfg.META_PAGE_ID||!st) { error='Facebook not configured'; }
-        else if (isVideo) { const vr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/videos',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({file_url:img,description:cap})})).json(); if(vr.id){ok=true;postId=vr.id;}else error=vr.error?.message||'Failed'; }
-        else { const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photos',{method:'POST',headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},body:JSON.stringify({url:img,message:cap})})).json(); if(fr.id){ok=true;postId=fr.id;}else error=fr.error?.message||'Failed'; }
+        else {
+          const fr=await(await fetch(META_API+'/'+cfg.META_PAGE_ID+'/photo_stories',{method:'POST',
+            headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+            body:JSON.stringify({photo_id:img})})).json();
+          if(fr.id){ok=true;postId=fr.id;}else error=fr.error?.message||'FB Story needs Page Story permission';
+        }
       }
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
+          const THREADS_API='https://graph.threads.net/v1.0';
           const pl={text:cap,media_type:img?'IMAGE':'TEXT'};if(img)pl.image_url=img;
-          const cr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify(pl)})).json();
-          if(cr.id){await new Promise(r=>setTimeout(r,2000));const pr=await(await fetch(META_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({creation_id:cr.id})})).json();if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Publish failed';}
-          else error=cr.error?.message||'Container failed';
+          const cr=await(await fetch(THREADS_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads',{method:'POST',
+            headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
+            body:JSON.stringify(pl)})).json();
+          if(cr.id){
+            await new Promise(r=>setTimeout(r,2000));
+            const pr=await(await fetch(THREADS_API+'/'+cfg.THREADS_NUMERIC_ID+'/threads_publish',{method:'POST',
+              headers:{'Authorization':'Bearer '+cfg.THREADS_ACCESS_TOKEN,'Content-Type':'application/json'},
+              body:JSON.stringify({creation_id:cr.id})})).json();
+            if(pr.id){ok=true;postId=pr.id;}else error='Publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,100));
+          } else error='Container: '+(cr.error?.message||JSON.stringify(cr).slice(0,100));
         }
       }
       else if (ch==='whatsapp_story') {
-        const res=await fetch(MKT_SB_URL+'/functions/v1/content-pipeline',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'publish_channel',calendar_id:parseInt(calendarId),channel:'whatsapp_story'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-        if(res.ok){ok=true;postId='wa_batch';}else error=res.error||'WA send failed';
+        // WhatsApp broadcast via WA Business API
+        if (!cfg.META_WA_PHONE_ID||!cfg.META_WA_TOKEN) { error='WhatsApp not configured'; }
+        else {
+          // Get opted-in customers
+          const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(20);
+          if (!waCusts?.length) { error='No opted-in WhatsApp customers'; }
+          else {
+            const clean = p => '91'+p.replace(/^\+91|^91/,'').replace(/\D/g,'').slice(-10);
+            let sent=0, failed=0;
+            for (const c of waCusts) {
+              try {
+                const wr=await(await fetch('https://graph.facebook.com/v25.0/'+cfg.META_WA_PHONE_ID+'/messages',{method:'POST',
+                  headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+                  body:JSON.stringify({messaging_product:'whatsapp',to:clean(c.phone),type:'template',
+                    template:{name:'vwholesale_new_arrival',language:{code:'en'},
+                      components:[{type:'body',parameters:[{type:'text',text:c.name||'there'},{type:'text',text:item.topic}]}]}})})).json();
+                if(wr.messages?.[0]?.id)sent++;else failed++;
+              } catch(e){failed++;}
+              await new Promise(r=>setTimeout(r,100));
+            }
+            if(sent>0){ok=true;postId='wa_'+sent+'_sent';}else error='All '+failed+' WA sends failed';
+          }
+        }
       }
       else if (ch==='gbp'||ch==='google_business') { error='GBP API pending (~Aug 1)'; }
-      else { error='Channel not yet wired'; }
+      else { error='Channel not yet implemented: '+ch; }
     } catch(e) { error=e.message||'Unknown error'; }
 
     results[ch]={ok,postId,error};
