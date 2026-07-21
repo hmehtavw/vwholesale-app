@@ -8101,7 +8101,7 @@ async function calPostNow(calendarId) {
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9;margin-bottom:5px">'
       +'<input type="radio" name="wa-target" value="select" style="accent-color:#22c55e"> Type specific numbers</label>'
       +'<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:#f1f5f9">'
-      +'<input type="radio" name="wa-target" value="all" style="accent-color:#22c55e"> All opted-in customers (template required ~₹0.78/msg)</label>'
+      +'<input type="radio" name="wa-target" value="all" style="accent-color:#22c55e"> All opted-in customers (template: vwholesale_offer_alert · ~₹0.78/msg)</label>'
       +'<div id="wa-customer-select" style="display:none;margin-top:8px">'
       +'<input id="wa-phone-input" type="text" placeholder="9876543210, 9123456789, …" style="width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box">'
       +'<div style="font-size:10px;color:#64748b;margin-top:4px">Comma-separated 10-digit numbers. Sends image directly.</div>'
@@ -8305,16 +8305,29 @@ async function calPostNowExecute(calendarId) {
               }
             }
 
-          } else { // all opted-in
+          } else { // all opted-in - use approved template
             const {data:waCusts} = await sb.from('customers').select('name,phone').not('phone','is',null).eq('wa_opted_in',true).limit(200);
             if (!waCusts?.length) { error='No opted-in customers (set wa_opted_in=true in CRM)'; }
             else {
+              const today = new Date();
+              const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+              const offerText = item.topic.slice(0,60);
               let sent = 0, lastErr = '';
               for (const c of waCusts) {
                 const num = '91'+c.phone.replace(/[^0-9]/g,'').slice(-10);
                 if (num.length !== 12) continue;
-                const msgId = await sendWAImage(num);
-                if (msgId) sent++; else lastErr = 'Some sends failed';
+                const wr = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
+                  method:'POST', headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+                  body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to:num,type:'template',
+                    template:{name:'vwholesale_offer_alert',language:{code:'en'},
+                      components:[{type:'body',parameters:[
+                        {type:'text',text:(c.name||'there').slice(0,60)},
+                        {type:'text',text:offerText},
+                        {type:'text',text:validTill}
+                      ]}]}})
+                })).json();
+                if (wr.messages?.[0]?.id) sent++;
+                else lastErr = wr.error?.message||JSON.stringify(wr).slice(0,80);
                 await new Promise(r=>setTimeout(r,300));
               }
               if (sent > 0) { ok=true; postId='wa_'+sent+'_sent'; }
