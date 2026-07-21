@@ -7988,11 +7988,16 @@ async function calPostNow(calendarId) {
     </div>
     <div style="font-size:11px;color:#64748b;margin-bottom:14px">Posts from your browser directly — no scheduling</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px">${rows}</div>
-    <button id="postnow-start" onclick="calPostNowExecute('${calendarId}')"
-      style="width:100%;background:#3b82f6;border:none;color:#fff;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
-      🚀 Post to All ${channels.length} Platforms Now
-    </button>
-  </div>`;
+    <div style="display:flex;gap:8px">
+      <button id="postnow-start" onclick="calPostNowExecute('${calendarId}')"
+        style="flex:1;background:#3b82f6;border:none;color:#fff;padding:12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">
+        🚀 Post to All ${channels.length} Platforms Now
+      </button>
+      <button onclick="calPostNowDebug('${calendarId}')"
+        style="background:#1e293b;border:1px solid #334155;color:#94a3b8;padding:12px 14px;border-radius:8px;cursor:pointer;font-size:12px" title="Diagnose what\'s wrong with each channel">
+        🔍 Debug
+      </button>
+    </div>
 
   pop.addEventListener('click', e => { if (e.target===pop) pop.remove(); });
   document.body.appendChild(pop);
@@ -8186,6 +8191,70 @@ async function calPostNowExecute(calendarId) {
   }
 }
 
+
+async function calPostNowDebug(calendarId) {
+  const { data: settings } = await sb.from('marketing_settings').select('key,value')
+    .in('key', ['META_IG_ID','META_PAGE_ID','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN']);
+  const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
+  const st = cfg['META_SYSTEM_USER_TOKEN'];
+  const META = 'https://graph.facebook.com/v25.0';
+
+  const popContent = document.querySelector('#postnow-popup > div');
+  const debugDiv = document.createElement('div');
+  debugDiv.style.cssText = 'margin-top:12px;background:#0f172a;border-radius:8px;padding:12px;border:1px solid #334155;font-size:10px;color:#94a3b8';
+  debugDiv.innerHTML = '<div style="color:#c9a84c;font-weight:700;margin-bottom:8px">🔍 Running diagnostics…</div>';
+  popContent?.appendChild(debugDiv);
+
+  const log = (msg, color) => {
+    const c = color || '#94a3b8';
+    const div = document.createElement('div');
+    div.style.color = c;
+    div.style.marginBottom = '3px';
+    div.textContent = msg;
+    debugDiv.appendChild(div);
+  };
+
+  // 1. Token check
+  try {
+    const me = await (await fetch(META+'/me?fields=id,name', {headers:{'Authorization':'Bearer '+st}})).json();
+    log(me.id ? '✅ Token valid — '+me.name+' ('+me.id+')' : '❌ Token invalid: '+(me.error?.message||''), me.id?'#22c55e':'#ef4444');
+  } catch(e) { log('❌ Token check: '+e.message, '#ef4444'); }
+
+  // 2. Pages + IG check
+  try {
+    const pages = await (await fetch(META+'/me/accounts?fields=id,name,instagram_business_account{id,username},access_token', {headers:{'Authorization':'Bearer '+st}})).json();
+    if (pages.data?.length) {
+      pages.data.forEach(function(p) {
+        log('📘 Page: '+p.name+' ('+p.id+')', '#3b82f6');
+        if (p.instagram_business_account) log('  📸 IG Business: @'+p.instagram_business_account.username+' ('+p.instagram_business_account.id+')', '#e1306c');
+        else log('  ⚠️ No IG Business account linked to this page', '#f59e0b');
+      });
+    } else log('❌ No pages: '+JSON.stringify(pages.error||pages).slice(0,100), '#ef4444');
+    const storedIg = cfg['META_IG_ID'];
+    const correctIg = pages.data?.find(function(p){return p.instagram_business_account;})?.instagram_business_account?.id;
+    if (correctIg && correctIg !== storedIg) log('⚠️ Stored IG_ID ('+storedIg+') ≠ actual ('+correctIg+') — needs update!', '#f59e0b');
+    else if (correctIg && correctIg === storedIg) log('✅ IG_ID correct: '+storedIg, '#22c55e');
+    else if (!correctIg) log('⚠️ No IG Business account found on any page', '#f59e0b');
+  } catch(e) { log('❌ Pages check: '+e.message, '#ef4444'); }
+
+  // 3. Threads token check
+  try {
+    const thMe = await (await fetch(META+'/'+cfg['THREADS_NUMERIC_ID']+'?fields=id,name,username', {headers:{'Authorization':'Bearer '+cfg['THREADS_ACCESS_TOKEN']}})).json();
+    log(thMe.id ? '✅ Threads token valid — @'+thMe.username+' ('+thMe.id+')' : '❌ Threads: '+(thMe.error?.message||JSON.stringify(thMe).slice(0,80)), thMe.id?'#22c55e':'#ef4444');
+  } catch(e) { log('❌ Threads check: '+e.message, '#ef4444'); }
+
+  // 4. WhatsApp check
+  try {
+    const wa = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'?fields=id,display_phone_number,verified_name', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
+    log(wa.id ? '✅ WhatsApp: '+wa.verified_name+' ('+wa.display_phone_number+')' : '❌ WA: '+(wa.error?.message||JSON.stringify(wa).slice(0,80)), wa.id?'#22c55e':'#ef4444');
+    const tmpl = await (await fetch(META+'/'+cfg['META_WA_PHONE_ID']+'/message_templates?name=vwholesale_new_arrival', {headers:{'Authorization':'Bearer '+cfg['META_WA_TOKEN']}})).json();
+    const t = tmpl.data?.[0];
+    log(t ? '✅ WA Template: '+t.status : '❌ Template "vwholesale_new_arrival" not found', t?.status==='APPROVED'?'#22c55e':'#f59e0b');
+  } catch(e) { log('❌ WA check: '+e.message, '#ef4444'); }
+
+  log('─── Diagnostics complete ───', '#334155');
+}
+window.calPostNowDebug = calPostNowDebug;
 
 window.calPostNow = calPostNow;
 window.calPostNowExecute = calPostNowExecute;
