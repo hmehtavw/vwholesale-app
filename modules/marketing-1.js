@@ -49,6 +49,13 @@ async function loadMusicTracks() {
         })),
         { id:'upload', label:'📁 Upload Your Own MP3', url:'__upload__', mood:'custom', attribution:null }
       ];
+      // Refresh any open music picker
+      const sel = document.getElementById('mkt-music-select');
+      if (sel) {
+        const cur = document.getElementById('mkt-music-value')?.value || 'none';
+        const parent = sel.closest('div');
+        if (parent) parent.outerHTML = mktMusicPickerHTML(cur);
+      }
     }
   } catch(e) { console.warn('Music tracks load failed:', e); }
 }
@@ -6479,7 +6486,8 @@ async function calPreviewDraggableBadge(calendarId) {
   editorRenderCanvas();
 }
 
-function buildEditorPopup() {
+async function buildEditorPopup() {
+  await loadMusicTracks(); // ensure DB tracks are loaded before picker renders
   document.getElementById('badge-editor-popup')?.remove();
   const pop = document.createElement('div');
   pop.id = 'badge-editor-popup';
