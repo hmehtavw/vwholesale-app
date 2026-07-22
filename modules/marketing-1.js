@@ -8089,14 +8089,22 @@ async function calPostNow(calendarId) {
   pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
 
   const chLabels = {instagram_feed:'📸 Instagram Feed',instagram_story:'📱 IG Story',facebook_post:'📘 Facebook Post',facebook_story:'📱 FB Story',threads:'🧵 Threads',whatsapp_story:'💬 WhatsApp Broadcast',gbp:'📍 Google Business',youtube:'▶️ YouTube'};
+  const chMediaHint = {instagram_feed:'MP4/Image',instagram_story:'MP4/Image',facebook_post:'MP4/Image',facebook_story:'MP4/Image',threads:'GIF/Image',whatsapp_story:'GIF/Image',gbp:'Image',youtube:'MP4'};
+
+  const isGifPost = item.content_type === 'gif';
+  const gifKeyMap = {instagram_feed:'instagram_feed_mp4',instagram_story:'instagram_story_mp4',facebook_post:'facebook_post_mp4',facebook_story:'facebook_story_mp4',threads:'square_gif',whatsapp_story:'story_gif',youtube:'youtube_mp4',gbp:'landscape_gif'};
 
   const rows = channels.map(ch => {
-    const img = pi[ch+'_mp4']||pi['mp4_music']||pi[ch+'_gif']||pi['gif']||pi[ch]||item.image_url;
+    const img = isGifPost
+      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
+    const mediaType = isGifPost ? chMediaHint[ch] : (img&&img.includes('.mp4')?'MP4':'Image');
+    const mediaOk = !!img;
     return '<div id="ch-row-'+ch+'" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">'
       +'<div style="font-size:18px">'+(chLabels[ch]||ch).split(' ')[0]+'</div>'
       +'<div style="flex:1">'
       +'<div style="font-size:12px;font-weight:700;color:#f1f5f9">'+(chLabels[ch]||ch)+'</div>'
-      +'<div style="font-size:10px;color:#475569">'+(img?'✅ Media ready':'⚠️ No image')+'</div>'
+      +'<div style="font-size:10px;color:'+(mediaOk?'#475569':'#ef4444')+'">'+(mediaOk?'✅ '+mediaType+' ready':'⚠️ No media — regenerate GIF')+'</div>'
       +'</div>'
       +'<div id="ch-status-'+ch+'" style="font-size:11px;color:#64748b">Waiting…</div>'
       +'</div>';
