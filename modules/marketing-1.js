@@ -8233,18 +8233,16 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
-          // IG Story: GIFs not supported via API - use static story poster
-          // If no story image, use square feed image
           const storyImg = pi['instagram_story'] || pi['story_gif'] || pi['instagram_feed'] || item.image_url;
           const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({image_url:storyImg,media_type:'IMAGE',is_carousel_item:false})})).json();
+            body:JSON.stringify({image_url:storyImg,media_type:'STORIES'})})).json();
           if(cr.id){
             const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
               headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
-            if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Story publish failed';
-          } else error=cr.error?.message||'Story container: '+JSON.stringify(cr).slice(0,80);
+            if(pr.id){ok=true;postId=pr.id;}else error=pr.error?.message||'Story publish failed: '+JSON.stringify(pr).slice(0,80);
+          } else error=cr.error?.message||'Story container failed: '+JSON.stringify(cr).slice(0,120);
         }
       }
       else if (ch==='facebook_post') {
