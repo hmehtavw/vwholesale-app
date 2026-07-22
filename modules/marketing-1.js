@@ -8355,7 +8355,7 @@ async function calPostNowDebug(calendarId) {
     if (pages.data?.length) {
       pages.data.forEach(function(p) {
         log('📘 Page: '+p.name+' ('+p.id+')', '#3b82f6');
-        if (p.instagram_business_account) log('  📸 IG Business: @'+p.instagram_business_account.username+' ('+p.instagram_business_account.id+')', '#e1306c');
+        if (p.instagram_business_account) log('  📸 IG Business: @'+p.instagram_business_account.username+' ('+p.instagram_business_account.id+')', '#22c55e');
         else log('  ⚠️ No IG Business account linked to this page', '#f59e0b');
       });
     } else log('❌ No pages: '+JSON.stringify(pages.error||pages).slice(0,100), '#ef4444');
