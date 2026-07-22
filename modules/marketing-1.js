@@ -3639,6 +3639,17 @@ async function mktForceDownload(url, filename) {
 }
 window.mktForceDownload = mktForceDownload;
 
+function renderReelScriptInline(script, calendarId, existingId) {
+  if (!script) return '';
+  const text = typeof script === 'string' ? script : JSON.stringify(script, null, 2);
+  const lines = text.split('\n');
+  return '<div style="font-size:11px;color:var(--text2);line-height:1.7;max-height:120px;overflow-y:auto">'
+    + lines.slice(0,6).map(function(l){return '<div>'+l.replace(/</g,'&lt;')+'</div>';}).join('')
+    + (lines.length>6?'<div style="color:var(--text3)">…+'+(lines.length-6)+' more lines</div>':'')
+    + '</div>';
+}
+window.renderReelScriptInline = renderReelScriptInline;
+
 
 
 
