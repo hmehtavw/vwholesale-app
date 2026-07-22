@@ -6492,27 +6492,7 @@ async function calPreviewDraggableBadge(calendarId) {
 }
 
 async function buildEditorPopup() {
-  await loadMusicTracks(); // ensure DB tracks are loaded before picker renders
-
-  // Populate the editor music select from DB tracks
-  const editorMusicSel = document.getElementById('editor-music');
-  if (editorMusicSel && MKT_MUSIC_TRACKS.length > 1) {
-    const moodLabels = {silent:'🔇 No Music',upbeat:'⚡ Upbeat',cinematic:'🎬 Cinematic',energetic:'🔥 Energetic',ambient:'🏠 Ambient',festive:'🎉 Festive',custom:'📁 Custom'};
-    const moods = ['silent','upbeat','cinematic','energetic','ambient','festive','custom'];
-    let html = '';
-    moods.forEach(m => {
-      const tracks = MKT_MUSIC_TRACKS.filter(t=>t.mood===m);
-      if (!tracks.length) return;
-      if (m === 'silent') {
-        tracks.forEach(t => { html += '<option value="'+(t.url||'none')+'">'+t.label+'</option>'; });
-      } else {
-        html += '<optgroup label="'+(moodLabels[m]||m)+'">';
-        tracks.forEach(t => { html += '<option value="'+(t.url||t.id)+'">'+t.label+'</option>'; });
-        html += '</optgroup>';
-      }
-    });
-    editorMusicSel.innerHTML = html;
-  }
+  await loadMusicTracks();
   document.getElementById('badge-editor-popup')?.remove();
   const pop = document.createElement('div');
   pop.id = 'badge-editor-popup';
@@ -6626,6 +6606,24 @@ async function buildEditorPopup() {
   editorInitCanvas();
   editorRenderLayers();
   editorRenderCanvas();
+
+  // Populate music select from DB tracks (popup is now in DOM)
+  const moodLabels = {silent:'🔇 No Music',upbeat:'⚡ Upbeat',cinematic:'🎬 Cinematic',energetic:'🔥 Energetic',ambient:'🏠 Ambient',festive:'🎉 Festive',custom:'📁 Custom'};
+  const moods = ['silent','upbeat','cinematic','energetic','ambient','festive','custom'];
+  function populateEditorMusic() {
+    const sel = document.getElementById('editor-music');
+    if (!sel) return;
+    let html = '';
+    moods.forEach(m => {
+      const tracks = MKT_MUSIC_TRACKS.filter(t=>t.mood===m);
+      if (!tracks.length) return;
+      if (m==='silent') { tracks.forEach(t=>{html+='<option value="'+(t.url||'none')+'">'+t.label+'</option>';}); }
+      else { html+='<optgroup label="'+(moodLabels[m]||m)+'">'; tracks.forEach(t=>{html+='<option value="'+(t.url||t.id)+'">'+t.label+'</option>';}); html+='</optgroup>'; }
+    });
+    sel.innerHTML = html || '<option value="none">No Music</option>';
+  }
+  if (MKT_MUSIC_TRACKS.length > 1) { populateEditorMusic(); }
+  else { loadMusicTracks().then(populateEditorMusic); }
 }
 
 function editorResizeCanvas(w, h) {
