@@ -6191,6 +6191,39 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
             if (key==='landscape') { platformImages['facebook_post']=pp.publicUrl; platformImages['youtube']=pp.publicUrl; platformImages['gbp']=pp.publicUrl; }
           }
         } catch(e) { console.warn('PNG upload failed', key, e); }
+
+        // Create MP4 for Instagram/Facebook (GIF shows black on these platforms)
+        try {
+          if (musicURL || key === 'square' || key === 'landscape') {
+            showMktToast('⏳ Creating MP4 for '+key+'…', 5000);
+            const srcUrl = 'data:image/png;base64,'+b64;
+            const mp4Blob = await mktExportMP4WithMusic(srcUrl, [], animStyle||'cinematic', musicURL||null, W, H, null);
+            if (mp4Blob) {
+              const mp4Bytes = new Uint8Array(await mp4Blob.arrayBuffer());
+              const ext = mp4Blob.type.includes('mp4') ? 'mp4' : 'webm';
+              const mp4Path = 'gif-calendar/'+calendarId+'_anim_'+key+'_'+ts+'.'+ext;
+              const {error:me} = await sb.storage.from('calendar-images').upload(mp4Path, mp4Bytes, {contentType:mp4Blob.type, upsert:true});
+              if (!me) {
+                const {data:mp} = sb.storage.from('calendar-images').getPublicUrl(mp4Path);
+                if (key==='square') {
+                  platformImages['instagram_feed_mp4'] = mp.publicUrl;
+                  platformImages['threads_mp4'] = mp.publicUrl;
+                  platformImages['mp4_music'] = mp.publicUrl;
+                }
+                if (key==='story') {
+                  platformImages['instagram_story_mp4'] = mp.publicUrl;
+                  platformImages['facebook_story_mp4'] = mp.publicUrl;
+                }
+                if (key==='landscape') {
+                  platformImages['facebook_post_mp4'] = mp.publicUrl;
+                  platformImages['youtube_mp4'] = mp.publicUrl;
+                }
+                totalKb += Math.round(mp4Blob.size/1024);
+              }
+            }
+          }
+        } catch(mp4Err) { console.warn('MP4 encode failed for', key, mp4Err); }
+
       } catch(e) { console.warn('Animated GIF failed for',fmt.key,e); }
     }
 
