@@ -3506,8 +3506,9 @@ function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
     if (hasImage) html += btnG('✏️', "openPosterEditor('"+id+"')", false, '9px');
   }
 
-  // Preview
+  // Preview + History
   if (hasImage) html += btnG('👁', "calPreviewPost('"+id+"')", false, '9px');
+  html += btnG('🕐', "openHistoryDrawer('"+id+"')", false, '9px');
 
   // Approval / posting
   if (isApproved) {
@@ -7975,7 +7976,7 @@ async function calPostNow(calendarId) {
   const chMediaHint = {instagram_feed:'MP4/Image',instagram_story:'MP4/Image',facebook_post:'MP4/Image',facebook_story:'MP4/Image',threads:'GIF/Image',whatsapp_story:'GIF/Image',gbp:'Image',youtube:'MP4'};
 
   const isGifPost = item.content_type === 'gif';
-  const gifKeyMap = {instagram_feed:'instagram_feed_mp4',instagram_story:'instagram_story_mp4',facebook_post:'facebook_post_mp4',facebook_story:'facebook_story_mp4',threads:'square_gif',whatsapp_story:'story_gif',youtube:'youtube_mp4',gbp:'landscape_gif'};
+  const gifKeyMap = {instagram_feed:'instagram_feed',instagram_story:'instagram_story',facebook_post:'facebook_post',facebook_story:'facebook_story',threads:'square_gif',whatsapp_story:'story_gif',youtube:'youtube_mp4',gbp:'gbp'};
 
   const rows = channels.map(ch => {
     const img = isGifPost
@@ -8087,21 +8088,21 @@ async function calPostNowExecute(calendarId) {
     const isGifPost = item.content_type === 'gif';
     // For GIF posts: use the GIF file per channel; for others use static image
     // Platform media routing for GIF posts:
-    // Instagram + Facebook: need MP4 (GIF shows as black)
+    // Instagram + Facebook: use static PNG (MP4 generation unreliable in background)
     // WhatsApp + Threads: GIF works fine
     const gifKeyMap = {
-      instagram_feed:  'instagram_feed_mp4',   // MP4 for IG
-      instagram_story: 'instagram_story_mp4',  // MP4 for IG Story
-      facebook_post:   'facebook_post_mp4',    // MP4 for FB
-      facebook_story:  'facebook_story_mp4',   // MP4 for FB Story
-      threads:         'square_gif',            // GIF ok on Threads
-      whatsapp_story:  'story_gif',             // GIF ok on WhatsApp
-      youtube:         'youtube_mp4',           // MP4 for YouTube
-      gbp:             'landscape_gif'          // GIF for GBP
+      instagram_feed:  'instagram_feed',     // static PNG for IG feed
+      instagram_story: 'instagram_story',    // static PNG for IG story
+      facebook_post:   'facebook_post',      // static PNG for FB
+      facebook_story:  'facebook_story',     // static PNG for FB story
+      threads:         'square_gif',          // GIF ok on Threads
+      whatsapp_story:  'story_gif',           // GIF ok on WhatsApp
+      youtube:         'youtube_mp4',         // MP4 for YouTube
+      gbp:             'gbp'                  // static for GBP
     };
-    // Fallback chain: try mp4 first, then gif, then static image
+    // Fallback chain
     const img = isGifPost
-      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['instagram_feed_mp4'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
       : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
     const isVideo = !!(img && (img.includes('.mp4') || img.includes('.webm')));
     // Note: for GIF posts on IG/FB, img will be .mp4 → isVideo=true → posts as Reel/Video
@@ -8145,28 +8146,17 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
-          // For GIF posts use MP4; for image posts use story image
-          const storyImg = isGifPost
-            ? (pi['instagram_story_mp4'] || pi['mp4_music'] || pi['instagram_story'] || pi['instagram_feed'] || item.image_url)
-            : (pi['instagram_story'] || pi['instagram_feed'] || item.image_url);
-          const isStoryVideo = !!(storyImg && (storyImg.includes('.mp4') || storyImg.includes('.webm')));
-          const storyPayload = isStoryVideo
-            ? {video_url: storyImg, media_type:'REELS', share_to_feed:'false'}
-            : {image_url: storyImg, media_type:'STORIES'};
+          const storyImg = pi['instagram_story'] || pi['instagram_feed'] || item.image_url;
           const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify(storyPayload)})).json();
+            body:JSON.stringify({image_url:storyImg,media_type:'STORIES'})})).json();
           if(cr.id){
-            // For video, wait for processing
-            if (isStoryVideo) await new Promise(r=>setTimeout(r,8000));
             const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
               headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
             if(pr.id){ok=true;postId=pr.id;}
             else error='Story publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,120));
-          } else {
-            error='Story container: '+(cr.error?.message||cr.error?.error_user_msg||JSON.stringify(cr).slice(0,200));
-          }
+          } else error='Story container: '+(cr.error?.message||cr.error?.error_user_msg||JSON.stringify(cr).slice(0,200));
         }
       }
       else if (ch==='facebook_post') {
