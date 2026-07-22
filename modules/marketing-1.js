@@ -6502,7 +6502,7 @@ async function buildEditorPopup() {
     <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#1e293b;border-bottom:1px solid #334155;flex-shrink:0">
       <div style="font-size:14px;font-weight:900;color:#c9a84c">✏️ V Wholesale Poster Editor</div>
       <div style="flex:1"></div>
-      <div style="font-size:11px;color:#22c55e">✅ Auto-saves on format switch &amp; encode</div>
+      <div style="font-size:11px;color:#475569">Changes save automatically</div>
       <button onclick="document.getElementById('badge-editor-popup').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px;padding:0 4px">✕</button>
     </div>
 
