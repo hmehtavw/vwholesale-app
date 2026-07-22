@@ -6237,7 +6237,7 @@ async function calEditOfferBadge(calendarId) {
           </label>
         </div>
       </div>
-      <div id="eo-music-picker">${mktMusicPickerHTML('none')}</div>
+      <div id="eo-music-picker"><div style="font-size:12px;color:#64748b;padding:8px">⏳ Loading music…</div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <button onclick="document.getElementById('edit-offer-popup').remove()"
           style="background:#0f172a;border:1px solid #334155;color:#94a3b8;padding:10px;border-radius:8px;cursor:pointer;font-size:13px">Cancel</button>
@@ -6255,6 +6255,11 @@ async function calEditOfferBadge(calendarId) {
   });
   pop.addEventListener('click', e => { if (e.target === pop) pop.remove(); });
   document.body.appendChild(pop);
+  // Load music picker async after popup is in DOM
+  loadMusicTracks().then(() => {
+    const picker = document.getElementById('eo-music-picker');
+    if (picker) picker.innerHTML = mktMusicPickerHTML('none');
+  });
   mktBindMusicPicker();
   setTimeout(() => document.getElementById('edit-offer-input')?.focus(), 100);
 }
