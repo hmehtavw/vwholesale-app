@@ -6151,6 +6151,13 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
       } catch(e) { console.warn('Animated GIF failed for',fmt.key,e); }
     }
 
+    // Save music attribution so Post Now can auto-append it
+    if (musicURL) {
+      const musicTrack = MKT_MUSIC_TRACKS.find(t => mktGetMusicURL(t.id) === musicURL);
+      if (musicTrack?.attribution) platformImages['music_attribution'] = musicTrack.attribution;
+      if (musicTrack?.id) platformImages['music_track_id'] = musicTrack.id;
+    }
+
     // Save
     const token=Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);
     const expires=new Date(Date.now()+48*3600*1000).toISOString();
@@ -8124,13 +8131,20 @@ async function calPostNow(calendarId) {
     });
   }
 
-  window._postNowCtx = { item, cfg, channels, pi, caption, META_API, st };
+  // Get music attribution - from popup selection OR from stored platform_images
+  const selectedMusicId = document.getElementById('mkt-music-value')?.value || 'none';
+  const selectedTrack = MKT_MUSIC_TRACKS.find(t => t.id === selectedMusicId);
+  const musicAttribution = (selectedMusicId !== 'none' && selectedTrack?.attribution)
+    ? selectedTrack.attribution
+    : (pi['music_attribution'] || null);  // fallback to stored attribution
+
+  window._postNowCtx = { item, cfg, channels, pi, caption, META_API, st, musicAttribution };
 }
 
 async function calPostNowExecute(calendarId) {
   const btn = document.getElementById('postnow-start');
   if (btn) { btn.disabled=true; btn.textContent='⏳ Posting…'; }
-  const { item, cfg, channels, pi, caption, META_API, st } = window._postNowCtx;
+  const { item, cfg, channels, pi, caption, META_API, st, musicAttribution } = window._postNowCtx;
   const results = {};
 
   const setStatus = (ch, icon, msg, color='#94a3b8') => {
@@ -8163,7 +8177,11 @@ async function calPostNowExecute(calendarId) {
       : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
     const isVideo = !!(img && (img.includes('.mp4') || img.includes('.webm')));
     // Note: for GIF posts on IG/FB, img will be .mp4 → isVideo=true → posts as Reel/Video
-    const cap = caption.slice(0, ch==='threads'?500:2200);
+    // Auto-append music attribution if music was used (CC-BY licence requirement)
+    const baseCaption = musicAttribution
+      ? caption + '\n\n🎵 ' + musicAttribution
+      : caption;
+    const cap = baseCaption.slice(0, ch==='threads'?500:2200);
     let ok=false, postId='', error='';
 
     try {
