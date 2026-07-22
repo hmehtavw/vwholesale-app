@@ -1112,32 +1112,52 @@ async function gsSaveCampaign() {
 
 // ── LIBRARY ──
 function gsShowLibrary() {
-  const lib = document.getElementById('gs-library');
-  if (!lib) return;
-  lib.style.display = lib.style.display === 'none' ? 'block' : 'none';
-  if (lib.style.display === 'block') gsLoadLibraryInBackground();
+  const sec = document.getElementById('gs-library-section');
+  if (!sec) return;
+  const isHidden = sec.style.display === 'none' || !sec.style.display;
+  sec.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) gsLoadLibraryInBackground();
 }
 async function gsLoadLibraryInBackground() {
-  const grid = document.getElementById('gs-lib-grid');
+  const grid = document.getElementById('gs-library-grid') || document.getElementById('gs-lib-grid');
   if (!grid) return;
-  const { data: history } = await sb.from('poster_history').select('*')
-    .like('template', 'gif_%')
+  grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px">⏳ Loading…</div>';
+
+  const { data: history } = await sb.from('generation_history')
+    .select('*')
+    .in('content_type', ['gif_animated','gif_slideshow','poster'])
     .order('created_at', { ascending: false })
-    .limit(20)
-    .then(r => r, () => ({ data: [] }));
+    .limit(30)
+    .then(r=>r, ()=>({data:[]}));
+
   if (!history?.length) {
-    grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">No GIF campaigns saved yet</div>';
+    grid.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;grid-column:1/-1">No GIF history yet. Generate a GIF from the calendar.</div>';
     return;
   }
-  grid.innerHTML = history.map(h => `
-    <div style="background:var(--bg3);border-radius:10px;overflow:hidden;border:1px solid var(--border)">
-      <div style="width:100%;aspect-ratio:1;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:32px">✨</div>
-      <div style="padding:8px">
-        <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px">${h.topic||'—'}</div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${h.template||''} · ${new Date(h.created_at).toLocaleDateString('en-IN')}</div>
-        <button onclick="gsDeleteHistory(${h.id})" style="font-size:10px;padding:3px 8px;background:none;border:1px solid var(--border);border-radius:5px;color:var(--text3);cursor:pointer">🗑 Delete</button>
-      </div>
-    </div>`).join('');
+
+  grid.innerHTML = '';
+  history.forEach(h => {
+    const pi = h.platform_images || {};
+    const thumb = pi.square_gif || pi.gif || pi.instagram_feed || '';
+    const date = new Date(h.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const typeLabel = {gif_animated:'🎬 Animated',gif_slideshow:'🖼️ Slideshow',poster:'🖼️ Poster'}[h.content_type] || h.content_type;
+    const cost = h.cost_inr ? '₹'+h.cost_inr : '';
+
+    const card = document.createElement('div');
+    card.style.cssText = 'background:var(--bg3);border-radius:10px;overflow:hidden;border:1px solid var(--border)';
+    card.innerHTML = thumb
+      ? '<img src="'+thumb+'" style="width:100%;aspect-ratio:1;object-fit:cover;cursor:pointer" onclick="openMktLightbox(\''+thumb+'\',\''+h.topic+'\',\''+thumb+'\',\'gif.gif\')" title="Click to preview">'
+      : '<div style="width:100%;aspect-ratio:1;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:32px">✨</div>';
+    card.innerHTML += '<div style="padding:8px">'
+      +'<div style="font-size:10px;color:var(--text3);margin-bottom:3px">'+typeLabel+' · '+date+(cost?' · '+cost:'')+'</div>'
+      +'<div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:6px">'+(h.topic||'—')+'</div>'
+      +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
+      +(thumb ? '<a href="'+thumb+'" download style="font-size:10px;padding:3px 8px;background:var(--gold);color:#111;border-radius:5px;text-decoration:none;font-weight:700">⬇ GIF</a>' : '')
+      +(h.calendar_id ? '<button onclick="calPostNow('+h.calendar_id+')" style="font-size:10px;padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:5px;cursor:pointer">🚀 Post</button>' : '')
+      +'</div>'
+      +'</div>';
+    grid.appendChild(card);
+  });
 }
 async function gsDeleteHistory(id) {
   if (!confirm('Delete this GIF campaign?')) return;
