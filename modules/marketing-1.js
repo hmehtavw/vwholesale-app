@@ -6493,6 +6493,26 @@ async function calPreviewDraggableBadge(calendarId) {
 
 async function buildEditorPopup() {
   await loadMusicTracks(); // ensure DB tracks are loaded before picker renders
+
+  // Populate the editor music select from DB tracks
+  const editorMusicSel = document.getElementById('editor-music');
+  if (editorMusicSel && MKT_MUSIC_TRACKS.length > 1) {
+    const moodLabels = {silent:'🔇 No Music',upbeat:'⚡ Upbeat',cinematic:'🎬 Cinematic',energetic:'🔥 Energetic',ambient:'🏠 Ambient',festive:'🎉 Festive',custom:'📁 Custom'};
+    const moods = ['silent','upbeat','cinematic','energetic','ambient','festive','custom'];
+    let html = '';
+    moods.forEach(m => {
+      const tracks = MKT_MUSIC_TRACKS.filter(t=>t.mood===m);
+      if (!tracks.length) return;
+      if (m === 'silent') {
+        tracks.forEach(t => { html += '<option value="'+(t.url||'none')+'">'+t.label+'</option>'; });
+      } else {
+        html += '<optgroup label="'+(moodLabels[m]||m)+'">';
+        tracks.forEach(t => { html += '<option value="'+(t.url||t.id)+'">'+t.label+'</option>'; });
+        html += '</optgroup>';
+      }
+    });
+    editorMusicSel.innerHTML = html;
+  }
   document.getElementById('badge-editor-popup')?.remove();
   const pop = document.createElement('div');
   pop.id = 'badge-editor-popup';
@@ -6571,120 +6591,7 @@ async function buildEditorPopup() {
 
         <!-- Save/Export -->
         <div style="padding:12px;border-top:1px solid #334155;display:flex;flex-direction:column;gap:6px">
-          <select id="editor-music" onchange="window.editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px">
-            <option value="none">🔇 No Music (export GIF)</option>
-            <optgroup label="⚡ Upbeat Corporate (20 tracks)">
-              <option value="/assets/music/01_upbeat_rise.mp3">Upbeat Rise</option>
-              <option value="/assets/music/02_corporate_drive.mp3">Corporate Drive</option>
-              <option value="/assets/music/03_positive_morning.mp3">Positive Morning</option>
-              <option value="/assets/music/04_business_bright.mp3">Business Bright</option>
-              <option value="/assets/music/05_success_steps.mp3">Success Steps</option>
-              <option value="/assets/music/06_confident_march.mp3">Confident March</option>
-              <option value="/assets/music/07_team_spirit.mp3">Team Spirit</option>
-              <option value="/assets/music/08_achievement.mp3">Achievement</option>
-              <option value="/assets/music/09_brand_power.mp3">Brand Power</option>
-              <option value="/assets/music/10_work_flow.mp3">Work Flow</option>
-              <option value="/assets/music/11_monday_motivation.mp3">Monday Motivation</option>
-              <option value="/assets/music/12_creative_spark.mp3">Creative Spark</option>
-              <option value="/assets/music/13_launch_ready.mp3">Launch Ready</option>
-              <option value="/assets/music/14_deal_maker.mp3">Deal Maker</option>
-              <option value="/assets/music/15_office_vibes.mp3">Office Vibes</option>
-              <option value="/assets/music/16_startup_hustle.mp3">Startup Hustle</option>
-              <option value="/assets/music/17_clean_corporate.mp3">Clean Corporate</option>
-              <option value="/assets/music/18_positive_results.mp3">Positive Results</option>
-              <option value="/assets/music/19_new_beginnings.mp3">New Beginnings</option>
-              <option value="/assets/music/20_bright_future.mp3">Bright Future</option>
-            </optgroup>
-            <optgroup label="🔥 Energetic (20 tracks)">
-              <option value="/assets/music/21_energetic_drive.mp3">Energetic Drive</option>
-              <option value="/assets/music/22_power_up.mp3">Power Up</option>
-              <option value="/assets/music/23_unstoppable.mp3">Unstoppable</option>
-              <option value="/assets/music/24_maximum_effort.mp3">Maximum Effort</option>
-              <option value="/assets/music/25_hype_builder.mp3">Hype Builder</option>
-              <option value="/assets/music/26_action_mode.mp3">Action Mode</option>
-              <option value="/assets/music/27_fast_forward.mp3">Fast Forward</option>
-              <option value="/assets/music/28_energy_surge.mp3">Energy Surge</option>
-              <option value="/assets/music/29_peak_performance.mp3">Peak Performance</option>
-              <option value="/assets/music/30_game_changer.mp3">Game Changer</option>
-              <option value="/assets/music/31_breakout.mp3">Breakout</option>
-              <option value="/assets/music/32_fire_starter.mp3">Fire Starter</option>
-              <option value="/assets/music/33_charge_up.mp3">Charge Up</option>
-              <option value="/assets/music/34_overdrive.mp3">Overdrive</option>
-              <option value="/assets/music/35_turbo_boost.mp3">Turbo Boost</option>
-              <option value="/assets/music/36_impact.mp3">Impact</option>
-              <option value="/assets/music/37_momentum.mp3">Momentum</option>
-              <option value="/assets/music/38_rocket_launch.mp3">Rocket Launch</option>
-              <option value="/assets/music/39_power_move.mp3">Power Move</option>
-              <option value="/assets/music/40_full_throttle.mp3">Full Throttle</option>
-            </optgroup>
-            <optgroup label="🎬 Cinematic (20 tracks)">
-              <option value="/assets/music/41_soft_cinematic.mp3">Soft Cinematic</option>
-              <option value="/assets/music/42_emotional_rise.mp3">Emotional Rise</option>
-              <option value="/assets/music/43_epic_moment.mp3">Epic Moment</option>
-              <option value="/assets/music/44_premium_feel.mp3">Premium Feel</option>
-              <option value="/assets/music/45_luxury_brand.mp3">Luxury Brand</option>
-              <option value="/assets/music/46_grand_opening.mp3">Grand Opening</option>
-              <option value="/assets/music/47_heritage_story.mp3">Heritage Story</option>
-              <option value="/assets/music/48_trust_built.mp3">Trust Built</option>
-              <option value="/assets/music/49_craftsmanship.mp3">Craftsmanship</option>
-              <option value="/assets/music/50_timeless_quality.mp3">Timeless Quality</option>
-              <option value="/assets/music/51_deep_impression.mp3">Deep Impression</option>
-              <option value="/assets/music/52_soulful_moment.mp3">Soulful Moment</option>
-              <option value="/assets/music/53_moving_forward.mp3">Moving Forward</option>
-              <option value="/assets/music/54_milestone.mp3">Milestone</option>
-              <option value="/assets/music/55_proud_legacy.mp3">Proud Legacy</option>
-              <option value="/assets/music/56_touching_story.mp3">Touching Story</option>
-              <option value="/assets/music/57_inspire_dream.mp3">Inspire Dream</option>
-              <option value="/assets/music/58_believe_achieve.mp3">Believe Achieve</option>
-              <option value="/assets/music/59_rise_together.mp3">Rise Together</option>
-              <option value="/assets/music/60_future_vision.mp3">Future Vision</option>
-            </optgroup>
-            <optgroup label="🌊 Ambient Calm (20 tracks)">
-              <option value="/assets/music/61_premium_ambient.mp3">Premium Ambient</option>
-              <option value="/assets/music/62_calm_confidence.mp3">Calm Confidence</option>
-              <option value="/assets/music/63_serene_space.mp3">Serene Space</option>
-              <option value="/assets/music/64_peaceful_home.mp3">Peaceful Home</option>
-              <option value="/assets/music/65_tranquil_morning.mp3">Tranquil Morning</option>
-              <option value="/assets/music/66_zen_workspace.mp3">Zen Workspace</option>
-              <option value="/assets/music/67_mindful_moment.mp3">Mindful Moment</option>
-              <option value="/assets/music/68_gentle_flow.mp3">Gentle Flow</option>
-              <option value="/assets/music/69_soft_glow.mp3">Soft Glow</option>
-              <option value="/assets/music/70_morning_light.mp3">Morning Light</option>
-              <option value="/assets/music/71_clear_sky.mp3">Clear Sky</option>
-              <option value="/assets/music/72_ocean_breeze.mp3">Ocean Breeze</option>
-              <option value="/assets/music/73_sunday_morning.mp3">Sunday Morning</option>
-              <option value="/assets/music/74_fresh_start.mp3">Fresh Start</option>
-              <option value="/assets/music/75_open_spaces.mp3">Open Spaces</option>
-              <option value="/assets/music/76_luxury_lounge.mp3">Luxury Lounge</option>
-              <option value="/assets/music/77_spa_vibes.mp3">Spa Vibes</option>
-              <option value="/assets/music/78_breathe_easy.mp3">Breathe Easy</option>
-              <option value="/assets/music/79_evening_calm.mp3">Evening Calm</option>
-              <option value="/assets/music/80_dream_space.mp3">Dream Space</option>
-            </optgroup>
-            <optgroup label="✨ Uplifting (20 tracks)">
-              <option value="/assets/music/100_v_wholesale_anthem.mp3">V Wholesale Anthem</option>
-              <option value="/assets/music/81_uplifting_hope.mp3">Uplifting Hope</option>
-              <option value="/assets/music/82_new_chapter.mp3">New Chapter</option>
-              <option value="/assets/music/83_possibilities.mp3">Possibilities</option>
-              <option value="/assets/music/84_together_strong.mp3">Together Strong</option>
-              <option value="/assets/music/85_community_love.mp3">Community Love</option>
-              <option value="/assets/music/86_local_pride.mp3">Local Pride</option>
-              <option value="/assets/music/87_vijayawada_vibes.mp3">Vijayawada Vibes</option>
-              <option value="/assets/music/88_city_of_victory.mp3">City Of Victory</option>
-              <option value="/assets/music/89_build_better.mp3">Build Better</option>
-              <option value="/assets/music/90_home_sweet_home.mp3">Home Sweet Home</option>
-              <option value="/assets/music/91_family_first.mp3">Family First</option>
-              <option value="/assets/music/92_growing_together.mp3">Growing Together</option>
-              <option value="/assets/music/93_dream_home.mp3">Dream Home</option>
-              <option value="/assets/music/94_new_beginnings2.mp3">New Beginnings2</option>
-              <option value="/assets/music/95_celebrate_life.mp3">Celebrate Life</option>
-              <option value="/assets/music/96_joy_of_home.mp3">Joy Of Home</option>
-              <option value="/assets/music/97_warm_welcome.mp3">Warm Welcome</option>
-              <option value="/assets/music/98_happy_place.mp3">Happy Place</option>
-              <option value="/assets/music/99_perfect_home.mp3">Perfect Home</option>
-            </optgroup>
-            <option value="__upload__">📁 Upload Your Own MP3</option>
-          </select>
+          <select id="editor-music" onchange="window.editorMusicChanged(this)" style="background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:7px;border-radius:6px;font-size:11px"><option value="none">⏳ Loading music…</option></select>
           <div id="editor-music-upload-row" style="display:none;margin-top:4px">
             <input type="file" id="editor-music-file" accept="audio/*,audio/mp3,audio/mpeg"
               style="width:100%;font-size:10px;color:#94a3b8;background:#0f172a;border:1px solid #334155;border-radius:5px;padding:4px"
