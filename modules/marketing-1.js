@@ -7976,7 +7976,7 @@ async function calPostNow(calendarId) {
   const chMediaHint = {instagram_feed:'MP4/Image',instagram_story:'MP4/Image',facebook_post:'MP4/Image',facebook_story:'MP4/Image',threads:'GIF/Image',whatsapp_story:'GIF/Image',gbp:'Image',youtube:'MP4'};
 
   const isGifPost = item.content_type === 'gif';
-  const gifKeyMap = {instagram_feed:'instagram_feed',instagram_story:'instagram_story',facebook_post:'facebook_post',facebook_story:'facebook_story',threads:'square_gif',whatsapp_story:'story_gif',youtube:'youtube_mp4',gbp:'gbp'};
+  const gifKeyMap = {instagram_feed:'instagram_feed',instagram_story:'instagram_story',facebook_post:'facebook_post',facebook_story:'facebook_story',threads:'instagram_feed',whatsapp_story:'story_gif',youtube:'youtube',gbp:'gbp'};
 
   const rows = channels.map(ch => {
     const img = isGifPost
@@ -8095,7 +8095,7 @@ async function calPostNowExecute(calendarId) {
       instagram_story: 'instagram_story',    // static PNG for IG story
       facebook_post:   'facebook_post',      // static PNG for FB
       facebook_story:  'facebook_story',     // static PNG for FB story
-      threads:         'square_gif',          // GIF ok on Threads
+      threads:         'instagram_feed',      // PNG for now (GIF shows black on Threads too)
       whatsapp_story:  'story_gif',           // GIF ok on WhatsApp
       youtube:         'youtube_mp4',         // MP4 for YouTube
       gbp:             'gbp'                  // static for GBP
@@ -8193,7 +8193,7 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
-          const thImg = pi['square_gif']||pi['instagram_feed']||item.image_url;
+          const thImg = pi['instagram_feed']||pi['threads']||item.image_url; // PNG not GIF
           const pr = await(await fetch(MKT_SB_URL+'/functions/v1/social-proxy',{method:'POST',
             headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
             body:JSON.stringify({action:'post_threads',token:cfg.THREADS_ACCESS_TOKEN,
@@ -8244,9 +8244,11 @@ async function calPostNowExecute(calendarId) {
 
           if (waTarget === 'owner') {
             const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
-            const msgId = await sendWA(ownerNum, 'Himansu');
-            if (msgId) { ok=true; postId='wa_owner_'+msgId; }
-            else error='WA send failed — check WA token';
+            const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
+              method:'POST',headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+              body:JSON.stringify(buildPayload(ownerNum,'Himansu'))})).json();
+            if (r.messages?.[0]?.id) { ok=true; postId='wa_owner_'+r.messages[0].id; }
+            else error='WA: '+(r.error?.message||r.error?.error_data?.details||JSON.stringify(r).slice(0,150));
 
           } else if (waTarget === 'select') {
             const rawNums = (document.getElementById('wa-phone-input')?.value||'').trim();
@@ -8279,6 +8281,7 @@ async function calPostNowExecute(calendarId) {
         }
       }
       else if (ch==='gbp'||ch==='google_business') { error='GBP API pending (~Aug 1)'; }
+      else if (ch==='youtube'||ch==='youtube_shorts') { error='YouTube API not configured yet — upload manually to youtube.com/@vwholesaleindia'; }
       else { error='Channel not yet implemented: '+ch; }
     } catch(e) { error=e.message||'Unknown error'; }
 
