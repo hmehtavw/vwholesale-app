@@ -7416,25 +7416,34 @@ async function mktExportMP4WithMusic(posterUrl, elementsOrOffer, animStyle, musi
     i.onload = () => res(i); i.onerror = rej; i.src = posterUrl;
   });
 
-  const audioCtx = new AudioContext();
-  const musicResp = await fetch(musicUrl);
-  if (!musicResp.ok) throw new Error('Music fetch failed: ' + musicResp.status);
-  const musicBuffer = await audioCtx.decodeAudioData(await musicResp.arrayBuffer());
-
   const can = document.createElement('canvas'); can.width = W; can.height = H;
   const ctx = can.getContext('2d');
   const videoStream = can.captureStream(30);
-  const audioDest = audioCtx.createMediaStreamDestination();
-  const musicSource = audioCtx.createBufferSource();
-  musicSource.buffer = musicBuffer;
-  musicSource.loop = true;
-  const gainNode = audioCtx.createGain();
-  gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
-  musicSource.connect(gainNode);
-  gainNode.connect(audioDest);
-  musicSource.start();
+  let combined;
 
-  const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
+  if (musicUrl) {
+    try {
+      const audioCtx = new AudioContext();
+      const musicResp = await fetch(musicUrl);
+      if (!musicResp.ok) throw new Error('Music fetch failed');
+      const musicBuffer = await audioCtx.decodeAudioData(await musicResp.arrayBuffer());
+      const audioDest = audioCtx.createMediaStreamDestination();
+      const musicSource = audioCtx.createBufferSource();
+      musicSource.buffer = musicBuffer;
+      musicSource.loop = true;
+      const gainNode = audioCtx.createGain();
+      gainNode.gain.setValueAtTime(0.7, audioCtx.currentTime);
+      musicSource.connect(gainNode);
+      gainNode.connect(audioDest);
+      musicSource.start();
+      combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDest.stream.getAudioTracks()]);
+    } catch(e) {
+      console.warn('Music failed, making silent video:', e.message);
+      combined = videoStream;
+    }
+  } else {
+    combined = videoStream; // silent video
+  }
   const mimeTypes = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
   const mimeType = mimeTypes.find(m => MediaRecorder.isTypeSupported(m));
   if (!mimeType) { musicSource.stop(); await audioCtx.close(); throw new Error('MediaRecorder not supported'); }
