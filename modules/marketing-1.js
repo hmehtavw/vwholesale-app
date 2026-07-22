@@ -8188,15 +8188,25 @@ async function calPostNowExecute(calendarId) {
     setStatus(ch, '⏳', 'Posting…', '#f59e0b');
     const isGifPost = item.content_type === 'gif';
     // For GIF posts: use the GIF file per channel; for others use static image
+    // Platform media routing for GIF posts:
+    // Instagram + Facebook: need MP4 (GIF shows as black)
+    // WhatsApp + Threads: GIF works fine
     const gifKeyMap = {
-      instagram_feed:'square_gif', instagram_story:'story_gif', facebook_story:'story_gif',
-      threads:'square_gif', facebook_post:'landscape_gif', whatsapp_story:'story_gif',
-      youtube:'landscape_gif', gbp:'landscape_gif'
+      instagram_feed:  'instagram_feed_mp4',   // MP4 for IG
+      instagram_story: 'instagram_story_mp4',  // MP4 for IG Story
+      facebook_post:   'facebook_post_mp4',    // MP4 for FB
+      facebook_story:  'facebook_story_mp4',   // MP4 for FB Story
+      threads:         'square_gif',            // GIF ok on Threads
+      whatsapp_story:  'story_gif',             // GIF ok on WhatsApp
+      youtube:         'youtube_mp4',           // MP4 for YouTube
+      gbp:             'landscape_gif'          // GIF for GBP
     };
+    // Fallback chain: try mp4 first, then gif, then static image
     const img = isGifPost
-      ? (pi[gifKeyMap[ch]] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
       : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
-    const isVideo = !!(img&&(img.includes('.mp4')||img.includes('.webm')));
+    const isVideo = !!(img && (img.includes('.mp4') || img.includes('.webm')));
+    // Note: for GIF posts on IG/FB, img will be .mp4 → isVideo=true → posts as Reel/Video
     const cap = caption.slice(0, ch==='threads'?500:2200);
     let ok=false, postId='', error='';
 
