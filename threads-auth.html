@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Threads Auth — V Wholesale</title>
+<style>
+body{font-family:system-ui;background:#0f172a;color:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:32px;max-width:500px;width:100%}
+h2{color:#c9a84c;margin:0 0 16px}
+.step{background:#0f172a;border-radius:8px;padding:12px;margin:8px 0;font-size:13px}
+.step strong{color:#c9a84c}
+input{width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:10px;border-radius:6px;font-size:12px;box-sizing:border-box;margin:6px 0}
+button{background:#c9a84c;color:#111;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;width:100%;margin:6px 0}
+.ok{background:rgba(34,197,94,.15);border:1px solid #22c55e;color:#22c55e;padding:10px;border-radius:8px;margin:8px 0;font-size:13px}
+.err{background:rgba(239,68,68,.15);border:1px solid #ef4444;color:#ef4444;padding:10px;border-radius:8px;margin:8px 0;font-size:13px}
+.warn{background:rgba(251,191,36,.1);border:1px solid #f59e0b;color:#f59e0b;padding:10px;border-radius:8px;margin:8px 0;font-size:12px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>🧵 Connect Threads to V Wholesale</h2>
+
+  <div class="warn">⚠️ Before clicking anything — open a new Incognito window, log into Instagram/Threads as <strong>vwholesaleindia</strong>, then come back to this page.</div>
+
+  <div id="main"></div>
+</div>
+
+<script>
+const SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+const APP_ID = '1287180253487804';
+const REDIRECT = window.location.origin + '/threads-auth.html';
+
+const main = document.getElementById('main');
+
+function showStep1() {
+  main.innerHTML = `
+    <div class="step"><strong>Step 1:</strong> Click below to authorize Threads. You must be logged in as <strong>@vwholesaleindia</strong>.</div>
+    <button onclick="startAuth()">🔐 Authorize Threads (@vwholesaleindia)</button>
+    <div class="step" style="margin-top:16px"><strong>Already have a code?</strong> Paste the full redirect URL below:</div>
+    <input id="code-url" placeholder="Paste full URL from Threads redirect here…">
+    <button onclick="handlePastedUrl()">→ Process Code</button>`;
+}
+
+function startAuth() {
+  const url = 'https://threads.net/oauth/authorize?client_id='+APP_ID
+    +'&redirect_uri='+encodeURIComponent(REDIRECT)
+    +'&scope=threads_basic,threads_content_publish'
+    +'&response_type=code';
+  window.location.href = url;
+}
+
+function handlePastedUrl() {
+  const raw = document.getElementById('code-url').value.trim();
+  const code = new URLSearchParams(raw.includes('?') ? raw.split('?')[1] : raw).get('code');
+  if (!code) { main.insertAdjacentHTML('beforeend','<div class="err">No code found in URL</div>'); return; }
+  exchangeCode(code);
+}
+
+async function exchangeCode(code) {
+  main.innerHTML = '<div class="step">⏳ Exchanging code for token…</div>';
+  try {
+    // Get app secret from DB
+    const sr = await fetch(SB_URL+'/rest/v1/marketing_settings?key=eq.THREADS_APP_SECRET&select=value',
+      {headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+    const sd = await sr.json();
+    const secret = sd[0]?.value;
+    if (!secret) throw new Error('App secret not found in DB');
+
+    // Exchange code
+    const tr = await fetch('https://graph.threads.net/oauth/access_token', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        client_id:APP_ID, client_secret:secret,
+        grant_type:'authorization_code',
+        redirect_uri:REDIRECT, code:code
+      })
+    });
+    const td = await tr.json();
+    if (!td.access_token) throw new Error('Token exchange failed: '+JSON.stringify(td));
+
+    main.innerHTML += '<div class="ok">✅ Short-lived token obtained</div>';
+
+    // Exchange for long-lived token
+    const lr = await fetch('https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret='+secret+'&access_token='+td.access_token);
+    const ld = await lr.json();
+    const token = ld.access_token || td.access_token;
+
+    // Verify with /me
+    const mr = await fetch('https://graph.threads.net/v1.0/me?fields=id,username',
+      {headers:{Authorization:'Bearer '+token}});
+    const md = await mr.json();
+    if (!md.id) throw new Error('/me failed: '+JSON.stringify(md));
+
+    main.innerHTML += '<div class="ok">✅ Verified: @'+md.username+' (ID: '+md.id+')</div>';
+
+    // Save to DB
+    await fetch(SB_URL+'/rest/v1/marketing_settings', {
+      method:'POST',
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
+      body:JSON.stringify([
+        {key:'THREADS_ACCESS_TOKEN',value:token,updated_at:new Date().toISOString()},
+        {key:'THREADS_NUMERIC_ID',value:String(md.id),updated_at:new Date().toISOString()}
+      ])
+    });
+    main.innerHTML += '<div class="ok">✅ Token saved to database! Threads is connected.</div>';
+    main.innerHTML += '<button onclick="window.location.href=\'/marketing.html\'">→ Back to Marketing Portal</button>';
+    window.history.replaceState({},'','/threads-auth.html');
+
+  } catch(e) {
+    main.innerHTML += '<div class="err">❌ '+e.message+'</div>';
+    main.innerHTML += '<button onclick="showStep1()">← Try Again</button>';
+  }
+}
+
+// Check if we're returning from Threads OAuth
+const params = new URLSearchParams(window.location.search);
+const code = params.get('code');
+const err = params.get('error');
+
+if (err) {
+  main.innerHTML = '<div class="err">❌ Auth failed: '+err+' — '+(params.get('error_description')||'')+'</div><button onclick="showStep1()">← Try Again</button>';
+} else if (code) {
+  exchangeCode(code);
+} else {
+  showStep1();
+}
+</script>
+</body>
+</html>
