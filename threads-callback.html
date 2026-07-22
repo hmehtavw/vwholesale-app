@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Threads OAuth — V Wholesale</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#0f172a;color:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.box{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:32px;max-width:480px;width:100%;text-align:center}
+h2{color:#c9a84c;margin:0 0 8px}
+.status{margin:16px 0;padding:12px;border-radius:8px;font-size:13px}
+.ok{background:rgba(34,197,94,.1);border:1px solid #22c55e;color:#22c55e}
+.err{background:rgba(239,68,68,.1);border:1px solid #ef4444;color:#ef4444}
+.info{background:rgba(59,130,246,.1);border:1px solid #3b82f6;color:#94a3b8}
+.token{word-break:break-all;font-size:10px;background:#0f172a;padding:8px;border-radius:6px;margin:8px 0;color:#64748b}
+button{background:#c9a84c;color:#111;border:none;padding:12px 24px;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;width:100%;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h2>🧵 Threads OAuth</h2>
+  <div id="status" class="status info">Processing…</div>
+  <div id="detail"></div>
+</div>
+<script>
+const SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+const APP_ID = '1287180253487804';
+const REDIRECT = 'https://vwholesale.in/threads-callback.html';
+
+async function getSecret() {
+  const r = await fetch(SB_URL+'/rest/v1/marketing_settings?key=eq.THREADS_APP_SECRET&select=value', {
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+  });
+  const d = await r.json();
+  return d[0]?.value;
+}
+
+async function saveToken(token, userId) {
+  await fetch(SB_URL+'/rest/v1/marketing_settings', {
+    method:'POST',
+    headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'},
+    body: JSON.stringify([
+      {key:'THREADS_ACCESS_TOKEN', value:token, updated_at: new Date().toISOString()},
+      {key:'THREADS_NUMERIC_ID', value:String(userId), updated_at: new Date().toISOString()}
+    ])
+  });
+}
+
+async function run() {
+  const p = new URLSearchParams(window.location.search);
+  const code = p.get('code');
+  const err = p.get('error');
+
+  if (err) {
+    document.getElementById('status').className = 'status err';
+    document.getElementById('status').textContent = '❌ ' + err + ': ' + (p.get('error_description')||'');
+    return;
+  }
+
+  if (!code) {
+    // Step 1: Start OAuth
+    document.getElementById('status').className = 'status info';
+    document.getElementById('status').innerHTML = '⚠️ Make sure you are logged into Facebook/Instagram as <strong>vwholesaleindia</strong> before clicking below.';
+    const btn = document.createElement('button');
+    btn.textContent = '🔐 Connect Threads (@vwholesaleindia)';
+    btn.onclick = function() {
+      const url = 'https://threads.net/oauth/authorize?client_id='+APP_ID
+        +'&redirect_uri='+encodeURIComponent(REDIRECT)
+        +'&scope=threads_basic,threads_content_publish'
+        +'&response_type=code';
+      window.location.href = url;
+    };
+    document.getElementById('detail').appendChild(btn);
+    return;
+  }
+
+  // Step 2: Exchange code for token
+  document.getElementById('status').textContent = '⏳ Exchanging code for token…';
+  try {
+    const secret = await getSecret();
+    const r = await fetch('https://graph.threads.net/oauth/access_token', {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({
+        client_id: APP_ID,
+        client_secret: secret,
+        grant_type: 'authorization_code',
+        redirect_uri: REDIRECT,
+        code: code
+      })
+    });
+    const d = await r.json();
+
+    if (!d.access_token) {
+      document.getElementById('status').className = 'status err';
+      document.getElementById('status').textContent = '❌ Token exchange failed: ' + JSON.stringify(d);
+      return;
+    }
+
+    // Step 3: Exchange for long-lived token
+    document.getElementById('status').textContent = '⏳ Getting long-lived token…';
+    const lr = await fetch('https://graph.threads.net/access_token?grant_type=th_exchange_token&client_secret='+secret+'&access_token='+d.access_token);
+    const ld = await lr.json();
+    const finalToken = ld.access_token || d.access_token;
+    const userId = d.user_id;
+
+    // Step 4: Verify with /me
+    const me = await (await fetch('https://graph.threads.net/v1.0/me?fields=id,username', {
+      headers:{Authorization:'Bearer '+finalToken}
+    })).json();
+
+    if (me.id) {
+      // Step 5: Save to DB
+      await saveToken(finalToken, me.id);
+      window.history.replaceState({}, '', '/threads-callback.html');
+      document.getElementById('status').className = 'status ok';
+      document.getElementById('status').innerHTML = '✅ Threads connected! @'+me.username+' (ID: '+me.id+')';
+      document.getElementById('detail').innerHTML = '<p style="font-size:12px;color:#64748b">Token saved to database. Long-lived token valid ~60 days.</p>'
+        +'<button onclick="window.location.href=\'/marketing.html\'">→ Back to Marketing Portal</button>';
+    } else {
+      document.getElementById('status').className = 'status err';
+      document.getElementById('status').textContent = '❌ /me failed: ' + JSON.stringify(me);
+    }
+  } catch(e) {
+    document.getElementById('status').className = 'status err';
+    document.getElementById('status').textContent = '❌ Error: ' + e.message;
+  }
+}
+run();
+</script>
+</body>
+</html>
