@@ -29,41 +29,30 @@ const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 let _musicPreviewAudio = null;
 let _uploadedMusicURL = null;
 
-const MKT_MUSIC_TRACKS = [
-  // No music
-  { id:'none', label:'No Music (GIF only)', url:null, mood:'silent' },
-
-  // Upbeat Corporate — good for product launches, offers
-  { id:'upbeat_01', label:'Corporate Success', url:'https://cdn.pixabay.com/audio/2023/10/30/audio_a6ce2c4f14.mp3', mood:'upbeat' },
-  { id:'upbeat_02', label:'Positive Energy', url:'https://cdn.pixabay.com/audio/2022/10/25/audio_946b00229d.mp3', mood:'upbeat' },
-  { id:'upbeat_03', label:'Business Motivation', url:'https://cdn.pixabay.com/audio/2023/04/05/audio_b4e11bff81.mp3', mood:'upbeat' },
-  { id:'upbeat_04', label:'Achievement', url:'https://cdn.pixabay.com/audio/2022/11/22/audio_febc508520.mp3', mood:'upbeat' },
-  { id:'upbeat_05', label:'Happy Corporate', url:'https://cdn.pixabay.com/audio/2023/01/16/audio_2bca9d30e0.mp3', mood:'upbeat' },
-
-  // Cinematic — premium feel, granite/tiles posts
-  { id:'cinematic_01', label:'Cinematic Opener', url:'https://cdn.pixabay.com/audio/2023/06/08/audio_0ddd9b5db5.mp3', mood:'cinematic' },
-  { id:'cinematic_02', label:'Epic Rise', url:'https://cdn.pixabay.com/audio/2022/08/02/audio_884fe92c21.mp3', mood:'cinematic' },
-  { id:'cinematic_03', label:'Grand Reveal', url:'https://cdn.pixabay.com/audio/2023/03/14/audio_2cc6be0e49.mp3', mood:'cinematic' },
-  { id:'cinematic_04', label:'Luxury Brand', url:'https://cdn.pixabay.com/audio/2022/12/23/audio_9ccd4e0df8.mp3', mood:'cinematic' },
-  { id:'cinematic_05', label:'Premium Feel', url:'https://cdn.pixabay.com/audio/2023/07/26/audio_2ad2afbe11.mp3', mood:'cinematic' },
-
-  // Energetic — offers, sales, contractor club
-  { id:'energy_01', label:'Power Drive', url:'https://cdn.pixabay.com/audio/2023/02/28/audio_7b40055b2a.mp3', mood:'energetic' },
-  { id:'energy_02', label:'Upbeat Action', url:'https://cdn.pixabay.com/audio/2022/10/16/audio_53f79e8f3f.mp3', mood:'energetic' },
-  { id:'energy_03', label:'Bold Move', url:'https://cdn.pixabay.com/audio/2023/05/18/audio_3feda12839.mp3', mood:'energetic' },
-
-  // Ambient — home, interiors, lifestyle
-  { id:'ambient_01', label:'Modern Home', url:'https://cdn.pixabay.com/audio/2023/01/25/audio_9f14a63462.mp3', mood:'ambient' },
-  { id:'ambient_02', label:'Relaxed Luxury', url:'https://cdn.pixabay.com/audio/2022/08/23/audio_d16737dc28.mp3', mood:'ambient' },
-  { id:'ambient_03', label:'Interior Vibes', url:'https://cdn.pixabay.com/audio/2023/04/19/audio_b2b3bf8b52.mp3', mood:'ambient' },
-
-  // Indian / Festive — festival posts, greetings
-  { id:'festive_01', label:'Festival Celebration', url:'https://cdn.pixabay.com/audio/2022/10/13/audio_24dc2cb1d6.mp3', mood:'festive' },
-  { id:'festive_02', label:'Celebration Bells', url:'https://cdn.pixabay.com/audio/2023/08/14/audio_a31a218d6a.mp3', mood:'festive' },
-
-  // Upload custom
-  { id:'upload', label:'📁 Upload Your Own MP3', url:'__upload__', mood:'custom' }
+let MKT_MUSIC_TRACKS = [
+  { id:'none', label:'No Music (GIF only)', url:null, mood:'silent', attribution:null }
 ];
+
+// Load tracks from DB on startup
+async function loadMusicTracks() {
+  try {
+    const { data } = await sb.from('music_tracks').select('*').eq('is_active', true).order('mood').order('title');
+    if (data && data.length) {
+      MKT_MUSIC_TRACKS = [
+        { id:'none', label:'No Music (GIF only)', url:null, mood:'silent', attribution:null },
+        ...data.map(t => ({
+          id: t.id,
+          label: t.title + (t.artist ? ' — ' + t.artist : ''),
+          url: t.public_url,
+          mood: t.mood,
+          attribution: t.attribution_text
+        })),
+        { id:'upload', label:'📁 Upload Your Own MP3', url:'__upload__', mood:'custom', attribution:null }
+      ];
+    }
+  } catch(e) { console.warn('Music tracks load failed:', e); }
+}
+
 
 
 // ── Auto poster generation via generate-poster-v2 ──
@@ -210,6 +199,7 @@ window._mktLoginReady = mktLogin; // signals stub that real function is ready
 
 
 function showMktApp() {
+  loadMusicTracks(); // load music library from DB
   document.getElementById('mkt-login').style.display = 'none';
   document.getElementById('mkt-layout').style.display = 'flex';
   // Repair access BEFORE painting the label — otherwise an admin whose
@@ -7883,31 +7873,22 @@ async function calRegenerateItem(calendarId) {
 // ── ROYALTY-FREE MUSIC TRACKS ──
 
 function mktMusicPickerHTML(selectedId = 'none') {
-  const grouped = [
-    { label:'🔇 No Music (GIF only)', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='silent') },
-    { label:'⚡ Upbeat Corporate', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='upbeat') },
-    { label:'🎬 Cinematic Premium', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='cinematic') },
-    { label:'🔥 Energetic', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='energetic') },
-    { label:'🏠 Ambient Home', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='ambient') },
-    { label:'🎉 Festive', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='festive') },
-    { label:'📁 Custom Upload', options: MKT_MUSIC_TRACKS.filter(t=>t.mood==='custom') },
-  ];
-  const optgroups = grouped.map(g => g.options.length ? '<optgroup label="'+g.label+'">'+ g.options.map(t=>'<option value="'+t.id+'" '+(t.id===selectedId?'selected':'')+'>'+t.label+'</option>').join('')+'</optgroup>' : '').join('');
-  return `<div style="margin-bottom:12px">
-    <label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">🎵 MUSIC <span style="font-weight:400;color:#475569">(royalty-free · with music → MP4)</span></label>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select id="mkt-music-select" name="mkt-music-select" onchange="mktMusicSelectChange(this)"
-        style="flex:1;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:8px;font-size:12px">
-        ${optgroups}
-      </select>
-      <button onclick="mktPreviewMusicFromSelect()" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);color:#c9a84c;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;white-space:nowrap">▶ Preview</button>
-    </div>
-    <div id="mkt-music-status" style="font-size:10px;color:#22c55e;margin-top:4px"></div>
-    <div id="mkt-music-upload-wrap" style="display:none;margin-top:6px">
-      <input type="file" id="music-upload-input" accept="audio/*,audio/mp3" onchange="mktHandleMusicUpload(this)" style="font-size:11px;color:#64748b;width:100%">
-    </div>
-    <input type="hidden" id="mkt-music-value" name="mkt-music" value="${selectedId}">
-  </div>`;
+  const moodLabels = {silent:'🔇 No Music',upbeat:'⚡ Upbeat Corporate',cinematic:'🎬 Cinematic',energetic:'🔥 Energetic',ambient:'🏠 Ambient Home',festive:'🎉 Festive',custom:'📁 Custom Upload'};
+  const moods = ['silent','upbeat','cinematic','energetic','ambient','festive','custom'];
+  const grouped = moods.map(m=>({label:moodLabels[m]||m,options:MKT_MUSIC_TRACKS.filter(t=>t.mood===m)})).filter(g=>g.options.length);
+  const optgroups = grouped.map(g=>'<optgroup label="'+g.label+'">'+g.options.map(t=>'<option value="'+t.id+'" '+(t.id===selectedId?'selected':'')+'>'+t.label+'</option>').join('')+'</optgroup>').join('');
+  const sel = MKT_MUSIC_TRACKS.find(t=>t.id===selectedId);
+  return '<div style="margin-bottom:12px">'
+    +'<label style="font-size:11px;font-weight:700;color:#94a3b8;display:block;margin-bottom:6px">🎵 MUSIC <span style="font-weight:400;color:#475569">(CC-BY · attribution auto-added to caption)</span></label>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<select id="mkt-music-select" name="mkt-music-select" onchange="mktMusicSelectChange(this)" style="flex:1;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:8px;font-size:12px">'+optgroups+'</select>'
+    +'<button onclick="mktPreviewMusicFromSelect()" style="background:rgba(201,168,76,.15);border:1px solid rgba(201,168,76,.4);color:#c9a84c;padding:7px 12px;border-radius:8px;cursor:pointer;font-size:12px;white-space:nowrap">▶ Preview</button>'
+    +'</div>'
+    +'<div id="mkt-music-attribution" style="font-size:10px;color:#64748b;margin-top:4px">'+(sel?.attribution||'')+'</div>'
+    +'<div id="mkt-music-status" style="font-size:10px;color:#22c55e;margin-top:2px"></div>'
+    +'<div id="mkt-music-upload-wrap" style="display:none;margin-top:6px"><input type="file" id="music-upload-input" accept="audio/*" onchange="mktHandleMusicUpload(this)" style="font-size:11px;color:#64748b;width:100%"></div>'
+    +'<input type="hidden" id="mkt-music-value" name="mkt-music" value="'+selectedId+'">'
+    +'</div>';
 }
 function mktMusicSelectChange(sel) {
   const val = sel.value;
