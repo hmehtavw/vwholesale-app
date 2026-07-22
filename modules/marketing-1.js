@@ -5579,7 +5579,7 @@ function gifStartGenerate(calendarId) {
 }
 
 
-async function calGenerateGif(calendarId, offerText, animStyle) {
+async function calGenerateGif(calendarId, offerText, animStyle, musicId) {
   // If not called from popup yet, show chooser first
   if (offerText === undefined && animStyle === undefined) {
     return showGifOptionsPopup(calendarId);
@@ -5590,7 +5590,7 @@ async function calGenerateGif(calendarId, offerText, animStyle) {
   if (isSlideshow) {
     return calGenerateGifSlideshow(calendarId);
   } else {
-    return calGenerateGifAnimated(calendarId, offerText || '', animStyle || 'cinematic');
+    return calGenerateGifAnimated(calendarId, offerText || '', animStyle || 'cinematic', musicId);
   }
 }
 
@@ -5929,12 +5929,13 @@ async function calGenerateGifSlideshow(calendarId) {
   }
 }
 
-async function calGenerateGifAnimated(calendarId, offerText, animStyle) {
+async function calGenerateGifAnimated(calendarId, offerText, animStyle, musicId) {
   const btn = document.getElementById(`gif-btn-${calendarId}`);
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
   let secs = 0;
   showMktToast('⏳ Generating Animated Poster GIF…', 5000);
   const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Animated GIF… ' + secs + 's', 5000); }, 3000);
+  const musicURL = musicId ? mktGetMusicURL(musicId) : null;
 
   try {
     // Generate captions
