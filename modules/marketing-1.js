@@ -5583,7 +5583,7 @@ function gifStartGenerate(calendarId) {
   const mode = btn?.dataset.mode || 'slideshow';
   const offer = ''; // Badge removed — AI poster has design baked in
   const style = mode === 'animated' ? (document.querySelector('input[name=gif-anim-style]:checked')?.value || 'cinematic') : '';
-  const musicId = 'none'; // Music added via Editor after generation
+  const musicId = 'none'; // Music added via Editor after generation — auto-selected on Post Now
   document.getElementById('gif-options-popup').remove();
   calGenerateGif(calendarId, mode === 'slideshow' ? null : offer, mode === 'slideshow' ? 'slideshow' : style, musicId);
 }
@@ -5647,16 +5647,17 @@ async function calGenerateGifSlideshow(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    // STEP 2: Generate 3 distinct slideshow frames (different content per slide)
-    showMktToast('⏳ Step 2/4: Generating 3 unique slide images (~3 min)…', 10000);
-    const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+    // STEP 2: Generate 3 distinct slideshow frames server-side
+    showMktToast('⏳ Step 2/4: Generating 3 unique AI slides (~3 min)…', 10000);
+    const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_slideshow_frames', calendar_id: parseInt(calendarId) })
+      body: JSON.stringify({ action: 'generate_slideshow', calendar_id: parseInt(calendarId) })
     });
     const slidesData = await slidesRes.json();
-    if (!slidesData.ok) throw new Error('Slideshow frame generation failed: ' + (slidesData.error || ''));
+    if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || ''));
+    const frameUrls = slidesData.frame_urls || [];
+    showMktToast('✅ ' + frameUrls.length + '/3 slides generated — encoding GIF…', 3000);
 
-    showMktToast('✅ 3 unique slides generated — encoding GIF…', 3000);
     let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     let pi = posterItem_check.data?.platform_images || {};
     const posterItem = posterItem_check.data;
@@ -5668,17 +5669,13 @@ async function calGenerateGifSlideshow(calendarId) {
       { key: 'landscape', gifW: 720, gifH: 480, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
     ]
     // Fetch slideshow frames via edge function proxy (avoids browser CORS for GIF encoding)
-    showMktToast('⏳ Fetching slide images…', 5000);
-    const proxyRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+    showMktToast('⏳ Fetching slide images for GIF encoding…', 5000);
+    const slideUrls = frameUrls.length ? 
+      {square: frameUrls[0], story: frameUrls[1]||frameUrls[0], landscape: frameUrls[2]||frameUrls[0]} :
+      {square: pi.instagram_feed, story: pi.instagram_story, landscape: pi.facebook_post};
+    const proxyRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({
-        action: 'fetch_images_b64',
-        urls: {
-          square: pi.instagram_feed,    // slide 1
-          story: pi.instagram_story,    // slide 2
-          landscape: pi.facebook_post   // slide 3
-        }
-      })
+      body: JSON.stringify({ action: 'fetch_images_b64', urls: slideUrls })
     });
     const proxyData = await proxyRes.json();
     if (!proxyData.ok) throw new Error('Image fetch failed: ' + (proxyData.error||JSON.stringify(proxyData).slice(0,100)));
@@ -7851,6 +7848,20 @@ function mktMusicSelectChange(sel) {
   const wrap = document.getElementById('mkt-music-upload-wrap');
   if (wrap) wrap.style.display = val === 'upload' ? 'block' : 'none';
 }
+// Auto-select music based on content type
+function autoSelectMusicId(contentType) {
+  const defaults = {
+    gif: 'upbeat_corporate',
+    reel: 'energetic_power',
+    festival: 'festive_celebration',
+    image: 'ambient_home',
+    poster: 'ambient_home'
+  };
+  const mood = defaults[contentType] || 'upbeat_corporate';
+  const track = MKT_MUSIC_TRACKS.find(t => t.mood !== 'silent' && t.mood !== 'custom' && (t.id.startsWith(mood.split('_')[0]) || t.mood === mood.split('_')[0]));
+  return track?.id || (MKT_MUSIC_TRACKS.find(t => t.mood !== 'silent' && t.mood !== 'custom')?.id) || 'none';
+}
+
 window.mktMusicSelectChange = mktMusicSelectChange;
 function mktPreviewMusicFromSelect() {
   const sel = document.getElementById('mkt-music-select');
@@ -7972,6 +7983,26 @@ window.calGeneratePosters = calGeneratePosters;
 async function calPostNow(calendarId) {
   const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
   if (!item) { showMktNotif('No post found'); return; }
+
+  // AUTO-GENERATE: If GIF post has no images, generate them first
+  const pi0 = item.platform_images || {};
+  const isGifType = item.content_type === 'gif';
+  const hasImages = pi0.instagram_feed || pi0.image_url || item.image_url;
+  const hasGif = pi0.square_gif || pi0.gif;
+
+  if (!hasImages) {
+    showMktNotif('⏳ Auto-generating posters first…');
+    try {
+      await calGeneratePosters(calendarId);
+    } catch(e) { showMktNotif('❌ Auto-poster failed: ' + e.message); return; }
+  }
+
+  if (isGifType && !hasGif) {
+    showMktNotif('⏳ Auto-generating GIF slideshow…');
+    try {
+      await calGenerateGif(calendarId, null, 'slideshow', 'none');
+    } catch(e) { console.warn('Auto-GIF failed:', e); }
+  }
   const { data: settings } = await sb.from('marketing_settings').select('key,value')
     .in('key', ['META_IG_ID','META_PAGE_ID','META_PAGE_ID_2','META_SYSTEM_USER_TOKEN','THREADS_ACCESS_TOKEN','THREADS_NUMERIC_ID','META_WA_PHONE_ID','META_WA_TOKEN','META_WA_OWNER_PHONE']);
   const cfg = {}; (settings||[]).forEach(s => cfg[s.key] = s.value);
@@ -8328,7 +8359,21 @@ async function calPostNowExecute(calendarId) {
         const ytDesc = (item.caption||'')+(item.hashtags?.length?'\n\n'+item.hashtags.join(' '):'')+'\n\nV Wholesale Vijayawada | Build Better, Pay Less\n📞 +91 8712697930 | 🌐 vwholesale.in';
         const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map(h=>h.replace('#',''))];
 
-        if (!ytVid) { error='No video file — encode MP4 first via Editor'; }
+        if (!ytVid) {
+          // Auto-generate: regen GIF then retry
+          showMktUpdateStatus(ch, '⏳ No video — regenerating…');
+          try {
+            await calGenerateGif(item.id, null, 'cinematic', 'none');
+            const{data:refreshed}=await sb.from('content_calendar').select('platform_images').eq('id',item.id).single();
+            const rpi=refreshed?.platform_images||{};
+            const retryVid=rpi['youtube_mp4']||rpi['instagram_feed_mp4']||rpi['mp4_music']||rpi['square_gif']||item.image_url;
+            if(retryVid){
+              const ytRes2=await(await fetch(MKT_SB_URL+'/functions/v1/youtube-upload',{method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},body:JSON.stringify({action:'upload_video',video_url:retryVid,title:ytTitle,description:ytDesc.slice(0,5000),tags:ytTags.slice(0,15),privacy:'public',is_short:isShort})})).json();
+              if(ytRes2.ok){ok=true;postId=ytRes2.video_id;}
+              else error='YouTube (after regen): '+(ytRes2.error||'Upload failed');
+            } else { error='No video even after regen'; }
+          } catch(regenErr) { error='Auto-regen failed: '+regenErr.message; }
+        }
         else {
           const ytRes = await (await fetch(MKT_SB_URL+'/functions/v1/youtube-upload',{
             method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
