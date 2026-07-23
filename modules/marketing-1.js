@@ -8255,19 +8255,27 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='instagram_story') {
         if (!cfg.META_IG_ID||!st) { error='Instagram not configured'; }
         else {
+          const storyMp4 = pi['instagram_story_mp4'] || null;
           const storyImg = pi['instagram_story'] || pi['instagram_feed'] || item.image_url;
+          const storyPayload = storyMp4
+            ? {video_url:storyMp4, media_type:'STORIES'}
+            : {image_url:storyImg, media_type:'STORIES'};
           const cr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media',{method:'POST',
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-            body:JSON.stringify({image_url:storyImg,media_type:'STORIES'})})).json();
+            body:JSON.stringify(storyPayload)})).json();
           if(cr.id){
-            // Wait for container to be ready
-            await new Promise(r=>setTimeout(r,4000));
-            // Check status
-            const sr=await(await fetch(META_API+'/'+cr.id+'?fields=status_code,status',
-              {headers:{'Authorization':'Bearer '+st}})).json();
-            if(sr.status_code==='ERROR'||sr.status_code==='EXPIRED'){
-              error='Story container '+sr.status_code+': '+sr.status;
+            if (storyMp4) {
+              setStatus(ch,'⏳','Processing story video…','#f59e0b');
+              for(let i=0;i<15;i++){
+                await new Promise(r=>setTimeout(r,3000));
+                const s=await(await fetch(META_API+'/'+cr.id+'?fields=status_code',{headers:{'Authorization':'Bearer '+st}})).json();
+                if(s.status_code==='FINISHED')break;
+                if(s.status_code==='ERROR'){error='Story video processing failed';break;}
+              }
             } else {
+              await new Promise(r=>setTimeout(r,4000));
+            }
+            if (!error) {
               const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
                 headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
                 body:JSON.stringify({creation_id:cr.id})})).json();
