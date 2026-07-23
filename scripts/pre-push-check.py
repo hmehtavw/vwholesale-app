@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+import subprocess as _sp
+print("[0] Syntax check (node --check)...")
+for fname in ['modules/marketing-1.js','modules/marketing-2.js','modules/marketing-gif.js','modules/marketing-inbox.js']:
+    r = _sp.run(['node','--check',fname], capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  ❌ {fname}: {r.stderr.strip()}")
+        sys.exit(1)
+    print(f"  ✅ {fname}")
 """V Wholesale Pre-Push Checker — run before every git push"""
 import re, sys, os, subprocess
 
