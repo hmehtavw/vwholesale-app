@@ -5857,7 +5857,14 @@ async function calGenerateGifSlideshow(calendarId) {
           worker.onerror = e => { worker.terminate(); reject(new Error('GIF encode: ' + (e.message||e.type))); };
           worker.postMessage({ frames, width: W, height: H });
         });
-      } catch(e) { console.warn('GIF encode failed for', key, e); }
+      } catch(e) { console.warn('GIF encode failed for', key, e); r.gifError = e.message; }
+    }
+
+    // Check if any GIFs were produced
+    const gifCount = Object.values(formatResults).filter(r => r.gifBlob).length;
+    if (gifCount === 0) {
+      const workerErrors = Object.values(formatResults).map(r => r.gifError).filter(Boolean);
+      throw new Error('GIF encoding failed — ' + (workerErrors[0] || 'try Animated Poster mode instead'));
     }
 
     // STEP 4+5: Upload each format GIF + static posters, save all URLs to platform_images
