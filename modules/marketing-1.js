@@ -7783,39 +7783,81 @@ async function calRegenerateItem(calendarId) {
   const origText = btn ? btn.innerHTML : '';
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
 
-  // Ticking counter so user sees it's running
   let secs = 0;
-  showMktToast('⏳ Generating AI poster… 0s (takes ~90s)', 5000);
-  const ticker = setInterval(() => {
-    secs += 3;
-    showMktToast(`⏳ Generating AI poster… ${secs}s (takes ~90s)`, 5000);
-  }, 3000);
+  const ticker = setInterval(() => { secs += 3; showMktToast('⏳ Generating… ' + secs + 's', 5000); }, 3000);
 
   try {
-    const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
-      method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-      body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
-    });
-    clearInterval(ticker);
-    const data = await res.json();
-    if (data.ok) {
-      // Save to history after successful generation
-      const { data: updItem } = await sb.from('content_calendar').select('image_url,platform_images,caption,caption_te,hashtags,poster_message').eq('id', calendarId).single();
-      if (updItem) saveToHistory(calendarId, 'poster', {
-        image_url: updItem.image_url,
-        platform_images: updItem.platform_images,
-        caption_en: updItem.caption,
-        caption_te: updItem.caption_te,
-        hashtags: updItem.hashtags,
-        poster_message: updItem.poster_message,
-        prompt_summary: 'AI Poster — caption + image generated'
+    // Load item to detect content type
+    const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    if (!item) throw new Error('Item not found');
+
+    const isGif = item.content_type === 'gif';
+    const isReel = item.content_type === 'reel';
+
+    if (isGif) {
+      // GIF: caption first, then Railway generates 9 images + MP4 automatically
+      showMktToast('⏳ Step 1/2: Generating caption…', 5000);
+      const captionRes = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
       });
-      showMktToast('✅ Done! Check hmehta@vwholesale.in for approval email', 6000);
-      renderCalendar();
-    } else {
-      showMktToast('⚠️ ' + (data.error||'Generation failed'), 6000);
+      const captionData = await captionRes.json();
+      if (!captionData.ok) throw new Error('Caption failed: ' + (captionData.error||''));
+
+      showMktToast('⏳ Step 2/2: Sending to Railway for 9 images + MP4 (~5-8 min)…', 8000);
+
+      // Reset gif_status so Railway processes fresh
+      await sb.from('content_calendar').update({ gif_status: null, updated_at: new Date().toISOString() }).eq('id', calendarId);
+
+      // Fire Railway — generates everything in background
+      const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
+      const RAIL_SECRET = 'vw-render-2026-secret';
+      const fireRes = await fetch(RAIL_URL + '/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
+        body: JSON.stringify({ action: 'gif_slideshow', calendar_id: parseInt(calendarId) })
+      });
+      const fireData = await fireRes.json();
+      if (!fireData.ok) throw new Error('Railway rejected: ' + (fireData.error||''));
+
+      clearInterval(ticker);
       if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+      showMktNotif('✅ Caption done! Railway generating 9 images + MP4s in background (~5-8 min). Post will be ready soon.');
+
+      // Poll progress in background
+      const pollInterval = setInterval(async () => {
+        try {
+          const pr = await fetch(RAIL_URL + '/progress/' + calendarId);
+          const pd = await pr.json();
+          if (pd.status === 'ready') {
+            clearInterval(pollInterval);
+            showMktNotif('✅ GIF post ready! All 9 images + 3 MP4s generated. Click 🚀 Post Now.');
+            renderCalendar();
+          } else if (pd.progress?.step) {
+            showMktToast('⏳ Railway: ' + pd.progress.step + ' (' + (pd.progress.done||0) + '/' + (pd.progress.total||9) + ')…', 11000);
+          }
+        } catch(e) {}
+      }, 10000);
+      setTimeout(() => clearInterval(pollInterval), 600000);
+      renderCalendar();
+
+    } else {
+      // Image/Festival/Reel: standard generate_single
+      showMktToast('⏳ Generating caption + poster…', 5000);
+      const res = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
+        method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+        body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
+      });
+      clearInterval(ticker);
+      const data = await res.json();
+      if (data.ok) {
+        showMktToast('✅ Done! Approval email sent to hmehta@vwholesale.in', 6000);
+        renderCalendar();
+      } else {
+        throw new Error(data.error || 'Generation failed');
+      }
     }
+
   } catch(e) {
     clearInterval(ticker);
     showMktToast('❌ ' + e.message, 6000);
