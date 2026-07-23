@@ -25,13 +25,19 @@ const SCOPE = 'https://www.googleapis.com/auth/youtube.upload https://www.google
 const main = document.getElementById('main');
 
 async function getCredentials() {
-  const r = await fetch(SB_URL+'/rest/v1/marketing_settings?key=in.("YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET")&select=key,value', {
-    headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}
-  });
-  const d = await r.json();
-  const obj = {};
-  d.forEach(i=>obj[i.key]=i.value);
-  return obj;
+  try {
+    const r = await fetch(SB_URL+'/rest/v1/marketing_settings?select=key,value&key=in.("YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET")', {
+      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}
+    });
+    const d = await r.json();
+    if (Array.isArray(d) && d.length) {
+      const obj = {};
+      d.forEach(i=>obj[i.key]=i.value);
+      return obj;
+    }
+  } catch(e) {}
+  // DB fetch failed - show manual entry form
+  return {};
 }
 
 async function saveTokens(tokens) {
@@ -63,9 +69,9 @@ async function run() {
     const creds = await getCredentials();
     if (!creds.YOUTUBE_CLIENT_ID) {
       main.innerHTML = `
-        <div class="step">⚠️ No OAuth credentials found. Enter your Google OAuth Client ID and Secret below:</div>
-        <input id="cid" placeholder="Client ID (ends in .apps.googleusercontent.com)">
-        <input id="csec" placeholder="Client Secret" type="password">
+        <div class="step">⚠️ Enter your Google OAuth credentials:</div>
+        <input id="cid" placeholder="Client ID" value="825770975900-hu3d3edgjaup25ec16vin7jpjs4phlo5.apps.googleusercontent.com">
+        <input id="csec" placeholder="Client Secret (from Google Cloud Console)" type="password">
         <button onclick="saveAndAuth()">Save & Authorize</button>
         <div class="step" style="margin-top:12px">
           <strong>How to get these:</strong><br>
