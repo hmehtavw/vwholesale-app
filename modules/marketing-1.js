@@ -5657,14 +5657,18 @@ async function calGenerateGifSlideshow(calendarId) {
 
     showMktToast('⏳ Firing Railway renders…', 5000);
 
-    // Fire Railway renders - don't wait, they save to DB in background
-    showMktToast('⏳ Firing MP4 renders to Railway…', 5000);
+    // Fire Railway directly (fire-and-forget, Railway responds in <1s)
+    const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
+    const RAIL_SECRET = 'vw-render-2026-secret';
+
     renderFormats.forEach(fmt => {
-      fetch(MKT_SB_URL + '/functions/v1/render-media', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      fetch(RAIL_URL + '/render', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
         body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
-          format_key:fmt.key, image_urls:fmt.urls, music_url:musicURL||null, duration:3 })
-      }).catch(e => console.warn('[render fire]', fmt.key, e.message));
+          format_key:fmt.key, image_urls:fmt.urls, duration:3 })
+      }).then(r => r.json()).then(d => console.log('[railway direct]', fmt.key, d.status))
+        .catch(e => console.warn('[railway direct]', fmt.key, e.message));
     });
 
     const mp4Count = renderFormats.length;
