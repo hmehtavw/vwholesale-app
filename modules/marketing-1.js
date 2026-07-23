@@ -5687,45 +5687,17 @@ async function calGenerateGifSlideshow(calendarId) {
 
     showMktToast('⏳ Firing Railway renders…', 5000);
 
-    // Fire all 3 simultaneously (Railway responds immediately, renders in background)
-    await Promise.all(renderFormats.map(fmt =>
+    // Fire Railway renders - don't wait, they save to DB in background
+    showMktToast('⏳ Firing MP4 renders to Railway…', 5000);
+    renderFormats.forEach(fmt => {
       fetch(MKT_SB_URL + '/functions/v1/render-media', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
         body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
           format_key:fmt.key, image_urls:fmt.urls, music_url:musicURL||null, duration:3 })
-      }).catch(e => console.warn('[render fire]', fmt.key, e.message))
-    ));
+      }).catch(e => console.warn('[render fire]', fmt.key, e.message));
+    });
 
-    // Poll Railway /status until MP4s ready (max 90s per format)
-    showMktToast('⏳ Railway rendering MP4s (~60s)…', 10000);
-    const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
-    const RAIL_SECRET = 'vw-render-2026-secret';
-    const formatKeys = renderFormats.map(f => f.key);
-    const ready = {};
-    const pollStart = Date.now();
-
-    while (Object.keys(ready).length < formatKeys.length && Date.now() - pollStart < 90000) {
-      await new Promise(r => setTimeout(r, 8000)); // poll every 8s
-      for (const fmtKey of formatKeys) {
-        if (ready[fmtKey]) continue;
-        try {
-          const sr = await fetch(RAIL_URL + '/status/' + calendarId + '/' + fmtKey,
-            { headers: { 'x-worker-secret': RAIL_SECRET } });
-          if (!sr.ok) continue;
-          const sd = await sr.json();
-          if (sd.ready && sd.mp4_url) {
-            ready[fmtKey] = sd.mp4_url;
-            showMktToast('✅ ' + fmtKey + ' MP4 ready! (' + Object.keys(ready).length + '/' + formatKeys.length + ')', 3000);
-          }
-        } catch(e) { console.warn('[poll]', fmtKey, e.message); }
-      }
-    }
-
-    const mp4Count = Object.keys(ready).length;
-    if (mp4Count === 0) {
-      // Railway may still be processing — proceed with static images
-      showMktToast('⚠️ MP4 still processing — posting static images now, MP4 will be ready soon', 5000);
-    }
+    const mp4Count = renderFormats.length;
 
     // Reload pi with saved MP4 URLs
     const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
