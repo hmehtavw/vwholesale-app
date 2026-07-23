@@ -5682,7 +5682,7 @@ async function calGenerateGifSlideshow(calendarId) {
       })
     });
     const proxyData = await proxyRes.json();
-    if (!proxyData.ok) throw new Error('Image fetch failed: ' + (proxyData.error||''));
+    if (!proxyData.ok) throw new Error('Image fetch failed: ' + (proxyData.error||JSON.stringify(proxyData).slice(0,100)));
 
     const formatResults = {};
     for (const fmt of GIF_FORMATS) {
