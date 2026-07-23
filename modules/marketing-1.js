@@ -5605,6 +5605,7 @@ async function calGenerateGif(calendarId, offerText, animStyle, musicId) {
 }
 
 async function calGenerateGifSlideshow(calendarId) {
+  const musicURL = null; // Music added via Editor — slideshow uses no music by default
 
   const btn = document.getElementById(`gif-btn-${calendarId}`);
   if (btn) { btn.innerHTML = '⏳'; btn.disabled = true; }
