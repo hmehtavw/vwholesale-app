@@ -5738,8 +5738,8 @@ async function calGenerateGifSlideshow(calendarId) {
         const TOTAL_FRAMES = HOLD + FADE * 2;
         const frames = [];
         const headline = posterItem?.topic || '';
-        const offerTxt = offerText || '';
-        const isCinematic = (animStyle || 'cinematic') === 'cinematic';
+        const offerTxt = ''; // slideshow mode — no offer badge
+        const isCinematic = true; // slideshow always cinematic
 
         // Draw base poster scaled to canvas
         const baseScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
