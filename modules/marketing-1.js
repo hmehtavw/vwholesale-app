@@ -7687,34 +7687,32 @@ async function calPreviewPost(calendarId) {
       ? 'width:55%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin:0 auto 8px auto;display:block'
       : 'width:100%;aspect-ratio:' + aspect + ';object-fit:cover;border-radius:8px;margin-bottom:8px;display:block';
 
-    const mediaHtml = (() => {
-      if (isGifPost) {
-        // For GIF posts: show MP4 player if available, else show 3 slides
-        const mp4Keys = {
-          instagram_feed: 'instagram_feed_mp4', threads: 'threads_mp4',
-          instagram_story: 'instagram_story_mp4', facebook_story: 'facebook_story_mp4',
-          whatsapp_story: 'whatsapp_story_mp4', facebook_post: 'facebook_post_mp4',
-          youtube: 'youtube_mp4', gbp: 'gbp_mp4'
-        };
-        const mp4Url = pi[mp4Keys[ch]];
-        if (mp4Url) {
-          const vidStyle = chImgStyle.replace('object-fit:cover','object-fit:contain');
-          return '<video src="'+mp4Url+'" style="'+vidStyle+'" controls muted playsinline></video><div style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px">🎬 MP4 ready for posting</div>';
+    let mediaHtml = '';
+    if (isGifPost) {
+      const mp4Keys = { instagram_feed:'instagram_feed_mp4', threads:'threads_mp4', instagram_story:'instagram_story_mp4', facebook_story:'facebook_story_mp4', whatsapp_story:'whatsapp_story_mp4', facebook_post:'facebook_post_mp4', youtube:'youtube_mp4', gbp:'gbp_mp4' };
+      const mp4Url = pi[mp4Keys[ch]] || null;
+      const slideKey = (ch.includes('story')||ch==='whatsapp_story') ? 'gif_slides_story' : (ch==='facebook_post'||ch==='youtube'||ch==='gbp') ? 'gif_slides_landscape' : 'gif_slides_square';
+      const slides = (pi[slideKey]||'').split('|').filter(Boolean);
+      if (mp4Url) {
+        const vidStyle = chImgStyle.replace('object-fit:cover','object-fit:contain');
+        mediaHtml = '<video src="' + mp4Url + '" style="' + vidStyle + '" controls muted playsinline></video><div style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px">🎬 MP4 ready</div>';
+      } else if (slides.length > 0) {
+        const cols = slides.length;
+        let divs = '';
+        for (let si = 0; si < slides.length; si++) {
+          divs += '<div style="position:relative"><img src="' + slides[si] + '" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px"><span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:8px;padding:1px 4px;border-radius:3px">Slide ' + (si+1) + '</span></div>';
         }
-        // No MP4 yet — show 3 slides side by side
-        const slideKey = ch.includes('story') || ch === 'whatsapp_story' ? 'gif_slides_story' :
-                         ch === 'facebook_post' || ch === 'youtube' || ch === 'gbp' ? 'gif_slides_landscape' : 'gif_slides_square';
-        const slides = (pi[slideKey]||'').split('|').filter(Boolean);
-        if (slides.length > 1) {
-          const slideDivs = slides.map((url,i) => '<div style="position:relative"><img src="'+url+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;background:#f5f0e8"><span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:8px;padding:1px 5px;border-radius:3px">Slide '+(i+1)+'</span></div>').join('');
-          return '<div style="display:grid;grid-template-columns:repeat('+slides.length+',1fr);gap:3px;margin-bottom:6px">'+slideDivs+'</div><div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">'+( mp4Url ? '🎬 MP4 ready' : '↕ Slideshow slides — MP4 rendering')+'</div>';
-        }
+        mediaHtml = '<div style="display:grid;grid-template-columns:repeat(' + cols + ',1fr);gap:3px;margin-bottom:6px">' + divs + '</div><div style="font-size:10px;color:var(--text3);text-align:center">↕ Slideshow MP4 rendering…</div>';
+      } else {
+        mediaHtml = '<div style="' + chImgStyle + ';background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">✨ Generating…</div>';
       }
-      // Default: image or video
-      if (!displayImg) return `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGifPost?'✨ Generating…':'📸 No image yet'}</div>`;
-      if (isVideo) return `<video src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')}" controls muted playsinline></video>`;
-      return `<img src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')};background:#f5f0e8" onerror="this.style.display='none'">`;
-    })();
+    } else if (!displayImg) {
+      mediaHtml = '<div style="' + chImgStyle + ';background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">' + (isVideo ? '🎬 No video yet' : '📸 No image yet') + '</div>';
+    } else if (isVideo) {
+      mediaHtml = '<video src="' + displayImg + '" style="' + chImgStyle.replace('object-fit:cover','object-fit:contain') + '" controls muted playsinline></video>';
+    } else {
+      mediaHtml = '<img src="' + displayImg + '" style="' + chImgStyle.replace('object-fit:cover','object-fit:contain') + ';background:#f5f0e8" onerror="this.style.display=\'none\'">';
+    }
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
     const dlFilename = isThisGif ? 'vwholesale.gif' : 'vwholesale.png';
