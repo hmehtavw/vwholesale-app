@@ -26,6 +26,11 @@
 const MKT_SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 
+// Strip content-type suffixes from topic for clean display
+function cleanTopic(topic) {
+  return (topic||'').replace(/\s*[—–-]\s*(GIF|Reel|Reels|Video|Slideshow|Animation|Animated|Campaign|GIF Campaign|GIF Comparison)\s*/gi, '').replace(/\b(GIF|Slideshow)\b/gi,'').trim();
+}
+
 let _musicPreviewAudio = null;
 let _uploadedMusicURL = null;
 
@@ -2255,7 +2260,7 @@ async function renderCommandCentre() {
       <div style="font-size:12px;font-weight:700;margin-bottom:10px">📅 Today's Content</div>
       ${todayCalItems.length ? todayCalItems.map(item=>`
       <div style="padding:8px;background:var(--bg3);border-radius:6px;margin-bottom:6px">
-        <div style="font-size:12px;font-weight:600">${item.topic||'Untitled'}</div>
+        <div style="font-size:12px;font-weight:600">${cleanTopic(item.topic)||'Untitled'}</div>
         <div style="font-size:10px;color:var(--text3);margin-top:2px">${item.content_type||'post'} · ${item.status||'planned'}</div>
         <div style="display:flex;gap:5px;margin-top:6px">
           ${item.is_reel
@@ -3667,7 +3672,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
       </div>
       <span style="font-size:18px">${icon}</span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.topic||'Untitled'}</div>
+        <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cleanTopic(item.topic)||'Untitled'}</div>
         <div style="font-size:10px;color:var(--text3)">${item.content_type||'post'} ${item.notes?'· '+item.notes.slice(0,40):''}</div>
       </div>
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
@@ -4508,7 +4513,7 @@ function calSelectDay(d, dateStr) {
           </div>
           <span class="badge ${item.status==="published"?"badge-green":item.status==="ready"?"badge-blue":item.status==="scripted"?"badge-blue":"badge-gray"}">${item.status}</span>
         </div>
-        ${item.topic?`<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${item.topic}</div>`:""}
+        ${item.topic?`<div style="font-size:11px;color:var(--text2);margin-bottom:6px">${cleanTopic(item.topic)}</div>`:""}
         ${item.reel_script?`<div style="font-size:11px;background:var(--bg2);border-radius:6px;padding:8px;white-space:pre-wrap;margin-bottom:6px;line-height:1.5">${item.reel_script}</div>`:""}
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="mkt-btn mkt-btn-primary" onclick="generateCalItemContent(${item.id})" style="font-size:10px;padding:3px 8px">🤖 Generate Content</button>
@@ -7738,7 +7743,7 @@ async function calPreviewPost(calendarId) {
   <div style="max-width:520px;margin:0 auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
-        <div style="font-size:16px;font-weight:900;color:var(--text1)">${item.topic}</div>
+        <div style="font-size:16px;font-weight:900;color:var(--text1)">${cleanTopic(item.topic)}</div>
         <div style="font-size:11px;color:var(--text3)">${postDate} · ${item.post_time||'10:00'} IST · ${item.content_type||'image'}</div>
       </div>
       <button onclick="document.getElementById('cal-preview-overlay').remove()" class="mkt-btn mkt-btn-ghost" style="padding:6px 12px">✕ Close</button>
@@ -8059,7 +8064,7 @@ async function calPostNow(calendarId) {
 
   pop.innerHTML = '<div style="background:#1e293b;border-radius:14px;padding:24px;max-width:480px;width:100%;border:1px solid #334155;max-height:90vh;overflow-y:auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
-    +'<div style="font-size:14px;font-weight:900;color:#f1f5f9">🚀 Post Now — '+item.topic.slice(0,40)+'</div>'
+    +'<div style="font-size:14px;font-weight:900;color:#f1f5f9">🚀 Post Now — '+cleanTopic(item.topic).slice(0,40)+'</div>'
     +'<button onclick="document.getElementById(\'postnow-popup\').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:20px">✕</button>'
     +'</div>'
     +'<div style="font-size:11px;color:#64748b;margin-bottom:12px">Posts from your browser directly — no scheduling</div>'
