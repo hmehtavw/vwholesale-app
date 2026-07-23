@@ -46,28 +46,16 @@ async function run() {
   if (code) {
     main.innerHTML = '<div class="step">⏳ Exchanging code for tokens…</div>';
     try {
-      // Get secret from DB
-      const sr = await fetch(SB_URL+'/rest/v1/marketing_settings?select=key,value&key=eq.YOUTUBE_CLIENT_SECRET',
-        {headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
-      const sd = await sr.json();
-      const secret = sd[0]?.value;
-      if (!secret) throw new Error('Client secret not found in DB');
-
-      const tr = await fetch('https://oauth2.googleapis.com/token', {
+      // Exchange code via edge function (has access to secret)
+      const tr = await fetch(SB_URL+'/functions/v1/youtube-upload', {
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({code, client_id:CLIENT_ID, client_secret:secret,
-          redirect_uri:REDIRECT, grant_type:'authorization_code'})
+        headers:{'Content-Type':'application/json','apikey':SB_KEY},
+        body: JSON.stringify({action:'exchange_code', code, redirect_uri:REDIRECT})
       });
       const td = await tr.json();
-      if (!td.access_token) throw new Error(JSON.stringify(td));
+      if (!td.access_token) throw new Error(td.error||JSON.stringify(td));
 
-      // Save tokens
-      await saveToDb([
-        {key:'YOUTUBE_ACCESS_TOKEN', value:td.access_token, updated_at:new Date().toISOString()},
-        {key:'YOUTUBE_REFRESH_TOKEN', value:td.refresh_token||'', updated_at:new Date().toISOString()},
-        {key:'YOUTUBE_TOKEN_EXPIRY', value:new Date(Date.now()+(td.expires_in||3600)*1000).toISOString(), updated_at:new Date().toISOString()}
-      ]);
+      // Tokens already saved by edge function
 
       // Verify
       const mr = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
