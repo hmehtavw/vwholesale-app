@@ -28,7 +28,11 @@ const MKT_SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSI
 
 // Strip content-type suffixes from topic for clean display
 function cleanTopic(topic) {
-  return (topic||'').replace(/\s*[—–-]\s*(GIF|Reel|Reels|Video|Slideshow|Animation|Animated|Campaign|GIF Campaign|GIF Comparison)\s*/gi, '').replace(/\b(GIF|Slideshow)\b/gi,'').trim();
+  return (topic||'')
+    .replace(/\s*[—–\-]\s*(GIF|Reel|Reels|Video|Slideshow|Animation|Animated|Campaign|GIF Campaign|GIF Comparison|GIF Slideshow)\s*/gi, '')
+    .replace(/\b(GIF|Slideshow|Animated)\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 let _musicPreviewAudio = null;
@@ -5622,31 +5626,64 @@ async function calGenerateGifSlideshow(calendarId) {
     const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     if (!item) throw new Error('Calendar item not found');
 
-    // STEP 1: Use existing caption or generate quickly - skip full brief for slideshow
     const pi_init = item.platform_images || {};
-    const existingSlides = (pi_init.gif_slides_square||'').split('|').filter(Boolean);
-    let frameUrls = [];
     let pi = pi_init;
+    const slideImages = { square: [], story: [], landscape: [] };
+    const sqExist = (pi_init.gif_slides_square||'').split('|').filter(Boolean);
+    const stExist = (pi_init.gif_slides_story||'').split('|').filter(Boolean);
+    const lsExist = (pi_init.gif_slides_landscape||'').split('|').filter(Boolean);
 
-    if (existingSlides.length >= 3) {
-      showMktToast('✅ Using existing slides — creating MP4…', 3000);
-      frameUrls = existingSlides;
+    if (sqExist.length >= 3 && stExist.length >= 3 && lsExist.length >= 3) {
+      slideImages.square = sqExist; slideImages.story = stExist; slideImages.landscape = lsExist;
+      showMktToast('✅ Using existing 9 slides — firing Railway MP4 renders…', 3000);
     } else {
-      showMktToast('⏳ Step 2/4: Generating 3 unique AI slides (~3 min)…', 10000);
-      const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+      // Get themes first (fast)
+      showMktToast('⏳ Getting slide themes…', 5000);
+      const themesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action: 'generate_slideshow', calendar_id: parseInt(calendarId) })
+        body: JSON.stringify({ action: 'get_themes', topic: cleanTopic(item.topic) })
       });
-      const slidesData = await slidesRes.json();
-      if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || JSON.stringify(slidesData).slice(0,150)));
-      frameUrls = slidesData.frame_urls || [];
-      if (!frameUrls.length) throw new Error('Slide generation returned 0 frames — OpenAI may have failed. Check billing/quota.');
-    }
-    showMktToast('✅ ' + frameUrls.length + '/3 slides ready — creating MP4 via Railway…', 3000);
+      const themesData = await themesRes.json();
+      if (!themesData.ok || !themesData.slides?.length) throw new Error('Could not get slide themes from GPT');
+      const themes = themesData.slides;
+      const t = cleanTopic(item.topic).toLowerCase();
+      const scheme = t.includes('granite')||t.includes('tile') ? 'elegant cream charcoal stone' :
+        t.includes('monsoon')||t.includes('rain') ? 'calm blue grey rainy atmosphere' :
+        t.includes('bathroom') ? 'clean white chrome spa' :
+        t.includes('paint') ? 'warm terracotta sage green' :
+        item.is_festival ? 'festive gold jewel tones' : 'warm professional cream charcoal';
 
-    // Reload platform_images in case slides were just generated
-    const reloaded = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
-    pi = reloaded.data?.platform_images || pi;
+      // Generate 9 images one at a time — each call is <30s, no timeout
+      let imgCount = 0;
+      for (let si = 0; si < themes.length; si++) {
+        for (const szKey of ['square','story','landscape']) {
+          showMktToast('⏳ Slide ' + (si+1) + '/3 — ' + szKey + ' (' + imgCount + '/9 done)…', 35000);
+          try {
+            const genRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+              body: JSON.stringify({ action:'gen_one', calendar_id:parseInt(calendarId),
+                slide_idx:si+1, size_key:szKey, headline:themes[si].headline,
+                message:themes[si].message, angle:themes[si].angle, scheme, category_idx:si })
+            });
+            const genData = await genRes.json();
+            if (genData.ok && genData.url) { slideImages[szKey].push(genData.url); imgCount++; }
+            else console.warn('[gif] gen_one failed', si+1, szKey, genData.error);
+          } catch(e) { console.warn('[gif] gen_one error', e.message); }
+        }
+      }
+
+      if (!slideImages.square.length) throw new Error('No images generated — check OpenAI quota');
+
+      showMktToast('✅ ' + imgCount + '/9 images done — saving…', 3000);
+      const saveRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action:'save_slides', calendar_id:parseInt(calendarId), slide_images:slideImages })
+      });
+      const saveData = await saveRes.json();
+      if (saveData.platform_images) pi = saveData.platform_images;
+    }
+
+    const frameUrls = slideImages.square;
 
     // Create MP4 via render-media — fire all 3 in parallel, then poll for completion
     const renderFormats = [
