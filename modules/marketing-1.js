@@ -5656,6 +5656,7 @@ async function calGenerateGifSlideshow(calendarId) {
     const slidesData = await slidesRes.json();
     if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || ''));
     const frameUrls = slidesData.frame_urls || [];
+    if (!frameUrls.length) throw new Error('Slide generation returned 0 frames — OpenAI may have failed. Check billing/quota.');
     showMktToast('✅ ' + frameUrls.length + '/3 slides generated — encoding GIF…', 3000);
 
     let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
