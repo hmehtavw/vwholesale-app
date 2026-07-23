@@ -5677,40 +5677,48 @@ async function calGenerateGifSlideshow(calendarId) {
     const reloaded = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
     pi = reloaded.data?.platform_images || pi;
 
-    // Create MP4 via render-media (Railway primary, Cloudinary fallback)
-    // Run all 3 formats IN PARALLEL with 120s timeout each
+    // Create MP4 via render-media — fire all 3 in parallel, then poll for completion
     const renderFormats = [
       { key:'square',    urls: (pi.gif_slides_square||'').split('|').filter(Boolean) },
       { key:'story',     urls: (pi.gif_slides_story||'').split('|').filter(Boolean) },
       { key:'landscape', urls: (pi.gif_slides_landscape||'').split('|').filter(Boolean) },
     ].filter(fmt => fmt.urls.length > 0);
 
-    showMktToast('⏳ Creating MP4s in parallel via Railway…', 15000);
+    showMktToast('⏳ Firing Railway renders…', 5000);
 
-    const renderWithTimeout = async (fmt) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
-      try {
-        const renderRes = await (await fetch(MKT_SB_URL + '/functions/v1/render-media', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-          signal: controller.signal,
-          body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
-            format_key:fmt.key, image_urls:fmt.urls, music_url:musicURL||null, duration:3 })
-        })).json();
-        clearTimeout(timeout);
-        if (renderRes.ok) console.log('[render]', fmt.key, 'via', renderRes.provider, '✅');
-        else console.warn('[render]', fmt.key, 'failed:', renderRes.error);
-        return renderRes;
-      } catch(e) {
-        clearTimeout(timeout);
-        console.warn('[render]', fmt.key, 'error:', e.message);
-        return { ok: false, error: e.message };
+    // Fire all 3 simultaneously (Railway responds immediately, renders in background)
+    await Promise.all(renderFormats.map(fmt =>
+      fetch(MKT_SB_URL + '/functions/v1/render-media', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
+          format_key:fmt.key, image_urls:fmt.urls, music_url:musicURL||null, duration:3 })
+      }).catch(e => console.warn('[render fire]', fmt.key, e.message))
+    ));
+
+    // Poll Railway /status until all MP4s are ready (max 3 min)
+    showMktToast('⏳ Railway rendering MP4s — polling for completion…', 10000);
+    const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
+    const RAIL_SECRET = 'vw-render-2026-secret';
+    const formatKeys = renderFormats.map(f => f.key);
+    const ready = {};
+    const pollStart = Date.now();
+
+    while (Object.keys(ready).length < formatKeys.length && Date.now() - pollStart < 180000) {
+      await new Promise(r => setTimeout(r, 5000)); // poll every 5s
+      for (const fmtKey of formatKeys) {
+        if (ready[fmtKey]) continue;
+        try {
+          const sr = await fetch(RAIL_URL + '/status/' + calendarId + '/' + fmtKey,
+            { headers: { 'x-worker-secret': RAIL_SECRET } });
+          const sd = await sr.json();
+          if (sd.ready) { ready[fmtKey] = sd.mp4_url; }
+        } catch(e) {}
       }
-    };
+      const readyCount = Object.keys(ready).length;
+      showMktToast('⏳ Railway: ' + readyCount + '/' + formatKeys.length + ' MP4s ready…', 6000);
+    }
 
-    const renderResults = await Promise.all(renderFormats.map(renderWithTimeout));
-    const mp4Count = renderResults.filter(r => r.ok).length;
+    const mp4Count = Object.keys(ready).length;
 
     // Reload pi with saved MP4 URLs
     const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
