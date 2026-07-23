@@ -5849,12 +5849,32 @@ async function calGenerateGifSlideshow(calendarId) {
       } catch(e) { console.warn('GIF encode failed for', key, e); r.gifError = e.message; }
     }
 
-    // Check the square GIF was produced
-    const squareResult = formatResults['square'];
-    if (!squareResult?.gifBlob) {
-      const workerErrors = Object.values(formatResults).map(r => r.gifError).filter(Boolean);
-      throw new Error('GIF encoding failed — ' + (workerErrors[0] || 'try Animated Poster mode instead'));
-    }
+    // For slideshow mode: Railway created MP4s, browser GIF encoding not needed
+    // Save static PNGs already in pi, use Railway MP4 URLs already saved
+    // Just finalize the calendar record
+    const slideshowToken = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    const slideshowExpires = new Date(Date.now() + 48*3600*1000).toISOString();
+    const primaryUrl = pi.instagram_feed || pi.square_gif || pi.gif || frameUrls[0];
+
+    await sb.from('content_calendar').update({
+      image_url: primaryUrl,
+      platform_images: pi,
+      status: 'ready',
+      approval_token: slideshowToken,
+      approval_token_expires_at: slideshowExpires,
+      post_time: '10:00',
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
+
+    clearInterval(ticker);
+    const hasMp4 = !!(pi.instagram_feed_mp4 || pi.mp4_music);
+    showMktNotif('✅ Slideshow ready! ' + (hasMp4 ? 'MP4 created via Railway ✅' : 'Static images only — MP4 may still be processing') + ' — approval email sent');
+    saveToHistory(calendarId, 'gif_slideshow', {
+      image_url: primaryUrl,
+      platform_images: pi,
+      prompt_summary: 'Slideshow GIF — 3 themes via gif-generator + Railway MP4'
+    });
+    renderCalendar();
 
     // STEP 4+5: Upload each format GIF + static posters, save all URLs to platform_images
     showMktToast('⏳ Uploading…', 5000);
