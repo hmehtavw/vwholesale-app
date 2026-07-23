@@ -5714,6 +5714,10 @@ async function calGenerateGifSlideshow(calendarId) {
     pi = refreshed.data?.platform_images || pi;
     showMktToast('✅ ' + mp4Count + '/3 MP4s created via Railway+Cloudinary — ready to post!', 4000);
 
+    // Slideshow mode: Railway/Cloudinary handled MP4 above — skip browser GIF encoding
+    // (Browser GIF encoding only used for Animated Poster mode)
+    return; // Exit slideshow flow here
+
     // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
       { key: 'square',    gifW: 720, gifH: 720, staticKey: 'instagram_feed',  channels: ['instagram_feed','threads'] },
