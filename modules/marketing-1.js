@@ -8337,14 +8337,20 @@ async function calPostNowExecute(calendarId) {
         else {
           const waTarget = document.querySelector('input[name="wa-target"]:checked')?.value || 'owner';
           const waTemplate = document.getElementById('wa-template-select')?.value || 'image';
-          // WhatsApp: use static PNG for reliability (GIF works but PNG more compatible)
-          const waImg = pi['instagram_feed'] || pi['story_gif'] || pi['square_gif'] || pi['instagram_story'] || item.image_url;
+          // WhatsApp: use MP4 if available, else static PNG
+          const waMp4 = pi['whatsapp_story_mp4'] || pi['instagram_story_mp4'] || pi['instagram_feed_mp4'] || null;
+          const waImg = pi['instagram_feed'] || pi['instagram_story'] || item.image_url;
           const today = new Date();
           const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 
           // Build message payload based on selected template
           const buildPayload = (to, name) => {
             if (waTemplate === 'image') {
+              // Send video if available, else image
+              if (waMp4) {
+                return {messaging_product:'whatsapp',recipient_type:'individual',to,type:'video',
+                  video:{link:waMp4,caption:cap.slice(0,1024)}};
+              }
               return {messaging_product:'whatsapp',recipient_type:'individual',to,type:'image',
                 image:{link:waImg,caption:cap.slice(0,1024)}};
             }
