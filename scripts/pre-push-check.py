@@ -159,3 +159,15 @@ if r.returncode != 0:
     if real_errors:
         print(f"  ❌ marketing-1.js node --check: {real_errors[0]}")
         sys.exit(1)
+
+# Check for TypeScript syntax in JS files (crashes browsers)
+import re as _re
+for fname in ['modules/marketing-1.js','modules/marketing-2.js','modules/marketing-gif.js']:
+    try:
+        with open(fname) as f: js = f.read()
+        # Find (param:type) TypeScript annotations
+        ts_hits = _re.findall(r'\(\w+:\w+\)', js)
+        if ts_hits:
+            print(f"  ❌ {fname}: TypeScript annotations found: {ts_hits[:3]}")
+            sys.exit(1)
+    except: pass
