@@ -5647,24 +5647,18 @@ async function calGenerateGifSlideshow(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    // STEP 2: Use generate-poster-v2 — skip if posters already exist
+    // STEP 2: Generate 3 distinct slideshow frames (different content per slide)
+    showMktToast('⏳ Step 2/4: Generating 3 unique slide images (~3 min)…', 10000);
+    const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'generate_slideshow_frames', calendar_id: parseInt(calendarId) })
+    });
+    const slidesData = await slidesRes.json();
+    if (!slidesData.ok) throw new Error('Slideshow frame generation failed: ' + (slidesData.error || ''));
+
+    showMktToast('✅ 3 unique slides generated — encoding GIF…', 3000);
     let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     let pi = posterItem_check.data?.platform_images || {};
-    const hasPosters = pi.instagram_feed && pi.instagram_story && pi.facebook_post;
-
-    if (!hasPosters) {
-      showMktToast('⏳ Step 2: Generating posters (~3 min)…', 5000);
-      const posterRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action: 'generate_posters', calendar_id: parseInt(calendarId) })
-      });
-      const posterData = await posterRes.json();
-      if (!posterData.ok) throw new Error('Poster generation failed: ' + (posterData.error || ''));
-      posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-      pi = posterItem_check.data?.platform_images || {};
-    } else {
-      showMktToast('⏳ Using existing posters — encoding GIF…', 4000);
-    }
     const posterItem = posterItem_check.data;
 
     // Map poster URLs to GIF format structure
@@ -5673,16 +5667,16 @@ async function calGenerateGifSlideshow(calendarId) {
       { key: 'story',     gifW: 480, gifH: 720, staticKey: 'instagram_story', channels: ['instagram_story','facebook_story','whatsapp_story'] },
       { key: 'landscape', gifW: 720, gifH: 480, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
     ]
-    // Fetch poster images via edge function proxy (avoids browser CORS/tainted-canvas issues)
-    showMktToast('⏳ Fetching poster images…', 5000);
+    // Fetch slideshow frames via edge function proxy (avoids browser CORS for GIF encoding)
+    showMktToast('⏳ Fetching slide images…', 5000);
     const proxyRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
       body: JSON.stringify({
         action: 'fetch_images_b64',
         urls: {
-          square: pi.instagram_feed,
-          story: pi.instagram_story,
-          landscape: pi.facebook_post
+          square: pi.instagram_feed,    // slide 1
+          story: pi.instagram_story,    // slide 2
+          landscape: pi.facebook_post   // slide 3
         }
       })
     });
