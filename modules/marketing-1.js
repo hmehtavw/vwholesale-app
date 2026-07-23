@@ -5664,48 +5664,42 @@ async function calGenerateGifSlideshow(calendarId) {
     let pi = posterItem_check.data?.platform_images || {};
     const posterItem = posterItem_check.data;
 
-    // Create MP4 + GIF via Cloudinary for each format
-    const cldResults = {};
-    const cldFormats = [
+    // Create MP4 via render-media (Railway primary, Cloudinary fallback)
+    const renderFormats = [
       { key:'square',    urls: (pi.gif_slides_square||'').split('|').filter(Boolean) },
       { key:'story',     urls: (pi.gif_slides_story||'').split('|').filter(Boolean) },
       { key:'landscape', urls: (pi.gif_slides_landscape||'').split('|').filter(Boolean) },
     ];
 
-    for (const fmt of cldFormats) {
+    let mp4Count = 0;
+    for (const fmt of renderFormats) {
       if (!fmt.urls.length) continue;
-      showMktToast('⏳ Creating ' + fmt.key + ' MP4 via Cloudinary…', 8000);
+      showMktToast('⏳ Creating ' + fmt.key + ' MP4 (Railway/Cloudinary)…', 10000);
       try {
-        const cldRes = await (await fetch(MKT_SB_URL + '/functions/v1/cloudinary-media', {
+        const renderRes = await (await fetch(MKT_SB_URL + '/functions/v1/render-media', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-          body: JSON.stringify({ action: 'create_slideshow', calendar_id: parseInt(calendarId), image_urls: fmt.urls, format_key: fmt.key })
+          body: JSON.stringify({
+            action: 'slideshow',
+            calendar_id: parseInt(calendarId),
+            format_key: fmt.key,
+            image_urls: fmt.urls,
+            music_url: musicURL || null,
+            duration: 3
+          })
         })).json();
-        if (cldRes.ok) {
-          cldResults[fmt.key] = cldRes;
-          if (cldRes.mp4_url) {
-            if (fmt.key === 'square')    { pi.instagram_feed_mp4 = cldRes.mp4_url; pi.threads_mp4 = cldRes.mp4_url; pi.mp4_music = cldRes.mp4_url; }
-            if (fmt.key === 'story')     { pi.instagram_story_mp4 = cldRes.mp4_url; pi.facebook_story_mp4 = cldRes.mp4_url; }
-            if (fmt.key === 'landscape') { pi.facebook_post_mp4 = cldRes.mp4_url; pi.youtube_mp4 = cldRes.mp4_url; }
-          }
-          if (cldRes.gif_url) {
-            if (fmt.key === 'square') pi.square_gif = cldRes.gif_url;
-            if (fmt.key === 'story')  pi.story_gif = cldRes.gif_url;
-          }
-          console.log('[cloudinary]', fmt.key, 'mp4:', cldRes.mp4_url?.slice(-30));
+        if (renderRes.ok) {
+          mp4Count++;
+          console.log('[render]', fmt.key, 'via', renderRes.provider, renderRes.mp4_url?.slice(-40));
         } else {
-          console.warn('[cloudinary]', fmt.key, 'failed:', cldRes.error);
+          console.warn('[render]', fmt.key, 'failed:', renderRes.error);
         }
-      } catch(e) { console.warn('[cloudinary]', fmt.key, 'error:', e.message); }
+      } catch(e) { console.warn('[render]', fmt.key, 'error:', e.message); }
     }
 
-    // Save updated platform_images with MP4 URLs
-    await sb.from('content_calendar').update({
-      platform_images: pi,
-      updated_at: new Date().toISOString()
-    }).eq('id', calendarId);
-
-    const mp4Count = Object.values(cldResults).filter(r => r.mp4_url).length;
-    showMktToast('✅ ' + mp4Count + '/3 MP4s created — ready to post!', 4000);
+    // Reload pi with saved MP4 URLs
+    const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
+    pi = refreshed.data?.platform_images || pi;
+    showMktToast('✅ ' + mp4Count + '/3 MP4s created via Railway+Cloudinary — ready to post!', 4000);
 
     // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
