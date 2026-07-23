@@ -5678,13 +5678,6 @@ async function calGenerateGifSlideshow(calendarId) {
     // Clear poll after 10 min max
     setTimeout(() => clearInterval(pollInterval), 600000);
 
-    const mp4Count = renderFormats.length;
-
-    // Reload pi with saved MP4 URLs
-    const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
-    pi = refreshed.data?.platform_images || pi;
-    showMktToast('✅ ' + mp4Count + '/3 MP4s created via Railway+Cloudinary — ready to post!', 4000);
-
     // Slideshow mode: Railway/Cloudinary handled MP4 above — skip browser GIF encoding
     clearInterval(ticker);
     return; // Exit slideshow flow here
