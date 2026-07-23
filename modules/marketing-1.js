@@ -8303,7 +8303,7 @@ async function calPostNowExecute(calendarId) {
         const ytImg = pi['instagram_feed']||pi['facebook_post']||item.image_url;
         const ytTitle = (item.topic||'V Wholesale').slice(0,100);
         const ytDesc = (item.caption||'')+(item.hashtags?.length?'\n\n'+item.hashtags.join(' '):'')+'\n\nV Wholesale Vijayawada | Build Better, Pay Less\n📞 +91 8712697930 | 🌐 vwholesale.in';
-        const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map((h:string)=>h.replace('#',''))];
+        const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map(h=>h.replace('#',''))];
 
         if (!ytVid) { error='No video file — encode MP4 first via Editor'; }
         else {
