@@ -5689,29 +5689,26 @@ async function calGenerateGifSlideshow(calendarId) {
     }
     if (!Object.keys(formatResults).length) throw new Error('Could not load any poster images for GIF encoding');
 
-    // STEP 3: Encode each format as its own GIF (fade in → hold → fade out)
+    // STEP 3: Encode ONE square GIF crossfading all 3 slide images
     const loadImg = b64 => new Promise((res, rej) => {
       const i = new Image(); i.onload = () => res(i); i.onerror = rej;
       i.src = 'data:image/png;base64,' + b64;
     });
 
-    // Load gifenc once
-    // Load gifenc lib once for all formats
     const _gifencResp = await fetch('/assets/gifenc-worker.js');
     if (!_gifencResp.ok) throw new Error('gifenc load failed: HTTP ' + _gifencResp.status);
     const libSrc = await _gifencResp.text();
 
-    // For each format: generate 3 content-different frames at native size, then crossfade GIF
-    for (const key of Object.keys(formatResults)) {
+    // All 3 slide b64s (slide1=square, slide2=story, slide3=landscape)
+    const slideB64s = ['square','story','landscape'].map(k => formatResults[k]?.b64).filter(Boolean);
+
+    for (const key of ['square']) {
       const r = formatResults[key];
-      const fmt = r.fmt;
+      if (!r) continue;
+      const fmt = { key:'square', gifW:720, gifH:720, label:'Slideshow' };
+      const allB64s = slideB64s.length > 1 ? slideB64s : [r.b64];
 
-      // Slideshow: crossfade between all available poster formats
-      // Collect all format b64s for this slideshow cycle
-      const allFormatB64s = Object.values(formatResults).map(fr => fr.b64).filter(Boolean);
-      const allB64s = allFormatB64s.length > 1 ? allFormatB64s : [r.b64];
-
-      showMktToast('⏳ Encoding ' + fmt.label + ' GIF (' + allB64s.length + ' frames)…', 5000);
+      showMktToast('⏳ Encoding slideshow GIF (' + allB64s.length + ' slides)…', 5000);
 
       try {
         // Load all frames as images
@@ -5860,10 +5857,10 @@ async function calGenerateGifSlideshow(calendarId) {
       } catch(e) { console.warn('GIF encode failed for', key, e); r.gifError = e.message; }
     }
 
-    // Check if any GIFs were produced
-    const gifCount = Object.values(formatResults).filter(r => r.gifBlob).length;
-    if (gifCount === 0) {
-      const workerErrors = Object.values(formatResults).map(r => r.gifError).filter(Boolean);
+    // Check the square GIF was produced
+    const squareResult = formatResults['square'];
+    if (!squareResult?.gifBlob) {
+      const workerErrors = Object.values(formatResults).map((r:any) => r.gifError).filter(Boolean);
       throw new Error('GIF encoding failed — ' + (workerErrors[0] || 'try Animated Poster mode instead'));
     }
 
