@@ -5675,7 +5675,7 @@ async function calGenerateGifSlideshow(calendarId) {
       {square: pi.instagram_feed, story: pi.instagram_story, landscape: pi.facebook_post};
     const proxyRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'fetch_images_b64', urls: slideUrls })
+      body: JSON.stringify({ action: 'fetch_images_b64', calendar_id: parseInt(calendarId), urls: slideUrls })
     });
     const proxyData = await proxyRes.json();
     if (!proxyData.ok) throw new Error('Image fetch failed: ' + (proxyData.error||JSON.stringify(proxyData).slice(0,100)));
