@@ -5714,133 +5714,56 @@ async function calGenerateGifSlideshow(calendarId) {
         // Load all frames as images
         const imgs = await Promise.all(allB64s.map(b64 => loadImg(b64)));
         const W = fmt.gifW, H = fmt.gifH;
-        const FPS = 10, DELAY = 100;
-        const HOLD = 25;   // 2.5s hold
-        const FADE = 6;    // 0.6s crossfade
+        const DELAY = 100; // 100ms per frame = 10fps
+        const HOLD_FRAMES = 20;  // 2s per slide
+        const FADE_FRAMES = 8;   // 0.8s crossfade
 
         const can = document.createElement('canvas'); can.width = W; can.height = H;
         const ctx = can.getContext('2d');
-        const off = document.createElement('canvas'); off.width = W; off.height = H;
-        const oct = off.getContext('2d');
 
-        const blend = (a, b, t) => {
-          const out = new Uint8ClampedArray(a.length);
-          for (let p = 0; p < a.length; p++) out[p] = Math.round(a[p]*(1-t) + b[p]*t);
-          return out;
-        };
+        // Load all slide images
+        const slideImgs = await Promise.all(allB64s.map(b => loadImg(b)));
 
-        const img = imgs[0];
-        const TOTAL_FRAMES = HOLD + FADE * 2;
+        // Build frames: for each slide show HOLD then FADE to next
         const frames = [];
-        const headline = posterItem?.topic || '';
-        const offerTxt = ''; // slideshow mode — no offer badge
-        const isCinematic = true; // slideshow always cinematic
 
-        // Draw base poster scaled to canvas
-        const baseScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
-        const baseW = img.naturalWidth * baseScale;
-        const baseH = img.naturalHeight * baseScale;
-        const baseX = (W - baseW) / 2;
-        const baseY = (H - baseH) / 2;
+        for (let si = 0; si < slideImgs.length; si++) {
+          const imgA = slideImgs[si];
+          const imgB = slideImgs[(si + 1) % slideImgs.length];
 
-        for (let f = 0; f < TOTAL_FRAMES; f++) {
-          const t = f / (TOTAL_FRAMES - 1); // 0→1 overall progress
-          // Fade envelope
-          const fadeAlpha = f < FADE ? f / FADE : f > TOTAL_FRAMES - FADE ? (TOTAL_FRAMES - f) / FADE : 1;
-          // Text animation progress (0→1 during middle hold section)
-          const textT = f < FADE ? 0 : Math.min(1, (f - FADE) / (HOLD * 0.6));
-
-          ctx.clearRect(0, 0, W, H);
-          ctx.fillStyle = '#111';
-          ctx.fillRect(0, 0, W, H);
-
-          if (isCinematic) {
-            // Cinematic: subtle Ken Burns zoom 100→106% + text slides in from left
-            const zoom = 1.0 + 0.06 * t;
-            const sw = baseW * zoom, sh = baseH * zoom;
-            ctx.drawImage(img, (W - sw) / 2, (H - sh) / 2, sw, sh);
-
-            // Dark gradient overlay for text readability
-            if (textT > 0) {
-              const grad = ctx.createLinearGradient(0, H * 0.55, 0, H);
-              grad.addColorStop(0, 'rgba(0,0,0,0)');
-              grad.addColorStop(1, 'rgba(0,0,0,0.72)');
-              ctx.fillStyle = grad;
-              ctx.fillRect(0, 0, W, H);
-            }
-
-            // Headline slides in from left
-            if (textT > 0 && headline) {
-              const slideX = -W + W * Math.min(1, textT * 2); // slides from -W to 0
-              const eased = slideX < 0 ? slideX : 0;
-              ctx.save();
-              ctx.translate(eased, 0);
-              ctx.font = 'bold ' + Math.round(W * 0.052) + 'px Arial';
-              ctx.fillStyle = '#C9A84C';
-              ctx.fillText(headline.slice(0, 32), W * 0.06, H * 0.72);
-              ctx.restore();
-            }
-
-            // Badge removed — AI poster already has price baked in
-
-          } else {
-            // Energetic: static poster + bouncing elements
-            ctx.drawImage(img, baseX, baseY, baseW, baseH);
-
-            // Flashing border pulse
-            const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 6);
-            ctx.strokeStyle = 'rgba(201,168,76,' + (0.3 + 0.7 * pulse) + ')';
-            ctx.lineWidth = Math.round(W * 0.012);
-            ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
-
-            // Headline bounces in from top
-            if (textT > 0 && headline) {
-              const bounce = textT < 0.5 ? 4 * textT * textT * textT : 1 - Math.pow(-2 * textT + 2, 3) / 2;
-              const y = -H * 0.12 + bounce * H * 0.12;
-              ctx.font = 'bold ' + Math.round(W * 0.055) + 'px Arial';
-              ctx.fillStyle = '#fff';
-              ctx.strokeStyle = '#000';
-              ctx.lineWidth = Math.round(W * 0.006);
-              ctx.strokeText(headline.slice(0, 28), W * 0.05, H * 0.22 + y);
-              ctx.fillText(headline.slice(0, 28), W * 0.05, H * 0.22 + y);
-            }
-
-            // Offer badge with scale pop
-            if (offerTxt && textT > 0.3) {
-              const popT = Math.min(1, (textT - 0.3) / 0.4);
-              const scale = popT < 0.6 ? popT / 0.6 : 1 + 0.2 * Math.sin((popT - 0.6) / 0.4 * Math.PI);
-              ctx.save();
-              ctx.translate(W / 2, H * 0.78);
-              ctx.scale(scale, scale);
-              const bW = Math.min(W * 0.78, ctx.measureText(offerTxt).width + W * 0.12);
-              const bH = Math.round(W * 0.1);
-              ctx.fillStyle = '#ef4444';
-              ctx.beginPath();
-              ctx.roundRect(-bW / 2, -bH * 0.7, bW, bH, bH * 0.25);
-              ctx.fill();
-              ctx.font = 'bold ' + Math.round(W * 0.052) + 'px Arial';
-              ctx.fillStyle = '#fff';
-              ctx.textAlign = 'center';
-              ctx.fillText(offerTxt, 0, 0);
-              ctx.textAlign = 'left';
-              ctx.restore();
-            }
-          }
-
-          // Global fade in/out
-          if (fadeAlpha < 1) {
-            ctx.fillStyle = 'rgba(0,0,0,' + (1 - fadeAlpha) + ')';
+          // Draw imgA scaled to fill canvas
+          const drawImg = (img, alpha) => {
+            const sc = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+            const iW = img.naturalWidth * sc, iH = img.naturalHeight * sc;
+            const iX = (W - iW) / 2, iY = (H - iH) / 2;
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = '#111';
             ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = alpha;
+            ctx.drawImage(img, iX, iY, iW, iH);
+            ctx.globalAlpha = 1;
+          };
+
+          // Hold frames — show slide fully
+          for (let f = 0; f < HOLD_FRAMES; f++) {
+            drawImg(imgA, 1);
+            frames.push({ data: Array.from(ctx.getImageData(0, 0, W, H).data), delay: DELAY });
           }
 
-          frames.push({ data: Array.from(ctx.getImageData(0, 0, W, H).data), delay: DELAY });
+          // Fade frames — crossfade to next slide
+          for (let f = 0; f < FADE_FRAMES; f++) {
+            const t = f / FADE_FRAMES;
+            drawImg(imgA, 1 - t);
+            const dataA = ctx.getImageData(0, 0, W, H).data;
+            drawImg(imgB, t);
+            const dataB = ctx.getImageData(0, 0, W, H).data;
+            // Blend
+            const blended = new Uint8ClampedArray(dataA.length);
+            for (let p = 0; p < dataA.length; p++) blended[p] = Math.round(dataA[p] * (1-t) + dataB[p] * t);
+            ctx.putImageData(new ImageData(blended, W, H), 0, 0);
+            frames.push({ data: Array.from(ctx.getImageData(0, 0, W, H).data), delay: DELAY });
+          }
         }
-
-        // Encode GIF
-        const wfn = 'self.onmessage=function(e){var f=e.data.frames,w=e.data.width,h=e.data.height,g=GIFEncoder();f.forEach(function(fr,i){var d=new Uint8ClampedArray(fr.data),p=quantize(d,256),ix=applyPalette(d,p);g.writeFrame(ix,w,h,{palette:p,delay:fr.delay,dispose:2});if(i%5===0)self.postMessage({type:"progress",pct:Math.round(i/f.length*100)});});g.finish();var b=g.bytes();self.postMessage({type:"done",buffer:b.buffer},[b.buffer]);};';
-        const libBlob = new Blob([libSrc], { type: 'application/javascript' });
-        const libUrl = URL.createObjectURL(libBlob);
-        const workerUrl = URL.createObjectURL(new Blob(['importScripts("'+libUrl+'");\n'+wfn], { type: 'application/javascript' }));
 
         r.gifBlob = await new Promise((resolve, reject) => {
           const worker = new Worker(workerUrl);
