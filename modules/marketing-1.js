@@ -5699,16 +5699,34 @@ async function calGenerateGifSlideshow(calendarId) {
     if (!_gifencResp.ok) throw new Error('gifenc load failed: HTTP ' + _gifencResp.status);
     const libSrc = await _gifencResp.text();
 
-    // All 3 slide b64s (slide1=square, slide2=story, slide3=landscape)
-    const slideB64s = ['square','story','landscape'].map(k => formatResults[k]?.b64).filter(Boolean);
+    // Encode 3 separate GIFs: square, story, landscape
+    // Each GIF crossfades 3 slides of same design
+    const GIF_CONFIGS = [
+      { key:'square',    gifW:720, gifH:720,  urlKey:'gif_slides_square' },
+      { key:'story',     gifW:480, gifH:854,  urlKey:'gif_slides_story' },
+      { key:'landscape', gifW:854, gifH:480,  urlKey:'gif_slides_landscape' },
+    ];
 
-    for (const key of ['square']) {
-      const r = formatResults[key];
-      if (!r) continue;
-      const fmt = { key:'square', gifW:720, gifH:720, label:'Slideshow' };
-      const allB64s = slideB64s.length > 1 ? slideB64s : [r.b64];
+    for (const gifCfg of GIF_CONFIGS) {
+      const slideUrlsStr = pi[gifCfg.urlKey] || '';
+      const slideUrls = slideUrlsStr.split('|').filter(Boolean);
+      if (!slideUrls.length) { console.warn('No slide URLs for', gifCfg.key); continue; }
 
-      showMktToast('⏳ Encoding slideshow GIF (' + allB64s.length + ' slides)…', 5000);
+      // Fetch all slide images for this format
+      showMktToast('⏳ Fetching ' + gifCfg.key + ' slides…', 5000);
+      const fmtProxyRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'fetch_images_b64', urls: Object.fromEntries(slideUrls.map((u,i) => ['s'+(i+1), u])) })
+      });
+      const fmtProxy = await fmtProxyRes.json();
+      if (!fmtProxy.ok) { console.warn('Fetch failed for', gifCfg.key); continue; }
+
+      const allB64s = Object.values(fmtProxy.images || {}).filter(Boolean);
+      if (!allB64s.length) continue;
+
+      const fmt = { key: gifCfg.key, gifW: gifCfg.gifW, gifH: gifCfg.gifH };
+      const r = { b64: allB64s[0], fmt };
+      showMktToast('⏳ Encoding ' + gifCfg.key + ' GIF (' + allB64s.length + ' slides)…', 5000);
 
       try {
         // Load all frames as images
