@@ -5657,11 +5657,55 @@ async function calGenerateGifSlideshow(calendarId) {
     if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || ''));
     const frameUrls = slidesData.frame_urls || [];
     if (!frameUrls.length) throw new Error('Slide generation returned 0 frames — OpenAI may have failed. Check billing/quota.');
-    showMktToast('✅ ' + frameUrls.length + '/3 slides generated — encoding GIF…', 3000);
+    showMktToast('✅ ' + frameUrls.length + '/3 AI images generated — creating MP4 via Cloudinary…', 4000);
 
+    // Reload platform_images which now has gif_slides_* keys
     let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     let pi = posterItem_check.data?.platform_images || {};
     const posterItem = posterItem_check.data;
+
+    // Create MP4 + GIF via Cloudinary for each format
+    const cldResults = {};
+    const cldFormats = [
+      { key:'square',    urls: (pi.gif_slides_square||'').split('|').filter(Boolean) },
+      { key:'story',     urls: (pi.gif_slides_story||'').split('|').filter(Boolean) },
+      { key:'landscape', urls: (pi.gif_slides_landscape||'').split('|').filter(Boolean) },
+    ];
+
+    for (const fmt of cldFormats) {
+      if (!fmt.urls.length) continue;
+      showMktToast('⏳ Creating ' + fmt.key + ' MP4 via Cloudinary…', 8000);
+      try {
+        const cldRes = await (await fetch(MKT_SB_URL + '/functions/v1/cloudinary-media', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+          body: JSON.stringify({ action: 'create_slideshow', calendar_id: parseInt(calendarId), image_urls: fmt.urls, format_key: fmt.key })
+        })).json();
+        if (cldRes.ok) {
+          cldResults[fmt.key] = cldRes;
+          if (cldRes.mp4_url) {
+            if (fmt.key === 'square')    { pi.instagram_feed_mp4 = cldRes.mp4_url; pi.threads_mp4 = cldRes.mp4_url; pi.mp4_music = cldRes.mp4_url; }
+            if (fmt.key === 'story')     { pi.instagram_story_mp4 = cldRes.mp4_url; pi.facebook_story_mp4 = cldRes.mp4_url; }
+            if (fmt.key === 'landscape') { pi.facebook_post_mp4 = cldRes.mp4_url; pi.youtube_mp4 = cldRes.mp4_url; }
+          }
+          if (cldRes.gif_url) {
+            if (fmt.key === 'square') pi.square_gif = cldRes.gif_url;
+            if (fmt.key === 'story')  pi.story_gif = cldRes.gif_url;
+          }
+          console.log('[cloudinary]', fmt.key, 'mp4:', cldRes.mp4_url?.slice(-30));
+        } else {
+          console.warn('[cloudinary]', fmt.key, 'failed:', cldRes.error);
+        }
+      } catch(e) { console.warn('[cloudinary]', fmt.key, 'error:', e.message); }
+    }
+
+    // Save updated platform_images with MP4 URLs
+    await sb.from('content_calendar').update({
+      platform_images: pi,
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
+
+    const mp4Count = Object.values(cldResults).filter(r => r.mp4_url).length;
+    showMktToast('✅ ' + mp4Count + '/3 MP4s created — ready to post!', 4000);
 
     // Map poster URLs to GIF format structure
     const GIF_FORMATS = [
