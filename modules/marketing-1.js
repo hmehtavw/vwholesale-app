@@ -5648,7 +5648,12 @@ async function calGenerateGifSlideshow(calendarId) {
     }).eq('id', calendarId);
 
     // STEP 2: Generate 3 distinct slideshow frames server-side
-    // Skip if slides already exist from previous run
+    // Load platform_images first to check for existing slides
+    let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
+    let pi = posterItem_check.data?.platform_images || {};
+    const posterItem = posterItem_check.data;
+
+    // Skip if slides already exist from previous run (saves AI cost)
     const existingSlides = (pi.gif_slides_square||'').split('|').filter(Boolean);
     let frameUrls = [];
 
@@ -5668,10 +5673,9 @@ async function calGenerateGifSlideshow(calendarId) {
     }
     showMktToast('✅ ' + frameUrls.length + '/3 slides ready — creating MP4 via Railway…', 3000);
 
-    // Reload platform_images which now has gif_slides_* keys
-    let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-    let pi = posterItem_check.data?.platform_images || {};
-    const posterItem = posterItem_check.data;
+    // Reload platform_images in case slides were just generated
+    const reloaded = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
+    pi = reloaded.data?.platform_images || pi;
 
     // Create MP4 via render-media (Railway primary, Cloudinary fallback)
     const renderFormats = [
