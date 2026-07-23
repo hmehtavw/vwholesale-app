@@ -3785,7 +3785,7 @@ async function renderCalendar(offsetMonths) {
               <div style="font-size:10px;color:var(--text3)">${date.toLocaleDateString('en-IN',{weekday:'short',month:'short'})}</div>
             </div>
             <div style="flex:1">
-              <div style="font-size:13px;font-weight:700" id="cal-topic-display-${item.id}">${item.topic||'Untitled reel'}</div>
+              <div style="font-size:13px;font-weight:700" id="cal-topic-display-${item.id}">${(item.topic||'Untitled').replace(/\s*[—–-]\s*(GIF|Reel|Video|Slideshow|Animation|Animated|Campaign)\s*/gi,'').trim()}</div>
               <div style="font-size:11px;color:var(--text3);margin-top:2px" id="cal-notes-display-${item.id}">${item.notes||''}</div>
             </div>
             <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
@@ -5709,9 +5709,10 @@ async function calGenerateGifSlideshow(calendarId) {
       const r = formatResults[key];
       const fmt = r.fmt;
 
-      // Use single poster with Ken Burns slow zoom effect for smooth GIF animation
-      // No extra API calls needed — consistent logo, consistent design
-      const allB64s = [r.b64]; // single source poster
+      // Slideshow: crossfade between all available poster formats
+      // Collect all format b64s for this slideshow cycle
+      const allFormatB64s = Object.values(formatResults).map(fr => fr.b64).filter(Boolean);
+      const allB64s = allFormatB64s.length > 1 ? allFormatB64s : [r.b64];
 
       showMktToast('⏳ Encoding ' + fmt.label + ' GIF (' + allB64s.length + ' frames)…', 5000);
 
