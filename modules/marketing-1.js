@@ -3868,10 +3868,10 @@ async function saveEditCalendarItem(id) {
 
   // Platform distribution by content type
   const platformByType = {
-    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube'],
-    gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story'],
-    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','youtube_shorts','whatsapp_story'],
-    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube'],
+    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_community'],
+    gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_shorts'],
+    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','youtube_shorts','whatsapp_story','gbp'],
+    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_community'],
     qa:       ['instagram_feed','facebook_post','threads'],
     post:     ['instagram_feed','facebook_post','threads'],
   };
