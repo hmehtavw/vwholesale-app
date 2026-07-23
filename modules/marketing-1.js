@@ -5622,41 +5622,11 @@ async function calGenerateGifSlideshow(calendarId) {
     const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     if (!item) throw new Error('Calendar item not found');
 
-    showMktToast('⏳ Step 1/4: Generating content brief…', 5000);
-    const briefRes = await fetch(MKT_SB_URL + '/functions/v1/content-pipeline', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({
-        action: 'generate_brief',
-        brief: [item.topic, item.notes].filter(Boolean).join('. '),
-        tone: 'product'
-      })
-    });
-    const briefData = await briefRes.json();
-    if (!briefData.ok) throw new Error('Brief generation failed: ' + (briefData.error || ''));
-
-    const brief = briefData.content;
-    const topic = item.topic;
-    const headline = brief.headline || item.topic;
-    const message = brief.poster_message || '';
-
-    // Save caption back to calendar
-    await sb.from('content_calendar').update({
-      caption: brief.caption_en,
-      caption_te: brief.caption_te,
-      hashtags: (brief.hashtags || '').split(' ').filter(h => h.startsWith('#')),
-      poster_message: message,
-      updated_at: new Date().toISOString()
-    }).eq('id', calendarId);
-
-    // STEP 2: Generate 3 distinct slideshow frames server-side
-    // Load platform_images first to check for existing slides
-    let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
-    let pi = posterItem_check.data?.platform_images || {};
-    const posterItem = posterItem_check.data;
-
-    // Skip if slides already exist from previous run (saves AI cost)
-    const existingSlides = (pi.gif_slides_square||'').split('|').filter(Boolean);
+    // STEP 1: Use existing caption or generate quickly - skip full brief for slideshow
+    const pi_init = item.platform_images || {};
+    const existingSlides = (pi_init.gif_slides_square||'').split('|').filter(Boolean);
     let frameUrls = [];
+    let pi = pi_init;
 
     if (existingSlides.length >= 3) {
       showMktToast('✅ Using existing slides — creating MP4…', 3000);
