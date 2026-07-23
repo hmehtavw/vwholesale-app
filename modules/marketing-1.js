@@ -8159,8 +8159,13 @@ async function calPostNowExecute(calendarId) {
               headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
               body:JSON.stringify({creation_id:cr.id})})).json();
             if(pr.id){ok=true;postId=pr.id;}
-            else error='Story publish: '+(pr.error?.message||JSON.stringify(pr).slice(0,120));
-          } else error='Story container: '+(cr.error?.message||cr.error?.error_user_msg||JSON.stringify(cr).slice(0,200));
+            else error='Story publish: '+(pr.error?.message||pr.error?.error_user_msg||JSON.stringify(pr).slice(0,200));
+          } else {
+            // Log full error for debugging
+            const errMsg = cr.error?.message||cr.error?.error_user_msg||'';
+            const errCode = cr.error?.code||cr.error?.error_subcode||'';
+            error='Story container ['+errCode+']: '+errMsg+'  IMG:'+storyImg.slice(-40);
+          }
         }
       }
       else if (ch==='facebook_post') {
