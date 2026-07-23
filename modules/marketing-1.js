@@ -3868,10 +3868,14 @@ async function saveEditCalendarItem(id) {
 
   // Platform distribution by content type
   const platformByType = {
-    image:    ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_community'],
-    gif:      ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_shorts'],
-    reel:     ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','youtube','youtube_shorts','whatsapp_story','gbp'],
-    festival: ['instagram_feed','instagram_story','facebook_post','facebook_story','threads','gbp','whatsapp_story','youtube','youtube_community'],
+    // Poster/Image: Feed channels only (no FB Story - needs special Meta permission)
+    image:    ['instagram_feed','instagram_story','facebook_post','threads','gbp','whatsapp_story','youtube'],
+    // GIF/MP4: Video channels (Shorts for vertical, regular for landscape)
+    gif:      ['instagram_feed','instagram_story','facebook_post','threads','whatsapp_story','youtube','youtube_shorts'],
+    // Reels: All video channels
+    reel:     ['instagram_feed','instagram_story','facebook_post','threads','youtube','youtube_shorts','whatsapp_story'],
+    // Festival: Same as image
+    festival: ['instagram_feed','instagram_story','facebook_post','threads','gbp','whatsapp_story','youtube'],
     qa:       ['instagram_feed','facebook_post','threads'],
     post:     ['instagram_feed','facebook_post','threads'],
   };
@@ -8207,7 +8211,8 @@ async function calPostNowExecute(calendarId) {
         else {
           const waTarget = document.querySelector('input[name="wa-target"]:checked')?.value || 'owner';
           const waTemplate = document.getElementById('wa-template-select')?.value || 'image';
-          const waImg = img;
+          // WhatsApp: use static PNG for reliability (GIF works but PNG more compatible)
+          const waImg = pi['instagram_feed'] || pi['story_gif'] || pi['square_gif'] || pi['instagram_story'] || item.image_url;
           const today = new Date();
           const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 
