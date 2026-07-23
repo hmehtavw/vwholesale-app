@@ -5860,7 +5860,7 @@ async function calGenerateGifSlideshow(calendarId) {
     // Check the square GIF was produced
     const squareResult = formatResults['square'];
     if (!squareResult?.gifBlob) {
-      const workerErrors = Object.values(formatResults).map((r:any) => r.gifError).filter(Boolean);
+      const workerErrors = Object.values(formatResults).map(r => r.gifError).filter(Boolean);
       throw new Error('GIF encoding failed — ' + (workerErrors[0] || 'try Animated Poster mode instead'));
     }
 
