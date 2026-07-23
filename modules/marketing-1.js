@@ -8319,11 +8319,15 @@ async function calPostNowExecute(calendarId) {
       else if (ch==='threads') {
         if (!cfg.THREADS_NUMERIC_ID||!cfg.THREADS_ACCESS_TOKEN) { error='Threads not configured'; }
         else {
-          const thImg = pi['instagram_feed']||pi['threads']||item.image_url; // PNG not GIF
+          const thMp4 = pi['threads_mp4'] || pi['instagram_feed_mp4'] || null;
+          const thImg = pi['instagram_feed']||pi['threads']||item.image_url;
           const pr = await(await fetch(MKT_SB_URL+'/functions/v1/social-proxy',{method:'POST',
             headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
             body:JSON.stringify({action:'post_threads',token:cfg.THREADS_ACCESS_TOKEN,
-              numeric_id:cfg.THREADS_NUMERIC_ID,image_url:thImg,text:cap.slice(0,500)})})).json();
+              numeric_id:cfg.THREADS_NUMERIC_ID,
+              video_url: thMp4 || null,
+              image_url: thMp4 ? null : thImg,
+              text:cap.slice(0,500)})})).json();
           if(pr.ok){ok=true;postId=pr.post_id;}
           else error='Threads: '+(pr.error||'Post failed');
         }
