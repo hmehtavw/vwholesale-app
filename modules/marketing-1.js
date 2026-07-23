@@ -8422,6 +8422,17 @@ async function calPostNowDebug(calendarId) {
     }
   } catch(e) { log('❌ WA check: '+e.message, '#ef4444'); }
 
+  // YouTube check
+  try {
+    const ytRows = await sb.from('marketing_settings').select('key,value').in('key',['YOUTUBE_REFRESH_TOKEN','YOUTUBE_CHANNEL_NAME','YOUTUBE_SUBSCRIBER_COUNT']);
+    const ytCfg = {}; (ytRows.data||[]).forEach(r=>ytCfg[r.key]=r.value);
+    if (ytCfg.YOUTUBE_REFRESH_TOKEN) {
+      log('✅ YouTube connected — '+ytCfg.YOUTUBE_CHANNEL_NAME+' ('+ytCfg.YOUTUBE_SUBSCRIBER_COUNT+' subscribers)', '#22c55e');
+    } else {
+      log('❌ YouTube not connected — go to /youtube-auth.html', '#ef4444');
+    }
+  } catch(e) { log('❌ YouTube check: '+e.message, '#ef4444'); }
+
   log('─── Diagnostics complete ───', '#334155');
   } catch(e) { showMktToast('❌ Debug error: '+e.message, 5000); console.error('Debug error:', e); }
 }
