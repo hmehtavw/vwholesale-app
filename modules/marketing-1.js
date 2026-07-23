@@ -8281,7 +8281,24 @@ async function calPostNowExecute(calendarId) {
         }
       }
       else if (ch==='gbp'||ch==='google_business') { error='GBP API pending (~Aug 1)'; }
-      else if (ch==='youtube'||ch==='youtube_shorts') { error='YouTube API not configured yet — upload manually to youtube.com/@vwholesaleindia'; }
+      else if (ch==='youtube'||ch==='youtube_shorts') {
+        const ytVid = pi['youtube_mp4']||pi['instagram_feed_mp4']||pi['mp4_music']||pi['square_gif']||item.image_url;
+        if (!ytVid) { error='No video file for YouTube'; }
+        else {
+          const isShorts = ch==='youtube_shorts' || (pi['instagram_story_mp4']&&!pi['youtube_mp4']);
+          const ytTitle = (item.topic||'V Wholesale').slice(0,100);
+          const ytDesc = (item.caption||'')+'\n\n'+item.hashtags?.join(' ')+'\n\nV Wholesale Vijayawada | Build Better, Pay Less\n📞 +91 8712697930 | 🌐 vwholesale.in';
+          const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map(h=>h.replace('#',''))];
+          const ytRes = await (await fetch(MKT_SB_URL+'/functions/v1/youtube-upload', {
+            method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+            body:JSON.stringify({action:'upload_video',video_url:ytVid,
+              title:(isShorts?'#Shorts ':'')+ytTitle, description:ytDesc.slice(0,5000),
+              tags:ytTags.slice(0,15), privacy:'public'})
+          })).json();
+          if(ytRes.ok){ok=true;postId=ytRes.video_id;}
+          else error='YouTube: '+(ytRes.error||'Upload failed');
+        }
+      }
       else { error='Channel not yet implemented: '+ch; }
     } catch(e) { error=e.message||'Unknown error'; }
 
