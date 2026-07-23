@@ -8337,9 +8337,12 @@ async function calPostNowExecute(calendarId) {
         else {
           const waTarget = document.querySelector('input[name="wa-target"]:checked')?.value || 'owner';
           const waTemplate = document.getElementById('wa-template-select')?.value || 'image';
+          // Reload fresh platform_images to get latest MP4 URLs from Railway
+          const { data: freshItem } = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
+          const freshPi = freshItem?.platform_images || pi;
           // WhatsApp: use MP4 if available, else static PNG
-          const waMp4 = pi['whatsapp_story_mp4'] || pi['instagram_story_mp4'] || pi['instagram_feed_mp4'] || null;
-          const waImg = pi['instagram_feed'] || pi['instagram_story'] || item.image_url;
+          const waMp4 = freshPi['whatsapp_story_mp4'] || freshPi['instagram_story_mp4'] || freshPi['instagram_feed_mp4'] || null;
+          const waImg = freshPi['instagram_feed'] || freshPi['instagram_story'] || item.image_url;
           const today = new Date();
           const validTill = new Date(today.getTime()+7*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 
