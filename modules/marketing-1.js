@@ -5696,30 +5696,36 @@ async function calGenerateGifSlideshow(calendarId) {
       }).catch(e => console.warn('[render fire]', fmt.key, e.message))
     ));
 
-    // Poll Railway /status until all MP4s are ready (max 3 min)
-    showMktToast('⏳ Railway rendering MP4s — polling for completion…', 10000);
+    // Poll Railway /status until MP4s ready (max 90s per format)
+    showMktToast('⏳ Railway rendering MP4s (~60s)…', 10000);
     const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
     const RAIL_SECRET = 'vw-render-2026-secret';
     const formatKeys = renderFormats.map(f => f.key);
     const ready = {};
     const pollStart = Date.now();
 
-    while (Object.keys(ready).length < formatKeys.length && Date.now() - pollStart < 180000) {
-      await new Promise(r => setTimeout(r, 5000)); // poll every 5s
+    while (Object.keys(ready).length < formatKeys.length && Date.now() - pollStart < 90000) {
+      await new Promise(r => setTimeout(r, 8000)); // poll every 8s
       for (const fmtKey of formatKeys) {
         if (ready[fmtKey]) continue;
         try {
           const sr = await fetch(RAIL_URL + '/status/' + calendarId + '/' + fmtKey,
             { headers: { 'x-worker-secret': RAIL_SECRET } });
+          if (!sr.ok) continue;
           const sd = await sr.json();
-          if (sd.ready) { ready[fmtKey] = sd.mp4_url; }
-        } catch(e) {}
+          if (sd.ready && sd.mp4_url) {
+            ready[fmtKey] = sd.mp4_url;
+            showMktToast('✅ ' + fmtKey + ' MP4 ready! (' + Object.keys(ready).length + '/' + formatKeys.length + ')', 3000);
+          }
+        } catch(e) { console.warn('[poll]', fmtKey, e.message); }
       }
-      const readyCount = Object.keys(ready).length;
-      showMktToast('⏳ Railway: ' + readyCount + '/' + formatKeys.length + ' MP4s ready…', 6000);
     }
 
     const mp4Count = Object.keys(ready).length;
+    if (mp4Count === 0) {
+      // Railway may still be processing — proceed with static images
+      showMktToast('⚠️ MP4 still processing — posting static images now, MP4 will be ready soon', 5000);
+    }
 
     // Reload pi with saved MP4 URLs
     const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
