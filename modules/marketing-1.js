@@ -4809,7 +4809,7 @@ async function renderAnalytics() {
   const formatCounts = {};
   (contentPosts||[]).forEach(p => { formatCounts[p.post_type||'image']=(formatCounts[p.post_type||'image']||0)+1; });
 
-  const CHANNEL_LABELS = {gbp:'📍 GBP',instagram_feed:'📸 Instagram',facebook_post:'👤 Facebook',whatsapp_bc:'💬 WhatsApp',threads:'🧵 Threads',x:'𝕏 X',youtube:'▶️ YouTube'};
+  const CHANNEL_LABELS = {gbp:'📍 GBP',instagram_feed:'📸 Instagram',facebook_post:'👤 Facebook',whatsapp_bc:'💬 WhatsApp',threads:'🧵 Threads',x:'𝕏 X',youtube:'▶️ YouTube',youtube_shorts:'▶️ YouTube Shorts',youtube_community:'💬 YT Community Post'};
   const FORMAT_LABELS = {image:'🖼️ Image',reel:'🎬 Reel',gif:'✨ GIF',festival:'🎉 Festival',qa:'❓ Q&A'};
   const barW = (val, max) => Math.max(4, Math.round((val/Math.max(max,1))*100));
 
@@ -7972,7 +7972,7 @@ async function calPostNow(calendarId) {
   pop.id = 'postnow-popup';
   pop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px';
 
-  const chLabels = {instagram_feed:'📸 Instagram Feed',instagram_story:'📱 IG Story',facebook_post:'📘 Facebook Post',facebook_story:'📱 FB Story',threads:'🧵 Threads',whatsapp_story:'💬 WhatsApp Broadcast',gbp:'📍 Google Business',youtube:'▶️ YouTube'};
+  const chLabels = {instagram_feed:'📸 Instagram Feed',instagram_story:'📱 IG Story',facebook_post:'📘 Facebook Post',facebook_story:'📱 FB Story',threads:'🧵 Threads',whatsapp_story:'💬 WhatsApp Broadcast',gbp:'📍 Google Business',youtube:'▶️ YouTube',youtube_shorts:'▶️ YouTube Shorts',youtube_community:'💬 YT Community Post'};
   const chMediaHint = {instagram_feed:'MP4/Image',instagram_story:'MP4/Image',facebook_post:'MP4/Image',facebook_story:'MP4/Image',threads:'GIF/Image',whatsapp_story:'GIF/Image',gbp:'Image',youtube:'MP4'};
 
   const isGifPost = item.content_type === 'gif';
@@ -8282,22 +8282,34 @@ async function calPostNowExecute(calendarId) {
       }
       else if (ch==='gbp'||ch==='google_business') { error='GBP API pending (~Aug 1)'; }
       else if (ch==='youtube'||ch==='youtube_shorts') {
-        const ytVid = pi['youtube_mp4']||pi['instagram_feed_mp4']||pi['mp4_music']||pi['square_gif']||item.image_url;
-        if (!ytVid) { error='No video file for YouTube'; }
+        const isShort = ch==='youtube_shorts';
+        // Video: use MP4 if available, else GIF
+        const ytVid = pi['youtube_mp4']||pi['instagram_feed_mp4']||pi['mp4_music']||(isShort?(pi['instagram_story_mp4']||pi['story_gif']):null)||pi['square_gif']||item.image_url;
+        const ytImg = pi['instagram_feed']||pi['facebook_post']||item.image_url;
+        const ytTitle = (item.topic||'V Wholesale').slice(0,100);
+        const ytDesc = (item.caption||'')+(item.hashtags?.length?'\n\n'+item.hashtags.join(' '):'')+'\n\nV Wholesale Vijayawada | Build Better, Pay Less\n📞 +91 8712697930 | 🌐 vwholesale.in';
+        const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map((h:string)=>h.replace('#',''))];
+
+        if (!ytVid) { error='No video file — encode MP4 first via Editor'; }
         else {
-          const isShorts = ch==='youtube_shorts' || (pi['instagram_story_mp4']&&!pi['youtube_mp4']);
-          const ytTitle = (item.topic||'V Wholesale').slice(0,100);
-          const ytDesc = (item.caption||'')+'\n\n'+item.hashtags?.join(' ')+'\n\nV Wholesale Vijayawada | Build Better, Pay Less\n📞 +91 8712697930 | 🌐 vwholesale.in';
-          const ytTags = ['VWholesale','Vijayawada','HomeBuilding','BuildBetterPayLess',...(item.hashtags||[]).map(h=>h.replace('#',''))];
-          const ytRes = await (await fetch(MKT_SB_URL+'/functions/v1/youtube-upload', {
-            method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-            body:JSON.stringify({action:'upload_video',video_url:ytVid,
-              title:(isShorts?'#Shorts ':'')+ytTitle, description:ytDesc.slice(0,5000),
-              tags:ytTags.slice(0,15), privacy:'public'})
+          const ytRes = await (await fetch(MKT_SB_URL+'/functions/v1/youtube-upload',{
+            method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+            body:JSON.stringify({action:'upload_video',video_url:ytVid,title:ytTitle,
+              description:ytDesc.slice(0,5000),tags:ytTags.slice(0,15),privacy:'public',is_short:isShort})
           })).json();
           if(ytRes.ok){ok=true;postId=ytRes.video_id;}
-          else error='YouTube: '+(ytRes.error||'Upload failed');
+          else error='YouTube'+(isShort?' Shorts':'')+': '+(ytRes.error||'Upload failed');
         }
+      }
+      else if (ch==='youtube_community') {
+        const ytImg = pi['instagram_feed']||pi['facebook_post']||item.image_url;
+        const ytText = (item.caption||item.topic||'').slice(0,2000)+(item.hashtags?.length?'\n\n'+item.hashtags.join(' '):'');
+        const ytRes = await (await fetch(MKT_SB_URL+'/functions/v1/youtube-upload',{
+          method:'POST',headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
+          body:JSON.stringify({action:'community_post',image_url:ytImg,text:ytText})
+        })).json();
+        if(ytRes.ok){ok=true;postId=ytRes.post_id;}
+        else error='YT Community: '+(ytRes.error||'Post failed');
       }
       else { error='Channel not yet implemented: '+ch; }
     } catch(e) { error=e.message||'Unknown error'; }
