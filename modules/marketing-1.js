@@ -7642,9 +7642,11 @@ async function calPreviewPost(calendarId) {
     }
 
     const isPending = PENDING_CHANNELS.has(ch);
+    // For GIF posts: show all 3 slides if available
+    const isGifPost = item.content_type === 'gif';
+    const gifSlides = isGifPost ? (item.platform_images?.gif_slides_square||'').split('|').filter(Boolean) : [];
     const rawImg = (item.platform_images && item.platform_images[ch]) || item.image_url || null;
-    // Cache-bust SVG URLs so browser always fetches fresh version after regeneration
-    const platformImg = rawImg ? (rawImg.includes('.svg') ? rawImg + '?t=' + (item.updated_at ? new Date(item.updated_at).getTime() : Date.now()) : rawImg) : null;
+    const platformImg = rawImg ? (rawImg.includes('.svg') ? rawImg + '?t=' + Date.now() : rawImg) : null;
     const iStyle = imgStyle[ch] || imgStyle['instagram_feed'];
     const noImgH = (ch.includes('story') || ch === 'whatsapp_story') ? 'aspect-ratio:9/16;width:56%' : 'height:120px;width:100%';
     const isVideo = item.content_type === 'reel';
@@ -7685,11 +7687,16 @@ async function calPreviewPost(calendarId) {
       ? 'width:55%;aspect-ratio:9/16;object-fit:cover;border-radius:8px;margin:0 auto 8px auto;display:block'
       : 'width:100%;aspect-ratio:' + aspect + ';object-fit:cover;border-radius:8px;margin-bottom:8px;display:block';
 
-    const mediaHtml = displayImg
-      ? isVideo
-        ? `<video src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')}" controls muted playsinline></video>`
-        : `<img src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')};background:#f5f0e8" onerror="this.style.display='none'">`
-      : `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGif?'✨ No GIF yet':'📸 No image yet'}</div>`;
+    const mediaHtml = isGifPost && gifSlides.length > 1 && ch === 'instagram_feed'
+      // GIF slideshow: show all 3 slides side by side
+      ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:8px">
+           ${gifSlides.map((url,i) => `<div style="position:relative"><img src="${url}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:6px;background:#f5f0e8"><span style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:9px;padding:2px 6px;border-radius:4px">Slide ${i+1}</span></div>`).join('')}
+         </div><div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:8px">↕ Crossfade slideshow GIF → MP4 on IG/FB/YT</div>`
+      : displayImg
+        ? isVideo
+          ? `<video src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')}" controls muted playsinline></video>`
+          : `<img src="${displayImg}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')};background:#f5f0e8" onerror="this.style.display='none'">`
+        : `<div style="${chImgStyle};background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">${isVideo?'🎬 No video yet':isGifPost?'✨ No GIF yet':'📸 No image yet'}</div>`;
 
     const dlLabel = isThisGif ? '⬇ Download GIF' : '⬇ Download Image';
     const dlFilename = isThisGif ? 'vwholesale.gif' : 'vwholesale.png';
