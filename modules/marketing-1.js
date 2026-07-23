@@ -8071,11 +8071,26 @@ async function calPostNow(calendarId) {
   const isGifPost = item.content_type === 'gif';
   const gifKeyMap = {instagram_feed:'instagram_feed',instagram_story:'instagram_story',facebook_post:'facebook_post',facebook_story:'facebook_story',threads:'instagram_feed',whatsapp_story:'story_gif',youtube:'youtube',gbp:'gbp'};
 
+  const gifMp4Map = {
+    instagram_feed: 'instagram_feed_mp4', instagram_story: 'instagram_story_mp4',
+    facebook_post: 'facebook_post_mp4', facebook_story: 'facebook_story_mp4',
+    threads: 'threads_mp4', whatsapp_story: 'whatsapp_story_mp4',
+    youtube: 'youtube_mp4', gbp: 'gbp_mp4'
+  };
+  const gifStaticMap = {
+    instagram_feed: 'instagram_feed', instagram_story: 'instagram_story',
+    facebook_post: 'facebook_post', facebook_story: 'facebook_story',
+    threads: 'instagram_feed', whatsapp_story: 'instagram_story',
+    youtube: 'youtube', gbp: 'facebook_post'
+  };
+
   const rows = channels.map(ch => {
     const img = isGifPost
-      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      ? (pi[gifMp4Map[ch]] || pi[gifStaticMap[ch]] || pi['square_gif'] || item.image_url)
       : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
-    const mediaType = isGifPost ? chMediaHint[ch] : (img&&img.includes('.mp4')?'MP4':'Image');
+    const mediaType = isGifPost
+      ? (pi[gifMp4Map[ch]] ? '🎬 MP4 ready' : '🖼️ Image only')
+      : (img&&img.includes('.mp4') ? 'MP4' : 'Image');
     const mediaOk = !!img;
     return '<div id="ch-row-'+ch+'" style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:10px;display:flex;align-items:center;gap:10px">'
       +'<div style="font-size:18px">'+(chLabels[ch]||ch).split(' ')[0]+'</div>'
@@ -8179,23 +8194,24 @@ async function calPostNowExecute(calendarId) {
   for (const ch of channels) {
     setStatus(ch, '⏳', 'Posting…', '#f59e0b');
     const isGifPost = item.content_type === 'gif';
-    // For GIF posts: use the GIF file per channel; for others use static image
-    // Platform media routing for GIF posts:
-    // Instagram + Facebook: use static PNG (MP4 generation unreliable in background)
-    // WhatsApp + Threads: GIF works fine
-    const gifKeyMap = {
-      instagram_feed:  'instagram_feed',     // static PNG for IG feed
-      instagram_story: 'instagram_story',    // static PNG for IG story
-      facebook_post:   'facebook_post',      // static PNG for FB
-      facebook_story:  'facebook_story',     // static PNG for FB story
-      threads:         'instagram_feed',      // PNG for now (GIF shows black on Threads too)
-      whatsapp_story:  'story_gif',           // GIF ok on WhatsApp
-      youtube:         'youtube_mp4',         // MP4 for YouTube
-      gbp:             'gbp'                  // static for GBP
+    // For GIF posts: use MP4 (H.264) for all channels — no more black posts
+    const gifMp4KeyMap = {
+      instagram_feed:  'instagram_feed_mp4',
+      instagram_story: 'instagram_story_mp4',
+      facebook_post:   'facebook_post_mp4',
+      facebook_story:  'facebook_story_mp4',
+      threads:         'threads_mp4',
+      whatsapp_story:  'whatsapp_story_mp4',
+      youtube:         'youtube_mp4',
+      gbp:             'gbp_mp4'
     };
-    // Fallback chain
+    const gifStaticFallback = {
+      instagram_feed: 'instagram_feed', instagram_story: 'instagram_story',
+      facebook_post: 'facebook_post', threads: 'instagram_feed',
+      whatsapp_story: 'instagram_story', youtube: 'youtube', gbp: 'facebook_post'
+    };
     const img = isGifPost
-      ? (pi[gifKeyMap[ch]] || pi['mp4_music'] || pi['instagram_feed_mp4'] || pi['square_gif'] || pi['gif'] || pi[ch] || item.image_url)
+      ? (pi[gifMp4KeyMap[ch]] || pi[gifStaticFallback[ch]] || pi['instagram_feed'] || item.image_url)
       : (pi[ch+'_mp4'] || pi['mp4_music'] || pi[ch] || item.image_url);
     const isVideo = !!(img && (img.includes('.mp4') || img.includes('.webm')));
     // Note: for GIF posts on IG/FB, img will be .mp4 → isVideo=true → posts as Reel/Video
