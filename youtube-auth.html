@@ -5,11 +5,10 @@
 body{font-family:system-ui;background:#0f172a;color:#f1f5f9;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
 .box{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:32px;max-width:500px;width:100%}
 h2{color:#ff0000;margin:0 0 16px}
-.step{background:#0f172a;border-radius:8px;padding:12px;margin:8px 0;font-size:13px;line-height:1.6}
 .ok{background:rgba(34,197,94,.1);border:1px solid #22c55e;color:#22c55e;padding:10px;border-radius:8px;margin:8px 0;font-size:13px}
-.err{background:rgba(239,68,68,.1);border:1px solid #ef4444;color:#ef4444;padding:10px;border-radius:8px;margin:8px 0;font-size:13px}
+.err{background:rgba(239,68,68,.1);border:1px solid #ef4444;color:#ef4444;padding:10px;border-radius:8px;margin:8px 0;font-size:13px;word-break:break-all}
+.step{background:#0f172a;border-radius:8px;padding:12px;margin:8px 0;font-size:13px;line-height:1.6}
 button{background:#ff0000;color:#fff;border:none;padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;width:100%;margin:6px 0}
-input{width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;padding:8px;border-radius:6px;font-size:12px;box-sizing:border-box;margin:4px 0}
 </style>
 </head>
 <body>
@@ -20,33 +19,12 @@ input{width:100%;background:#0f172a;border:1px solid #334155;color:#f1f5f9;paddi
 <script>
 const SB_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+const CLIENT_ID = '825770975900-hu3d3edgjaup25ec16vin7jpjs4phlo5.apps.googleusercontent.com';
 const REDIRECT = 'https://vwholesale.in/youtube-auth.html';
 const SCOPE = 'https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube';
 const main = document.getElementById('main');
 
-async function getCredentials() {
-  try {
-    const r = await fetch(SB_URL+'/rest/v1/marketing_settings?select=key,value&key=in.("YOUTUBE_CLIENT_ID","YOUTUBE_CLIENT_SECRET")', {
-      headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}
-    });
-    const d = await r.json();
-    if (Array.isArray(d) && d.length) {
-      const obj = {};
-      d.forEach(i=>obj[i.key]=i.value);
-      return obj;
-    }
-  } catch(e) {}
-  // DB fetch failed - show manual entry form
-  return {};
-}
-
-async function saveTokens(tokens) {
-  const rows = [
-    {key:'YOUTUBE_ACCESS_TOKEN', value:tokens.access_token},
-    {key:'YOUTUBE_REFRESH_TOKEN', value:tokens.refresh_token||''},
-    {key:'YOUTUBE_TOKEN_EXPIRY', value:new Date(Date.now()+tokens.expires_in*1000).toISOString()}
-  ].filter(r=>r.value);
-
+async function saveToDb(rows) {
   await fetch(SB_URL+'/rest/v1/marketing_settings', {
     method:'POST',
     headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
@@ -60,88 +38,65 @@ async function run() {
   const err = p.get('error');
 
   if (err) {
-    main.innerHTML = '<div class="err">❌ '+err+'</div><button onclick="location.reload()">Try Again</button>';
+    main.innerHTML = '<div class="err">❌ '+err+': '+(p.get('error_description')||'')+'</div>'
+      +'<button onclick="startAuth()">Try Again</button>';
     return;
   }
 
-  if (!code) {
-    // Check if credentials exist
-    const creds = await getCredentials();
-    if (!creds.YOUTUBE_CLIENT_ID) {
-      main.innerHTML = `
-        <div class="step">⚠️ Enter your Google OAuth credentials:</div>
-        <input id="cid" placeholder="Client ID" >
-        <input id="csec" placeholder="Client Secret (from Google Cloud Console)" type="password">
-        <button onclick="saveAndAuth()">Save & Authorize</button>
-        <div class="step" style="margin-top:12px">
-          <strong>How to get these:</strong><br>
-          1. <a href="https://console.cloud.google.com/apis/credentials?project=acquired-rite-502112-t5" target="_blank" style="color:#60a5fa">Open Google Cloud Credentials</a><br>
-          2. Click <strong>+ CREATE CREDENTIALS → OAuth client ID</strong><br>
-          3. Application type: <strong>Web application</strong><br>
-          4. Authorised redirect URI: <code style="background:#0f172a;padding:2px 6px">https://vwholesale.in/youtube-auth.html</code><br>
-          5. Copy Client ID + Secret here
-        </div>`;
-    } else {
-      main.innerHTML = '<div class="step">✅ Credentials found. Click below to authorize YouTube access.</div>'
-        +'<div class="step">⚠️ Make sure you are logged into <strong>V Wholesale Google Account</strong></div>'
-        +'<button onclick="startAuth()">▶️ Authorize YouTube Upload Access</button>';
+  if (code) {
+    main.innerHTML = '<div class="step">⏳ Exchanging code for tokens…</div>';
+    try {
+      // Get secret from DB
+      const sr = await fetch(SB_URL+'/rest/v1/marketing_settings?select=key,value&key=eq.YOUTUBE_CLIENT_SECRET',
+        {headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY}});
+      const sd = await sr.json();
+      const secret = sd[0]?.value;
+      if (!secret) throw new Error('Client secret not found in DB');
+
+      const tr = await fetch('https://oauth2.googleapis.com/token', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({code, client_id:CLIENT_ID, client_secret:secret,
+          redirect_uri:REDIRECT, grant_type:'authorization_code'})
+      });
+      const td = await tr.json();
+      if (!td.access_token) throw new Error(JSON.stringify(td));
+
+      // Save tokens
+      await saveToDb([
+        {key:'YOUTUBE_ACCESS_TOKEN', value:td.access_token, updated_at:new Date().toISOString()},
+        {key:'YOUTUBE_REFRESH_TOKEN', value:td.refresh_token||'', updated_at:new Date().toISOString()},
+        {key:'YOUTUBE_TOKEN_EXPIRY', value:new Date(Date.now()+(td.expires_in||3600)*1000).toISOString(), updated_at:new Date().toISOString()}
+      ]);
+
+      // Verify
+      const mr = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+        {headers:{Authorization:'Bearer '+td.access_token}});
+      const md = await mr.json();
+      const ch = md.items?.[0];
+      window.history.replaceState({},'','/youtube-auth.html');
+      main.innerHTML = '<div class="ok">✅ YouTube connected! '+(ch?'Channel: '+ch.snippet.title:'')+'</div>'
+        +'<div class="step">Tokens saved. YouTube posts will upload automatically from Post Now.</div>'
+        +'<button onclick="window.location.href=\'/marketing.html\'">→ Back to Marketing Portal</button>';
+    } catch(e) {
+      main.innerHTML = '<div class="err">❌ '+e.message+'</div><button onclick="startAuth()">Try Again</button>';
     }
     return;
   }
 
-  // Exchange code for tokens
-  main.innerHTML = '<div class="step">⏳ Exchanging code for tokens…</div>';
-  const creds = await getCredentials();
-  try {
-    const r = await fetch('https://oauth2.googleapis.com/token', {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({
-        code, client_id:creds.YOUTUBE_CLIENT_ID,
-        client_secret:creds.YOUTUBE_CLIENT_SECRET,
-        redirect_uri:REDIRECT, grant_type:'authorization_code'
-      })
-    });
-    const t = await r.json();
-    if (!t.access_token) throw new Error(JSON.stringify(t));
-
-    await saveTokens(t);
-    window.history.replaceState({},'','/youtube-auth.html');
-
-    // Verify channel access
-    const ch = await (await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
-      {headers:{Authorization:'Bearer '+t.access_token}})).json();
-    const channel = ch.items?.[0];
-
-    main.innerHTML = '<div class="ok">✅ YouTube connected!'+(channel?' Channel: '+channel.snippet.title:'')+'</div>'
-      +'<div class="step">Refresh token saved. YouTube uploads will work for 30+ days.</div>'
-      +'<button onclick="window.location.href=\'/marketing.html\'">→ Back to Marketing Portal</button>';
-  } catch(e) {
-    main.innerHTML = '<div class="err">❌ '+e.message+'</div><button onclick="location.reload()">Try Again</button>';
-  }
+  // Default: show authorize button
+  main.innerHTML = '<div class="step">⚠️ Make sure you are logged into the <strong>V Wholesale Google account</strong> before clicking below.</div>'
+    +'<button onclick="startAuth()">▶️ Authorize YouTube Access</button>';
 }
 
-async function saveAndAuth() {
-  const cid = document.getElementById('cid').value.trim();
-  const csec = document.getElementById('csec').value.trim();
-  if (!cid||!csec) { alert('Enter both Client ID and Secret'); return; }
-  await fetch(SB_URL+'/rest/v1/marketing_settings', {
-    method:'POST',
-    headers:{apikey:SB_KEY,Authorization:'Bearer '+SB_KEY,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'},
-    body:JSON.stringify([{key:'YOUTUBE_CLIENT_ID',value:cid},{key:'YOUTUBE_CLIENT_SECRET',value:csec}])
-  });
-  startAuth(cid);
-}
-
-function startAuth(clientId) {
-  getCredentials().then(creds => {
-    const cid = clientId||creds.YOUTUBE_CLIENT_ID;
-    const url = 'https://accounts.google.com/o/oauth2/v2/auth?client_id='+cid
-      +'&redirect_uri='+encodeURIComponent(REDIRECT)
-      +'&response_type=code&scope='+encodeURIComponent(SCOPE)
-      +'&access_type=offline&prompt=consent';
-    window.location.href = url;
-  });
+function startAuth() {
+  const url = 'https://accounts.google.com/o/oauth2/v2/auth'
+    +'?client_id='+encodeURIComponent(CLIENT_ID)
+    +'&redirect_uri='+encodeURIComponent(REDIRECT)
+    +'&response_type=code'
+    +'&scope='+encodeURIComponent(SCOPE)
+    +'&access_type=offline&prompt=consent';
+  window.location.href = url;
 }
 
 run();
