@@ -5678,36 +5678,39 @@ async function calGenerateGifSlideshow(calendarId) {
     pi = reloaded.data?.platform_images || pi;
 
     // Create MP4 via render-media (Railway primary, Cloudinary fallback)
+    // Run all 3 formats IN PARALLEL with 120s timeout each
     const renderFormats = [
       { key:'square',    urls: (pi.gif_slides_square||'').split('|').filter(Boolean) },
       { key:'story',     urls: (pi.gif_slides_story||'').split('|').filter(Boolean) },
       { key:'landscape', urls: (pi.gif_slides_landscape||'').split('|').filter(Boolean) },
-    ];
+    ].filter(fmt => fmt.urls.length > 0);
 
-    let mp4Count = 0;
-    for (const fmt of renderFormats) {
-      if (!fmt.urls.length) continue;
-      showMktToast('⏳ Creating ' + fmt.key + ' MP4 (Railway/Cloudinary)…', 10000);
+    showMktToast('⏳ Creating MP4s in parallel via Railway…', 15000);
+
+    const renderWithTimeout = async (fmt) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000); // 2 min timeout
       try {
         const renderRes = await (await fetch(MKT_SB_URL + '/functions/v1/render-media', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-          body: JSON.stringify({
-            action: 'slideshow',
-            calendar_id: parseInt(calendarId),
-            format_key: fmt.key,
-            image_urls: fmt.urls,
-            music_url: musicURL || null,
-            duration: 3
-          })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+          signal: controller.signal,
+          body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
+            format_key:fmt.key, image_urls:fmt.urls, music_url:musicURL||null, duration:3 })
         })).json();
-        if (renderRes.ok) {
-          mp4Count++;
-          console.log('[render]', fmt.key, 'via', renderRes.provider, renderRes.mp4_url?.slice(-40));
-        } else {
-          console.warn('[render]', fmt.key, 'failed:', renderRes.error);
-        }
-      } catch(e) { console.warn('[render]', fmt.key, 'error:', e.message); }
-    }
+        clearTimeout(timeout);
+        if (renderRes.ok) console.log('[render]', fmt.key, 'via', renderRes.provider, '✅');
+        else console.warn('[render]', fmt.key, 'failed:', renderRes.error);
+        return renderRes;
+      } catch(e) {
+        clearTimeout(timeout);
+        console.warn('[render]', fmt.key, 'error:', e.message);
+        return { ok: false, error: e.message };
+      }
+    };
+
+    const renderResults = await Promise.all(renderFormats.map(renderWithTimeout));
+    const mp4Count = renderResults.filter(r => r.ok).length;
 
     // Reload pi with saved MP4 URLs
     const refreshed = await sb.from('content_calendar').select('platform_images').eq('id', calendarId).single();
