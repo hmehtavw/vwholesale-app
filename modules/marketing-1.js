@@ -8249,11 +8249,21 @@ async function calPostNowExecute(calendarId) {
 
           if (waTarget === 'owner') {
             const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
-            const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
+            // Try image first
+            const imgPayload = buildPayload(ownerNum, 'Himansu');
+            const r1 = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
               method:'POST',headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
-              body:JSON.stringify(buildPayload(ownerNum,'Himansu'))})).json();
-            if (r.messages?.[0]?.id) { ok=true; postId='wa_owner_'+r.messages[0].id; }
-            else error='WA: '+(r.error?.message||r.error?.error_data?.details||JSON.stringify(r).slice(0,150));
+              body:JSON.stringify(imgPayload)})).json();
+            if (r1.messages?.[0]?.id) { ok=true; postId='wa_owner_'+r1.messages[0].id; }
+            else {
+              // Fallback: text message with image link
+              const r2 = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
+                method:'POST',headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
+                body:JSON.stringify({messaging_product:'whatsapp',to:ownerNum,type:'text',
+                  text:{body:'📢 New post ready!\n\n'+(item.caption||item.topic||'').slice(0,500)+'\n\n🖼 '+waImg}})})).json();
+              if (r2.messages?.[0]?.id) { ok=true; postId='wa_text_'+r2.messages[0].id; }
+              else error='WA: '+(r1.error?.message||r2.error?.message||JSON.stringify(r1).slice(0,150));
+            }
 
           } else if (waTarget === 'select') {
             const rawNums = (document.getElementById('wa-phone-input')?.value||'').trim();
