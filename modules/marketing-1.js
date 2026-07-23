@@ -7698,17 +7698,16 @@ async function calPreviewPost(calendarId) {
         };
         const mp4Url = pi[mp4Keys[ch]];
         if (mp4Url) {
-          return `<video src="${mp4Url}" style="${chImgStyle.replace('object-fit:cover','object-fit:contain')}" controls muted playsinline></video>
-                  <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px">🎬 MP4 ready for posting</div>`;
+          const vidStyle = chImgStyle.replace('object-fit:cover','object-fit:contain');
+          return '<video src="'+mp4Url+'" style="'+vidStyle+'" controls muted playsinline></video><div style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px">🎬 MP4 ready for posting</div>';
         }
         // No MP4 yet — show 3 slides side by side
         const slideKey = ch.includes('story') || ch === 'whatsapp_story' ? 'gif_slides_story' :
                          ch === 'facebook_post' || ch === 'youtube' || ch === 'gbp' ? 'gif_slides_landscape' : 'gif_slides_square';
         const slides = (pi[slideKey]||'').split('|').filter(Boolean);
         if (slides.length > 1) {
-          return `<div style="display:grid;grid-template-columns:repeat(${slides.length},1fr);gap:3px;margin-bottom:6px">
-            ${slides.map((url,i) => `<div style="position:relative"><img src="${url}" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;background:#f5f0e8"><span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:8px;padding:1px 5px;border-radius:3px">Slide ${i+1}</span></div>`).join('')}
-          </div><div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">↕ Slideshow → MP4 rendering in background</div>`;
+          const slideDivs = slides.map((url,i) => '<div style="position:relative"><img src="'+url+'" style="width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:5px;background:#f5f0e8"><span style="position:absolute;bottom:3px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:8px;padding:1px 5px;border-radius:3px">Slide '+(i+1)+'</span></div>').join('');
+          return '<div style="display:grid;grid-template-columns:repeat('+slides.length+',1fr);gap:3px;margin-bottom:6px">'+slideDivs+'</div><div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:6px">'+( mp4Url ? '🎬 MP4 ready' : '↕ Slideshow slides — MP4 rendering')+'</div>';
         }
       }
       // Default: image or video
