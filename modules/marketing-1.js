@@ -8155,17 +8155,21 @@ async function calPostNowExecute(calendarId) {
             headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
             body:JSON.stringify({image_url:storyImg,media_type:'STORIES'})})).json();
           if(cr.id){
-            const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
-              headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
-              body:JSON.stringify({creation_id:cr.id})})).json();
-            if(pr.id){ok=true;postId=pr.id;}
-            else error='Story publish: '+(pr.error?.message||pr.error?.error_user_msg||JSON.stringify(pr).slice(0,200));
-          } else {
-            // Log full error for debugging
-            const errMsg = cr.error?.message||cr.error?.error_user_msg||'';
-            const errCode = cr.error?.code||cr.error?.error_subcode||'';
-            error='Story container ['+errCode+']: '+errMsg+'  IMG:'+storyImg.slice(-40);
-          }
+            // Wait for container to be ready
+            await new Promise(r=>setTimeout(r,4000));
+            // Check status
+            const sr=await(await fetch(META_API+'/'+cr.id+'?fields=status_code,status',
+              {headers:{'Authorization':'Bearer '+st}})).json();
+            if(sr.status_code==='ERROR'||sr.status_code==='EXPIRED'){
+              error='Story container '+sr.status_code+': '+sr.status;
+            } else {
+              const pr=await(await fetch(META_API+'/'+cfg.META_IG_ID+'/media_publish',{method:'POST',
+                headers:{'Authorization':'Bearer '+st,'Content-Type':'application/json'},
+                body:JSON.stringify({creation_id:cr.id})})).json();
+              if(pr.id){ok=true;postId=pr.id;}
+              else error='Story publish: '+(pr.error?.message||pr.error?.error_user_msg||JSON.stringify(pr).slice(0,200));
+            }
+          } else error='Story container: '+(cr.error?.message||cr.error?.error_user_msg||JSON.stringify(cr).slice(0,200));
         }
       }
       else if (ch==='facebook_post') {
