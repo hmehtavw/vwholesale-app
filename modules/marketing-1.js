@@ -5626,87 +5626,57 @@ async function calGenerateGifSlideshow(calendarId) {
     const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     if (!item) throw new Error('Calendar item not found');
 
-    const pi_init = item.platform_images || {};
-    let pi = pi_init;
-    const slideImages = { square: [], story: [], landscape: [] };
-    const sqExist = (pi_init.gif_slides_square||'').split('|').filter(Boolean);
-    const stExist = (pi_init.gif_slides_story||'').split('|').filter(Boolean);
-    const lsExist = (pi_init.gif_slides_landscape||'').split('|').filter(Boolean);
-
-    if (sqExist.length >= 3 && stExist.length >= 3 && lsExist.length >= 3) {
-      slideImages.square = sqExist; slideImages.story = stExist; slideImages.landscape = lsExist;
-      showMktToast('✅ Using existing 9 slides — firing Railway MP4 renders…', 3000);
-    } else {
-      // Get themes first (fast)
-      showMktToast('⏳ Getting slide themes…', 5000);
-      const themesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action: 'get_themes', topic: cleanTopic(item.topic) })
-      });
-      const themesData = await themesRes.json();
-      if (!themesData.ok || !themesData.slides?.length) throw new Error('Could not get slide themes from GPT');
-      const themes = themesData.slides;
-      const t = cleanTopic(item.topic).toLowerCase();
-      const scheme = t.includes('granite')||t.includes('tile') ? 'elegant cream charcoal stone' :
-        t.includes('monsoon')||t.includes('rain') ? 'calm blue grey rainy atmosphere' :
-        t.includes('bathroom') ? 'clean white chrome spa' :
-        t.includes('paint') ? 'warm terracotta sage green' :
-        item.is_festival ? 'festive gold jewel tones' : 'warm professional cream charcoal';
-
-      // Generate 9 images one at a time — each call is <30s, no timeout
-      let imgCount = 0;
-      for (let si = 0; si < themes.length; si++) {
-        for (const szKey of ['square','story','landscape']) {
-          showMktToast('⏳ Slide ' + (si+1) + '/3 — ' + szKey + ' (' + imgCount + '/9 done)…', 35000);
-          try {
-            const genRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
-              method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-              body: JSON.stringify({ action:'gen_one', calendar_id:parseInt(calendarId),
-                slide_idx:si+1, size_key:szKey, headline:themes[si].headline,
-                message:themes[si].message, angle:themes[si].angle, scheme, category_idx:si })
-            });
-            const genData = await genRes.json();
-            if (genData.ok && genData.url) { slideImages[szKey].push(genData.url); imgCount++; }
-            else console.warn('[gif] gen_one failed', si+1, szKey, genData.error);
-          } catch(e) { console.warn('[gif] gen_one error', e.message); }
-        }
-      }
-
-      if (!slideImages.square.length) throw new Error('No images generated — check OpenAI quota');
-
-      showMktToast('✅ ' + imgCount + '/9 images done — saving…', 3000);
-      const saveRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-        body: JSON.stringify({ action:'save_slides', calendar_id:parseInt(calendarId), slide_images:slideImages })
-      });
-      const saveData = await saveRes.json();
-      if (saveData.platform_images) pi = saveData.platform_images;
-    }
-
-    const frameUrls = slideImages.square;
-
-    // Create MP4 via render-media — fire all 3 in parallel, then poll for completion
-    const renderFormats = [
-      { key:'square',    urls: (pi.gif_slides_square||'').split('|').filter(Boolean) },
-      { key:'story',     urls: (pi.gif_slides_story||'').split('|').filter(Boolean) },
-      { key:'landscape', urls: (pi.gif_slides_landscape||'').split('|').filter(Boolean) },
-    ].filter(fmt => fmt.urls.length > 0);
-
-    showMktToast('⏳ Firing Railway renders…', 5000);
-
-    // Fire Railway directly (fire-and-forget, Railway responds in <1s)
     const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
     const RAIL_SECRET = 'vw-render-2026-secret';
 
-    renderFormats.forEach(fmt => {
-      fetch(RAIL_URL + '/render', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
-        body: JSON.stringify({ action:'slideshow', calendar_id:parseInt(calendarId),
-          format_key:fmt.key, image_urls:fmt.urls, duration:3 })
-      }).then(r => r.json()).then(d => console.log('[railway direct]', fmt.key, d.status))
-        .catch(e => console.warn('[railway direct]', fmt.key, e.message));
+    // Check if Railway already processed this (gif_status = 'ready')
+    if (item.gif_status === 'ready') {
+      showMktToast('✅ GIF already generated — ready to post!', 3000);
+      clearInterval(ticker);
+      const btn2 = document.getElementById('gif-btn-'+calendarId);
+      if (btn2) { btn2.innerHTML = '✨'; btn2.disabled = false; }
+      renderCalendar();
+      return;
+    }
+
+    // Fire Railway — it does EVERYTHING (themes + 9 images + 3 MP4s)
+    // No waiting — Railway saves to DB as it goes
+    showMktToast('⏳ Sending to Railway — generating 9 images + MP4s in background…', 8000);
+
+    // Mark as pending in DB
+    await sb.from('content_calendar').update({
+      gif_status: 'pending',
+      gif_requested_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
+
+    const fireRes = await fetch(RAIL_URL + '/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
+      body: JSON.stringify({ action: 'gif_slideshow', calendar_id: parseInt(calendarId) })
     });
+    const fireData = await fireRes.json();
+    if (!fireData.ok) throw new Error('Railway rejected job: ' + fireData.error);
+
+    showMktToast('✅ Job queued on Railway! Generating 9 images + MP4s (~5-8 min). Check back soon.', 8000);
+
+    // Poll progress from Railway every 10s and show in toast
+    const pollInterval = setInterval(async () => {
+      try {
+        const pr = await fetch(RAIL_URL + '/progress/' + calendarId);
+        const pd = await pr.json();
+        if (pd.status === 'ready') {
+          clearInterval(pollInterval);
+          showMktNotif('✅ GIF complete! ' + (pd.has_mp4 ? 'MP4 ready for all channels.' : 'Images ready.'));
+          renderCalendar();
+        } else if (pd.progress) {
+          showMktToast('⏳ Railway: ' + pd.progress.step + ' (' + (pd.progress.done||0) + '/' + (pd.progress.total||9) + ')…', 11000);
+        }
+      } catch(e) {}
+    }, 10000);
+
+    // Clear poll after 10 min max
+    setTimeout(() => clearInterval(pollInterval), 600000);
 
     const mp4Count = renderFormats.length;
 
