@@ -70,7 +70,7 @@ async function run() {
     if (!creds.YOUTUBE_CLIENT_ID) {
       main.innerHTML = `
         <div class="step">⚠️ Enter your Google OAuth credentials:</div>
-        <input id="cid" placeholder="Client ID" value="825770975900-hu3d3edgjaup25ec16vin7jpjs4phlo5.apps.googleusercontent.com">
+        <input id="cid" placeholder="Client ID" >
         <input id="csec" placeholder="Client Secret (from Google Cloud Console)" type="password">
         <button onclick="saveAndAuth()">Save & Authorize</button>
         <div class="step" style="margin-top:12px">
