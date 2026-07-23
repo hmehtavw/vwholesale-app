@@ -5648,16 +5648,25 @@ async function calGenerateGifSlideshow(calendarId) {
     }).eq('id', calendarId);
 
     // STEP 2: Generate 3 distinct slideshow frames server-side
-    showMktToast('⏳ Step 2/4: Generating 3 unique AI slides (~3 min)…', 10000);
-    const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
-      body: JSON.stringify({ action: 'generate_slideshow', calendar_id: parseInt(calendarId) })
-    });
-    const slidesData = await slidesRes.json();
-    if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || ''));
-    const frameUrls = slidesData.frame_urls || [];
-    if (!frameUrls.length) throw new Error('Slide generation returned 0 frames — OpenAI may have failed. Check billing/quota.');
-    showMktToast('✅ ' + frameUrls.length + '/3 AI images generated — creating MP4 via Cloudinary…', 4000);
+    // Skip if slides already exist from previous run
+    const existingSlides = (pi.gif_slides_square||'').split('|').filter(Boolean);
+    let frameUrls = [];
+
+    if (existingSlides.length >= 3) {
+      showMktToast('✅ Using existing slides — creating MP4…', 3000);
+      frameUrls = existingSlides;
+    } else {
+      showMktToast('⏳ Step 2/4: Generating 3 unique AI slides (~3 min)…', 10000);
+      const slidesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({ action: 'generate_slideshow', calendar_id: parseInt(calendarId) })
+      });
+      const slidesData = await slidesRes.json();
+      if (!slidesData.ok) throw new Error('Slide generation failed: ' + (slidesData.error || JSON.stringify(slidesData).slice(0,150)));
+      frameUrls = slidesData.frame_urls || [];
+      if (!frameUrls.length) throw new Error('Slide generation returned 0 frames — OpenAI may have failed. Check billing/quota.');
+    }
+    showMktToast('✅ ' + frameUrls.length + '/3 slides ready — creating MP4 via Railway…', 3000);
 
     // Reload platform_images which now has gif_slides_* keys
     let posterItem_check = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
