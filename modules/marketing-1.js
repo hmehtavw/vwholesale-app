@@ -5705,7 +5705,7 @@ async function calGenerateGifSlideshow(calendarId) {
     showMktToast('✅ ' + mp4Count + '/3 MP4s created via Railway+Cloudinary — ready to post!', 4000);
 
     // Slideshow mode: Railway/Cloudinary handled MP4 above — skip browser GIF encoding
-    // (Browser GIF encoding only used for Animated Poster mode)
+    clearInterval(ticker);
     return; // Exit slideshow flow here
 
     // Map poster URLs to GIF format structure
