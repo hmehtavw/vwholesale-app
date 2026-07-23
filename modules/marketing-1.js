@@ -8249,12 +8249,18 @@ async function calPostNowExecute(calendarId) {
 
           if (waTarget === 'owner') {
             const ownerNum = cfg.META_WA_OWNER_PHONE || '919038010175';
-            // Must use template - image sends require active 24h conversation window
+            // Send new_arrival template with image header
             const r = await (await fetch(META_API+'/'+cfg.META_WA_PHONE_ID+'/messages',{
               method:'POST',headers:{'Authorization':'Bearer '+cfg.META_WA_TOKEN,'Content-Type':'application/json'},
               body:JSON.stringify({messaging_product:'whatsapp',recipient_type:'individual',to:ownerNum,
-                type:'template',template:{name:'vwholesale_visit_invite',language:{code:'en'},
-                  components:[{type:'body',parameters:[{type:'text',text:'Himansu'}]}]}})})).json();
+                type:'template',template:{name:'vwholesale_new_arrival',language:{code:'en'},
+                  components:[
+                    {type:'header',parameters:[{type:'image',image:{link:waImg}}]},
+                    {type:'body',parameters:[
+                      {type:'text',text:'Himansu'},
+                      {type:'text',text:(item.topic||'New products').slice(0,60)}
+                    ]}
+                  ]}})})).json();
             if (r.messages?.[0]?.id) { ok=true; postId='wa_owner_'+r.messages[0].id; }
             else error='WA: '+(r.error?.message||r.error?.error_data?.details||JSON.stringify(r).slice(0,150));
 
