@@ -5668,25 +5668,27 @@ async function calGenerateGifSlideshow(calendarId) {
       { key: 'story',     gifW: 480, gifH: 720, staticKey: 'instagram_story', channels: ['instagram_story','facebook_story','whatsapp_story'] },
       { key: 'landscape', gifW: 720, gifH: 480, staticKey: 'facebook_post',   channels: ['facebook_post','youtube','gbp'] },
     ]
+    // Fetch poster images via edge function proxy (avoids browser CORS/tainted-canvas issues)
+    showMktToast('⏳ Fetching poster images…', 5000);
+    const proxyRes = await fetch(MKT_SB_URL + '/functions/v1/generate-poster-v2', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({
+        action: 'fetch_images_b64',
+        urls: {
+          square: pi.instagram_feed,
+          story: pi.instagram_story,
+          landscape: pi.facebook_post
+        }
+      })
+    });
+    const proxyData = await proxyRes.json();
+    if (!proxyData.ok) throw new Error('Image fetch failed: ' + (proxyData.error||''));
+
     const formatResults = {};
     for (const fmt of GIF_FORMATS) {
-      const url = pi[fmt.staticKey] || null;
-      if (!url) { console.warn('No poster URL for', fmt.key); continue; }
-      showMktToast('⏳ Loading ' + fmt.key + ' poster…', 3000);
-      try {
-        // Load via Image tag (avoids CORS issues with Supabase storage)
-        const img = await new Promise((res, rej) => {
-          const i = new Image(); i.crossOrigin = 'anonymous';
-          i.onload = () => res(i); i.onerror = rej;
-          i.src = url + '?t=' + Date.now(); // cache-bust
-        });
-        // Draw to canvas to get b64
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth || fmt.gifW; c.height = img.naturalHeight || fmt.gifH;
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        const b64 = c.toDataURL('image/png').split(',')[1];
-        formatResults[fmt.key] = { b64, fmt };
-      } catch(e) { console.warn(fmt.key + ' load error:', e); }
+      const b64 = proxyData.images?.[fmt.key];
+      if (!b64) { console.warn('No image data for', fmt.key); continue; }
+      formatResults[fmt.key] = { b64, fmt };
     }
     if (!Object.keys(formatResults).length) throw new Error('Could not load any poster images for GIF encoding');
 
