@@ -3727,8 +3727,17 @@ async function renderCalendar(offsetUnits) {
   const now = new Date();
   let viewStart, viewEnd, periodLabel, prevLabel, nextLabel;
 
-  if (calViewMode === 'week') {
-    // Week view: Mon–Sun
+  if (calViewMode === 'today') {
+    const todayStr = now.toISOString().split('T')[0];
+    viewStart = todayStr;
+    viewEnd   = todayStr;
+    periodLabel = 'Today — ' + now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+    prevLabel = '← Yesterday'; nextLabel = 'Tomorrow →';
+    // For today, offset means days
+    const d = new Date(now); d.setDate(d.getDate() + offsetUnits);
+    viewStart = viewEnd = d.toISOString().split('T')[0];
+    periodLabel = offsetUnits === 0 ? 'Today' : d.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'});
+  } else if (calViewMode === 'week') {
     const dayOfWeek = now.getDay() || 7;
     const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + 1 + (offsetUnits * 7));
     const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
@@ -3737,7 +3746,6 @@ async function renderCalendar(offsetUnits) {
     periodLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' – ' + sunday.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
     prevLabel = '← Prev Week'; nextLabel = 'Next Week →';
   } else if (calViewMode === 'fortnight') {
-    // Fortnight: 2 weeks
     const dayOfWeek = now.getDay() || 7;
     const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + 1 + (offsetUnits * 14));
     const endDay = new Date(monday); endDay.setDate(monday.getDate() + 13);
@@ -3746,7 +3754,6 @@ async function renderCalendar(offsetUnits) {
     periodLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' – ' + endDay.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
     prevLabel = '← Prev 2 Weeks'; nextLabel = 'Next 2 Weeks →';
   } else if (calViewMode === 'quarter') {
-    // Quarter: 3 months
     const baseMonth = new Date(now.getFullYear(), now.getMonth() + (offsetUnits * 3), 1);
     viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
     viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 3, 0).toISOString().split('T')[0];
@@ -3755,7 +3762,7 @@ async function renderCalendar(offsetUnits) {
     periodLabel = m1 + ' – ' + m3;
     prevLabel = '← Prev Quarter'; nextLabel = 'Next Quarter →';
   } else {
-    // Default: month view (1 month)
+    // month (default)
     const baseMonth = new Date(now.getFullYear(), now.getMonth() + offsetUnits, 1);
     viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
     viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -3817,7 +3824,7 @@ async function renderCalendar(offsetUnits) {
     </div>
     <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
       <span style="font-size:10px;font-weight:700;color:var(--text3);padding:0 6px">VIEW</span>
-      ${_vp('week','This Week')}${_vp('fortnight','2 Weeks')}${_vp('month','Month')}${_vp('quarter','Quarter')}
+      ${_vp('today','Today')}${_vp('week','This Week')}${_vp('fortnight','15 Days')}${_vp('month','Month')}${_vp('quarter','Quarter')}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">
       <div style="display:flex;gap:3px;background:var(--bg2);border-radius:24px;padding:3px">
