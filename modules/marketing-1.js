@@ -3778,8 +3778,8 @@ async function renderCalendar(offsetUnits) {
   const contentByTopic = {};
   (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
 
-  const reelDays = (calItems||[]).filter(i => (i.is_reel === true || i.content_type==='reel') && (calFilterType==='all'||calFilterType==='reel') && (calFilterStatus==='all'||i.status===calFilterStatus));
-  const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel' && (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus));
+  const reelDays = (calItems||[]).filter(i => (i.is_reel === true || i.content_type==='reel') && (calFilterType==='all'||calFilterType==='reel') && (calFilterStatus==='all'||i.status===calFilterStatus) && (!i.cal_date || (i.cal_date >= viewStart && i.cal_date <= viewEnd)));
+  const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel' && (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus) && (!i.cal_date || (i.cal_date >= viewStart && i.cal_date <= viewEnd)));
 
   const TYPE_ICON = {image:'🖼️', reel:'🎬', gif:'✨', festival:'🎉', qa:'❓', offer:'💰', post:'📝'};
 
