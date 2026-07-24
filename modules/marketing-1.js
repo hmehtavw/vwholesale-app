@@ -3802,12 +3802,9 @@ async function renderCalendar(offsetUnits) {
   const sessionDue = daysSinceSession >= 12;
 
   // Group items into a single period for display
-  const itemsByMonth = [(calItems||[]).filter(item => item.cal_date >= viewStart && item.cal_date <= viewEnd)];
+  const itemsByMonth = [allFiltered.filter(item => !item.cal_date || (item.cal_date >= viewStart && item.cal_date <= viewEnd))];
 
-  const shownCount = (calItems||[]).filter(i =>
-    (calFilterType==='all'||i.content_type===calFilterType) &&
-    (calFilterStatus==='all'||i.status===calFilterStatus)
-  ).length;
+  const shownCount = allFiltered.length;
 
   const _vp = (v,l) => '<button onclick="window._calViewMode=\''+v+'\';window._calOffset=0;renderCalendar(0)" style="padding:5px 12px;font-size:11px;font-weight:700;border-radius:20px;border:none;cursor:pointer;background:'+(calViewMode===v?'var(--accent)':'var(--bg2)')+';color:'+(calViewMode===v?'#000':'var(--text2)')+'">'+l+'</button>';
   const _tp = (k,l) => '<button onclick="window._calFilterType=\''+k+'\';renderCalendar()" style="padding:4px 10px;font-size:11px;font-weight:700;border-radius:20px;border:none;cursor:pointer;background:'+(calFilterType===k?'var(--accent)':'transparent')+';color:'+(calFilterType===k?'#000':'var(--text2)')+'">'+l+'</button>';
