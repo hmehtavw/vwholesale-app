@@ -3716,7 +3716,9 @@ function buildCalMonthGroups(itemsByMonth, monthLabels, contentByTopic, now, TYP
 }
 
 async function renderCalendar(offsetUnits) {
-  const calViewMode = window._calViewMode || 'month';
+  const calViewMode     = window._calViewMode     || 'month';
+  const calFilterType   = window._calFilterType   || 'all';
+  const calFilterStatus = window._calFilterStatus || 'all';
   if (typeof offsetUnits !== 'number') offsetUnits = window._calOffset || 0;
   window._calOffset = offsetUnits;
 
@@ -3791,9 +3793,6 @@ async function renderCalendar(offsetUnits) {
 
   // Group items into a single period for display
   const itemsByMonth = [(calItems||[]).filter(item => item.cal_date >= viewStart && item.cal_date <= viewEnd)];
-
-  const calFilterType   = window._calFilterType   || 'all';
-  const calFilterStatus = window._calFilterStatus || 'all';
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
