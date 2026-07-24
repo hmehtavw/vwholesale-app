@@ -3715,23 +3715,55 @@ function buildCalMonthGroups(itemsByMonth, monthLabels, contentByTopic, now, TYP
   }).join('');
 }
 
-async function renderCalendar(offsetMonths) {
-  // Support month navigation — default to current month
-  if (typeof offsetMonths !== 'number') offsetMonths = window._calOffset || 0;
-  window._calOffset = offsetMonths;
+async function renderCalendar(offsetUnits) {
+  const calViewMode = window._calViewMode || 'month';
+  if (typeof offsetUnits !== 'number') offsetUnits = window._calOffset || 0;
+  window._calOffset = offsetUnits;
 
   setContent(`<div style="text-align:center;padding:40px;color:var(--text3)">⏳ Loading calendar…</div>`);
 
   const now = new Date();
-  const baseMonth = new Date(now.getFullYear(), now.getMonth() + offsetMonths, 1);
-  // Show 3 months: baseMonth, baseMonth+1, baseMonth+2
-  const viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
-  const viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 3, 0).toISOString().split('T')[0];
+  let viewStart, viewEnd, periodLabel, prevLabel, nextLabel;
 
-  const monthLabels = [0,1,2].map(i =>
-    new Date(baseMonth.getFullYear(), baseMonth.getMonth() + i, 1)
-      .toLocaleString('en-IN', { month: 'long', year: 'numeric' })
-  );
+  if (calViewMode === 'week') {
+    // Week view: Mon–Sun
+    const dayOfWeek = now.getDay() || 7;
+    const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + 1 + (offsetUnits * 7));
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    viewStart = monday.toISOString().split('T')[0];
+    viewEnd   = sunday.toISOString().split('T')[0];
+    periodLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' – ' + sunday.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    prevLabel = '← Prev Week'; nextLabel = 'Next Week →';
+  } else if (calViewMode === 'fortnight') {
+    // Fortnight: 2 weeks
+    const dayOfWeek = now.getDay() || 7;
+    const monday = new Date(now); monday.setDate(now.getDate() - dayOfWeek + 1 + (offsetUnits * 14));
+    const endDay = new Date(monday); endDay.setDate(monday.getDate() + 13);
+    viewStart = monday.toISOString().split('T')[0];
+    viewEnd   = endDay.toISOString().split('T')[0];
+    periodLabel = monday.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' – ' + endDay.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+    prevLabel = '← Prev 2 Weeks'; nextLabel = 'Next 2 Weeks →';
+  } else if (calViewMode === 'quarter') {
+    // Quarter: 3 months
+    const baseMonth = new Date(now.getFullYear(), now.getMonth() + (offsetUnits * 3), 1);
+    viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
+    viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 3, 0).toISOString().split('T')[0];
+    const m1 = new Date(baseMonth).toLocaleString('en-IN',{month:'short',year:'numeric'});
+    const m3 = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+2, 1).toLocaleString('en-IN',{month:'short',year:'numeric'});
+    periodLabel = m1 + ' – ' + m3;
+    prevLabel = '← Prev Quarter'; nextLabel = 'Next Quarter →';
+  } else {
+    // Default: month view (1 month)
+    const baseMonth = new Date(now.getFullYear(), now.getMonth() + offsetUnits, 1);
+    viewStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth(), 1).toISOString().split('T')[0];
+    viewEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth() + 1, 0).toISOString().split('T')[0];
+    periodLabel = baseMonth.toLocaleString('en-IN',{month:'long',year:'numeric'});
+    prevLabel = '← Prev Month'; nextLabel = 'Next Month →';
+  }
+
+  const baseMonth = new Date(viewStart);
+  const monthLabels = [periodLabel];
+
   const nextStrategyDate = getNextStrategyDate();
 
   const [
@@ -3757,43 +3789,41 @@ async function renderCalendar(offsetMonths) {
     : 999;
   const sessionDue = daysSinceSession >= 12;
 
-  // Group items by month for display
-  const itemsByMonth = [0,1,2].map(i => {
-    const mStart = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+i, 1).toISOString().split('T')[0];
-    const mEnd   = new Date(baseMonth.getFullYear(), baseMonth.getMonth()+i+1, 0).toISOString().split('T')[0];
-    return (calItems||[]).filter(item => item.cal_date >= mStart && item.cal_date <= mEnd);
-  });
+  // Group items into a single period for display
+  const itemsByMonth = [(calItems||[]).filter(item => item.cal_date >= viewStart && item.cal_date <= viewEnd)];
 
-  // Read active filters from window state
   const calFilterType   = window._calFilterType   || 'all';
   const calFilterStatus = window._calFilterStatus || 'all';
-  const calViewMode     = window._calViewMode     || 'month';
 
   setContent(`
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
     <div>
       <h3 style="font-size:16px;font-weight:900">📅 Content Calendar</h3>
-      <div style="font-size:12px;color:var(--text3)">${monthLabels[0]} – ${monthLabels[2]} · ${(calItems||[]).length} posts</div>
+      <div style="font-size:12px;color:var(--text3)">${periodLabel} · ${(calItems||[]).length} posts</div>
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button onclick="renderCalendar(${offsetMonths-3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">← Prev</button>
-      <button onclick="renderCalendar(0)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">Today</button>
-      <button onclick="renderCalendar(${offsetMonths+3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">Next →</button>
-      <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
+      <button onclick="renderCalendar(${offsetUnits-1})" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">${prevLabel}</button>
+      <button onclick="window._calOffset=0;renderCalendar(0)" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">Today</button>
+      <button onclick="renderCalendar(${offsetUnits+1})" class="mkt-btn mkt-btn-ghost" style="font-size:11px;padding:4px 10px">${nextLabel}</button>
+      <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:5px 12px">+ Add</button>
     </div>
   </div>
 
-  <!-- Filters Row -->
+  <!-- View mode + Filters -->
   <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <!-- View toggle -->
+    <div style="display:flex;gap:3px;background:var(--bg2);border-radius:8px;padding:3px">
+      ${['week','fortnight','month','quarter'].map(v => `<button onclick="window._calViewMode='${v}';window._calOffset=0;renderCalendar(0)" style="padding:4px 8px;font-size:10px;font-weight:700;border-radius:5px;border:none;cursor:pointer;background:${calViewMode===v?'var(--accent)':'transparent'};color:${calViewMode===v?'#000':'var(--text2)'}">${v==='week'?'Week':v==='fortnight'?'2 Weeks':v==='month'?'Month':'Quarter'}</button>`).join('')}
+    </div>
     <!-- Type filter -->
-    <div style="display:flex;gap:4px;background:var(--bg2);border-radius:8px;padding:3px">
-      ${['all','image','gif','reel','festival'].map(t => `<button onclick="window._calFilterType='${t}';renderCalendar()" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;cursor:pointer;background:${calFilterType===t?'var(--accent)':'transparent'};color:${calFilterType===t?'#000':'var(--text2)'}">${t==='all'?'All Types':t==='image'?'🖼️ Poster':t==='gif'?'🎬 GIF':t==='reel'?'📱 Reel':'🎉 Festival'}</button>`).join('')}
+    <div style="display:flex;gap:3px;background:var(--bg2);border-radius:8px;padding:3px">
+      ${['all','image','gif','reel','festival'].map(t => `<button onclick="window._calFilterType='${t}';renderCalendar()" style="padding:4px 8px;font-size:10px;font-weight:700;border-radius:5px;border:none;cursor:pointer;background:${calFilterType===t?'var(--accent)':'transparent'};color:${calFilterType===t?'#000':'var(--text2)'}">${t==='all'?'All':t==='image'?'🖼️':t==='gif'?'🎬':t==='reel'?'📱':'🎉'}</button>`).join('')}
     </div>
     <!-- Status filter -->
-    <div style="display:flex;gap:4px;background:var(--bg2);border-radius:8px;padding:3px">
-      ${['all','planned','ready','approved','published'].map(s => `<button onclick="window._calFilterStatus='${s}';renderCalendar()" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;cursor:pointer;background:${calFilterStatus===s?'var(--accent)':'transparent'};color:${calFilterStatus===s?'#000':'var(--text2)'}">${s==='all'?'All Status':s==='planned'?'⬜ Not Ready':s==='ready'?'⏳ Ready':s==='approved'?'✅ Approved':'📤 Published'}</button>`).join('')}
+    <div style="display:flex;gap:3px;background:var(--bg2);border-radius:8px;padding:3px">
+      ${['all','planned','ready','approved','published'].map(s => `<button onclick="window._calFilterStatus='${s}';renderCalendar()" style="padding:4px 8px;font-size:10px;font-weight:700;border-radius:5px;border:none;cursor:pointer;background:${calFilterStatus===s?'var(--accent)':'transparent'};color:${calFilterStatus===s?'#000':'var(--text2)'}">${s==='all'?'All':s==='planned'?'⬜':s==='ready'?'⏳':s==='approved'?'✅':'📤'}</button>`).join('')}
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-left:4px">${(calItems||[]).filter(i => (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus)).length} shown</div>
+    <div style="font-size:11px;color:var(--text3)">${(calItems||[]).filter(i => (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus)).length} shown</div>
   </div>
 
   <!-- REEL DAYS -->
