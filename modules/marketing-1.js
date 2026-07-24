@@ -3746,8 +3746,8 @@ async function renderCalendar(offsetMonths) {
   const contentByTopic = {};
   (contentPosts||[]).forEach(p => { contentByTopic[p.topic] = p; });
 
-  const reelDays = (calItems||[]).filter(i => i.is_reel === true || i.content_type==='reel');
-  const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel');
+  const reelDays = (calItems||[]).filter(i => (i.is_reel === true || i.content_type==='reel') && (calFilterType==='all'||calFilterType==='reel') && (calFilterStatus==='all'||i.status===calFilterStatus));
+  const otherDays = (calItems||[]).filter(i => !i.is_reel && i.content_type!=='reel' && (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus));
 
   const TYPE_ICON = {image:'🖼️', reel:'🎬', gif:'✨', festival:'🎉', qa:'❓', offer:'💰', post:'📝'};
 
@@ -3764,18 +3764,36 @@ async function renderCalendar(offsetMonths) {
     return (calItems||[]).filter(item => item.cal_date >= mStart && item.cal_date <= mEnd);
   });
 
+  // Read active filters from window state
+  const calFilterType   = window._calFilterType   || 'all';
+  const calFilterStatus = window._calFilterStatus || 'all';
+  const calViewMode     = window._calViewMode     || 'month';
+
   setContent(`
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
     <div>
       <h3 style="font-size:16px;font-weight:900">📅 Content Calendar</h3>
       <div style="font-size:12px;color:var(--text3)">${monthLabels[0]} – ${monthLabels[2]} · ${(calItems||[]).length} posts</div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button onclick="renderCalendar(${offsetMonths-3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px">← Prev 3 months</button>
-      <button onclick="renderCalendar(0)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px" title="Jump to today">Today</button>
-      <button onclick="renderCalendar(${offsetMonths+3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 12px">Next 3 months →</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button onclick="renderCalendar(${offsetMonths-3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">← Prev</button>
+      <button onclick="renderCalendar(0)" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">Today</button>
+      <button onclick="renderCalendar(${offsetMonths+3})" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:5px 10px">Next →</button>
       <button onclick="addCalendarItem()" class="mkt-btn mkt-btn-primary" style="font-size:11px;padding:6px 14px">+ Add</button>
     </div>
+  </div>
+
+  <!-- Filters Row -->
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    <!-- Type filter -->
+    <div style="display:flex;gap:4px;background:var(--bg2);border-radius:8px;padding:3px">
+      ${['all','image','gif','reel','festival'].map(t => `<button onclick="window._calFilterType='${t}';renderCalendar()" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;cursor:pointer;background:${calFilterType===t?'var(--accent)':'transparent'};color:${calFilterType===t?'#000':'var(--text2)'}">${t==='all'?'All Types':t==='image'?'🖼️ Poster':t==='gif'?'🎬 GIF':t==='reel'?'📱 Reel':'🎉 Festival'}</button>`).join('')}
+    </div>
+    <!-- Status filter -->
+    <div style="display:flex;gap:4px;background:var(--bg2);border-radius:8px;padding:3px">
+      ${['all','planned','ready','approved','published'].map(s => `<button onclick="window._calFilterStatus='${s}';renderCalendar()" style="padding:4px 10px;font-size:11px;font-weight:600;border-radius:6px;border:none;cursor:pointer;background:${calFilterStatus===s?'var(--accent)':'transparent'};color:${calFilterStatus===s?'#000':'var(--text2)'}">${s==='all'?'All Status':s==='planned'?'⬜ Not Ready':s==='ready'?'⏳ Ready':s==='approved'?'✅ Approved':'📤 Published'}</button>`).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-left:4px">${(calItems||[]).filter(i => (calFilterType==='all'||i.content_type===calFilterType) && (calFilterStatus==='all'||i.status===calFilterStatus)).length} shown</div>
   </div>
 
   <!-- REEL DAYS -->
