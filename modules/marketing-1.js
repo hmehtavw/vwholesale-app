@@ -3838,8 +3838,8 @@ async function renderCalendar(offsetUnits) {
     </div>
   </div>
 
-  <!-- REEL DAYS -->
-  ${reelDays.length ? `
+  <!-- REEL DAYS - compact script view, only when no type filter -->
+  ${(reelDays.length && calFilterType === 'all') ? `
   <div style="margin-bottom:20px">
     <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎬 Reel days — ${reelDays.length} in ${monthLabels[0]}</div>
     <div style="display:grid;gap:10px">
