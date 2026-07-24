@@ -3631,8 +3631,11 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
               { gifKey:'story_gif',   staticKey:'instagram_story', label:'9:16 Story',  w:'56px',  h:'99px'  },
               { gifKey:'landscape_gif',staticKey:'facebook_post',  label:'16:9 FB/YT', w:'120px', h:'68px'  },
             ].map(({gifKey,staticKey,label,w,h}) => {
+              // Check gif key, then first slide URL, then static key
+              const slideKey = gifKey === 'square_gif' ? 'gif_slides_square' : gifKey === 'story_gif' ? 'gif_slides_story' : 'gif_slides_landscape';
+              const firstSlide = (platformImages[slideKey]||'').split('|')[0] || null;
               const gifSrc = platformImages[gifKey] || null;
-              const staticSrc = platformImages[staticKey] || null;
+              const staticSrc = firstSlide || platformImages[staticKey] || null;
               const src = gifSrc || staticSrc;
               const dlName = gifSrc ? gifKey + '.gif' : staticKey + '.png';
               return src ? `<div style="flex-shrink:0;text-align:center;cursor:pointer" onclick="openMktLightbox('${src}','${label}','${src}','${dlName}')" title="Click to expand">
