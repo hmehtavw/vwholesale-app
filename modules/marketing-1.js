@@ -3763,9 +3763,7 @@ async function renderCalendar(offsetUnits) {
     prevLabel = '← Prev Month'; nextLabel = 'Next Month →';
   }
 
-  const baseMonth = new Date(viewStart);
   const monthLabels = [periodLabel];
-
   const nextStrategyDate = getNextStrategyDate();
 
   const [
