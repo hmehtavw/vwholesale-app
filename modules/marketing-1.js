@@ -3826,7 +3826,7 @@ async function renderCalendar(offsetUnits) {
   <!-- REEL DAYS -->
   ${reelDays.length ? `
   <div style="margin-bottom:20px">
-    <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎬 Reel days — ${reelDays.length} across ${monthLabels[0].split(' ')[0]}–${monthLabels[2].split(' ')[0]}</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">🎬 Reel days — ${reelDays.length} in ${monthLabels[0]}</div>
     <div style="display:grid;gap:10px">
       ${reelDays.map(item => {
         const existing = contentByTopic[item.topic];
