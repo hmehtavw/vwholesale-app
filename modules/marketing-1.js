@@ -7795,14 +7795,33 @@ async function calRegenerateItem(calendarId) {
     const isReel = item.content_type === 'reel';
 
     if (isGif) {
-      // GIF: caption first, then Railway generates 9 images + MP4 automatically
+      // GIF: caption only first (no poster - Railway handles images)
       showMktToast('⏳ Step 1/2: Generating caption…', 5000);
       const captionRes = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
-        body: JSON.stringify({action:'generate_single', calendar_id: parseInt(calendarId)})
+        body: JSON.stringify({
+          action: 'generate_brief',
+          brief: item.topic + (item.notes ? '. ' + item.notes : ''),
+          tone: 'product'
+        })
       });
       const captionData = await captionRes.json();
       if (!captionData.ok) throw new Error('Caption failed: ' + (captionData.error||''));
+
+      // Save caption to DB
+      const c = captionData.content;
+      const tok = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      const exp = new Date(Date.now()+48*3600*1000).toISOString();
+      await sb.from('content_calendar').update({
+        caption: c.caption_en,
+        caption_te: c.caption_te || null,
+        hashtags: c.hashtags || [],
+        poster_message: c.poster_message || item.topic,
+        status: 'ready',
+        approval_token: tok,
+        approval_token_expires_at: exp,
+        updated_at: new Date().toISOString()
+      }).eq('id', calendarId);
 
       showMktToast('⏳ Step 2/2: Sending to Railway for 9 images + MP4 (~5-8 min)…', 8000);
 
