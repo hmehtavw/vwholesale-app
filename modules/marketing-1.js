@@ -3505,7 +3505,7 @@ function calCardButtons(item, hasImage, isReady, isApproved, isGif) {
 
   // Content-type specific
   if (ct === 'gif') {
-    html += btnG(hasImage ? '✨ Regen' : '✨ Generate GIF', "calGenerateGif('"+id+"')", !hasImage, '12px');
+    html += btnG(hasImage ? '🎬 Create Animation' : '🎬 Create Animation', "calGenerateGif('"+id+"')", !hasImage, '12px');
     if (hasImage) {
   
       html += btnG('✏️', "openPosterEditor('"+id+"')", false, '9px');
@@ -3685,7 +3685,7 @@ function calBuildItemRow(item, contentByTopic, now, TYPE_ICON) {
       <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
         ${statusBadge}
         <button onclick="editCalendarItemById('${item.id}',false)" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:3px 8px">✏️</button>
-        ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px" title="${isReady?'Regenerate caption + poster':'Generate caption + poster for the first time'}">⚡ ${isReady?'Regen':'Generate'}</button>` : ''}
+        ${!isApproved ? `<button onclick="calRegenerateItem('${item.id}')" class="mkt-btn mkt-btn-primary" style="font-size:10px;padding:3px 8px" title="${isGif ? (isReady?'Regenerate caption':'Prepare caption + slide themes') : (isReady?'Regenerate caption + poster':'Generate caption + poster')}">⚡ ${isGif ? (isReady?'Re-Prepare':'Prepare') : (isReady?'Regen':'Generate')}</button>` : ''}
       </div>
     </div>
     ${expandedPanel}
@@ -5487,7 +5487,7 @@ function showGifOptionsPopup(calendarId) {
 
   pop.innerHTML = `
     <div style="background:#1e293b;border-radius:16px;padding:24px;max-width:420px;width:100%;border:1px solid #334155">
-      <div style="font-size:17px;font-weight:900;color:#f1f5f9;margin-bottom:4px">✨ Generate GIF</div>
+      <div style="font-size:17px;font-weight:900;color:#f1f5f9;margin-bottom:4px">🎬 Create Animation</div>
       <div style="font-size:11px;color:#64748b;margin-bottom:20px">Choose what type of GIF you want to create</div>
 
       <!-- MODE CHOOSER -->
@@ -5922,7 +5922,7 @@ async function calGenerateGifSlideshow(calendarId) {
   } catch(e) {
     clearInterval(ticker);
     showMktNotif('❌ GIF generation failed: ' + e.message);
-    if (btn) { btn.innerHTML = '✨ Generate GIF'; btn.disabled = false; }
+    if (btn) { btn.innerHTML = '🎬 Create Animation'; btn.disabled = false; }
     renderCalendar();
   }
 }
@@ -6192,7 +6192,7 @@ async function calGenerateGifAnimated(calendarId, offerText, animStyle, musicId)
   } catch(e) {
     clearInterval(ticker);
     showMktNotif('❌ Animated GIF failed: '+e.message);
-    if (btn) { btn.innerHTML='✨ Generate GIF'; btn.disabled=false; }
+    if (btn) { btn.innerHTML='🎬 Create Animation'; btn.disabled=false; }
     renderCalendar();
   }
 }
@@ -7827,7 +7827,7 @@ async function calRegenerateItem(calendarId) {
 
       clearInterval(ticker);
       if (btn) { btn.innerHTML = origText; btn.disabled = false; }
-      showMktToast('✅ Caption ready! Review then click ✨ Regen → Poster Slideshow to generate images.', 8000);
+      showMktToast('✅ Caption ready! Review then click 🎬 Create Animation → Poster Slideshow to generate images.', 8000);
       renderCalendar();
       return;
 
