@@ -7798,8 +7798,8 @@ async function calRegenerateItem(calendarId) {
     const isReel = item.content_type === 'reel';
 
     if (isGif) {
-      // GIF: caption only first (no poster - Railway handles images)
-      showMktToast('⏳ Step 1/2: Generating caption…', 5000);
+      // GIF: Generate caption ONLY — Railway fires only from Regen → Slideshow/Animated
+      showMktToast('⏳ Generating caption…', 5000);
       const captionRes = await fetch(MKT_SB_URL+'/functions/v1/content-pipeline', {
         method:'POST', headers:{'Content-Type':'application/json','apikey':MKT_SB_KEY},
         body: JSON.stringify({
@@ -7811,7 +7811,6 @@ async function calRegenerateItem(calendarId) {
       const captionData = await captionRes.json();
       if (!captionData.ok) throw new Error('Caption failed: ' + (captionData.error||''));
 
-      // Save caption to DB
       const c = captionData.content;
       const tok = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
       const exp = new Date(Date.now()+48*3600*1000).toISOString();
@@ -7826,42 +7825,11 @@ async function calRegenerateItem(calendarId) {
         updated_at: new Date().toISOString()
       }).eq('id', calendarId);
 
-      showMktToast('⏳ Step 2/2: Sending to Railway for 9 images + MP4 (~5-8 min)…', 8000);
-
-      // Reset gif_status so Railway processes fresh
-      await sb.from('content_calendar').update({ gif_status: null, updated_at: new Date().toISOString() }).eq('id', calendarId);
-
-      // Fire Railway — generates everything in background
-      const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
-      const RAIL_SECRET = 'vw-render-2026-secret';
-      const fireRes = await fetch(RAIL_URL + '/render', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
-        body: JSON.stringify({ action: 'gif_slideshow', calendar_id: parseInt(calendarId) })
-      });
-      const fireData = await fireRes.json();
-      if (!fireData.ok) throw new Error('Railway rejected: ' + (fireData.error||''));
-
       clearInterval(ticker);
       if (btn) { btn.innerHTML = origText; btn.disabled = false; }
-      showMktNotif('✅ Caption done! Railway generating 9 images + MP4s in background (~5-8 min). Post will be ready soon.');
-
-      // Poll progress in background
-      const pollInterval = setInterval(async () => {
-        try {
-          const pr = await fetch(RAIL_URL + '/progress/' + calendarId);
-          const pd = await pr.json();
-          if (pd.status === 'ready') {
-            clearInterval(pollInterval);
-            showMktNotif('✅ GIF post ready! All 9 images + 3 MP4s generated. Click 🚀 Post Now.');
-            renderCalendar();
-          } else if (pd.progress?.step) {
-            showMktToast('⏳ Railway: ' + pd.progress.step + ' (' + (pd.progress.done||0) + '/' + (pd.progress.total||9) + ')…', 11000);
-          }
-        } catch(e) {}
-      }, 10000);
-      setTimeout(() => clearInterval(pollInterval), 600000);
+      showMktToast('✅ Caption ready! Review then click ✨ Regen → Poster Slideshow to generate images.', 8000);
       renderCalendar();
+      return;
 
     } else {
       // Image/Festival/Reel: standard generate_single
