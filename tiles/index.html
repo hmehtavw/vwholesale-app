@@ -172,7 +172,8 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <!-- ===== APP ===== -->
 <div id="app" class="hide">
   <header>
-    <div class="who"><b id="hname"></b><span id="hrole"></span></div>
+    <button id="back" class="hide" style="padding:8px 11px">‹</button>
+    <div class="who" id="whoBtn" style="cursor:pointer"><b id="hname"></b><span id="hrole"></span></div>
     <button id="out">Sign out</button>
   </header>
   <main>
@@ -300,6 +301,7 @@ function wireAdd(mid, mcode){
 }
 
 function renderFamily(d){
+  LAST = d.query; $('back').classList.remove('hide');
   const withStock = d.family.filter(f => f.totals.physical > 0);
   const empty     = d.family.filter(f => f.totals.physical === 0);
 
@@ -330,6 +332,7 @@ function renderFamily(d){
 }
 
 function renderModel(d){
+  $('back').classList.remove('hide');
   const t = d.totals;
   let h = '<div class="mhead"><b>'+esc(d.model.model_code)+'</b><span>'+
     [d.model.brand, d.model.size, t.locations+' location'+(t.locations===1?'':'s')]
@@ -631,6 +634,22 @@ async function loadApprovals(){
   $('res').querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no,'REJECTED'));
 }
 
+/* ================= NAVIGATION ================= */
+let LAST = null;              // last search term, for the back button
+function goHome(){
+  CART = []; paintCart(); closeSheet();
+  $('q').value = ''; LAST = null;
+  setTab('stock');
+  $('back').classList.add('hide');
+}
+$('whoBtn').onclick = goHome;
+$('back').onclick = () => {
+  if($('ov').classList.contains('hide') === false){ closeSheet(); return; }
+  if(LAST){ LAST = null; $('q').value=''; setTab('stock'); $('back').classList.add('hide'); }
+  else goHome();
+};
+
+window.addEventListener('popstate', () => { if(!$('ov').classList.contains('hide')) closeSheet(); });
 if(TOKEN && NAME) enter();
 </script>
 </body>
