@@ -82,6 +82,17 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .acts button{flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--navy);
   background:#fff;color:var(--navy);font-weight:700;font-size:14px}
 .acts button.soon{border-color:var(--line);color:#9aa5b8}
+.fam{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;margin-bottom:10px;cursor:pointer}
+.fam:active{background:#f7f9fc}
+.famhead{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.famhead b{font-size:18px;display:block}
+.famhead span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.famq{text-align:right;flex-shrink:0}
+.famq i{display:block;font-style:normal;font-size:9px;letter-spacing:.11em;color:var(--muted)}
+.famq b{font-size:24px;color:var(--ok)}
+.famsub{font-size:12px;color:var(--muted);margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+.tap{color:var(--gold);font-weight:600;float:right}
 .choose button{display:block;width:100%;text-align:left;background:var(--card);
   border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:9px;font-size:16px;font-weight:600}
 .foot{text-align:center;color:#9aa5b8;font-size:11px;margin:26px 0 10px;letter-spacing:.05em}
@@ -181,11 +192,11 @@ $('out').onclick = async () => {
 $('go').onclick = search;
 $('q').addEventListener('keydown', e => { if(e.key==='Enter') search(); });
 
-async function search(term){
+async function search(term, exact){
   const q = typeof term === 'string' ? term : $('q').value.trim();
-  if(q.length < 2) return;
+  if(!exact && q.length < 2) return;
   $('res').innerHTML = '<div class="msg">Searching…</div>';
-  const d = await call({ action:'search', query:q });
+  const d = await call(exact ? { action:'search', model_code:exact } : { action:'search', query:q });
 
   if(!d.ok){
     $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
@@ -193,18 +204,57 @@ async function search(term){
     return;
   }
   if(d.mode === 'none')   return $('res').innerHTML = '<div class="msg"><b>Tile code not found</b><br>Check the code and try again.</div>';
-  if(d.mode === 'choose') return renderChoose(d.models);
+  if(d.mode === 'family') return renderFamily(d);
   renderModel(d);
 }
 
-function renderChoose(models){
-  $('res').innerHTML = '<div class="msg" style="margin-bottom:11px">'+models.length+
-    ' models match. Select one.</div><div class="choose">' +
-    models.map(m => '<button data-c="'+esc(m.model_code)+'">'+esc(m.model_code)+
-      (m.size ? ' <span style="color:#6b7891;font-weight:400">· '+esc(m.size)+'</span>' : '')+'</button>').join('') +
-    '</div>';
-  $('res').querySelectorAll('[data-c]').forEach(b =>
-    b.onclick = () => { $('q').value = b.dataset.c; search(b.dataset.c); });
+function locRows(list){
+  return list.map(l => {
+    const a = Number(l.available_qty);
+    const cls = a <= 0 ? 'zero' : (a <= 5 ? 'low' : '');
+    return '<div class="loc '+cls+'">'+
+      '<div class="ln">'+esc(l.location_name)+'</div>'+
+      '<div class="lt">'+esc(String(l.location_type).replace(/_/g,' '))+'</div>'+
+      '<div class="qty">'+
+        '<div>Physical<b>'+l.physical_qty+'</b></div>'+
+        '<div>Held<b>'+l.held_qty+'</b></div>'+
+        '<div class="a">Available<b>'+a+'</b></div>'+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="soon" disabled>Record Sale</button>'+
+        '<button class="soon" disabled>Hold Stock</button>'+
+      '</div></div>';
+  }).join('');
+}
+
+function renderFamily(d){
+  const withStock = d.family.filter(f => f.totals.physical > 0);
+  const empty     = d.family.filter(f => f.totals.physical === 0);
+
+  let h = '<div class="msg" style="margin-bottom:12px;text-align:left">'+
+    '<b>'+withStock.length+'</b> match'+(withStock.length===1?'':'es')+' for “'+esc(d.query)+'”'+
+    (empty.length ? ' · '+empty.length+' with no stock' : '')+'</div>';
+
+  h += withStock.map(f =>
+    '<div class="fam" data-c="'+esc(f.model_code)+'">'+
+      '<div class="famhead">'+
+        '<div><b>'+esc(f.model_code)+'</b>'+
+          (f.size ? '<span>'+esc(f.size)+(f.brand?' · '+esc(f.brand):'')+'</span>' : '')+'</div>'+
+        '<div class="famq"><i>AVAILABLE</i><b>'+f.totals.available+'</b></div>'+
+      '</div>'+
+      '<div class="famsub">'+f.totals.locations+' location'+(f.totals.locations===1?'':'s')+
+        ' · physical '+f.totals.physical+
+        (f.totals.held ? ' · held '+f.totals.held : '')+
+        ' <span class="tap">tap for locations ▾</span></div>'+
+    '</div>').join('');
+
+  if(empty.length)
+    h += '<div class="msg" style="margin-top:12px;font-size:13px">No stock: '+
+         empty.map(f => esc(f.model_code)).join(', ')+'</div>';
+
+  $('res').innerHTML = h;
+  $('res').querySelectorAll('.fam').forEach(el =>
+    el.onclick = () => { $('q').value = el.dataset.c; search(el.dataset.c, el.dataset.c); });
 }
 
 function renderModel(d){
@@ -221,22 +271,7 @@ function renderModel(d){
   if(t.expired_held > 0)
     h += '<div class="pill">⚠ '+t.expired_held+' held on expired holds — needs review</div>';
 
-  h += d.locations.map(l => {
-    const a = Number(l.available_qty);
-    const cls = a <= 0 ? 'zero' : (a <= 5 ? 'low' : '');
-    return '<div class="loc '+cls+'">'+
-      '<div class="ln">'+esc(l.location_name)+'</div>'+
-      '<div class="lt">'+esc(String(l.location_type).replace(/_/g,' '))+'</div>'+
-      '<div class="qty">'+
-        '<div>Physical<b>'+l.physical_qty+'</b></div>'+
-        '<div>Held<b>'+l.held_qty+'</b></div>'+
-        '<div class="a">Available<b>'+a+'</b></div>'+
-      '</div>'+
-      '<div class="acts">'+
-        '<button class="soon" disabled>Record Sale</button>'+
-        '<button class="soon" disabled>Hold Stock</button>'+
-      '</div></div>';
-  }).join('');
+  h += locRows(d.locations);
 
   $('res').innerHTML = h;
 }
