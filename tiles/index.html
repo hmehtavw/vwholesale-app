@@ -82,6 +82,56 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .acts button{flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--navy);
   background:#fff;color:var(--navy);font-weight:700;font-size:14px}
 .acts button.soon{border-color:var(--line);color:#9aa5b8}
+
+/* cart + modal */
+.tabs{display:flex;gap:7px;margin-bottom:14px}
+.tabs button{flex:1;padding:10px;border-radius:9px;border:1.5px solid var(--line);
+  background:#fff;color:var(--muted);font-weight:600;font-size:13px}
+.tabs button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.cartbar{position:fixed;left:0;right:0;bottom:0;background:var(--navy);color:#fff;
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:flex;gap:10px;
+  align-items:center;z-index:40;box-shadow:0 -3px 14px rgba(0,0,0,.16)}
+.cartbar .n{flex:1;font-size:14px}
+.cartbar .n b{font-size:17px;display:block}
+.cartbar button{padding:11px 15px;border:0;border-radius:9px;font-weight:700;font-size:14px}
+.cartbar .sell{background:var(--gold);color:var(--navy)}
+.cartbar .hold{background:#33455f;color:#fff}
+.ov{position:fixed;inset:0;background:rgba(10,16,28,.55);z-index:50;display:flex;
+  align-items:flex-end;justify-content:center}
+.sheet{background:#fff;width:100%;max-width:640px;border-radius:16px 16px 0 0;
+  padding:20px 18px calc(20px + env(safe-area-inset-bottom));max-height:92dvh;overflow:auto}
+.sheet h3{margin:0 0 4px;font-size:19px}
+.sheet .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+.sheet label{color:var(--muted);text-transform:none;letter-spacing:0;font-size:12px}
+.sheet input,.sheet textarea,.sheet select{background:#fff;border:1.5px solid var(--line);
+  color:var(--ink);font-size:16px;border-radius:10px;padding:12px 13px;width:100%}
+.sheet textarea{min-height:64px;font-family:inherit}
+.row2{display:flex;gap:10px}.row2>*{flex:1}
+.line{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.line .lm{flex:1;min-width:0}
+.line .lm b{display:block;font-size:15px}
+.line .lm span{font-size:12px;color:var(--muted)}
+.line input{width:74px;text-align:center;padding:9px}
+.line .x{background:none;border:0;color:var(--bad);font-size:20px;padding:0 4px}
+.sheet .go{background:var(--gold);color:var(--navy);font-weight:700;border:0;
+  border-radius:11px;padding:15px;width:100%;font-size:16px;margin-top:6px}
+.sheet .cancel{background:none;border:0;color:var(--muted);width:100%;padding:13px;font-size:14px}
+.serr{background:var(--bad-bg);color:var(--bad);border:1px solid #f3c9c5;padding:10px 12px;
+  border-radius:9px;font-size:14px;margin-bottom:12px}
+.sok{background:var(--ok-bg);color:var(--ok);border:1px solid #b6e0cf;padding:14px;
+  border-radius:10px;font-size:15px;margin-bottom:12px}
+.photo{border:1.5px dashed var(--line);border-radius:11px;padding:16px;text-align:center;
+  color:var(--muted);font-size:14px;margin-bottom:13px}
+.photo.has{border-style:solid;border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
+.photo input{display:none}
+.hold-card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.hold-card.exp{border-left:4px solid var(--bad)}
+.hold-card b{font-size:16px}
+.hold-card .meta{font-size:13px;color:var(--muted);margin-top:4px}
+.badge{display:inline-block;font-size:10px;padding:3px 8px;border-radius:12px;
+  background:var(--warn-bg);color:var(--warn);margin-left:6px;letter-spacing:.06em}
+.badge.red{background:var(--bad-bg);color:var(--bad)}
+.pad{padding-bottom:86px}
 .fam{background:var(--card);border:1px solid var(--line);border-radius:12px;
   padding:14px 16px;margin-bottom:10px;cursor:pointer}
 .fam:active{background:#f7f9fc}
@@ -126,14 +176,26 @@ main{padding:16px;max-width:640px;margin:0 auto}
     <button id="out">Sign out</button>
   </header>
   <main>
-    <div class="searchbar">
+    <div class="searchbar" id="searchbar">
       <input id="q" placeholder="10408-D" autocomplete="off" enterkeyhint="search">
       <button id="go">Search</button>
+    </div>
+    <div class="tabs">
+      <button id="tabStock" class="on">Stock</button>
+      <button id="tabHolds">Holds</button>
+      <button id="tabAdmin" class="hide">Approvals</button>
     </div>
     <div id="res"></div>
     <div class="foot">TEMPORARY STOCK DESK · INTERNAL USE</div>
   </main>
 </div>
+<div id="cartbar" class="cartbar hide">
+  <div class="n"><b><span id="cq">0</span> boxes</b><span id="ci">0 items</span></div>
+  <button class="hold hide" id="doDmg">Damage</button>
+  <button class="hold" id="doHold">Hold</button>
+  <button class="sell" id="doSale">Record Sale</button>
+</div>
+<div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
@@ -178,6 +240,8 @@ function showErr(m){ $('lerr').textContent = m; $('lerr').classList.remove('hide
 function enter(){
   $('hname').textContent = NAME;
   $('hrole').textContent = ROLE;
+  if(ROLE==='ADMIN') $('tabAdmin').classList.remove('hide');
+  if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doDmg').classList.remove('hide');
   $('login').classList.add('hide');
   $('app').classList.remove('hide');
   $('q').focus();
@@ -220,11 +284,19 @@ function locRows(list){
         '<div>Held<b>'+l.held_qty+'</b></div>'+
         '<div class="a">Available<b>'+a+'</b></div>'+
       '</div>'+
-      '<div class="acts">'+
-        '<button class="soon" disabled>Record Sale</button>'+
-        '<button class="soon" disabled>Hold Stock</button>'+
-      '</div></div>';
+      (a > 0
+        ? '<div class="acts"><button data-add="'+esc(l.location_id)+'" data-n="'+esc(l.location_name)+
+          '" data-a="'+a+'">Add to order</button></div>'
+        : '<div class="acts"><button class="soon" disabled>No stock here</button></div>')+
+      '</div>';
   }).join('');
+}
+function wireAdd(mid, mcode){
+  $('res').querySelectorAll('[data-add]').forEach(btn => btn.onclick = e => {
+    e.stopPropagation();
+    addToCart(mid, mcode, btn.dataset.add, btn.dataset.n, Number(btn.dataset.a));
+    btn.textContent = 'Added ✓'; setTimeout(()=>btn.textContent='Add to order', 900);
+  });
 }
 
 function renderFamily(d){
@@ -274,6 +346,289 @@ function renderModel(d){
   h += locRows(d.locations);
 
   $('res').innerHTML = h;
+  wireAdd(d.locations[0] ? d.locations[0].model_id : null, d.model.model_code);
+}
+
+
+/* ================= CART ================= */
+let CART = [];   // {model_id, model_code, location_id, location_name, qty, available}
+const uid = () => crypto.randomUUID();
+
+function addToCart(mid, mcode, lid, lname, avail){
+  const ex = CART.find(c => c.model_id===mid && c.location_id===lid);
+  if(ex){ ex.qty = Math.min(ex.qty + 1, avail); }
+  else CART.push({model_id:mid, model_code:mcode, location_id:lid, location_name:lname, qty:1, available:avail});
+  paintCart();
+}
+function paintCart(){
+  const q = CART.reduce((t,c)=>t+Number(c.qty||0),0);
+  $('cq').textContent = q; $('ci').textContent = CART.length+' item'+(CART.length===1?'':'s');
+  $('cartbar').classList.toggle('hide', CART.length===0);
+  document.body.classList.toggle('pad', CART.length>0);
+}
+function cartLines(){ return CART.map(c => ({model_id:c.model_id, location_id:c.location_id, qty:Number(c.qty)})); }
+
+/* ================= SHEET ================= */
+function openSheet(html){ $('sheet').innerHTML = html; $('ov').classList.remove('hide'); }
+function closeSheet(){ $('ov').classList.add('hide'); $('sheet').innerHTML=''; }
+$('ov').addEventListener('click', e => { if(e.target.id==='ov') closeSheet(); });
+const sErr = m => { const e=$('sherr'); if(e){ e.textContent=m; e.classList.remove('hide'); e.scrollIntoView({block:'nearest'}); } };
+
+function lineRows(editable){
+  return CART.map((c,i) =>
+    '<div class="line"><div class="lm"><b>'+esc(c.model_code)+'</b>'+
+    '<span>'+esc(c.location_name)+' · '+c.available+' available</span></div>'+
+    (editable ? '<input type="number" min="1" max="'+c.available+'" value="'+c.qty+'" data-i="'+i+'">'+
+                '<button class="x" data-rm="'+i+'">×</button>' : '<b>'+c.qty+'</b>')+
+    '</div>').join('');
+}
+function wireLines(){
+  $('sheet').querySelectorAll('[data-i]').forEach(inp => inp.oninput = () => {
+    const c = CART[+inp.dataset.i];
+    let v = Math.max(1, Math.min(Number(inp.value||1), c.available));
+    c.qty = v; paintCart();
+  });
+  $('sheet').querySelectorAll('[data-rm]').forEach(b => b.onclick = () => {
+    CART.splice(+b.dataset.rm,1); paintCart();
+    if(!CART.length){ closeSheet(); return; }
+    $('sheet').querySelector('#lines').innerHTML = lineRows(true); wireLines();
+  });
+}
+
+/* ================= PHOTO ================= */
+async function shrink(file){
+  const img = await createImageBitmap(file);
+  const max = 1400, sc = Math.min(1, max/Math.max(img.width,img.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(img.width*sc); cv.height = Math.round(img.height*sc);
+  cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+  return await new Promise(r => cv.toBlob(r,'image/jpeg',0.75));
+}
+async function uploadPhoto(file, kind){
+  try{
+    const blob = await shrink(file);
+    const d = await call({action:'upload_url', kind});
+    if(!d.ok) return null;
+    const r = await fetch(d.signed_url, {method:'PUT', headers:{'Content-Type':'image/jpeg'}, body:blob});
+    return r.ok ? d.path : null;
+  }catch(e){ return null; }
+}
+function photoBox(id,label){
+  return '<label class="photo" id="'+id+'box"><span id="'+id+'txt">📷 '+label+'</span>'+
+         '<input type="file" accept="image/*" capture="environment" id="'+id+'"></label>';
+}
+function wirePhoto(id){
+  const el = $(id); if(!el) return;
+  el.onchange = () => { if(el.files[0]){
+    $(id+'txt').textContent = '✓ Photo attached';
+    $(id+'box').classList.add('has');
+  }};
+}
+
+/* ================= SALE ================= */
+$('doSale').onclick = () => {
+  openSheet('<h3>Record Sale</h3><div class="sub">Stock comes off the exact locations below.</div>'+
+    '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
+    '<div class="field" style="margin-top:14px"><label>Invoice number *</label><input id="inv" autocomplete="off"></div>'+
+    '<div class="row2"><div class="field"><label>Customer</label><input id="cn"></div>'+
+    '<div class="field"><label>Mobile</label><input id="cm" inputmode="numeric"></div></div>'+
+    photoBox('sph','Photograph the invoice')+
+    '<button class="go" id="okSale">Confirm Sale</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+  wireLines(); wirePhoto('sph');
+  const key = uid();
+  $('okSale').onclick = async () => {
+    const inv = $('inv').value.trim();
+    if(!inv) return sErr('Invoice number is required');
+    $('okSale').disabled = true; $('okSale').textContent = 'Saving…';
+    const d = await call({action:'sale', invoice:inv, customer_name:$('cn').value.trim(),
+      customer_mobile:$('cm').value.trim(), lines:cartLines(), idempotency:key});
+    if(!d.ok){ $('okSale').disabled=false; $('okSale').textContent='Confirm Sale'; return sErr(d.error); }
+    const f = $('sph').files[0];
+    let pending = false;
+    if(f){ const path = await uploadPhoto(f,'sale');
+      if(path) await call({action:'attach_photo', path, order_id:d.order_id}); else pending = true; }
+    openSheet('<div class="sok"><b>Sale recorded — '+esc(d.order_number)+'</b><br>'+
+      d.total_qty+' boxes on invoice '+esc(inv)+
+      (pending?'<br><br>⚠ Photo did not upload. Saved as photo-pending.':'')+'</div>'+
+      '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+  };
+};
+
+/* ================= HOLD ================= */
+$('doDmg').onclick = () => openChange('DAMAGE');
+$('doHold').onclick = () => {
+  const d15 = new Date(Date.now()+15*864e5).toISOString().slice(0,10);
+  openSheet('<h3>Hold Stock</h3><div class="sub">Advance payment and receipt photo are required.</div>'+
+    '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
+    '<div class="row2" style="margin-top:14px"><div class="field"><label>Customer name *</label><input id="hn"></div>'+
+    '<div class="field"><label>Mobile *</label><input id="hm" inputmode="numeric"></div></div>'+
+    '<div class="row2"><div class="field"><label>Advance ₹ *</label><input id="ha" inputmode="decimal"></div>'+
+    '<div class="field"><label>Receipt no. *</label><input id="hr"></div></div>'+
+    '<div class="field"><label>Hold until</label><input id="he" type="date" value="'+d15+'"></div>'+
+    photoBox('hph','Photograph the advance receipt')+
+    '<button class="go" id="okHold">Confirm Hold</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+  wireLines(); wirePhoto('hph');
+  const key = uid();
+  $('okHold').onclick = async () => {
+    const n=$('hn').value.trim(), m=$('hm').value.trim(), a=Number($('ha').value), r=$('hr').value.trim();
+    if(!n) return sErr('Customer name is required');
+    if(!m) return sErr('Customer mobile is required');
+    if(!(a>0)) return sErr('An advance payment is required to hold stock');
+    if(!r) return sErr('Receipt reference is required');
+    $('okHold').disabled = true; $('okHold').textContent='Saving…';
+    const d = await call({action:'hold', customer_name:n, customer_mobile:m, advance:a,
+      receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), idempotency:key});
+    if(!d.ok){ $('okHold').disabled=false; $('okHold').textContent='Confirm Hold'; return sErr(d.error); }
+    const f = $('hph').files[0]; let unconf = true;
+    if(f){ const path = await uploadPhoto(f,'hold');
+      if(path){ await call({action:'attach_photo', path, hold_id:d.hold_id}); unconf = false; } }
+    const summary = 'V Wholesale — Hold '+d.hold_number+'\nCustomer: '+n+'\nBoxes: '+d.total_qty+
+                    '\nAdvance: Rs '+a+'\nValid till: '+($('he').value||'');
+    openSheet('<div class="sok"><b>Hold created — '+esc(d.hold_number)+'</b><br>'+
+      d.total_qty+' boxes reserved for '+esc(n)+
+      (unconf?'<br><br>⚠ Receipt photo missing — hold marked UNCONFIRMED.':'')+'</div>'+
+      '<textarea id="shr" readonly>'+esc(summary)+'</textarea>'+
+      '<button class="go" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'shr\').value);this.textContent=\'Copied\'">Copy for WhatsApp</button>'+
+      '<button class="cancel" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+  };
+};
+
+/* ================= TABS ================= */
+let TAB = 'stock';
+function setTab(t){
+  TAB = t;
+  $('tabStock').classList.toggle('on', t==='stock');
+  $('tabHolds').classList.toggle('on', t==='holds');
+  $('tabAdmin').classList.toggle('on', t==='admin');
+  $('searchbar').classList.toggle('hide', t!=='stock');
+  if(t==='stock') $('res').innerHTML = '<div class="msg">Search a tile code to begin.</div>';
+  if(t==='holds') loadHolds();
+  if(t==='admin') loadApprovals();
+}
+$('tabStock').onclick = () => setTab('stock');
+$('tabHolds').onclick = () => setTab('holds');
+$('tabAdmin').onclick = () => setTab('admin');
+
+/* ================= HOLDS ================= */
+async function loadHolds(){
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const d = await call({action:'holds'});
+  if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+  if(!d.holds.length) return $('res').innerHTML = '<div class="msg">No active holds.</div>';
+  $('res').innerHTML = d.holds.map(x =>
+    '<div class="hold-card'+(x.expired?' exp':'')+'" data-h="'+x.id+'">'+
+      '<b>'+esc(x.hold_number)+'</b>'+
+      (x.expired?'<span class="badge red">EXPIRED</span>':'')+
+      (x.confirmation_status==='UNCONFIRMED'?'<span class="badge">NO PHOTO</span>':'')+
+      '<div class="meta">'+esc(x.customer_name)+' · '+esc(x.customer_mobile)+'</div>'+
+      '<div class="meta">'+x.total_qty+' boxes · ₹'+x.advance_amount+' advance · till '+esc(x.expiry_date)+'</div>'+
+    '</div>').join('');
+  $('res').querySelectorAll('[data-h]').forEach(el => el.onclick = () => openHold(el.dataset.h));
+}
+
+async function openHold(id){
+  const d = await call({action:'hold_detail', hold_id:id});
+  if(!d.ok) return;
+  const h = d.hold, canRelease = (ROLE==='ADMIN'||ROLE==='INVENTORY');
+  openSheet('<h3>'+esc(h.hold_number)+'</h3><div class="sub">'+esc(h.customer_name)+' · '+esc(h.customer_mobile)+
+    ' · ₹'+h.advance_amount+' advance · till '+esc(h.expiry_date)+'</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    d.lines.map(l => '<div class="line"><div class="lm"><b>'+esc(l.model_code)+'</b>'+
+      '<span>'+esc(l.location_name)+' · '+l.balance_qty+' of '+l.original_qty+' remaining</span></div>'+
+      (Number(l.balance_qty)>0
+        ? '<input type="number" min="0" max="'+l.balance_qty+'" value="'+l.balance_qty+'" data-l="'+l.id+'">'
+        : '<b style="color:#6b7891">done</b>')+'</div>').join('')+
+    '<div class="field" style="margin-top:14px"><label>Invoice number (to convert)</label><input id="cinv"></div>'+
+    '<button class="go" id="okConv">Convert to Sale</button>'+
+    (canRelease ? '<div class="field" style="margin-top:12px"><label>Reason (to release)</label><input id="rrs"></div>'+
+                  '<button class="go" id="okRel" style="background:#fdecea;color:#b3261e">Release</button>' : '')+
+    '<button class="cancel" onclick="closeSheet()">Close</button>');
+
+  const picked = () => Array.from($('sheet').querySelectorAll('[data-l]'))
+    .map(i => ({line_id:i.dataset.l, qty:Number(i.value||0)})).filter(x => x.qty>0);
+
+  const ck = uid();
+  $('okConv').onclick = async () => {
+    const inv = $('cinv').value.trim();
+    if(!inv) return sErr('Invoice number is required');
+    if(!picked().length) return sErr('Enter how many boxes to convert');
+    $('okConv').disabled = true;
+    const r = await call({action:'convert', hold_id:id, invoice:inv, lines:picked(), idempotency:ck});
+    if(!r.ok){ $('okConv').disabled=false; return sErr(r.error); }
+    openSheet('<div class="sok"><b>Converted — '+esc(r.order_number)+'</b><br>'+r.converted+
+      ' boxes sold. Hold is now '+esc(r.hold_status)+'.</div>'+
+      '<button class="go" onclick="closeSheet();loadHolds()">Done</button>');
+  };
+  if($('okRel')) $('okRel').onclick = async () => {
+    const rs = $('rrs').value.trim();
+    if(!rs) return sErr('A reason is required');
+    if(!picked().length) return sErr('Enter how many boxes to release');
+    $('okRel').disabled = true;
+    const r = await call({action:'release', hold_id:id, lines:picked(), reason:rs});
+    if(!r.ok){ $('okRel').disabled=false; return sErr(r.error); }
+    openSheet('<div class="sok"><b>Released</b><br>'+r.released+' boxes back to available. Hold is '+esc(r.hold_status)+'.</div>'+
+      '<button class="go" onclick="closeSheet();loadHolds()">Done</button>');
+  };
+}
+
+/* ================= DAMAGE / INWARD (Inventory + Admin) ================= */
+function openChange(type){
+  if(!CART.length) return alert('Add items from a stock search first.');
+  const isDmg = type==='DAMAGE';
+  openSheet('<h3>'+(isDmg?'Report Damage':'Record Inward')+'</h3>'+
+    '<div class="sub">This needs administrator approval before stock changes.</div>'+
+    '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
+    '<div class="field" style="margin-top:14px"><label>Reason '+(isDmg?'*':'')+'</label>'+
+    '<textarea id="rsn" placeholder="'+(isDmg?'e.g. Corner chipped in handling':'e.g. GRN 4471')+'"></textarea></div>'+
+    photoBox('pph', isDmg?'Photograph the damage':'Photograph the GRN')+
+    '<button class="go" id="okChg">Send for approval</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+  wireLines(); wirePhoto('pph');
+  const key = uid();
+  $('okChg').onclick = async () => {
+    const rsn = $('rsn').value.trim();
+    if(isDmg && !rsn) return sErr('A reason is required for damage');
+    $('okChg').disabled = true; $('okChg').textContent='Sending…';
+    let proof = null;
+    const f = $('pph').files[0];
+    if(f) proof = await uploadPhoto(f, isDmg?'damage':'inward');
+    const d = await call({action:'request_change', type, lines:cartLines(),
+                          reason:rsn, proof_url:proof, idempotency:key});
+    if(!d.ok){ $('okChg').disabled=false; $('okChg').textContent='Send for approval'; return sErr(d.error); }
+    openSheet('<div class="sok"><b>Sent for approval</b><br>'+d.total_qty+' boxes. '+
+      'Stock will not change until an administrator approves it.'+
+      (f && !proof ? '<br><br>⚠ Photo did not upload.' : '')+'</div>'+
+      '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+  };
+}
+
+/* ================= APPROVALS (Admin) ================= */
+async function loadApprovals(){
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const d = await call({action:'approvals'});
+  if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+  if(!d.approvals.length) return $('res').innerHTML = '<div class="msg">Nothing waiting for approval.</div>';
+  $('res').innerHTML = d.approvals.map(r =>
+    '<div class="hold-card">'+
+      '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
+      (r.proof_signed_url?'':'<span class="badge">NO PROOF</span>')+
+      '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
+      (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
+      r.lines.map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
+      (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
+      '<div class="acts" style="margin-top:12px">'+
+        '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
+        '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
+      '</div></div>').join('');
+  const decide = async (id, decision) => {
+    const r = await call({action:'decide', approval_id:id, decision});
+    if(!r.ok) return alert(r.error);
+    loadApprovals();
+  };
+  $('res').querySelectorAll('[data-yes]').forEach(b => b.onclick = () => decide(b.dataset.yes,'APPROVED'));
+  $('res').querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no,'REJECTED'));
 }
 
 if(TOKEN && NAME) enter();
