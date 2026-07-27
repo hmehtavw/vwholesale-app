@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1a2744">
+<title>Tile Stock Desk — V Wholesale</title>
+<style>
+:root{
+  --navy:#1a2744; --navy-2:#24344f; --gold:#c9a84c;
+  --ink:#12192b; --muted:#6b7891; --line:#e3e7ef; --bg:#f4f6fa; --card:#fff;
+  --ok:#12805c; --ok-bg:#e6f5ef; --warn:#a86612; --warn-bg:#fdf3e2; --bad:#b3261e; --bad-bg:#fdecea;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:env(safe-area-inset-bottom)}
+.hide{display:none!important}
+
+/* ---------- login ---------- */
+#login{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+  padding:28px 22px;background:var(--navy)}
+.brand{text-align:center;margin-bottom:34px}
+.brand b{display:block;color:#fff;font-size:27px;letter-spacing:.14em;font-weight:700}
+.brand span{display:block;color:var(--gold);font-size:11px;letter-spacing:.3em;margin-top:7px}
+.brand i{display:block;color:#8fa0bd;font-size:15px;font-style:normal;margin-top:20px;letter-spacing:.02em}
+.field{margin-bottom:15px}
+label{display:block;font-size:12px;color:#8fa0bd;margin-bottom:7px;letter-spacing:.09em;text-transform:uppercase}
+input{width:100%;padding:15px 16px;font-size:17px;border:1.5px solid #35455f;border-radius:11px;
+  background:var(--navy-2);color:#fff;outline:none}
+input:focus{border-color:var(--gold)}
+input::placeholder{color:#5f7089}
+#pin{letter-spacing:.42em;font-size:21px}
+.btn{width:100%;padding:16px;font-size:16px;font-weight:700;border:0;border-radius:11px;
+  background:var(--gold);color:var(--navy);cursor:pointer;letter-spacing:.03em}
+.btn:disabled{opacity:.55}
+.err{background:rgba(255,120,110,.13);border:1px solid rgba(255,120,110,.4);color:#ffb4ae;
+  padding:11px 13px;border-radius:9px;font-size:14px;margin-bottom:15px}
+
+/* ---------- app ---------- */
+header{background:var(--navy);color:#fff;padding:13px 16px;display:flex;
+  align-items:center;gap:12px;position:sticky;top:0;z-index:10;
+  padding-top:calc(13px + env(safe-area-inset-top))}
+header .who{flex:1;min-width:0}
+header .who b{display:block;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+header .who span{font-size:11px;color:var(--gold);letter-spacing:.13em}
+header button{background:transparent;border:1px solid #46587a;color:#c3cede;
+  padding:8px 13px;border-radius:8px;font-size:13px}
+main{padding:16px;max-width:640px;margin:0 auto}
+.searchbar{display:flex;gap:9px;margin-bottom:16px}
+.searchbar input{background:var(--card);border:1.5px solid var(--line);color:var(--ink);font-size:17px}
+.searchbar button{padding:0 22px;border:0;border-radius:11px;background:var(--navy);
+  color:#fff;font-weight:700;font-size:15px}
+
+.msg{background:var(--card);border:1px solid var(--line);border-radius:13px;
+  padding:26px 20px;text-align:center;color:var(--muted)}
+
+.mhead{background:var(--navy);color:#fff;border-radius:13px;padding:15px 17px;margin-bottom:11px}
+.mhead b{font-size:21px;letter-spacing:.02em}
+.mhead span{display:block;color:#93a3bf;font-size:13px;margin-top:3px}
+
+.cards{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:15px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 9px;text-align:center}
+.c i{display:block;font-style:normal;font-size:10px;letter-spacing:.11em;color:var(--muted);margin-bottom:5px}
+.c b{font-size:22px;font-weight:700}
+.c.avail{background:var(--ok-bg);border-color:#b6e0cf;grid-column:span 1}
+.c.avail b{color:var(--ok);font-size:27px}
+
+.loc{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--ok);
+  border-radius:12px;padding:14px 16px;margin-bottom:10px}
+.loc.low{border-left-color:var(--warn)} .loc.zero{border-left-color:var(--bad);opacity:.75}
+.loc .ln{font-weight:700;font-size:16px;margin-bottom:2px}
+.loc .lt{font-size:11px;color:var(--muted);letter-spacing:.08em;margin-bottom:10px}
+.qty{display:flex;gap:18px;margin-bottom:12px}
+.qty div{font-size:13px;color:var(--muted)}
+.qty div b{display:block;font-size:19px;color:var(--ink);font-weight:700}
+.qty div.a b{color:var(--ok)} .loc.low .qty div.a b{color:var(--warn)} .loc.zero .qty div.a b{color:var(--bad)}
+.pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:20px;
+  background:var(--warn-bg);color:var(--warn);margin-bottom:9px}
+.acts{display:flex;gap:9px}
+.acts button{flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--navy);
+  background:#fff;color:var(--navy);font-weight:700;font-size:14px}
+.acts button.soon{border-color:var(--line);color:#9aa5b8}
+.choose button{display:block;width:100%;text-align:left;background:var(--card);
+  border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:9px;font-size:16px;font-weight:600}
+.foot{text-align:center;color:#9aa5b8;font-size:11px;margin:26px 0 10px;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<!-- ===== LOGIN ===== -->
+<section id="login">
+  <div class="brand">
+    <b>V WHOLESALE</b>
+    <span>BUILD BETTER. PAY LESS.</span>
+    <i>Tile Stock Desk</i>
+  </div>
+  <div id="lerr" class="err hide"></div>
+  <div class="field">
+    <label for="who">Your name</label>
+    <input id="who" autocomplete="name" placeholder="e.g. Ravi">
+  </div>
+  <div class="field">
+    <label for="pin">Employee PIN</label>
+    <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
+  </div>
+  <button class="btn" id="lbtn">Sign in</button>
+</section>
+
+<!-- ===== APP ===== -->
+<div id="app" class="hide">
+  <header>
+    <div class="who"><b id="hname"></b><span id="hrole"></span></div>
+    <button id="out">Sign out</button>
+  </header>
+  <main>
+    <div class="searchbar">
+      <input id="q" placeholder="10408-D" autocomplete="off" enterkeyhint="search">
+      <button id="go">Search</button>
+    </div>
+    <div id="res"></div>
+    <div class="foot">TEMPORARY STOCK DESK · INTERNAL USE</div>
+  </main>
+</div>
+
+<script>
+const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
+let TOKEN = sessionStorage.getItem('vwt_token') || '';
+let NAME  = sessionStorage.getItem('vwt_name')  || '';
+let ROLE  = sessionStorage.getItem('vwt_role')  || '';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function call(payload){
+  try{
+    const r = await fetch(API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ ...payload, token: TOKEN })
+    });
+    return await r.json();
+  }catch(e){
+    return { ok:false, error:'No connection. Check your internet and try again.' };
+  }
+}
+
+/* ---------- login ---------- */
+$('lbtn').onclick = async () => {
+  const who = $('who').value.trim(), pin = $('pin').value.trim();
+  $('lerr').classList.add('hide');
+  if(!who || !pin){ return showErr('Enter your name and PIN'); }
+  $('lbtn').disabled = true; $('lbtn').textContent = 'Signing in…';
+  const d = await call({ action:'login', pin, staff_name: who });
+  $('lbtn').disabled = false; $('lbtn').textContent = 'Sign in';
+  if(!d.ok) return showErr(d.error);
+  TOKEN = d.token; NAME = d.staff_name; ROLE = d.role;
+  sessionStorage.setItem('vwt_token',TOKEN);
+  sessionStorage.setItem('vwt_name',NAME);
+  sessionStorage.setItem('vwt_role',ROLE);
+  $('pin').value = '';
+  enter();
+};
+$('pin').addEventListener('keydown', e => { if(e.key==='Enter') $('lbtn').click(); });
+function showErr(m){ $('lerr').textContent = m; $('lerr').classList.remove('hide'); }
+
+function enter(){
+  $('hname').textContent = NAME;
+  $('hrole').textContent = ROLE;
+  $('login').classList.add('hide');
+  $('app').classList.remove('hide');
+  $('q').focus();
+}
+
+$('out').onclick = async () => {
+  await call({ action:'logout' });
+  sessionStorage.clear(); location.reload();
+};
+
+/* ---------- search ---------- */
+$('go').onclick = search;
+$('q').addEventListener('keydown', e => { if(e.key==='Enter') search(); });
+
+async function search(term){
+  const q = typeof term === 'string' ? term : $('q').value.trim();
+  if(q.length < 2) return;
+  $('res').innerHTML = '<div class="msg">Searching…</div>';
+  const d = await call({ action:'search', query:q });
+
+  if(!d.ok){
+    $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+    if(String(d.error).includes('session')){ sessionStorage.clear(); setTimeout(()=>location.reload(),1600); }
+    return;
+  }
+  if(d.mode === 'none')   return $('res').innerHTML = '<div class="msg"><b>Tile code not found</b><br>Check the code and try again.</div>';
+  if(d.mode === 'choose') return renderChoose(d.models);
+  renderModel(d);
+}
+
+function renderChoose(models){
+  $('res').innerHTML = '<div class="msg" style="margin-bottom:11px">'+models.length+
+    ' models match. Select one.</div><div class="choose">' +
+    models.map(m => '<button data-c="'+esc(m.model_code)+'">'+esc(m.model_code)+
+      (m.size ? ' <span style="color:#6b7891;font-weight:400">· '+esc(m.size)+'</span>' : '')+'</button>').join('') +
+    '</div>';
+  $('res').querySelectorAll('[data-c]').forEach(b =>
+    b.onclick = () => { $('q').value = b.dataset.c; search(b.dataset.c); });
+}
+
+function renderModel(d){
+  const t = d.totals;
+  let h = '<div class="mhead"><b>'+esc(d.model.model_code)+'</b><span>'+
+    [d.model.brand, d.model.size, t.locations+' location'+(t.locations===1?'':'s')]
+      .filter(Boolean).map(esc).join(' · ')+'</span></div>';
+
+  h += '<div class="cards">'+
+       '<div class="c"><i>PHYSICAL</i><b>'+t.physical+'</b></div>'+
+       '<div class="c"><i>ON HOLD</i><b>'+t.held+'</b></div>'+
+       '<div class="c avail"><i>AVAILABLE</i><b>'+t.available+'</b></div></div>';
+
+  if(t.expired_held > 0)
+    h += '<div class="pill">⚠ '+t.expired_held+' held on expired holds — needs review</div>';
+
+  h += d.locations.map(l => {
+    const a = Number(l.available_qty);
+    const cls = a <= 0 ? 'zero' : (a <= 5 ? 'low' : '');
+    return '<div class="loc '+cls+'">'+
+      '<div class="ln">'+esc(l.location_name)+'</div>'+
+      '<div class="lt">'+esc(String(l.location_type).replace(/_/g,' '))+'</div>'+
+      '<div class="qty">'+
+        '<div>Physical<b>'+l.physical_qty+'</b></div>'+
+        '<div>Held<b>'+l.held_qty+'</b></div>'+
+        '<div class="a">Available<b>'+a+'</b></div>'+
+      '</div>'+
+      '<div class="acts">'+
+        '<button class="soon" disabled>Record Sale</button>'+
+        '<button class="soon" disabled>Hold Stock</button>'+
+      '</div></div>';
+  }).join('');
+
+  $('res').innerHTML = h;
+}
+
+if(TOKEN && NAME) enter();
+</script>
+</body>
+</html>
