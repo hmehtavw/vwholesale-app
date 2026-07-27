@@ -5727,6 +5727,7 @@ async function calGenerateGifSlideshow(calendarId) {
     const pollInterval = setInterval(async () => {
       try {
         const pr = await fetch(RAIL_URL + '/progress/' + calendarId);
+        if (!pr.ok) { console.warn('[gif-poll] progress HTTP ' + pr.status); return; }
         const pd = await pr.json();
         if (pd.status === 'ready') {
           clearInterval(pollInterval);

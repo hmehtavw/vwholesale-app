@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import subprocess as _sp
+import subprocess as _sp, sys
 print("[0] Syntax check (node --check)...")
 for fname in ['modules/marketing-1.js','modules/marketing-2.js','modules/marketing-gif.js','modules/marketing-inbox.js']:
     r = _sp.run(['node','--check',fname], capture_output=True, text=True)
@@ -79,19 +79,7 @@ if em:
         print(f"  ✅ All {len(candidates)} exports valid")
 
 # Summary
-print("\n" + "=" * 55)
-if errors:
-    print(f"❌ FAILED — {len(errors)} error(s):")
-    for e in errors:
-        print(f"  🔴 {e}")
-    print("\n⛔ Fix before pushing")
-    sys.exit(1)
-else:
-    print(f"✅ ALL CHECKS PASSED — safe to push")
-    if warnings:
-        for w in warnings[:3]:
-            print(f"  🟡 {w}")
-    sys.exit(0)
+# (summary + exit moved to end of file so checks [4]-[7] actually run)
 
 # ── MARKETING JS SYNTAX CHECK ──
 print("\n[4] Marketing JS syntax check...")
@@ -126,7 +114,10 @@ if os.path.exists(mkt_path):
         mkt = f.read()
     # Check Supabase inline JS not corrupted (must contain these patterns)
     checks = [
-        ('Supabase createClient', 'createClient('),
+        ('Supabase UMD bundle intact', 'e.createClient=' in mkt),
+        ('All 6 marketing modules referenced', all(
+            ('modules/marketing-%s.js' % m) in mkt
+            for m in ['1', '2', 'inbox', 'gif', 'bi', 'strategy'])),
         ('No corrupted version injection', 'let v=17' not in mkt and 'const v=17' not in mkt),
         ('DOCTYPE present', '<!DOCTYPE html>' in mkt),
     ]
@@ -170,12 +161,29 @@ if r.returncode != 0:
 
 # Check for TypeScript syntax in JS files (crashes browsers)
 import re as _re
+TS_TYPES = r'(?:string|number|boolean|any|void|object|unknown|never|null|undefined)'
 for fname in ['modules/marketing-1.js','modules/marketing-2.js','modules/marketing-gif.js']:
     try:
         with open(fname) as f: js = f.read()
-        # Find (param:type) TypeScript annotations
-        ts_hits = _re.findall(r'\(\w+:\w+\)', js)
-        if ts_hits:
-            print(f"  ❌ {fname}: TypeScript annotations found: {ts_hits[:3]}")
-            sys.exit(1)
-    except: pass
+    except OSError:
+        continue
+    # Real TS annotations: (param: string). Excludes (9:16), (quality:high) etc.
+    ts_hits = _re.findall(r'\(\w+\s*:\s*' + TS_TYPES + r'\s*\)', js)
+    if ts_hits:
+        print(f"  ❌ {fname}: TypeScript annotations found: {ts_hits[:3]}")
+        errors.append(f"{fname}: TypeScript annotations")
+
+# ── SUMMARY (must stay last) ──
+print("\n" + "=" * 55)
+if errors:
+    print(f"❌ FAILED — {len(errors)} error(s):")
+    for e in errors:
+        print(f"  🔴 {e}")
+    print("\n⛔ Fix before pushing")
+    sys.exit(1)
+else:
+    print(f"✅ ALL CHECKS PASSED — safe to push")
+    if warnings:
+        for w in warnings[:3]:
+            print(f"  🟡 {w}")
+    sys.exit(0)
