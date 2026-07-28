@@ -146,6 +146,38 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .choose button{display:block;width:100%;text-align:left;background:var(--card);
   border:1px solid var(--line);border-radius:11px;padding:15px;margin-bottom:9px;font-size:16px;font-weight:600}
 .foot{text-align:center;color:#9aa5b8;font-size:11px;margin:26px 0 10px;letter-spacing:.05em}
+
+/* ---------- data editor ---------- */
+.chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:2px;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex-shrink:0;padding:8px 13px;border-radius:20px;border:1.5px solid var(--line);
+  background:#fff;color:var(--muted);font-size:13px;font-weight:600;white-space:nowrap}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.chip b{margin-left:5px;opacity:.75}
+.gridtools{display:flex;gap:9px;margin-bottom:13px}
+.gridtools button{flex:1;padding:11px;border-radius:10px;border:1.5px dashed var(--line);
+  background:#fff;color:var(--navy);font-weight:700;font-size:13px}
+.grow{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:13px 15px;margin-bottom:9px}
+.grow .gh{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
+.grow .gt{min-width:0}
+.grow .gt b{display:block;font-size:16px}
+.grow .gt span{font-size:12px;color:var(--muted);display:block;margin-top:2px}
+.grow .step{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.grow .step button{width:32px;height:32px;border-radius:8px;border:1.5px solid var(--line);
+  background:#fff;font-size:17px;font-weight:700;color:var(--navy);line-height:1}
+.grow .step input{width:52px;text-align:center;padding:6px 2px;font-size:15px}
+.tagrow{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.tag{font-size:10px;padding:3px 8px;border-radius:10px;letter-spacing:.05em}
+.tag.notlive{background:var(--bad-bg);color:var(--bad)}
+.tag.pending{background:var(--warn-bg);color:var(--warn)}
+.tag.dup{background:#eee3fb;color:#6b3fa0}
+.shared-lbl{display:inline-block;font-size:10px;color:var(--gold);letter-spacing:.08em;
+  text-transform:uppercase;margin-bottom:4px}
+.field.shared input{border-color:#e7d6a3;background:#fffaf0}
+.more{width:100%;padding:13px;border-radius:11px;border:1.5px solid var(--line);
+  background:#fff;color:var(--navy);font-weight:700;font-size:14px;margin-top:4px}
+.danger{background:#fff!important;border:1.5px solid #f3c9c5!important;color:#b3261e!important}
 </style>
 </head>
 <body>
@@ -185,6 +217,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
       <button id="tabStock" class="on">Stock</button>
       <button id="tabHolds">Holds</button>
       <button id="tabAdmin" class="hide">Approvals</button>
+      <button id="tabEditor" class="hide">Editor</button>
     </div>
     <div id="res"></div>
     <div class="foot">TEMPORARY STOCK DESK · INTERNAL USE</div>
@@ -243,6 +276,7 @@ function enter(){
   $('hrole').textContent = ROLE;
   if(ROLE==='ADMIN') $('tabAdmin').classList.remove('hide');
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doDmg').classList.remove('hide');
+  if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('tabEditor').classList.remove('hide');
   $('login').classList.add('hide');
   $('app').classList.remove('hide');
   $('q').focus();
@@ -505,14 +539,17 @@ function setTab(t){
   $('tabStock').classList.toggle('on', t==='stock');
   $('tabHolds').classList.toggle('on', t==='holds');
   $('tabAdmin').classList.toggle('on', t==='admin');
+  $('tabEditor').classList.toggle('on', t==='editor');
   $('searchbar').classList.toggle('hide', t!=='stock');
   if(t==='stock') $('res').innerHTML = '<div class="msg">Search a tile code to begin.</div>';
   if(t==='holds') loadHolds();
   if(t==='admin') loadApprovals();
+  if(t==='editor') loadGrid(true);
 }
 $('tabStock').onclick = () => setTab('stock');
 $('tabHolds').onclick = () => setTab('holds');
 $('tabAdmin').onclick = () => setTab('admin');
+$('tabEditor').onclick = () => setTab('editor');
 
 /* ================= HOLDS ================= */
 async function loadHolds(){
@@ -613,18 +650,33 @@ async function loadApprovals(){
   const d = await call({action:'approvals'});
   if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
   if(!d.approvals.length) return $('res').innerHTML = '<div class="msg">Nothing waiting for approval.</div>';
-  $('res').innerHTML = d.approvals.map(r =>
-    '<div class="hold-card">'+
+  $('res').innerHTML = d.approvals.map(r => {
+    if(r.is_editor){
+      const ch = r.payload && r.payload.changes ? r.payload.changes : r.payload;
+      const chSummary = ch ? Object.keys(ch).filter(k=>k!=='custom_fields').map(k => k+': '+esc(String(ch[k]))).join(', ') : '';
+      return '<div class="hold-card">'+
+        '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
+        '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
+        (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
+        '<div class="meta">• '+esc(r.model_code||'(new tile)')+(r.location_name?' at '+esc(r.location_name):'')+'</div>'+
+        (chSummary?'<div class="meta">'+chSummary+'</div>':'')+
+        '<div class="acts" style="margin-top:12px">'+
+          '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
+          '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
+        '</div></div>';
+    }
+    return '<div class="hold-card">'+
       '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
       (r.proof_signed_url?'':'<span class="badge">NO PROOF</span>')+
       '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
       (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
-      r.lines.map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
+      (r.lines||[]).map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
       (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
       '<div class="acts" style="margin-top:12px">'+
         '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
         '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
-      '</div></div>').join('');
+      '</div></div>';
+  }).join('');
   const decide = async (id, decision) => {
     const r = await call({action:'decide', approval_id:id, decision});
     if(!r.ok) return alert(r.error);
@@ -632,6 +684,216 @@ async function loadApprovals(){
   };
   $('res').querySelectorAll('[data-yes]').forEach(b => b.onclick = () => decide(b.dataset.yes,'APPROVED'));
   $('res').querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no,'REJECTED'));
+}
+
+/* ================= DATA EDITOR (Admin + Inventory) ================= */
+let GRID_FILTER = 'ALL', GRID_Q = '', GRID_OFFSET = 0, GRID_LIMIT = 40, GRID_COUNTS = {};
+const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates']];
+
+async function loadGrid(reset){
+  if(reset){ GRID_OFFSET = 0; }
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const d = await call({action:'grid', filter:GRID_FILTER, query:GRID_Q||null, limit:GRID_LIMIT, offset:GRID_OFFSET});
+  if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+  GRID_COUNTS = d.counts;
+  renderGrid(d);
+}
+
+function renderGrid(d){
+  let h = '<div class="chips">'+FILTERS.map(([k,label]) =>
+    '<button class="chip'+(GRID_FILTER===k?' on':'')+'" data-f="'+k+'">'+label+' <b>'+(GRID_COUNTS[k]??0)+'</b></button>').join('')+'</div>';
+
+  h += '<div class="searchbar" style="margin-bottom:12px"><input id="eq" placeholder="Search code, name, brand, location" value="'+esc(GRID_Q)+'"><button id="egoBtn">Go</button></div>';
+
+  h += '<div class="gridtools"><button id="addRowBtn">+ Add row</button><button id="addColBtn">+ Add column</button></div>';
+
+  if(!d.rows.length){
+    h += '<div class="msg">No rows match this filter.</div>';
+  } else {
+    h += d.rows.map(r => {
+      const tags = [];
+      if(r.row_status==='NOT_LIVE' || !r.is_active) tags.push('<span class="tag notlive">NOT LIVE</span>');
+      if(r.pending_edit) tags.push('<span class="tag pending">PENDING EDIT</span>');
+      if(r.dup_kind) tags.push('<span class="tag dup">POSSIBLE DUPLICATE</span>');
+      return '<div class="grow" data-row=\''+JSON.stringify(r).replace(/'/g,'&#39;')+'\'>'+
+        '<div class="gh">'+
+          '<div class="gt" data-open="1">'+
+            '<b>'+esc(r.model_code)+'</b>'+
+            '<span>'+[esc(r.location_name), r.brand, r.size].filter(Boolean).join(' · ')+'</span>'+
+          '</div>'+
+          '<div class="step">'+
+            '<button data-step="-1">−</button>'+
+            '<input type="number" data-qty value="'+r.current_physical_qty+'">'+
+            '<button data-step="1">+</button>'+
+          '</div>'+
+        '</div>'+
+        (tags.length ? '<div class="tagrow">'+tags.join('')+'</div>' : '')+
+      '</div>';
+    }).join('');
+    if(d.rows.length + GRID_OFFSET < d.total)
+      h += '<button class="more" id="loadMoreBtn">Load more ('+(d.total - GRID_OFFSET - d.rows.length)+' left)</button>';
+  }
+  $('res').innerHTML = h;
+  wireGrid();
+}
+
+function wireGrid(){
+  $('res').querySelectorAll('[data-f]').forEach(b => b.onclick = () => {
+    GRID_FILTER = b.dataset.f; loadGrid(true);
+  });
+  $('egoBtn').onclick = () => { GRID_Q = $('eq').value.trim(); loadGrid(true); };
+  $('eq').addEventListener('keydown', e => { if(e.key==='Enter') $('egoBtn').click(); });
+  $('addRowBtn').onclick = openAddRow;
+  $('addColBtn').onclick = openAddColumn;
+  const lm = $('loadMoreBtn');
+  if(lm) lm.onclick = async () => {
+    GRID_OFFSET += GRID_LIMIT;
+    const d = await call({action:'grid', filter:GRID_FILTER, query:GRID_Q||null, limit:GRID_LIMIT, offset:GRID_OFFSET});
+    if(!d.ok) return;
+    GRID_COUNTS = d.counts; renderGrid({...d, rows: [...currentRows(), ...d.rows]});
+  };
+
+  $('res').querySelectorAll('.grow').forEach(el => {
+    const row = JSON.parse(el.dataset.row);
+    el.querySelector('[data-open]').onclick = () => openRowEditor(row);
+    const inp = el.querySelector('[data-qty]');
+    el.querySelectorAll('[data-step]').forEach(btn => btn.onclick = () => {
+      inp.value = Math.max(0, Number(inp.value||0) + Number(btn.dataset.step));
+      submitQtyChange(row, Number(inp.value||0));
+    });
+    inp.addEventListener('change', () => submitQtyChange(row, Number(inp.value||0)));
+  });
+}
+function currentRows(){
+  return Array.from($('res').querySelectorAll('.grow')).map(el => JSON.parse(el.dataset.row));
+}
+
+async function submitQtyChange(row, newQty){
+  if(newQty === row.current_physical_qty) return;
+  const d = await call({action:'request_edit', type:'EDIT_ROW',
+    payload:{ stock_id:row.stock_id, row_version:row.row_version, changes:{ qty:newQty } },
+    reason:'Data editor: quantity correction', idempotency: uid()});
+  if(!d.ok){ alert(d.error); loadGrid(true); return; }
+  loadGrid(true);
+}
+
+function openRowEditor(row){
+  openSheet('<h3>'+esc(row.model_code)+'</h3><div class="sub">'+esc(row.location_name)+'</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<span class="shared-lbl">Shared across all locations of this tile</span>'+
+    '<div class="row2"><div class="field shared"><label>Name</label><input id="fName" value="'+esc(row.model_name||'')+'"></div>'+
+    '<div class="field shared"><label>Brand</label><input id="fBrand" value="'+esc(row.brand||'')+'"></div></div>'+
+    '<div class="row2"><div class="field shared"><label>Size</label><input id="fSize" value="'+esc(row.size||'')+'"></div>'+
+    '<div class="field shared"><label>Category</label><input id="fCat" value="'+esc(row.category||'')+'"></div></div>'+
+    '<div class="field" style="margin-top:6px"><label>Boxes at this location</label><input id="fQty" type="number" value="'+row.current_physical_qty+'"></div>'+
+    '<div class="field"><label>Status</label><select id="fStatus">'+
+      '<option value="LIVE"'+(row.row_status==='LIVE'?' selected':'')+'>Live</option>'+
+      '<option value="NOT_LIVE"'+(row.row_status==='NOT_LIVE'?' selected':'')+'>Not live</option>'+
+    '</select></div>'+
+    '<button class="go" id="okEdit">Save changes</button>'+
+    '<button class="more danger" id="okDelete" style="margin-top:10px">Remove this row</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('okEdit').onclick = async () => {
+    $('okEdit').disabled = true; $('okEdit').textContent = 'Saving…';
+    const modelChanges = {};
+    if($('fName').value.trim() !== (row.model_name||'')) modelChanges.model_name = $('fName').value.trim();
+    if($('fBrand').value.trim() !== (row.brand||'')) modelChanges.brand = $('fBrand').value.trim();
+    if($('fSize').value.trim() !== (row.size||'')) modelChanges.size = $('fSize').value.trim();
+    if($('fCat').value.trim() !== (row.category||'')) modelChanges.category = $('fCat').value.trim();
+
+    const stockChanges = {};
+    const newQty = Number($('fQty').value||0);
+    if(newQty !== row.current_physical_qty) stockChanges.qty = newQty;
+    if($('fStatus').value !== row.row_status) stockChanges.row_status = $('fStatus').value;
+
+    let lastErr = null, anyPending = false;
+    if(Object.keys(modelChanges).length){
+      const r1 = await call({action:'request_edit', type:'EDIT_MODEL',
+        payload:{model_id:row.model_id, changes:modelChanges}, reason:'Data editor', idempotency:uid()});
+      if(!r1.ok) lastErr = r1.error; else if(r1.status==='PENDING') anyPending = true;
+    }
+    if(!lastErr && Object.keys(stockChanges).length){
+      const r2 = await call({action:'request_edit', type:'EDIT_ROW',
+        payload:{stock_id:row.stock_id, row_version:row.row_version, changes:stockChanges},
+        reason:'Data editor', idempotency:uid()});
+      if(!r2.ok) lastErr = r2.error; else if(r2.status==='PENDING') anyPending = true;
+    }
+    if(lastErr){ $('okEdit').disabled=false; $('okEdit').textContent='Save changes'; return sErr(lastErr); }
+    closeSheet();
+    if(anyPending) alert('Sent for approval — nothing changes until Admin approves it.');
+    loadGrid(true);
+  };
+
+  $('okDelete').onclick = async () => {
+    const force = row.current_physical_qty > 0
+      ? confirm('This row still shows '+row.current_physical_qty+' boxes. Remove it anyway?')
+      : true;
+    if(row.current_physical_qty > 0 && !force) return;
+    const d = await call({action:'request_edit', type:'DELETE_ROW',
+      payload:{stock_id:row.stock_id, force}, reason:'Data editor: row removed', idempotency:uid()});
+    if(!d.ok) return sErr(d.error);
+    closeSheet();
+    if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
+    loadGrid(true);
+  };
+}
+
+function openAddRow(){
+  openSheet('<h3>Add a row</h3><div class="sub">An existing tile code + location will add stock there; a new code + location creates both.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<div class="field"><label>Tile code *</label><input id="nCode" autocomplete="off"></div>'+
+    '<div class="row2"><div class="field"><label>Name</label><input id="nName"></div>'+
+    '<div class="field"><label>Brand</label><input id="nBrand"></div></div>'+
+    '<div class="row2"><div class="field"><label>Size</label><input id="nSize"></div>'+
+    '<div class="field"><label>Category</label><input id="nCat" value="Tiles"></div></div>'+
+    '<div class="field"><label>Location name *</label><input id="nLoc" autocomplete="off"></div>'+
+    '<div class="field"><label>Opening boxes</label><input id="nQty" type="number" value="0"></div>'+
+    '<button class="go" id="okAdd">Add row</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('okAdd').onclick = async () => {
+    const code = $('nCode').value.trim(), loc = $('nLoc').value.trim();
+    if(!code) return sErr('A tile code is required');
+    if(!loc) return sErr('A location is required');
+    $('okAdd').disabled = true; $('okAdd').textContent='Adding…';
+    const d = await call({action:'request_edit', type:'ADD_ROW', payload:{
+      model_code:code, model_name:$('nName').value.trim()||null, brand:$('nBrand').value.trim()||null,
+      size:$('nSize').value.trim()||null, category:$('nCat').value.trim()||null,
+      location_name:loc, qty:Number($('nQty').value||0)
+    }, reason:'Data editor: new row', idempotency:uid()});
+    if(!d.ok){ $('okAdd').disabled=false; $('okAdd').textContent='Add row'; return sErr(d.error); }
+    closeSheet();
+    if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
+    loadGrid(true);
+  };
+}
+
+function openAddColumn(){
+  openSheet('<h3>Add a column</h3><div class="sub">Shows up on every row going forward.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<div class="field"><label>Column label *</label><input id="cLabel" placeholder="e.g. Shelf note"></div>'+
+    '<div class="row2"><div class="field"><label>Type</label><select id="cType">'+
+      '<option value="text">Text</option><option value="number">Number</option>'+
+      '<option value="boolean">Yes / No</option><option value="date">Date</option></select></div>'+
+    '<div class="field"><label>Applies to</label><select id="cApplies">'+
+      '<option value="stock">Each shelf row</option><option value="model">Each tile</option></select></div></div>'+
+    '<button class="go" id="okCol">Add column</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('okCol').onclick = async () => {
+    const label = $('cLabel').value.trim();
+    if(!label) return sErr('A column label is required');
+    $('okCol').disabled = true; $('okCol').textContent='Adding…';
+    const key = label.toUpperCase().replace(/[^A-Z0-9]/g,'');
+    const d = await call({action:'request_edit', type:'ADD_COLUMN', payload:{
+      field_key:key, label, field_type:$('cType').value, applies_to:$('cApplies').value
+    }, reason:'Data editor: new column', idempotency:uid()});
+    if(!d.ok){ $('okCol').disabled=false; $('okCol').textContent='Add column'; return sErr(d.error); }
+    closeSheet();
+    if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
+    loadGrid(true);
+  };
 }
 
 /* ================= NAVIGATION ================= */
