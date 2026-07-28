@@ -514,18 +514,23 @@ $('doSale').onclick = () => {
     const inv = $('inv').value.trim();
     if(!inv) return sErr('Invoice number is required');
     $('okSale').disabled = true; $('okSale').textContent = 'Saving…';
+    const f = $('sph').files[0];
+    let proofPath = null, photoFailed = false;
+    if(f){ proofPath = await uploadPhoto(f,'sale'); if(!proofPath) photoFailed = true; }
     const d = await call({action:'sale', invoice:inv, customer_name:$('cn').value.trim(),
-      customer_mobile:$('cm').value.trim(), lines:cartLines(), idempotency:key});
+      customer_mobile:$('cm').value.trim(), lines:cartLines(), proof_url:proofPath, idempotency:key});
     if(!d.ok){ $('okSale').disabled=false; $('okSale').textContent='Confirm Sale'; return sErr(d.error); }
     SALE_DRAFT = null;
-    const f = $('sph').files[0];
-    let pending = false;
-    if(f){ const path = await uploadPhoto(f,'sale');
-      if(path) await call({action:'attach_photo', path, order_id:d.order_id}); else pending = true; }
-    openSheet('<div class="sok"><b>Sale recorded — '+esc(d.order_number)+'</b><br>'+
-      d.total_qty+' boxes on invoice '+esc(inv)+
-      (pending?'<br><br>⚠ Photo did not upload. Saved as photo-pending.':'')+'</div>'+
-      '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+    const pendingApproval = d.status === 'PENDING';
+    openSheet(pendingApproval
+      ? '<div class="sok"><b>Sent for approval</b><br>Invoice '+esc(inv)+', '+CART.reduce((t,c)=>t+Number(c.qty),0)+
+        ' boxes — stock will not move until an administrator approves it.'+
+        (photoFailed?'<br><br>⚠ Photo did not upload — attach it again if needed.':'')+'</div>'+
+        '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>'
+      : '<div class="sok"><b>Sale recorded — '+esc(d.result.order_number)+'</b><br>'+
+        d.result.total_qty+' boxes on invoice '+esc(inv)+
+        (photoFailed?'<br><br>⚠ Photo did not upload. Saved as photo-pending.':'')+'</div>'+
+        '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
   };
 };
 
@@ -559,18 +564,26 @@ $('doHold').onclick = () => {
     if(!(a>0)) return sErr('An advance payment is required to hold stock');
     if(!r) return sErr('Receipt reference is required');
     $('okHold').disabled = true; $('okHold').textContent='Saving…';
+    const f = $('hph').files[0];
+    let proofPath = null, photoFailed = false;
+    if(f){ proofPath = await uploadPhoto(f,'hold'); if(!proofPath) photoFailed = true; }
     const d = await call({action:'hold', customer_name:n, customer_mobile:m, advance:a,
-      receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), idempotency:key});
+      receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), proof_url:proofPath, idempotency:key});
     if(!d.ok){ $('okHold').disabled=false; $('okHold').textContent='Confirm Hold'; return sErr(d.error); }
     HOLD_DRAFT = null;
-    const f = $('hph').files[0]; let unconf = true;
-    if(f){ const path = await uploadPhoto(f,'hold');
-      if(path){ await call({action:'attach_photo', path, hold_id:d.hold_id}); unconf = false; } }
-    const summary = 'V Wholesale — Hold '+d.hold_number+'\nCustomer: '+n+'\nBoxes: '+d.total_qty+
+    const totalQty = CART.reduce((t,c)=>t+Number(c.qty),0);
+    if(d.status === 'PENDING'){
+      openSheet('<div class="sok"><b>Sent for approval</b><br>'+totalQty+' boxes for '+esc(n)+
+        ' — nothing is reserved until an administrator approves it.'+
+        (photoFailed?'<br><br>⚠ Photo did not upload — attach it again if needed.':'')+'</div>'+
+        '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+      return;
+    }
+    const summary = 'V Wholesale — Hold '+d.result.hold_number+'\nCustomer: '+n+'\nBoxes: '+d.result.total_qty+
                     '\nAdvance: Rs '+a+'\nValid till: '+($('he').value||'');
-    openSheet('<div class="sok"><b>Hold created — '+esc(d.hold_number)+'</b><br>'+
-      d.total_qty+' boxes reserved for '+esc(n)+
-      (unconf?'<br><br>⚠ Receipt photo missing — hold marked UNCONFIRMED.':'')+'</div>'+
+    openSheet('<div class="sok"><b>Hold created — '+esc(d.result.hold_number)+'</b><br>'+
+      d.result.total_qty+' boxes reserved for '+esc(n)+
+      (photoFailed?'<br><br>⚠ Photo did not upload — hold marked UNCONFIRMED.':'')+'</div>'+
       '<textarea id="shr" readonly>'+esc(summary)+'</textarea>'+
       '<button class="go" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'shr\').value);this.textContent=\'Copied\'">Copy for WhatsApp</button>'+
       '<button class="cancel" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
@@ -710,10 +723,14 @@ async function loadApprovals(){
           '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
         '</div></div>';
     }
+    const isSaleHold = r.request_type === 'SALE' || r.request_type === 'HOLD';
     return '<div class="hold-card">'+
       '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
       (r.proof_signed_url?'':'<span class="badge">NO PROOF</span>')+
       '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
+      (isSaleHold ? '<div class="meta"><b>'+esc(r.customer_name||'—')+'</b>'+(r.customer_mobile?' · '+esc(r.customer_mobile):'')+'</div>'+
+        (r.request_type==='SALE' ? '<div class="meta">Invoice '+esc(r.invoice||'—')+'</div>' :
+          '<div class="meta">Advance ₹'+esc(String(r.advance||0))+' · Receipt '+esc(r.receipt_ref||'—')+(r.expiry?' · until '+esc(r.expiry):'')+'</div>') : '')+
       (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
       (r.lines||[]).map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
       (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
