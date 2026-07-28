@@ -254,7 +254,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-04';
+const APP_VERSION = '2026-07-28-05';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
@@ -905,7 +905,7 @@ async function loadHistory(reset){
 
 /* ================= DATA EDITOR (Admin + Inventory) ================= */
 let GRID_FILTER = 'ALL', GRID_Q = '', GRID_OFFSET = 0, GRID_LIMIT = 1000, GRID_COUNTS = {};
-const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates']];
+const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates'],['INCOMPLETE','Incomplete']];
 
 async function loadGrid(reset){
   if(reset){ GRID_OFFSET = 0; }
@@ -934,6 +934,7 @@ function renderGrid(d){
       if(r.pending_edit) tags.push('<span class="tag pending">PENDING EDIT</span>');
       const activePartners = (r.dup_partners||[]).filter(p => p.decision !== 'DISMISSED');
       if(activePartners.length) tags.push('<span class="tag dup">'+activePartners.length+' possible match'+(activePartners.length===1?'':'es')+'</span>');
+      if(r.missing_fields && r.missing_fields.length) tags.push('<span class="tag pending">Missing: '+r.missing_fields.map(esc).join(', ')+'</span>');
       return '<div class="grow" data-row=\''+JSON.stringify(r).replace(/'/g,'&#39;')+'\'>'+
         '<div class="gh">'+
           '<div class="gt" data-open="1">'+
