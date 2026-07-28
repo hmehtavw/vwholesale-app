@@ -740,6 +740,7 @@ function renderGrid(d){
             '<button data-step="-1">−</button>'+
             '<input type="number" data-qty value="'+r.current_physical_qty+'">'+
             '<button data-step="1">+</button>'+
+            '<button data-save class="hide" style="background:var(--navy);color:#fff">✓</button>'+
           '</div>'+
         '</div>'+
         (tags.length ? '<div class="tagrow">'+tags.join('')+'</div>' : '')+
@@ -784,11 +785,14 @@ function wireGrid(){
     const row = JSON.parse(el.dataset.row);
     el.querySelector('[data-open]').onclick = () => openRowEditor(row);
     const inp = el.querySelector('[data-qty]');
+    const saveBtn = el.querySelector('[data-save]');
+    const toggleSave = () => saveBtn.classList.toggle('hide', Number(inp.value||0) === row.current_physical_qty);
     el.querySelectorAll('[data-step]').forEach(btn => btn.onclick = () => {
       inp.value = Math.max(0, Number(inp.value||0) + Number(btn.dataset.step));
-      submitQtyChange(row, Number(inp.value||0));
+      toggleSave();
     });
-    inp.addEventListener('change', () => submitQtyChange(row, Number(inp.value||0)));
+    inp.addEventListener('input', toggleSave);
+    saveBtn.onclick = () => submitQtyChange(row, Number(inp.value||0));
   });
 
   $('res').querySelectorAll('[data-dis]').forEach(btn => btn.onclick = () => decideDup(btn.dataset.dis, 'DISMISSED', btn));
