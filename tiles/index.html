@@ -718,7 +718,7 @@ function renderGrid(d){
 
   h += '<div class="searchbar" style="margin-bottom:12px"><input id="eq" placeholder="Search code, name, brand, location" value="'+esc(GRID_Q)+'"><button id="egoBtn">Go</button></div>';
 
-  h += '<div class="gridtools"><button id="addRowBtn">+ Add row</button><button id="addColBtn">+ Add column</button></div>';
+  h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button><button id="addColBtn">+ New attribute</button></div>';
 
   if(!d.rows.length){
     h += '<div class="msg">No rows match this filter.</div>';
@@ -876,7 +876,7 @@ function openRowEditor(row){
 }
 
 function openAddRow(){
-  openSheet('<h3>Add a row</h3><div class="sub">An existing tile code + location will add stock there; a new code + location creates both.</div>'+
+  openSheet('<h3>Add stock</h3><div class="sub">Existing tile code + existing location adds boxes there. A new code or new location gets created automatically.</div>'+
     '<div id="sherr" class="serr hide"></div>'+
     '<div class="field"><label>Tile code *</label><input id="nCode" autocomplete="off"></div>'+
     '<div class="row2"><div class="field"><label>Name</label><input id="nName"></div>'+
@@ -885,7 +885,7 @@ function openAddRow(){
     '<div class="field"><label>Category</label><input id="nCat" value="Tiles"></div></div>'+
     '<div class="field"><label>Location name *</label><input id="nLoc" autocomplete="off"></div>'+
     '<div class="field"><label>Opening boxes</label><input id="nQty" type="number" value="0"></div>'+
-    '<button class="go" id="okAdd">Add row</button>'+
+    '<button class="go" id="okAdd">Add stock</button>'+
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
 
   $('okAdd').onclick = async () => {
@@ -898,7 +898,7 @@ function openAddRow(){
       size:$('nSize').value.trim()||null, category:$('nCat').value.trim()||null,
       location_name:loc, qty:Number($('nQty').value||0)
     }, reason:'Data editor: new row', idempotency:uid()});
-    if(!d.ok){ $('okAdd').disabled=false; $('okAdd').textContent='Add row'; return sErr(d.error); }
+    if(!d.ok){ $('okAdd').disabled=false; $('okAdd').textContent='Add stock'; return sErr(d.error); }
     closeSheet();
     if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
     loadGrid(true);
@@ -906,7 +906,7 @@ function openAddRow(){
 }
 
 function openAddColumn(){
-  openSheet('<h3>Add a column</h3><div class="sub">Shows up on every row going forward.</div>'+
+  openSheet('<h3>Add a new attribute</h3><div class="sub">Rarely needed — use this only if you want to start tracking something new (like "Supplier code") on every tile or shelf going forward. To add stock, use "+ Add stock" instead.</div>'+
     '<div id="sherr" class="serr hide"></div>'+
     '<div class="field"><label>Column label *</label><input id="cLabel" placeholder="e.g. Shelf note"></div>'+
     '<div class="row2"><div class="field"><label>Type</label><select id="cType">'+
