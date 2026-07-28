@@ -196,6 +196,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .pgal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px}
 </style>
 </head>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <body>
 
 <!-- ===== LOGIN ===== -->
@@ -784,7 +785,8 @@ function renderGrid(d){
 
   h += '<div class="searchbar" style="margin-bottom:12px"><input id="eq" placeholder="Search code, name, brand, location" value="'+esc(GRID_Q)+'"><button id="egoBtn">Go</button></div>';
 
-  h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button></div>';
+  h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button>'+
+    (ROLE==='ADMIN' ? '<button id="bulkBtn">+ Bulk upload</button>' : '')+'</div>';
 
   if(!d.rows.length){
     h += '<div class="msg">No rows match this filter.</div>';
@@ -838,6 +840,7 @@ function wireGrid(){
   $('egoBtn').onclick = () => { GRID_Q = $('eq').value.trim(); loadGrid(true); };
   $('eq').addEventListener('keydown', e => { if(e.key==='Enter') $('egoBtn').click(); });
   $('addRowBtn').onclick = openAddRow;
+  const bb = $('bulkBtn'); if(bb) bb.onclick = openBulkUpload;
   const lm = $('loadMoreBtn');
   if(lm) lm.onclick = async () => {
     GRID_OFFSET += GRID_LIMIT;
@@ -1059,6 +1062,128 @@ $('pinBtn').onclick = () => {
     alert(role+' PIN updated. Everyone signed in as '+role+' (except you) has been signed out.');
   });
 };
+
+/* ================= BULK UPLOAD (Admin only) ================= */
+let BULK_FILE_NAME = null, BULK_HEADERS = [], BULK_DATA = [], BULK_BATCH = null;
+
+function openBulkUpload(){
+  openSheet('<h3>Bulk Upload</h3><div class="sub">Upload an Excel or CSV file. Nothing touches live stock until you review and commit it.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<input type="file" id="bulkFile" accept=".xlsx,.xls,.csv" style="margin:14px 0;width:100%">'+
+    '<div id="bulkMapArea"></div>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('bulkFile').onchange = async () => {
+    const f = $('bulkFile').files[0]; if(!f) return;
+    if(typeof XLSX === 'undefined') return sErr('Could not load the file reader — check your connection and try again.');
+    try{
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows2d = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      if(!rows2d.length) return sErr('That file has no rows');
+      BULK_HEADERS = rows2d[0].map(h => String(h||'').trim());
+      BULK_DATA = rows2d.slice(1).filter(r => r.some(c => String(c||'').trim() !== ''));
+      BULK_FILE_NAME = f.name;
+      if(!BULK_DATA.length) return sErr('No data rows found below the header row');
+      renderBulkMapping();
+    }catch(e){ sErr('Could not read that file — is it a valid Excel or CSV file?'); }
+  };
+}
+
+function guessCol(headers, keywords){
+  const lower = headers.map(h => h.toLowerCase());
+  for(const kw of keywords){ const i = lower.findIndex(h => h.includes(kw)); if(i>=0) return i; }
+  return -1;
+}
+
+function renderBulkMapping(){
+  const fields = [
+    ['model_code','Tile Code *',['code','model','sku','item']],
+    ['model_name','Name',['name','description','desc']],
+    ['brand','Brand',['brand','make']],
+    ['size','Size',['size','dimension']],
+    ['category','Category',['category','type']],
+    ['location_name','Location *',['location','shelf','rack','godown','stand']],
+    ['qty','Quantity *',['qty','quantity','boxes','count','stock']],
+  ];
+  let h = '<div class="field" style="margin-top:10px"><label>Match your columns</label></div>';
+  fields.forEach(([key,label,kws]) => {
+    const guess = guessCol(BULK_HEADERS, kws);
+    h += '<div class="row2" style="align-items:center;margin-bottom:8px">'+
+      '<div style="flex:0 0 38%;font-size:13px;font-weight:600">'+esc(label)+'</div>'+
+      '<select data-map="'+key+'" style="flex:1"><option value="">— skip —</option>'+
+      BULK_HEADERS.map((hd,i) => '<option value="'+i+'"'+(i===guess?' selected':'')+'>'+esc(hd||('Column '+(i+1)))+'</option>').join('')+
+      '</select></div>';
+  });
+  h += '<div class="meta">'+BULK_DATA.length+' data rows found in "'+esc(BULK_FILE_NAME)+'"</div>';
+  h += '<button class="go" id="bulkPreviewBtn" style="margin-top:14px">Stage for review</button>';
+  $('bulkMapArea').innerHTML = h;
+  $('bulkPreviewBtn').onclick = doBulkStage;
+}
+
+async function doBulkStage(){
+  const map = {};
+  $('sheet').querySelectorAll('[data-map]').forEach(s => { map[s.dataset.map] = s.value; });
+  if(map.model_code === '') return sErr('Pick a column for Tile Code');
+  if(map.location_name === '') return sErr('Pick a column for Location');
+  if(map.qty === '') return sErr('Pick a column for Quantity');
+
+  $('bulkPreviewBtn').disabled = true; $('bulkPreviewBtn').textContent = 'Processing…';
+  const pick = (r,k) => map[k] !== '' && map[k] != null ? String(r[map[k]] ?? '').trim() : '';
+  const rows = BULK_DATA.map(r => ({
+    model_code: pick(r,'model_code'), model_name: pick(r,'model_name'), brand: pick(r,'brand'),
+    size: pick(r,'size'), category: pick(r,'category'), location_name: pick(r,'location_name'), qty: pick(r,'qty'),
+  }));
+
+  const d = await call({action:'bulk_stage', filename:BULK_FILE_NAME, rows});
+  if(!d.ok){ sErr(d.error); $('bulkPreviewBtn').disabled=false; $('bulkPreviewBtn').textContent='Stage for review'; return; }
+  BULK_BATCH = d.batch_id;
+  closeSheet();
+  renderBulkPreview();
+}
+
+async function renderBulkPreview(){
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const pv = await call({action:'bulk_preview', batch_id:BULK_BATCH});
+  if(!pv.ok) return $('res').innerHTML = '<div class="msg">'+esc(pv.error)+'</div>';
+  const rows = pv.rows;
+  const ready = rows.filter(r => r.status==='READY').length;
+  const err = rows.filter(r => r.status==='ERROR').length;
+  const done = rows.filter(r => r.status==='COMMITTED').length;
+
+  let h = '<div class="msg" style="text-align:left"><b>'+esc(pv.batch.filename||'Upload')+'</b><br>'+
+    (done ? done+' already committed. ' : '')+ready+' ready to import, '+err+' with problems.</div>';
+
+  h += rows.filter(r => r.status !== 'COMMITTED').map(r =>
+    '<div class="grow"><div class="gh"><div class="gt"><b>'+esc(r.model_code||'—')+'</b>'+
+    '<span>'+[esc(r.location_name||''), r.qty!=null?r.qty+' boxes':null].filter(Boolean).join(' · ')+'</span></div>'+
+    '<span class="tag '+(r.status==='ERROR'?'notlive':'pending')+'">'+(r.status==='ERROR'?esc(r.error_msg):'READY')+'</span></div>'+
+    (r.status==='ERROR' ? '<div class="tagrow"><button class="dupno" data-drop="'+r.id+'">Remove this row</button></div>' : '')+
+    '</div>').join('');
+
+  h += '<div class="gridtools" style="margin-top:14px">'+
+    (ROLE==='ADMIN' && ready>0 ? '<button id="bulkCommitBtn">Commit '+ready+' rows</button>' : '')+
+    '<button id="bulkCancelBtn" style="border-color:#f3c9c5;color:#b3261e">Back to editor</button></div>';
+  $('res').innerHTML = h;
+
+  $('res').querySelectorAll('[data-drop]').forEach(b => b.onclick = async () => {
+    await call({action:'bulk_drop_row', row_id:b.dataset.drop});
+    renderBulkPreview();
+  });
+  const commitBtn = $('bulkCommitBtn');
+  if(commitBtn) commitBtn.onclick = async () => {
+    if(!confirm('Commit '+ready+' rows to live stock? This adds to existing tiles and creates new ones as needed.')) return;
+    commitBtn.disabled = true; commitBtn.textContent = 'Committing…';
+    const cd = await call({action:'bulk_commit', batch_id:BULK_BATCH});
+    if(!cd.ok){ alert(cd.error); commitBtn.disabled=false; commitBtn.textContent='Commit '+ready+' rows'; return; }
+    alert(cd.committed+' row'+(cd.committed===1?'':'s')+' committed'+
+      (cd.failed?', '+cd.failed+' failed unexpectedly — check the audit log':'')+'.');
+    BULK_BATCH = null;
+    loadGrid(true);
+  };
+  $('bulkCancelBtn').onclick = () => { BULK_BATCH = null; loadGrid(true); };
+}
 
 /* ================= NAVIGATION ================= */
 let LAST = null;              // last search term, for the back button
