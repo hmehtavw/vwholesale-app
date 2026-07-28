@@ -428,6 +428,8 @@ function paintCart(){
   $('cq').textContent = q; $('ci').textContent = CART.length+' item'+(CART.length===1?'':'s');
   $('cartbar').classList.toggle('hide', CART.length===0);
   document.body.classList.toggle('pad', CART.length>0);
+  $('doSale').textContent = SALE_DRAFT ? 'Continue Sale →' : 'Record Sale';
+  $('doHold').textContent = HOLD_DRAFT ? 'Continue Hold →' : 'Hold';
 }
 function cartLines(){ return CART.map(c => ({model_id:c.model_id, location_id:c.location_id, qty:Number(c.qty)})); }
 
@@ -489,16 +491,24 @@ function wirePhoto(id){
 }
 
 /* ================= SALE ================= */
+let SALE_DRAFT = null, HOLD_DRAFT = null;
 $('doSale').onclick = () => {
+  const dft = SALE_DRAFT || {};
   openSheet('<h3>Record Sale</h3><div class="sub">Stock comes off the exact locations below.</div>'+
     '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
-    '<div class="field" style="margin-top:14px"><label>Invoice number *</label><input id="inv" autocomplete="off"></div>'+
-    '<div class="row2"><div class="field"><label>Customer</label><input id="cn"></div>'+
-    '<div class="field"><label>Mobile</label><input id="cm" inputmode="numeric"></div></div>'+
+    '<button class="more" id="addMoreSale" style="margin-top:8px">+ Add another product</button>'+
+    '<div class="field" style="margin-top:14px"><label>Invoice number *</label><input id="inv" autocomplete="off" value="'+esc(dft.inv||'')+'"></div>'+
+    '<div class="row2"><div class="field"><label>Customer</label><input id="cn" value="'+esc(dft.cn||'')+'"></div>'+
+    '<div class="field"><label>Mobile</label><input id="cm" inputmode="numeric" value="'+esc(dft.cm||'')+'"></div></div>'+
     photoBox('sph','Photograph the invoice')+
     '<button class="go" id="okSale">Confirm Sale</button>'+
-    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+    '<button class="cancel" id="cancelSale">Cancel</button>');
   wireLines(); wirePhoto('sph');
+  $('addMoreSale').onclick = () => {
+    SALE_DRAFT = { inv:$('inv').value, cn:$('cn').value, cm:$('cm').value };
+    closeSheet();
+  };
+  $('cancelSale').onclick = () => { SALE_DRAFT = null; closeSheet(); };
   const key = uid();
   $('okSale').onclick = async () => {
     const inv = $('inv').value.trim();
@@ -507,6 +517,7 @@ $('doSale').onclick = () => {
     const d = await call({action:'sale', invoice:inv, customer_name:$('cn').value.trim(),
       customer_mobile:$('cm').value.trim(), lines:cartLines(), idempotency:key});
     if(!d.ok){ $('okSale').disabled=false; $('okSale').textContent='Confirm Sale'; return sErr(d.error); }
+    SALE_DRAFT = null;
     const f = $('sph').files[0];
     let pending = false;
     if(f){ const path = await uploadPhoto(f,'sale');
@@ -521,18 +532,25 @@ $('doSale').onclick = () => {
 /* ================= HOLD ================= */
 $('doDmg').onclick = () => openChange('DAMAGE');
 $('doHold').onclick = () => {
-  const d15 = new Date(Date.now()+15*864e5).toISOString().slice(0,10);
+  const dft = HOLD_DRAFT || {};
+  const d15 = dft.he || new Date(Date.now()+15*864e5).toISOString().slice(0,10);
   openSheet('<h3>Hold Stock</h3><div class="sub">Advance payment and receipt photo are required.</div>'+
     '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
-    '<div class="row2" style="margin-top:14px"><div class="field"><label>Customer name *</label><input id="hn"></div>'+
-    '<div class="field"><label>Mobile *</label><input id="hm" inputmode="numeric"></div></div>'+
-    '<div class="row2"><div class="field"><label>Advance ₹ *</label><input id="ha" inputmode="decimal"></div>'+
-    '<div class="field"><label>Receipt no. *</label><input id="hr"></div></div>'+
+    '<button class="more" id="addMoreHold" style="margin-top:8px">+ Add another product</button>'+
+    '<div class="row2" style="margin-top:14px"><div class="field"><label>Customer name *</label><input id="hn" value="'+esc(dft.hn||'')+'"></div>'+
+    '<div class="field"><label>Mobile *</label><input id="hm" inputmode="numeric" value="'+esc(dft.hm||'')+'"></div></div>'+
+    '<div class="row2"><div class="field"><label>Advance ₹ *</label><input id="ha" inputmode="decimal" value="'+esc(dft.ha||'')+'"></div>'+
+    '<div class="field"><label>Receipt no. *</label><input id="hr" value="'+esc(dft.hr||'')+'"></div></div>'+
     '<div class="field"><label>Hold until</label><input id="he" type="date" value="'+d15+'"></div>'+
     photoBox('hph','Photograph the advance receipt')+
     '<button class="go" id="okHold">Confirm Hold</button>'+
-    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+    '<button class="cancel" id="cancelHold">Cancel</button>');
   wireLines(); wirePhoto('hph');
+  $('addMoreHold').onclick = () => {
+    HOLD_DRAFT = { hn:$('hn').value, hm:$('hm').value, ha:$('ha').value, hr:$('hr').value, he:$('he').value };
+    closeSheet();
+  };
+  $('cancelHold').onclick = () => { HOLD_DRAFT = null; closeSheet(); };
   const key = uid();
   $('okHold').onclick = async () => {
     const n=$('hn').value.trim(), m=$('hm').value.trim(), a=Number($('ha').value), r=$('hr').value.trim();
@@ -544,6 +562,7 @@ $('doHold').onclick = () => {
     const d = await call({action:'hold', customer_name:n, customer_mobile:m, advance:a,
       receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), idempotency:key});
     if(!d.ok){ $('okHold').disabled=false; $('okHold').textContent='Confirm Hold'; return sErr(d.error); }
+    HOLD_DRAFT = null;
     const f = $('hph').files[0]; let unconf = true;
     if(f){ const path = await uploadPhoto(f,'hold');
       if(path){ await call({action:'attach_photo', path, hold_id:d.hold_id}); unconf = false; } }
