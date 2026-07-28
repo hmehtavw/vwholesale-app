@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
@@ -251,12 +254,33 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
+const APP_VERSION = '2026-07-28-02';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
 let ROLE  = sessionStorage.getItem('vwt_role')  || '';
 
 const $ = id => document.getElementById(id);
+
+// staff sometimes leave this open for hours (home-screen shortcut, background tab) —
+// this catches it and nudges them to refresh instead of quietly working on stale code
+async function checkForUpdate(){
+  try{
+    const r = await fetch(location.pathname + '?_=' + Date.now(), {cache:'no-store'});
+    const html = await r.text();
+    const m = html.match(/APP_VERSION = '([^']+)'/);
+    if(m && m[1] !== APP_VERSION && !document.getElementById('updbar')){
+      const bar = document.createElement('div');
+      bar.id = 'updbar';
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--gold,#c9973a);color:#1a2744;padding:10px 14px;text-align:center;font-weight:700;font-size:13px;cursor:pointer';
+      bar.textContent = '⟳ A newer version is ready — tap to refresh';
+      bar.onclick = () => location.reload(true);
+      document.body.prepend(bar);
+    }
+  }catch(e){ /* offline or blocked — ignore, meta tags still prevent stale caching on next load */ }
+}
+setInterval(checkForUpdate, 120000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) checkForUpdate(); });
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 async function call(payload){
@@ -415,10 +439,34 @@ function renderModel(d){
   if(t.expired_held > 0)
     h += '<div class="pill">⚠ '+t.expired_held+' held on expired holds — needs review</div>';
 
+  if(ROLE==='ADMIN'||ROLE==='INVENTORY')
+    h += '<div id="tphGallery"></div><label class="photo" id="tphBox"><span id="tphTxt">📷 Take or add a tile photo</span>'+
+      '<input type="file" accept="image/*" capture="environment" id="tphInput"></label>';
+
   h += locRows(d.locations);
 
   $('res').innerHTML = h;
   wireAdd(d.locations[0] ? d.locations[0].model_id : null, d.model.model_code);
+  if(ROLE==='ADMIN'||ROLE==='INVENTORY') wireTilePhoto(d.model.id);
+}
+
+async function wireTilePhoto(modelId){
+  const load = async () => {
+    const p = await call({action:'model_photos', model_id:modelId});
+    const gal = $('tphGallery'); if(!gal) return;
+    gal.innerHTML = (p.ok && p.photos.length) ? '<div class="pgal">'+p.photos.map(x=>'<img src="'+x.url+'">').join('')+'</div>' : '';
+  };
+  await load();
+  $('tphInput').onchange = async () => {
+    const f = $('tphInput').files[0]; if(!f) return;
+    $('tphTxt').textContent = 'Uploading…';
+    const path = await uploadPhoto(f, 'tile');
+    $('tphInput').value = '';
+    if(!path){ $('tphTxt').textContent = '⚠ Upload failed — tap to retry'; return; }
+    await call({action:'attach_model_photo', model_id:modelId, path});
+    $('tphTxt').textContent = '📷 Take or add another photo';
+    await load();
+  };
 }
 
 
@@ -719,44 +767,54 @@ function openChange(type){
 }
 
 /* ================= APPROVALS (Admin) ================= */
+function renderApprovalCard(r, showActions){
+  const statusTag = !showActions ? '<span class="tag '+(r.status==='APPROVED'?'pending':'notlive')+'" style="margin-left:6px">'+
+    esc(r.status)+' by '+esc(r.decided_by||'—')+'</span>' : '';
+  if(r.is_editor){
+    const ch = r.payload && r.payload.changes ? r.payload.changes : r.payload;
+    const chSummary = ch ? Object.keys(ch).filter(k=>k!=='custom_fields').map(k => k+': '+esc(String(ch[k]))).join(', ') : '';
+    return '<div class="hold-card">'+
+      '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+statusTag+
+      '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
+      (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
+      (r.decision_note && !showActions?'<div class="meta">Note: '+esc(r.decision_note)+'</div>':'')+
+      '<div class="meta">• '+esc(r.model_code||'(new tile)')+(r.location_name?' at '+esc(r.location_name):'')+'</div>'+
+      (chSummary?'<div class="meta">'+chSummary+'</div>':'')+
+      (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
+      (showActions ? '<div class="acts" style="margin-top:12px">'+
+        '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
+        '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
+      '</div>' : '')+'</div>';
+  }
+  const isSaleHold = r.request_type === 'SALE' || r.request_type === 'HOLD';
+  return '<div class="hold-card">'+
+    '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+statusTag+
+    (showActions && !r.proof_signed_url?'<span class="badge">NO PROOF</span>':'')+
+    '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
+    (isSaleHold ? '<div class="meta"><b>'+esc(r.customer_name||'—')+'</b>'+(r.customer_mobile?' · '+esc(r.customer_mobile):'')+'</div>'+
+      (r.request_type==='SALE' ? '<div class="meta">Invoice '+esc(r.invoice||'—')+'</div>' :
+        '<div class="meta">Advance ₹'+esc(String(r.advance||0))+' · Receipt '+esc(r.receipt_ref||'—')+(r.expiry?' · until '+esc(r.expiry):'')+'</div>') : '')+
+    (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
+    (r.decision_note && !showActions?'<div class="meta">Note: '+esc(r.decision_note)+'</div>':'')+
+    (r.lines||[]).map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
+    (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
+    (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
+    (showActions ? '<div class="acts" style="margin-top:12px">'+
+      '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
+      '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
+    '</div>' : (!showActions&&r.status?'<div class="meta" style="margin-top:6px">'+new Date(r.decided_at).toLocaleString()+'</div>':''))+'</div>';
+}
+
+let APPROVAL_MODE = 'pending';
 async function loadApprovals(){
+  APPROVAL_MODE = 'pending';
   $('res').innerHTML = '<div class="msg">Loading…</div>';
   const d = await call({action:'approvals'});
   if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
-  if(!d.approvals.length) return $('res').innerHTML = '<div class="msg">Nothing waiting for approval.</div>';
-  $('res').innerHTML = d.approvals.map(r => {
-    if(r.is_editor){
-      const ch = r.payload && r.payload.changes ? r.payload.changes : r.payload;
-      const chSummary = ch ? Object.keys(ch).filter(k=>k!=='custom_fields').map(k => k+': '+esc(String(ch[k]))).join(', ') : '';
-      return '<div class="hold-card">'+
-        '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
-        '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
-        (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
-        '<div class="meta">• '+esc(r.model_code||'(new tile)')+(r.location_name?' at '+esc(r.location_name):'')+'</div>'+
-        (chSummary?'<div class="meta">'+chSummary+'</div>':'')+
-        (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
-        '<div class="acts" style="margin-top:12px">'+
-          '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
-          '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
-        '</div></div>';
-    }
-    const isSaleHold = r.request_type === 'SALE' || r.request_type === 'HOLD';
-    return '<div class="hold-card">'+
-      '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+
-      (r.proof_signed_url?'':'<span class="badge">NO PROOF</span>')+
-      '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
-      (isSaleHold ? '<div class="meta"><b>'+esc(r.customer_name||'—')+'</b>'+(r.customer_mobile?' · '+esc(r.customer_mobile):'')+'</div>'+
-        (r.request_type==='SALE' ? '<div class="meta">Invoice '+esc(r.invoice||'—')+'</div>' :
-          '<div class="meta">Advance ₹'+esc(String(r.advance||0))+' · Receipt '+esc(r.receipt_ref||'—')+(r.expiry?' · until '+esc(r.expiry):'')+'</div>') : '')+
-      (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
-      (r.lines||[]).map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
-      (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
-      (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
-      '<div class="acts" style="margin-top:12px">'+
-        '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
-        '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
-      '</div></div>';
-  }).join('');
+  let h = approvalModeChips();
+  h += d.approvals.length ? d.approvals.map(r => renderApprovalCard(r,true)).join('') : '<div class="msg">Nothing waiting for approval.</div>';
+  $('res').innerHTML = h;
+  wireApprovalChips();
   const decide = async (id, decision) => {
     const r = await call({action:'decide', approval_id:id, decision});
     if(!r.ok) return alert(r.error);
@@ -764,6 +822,35 @@ async function loadApprovals(){
   };
   $('res').querySelectorAll('[data-yes]').forEach(b => b.onclick = () => decide(b.dataset.yes,'APPROVED'));
   $('res').querySelectorAll('[data-no]').forEach(b => b.onclick = () => decide(b.dataset.no,'REJECTED'));
+}
+
+function approvalModeChips(){
+  return '<div class="chips" style="margin-bottom:14px">'+
+    '<button class="chip'+(APPROVAL_MODE==='pending'?' on':'')+'" data-mode="pending">Pending</button>'+
+    '<button class="chip'+(APPROVAL_MODE==='history'?' on':'')+'" data-mode="history">History</button>'+
+    '</div>';
+}
+function wireApprovalChips(){
+  $('res').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+    b.dataset.mode==='pending' ? loadApprovals() : loadHistory();
+  });
+}
+
+let HISTORY_OFFSET = 0;
+async function loadHistory(reset){
+  APPROVAL_MODE = 'history';
+  if(reset!==false) HISTORY_OFFSET = 0;
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const d = await call({action:'history', limit:30, offset:HISTORY_OFFSET});
+  if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+  let h = approvalModeChips();
+  h += d.rows.length ? d.rows.map(r => renderApprovalCard(r,false)).join('') : '<div class="msg">No decisions yet.</div>';
+  if(HISTORY_OFFSET + d.rows.length < d.total)
+    h += '<button class="more" id="histMoreBtn">Load more ('+(d.total-HISTORY_OFFSET-d.rows.length)+' left)</button>';
+  $('res').innerHTML = h;
+  wireApprovalChips();
+  const mb = $('histMoreBtn');
+  if(mb) mb.onclick = () => { HISTORY_OFFSET += 30; loadHistory(false); };
 }
 
 /* ================= DATA EDITOR (Admin + Inventory) ================= */
@@ -1069,9 +1156,22 @@ let BULK_FILE_NAME = null, BULK_HEADERS = [], BULK_DATA = [], BULK_BATCH = null;
 function openBulkUpload(){
   openSheet('<h3>Bulk Upload</h3><div class="sub">Upload an Excel or CSV file. Nothing touches live stock until you review and commit it.</div>'+
     '<div id="sherr" class="serr hide"></div>'+
+    '<button class="more" id="sampleBtn" style="margin-bottom:10px">⬇ Download a sample sheet</button>'+
     '<input type="file" id="bulkFile" accept=".xlsx,.xls,.csv" style="margin:14px 0;width:100%">'+
     '<div id="bulkMapArea"></div>'+
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('sampleBtn').onclick = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['Tile Code','Name','Brand','Size','Category','Location','Quantity'],
+      ['10480-D','Marble Look Glossy','SUN HEART','2x2','Tiles','GODOWN RACK NO. 1 (A)',48],
+      ['97039-HL','','BLUEZONE','2x2','Tiles','S-42',25],
+    ]);
+    ws['!cols'] = [{wch:14},{wch:22},{wch:14},{wch:10},{wch:12},{wch:24},{wch:10}];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stock');
+    XLSX.writeFile(wb, 'vwholesale-bulk-upload-sample.xlsx');
+  };
 
   $('bulkFile').onchange = async () => {
     const f = $('bulkFile').files[0]; if(!f) return;
