@@ -79,6 +79,10 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:20px;
   background:var(--warn-bg);color:var(--warn);margin-bottom:9px}
 .acts{display:flex;gap:9px}
+.acts.step{align-items:center;gap:8px}
+.acts.step button{width:38px;height:38px;border-radius:9px;border:1.5px solid var(--line);
+  background:#fff;font-size:19px;font-weight:700;color:var(--navy);line-height:1;flex:0 0 auto}
+.acts.step input{flex:1;text-align:center;font-size:16px;font-weight:700;padding:9px 4px}
 .acts button{flex:1;padding:12px;border-radius:10px;border:1.5px solid var(--navy);
   background:#fff;color:var(--navy);font-weight:700;font-size:14px}
 .acts button.soon{border-color:var(--line);color:#9aa5b8}
@@ -325,7 +329,9 @@ function locRows(list){
   return list.map(l => {
     const a = Number(l.available_qty);
     const cls = a <= 0 ? 'zero' : (a <= 5 ? 'low' : '');
-    return '<div class="loc '+cls+'">'+
+    const inCart = CART.find(c => c.model_id===l.model_id && c.location_id===l.location_id);
+    const qty = inCart ? inCart.qty : 0;
+    return '<div class="loc '+cls+'" data-mid="'+esc(l.model_id)+'" data-lid="'+esc(l.location_id)+'" data-lname="'+esc(l.location_name)+'" data-avail="'+a+'">'+
       '<div class="ln">'+esc(l.location_name)+'</div>'+
       '<div class="lt">'+esc(String(l.location_type).replace(/_/g,' '))+'</div>'+
       '<div class="qty">'+
@@ -334,18 +340,30 @@ function locRows(list){
         '<div class="a">Available<b>'+a+'</b></div>'+
       '</div>'+
       (a > 0
-        ? '<div class="acts"><button data-add="'+esc(l.location_id)+'" data-n="'+esc(l.location_name)+
-          '" data-a="'+a+'">Add to order</button></div>'
+        ? '<div class="acts step"><button data-ostep="-1">−</button><input type="number" data-oqty value="'+qty+'" readonly><button data-ostep="1">+</button></div>'
         : '<div class="acts"><button class="soon" disabled>No stock here</button></div>')+
       '</div>';
   }).join('');
 }
 function wireAdd(mid, mcode){
-  $('res').querySelectorAll('[data-add]').forEach(btn => btn.onclick = e => {
-    e.stopPropagation();
-    addToCart(mid, mcode, btn.dataset.add, btn.dataset.n, Number(btn.dataset.a));
-    btn.textContent = 'Added ✓'; setTimeout(()=>btn.textContent='Add to order', 900);
+  $('res').querySelectorAll('.loc[data-lid]').forEach(el => {
+    const {mid: emid, lid, lname, avail} = {mid: el.dataset.mid, lid: el.dataset.lid, lname: el.dataset.lname, avail: Number(el.dataset.avail)};
+    const inp = el.querySelector('[data-oqty]');
+    if(!inp) return;
+    el.querySelectorAll('[data-ostep]').forEach(btn => btn.onclick = () => {
+      const delta = Number(btn.dataset.ostep);
+      const newQty = Math.max(0, Math.min(Number(inp.value||0) + delta, avail));
+      inp.value = newQty;
+      setCartQty(emid, mcode, lid, lname, avail, newQty);
+    });
   });
+}
+function setCartQty(mid, mcode, lid, lname, avail, qty){
+  const idx = CART.findIndex(c => c.model_id===mid && c.location_id===lid);
+  if(qty <= 0){ if(idx>=0) CART.splice(idx,1); }
+  else if(idx>=0){ CART[idx].qty = qty; }
+  else CART.push({model_id:mid, model_code:mcode, location_id:lid, location_name:lname, qty, available:avail});
+  paintCart();
 }
 
 function renderFamily(d){
@@ -405,12 +423,6 @@ function renderModel(d){
 let CART = [];   // {model_id, model_code, location_id, location_name, qty, available}
 const uid = () => crypto.randomUUID();
 
-function addToCart(mid, mcode, lid, lname, avail){
-  const ex = CART.find(c => c.model_id===mid && c.location_id===lid);
-  if(ex){ ex.qty = Math.min(ex.qty + 1, avail); }
-  else CART.push({model_id:mid, model_code:mcode, location_id:lid, location_name:lname, qty:1, available:avail});
-  paintCart();
-}
 function paintCart(){
   const q = CART.reduce((t,c)=>t+Number(c.qty||0),0);
   $('cq').textContent = q; $('ci').textContent = CART.length+' item'+(CART.length===1?'':'s');
