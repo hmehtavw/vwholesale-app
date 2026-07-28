@@ -255,7 +255,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-06';
+const APP_VERSION = '2026-07-28-07';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
@@ -925,7 +925,7 @@ function renderGrid(d){
   h += '<div class="searchbar" style="margin-bottom:12px"><input id="eq" placeholder="Search code, name, brand, location" value="'+esc(GRID_Q)+'"><button id="egoBtn">Go</button></div>';
 
   h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button>'+
-    (ROLE==='ADMIN' ? '<button id="bulkBtn">+ Bulk upload</button>' : '')+'</div>';
+    (ROLE==='ADMIN'||ROLE==='INVENTORY' ? '<button id="bulkBtn">+ Bulk upload</button>' : '')+'</div>';
 
   if(!d.rows.length){
     h += '<div class="msg">No rows match this filter.</div>';
@@ -1212,12 +1212,15 @@ $('pinBtn').onclick = () => {
 let BULK_FILE_NAME = null, BULK_HEADERS = [], BULK_DATA = [], BULK_BATCH = null;
 
 function openBulkUpload(){
-  openSheet('<h3>Bulk Upload</h3><div class="sub">Upload an Excel or CSV file. Nothing touches live stock until you review and commit it.</div>'+
+  openSheet('<h3>Bulk Upload</h3><div class="sub">Upload an Excel or CSV file. Nothing touches live stock until '+(ROLE==='ADMIN'?'you review and commit it':'an administrator reviews and commits it')+'.</div>'+
     '<div id="sherr" class="serr hide"></div>'+
-    '<button class="more" id="sampleBtn" style="margin-bottom:10px">⬇ Download a sample sheet</button>'+
+    '<div id="bulkBatchList"><div class="msg">Checking for staged batches…</div></div>'+
+    '<button class="more" id="sampleBtn" style="margin:10px 0">⬇ Download a sample sheet</button>'+
     '<input type="file" id="bulkFile" accept=".xlsx,.xls,.csv" style="margin:14px 0;width:100%">'+
     '<div id="bulkMapArea"></div>'+
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  loadBulkBatchList();
 
   $('sampleBtn').onclick = () => {
     const ws = XLSX.utils.aoa_to_sheet([
@@ -1299,6 +1302,22 @@ async function doBulkStage(){
   BULK_BATCH = d.batch_id;
   closeSheet();
   renderBulkPreview();
+}
+
+async function loadBulkBatchList(){
+  const d = await call({action:'bulk_batches'});
+  const el = $('bulkBatchList'); if(!el) return;
+  if(!d.ok || !d.batches.length){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="meta" style="margin-bottom:6px">Staged and waiting for review:</div>'+
+    d.batches.map(b => '<div class="grow" data-openbatch="'+b.id+'" style="cursor:pointer">'+
+      '<div class="gh"><div class="gt"><b>'+esc(b.filename||'Untitled upload')+'</b>'+
+      '<span>by '+esc(b.uploaded_by)+' · '+b.ready+' ready'+(b.errors?', '+b.errors+' with problems':'')+'</span></div></div>'+
+    '</div>').join('');
+  el.querySelectorAll('[data-openbatch]').forEach(x => x.onclick = () => {
+    BULK_BATCH = x.dataset.openbatch;
+    closeSheet();
+    renderBulkPreview();
+  });
 }
 
 async function renderBulkPreview(){
