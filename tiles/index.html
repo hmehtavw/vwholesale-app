@@ -718,7 +718,7 @@ function renderGrid(d){
 
   h += '<div class="searchbar" style="margin-bottom:12px"><input id="eq" placeholder="Search code, name, brand, location" value="'+esc(GRID_Q)+'"><button id="egoBtn">Go</button></div>';
 
-  h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button><button id="addColBtn">+ New attribute</button></div>';
+  h += '<div class="gridtools"><button id="addRowBtn">+ Add stock</button></div>';
 
   if(!d.rows.length){
     h += '<div class="msg">No rows match this filter.</div>';
@@ -769,7 +769,6 @@ function wireGrid(){
   $('egoBtn').onclick = () => { GRID_Q = $('eq').value.trim(); loadGrid(true); };
   $('eq').addEventListener('keydown', e => { if(e.key==='Enter') $('egoBtn').click(); });
   $('addRowBtn').onclick = openAddRow;
-  $('addColBtn').onclick = openAddColumn;
   const lm = $('loadMoreBtn');
   if(lm) lm.onclick = async () => {
     GRID_OFFSET += GRID_LIMIT;
@@ -899,33 +898,6 @@ function openAddRow(){
       location_name:loc, qty:Number($('nQty').value||0)
     }, reason:'Data editor: new row', idempotency:uid()});
     if(!d.ok){ $('okAdd').disabled=false; $('okAdd').textContent='Add stock'; return sErr(d.error); }
-    closeSheet();
-    if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
-    loadGrid(true);
-  };
-}
-
-function openAddColumn(){
-  openSheet('<h3>Add a new attribute</h3><div class="sub">Rarely needed — use this only if you want to start tracking something new (like "Supplier code") on every tile or shelf going forward. To add stock, use "+ Add stock" instead.</div>'+
-    '<div id="sherr" class="serr hide"></div>'+
-    '<div class="field"><label>Column label *</label><input id="cLabel" placeholder="e.g. Shelf note"></div>'+
-    '<div class="row2"><div class="field"><label>Type</label><select id="cType">'+
-      '<option value="text">Text</option><option value="number">Number</option>'+
-      '<option value="boolean">Yes / No</option><option value="date">Date</option></select></div>'+
-    '<div class="field"><label>Applies to</label><select id="cApplies">'+
-      '<option value="stock">Each shelf row</option><option value="model">Each tile</option></select></div></div>'+
-    '<button class="go" id="okCol">Add column</button>'+
-    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
-
-  $('okCol').onclick = async () => {
-    const label = $('cLabel').value.trim();
-    if(!label) return sErr('A column label is required');
-    $('okCol').disabled = true; $('okCol').textContent='Adding…';
-    const key = label.toUpperCase().replace(/[^A-Z0-9]/g,'');
-    const d = await call({action:'request_edit', type:'ADD_COLUMN', payload:{
-      field_key:key, label, field_type:$('cType').value, applies_to:$('cApplies').value
-    }, reason:'Data editor: new column', idempotency:uid()});
-    if(!d.ok){ $('okCol').disabled=false; $('okCol').textContent='Add column'; return sErr(d.error); }
     closeSheet();
     if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
     loadGrid(true);
