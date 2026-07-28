@@ -254,7 +254,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-03';
+const APP_VERSION = '2026-07-28-04';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
@@ -781,14 +781,27 @@ function openChange(type){
 }
 
 /* ================= APPROVALS (Admin) ================= */
+const TYPE_LABELS = {
+  SALE:'Sale', HOLD:'Hold', EDIT_ROW:'Stock Correction', EDIT_MODEL:'Tile Details Updated',
+  ADD_ROW:'New Stock Added', DELETE_ROW:'Stock Row Removed', ADD_COLUMN:'New Attribute',
+  INWARD:'Inward Stock', DAMAGE:'Damage Reported', ADJUSTMENT_PLUS:'Stock Increased',
+  ADJUSTMENT_MINUS:'Stock Decreased', TRANSFER:'Stock Transfer',
+};
+const FIELD_LABELS = {
+  qty:'Quantity', size:'Size', brand:'Brand', category:'Category', model_code:'Code',
+  model_name:'Name', row_status:'Status', unit:'Unit', is_active:'Active',
+};
+const typeLabel = t => TYPE_LABELS[t] || t.replace(/_/g,' ');
+const fieldLabel = k => FIELD_LABELS[k] || k;
+
 function renderApprovalCard(r, showActions){
   const statusTag = !showActions ? '<span class="tag '+(r.status==='APPROVED'?'pending':'notlive')+'" style="margin-left:6px">'+
     esc(r.status)+' by '+esc(r.decided_by||'—')+'</span>' : '';
   if(r.is_editor){
     const ch = r.payload && r.payload.changes ? r.payload.changes : r.payload;
-    const chSummary = ch ? Object.keys(ch).filter(k=>k!=='custom_fields').map(k => k+': '+esc(String(ch[k]))).join(', ') : '';
+    const chSummary = ch ? Object.keys(ch).filter(k=>k!=='custom_fields').map(k => fieldLabel(k)+': '+esc(String(ch[k]))).join(' · ') : '';
     return '<div class="hold-card">'+
-      '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+statusTag+
+      '<b>'+esc(typeLabel(r.request_type))+'</b>'+statusTag+
       '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
       (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
       (r.decision_note && !showActions?'<div class="meta">Note: '+esc(r.decision_note)+'</div>':'')+
@@ -802,7 +815,7 @@ function renderApprovalCard(r, showActions){
   }
   const isSaleHold = r.request_type === 'SALE' || r.request_type === 'HOLD';
   return '<div class="hold-card">'+
-    '<b>'+esc(r.request_type.replace(/_/g,' '))+'</b>'+statusTag+
+    '<b>'+esc(typeLabel(r.request_type))+'</b>'+statusTag+
     (showActions && !r.proof_signed_url?'<span class="badge">NO PROOF</span>':'')+
     '<div class="meta">by '+esc(r.requested_by)+' · '+new Date(r.created_at).toLocaleString()+'</div>'+
     (isSaleHold ? '<div class="meta"><b>'+esc(r.customer_name||'—')+'</b>'+(r.customer_mobile?' · '+esc(r.customer_mobile):'')+'</div>'+
@@ -839,23 +852,46 @@ async function loadApprovals(){
 }
 
 function approvalModeChips(){
-  return '<div class="chips" style="margin-bottom:14px">'+
+  let h = '<div class="chips" style="margin-bottom:10px">'+
     '<button class="chip'+(APPROVAL_MODE==='pending'?' on':'')+'" data-mode="pending">Pending</button>'+
     '<button class="chip'+(APPROVAL_MODE==='history'?' on':'')+'" data-mode="history">History</button>'+
     '</div>';
+  if(APPROVAL_MODE==='history'){
+    h += '<div class="chips" style="margin-bottom:14px">'+
+      HISTORY_GROUPS.map(([key,label]) =>
+        '<button class="chip'+(HISTORY_TYPE===key?' on':'')+'" data-htype="'+key+'">'+label+'</button>').join('')+
+      '</div>';
+  }
+  return h;
 }
 function wireApprovalChips(){
   $('res').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
     b.dataset.mode==='pending' ? loadApprovals() : loadHistory();
   });
+  $('res').querySelectorAll('[data-htype]').forEach(b => b.onclick = () => {
+    HISTORY_TYPE = b.dataset.htype; loadHistory();
+  });
 }
 
-let HISTORY_OFFSET = 0;
+const HISTORY_GROUPS = [
+  ['ALL','All'],
+  ['SALE','Sales'],
+  ['HOLD','Holds'],
+  ['EDITOR','Stock Editor'],
+  ['ADJUST','Adjustments'],
+];
+const HISTORY_GROUP_TYPES = {
+  SALE:['SALE'], HOLD:['HOLD'],
+  EDITOR:['EDIT_ROW','ADD_ROW','DELETE_ROW','EDIT_MODEL','ADD_COLUMN'],
+  ADJUST:['INWARD','DAMAGE','ADJUSTMENT_PLUS','ADJUSTMENT_MINUS','TRANSFER'],
+};
+let HISTORY_TYPE = 'ALL', HISTORY_OFFSET = 0;
 async function loadHistory(reset){
   APPROVAL_MODE = 'history';
   if(reset!==false) HISTORY_OFFSET = 0;
   $('res').innerHTML = '<div class="msg">Loading…</div>';
-  const d = await call({action:'history', limit:30, offset:HISTORY_OFFSET});
+  const types = HISTORY_TYPE==='ALL' ? null : HISTORY_GROUP_TYPES[HISTORY_TYPE];
+  const d = await call({action:'history', limit:30, offset:HISTORY_OFFSET, types});
   if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
   let h = approvalModeChips();
   h += d.rows.length ? d.rows.map(r => renderApprovalCard(r,false)).join('') : '<div class="msg">No decisions yet.</div>';
