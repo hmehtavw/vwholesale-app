@@ -254,7 +254,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-02';
+const APP_VERSION = '2026-07-28-03';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
@@ -532,16 +532,30 @@ async function uploadPhoto(file, kind){
 const PHOTO_FILES = {};   // id -> File[]
 function photoBox(id,label){
   PHOTO_FILES[id] = [];
-  return '<label class="photo" id="'+id+'box"><span id="'+id+'txt">📷 '+label+' (you can pick several)</span>'+
-         '<input type="file" accept="image/*" multiple id="'+id+'"></label>';
+  return '<div class="field"><label>'+esc(label)+'</label>'+
+    '<div class="row2">'+
+      '<label class="photo" id="'+id+'cbox" style="flex:1"><span>📷 Camera</span>'+
+      '<input type="file" accept="image/*" capture="environment" id="'+id+'cam"></label>'+
+      '<label class="photo" id="'+id+'gbox" style="flex:1"><span>🖼 Gallery (several)</span>'+
+      '<input type="file" accept="image/*" multiple id="'+id+'gal"></label>'+
+    '</div>'+
+    '<div id="'+id+'txt" class="meta" style="margin-top:6px"></div></div>';
 }
 function wirePhoto(id){
-  const el = $(id); if(!el) return;
-  el.onchange = () => {
-    PHOTO_FILES[id] = [...(PHOTO_FILES[id]||[]), ...Array.from(el.files||[])];
-    el.value = '';  // cleared so picking again appends rather than replacing
-    const n = PHOTO_FILES[id].length;
-    if(n){ $(id+'txt').textContent = '✓ '+n+' photo'+(n===1?'':'s')+' attached — tap to add more'; $(id+'box').classList.add('has'); }
+  const camEl = $(id+'cam'), galEl = $(id+'gal');
+  if(!camEl && !galEl) return;
+  const refresh = () => {
+    const n = (PHOTO_FILES[id]||[]).length;
+    $(id+'txt').textContent = n ? '✓ '+n+' photo'+(n===1?'':'s')+' attached' : '';
+    if(n){ $(id+'cbox').classList.add('has'); $(id+'gbox').classList.add('has'); }
+  };
+  if(camEl) camEl.onchange = () => {
+    PHOTO_FILES[id] = [...(PHOTO_FILES[id]||[]), ...Array.from(camEl.files||[])];
+    camEl.value = ''; refresh();
+  };
+  if(galEl) galEl.onchange = () => {
+    PHOTO_FILES[id] = [...(PHOTO_FILES[id]||[]), ...Array.from(galEl.files||[])];
+    galEl.value = ''; refresh();
   };
 }
 async function uploadAllPhotos(id, kind){
