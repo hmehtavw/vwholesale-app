@@ -206,6 +206,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
   <header>
     <button id="back" class="hide" style="padding:8px 11px">‹</button>
     <div class="who" id="whoBtn" style="cursor:pointer"><b id="hname"></b><span id="hrole"></span></div>
+    <button id="pinBtn" class="hide" style="margin-right:2px">PINs</button>
     <button id="out">Sign out</button>
   </header>
   <main>
@@ -226,6 +227,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="cartbar" class="cartbar hide">
   <div class="n"><b><span id="cq">0</span> boxes</b><span id="ci">0 items</span></div>
   <button class="hold hide" id="doDmg">Damage</button>
+  <button class="hold hide" id="doXfer">Transfer</button>
   <button class="hold" id="doHold">Hold</button>
   <button class="sell" id="doSale">Record Sale</button>
 </div>
@@ -275,7 +277,9 @@ function enter(){
   $('hname').textContent = NAME;
   $('hrole').textContent = ROLE;
   if(ROLE==='ADMIN') $('tabAdmin').classList.remove('hide');
+  if(ROLE==='ADMIN') $('pinBtn').classList.remove('hide');
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doDmg').classList.remove('hide');
+  if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doXfer').classList.remove('hide');
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('tabEditor').classList.remove('hide');
   $('login').classList.add('hide');
   $('app').classList.remove('hide');
@@ -895,6 +899,76 @@ function openAddColumn(){
     loadGrid(true);
   };
 }
+
+/* ================= TRANSFER (Admin + Inventory) ================= */
+$('doXfer').onclick = async () => {
+  if(!CART.length) return alert('Add items from a stock search first.');
+  openSheet('<h3>Transfer Stock</h3><div class="sub">Loading locations…</div>');
+  const d = await call({action:'locations'});
+  if(!d.ok) return openSheet('<div class="msg">'+esc(d.error)+'</div><button class="cancel" onclick="closeSheet()">Close</button>');
+  const locs = d.locations;
+
+  const rows = CART.map((c,i) => {
+    const opts = locs.filter(l => l.id !== c.location_id)
+      .map(l => '<option value="'+esc(l.id)+'">'+esc(l.location_name)+'</option>').join('');
+    return '<div class="line" style="flex-wrap:wrap"><div class="lm" style="flex-basis:100%">'+
+      '<b>'+esc(c.model_code)+'</b><span>from '+esc(c.location_name)+' · '+c.available+' available</span></div>'+
+      '<input type="number" min="1" max="'+c.available+'" value="'+c.qty+'" data-i="'+i+'" style="margin-top:8px">'+
+      '<select data-to="'+i+'" style="flex:1;margin-top:8px"><option value="">Send to…</option>'+opts+'</select>'+
+      '</div>';
+  }).join('');
+
+  openSheet('<h3>Transfer Stock</h3><div class="sub">Needs administrator approval before stock moves.</div>'+
+    '<div id="sherr" class="serr hide"></div><div id="lines">'+rows+'</div>'+
+    '<div class="field" style="margin-top:14px"><label>Reason</label><textarea id="xrsn" placeholder="e.g. Balancing stock ahead of the weekend"></textarea></div>'+
+    '<button class="go" id="okXfer">Send for approval</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+
+  $('sheet').querySelectorAll('[data-i]').forEach(inp => inp.oninput = () => {
+    const c = CART[+inp.dataset.i];
+    inp.value = Math.max(1, Math.min(Number(inp.value||1), c.available));
+  });
+
+  const key = uid();
+  $('okXfer').onclick = async () => {
+    const lines = CART.map((c,i) => {
+      const to = $('sheet').querySelector('[data-to="'+i+'"]').value;
+      const qty = Number($('sheet').querySelector('[data-i="'+i+'"]').value||0);
+      return { model_id:c.model_id, location_id:c.location_id, to_location_id:to||null, qty };
+    });
+    if(lines.some(l => !l.to_location_id)) return sErr('Pick a destination for every line');
+    $('okXfer').disabled = true; $('okXfer').textContent = 'Sending…';
+    const r = await call({action:'transfer', lines, reason:$('xrsn').value.trim()||null, idempotency:key});
+    if(!r.ok){ $('okXfer').disabled=false; $('okXfer').textContent='Send for approval'; return sErr(r.error); }
+    openSheet('<div class="sok"><b>Sent for approval</b><br>'+r.total_qty+
+      ' boxes. Stock will not move until an administrator approves it.</div>'+
+      '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
+  };
+};
+
+/* ================= PIN MANAGEMENT (Admin) ================= */
+$('pinBtn').onclick = () => {
+  openSheet('<h3>Change a PIN</h3><div class="sub">These are shared PINs — one per role. Changing a PIN signs out everyone currently using that role.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    ['ADMIN','INVENTORY','SALES'].map(r =>
+      '<div class="field"><label>'+r+'</label><div class="row2">'+
+      '<input type="password" inputmode="numeric" maxlength="6" placeholder="New 6-digit PIN" data-np="'+r+'">'+
+      '<button data-save="'+r+'" style="flex:0 0 auto;padding:0 18px;border:0;border-radius:10px;background:var(--navy);color:#fff;font-weight:700">Save</button>'+
+      '</div></div>').join('')+
+    '<button class="cancel" onclick="closeSheet()">Close</button>');
+
+  $('sheet').querySelectorAll('[data-save]').forEach(btn => btn.onclick = async () => {
+    const role = btn.dataset.save;
+    const pin = $('sheet').querySelector('[data-np="'+role+'"]').value.trim();
+    if(!/^[0-9]{6}$/.test(pin)) return sErr('PIN must be exactly 6 digits');
+    btn.disabled = true; btn.textContent = '…';
+    const r = await call({action:'change_pin', role, new_pin:pin});
+    btn.disabled = false; btn.textContent = 'Save';
+    if(!r.ok) return sErr(r.error);
+    $('sheet').querySelector('[data-np="'+role+'"]').value = '';
+    alert(role+' PIN updated. Everyone signed in as '+role+' (except you) has been signed out.');
+  });
+};
 
 /* ================= NAVIGATION ================= */
 let LAST = null;              // last search term, for the back button
