@@ -192,6 +192,8 @@ main{padding:16px;max-width:640px;margin:0 auto}
 .dupacts .dupyes{border-color:#eee3fb;color:#6b3fa0}
 .dupacts .dupno{color:var(--muted)}
 .dupnote{font-size:11px;color:var(--muted);margin-bottom:6px;font-style:italic}
+.pgal{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:9px}
+.pgal img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px}
 </style>
 </head>
 <body>
@@ -460,7 +462,7 @@ function wireLines(){
   });
 }
 
-/* ================= PHOTO ================= */
+/* ================= PHOTO (multi-image) ================= */
 async function shrink(file){
   const img = await createImageBitmap(file);
   const max = 1400, sc = Math.min(1, max/Math.max(img.width,img.height));
@@ -478,16 +480,29 @@ async function uploadPhoto(file, kind){
     return r.ok ? d.path : null;
   }catch(e){ return null; }
 }
+const PHOTO_FILES = {};   // id -> File[]
 function photoBox(id,label){
-  return '<label class="photo" id="'+id+'box"><span id="'+id+'txt">📷 '+label+'</span>'+
-         '<input type="file" accept="image/*" capture="environment" id="'+id+'"></label>';
+  PHOTO_FILES[id] = [];
+  return '<label class="photo" id="'+id+'box"><span id="'+id+'txt">📷 '+label+' (you can pick several)</span>'+
+         '<input type="file" accept="image/*" multiple id="'+id+'"></label>';
 }
 function wirePhoto(id){
   const el = $(id); if(!el) return;
-  el.onchange = () => { if(el.files[0]){
-    $(id+'txt').textContent = '✓ Photo attached';
-    $(id+'box').classList.add('has');
-  }};
+  el.onchange = () => {
+    PHOTO_FILES[id] = [...(PHOTO_FILES[id]||[]), ...Array.from(el.files||[])];
+    el.value = '';  // cleared so picking again appends rather than replacing
+    const n = PHOTO_FILES[id].length;
+    if(n){ $(id+'txt').textContent = '✓ '+n+' photo'+(n===1?'':'s')+' attached — tap to add more'; $(id+'box').classList.add('has'); }
+  };
+}
+async function uploadAllPhotos(id, kind){
+  const files = PHOTO_FILES[id] || [];
+  const paths = []; let failed = 0;
+  for(const f of files){
+    const p = await uploadPhoto(f, kind);
+    if(p) paths.push(p); else failed++;
+  }
+  return {paths, failed};
 }
 
 /* ================= SALE ================= */
@@ -514,22 +529,22 @@ $('doSale').onclick = () => {
     const inv = $('inv').value.trim();
     if(!inv) return sErr('Invoice number is required');
     $('okSale').disabled = true; $('okSale').textContent = 'Saving…';
-    const f = $('sph').files[0];
-    let proofPath = null, photoFailed = false;
-    if(f){ proofPath = await uploadPhoto(f,'sale'); if(!proofPath) photoFailed = true; }
+    const {paths, failed} = await uploadAllPhotos('sph','sale');
+    const photoFailed = failed > 0;
     const d = await call({action:'sale', invoice:inv, customer_name:$('cn').value.trim(),
-      customer_mobile:$('cm').value.trim(), lines:cartLines(), proof_url:proofPath, idempotency:key});
+      customer_mobile:$('cm').value.trim(), lines:cartLines(), proof_url:paths[0]||null, idempotency:key});
     if(!d.ok){ $('okSale').disabled=false; $('okSale').textContent='Confirm Sale'; return sErr(d.error); }
-    SALE_DRAFT = null;
+    SALE_DRAFT = null; delete PHOTO_FILES['sph'];
+    if(paths.length > 1) await call({action:'attach_files', approval_id:d.approval_id, paths:paths.slice(1)});
     const pendingApproval = d.status === 'PENDING';
     openSheet(pendingApproval
       ? '<div class="sok"><b>Sent for approval</b><br>Invoice '+esc(inv)+', '+CART.reduce((t,c)=>t+Number(c.qty),0)+
         ' boxes — stock will not move until an administrator approves it.'+
-        (photoFailed?'<br><br>⚠ Photo did not upload — attach it again if needed.':'')+'</div>'+
+        (photoFailed?'<br><br>⚠ '+failed+' photo(s) did not upload — attach again if needed.':'')+'</div>'+
         '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>'
       : '<div class="sok"><b>Sale recorded — '+esc(d.result.order_number)+'</b><br>'+
         d.result.total_qty+' boxes on invoice '+esc(inv)+
-        (photoFailed?'<br><br>⚠ Photo did not upload. Saved as photo-pending.':'')+'</div>'+
+        (photoFailed?'<br><br>⚠ '+failed+' photo(s) did not upload. Saved as photo-pending.':'')+'</div>'+
         '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
   };
 };
@@ -564,18 +579,18 @@ $('doHold').onclick = () => {
     if(!(a>0)) return sErr('An advance payment is required to hold stock');
     if(!r) return sErr('Receipt reference is required');
     $('okHold').disabled = true; $('okHold').textContent='Saving…';
-    const f = $('hph').files[0];
-    let proofPath = null, photoFailed = false;
-    if(f){ proofPath = await uploadPhoto(f,'hold'); if(!proofPath) photoFailed = true; }
+    const {paths, failed} = await uploadAllPhotos('hph','hold');
+    const photoFailed = failed > 0;
     const d = await call({action:'hold', customer_name:n, customer_mobile:m, advance:a,
-      receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), proof_url:proofPath, idempotency:key});
+      receipt_ref:r, expiry:$('he').value||null, lines:cartLines(), proof_url:paths[0]||null, idempotency:key});
     if(!d.ok){ $('okHold').disabled=false; $('okHold').textContent='Confirm Hold'; return sErr(d.error); }
-    HOLD_DRAFT = null;
+    HOLD_DRAFT = null; delete PHOTO_FILES['hph'];
+    if(paths.length > 1) await call({action:'attach_files', approval_id:d.approval_id, paths:paths.slice(1)});
     const totalQty = CART.reduce((t,c)=>t+Number(c.qty),0);
     if(d.status === 'PENDING'){
       openSheet('<div class="sok"><b>Sent for approval</b><br>'+totalQty+' boxes for '+esc(n)+
         ' — nothing is reserved until an administrator approves it.'+
-        (photoFailed?'<br><br>⚠ Photo did not upload — attach it again if needed.':'')+'</div>'+
+        (photoFailed?'<br><br>⚠ '+failed+' photo(s) did not upload — attach again if needed.':'')+'</div>'+
         '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
       return;
     }
@@ -583,7 +598,7 @@ $('doHold').onclick = () => {
                     '\nAdvance: Rs '+a+'\nValid till: '+($('he').value||'');
     openSheet('<div class="sok"><b>Hold created — '+esc(d.result.hold_number)+'</b><br>'+
       d.result.total_qty+' boxes reserved for '+esc(n)+
-      (photoFailed?'<br><br>⚠ Photo did not upload — hold marked UNCONFIRMED.':'')+'</div>'+
+      (photoFailed?'<br><br>⚠ '+failed+' photo(s) did not upload — hold marked UNCONFIRMED.':'')+'</div>'+
       '<textarea id="shr" readonly>'+esc(summary)+'</textarea>'+
       '<button class="go" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById(\'shr\').value);this.textContent=\'Copied\'">Copy for WhatsApp</button>'+
       '<button class="cancel" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
@@ -689,15 +704,15 @@ function openChange(type){
     const rsn = $('rsn').value.trim();
     if(isDmg && !rsn) return sErr('A reason is required for damage');
     $('okChg').disabled = true; $('okChg').textContent='Sending…';
-    let proof = null;
-    const f = $('pph').files[0];
-    if(f) proof = await uploadPhoto(f, isDmg?'damage':'inward');
+    const {paths, failed} = await uploadAllPhotos('pph', isDmg?'damage':'inward');
     const d = await call({action:'request_change', type, lines:cartLines(),
-                          reason:rsn, proof_url:proof, idempotency:key});
+                          reason:rsn, proof_url:paths[0]||null, idempotency:key});
     if(!d.ok){ $('okChg').disabled=false; $('okChg').textContent='Send for approval'; return sErr(d.error); }
+    delete PHOTO_FILES['pph'];
+    if(paths.length > 1) await call({action:'attach_files', approval_id:d.approval_id, paths:paths.slice(1)});
     openSheet('<div class="sok"><b>Sent for approval</b><br>'+d.total_qty+' boxes. '+
       'Stock will not change until an administrator approves it.'+
-      (f && !proof ? '<br><br>⚠ Photo did not upload.' : '')+'</div>'+
+      (failed ? '<br><br>⚠ '+failed+' photo(s) did not upload.' : '')+'</div>'+
       '<button class="go" onclick="closeSheet();CART=[];paintCart();search()">Done</button>');
   };
 }
@@ -718,6 +733,7 @@ async function loadApprovals(){
         (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
         '<div class="meta">• '+esc(r.model_code||'(new tile)')+(r.location_name?' at '+esc(r.location_name):'')+'</div>'+
         (chSummary?'<div class="meta">'+chSummary+'</div>':'')+
+        (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
         '<div class="acts" style="margin-top:12px">'+
           '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
           '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
@@ -734,6 +750,7 @@ async function loadApprovals(){
       (r.reason?'<div class="meta">“'+esc(r.reason)+'”</div>':'')+
       (r.lines||[]).map(l => '<div class="meta">• '+esc(l.model_code)+' at '+esc(l.location_name)+' — '+l.qty+' boxes</div>').join('')+
       (r.proof_signed_url?'<div style="margin-top:9px"><img src="'+r.proof_signed_url+'" style="max-width:100%;border-radius:9px"></div>':'')+
+      (r.extra_photos&&r.extra_photos.length?'<div class="pgal">'+r.extra_photos.map(u=>'<img src="'+u+'">').join('')+'</div>':'')+
       '<div class="acts" style="margin-top:12px">'+
         '<button data-no="'+r.id+'" style="border-color:#f3c9c5;color:#b3261e">Reject</button>'+
         '<button data-yes="'+r.id+'" style="background:var(--navy);color:#fff">Approve</button>'+
