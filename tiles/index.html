@@ -701,7 +701,7 @@ async function loadApprovals(){
 }
 
 /* ================= DATA EDITOR (Admin + Inventory) ================= */
-let GRID_FILTER = 'ALL', GRID_Q = '', GRID_OFFSET = 0, GRID_LIMIT = 40, GRID_COUNTS = {};
+let GRID_FILTER = 'ALL', GRID_Q = '', GRID_OFFSET = 0, GRID_LIMIT = 1000, GRID_COUNTS = {};
 const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates']];
 
 async function loadGrid(reset){
