@@ -829,6 +829,7 @@ function openRowEditor(row){
   openSheet('<h3>'+esc(row.model_code)+'</h3><div class="sub">'+esc(row.location_name)+'</div>'+
     '<div id="sherr" class="serr hide"></div>'+
     '<span class="shared-lbl">Shared across all locations of this tile</span>'+
+    '<div class="field shared"><label>Code</label><input id="fCode" value="'+esc(row.model_code||'')+'"></div>'+
     '<div class="row2"><div class="field shared"><label>Name</label><input id="fName" value="'+esc(row.model_name||'')+'"></div>'+
     '<div class="field shared"><label>Brand</label><input id="fBrand" value="'+esc(row.brand||'')+'"></div></div>'+
     '<div class="row2"><div class="field shared"><label>Size</label><input id="fSize" value="'+esc(row.size||'')+'"></div>'+
@@ -844,7 +845,10 @@ function openRowEditor(row){
 
   $('okEdit').onclick = async () => {
     $('okEdit').disabled = true; $('okEdit').textContent = 'Saving…';
+    const newCode = $('fCode').value.trim();
+    if(!newCode) { $('okEdit').disabled=false; $('okEdit').textContent='Save changes'; return sErr('Code cannot be empty'); }
     const modelChanges = {};
+    if(newCode !== row.model_code) modelChanges.model_code = newCode;
     if($('fName').value.trim() !== (row.model_name||'')) modelChanges.model_name = $('fName').value.trim();
     if($('fBrand').value.trim() !== (row.brand||'')) modelChanges.brand = $('fBrand').value.trim();
     if($('fSize').value.trim() !== (row.size||'')) modelChanges.size = $('fSize').value.trim();
