@@ -1290,6 +1290,12 @@ window.filterCategoryNav = filterCategoryNav;
 // =====================================================
 
 // ===== AUDIT HELPER =====
+// Tile Stock is in "View Stock" mode while running alongside the /tiles
+// tool during migration testing — real transactions still happen in
+// /tiles only, so nothing here writes anything yet. Flip to false once
+// /tiles is retired and staff.html becomes the one real system.
+const TILE_STOCK_READONLY = true;
+
 async function auditLog(action, entityType, entityId, entityRef, oldVal, newVal, notes) {
   const p = VW_AUTH.getCurrentProfile();
   try {
@@ -1333,10 +1339,11 @@ async function renderTileInventoryPage() {
 
   return `
   <div class="module-header">
-    <h2>🔲 Tile Inventory</h2>
+    <h2>🔲 Tile Inventory ${TILE_STOCK_READONLY ? '<span style="font-size:11px;font-weight:600;color:var(--gold);background:rgba(245,200,66,0.12);padding:2px 8px;border-radius:6px;margin-left:6px">VIEW ONLY — /tiles is still the real system</span>' : ''}</h2>
     <div style="display:flex;gap:6px">
+      ${TILE_STOCK_READONLY ? '' : `
       <button class="btn-sm" onclick="VW_TILE_INV.showExcelImport()">📊 Import</button>
-      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_TILE_INV.showAddTileForm()">+ Add Tile</button>
+      <button class="btn-sm" style="background:var(--gold);color:#000" onclick="VW_TILE_INV.showAddTileForm()">+ Add Tile</button>`}
     </div>
   </div>
 
@@ -1356,10 +1363,10 @@ async function renderTileInventoryPage() {
     </select>
   </div>
 
-  <!-- WAREHOUSE MANAGER — admin/store_manager only -->
-  ${hasPermission('tile_stock','approve') ? await _renderTileApprovalsPanel() : ''}
+  <!-- WAREHOUSE MANAGER — admin/store_manager only, hidden while read-only -->
+  ${(!TILE_STOCK_READONLY && hasPermission('tile_stock','approve')) ? await _renderTileApprovalsPanel() : ''}
 
-  ${(['admin','store_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? `
+  ${(!TILE_STOCK_READONLY && ['admin','store_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? `
   <div class="card" style="margin-bottom:12px;border-color:rgba(96,165,250,0.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
       <h3 class="card-title" style="margin:0">🏭 Warehouse / Location Manager</h3>
@@ -1433,7 +1440,7 @@ function _renderTileList(tiles, heldMap) {
   <div style="text-align:center;padding:40px;color:var(--text3)">
     <div style="font-size:40px;margin-bottom:10px">🔲</div>
     <div style="font-size:14px">No tiles in inventory yet</div>
-    <button class="btn-primary" style="margin-top:14px" onclick="VW_TILE_INV.showAddTileForm()">+ Add First Tile</button>
+    ${TILE_STOCK_READONLY ? '' : `<button class="btn-primary" style="margin-top:14px" onclick="VW_TILE_INV.showAddTileForm()">+ Add First Tile</button>`}
   </div>`;
 
   // Group by brand
@@ -1475,7 +1482,7 @@ function _renderTileList(tiles, heldMap) {
           <!-- ACTIONS -->
           <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
             <button onclick="VW_TILE_INV.showQR(${p.id},'${(p.name||'').replace(/'/g,"\\'")}')" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text2)">📱 QR</button>
-            <button onclick="VW_TILE_INV.adjustStock(${p.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text2)">+ Stock</button>
+            ${TILE_STOCK_READONLY ? '' : `<button onclick="VW_TILE_INV.adjustStock(${p.id})" style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;cursor:pointer;color:var(--text2)">+ Stock</button>`}
           </div>
         </div>
         <!-- LOCATION BREAKDOWN -->
@@ -2122,7 +2129,7 @@ async function openTileDetail(productId) {
     </div>`).join('')}` : ''}
     <!-- ACTIONS -->
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn-secondary" style="flex:1" onclick="closeSheet();VW_TILE_INV.adjustStock(${productId})">+ Add Stock</button>
+      ${TILE_STOCK_READONLY ? '' : `<button class="btn-secondary" style="flex:1" onclick="closeSheet();VW_TILE_INV.adjustStock(${productId})">+ Add Stock</button>`}
       <button class="btn-primary" style="flex:1" onclick="closeSheet();VW_TILE_INV.showQR(${productId},'${(p.name||'').replace(/'/g,"\\'")}')">📱 QR Code</button>
     </div>`;
   sheet.classList.add('open');
