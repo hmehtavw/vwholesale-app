@@ -255,7 +255,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-07';
+const APP_VERSION = '2026-07-28-08';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = sessionStorage.getItem('vwt_token') || '';
 let NAME  = sessionStorage.getItem('vwt_name')  || '';
@@ -444,11 +444,14 @@ function renderModel(d){
     h += '<div id="tphGallery"></div><label class="photo" id="tphBox"><span id="tphTxt">📷 Take or add a tile photo</span>'+
       '<input type="file" accept="image/*" capture="environment" id="tphInput"></label>';
 
+  h += '<button class="more" id="reportIssueBtn" style="margin:10px 0">⚠ Something wrong with this listing?</button>';
+
   h += locRows(d.locations);
 
   $('res').innerHTML = h;
   wireAdd(d.locations[0] ? d.locations[0].model_id : null, d.model.model_code);
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') wireTilePhoto(d.model.id);
+  $('reportIssueBtn').onclick = () => openRemarkSheet('PRODUCT', {model_id: d.model.id}, d.model.model_code);
 }
 
 async function wireTilePhoto(modelId, prefix){
@@ -582,8 +585,13 @@ $('doSale').onclick = () => {
     '<div class="field"><label>Mobile</label><input id="cm" inputmode="numeric" value="'+esc(dft.cm||'')+'"></div></div>'+
     photoBox('sph','Photograph the invoice')+
     '<button class="go" id="okSale">Confirm Sale</button>'+
+    '<button class="more" id="reportSaleIssue" style="margin-top:8px">⚠ A quantity here looks wrong</button>'+
     '<button class="cancel" id="cancelSale">Cancel</button>');
   wireLines(); wirePhoto('sph');
+  $('reportSaleIssue').onclick = () => {
+    SALE_DRAFT = { inv:$('inv').value, cn:$('cn').value, cm:$('cm').value };
+    openRemarkSheet('SALE', {}, 'this sale', () => $('doSale').onclick());
+  };
   $('addMoreSale').onclick = () => {
     SALE_DRAFT = { inv:$('inv').value, cn:$('cn').value, cm:$('cm').value };
     closeSheet();
@@ -722,6 +730,7 @@ async function openHold(id){
     '<button class="go" id="okConv">Convert to Sale</button>'+
     (canRelease ? '<div class="field" style="margin-top:12px"><label>Reason (to release)</label><input id="rrs"></div>'+
                   '<button class="go" id="okRel" style="background:#fdecea;color:#b3261e">Release</button>' : '')+
+    '<button class="more" id="reportHoldIssue" style="margin-top:10px">⚠ Something wrong with this hold?</button>'+
     '<button class="cancel" onclick="closeSheet()">Close</button>');
 
   const picked = () => Array.from($('sheet').querySelectorAll('[data-l]'))
@@ -749,9 +758,33 @@ async function openHold(id){
     openSheet('<div class="sok"><b>Released</b><br>'+r.released+' boxes back to available. Hold is '+esc(r.hold_status)+'.</div>'+
       '<button class="go" onclick="closeSheet();loadHolds()">Done</button>');
   };
+  $('reportHoldIssue').onclick = () => openRemarkSheet('HOLD', {hold_id:id}, h.hold_number);
 }
 
 /* ================= DAMAGE / INWARD (Inventory + Admin) ================= */
+/* ================= REMARKS (report a problem) ================= */
+function openRemarkSheet(context, ids, label, onClose){
+  openSheet('<h3>Report a problem</h3><div class="sub">About '+esc(label)+'. An administrator will review this.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<div class="field"><label>What looks wrong? *</label><textarea id="rmMsg" placeholder="e.g. System shows 46 boxes but the shelf only has about 15"></textarea></div>'+
+    '<button class="go" id="okRemark">Send</button>'+
+    '<button class="cancel" id="cancelRemark">Cancel</button>');
+  const done = () => { closeSheet(); if(onClose) onClose(); };
+  $('cancelRemark').onclick = done;
+  $('okRemark').onclick = async () => {
+    const msg = $('rmMsg').value.trim();
+    if(!msg) return sErr('Please describe the problem');
+    $('okRemark').disabled = true; $('okRemark').textContent = 'Sending…';
+    const d = await call({action:'raise_remark', context, message:msg,
+      model_id: ids.model_id||null, stock_id: ids.stock_id||null,
+      hold_id: ids.hold_id||null, sale_order_id: ids.sale_order_id||null});
+    if(!d.ok){ $('okRemark').disabled=false; $('okRemark').textContent='Send'; return sErr(d.error); }
+    openSheet('<div class="sok"><b>Sent</b><br>An administrator will review this.</div>'+
+      '<button class="go" id="okRemarkDone">Done</button>');
+    $('okRemarkDone').onclick = done;
+  };
+}
+
 function openChange(type){
   if(!CART.length) return alert('Add items from a stock search first.');
   const isDmg = type==='DAMAGE';
@@ -759,8 +792,8 @@ function openChange(type){
     '<div class="sub">This needs administrator approval before stock changes.</div>'+
     '<div id="sherr" class="serr hide"></div><div id="lines">'+lineRows(true)+'</div>'+
     '<div class="field" style="margin-top:14px"><label>Reason '+(isDmg?'*':'')+'</label>'+
-    '<textarea id="rsn" placeholder="'+(isDmg?'e.g. Corner chipped in handling':'e.g. GRN 4471')+'"></textarea></div>'+
-    photoBox('pph', isDmg?'Photograph the damage':'Photograph the GRN')+
+    '<textarea id="rsn" placeholder="'+(isDmg?'e.g. Corner chipped during loading':'e.g. GRN 4471')+'"></textarea></div>'+
+    photoBox('pph', isDmg?'Photograph the damage *':'Photograph the GRN')+
     '<button class="go" id="okChg">Send for approval</button>'+
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
   wireLines(); wirePhoto('pph');
@@ -768,8 +801,10 @@ function openChange(type){
   $('okChg').onclick = async () => {
     const rsn = $('rsn').value.trim();
     if(isDmg && !rsn) return sErr('A reason is required for damage');
+    if(isDmg && !(PHOTO_FILES['pph']||[]).length) return sErr('A photo is required to report damage');
     $('okChg').disabled = true; $('okChg').textContent='Sending…';
     const {paths, failed} = await uploadAllPhotos('pph', isDmg?'damage':'inward');
+    if(isDmg && !paths.length){ $('okChg').disabled=false; $('okChg').textContent='Send for approval'; return sErr('Photo upload failed — please try again'); }
     const d = await call({action:'request_change', type, lines:cartLines(),
                           reason:rsn, proof_url:paths[0]||null, idempotency:key});
     if(!d.ok){ $('okChg').disabled=false; $('okChg').textContent='Send for approval'; return sErr(d.error); }
@@ -857,6 +892,7 @@ function approvalModeChips(){
   let h = '<div class="chips" style="margin-bottom:10px">'+
     '<button class="chip'+(APPROVAL_MODE==='pending'?' on':'')+'" data-mode="pending">Pending</button>'+
     '<button class="chip'+(APPROVAL_MODE==='history'?' on':'')+'" data-mode="history">History</button>'+
+    '<button class="chip'+(APPROVAL_MODE==='remarks'?' on':'')+'" data-mode="remarks">Remarks</button>'+
     '</div>';
   if(APPROVAL_MODE==='history'){
     h += '<div class="chips" style="margin-bottom:14px">'+
@@ -864,14 +900,55 @@ function approvalModeChips(){
         '<button class="chip'+(HISTORY_TYPE===key?' on':'')+'" data-htype="'+key+'">'+label+'</button>').join('')+
       '</div>';
   }
+  if(APPROVAL_MODE==='remarks'){
+    h += '<div class="chips" style="margin-bottom:14px">'+
+      '<button class="chip'+(REMARK_STATUS==='OPEN'?' on':'')+'" data-rstatus="OPEN">Open</button>'+
+      '<button class="chip'+(REMARK_STATUS==='RESOLVED'?' on':'')+'" data-rstatus="RESOLVED">Resolved</button>'+
+      '</div>';
+  }
   return h;
 }
 function wireApprovalChips(){
   $('res').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
-    b.dataset.mode==='pending' ? loadApprovals() : loadHistory();
+    if(b.dataset.mode==='pending') loadApprovals();
+    else if(b.dataset.mode==='history') loadHistory();
+    else loadRemarks();
   });
   $('res').querySelectorAll('[data-htype]').forEach(b => b.onclick = () => {
     HISTORY_TYPE = b.dataset.htype; loadHistory();
+  });
+  $('res').querySelectorAll('[data-rstatus]').forEach(b => b.onclick = () => {
+    REMARK_STATUS = b.dataset.rstatus; loadRemarks();
+  });
+}
+
+let REMARK_STATUS = 'OPEN';
+const REMARK_CONTEXT_LABELS = {PRODUCT:'Product', HOLD:'Hold', SALE:'Sale', OTHER:'Other'};
+async function loadRemarks(){
+  APPROVAL_MODE = 'remarks';
+  $('res').innerHTML = '<div class="msg">Loading…</div>';
+  const d = await call({action:'remarks', status:REMARK_STATUS});
+  if(!d.ok) return $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
+  let h = approvalModeChips();
+  h += d.remarks.length ? d.remarks.map(r => {
+    const ref = r.order_number || r.hold_number || r.model_code || '';
+    return '<div class="hold-card">'+
+      '<b>'+(REMARK_CONTEXT_LABELS[r.context]||r.context)+'</b>'+
+      (r.status==='RESOLVED'?'<span class="tag pending" style="margin-left:6px">RESOLVED by '+esc(r.resolved_by||'—')+'</span>':'')+
+      '<div class="meta">by '+esc(r.raised_by)+' ('+esc(r.raised_role)+') · '+new Date(r.created_at).toLocaleString()+'</div>'+
+      (ref?'<div class="meta">'+esc(ref)+(r.location_name?' at '+esc(r.location_name):'')+'</div>':'')+
+      '<div class="meta">“'+esc(r.message)+'”</div>'+
+      (r.resolution_note?'<div class="meta">Resolution: '+esc(r.resolution_note)+'</div>':'')+
+      (r.status==='OPEN'?'<div class="acts" style="margin-top:12px"><button data-resolve="'+r.id+'" style="background:var(--navy);color:#fff">Mark resolved</button></div>':'')+
+      '</div>';
+  }).join('') : '<div class="msg">No '+REMARK_STATUS.toLowerCase()+' remarks.</div>';
+  $('res').innerHTML = h;
+  wireApprovalChips();
+  $('res').querySelectorAll('[data-resolve]').forEach(b => b.onclick = async () => {
+    const note = prompt('Resolution note (optional):') || null;
+    const r = await call({action:'resolve_remark', remark_id:b.dataset.resolve, note});
+    if(!r.ok) return alert(r.error);
+    loadRemarks();
   });
 }
 
@@ -907,7 +984,7 @@ async function loadHistory(reset){
 
 /* ================= DATA EDITOR (Admin + Inventory) ================= */
 let GRID_FILTER = 'ALL', GRID_Q = '', GRID_OFFSET = 0, GRID_LIMIT = 1000, GRID_COUNTS = {};
-const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates'],['INCOMPLETE','Incomplete']];
+const FILTERS = [['ALL','All'],['LIVE','Live'],['NOT_LIVE','Not live'],['PENDING','Pending'],['DUPLICATES','Duplicates'],['INCOMPLETE','Incomplete'],['DAMAGED','Damaged']];
 
 async function loadGrid(reset){
   if(reset){ GRID_OFFSET = 0; }
@@ -937,6 +1014,7 @@ function renderGrid(d){
       const activePartners = (r.dup_partners||[]).filter(p => p.decision !== 'DISMISSED');
       if(activePartners.length) tags.push('<span class="tag dup">'+activePartners.length+' possible match'+(activePartners.length===1?'':'es')+'</span>');
       if(r.missing_fields && r.missing_fields.length) tags.push('<span class="tag pending">Missing: '+r.missing_fields.map(esc).join(', ')+'</span>');
+      if(r.damaged_qty > 0) tags.push('<span class="tag notlive">⚠ '+r.damaged_qty+' damaged</span>');
       return '<div class="grow" data-row=\''+JSON.stringify(r).replace(/'/g,'&#39;')+'\'>'+
         '<div class="gh">'+
           (r.photo_url ? '<img src="'+r.photo_url+'" class="rowthumb" data-open="1">' : '')+
