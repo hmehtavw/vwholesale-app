@@ -255,7 +255,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-10';
+const APP_VERSION = '2026-07-28-11';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = localStorage.getItem('vwt_token') || '';
 let NAME  = localStorage.getItem('vwt_name')  || '';
@@ -724,14 +724,20 @@ async function openHold(id){
   const d = await call({action:'hold_detail', hold_id:id});
   if(!d.ok) return;
   const h = d.hold, canRelease = (ROLE==='ADMIN'||ROLE==='INVENTORY');
+  const canEdit = (ROLE==='ADMIN'||ROLE==='INVENTORY'||ROLE==='SALES') && !['CONVERTED','RELEASED','CANCELLED'].includes(h.status);
   openSheet('<h3>'+esc(h.hold_number)+'</h3><div class="sub">'+esc(h.customer_name)+' · '+esc(h.customer_mobile)+
     ' · ₹'+h.advance_amount+' advance · till '+esc(h.expiry_date)+'</div>'+
     '<div id="sherr" class="serr hide"></div>'+
-    d.lines.map(l => '<div class="line"><div class="lm"><b>'+esc(l.model_code)+'</b>'+
+    d.lines.map(l => '<div class="line" data-lrow="'+l.id+'" style="flex-wrap:wrap"><div class="lm" style="flex-basis:60%"><b>'+esc(l.model_code)+'</b>'+
       '<span>'+esc(l.location_name)+' · '+l.balance_qty+' of '+l.original_qty+' remaining</span></div>'+
       (Number(l.balance_qty)>0
         ? '<input type="number" min="0" max="'+l.balance_qty+'" value="'+l.balance_qty+'" data-l="'+l.id+'">'
-        : '<b style="color:#6b7891">done</b>')+'</div>').join('')+
+        : '<b style="color:#6b7891">done</b>')+
+      (canEdit && Number(l.balance_qty)>0 ? '<div style="flex-basis:100%;display:flex;gap:6px;margin-top:6px">'+
+        '<button class="dupno" data-editline="'+l.id+'" data-code="'+esc(l.model_code)+'" data-max="'+l.balance_qty+'">✎ Change quantity</button>'+
+        '<button class="dupno" data-removeline="'+l.id+'" data-code="'+esc(l.model_code)+'" style="color:#b3261e">✕ Remove this design</button>'+
+        '</div>' : '')+'</div>').join('')+
+    (canEdit ? '<div id="addDesignArea"><button class="more" id="addDesignBtn" style="margin-top:8px">+ Add a design to this hold</button></div>' : '')+
     '<div class="field" style="margin-top:14px"><label>Invoice number (to convert)</label><input id="cinv"></div>'+
     '<button class="go" id="okConv">Convert to Sale</button>'+
     (canRelease ? '<div class="field" style="margin-top:12px"><label>Reason (to release)</label><input id="rrs"></div>'+
@@ -765,6 +771,56 @@ async function openHold(id){
       '<button class="go" onclick="closeSheet();loadHolds()">Done</button>');
   };
   $('reportHoldIssue').onclick = () => openRemarkSheet('HOLD', {hold_id:id}, h.hold_number);
+
+  if(canEdit){
+    $('sheet').querySelectorAll('[data-editline]').forEach(btn => btn.onclick = async () => {
+      const nv = prompt('New quantity for '+btn.dataset.code+' (currently '+btn.dataset.max+' — this needs a reason and, if approving yourself as Admin, applies right away):');
+      if(nv===null) return;
+      const qty = Number(nv);
+      if(!(qty>=0)) return alert('Enter a valid number');
+      const reason = prompt('Reason for the change:');
+      if(!reason) return alert('A reason is required');
+      const r = await call({action:'hold_edit', hold_id:id, hold_action:'EDIT_QTY', line_id:btn.dataset.editline, qty, reason, idempotency:uid()});
+      if(!r.ok) return alert(r.error);
+      alert(r.status==='PENDING' ? 'Sent for approval — nothing changes until Admin approves it.' : 'Updated.');
+      openHold(id);
+    });
+    $('sheet').querySelectorAll('[data-removeline]').forEach(btn => btn.onclick = async () => {
+      if(!confirm('Remove '+btn.dataset.code+' from this hold? The reserved boxes go back to available stock.')) return;
+      const reason = prompt('Reason for removing this design:');
+      if(!reason) return alert('A reason is required');
+      const r = await call({action:'hold_edit', hold_id:id, hold_action:'REMOVE', line_id:btn.dataset.removeline, reason, idempotency:uid()});
+      if(!r.ok) return alert(r.error);
+      alert(r.status==='PENDING' ? 'Sent for approval — nothing changes until Admin approves it.' : 'Removed.');
+      openHold(id);
+    });
+    const addBtn = $('addDesignBtn');
+    if(addBtn) addBtn.onclick = async () => {
+      const locs = await call({action:'locations'});
+      if(!locs.ok) return alert(locs.error);
+      $('addDesignArea').innerHTML =
+        '<div class="field"><label>Tile code</label><input id="adCode" autocomplete="off"></div>'+
+        '<div class="field"><label>Location</label><select id="adLoc"><option value="">Select…</option>'+
+          locs.locations.map(l=>'<option value="'+l.id+'">'+esc(l.location_name)+'</option>').join('')+'</select></div>'+
+        '<div class="field"><label>Quantity</label><input id="adQty" type="number" min="1" value="1"></div>'+
+        '<div class="field"><label>Reason</label><input id="adReason" placeholder="e.g. Customer swapped design"></div>'+
+        '<button class="go" id="adSubmit" style="margin-top:6px">Add to hold</button>';
+      $('adSubmit').onclick = async () => {
+        const code = $('adCode').value.trim(), locId = $('adLoc').value, qty = Number($('adQty').value||0), reason = $('adReason').value.trim();
+        if(!code) return sErr('Enter a tile code');
+        if(!locId) return sErr('Pick a location');
+        if(!(qty>0)) return sErr('Enter a quantity');
+        if(!reason) return sErr('A reason is required');
+        const sr = await call({action:'search', model_code:code});
+        if(!sr.ok || sr.mode!=='model') return sErr('Tile code not found');
+        $('adSubmit').disabled = true; $('adSubmit').textContent = 'Adding…';
+        const r = await call({action:'hold_edit', hold_id:id, hold_action:'ADD', model_id:sr.model.id, location_id:locId, qty, reason, idempotency:uid()});
+        if(!r.ok){ $('adSubmit').disabled=false; $('adSubmit').textContent='Add to hold'; return sErr(r.error); }
+        alert(r.status==='PENDING' ? 'Sent for approval — nothing is reserved until Admin approves it.' : 'Added.');
+        openHold(id);
+      };
+    };
+  }
 }
 
 /* ================= DAMAGE / INWARD (Inventory + Admin) ================= */
@@ -825,7 +881,7 @@ function openChange(type){
 
 /* ================= APPROVALS (Admin) ================= */
 const TYPE_LABELS = {
-  SALE:'Sale', HOLD:'Hold', EDIT_ROW:'Stock Correction', EDIT_MODEL:'Tile Details Updated',
+  SALE:'Sale', HOLD:'Hold', HOLD_EDIT:'Hold Changed', EDIT_ROW:'Stock Correction', EDIT_MODEL:'Tile Details Updated',
   ADD_ROW:'New Stock Added', DELETE_ROW:'Stock Row Removed', ADD_COLUMN:'New Attribute',
   INWARD:'Inward Stock', DAMAGE:'Damage Reported', ADJUSTMENT_PLUS:'Stock Increased',
   ADJUSTMENT_MINUS:'Stock Decreased', TRANSFER:'Stock Transfer',
@@ -966,7 +1022,7 @@ const HISTORY_GROUPS = [
   ['ADJUST','Adjustments'],
 ];
 const HISTORY_GROUP_TYPES = {
-  SALE:['SALE'], HOLD:['HOLD'],
+  SALE:['SALE'], HOLD:['HOLD','HOLD_EDIT'],
   EDITOR:['EDIT_ROW','ADD_ROW','DELETE_ROW','EDIT_MODEL','ADD_COLUMN'],
   ADJUST:['INWARD','DAMAGE','ADJUSTMENT_PLUS','ADJUSTMENT_MINUS','TRANSFER'],
 };
