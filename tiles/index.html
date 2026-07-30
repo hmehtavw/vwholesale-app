@@ -255,7 +255,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-09';
+const APP_VERSION = '2026-07-28-10';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = localStorage.getItem('vwt_token') || '';
 let NAME  = localStorage.getItem('vwt_name')  || '';
@@ -1134,7 +1134,10 @@ function openRowEditor(row){
     '<div class="field shared"><label>Tile photo</label><div id="etphGallery"></div>'+
       '<label class="photo" id="etphBox"><span id="etphTxt">📷 Take or add a photo</span>'+
       '<input type="file" accept="image/*" capture="environment" id="etphInput"></label></div>'+
-    '<div class="field" style="margin-top:6px"><label>Boxes at this location</label><input id="fQty" type="number" value="'+row.current_physical_qty+'"></div>'+
+    '<div class="field" style="margin-top:6px"><label>Boxes at this location</label>'+
+      '<div class="row2" style="align-items:center"><b style="font-size:20px;flex:1">'+row.current_physical_qty+'</b>'+
+      '<button id="openAdjust" style="flex:0 0 auto;padding:10px 16px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-weight:700;color:var(--navy)">Adjust quantity</button></div>'+
+      '<div class="meta" style="margin-top:4px">Every quantity change needs Admin approval — even for Admin.</div></div>'+
     '<div class="field"><label>Status</label><select id="fStatus">'+
       '<option value="LIVE"'+(row.row_status==='LIVE'?' selected':'')+'>Live</option>'+
       '<option value="NOT_LIVE"'+(row.row_status==='NOT_LIVE'?' selected':'')+'>Not live</option>'+
@@ -1143,6 +1146,7 @@ function openRowEditor(row){
     '<button class="more danger" id="okDelete" style="margin-top:10px">Remove this row</button>'+
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
   wireTilePhoto(row.model_id, 'etph');
+  $('openAdjust').onclick = () => openQtyAdjust(row);
 
   $('okEdit').onclick = async () => {
     $('okEdit').disabled = true; $('okEdit').textContent = 'Saving…';
@@ -1156,8 +1160,6 @@ function openRowEditor(row){
     if($('fCat').value.trim() !== (row.category||'')) modelChanges.category = $('fCat').value.trim();
 
     const stockChanges = {};
-    const newQty = Number($('fQty').value||0);
-    if(newQty !== row.current_physical_qty) stockChanges.qty = newQty;
     if($('fStatus').value !== row.row_status) stockChanges.row_status = $('fStatus').value;
 
     let lastErr = null, anyPending = false;
@@ -1188,6 +1190,58 @@ function openRowEditor(row){
     if(!d.ok) return sErr(d.error);
     closeSheet();
     if(d.status==='PENDING') alert('Sent for approval — nothing changes until Admin approves it.');
+    loadGrid(true);
+  };
+}
+
+function openQtyAdjust(row){
+  const types = [
+    ['DAMAGE','Damage'],
+    ['ADJUSTMENT_PLUS','Found more than recorded'],
+    ['ADJUSTMENT_MINUS','Found less than recorded'],
+    ['INWARD','New stock received'],
+  ];
+  openSheet('<h3>Adjust quantity</h3><div class="sub">'+esc(row.model_code)+' at '+esc(row.location_name)+
+    ' — currently '+row.current_physical_qty+' boxes. This always needs Admin approval.</div>'+
+    '<div id="sherr" class="serr hide"></div>'+
+    '<div class="field"><label>Reason for the change</label><select id="qaType">'+
+      types.map(([v,l])=>'<option value="'+v+'">'+l+'</option>').join('')+'</select></div>'+
+    '<div class="field"><label>How many boxes?</label><input id="qaQty" type="number" min="1" value="1"></div>'+
+    '<div class="field" id="qaReasonWrap"><label>Details *</label><textarea id="qaReason" placeholder="e.g. Chipped corners found during recount"></textarea></div>'+
+    '<div id="qaPhotoWrap">'+photoBox('qaph','Photograph the damage *')+'</div>'+
+    '<button class="go" id="okAdjust">Send for approval</button>'+
+    '<button class="cancel" onclick="closeSheet()">Cancel</button>');
+  wirePhoto('qaph');
+
+  const refreshVisibility = () => {
+    const isDmg = $('qaType').value === 'DAMAGE';
+    $('qaPhotoWrap').classList.toggle('hide', !isDmg);
+  };
+  $('qaType').onchange = refreshVisibility;
+  refreshVisibility();
+
+  const key = uid();
+  $('okAdjust').onclick = async () => {
+    const type = $('qaType').value;
+    const qty = Number($('qaQty').value||0);
+    const reason = $('qaReason').value.trim();
+    if(!(qty > 0)) return sErr('Enter how many boxes');
+    if(!reason) return sErr('Please add a short reason — it helps whoever approves this');
+    const isDmg = type === 'DAMAGE';
+    if(isDmg && !(PHOTO_FILES['qaph']||[]).length) return sErr('A photo is required to report damage');
+
+    $('okAdjust').disabled = true; $('okAdjust').textContent = 'Sending…';
+    const {paths, failed} = await uploadAllPhotos('qaph', isDmg?'damage':'inward');
+    if(isDmg && !paths.length){ $('okAdjust').disabled=false; $('okAdjust').textContent='Send for approval'; return sErr('Photo upload failed — please try again'); }
+
+    const d = await call({action:'request_change', type,
+      lines:[{model_id:row.model_id, location_id:row.location_id, qty}],
+      reason, proof_url:paths[0]||null, idempotency:key});
+    if(!d.ok){ $('okAdjust').disabled=false; $('okAdjust').textContent='Send for approval'; return sErr(d.error); }
+    delete PHOTO_FILES['qaph'];
+    if(paths.length > 1) await call({action:'attach_files', approval_id:d.approval_id, paths:paths.slice(1)});
+    closeSheet();
+    alert('Sent for approval — the count will not change until Admin approves it.');
     loadGrid(true);
   };
 }
