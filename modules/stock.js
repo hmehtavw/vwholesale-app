@@ -1357,7 +1357,7 @@ async function renderTileInventoryPage() {
   </div>
 
   <!-- WAREHOUSE MANAGER — admin/store_manager only -->
-  ${(['admin','store_manager','floor_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? await _renderTileApprovalsPanel() : ''}
+  ${hasPermission('tile_stock','approve') ? await _renderTileApprovalsPanel() : ''}
 
   ${(['admin','store_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? `
   <div class="card" style="margin-bottom:12px;border-color:rgba(96,165,250,0.3)">

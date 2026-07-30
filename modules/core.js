@@ -1474,6 +1474,15 @@ window.setExecStatus = setExecStatus;
 // ============================================================
 
 const FEATURE_PERMISSIONS = {
+  tile_stock: {
+    label: 'Tile Stock',
+    icon: '🔲',
+    actions: {
+      add:     { label: 'Add Stock',            admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
+      damage:  { label: 'Report Damage',        admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
+      approve: { label: 'Approve Stock Changes', admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false, store_manager:false, floor_manager:false },
+    }
+  },
   billing: {
     label: 'Billing & Invoicing',
     icon: '🧾',
