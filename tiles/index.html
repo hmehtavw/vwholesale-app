@@ -255,11 +255,11 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-08';
+const APP_VERSION = '2026-07-28-09';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
-let TOKEN = sessionStorage.getItem('vwt_token') || '';
-let NAME  = sessionStorage.getItem('vwt_name')  || '';
-let ROLE  = sessionStorage.getItem('vwt_role')  || '';
+let TOKEN = localStorage.getItem('vwt_token') || '';
+let NAME  = localStorage.getItem('vwt_name')  || '';
+let ROLE  = localStorage.getItem('vwt_role')  || '';
 
 const $ = id => document.getElementById(id);
 
@@ -290,7 +290,14 @@ async function call(payload){
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ ...payload, token: TOKEN })
     });
-    return await r.json();
+    const d = await r.json();
+    if(r.status === 401 && payload.action !== 'login' && TOKEN){
+      localStorage.clear();
+      alert('Your session has expired. Please sign in again.');
+      location.reload();
+      return d;
+    }
+    return d;
   }catch(e){
     return { ok:false, error:'No connection. Check your internet and try again.' };
   }
@@ -306,9 +313,9 @@ $('lbtn').onclick = async () => {
   $('lbtn').disabled = false; $('lbtn').textContent = 'Sign in';
   if(!d.ok) return showErr(d.error);
   TOKEN = d.token; NAME = d.staff_name; ROLE = d.role;
-  sessionStorage.setItem('vwt_token',TOKEN);
-  sessionStorage.setItem('vwt_name',NAME);
-  sessionStorage.setItem('vwt_role',ROLE);
+  localStorage.setItem('vwt_token',TOKEN);
+  localStorage.setItem('vwt_name',NAME);
+  localStorage.setItem('vwt_role',ROLE);
   $('pin').value = '';
   enter();
 };
@@ -330,7 +337,7 @@ function enter(){
 
 $('out').onclick = async () => {
   await call({ action:'logout' });
-  sessionStorage.clear(); location.reload();
+  localStorage.clear(); location.reload();
 };
 
 /* ---------- search ---------- */
@@ -345,7 +352,6 @@ async function search(term, exact){
 
   if(!d.ok){
     $('res').innerHTML = '<div class="msg">'+esc(d.error)+'</div>';
-    if(String(d.error).includes('session')){ sessionStorage.clear(); setTimeout(()=>location.reload(),1600); }
     return;
   }
   if(d.mode === 'none')   return $('res').innerHTML = '<div class="msg"><b>Tile code not found</b><br>Check the code and try again.</div>';
