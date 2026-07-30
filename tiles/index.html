@@ -22,7 +22,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .hide{display:none!important}
 
 /* ---------- login ---------- */
-#login{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+#login,#tileView{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
   padding:28px 22px;background:var(--navy)}
 .brand{text-align:center;margin-bottom:34px}
 .brand b{display:block;color:#fff;font-size:27px;letter-spacing:.14em;font-weight:700}
@@ -201,6 +201,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 </style>
 </head>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <body>
 
 <!-- ===== LOGIN ===== -->
@@ -220,6 +221,15 @@ main{padding:16px;max-width:640px;margin:0 auto}
     <input id="pin" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
   </div>
   <button class="btn" id="lbtn">Sign in</button>
+</section>
+
+<!-- ===== PUBLIC TILE VIEW (QR scan) ===== -->
+<section id="tileView" class="hide">
+  <div class="brand">
+    <b>V WHOLESALE</b>
+    <span>BUILD BETTER. PAY LESS.</span>
+  </div>
+  <div id="tvBody"></div>
 </section>
 
 <!-- ===== APP ===== -->
@@ -255,7 +265,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-28-11';
+const APP_VERSION = '2026-07-30-01';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = localStorage.getItem('vwt_token') || '';
 let NAME  = localStorage.getItem('vwt_name')  || '';
@@ -1187,9 +1197,14 @@ function openRowEditor(row){
     '<div class="field shared"><label>Brand</label><input id="fBrand" value="'+esc(row.brand||'')+'"></div></div>'+
     '<div class="row2"><div class="field shared"><label>Size</label><input id="fSize" value="'+esc(row.size||'')+'"></div>'+
     '<div class="field shared"><label>Category</label><input id="fCat" value="'+esc(row.category||'')+'"></div></div>'+
+    '<div class="row2"><div class="field shared"><label>MRP ₹</label><input id="fMrp" type="number" step="0.01" value="'+(row.mrp??'')+'"></div>'+
+    '<div class="field shared"><label>VWP ₹</label><input id="fVwp" type="number" step="0.01" value="'+(row.vwp??'')+'"></div></div>'+
     '<div class="field shared"><label>Tile photo</label><div id="etphGallery"></div>'+
       '<label class="photo" id="etphBox"><span id="etphTxt">📷 Take or add a photo</span>'+
       '<input type="file" accept="image/*" capture="environment" id="etphInput"></label></div>'+
+    '<div class="field shared"><label>QR code</label><div class="row2">'+
+      '<button id="genQrBtn" style="flex:1;padding:11px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-weight:700;color:var(--navy)">Generate</button>'+
+      '</div><div id="qrArea" style="margin-top:10px;text-align:center"></div></div>'+
     '<div class="field" style="margin-top:6px"><label>Boxes at this location</label>'+
       '<div class="row2" style="align-items:center"><b style="font-size:20px;flex:1">'+row.current_physical_qty+'</b>'+
       '<button id="openAdjust" style="flex:0 0 auto;padding:10px 16px;border-radius:9px;border:1.5px solid var(--line);background:#fff;font-weight:700;color:var(--navy)">Adjust quantity</button></div>'+
@@ -1203,6 +1218,23 @@ function openRowEditor(row){
     '<button class="cancel" onclick="closeSheet()">Cancel</button>');
   wireTilePhoto(row.model_id, 'etph');
   $('openAdjust').onclick = () => openQtyAdjust(row);
+  $('genQrBtn').onclick = () => {
+    const url = 'https://vwholesale.in/tiles/?view='+encodeURIComponent(row.model_code);
+    $('qrArea').innerHTML = '';
+    new QRCode($('qrArea'), {text:url, width:180, height:180});
+    setTimeout(() => {
+      const canvas = $('qrArea').querySelector('canvas');
+      if(!canvas) return;
+      $('qrArea').innerHTML += '<div class="meta" style="margin-top:8px;word-break:break-all">'+esc(url)+'</div>'+
+        '<button id="dlQrBtn" class="more" style="margin-top:8px">⬇ Download QR</button>';
+      $('dlQrBtn').onclick = () => {
+        const a = document.createElement('a');
+        a.href = canvas.toDataURL('image/png');
+        a.download = row.model_code+'-qr.png';
+        a.click();
+      };
+    }, 60);
+  };
 
   $('okEdit').onclick = async () => {
     $('okEdit').disabled = true; $('okEdit').textContent = 'Saving…';
@@ -1214,6 +1246,9 @@ function openRowEditor(row){
     if($('fBrand').value.trim() !== (row.brand||'')) modelChanges.brand = $('fBrand').value.trim();
     if($('fSize').value.trim() !== (row.size||'')) modelChanges.size = $('fSize').value.trim();
     if($('fCat').value.trim() !== (row.category||'')) modelChanges.category = $('fCat').value.trim();
+    const newMrp = $('fMrp').value.trim(), newVwp = $('fVwp').value.trim();
+    if(newMrp !== String(row.mrp??'')) modelChanges.mrp = newMrp;
+    if(newVwp !== String(row.vwp??'')) modelChanges.vwp = newVwp;
 
     const stockChanges = {};
     if($('fStatus').value !== row.row_status) stockChanges.row_status = $('fStatus').value;
@@ -1572,7 +1607,59 @@ $('back').onclick = () => {
 };
 
 window.addEventListener('popstate', () => { if(!$('ov').classList.contains('hide')) closeSheet(); });
-if(TOKEN && NAME) enter();
+
+/* ================= PUBLIC TILE VIEW (QR scan landing) ================= */
+async function renderPublicTileView(code){
+  $('login').classList.add('hide');
+  $('app').classList.add('hide');
+  $('tileView').classList.remove('hide');
+  $('tvBody').innerHTML = '<div class="field"><label style="color:#8fa0bd">Loading…</label></div>';
+
+  const d = await call({action:'public_tile_info', code, token:TOKEN||null});
+  if(!d.ok){
+    $('tvBody').innerHTML = '<div class="field"><label style="color:#e08585">'+esc(d.error||'Tile not found')+'</label></div>'+
+      '<button class="btn" id="tvBack">Go to staff login</button>';
+    $('tvBack').onclick = () => { $('tileView').classList.add('hide'); $('login').classList.remove('hide'); };
+    return;
+  }
+
+  let h = '<div class="field" style="text-align:center"><label style="color:#8fa0bd;font-size:11px">TILE CODE</label>'+
+    '<div style="color:#fff;font-size:26px;font-weight:700;letter-spacing:.03em">'+esc(d.model_code)+'</div></div>';
+  if(d.model_name) h += '<div class="field" style="text-align:center"><div style="color:#c9d3e4;font-size:15px">'+esc(d.model_name)+'</div></div>';
+  h += '<div class="field" style="text-align:center"><div style="color:var(--gold);font-size:13px;letter-spacing:.08em">'+esc(d.brand||'—')+'</div></div>';
+  h += '<div class="field" style="text-align:center;margin-top:18px"><label style="color:#8fa0bd">MRP</label>'+
+    '<div style="color:#fff;font-size:32px;font-weight:700">'+(d.mrp!=null?'₹'+d.mrp:'—')+'</div></div>';
+
+  if(d.is_staff){
+    h += '<div class="field" style="text-align:center;margin-top:14px"><label style="color:#8fa0bd">VWP</label>'+
+      '<div style="color:#fff;font-size:22px;font-weight:700">'+(d.vwp!=null?'₹'+d.vwp:'—')+'</div></div>';
+    h += '<div class="field" style="text-align:center"><label style="color:#8fa0bd">Available</label>'+
+      '<div style="color:#fff;font-size:22px;font-weight:700">'+(d.available_qty??0)+' boxes</div></div>';
+    if(d.size) h += '<div class="field" style="text-align:center"><div style="color:#c9d3e4;font-size:13px">'+esc(d.size)+'</div></div>';
+    h += '<button class="btn" id="tvPlaceOrder" style="margin-top:18px">Place Order</button>';
+    h += '<div class="field" style="text-align:center;margin-top:10px"><span style="color:#8fa0bd;font-size:12px">Signed in as '+esc(NAME)+' ('+esc(ROLE)+')</span></div>';
+  } else {
+    h += '<div class="field" style="text-align:center;margin-top:20px"><span style="color:#8fa0bd;font-size:12px">Sign in as staff to see price, stock, and place an order</span></div>';
+    h += '<button class="btn" id="tvLogin" style="margin-top:10px">Staff login</button>';
+  }
+  $('tvBody').innerHTML = h;
+
+  if(d.is_staff){
+    $('tvPlaceOrder').onclick = () => {
+      $('tileView').classList.add('hide');
+      enter();
+      setTab('stock');
+      search(null, d.model_code);
+    };
+  } else {
+    $('tvLogin').onclick = () => { $('tileView').classList.add('hide'); $('login').classList.remove('hide'); };
+  }
+}
+
+const _qrCode = new URLSearchParams(location.search).get('view');
+if(_qrCode){
+  renderPublicTileView(_qrCode);
+} else if(TOKEN && NAME) enter();
 </script>
 </body>
 </html>
