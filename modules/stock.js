@@ -1357,6 +1357,8 @@ async function renderTileInventoryPage() {
   </div>
 
   <!-- WAREHOUSE MANAGER — admin/store_manager only -->
+  ${(['admin','store_manager','floor_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? await _renderTileApprovalsPanel() : ''}
+
   ${(['admin','store_manager'].includes(VW_AUTH.getCurrentProfile()?.role||'')) ? `
   <div class="card" style="margin-bottom:12px;border-color:rgba(96,165,250,0.3)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -1382,6 +1384,48 @@ async function renderTileInventoryPage() {
   <div id="tile-inv-list">
     ${_renderTileList(tiles, heldMap)}
   </div>`;
+}
+
+// ===== PENDING STOCK-CHANGE APPROVALS =====
+// Shown to admin/store_manager/floor_manager (the auto-approve tier).
+// Everyone else's Add Stock / Damage requests land here until decided.
+async function _renderTileApprovalsPanel() {
+  const { data, error } = await VW_DB.client.rpc('tile_list_pending_approvals');
+  const pending = error ? [] : (data || []);
+  if (!pending.length) return '';
+  return `
+  <div class="card" id="tile-approvals-card" style="margin-bottom:12px;border-color:rgba(239,68,68,0.35)">
+    <h3 class="card-title" style="margin:0 0 10px">⏳ Pending Stock Approvals (${pending.length})</h3>
+    <div id="tile-approvals-list">
+    ${pending.map(a => `
+    <div style="padding:9px 0;border-bottom:1px solid var(--border2)" id="tile-appr-row-${a.id}">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div style="min-width:0">
+          <div style="font-size:12px;font-weight:700">${a.type==='DAMAGE'?'⚠ Damage':'+ Add Stock'} · ${a.product_brand||''} ${a.product_name||''}</div>
+          <div style="font-size:11px;color:var(--text3)">${a.warehouse_code}${a.rack_no?' · '+a.rack_no:''}${a.shelf_no?'/'+a.shelf_no:''} · ${a.qty_boxes} boxes${a.qty_pcs?', '+a.qty_pcs+' pcs':''}</div>
+          <div style="font-size:11px;color:var(--text3)">by ${a.requested_by} (${a.requested_role}) · ${new Date(a.created_at).toLocaleString()}</div>
+          ${a.reason?`<div style="font-size:11px;color:var(--text2);margin-top:2px">“${a.reason}”</div>`:''}
+        </div>
+        ${a.photo_url?`<img src="${a.photo_url}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0">`:''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="VW_TILE_INV.decideTileApproval(${a.id},'REJECTED')" style="flex:1;padding:7px;border-radius:7px;font-size:12px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);color:var(--red)">Reject</button>
+        <button onclick="VW_TILE_INV.decideTileApproval(${a.id},'APPROVED')" style="flex:1;padding:7px;border-radius:7px;font-size:12px;background:var(--gold);border:none;color:#000;font-weight:700">Approve</button>
+      </div>
+    </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+async function decideTileApproval(id, decision) {
+  const note = decision === 'REJECTED' ? (prompt('Reason for rejecting (optional):') || null) : null;
+  const profile = VW_AUTH.getCurrentProfile();
+  const { error } = await VW_DB.client.rpc('tile_decide_stock_approval', {
+    p_id: id, p_decision: decision, p_admin_name: profile?.name||'', p_admin_role: profile?.role||'', p_note: note,
+  });
+  if (error) { showToast(error.message, 'error'); return; }
+  showToast(decision === 'APPROVED' ? 'Approved ✓' : 'Rejected', 'success');
+  navigateTo('tile_inventory');
 }
 
 function _renderTileList(tiles, heldMap) {
@@ -1894,7 +1938,11 @@ async function adjustStock(productId) {
       <span style="font-weight:600">${l.qty_boxes} boxes</span>
     </div>`).join('')}
 
-    <div style="font-size:12px;font-weight:600;margin:12px 0 8px">Add More Stock</div>
+    <div style="font-size:11px;color:var(--text3);margin:10px 0;background:var(--bg2);border-radius:8px;padding:8px">
+      Changes here need admin/manager approval before stock updates — unless you already are one.
+    </div>
+
+    <div style="font-size:12px;font-weight:600;margin:12px 0 8px">Add Stock / Report Damage</div>
     <div class="form-group"><label>Warehouse</label>
       <select id="adj-wh" onchange="VW_TILE_INV.loadRacksForAdj(this.value)">
         <option value="">Select</option>
@@ -1906,15 +1954,17 @@ async function adjustStock(productId) {
       <div class="form-group" style="margin:0;flex:1"><label>Shelf</label><select id="adj-shelf"><option>Select rack first</option></select></div>
     </div>
     <div class="form-row">
-      <div class="form-group" style="margin:0;flex:1"><label>Boxes to Add</label><input type="number" id="adj-boxes" placeholder="0" min="0"></div>
-      <div class="form-group" style="margin:0;flex:1"><label>Pcs to Add</label><input type="number" id="adj-pcs" placeholder="0" min="0"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Boxes</label><input type="number" id="adj-boxes" placeholder="0" min="0"></div>
+      <div class="form-group" style="margin:0;flex:1"><label>Pcs</label><input type="number" id="adj-pcs" placeholder="0" min="0"></div>
     </div>
-    <div class="form-group"><label>📷 Shelf Photo (Live) *</label>
+    <div class="form-group"><label>Reason</label><input type="text" id="adj-reason" placeholder="e.g. New delivery / Chipped in loading"></div>
+    <div class="form-group"><label>📷 Live Photo *</label>
       <button onclick="document.getElementById('adj-pic').click()" style="width:100%;background:var(--bg2);border:1px dashed var(--border);border-radius:8px;padding:8px;font-size:12px;cursor:pointer;color:var(--text3)">📷 Take Live Photo</button>
       <input type="file" id="adj-pic" accept="image/*" capture="environment" style="display:none" onchange="VW_TILE_INV.previewAdjPhoto(this)">
       <div id="adj-pic-preview" style="margin-top:6px"></div>
     </div>
-    <button class="btn-primary full-width" onclick="VW_TILE_INV.saveStockAdjustment(${productId})">Add Stock</button>`;
+    <button class="btn-primary full-width" onclick="VW_TILE_INV.saveStockAdjustment(${productId})">+ Add Stock</button>
+    <button class="full-width" style="margin-top:8px;background:#fdecea;color:#b3261e;border:none;border-radius:8px;padding:10px;font-weight:600" onclick="VW_TILE_INV.saveDamageReport(${productId})">⚠ Report Damage</button>`;
   sheet.classList.add('open');
   document.getElementById('sheet-overlay').classList.add('open');
 }
@@ -1942,42 +1992,80 @@ function previewAdjPhoto(input) {
   reader.readAsDataURL(file);
 }
 
-async function saveStockAdjustment(productId) {
-  if (!window._adjShelfFile) { showToast('Live shelf photo required','warn'); return; }
+// Uploads the captured shelf/damage photo to the same public bucket the
+// rest of the app already uses for product imagery, and returns its URL.
+// Returns null (not an empty string) if no photo was selected.
+async function _uploadAdjPhoto(){
+  if (!window._adjShelfFile) return null;
+  const file = window._adjShelfFile;
+  const ext = (file.name||'photo.jpg').split('.').pop() || 'jpg';
+  const path = `stock-adjust/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const { error } = await VW_DB.client.storage.from('product-photos').upload(path, file, { contentType: file.type || 'image/jpeg', upsert: false });
+  if (error) { showToast('Photo upload failed: '+error.message, 'error'); return undefined; }
+  const { data: urlData } = VW_DB.client.storage.from('product-photos').getPublicUrl(path);
+  return urlData?.publicUrl || null;
+}
+
+function _readAdjForm(){
   const boxes = parseInt(document.getElementById('adj-boxes')?.value||0);
   const pcs = parseInt(document.getElementById('adj-pcs')?.value||0);
   const wh = document.getElementById('adj-wh')?.value;
   const rack = document.getElementById('adj-rack')?.value;
   const shelf = document.getElementById('adj-shelf')?.value;
+  const reason = document.getElementById('adj-reason')?.value?.trim();
+  return {boxes, pcs, wh, rack, shelf, reason};
+}
+
+async function saveStockAdjustment(productId) {
+  const {boxes, pcs, wh, rack, shelf, reason} = _readAdjForm();
   if (!boxes && !pcs) { showToast('Enter quantity','warn'); return; }
   if (!wh || !rack) { showToast('Select warehouse and rack','warn'); return; }
+  if (!window._adjShelfFile) { showToast('Live shelf photo required','warn'); return; }
 
-  const { data: existing } = await VW_DB.client.from('tile_stock_locations')
-    .select('*').eq('product_id',productId).eq('warehouse_code',wh).eq('rack_no',rack).eq('shelf_no',shelf||'')
-    .single().then(r=>r, ()=>({data:null}));
+  const photoUrl = await _uploadAdjPhoto();
+  if (photoUrl === undefined) return; // upload failed, toast already shown
 
-  if (existing) {
-    await VW_DB.client.from('tile_stock_locations').update({
-      qty_boxes:(existing.qty_boxes||0)+boxes, qty_pcs:(existing.qty_pcs||0)+pcs,
-      last_counted_at:new Date().toISOString(), last_counted_by:VW_AUTH.getCurrentProfile()?.name||'',
-    }).eq('id',existing.id);
-  } else {
-    await VW_DB.client.from('tile_stock_locations').insert({
-      product_id:productId, warehouse_code:wh, rack_no:rack, shelf_no:shelf||'',
-      qty_boxes:boxes, qty_pcs:pcs, last_counted_at:new Date().toISOString(),
-      last_counted_by:VW_AUTH.getCurrentProfile()?.name||'',
-    });
-  }
+  const profile = VW_AUTH.getCurrentProfile();
+  const { data, error } = await VW_DB.client.rpc('tile_request_stock_change', {
+    p_type: 'ADD_STOCK', p_product_id: productId, p_warehouse_code: wh, p_rack_no: rack, p_shelf_no: shelf||'',
+    p_qty_boxes: boxes, p_qty_pcs: pcs, p_reason: reason||'Stock addition', p_photo_url: photoUrl,
+    p_staff_name: profile?.name||'', p_staff_role: profile?.role||'',
+  });
+  if (error) { showToast(error.message,'error'); return; }
 
-  // Update product total stock
-  const { data: allLocs } = await VW_DB.client.from('tile_stock_locations').select('qty_boxes').eq('product_id',productId);
-  const total = (allLocs||[]).reduce((s,l)=>s+(l.qty_boxes||0),0);
-  await VW_DB.client.from('products').update({ stock:total, has_live_photo:true }).eq('id',productId);
-
-  await auditLog('stock_adjust', 'product', productId, null, null, {boxes, wh, rack}, 'Manual stock addition');
+  await auditLog('stock_adjust', 'product', productId, null, null, {boxes, wh, rack}, reason||'Manual stock addition');
   window._adjShelfFile = null;
   closeSheet();
-  showToast(`+${boxes} boxes added to stock ✓`,'success');
+  showToast(data?.status === 'PENDING'
+    ? `Sent for approval — ${boxes} boxes will show once approved`
+    : `+${boxes} boxes added to stock ✓`, 'success');
+  navigateTo('tile_inventory');
+}
+
+async function saveDamageReport(productId) {
+  const {boxes, pcs, wh, rack, shelf, reason} = _readAdjForm();
+  if (!boxes && !pcs) { showToast('Enter quantity','warn'); return; }
+  if (!wh || !rack) { showToast('Select warehouse and rack','warn'); return; }
+  if (!window._adjShelfFile) { showToast('Live photo of the damage required','warn'); return; }
+  if (!reason) { showToast('Enter a reason for the damage','warn'); return; }
+
+  const photoUrl = await _uploadAdjPhoto();
+  if (photoUrl === undefined) return;
+
+  const profile = VW_AUTH.getCurrentProfile();
+  const { data, error } = await VW_DB.client.rpc('tile_request_stock_change', {
+    p_type: 'DAMAGE', p_product_id: productId, p_warehouse_code: wh, p_rack_no: rack, p_shelf_no: shelf||'',
+    p_qty_boxes: boxes, p_qty_pcs: pcs, p_reason: reason, p_photo_url: photoUrl,
+    p_staff_name: profile?.name||'', p_staff_role: profile?.role||'',
+  });
+  if (error) { showToast(error.message,'error'); return; }
+
+  await auditLog('damage_report', 'product', productId, null, null, {boxes, wh, rack, reason}, reason);
+  window._adjShelfFile = null;
+  closeSheet();
+  showToast(data?.status === 'PENDING'
+    ? `Sent for approval — stock will not change until approved`
+    : `Damage recorded, ${boxes} boxes removed ✓`, 'success');
   navigateTo('tile_inventory');
 }
 
@@ -2306,7 +2394,7 @@ window.VW_TILE_INV = {
   showAddTileForm, onBrandChange, loadRacks, loadShelves,
   matchDesign, previewDesignPics, previewShelfPic,
   mergeWithExisting, saveTileProduct,
-  adjustStock, loadRacksForAdj, previewAdjPhoto, saveStockAdjustment,
+  adjustStock, loadRacksForAdj, previewAdjPhoto, saveStockAdjustment, saveDamageReport, decideTileApproval,
   openTileDetail, showQR, printQR, renderProductQRPage, addToWishlistFromQR,
   showExcelImport, downloadTileImportTemplate, previewExcelImport, processExcelImport,
   showAddWarehouseForm, saveWarehouse, editWarehouse, deleteWarehouse,
