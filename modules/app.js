@@ -289,6 +289,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'rewards') html = await renderRewardsStorePage();
     else if (page === 'labor') html = await renderLaborMarketplacePage();
     else if (page === 'tile_inventory') html = await VW_TILE_INV.renderTileInventoryPage();
+    else if (page === 'stock_search') html = await VW_TILE_INV.renderStockSearchPage();
     else if (page === 'tile_catalog') html = await VW_NON_INV.renderCatalogUploadPage();
     else if (page === 'brand_catalog') html = await VW_ADMIN.renderBrandCatalogPage();
     else if (page === 'category_manager') { await VW_ADMIN.renderCategoryManagerPage(); return; }
@@ -3798,7 +3799,7 @@ const SIDEBAR_NAV = [
   // ── INVENTORY ────────────────────────────────────────
   { section: 'Inventory' },
   { page: 'inventory',      icon: '📦', label: 'Inventory',       perm: 'inventory' },
-  { page: 'tile_inventory', icon: '🔲', label: 'Tile Stock',      perm: 'tile_inventory' },
+  { page: 'stock_search',   icon: '🔍', label: 'Stock Search',    perm: 'tile_inventory' },
   { page: 'grn',            icon: '📥', label: 'GRN',             perm: 'inventory' },
   { page: 'dispatch',       icon: '🚚', label: 'Dispatch',        perm: 'dispatch' },
   { page: 'returns',        icon: '↩️', label: 'Returns',         perm: 'billing' },

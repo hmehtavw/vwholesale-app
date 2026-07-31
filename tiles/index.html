@@ -265,7 +265,7 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-30-01';
+const APP_VERSION = '2026-07-30-02';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = localStorage.getItem('vwt_token') || '';
 let NAME  = localStorage.getItem('vwt_name')  || '';
@@ -1656,9 +1656,28 @@ async function renderPublicTileView(code){
   }
 }
 
+// SSO handoff from staff.html's "Stock Search" — a valid session token
+// arrives via the URL hash (never sent to any server) instead of asking
+// for a PIN. Adopted once, then the hash is cleared immediately.
+function _tryAdoptSSO(){
+  const params = new URLSearchParams(location.hash.slice(1));
+  const ssoToken = params.get('sso_token');
+  if(!ssoToken) return false;
+  TOKEN = ssoToken;
+  NAME  = params.get('sso_name') || '';
+  ROLE  = params.get('sso_role') || '';
+  localStorage.setItem('vwt_token', TOKEN);
+  localStorage.setItem('vwt_name', NAME);
+  localStorage.setItem('vwt_role', ROLE);
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+
 const _qrCode = new URLSearchParams(location.search).get('view');
 if(_qrCode){
   renderPublicTileView(_qrCode);
+} else if(_tryAdoptSSO()){
+  enter();
 } else if(TOKEN && NAME) enter();
 </script>
 </body>

@@ -1311,6 +1311,28 @@ async function auditLog(action, entityType, entityId, entityRef, oldVal, newVal,
 window.auditLog = auditLog;
 
 // ===== MAIN TILE INVENTORY PAGE =====
+// ===== STOCK SEARCH — embeds the real /tiles tool, signed in automatically =====
+// This is the actual working system (Sale/Hold/Damage/Remarks/Approvals),
+// reached from inside staff.html without a second login. No PIN, no
+// separate data model — same tool, same data, just one click away.
+async function renderStockSearchPage() {
+  const { data, error } = await VW_DB.client.rpc('temp_tiles_sso_login');
+  if (error || !data?.ok) {
+    const msg = error?.message || data?.error || 'Could not sign in to Stock Search';
+    return `
+    <div class="module-header"><h2>🔍 Stock Search</h2></div>
+    <div class="card" style="text-align:center;padding:30px 16px">
+      <div style="font-size:32px;margin-bottom:10px">🔒</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:6px">No access yet</div>
+      <div style="font-size:12px;color:var(--text3)">${msg}</div>
+    </div>`;
+  }
+  const url = `https://vwholesale.in/tiles/#sso_token=${encodeURIComponent(data.token)}&sso_name=${encodeURIComponent(data.staff_name)}&sso_role=${encodeURIComponent(data.role)}`;
+  return `
+  <div class="module-header"><h2>🔍 Stock Search</h2></div>
+  <iframe src="${url}" style="width:100%;height:calc(100dvh - 130px);border:none;border-radius:12px;background:#0F1B2E"></iframe>`;
+}
+
 async function renderTileInventoryPage() {
   const { data: products } = await VW_DB.client
     .from('products')
@@ -2397,7 +2419,7 @@ async function deleteWarehouse(id, name) {
 }
 
 window.VW_TILE_INV = {
-  renderTileInventoryPage, filterTileInventory,
+  renderTileInventoryPage, renderStockSearchPage, filterTileInventory,
   showAddTileForm, onBrandChange, loadRacks, loadShelves,
   matchDesign, previewDesignPics, previewShelfPic,
   mergeWithExisting, saveTileProduct,
