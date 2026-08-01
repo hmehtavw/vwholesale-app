@@ -1478,9 +1478,11 @@ const FEATURE_PERMISSIONS = {
     label: 'Tile Stock',
     icon: '🔲',
     actions: {
-      add:     { label: 'Add Stock',            admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
-      damage:  { label: 'Report Damage',        admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
-      approve: { label: 'Approve Stock Changes', admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false, store_manager:false, floor_manager:false },
+      add:     { label: 'Add Stock (legacy)',            admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
+      damage:  { label: 'Report Damage (legacy)',        admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:true, store_manager:false, floor_manager:false },
+      search:  { label: 'Stock Search — can open it',    admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false, store_manager:false, floor_manager:false },
+      manage:  { label: 'Stock Search — Inventory/Dispatch rights', admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false, store_manager:false, floor_manager:false },
+      approve: { label: 'Stock Search — Admin rights (approves everything)', admin:true, executive:false, staff:false, reception:false, accounts:false, dispatch:false, store_manager:false, floor_manager:false },
     }
   },
   billing: {
