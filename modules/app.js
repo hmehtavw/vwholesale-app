@@ -117,13 +117,13 @@ function applyRolePermissions() {
   let moreVisibleCount = 0;
   document.querySelectorAll('.more-tile[data-page]').forEach(btn => {
     const page = btn.dataset.page;
-    const show = page === 'stock_search' || allowed.includes(page);
+    const show = page === 'stock_search' || page === 'settings' || allowed.includes(page);
     btn.style.display = show ? '' : 'none';
     if (show) moreVisibleCount++;
   });
   document.querySelectorAll('.more-btn[data-page]').forEach(btn => {
     const page = btn.dataset.page;
-    const show = page === 'stock_search' || allowed.includes(page);
+    const show = page === 'stock_search' || page === 'settings' || allowed.includes(page);
     btn.style.display = show ? '' : 'none';
     if (show) moreVisibleCount++;
   });
@@ -3815,6 +3815,13 @@ const SIDEBAR_NAV = [
   { page: 'visualizer',     icon: '🎨', label: 'Room Visualizer', perm: 'billing' },
   { page: 'training',       icon: '🎓', label: 'Training',        always: true },
   { page: 'feedback',       icon: '⭐', label: 'Feedback',        always: true },
+
+  // ── SETTINGS ─────────────────────────────────────────
+  // was only reachable via a small header dropdown before this — now a
+  // real sidebar entry. Sensitive tabs (Team, Permissions, etc) are
+  // still gated to admin inside the page itself.
+  { section: 'Settings' },
+  { page: 'settings',       icon: '⚙️', label: 'Settings',        always: true },
 
   // ── DAILY FEED ──────────────────────────────────────
   { section: 'Daily Feed' },
