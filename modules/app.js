@@ -207,7 +207,7 @@ async function navigateToFresh(page, params, cacheKey) {
   const allowed = VW_AUTH.getAllowedPages();
   // Always allow dashboard for authenticated staff — profile may still be loading
   const isStaffPage = ['dashboard','checkin','billing','inventory','tile_quotes','quotations',
-    'vendors','tasks','leads','settings','eod','people','operations'].includes(page);
+    'vendors','tasks','leads','settings','eod','people','operations','stock_search'].includes(page);
   const profile = VW_AUTH.getCurrentProfile();
   if (!allowed.includes(page) && !(isStaffPage && profile)) {
     showToast("You don't have access to this section.", 'warn');
