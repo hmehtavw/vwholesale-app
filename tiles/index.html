@@ -265,11 +265,12 @@ main{padding:16px;max-width:640px;margin:0 auto}
 <div id="ov" class="ov hide"><div class="sheet" id="sheet"></div></div>
 
 <script>
-const APP_VERSION = '2026-07-30-02';
+const APP_VERSION = '2026-08-01-01';
 const API = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/temp-tiles-api';
 let TOKEN = localStorage.getItem('vwt_token') || '';
 let NAME  = localStorage.getItem('vwt_name')  || '';
 let ROLE  = localStorage.getItem('vwt_role')  || '';
+let IS_SSO = localStorage.getItem('vwt_sso') === '1';
 
 const $ = id => document.getElementById(id);
 
@@ -340,6 +341,13 @@ function enter(){
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doDmg').classList.remove('hide');
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('doXfer').classList.remove('hide');
   if(ROLE==='ADMIN'||ROLE==='INVENTORY') $('tabEditor').classList.remove('hide');
+  if(IS_SSO){
+    // Embedded inside staff.html — it already shows who's logged in and
+    // owns the real Sign Out. Showing a second, nested one here is just
+    // confusing, so this view stays lean and lets staff.html be the boss.
+    $('whoBtn').classList.add('hide');
+    $('out').classList.add('hide');
+  }
   $('login').classList.add('hide');
   $('app').classList.remove('hide');
   $('q').focus();
@@ -1666,9 +1674,11 @@ function _tryAdoptSSO(){
   TOKEN = ssoToken;
   NAME  = params.get('sso_name') || '';
   ROLE  = params.get('sso_role') || '';
+  IS_SSO = true;
   localStorage.setItem('vwt_token', TOKEN);
   localStorage.setItem('vwt_name', NAME);
   localStorage.setItem('vwt_role', ROLE);
+  localStorage.setItem('vwt_sso', '1');
   history.replaceState(null, '', location.pathname + location.search);
   return true;
 }
