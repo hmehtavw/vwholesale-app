@@ -134,7 +134,7 @@ function applyRolePermissions() {
     btn.style.display = allowed.includes(btn.dataset.page) ? '' : 'none';
   });
 
-  if (!allowed.includes(currentPage)) {
+  if (!allowed.includes(currentPage) && currentPage !== 'stock_search' && currentPage !== 'settings') {
     navigateTo('dashboard');
   }
   // Sync header dropdown visibility to role
