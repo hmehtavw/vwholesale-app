@@ -117,13 +117,13 @@ function applyRolePermissions() {
   let moreVisibleCount = 0;
   document.querySelectorAll('.more-tile[data-page]').forEach(btn => {
     const page = btn.dataset.page;
-    const show = allowed.includes(page);
+    const show = page === 'stock_search' || allowed.includes(page);
     btn.style.display = show ? '' : 'none';
     if (show) moreVisibleCount++;
   });
   document.querySelectorAll('.more-btn[data-page]').forEach(btn => {
     const page = btn.dataset.page;
-    const show = allowed.includes(page);
+    const show = page === 'stock_search' || allowed.includes(page);
     btn.style.display = show ? '' : 'none';
     if (show) moreVisibleCount++;
   });
@@ -3799,7 +3799,7 @@ const SIDEBAR_NAV = [
   // ── INVENTORY ────────────────────────────────────────
   { section: 'Inventory' },
   { page: 'inventory',      icon: '📦', label: 'Inventory',       perm: 'inventory' },
-  { page: 'stock_search',   icon: '🔍', label: 'Stock Search',    perm: 'tile_inventory' },
+  { page: 'stock_search',   icon: '🔍', label: 'Stock Search',    always: true },
   { page: 'grn',            icon: '📥', label: 'GRN',             perm: 'inventory' },
   { page: 'dispatch',       icon: '🚚', label: 'Dispatch',        perm: 'dispatch' },
   { page: 'returns',        icon: '↩️', label: 'Returns',         perm: 'billing' },
