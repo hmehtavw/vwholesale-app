@@ -914,6 +914,8 @@ const SHOP_CATEGORIES = [
 let _shopCart = {}; // {productId: qty}
 let _shopCategory = null;
 let _shopSearch = '';
+let _shopSizeFilter = null;
+let _shopSeriesFilter = null;
 
 async function renderShopPage() {
   const prof = VW_AUTH.getCurrentProfile();
@@ -1163,6 +1165,8 @@ async function loadShopProducts(category, search) {
 
     if (category) query = query.eq('category', category);
     if (search)   query = query.ilike('name', `%${search}%`);
+    if (category === 'Tiles' && _shopSizeFilter)   query = query.eq('tile_size_label', _shopSizeFilter);
+    if (category === 'Tiles' && _shopSeriesFilter) query = query.eq('subcategory', _shopSeriesFilter);
 
     const { data: products } = await query;
 
@@ -1281,7 +1285,8 @@ function homeRunProductCard(p) {
   </div>`;
 }
 
-function filterCategory(cat) {
+async function filterCategory(cat) {
+  if (cat !== _shopCategory) { _shopSizeFilter = null; _shopSeriesFilter = null; }
   _shopCategory = cat;
   if (!cat) {
     // Reset to home
@@ -1298,6 +1303,35 @@ function filterCategory(cat) {
   if (!root) { renderShopPage().then(html => { document.getElementById('main-content').innerHTML = html; loadShopProducts(cat, ''); }); return; }
 
   const catCfg = SHOP_CATEGORIES.find(c => c.key === cat) || { icon:'📦', label: cat, color:'#666' };
+
+  // TILES: fetch distinct sizes + series for faceted filtering
+  let filterChipsHtml = '';
+  if (cat === 'Tiles') {
+    const { data: facetRows } = await VW_DB.client.from('products')
+      .select('tile_size_label, subcategory').eq('category', 'Tiles').eq('is_active', true);
+    const sizes = [...new Set((facetRows || []).map(r => r.tile_size_label).filter(Boolean))].sort();
+    const seriesList = [...new Set((facetRows || []).map(r => r.subcategory).filter(Boolean))].sort();
+
+    const chipRow = (label, options, current, kind) => `
+    <div style="margin-bottom:4px">
+      <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin:6px 0 4px 2px">${label}</div>
+      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">
+        <button onclick="VW_SHOP.setTileFilter('${kind}',null)"
+          style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
+            border:${!current?'2px solid #2a7a3b':'1px solid #ddd'};background:${!current?'#eafaf0':'#fff'};color:${!current?'#2a7a3b':'#555'}">All</button>
+        ${options.map(o => `
+        <button onclick="VW_SHOP.setTileFilter('${kind}','${o.replace(/'/g,"\\'")}')"
+          style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
+            border:${current===o?'2px solid #2a7a3b':'1px solid #ddd'};background:${current===o?'#eafaf0':'#fff'};color:${current===o?'#2a7a3b':'#555'}">${o}</button>`).join('')}
+      </div>
+    </div>`;
+
+    filterChipsHtml = `
+    <div style="padding:0 14px 4px">
+      ${chipRow('Size (mm)', sizes, _shopSizeFilter, 'size')}
+      ${chipRow('Finish / Series', seriesList, _shopSeriesFilter, 'series')}
+    </div>`;
+  }
 
   root.innerHTML = `
   <style>
@@ -1330,6 +1364,8 @@ function filterCategory(cat) {
       </div>
     </div>
 
+    ${filterChipsHtml}
+
     <!-- PRODUCT GRID -->
     <div id="shop-products-grid" style="background:#fff;padding:0 12px 20px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="grid-column:1/-1;text-align:center;padding:30px;color:#888;font-size:13px">Loading ${catCfg.label}...</div>
@@ -1343,6 +1379,12 @@ function shopSearch(val) {
   _shopSearch = val;
   const container = document.getElementById('shop-products-grid');
   if (container) loadShopProducts(null, val);
+}
+
+function setTileFilter(kind, val) {
+  if (kind === 'size') _shopSizeFilter = val;
+  if (kind === 'series') _shopSeriesFilter = val;
+  filterCategory(_shopCategory); // full re-render so chip highlighting updates too
 }
 
 async function openCart() {
@@ -1525,7 +1567,7 @@ function selectDeliveryAddress() {
 
 window.VW_SHOP = {
   renderShopPage, loadShopProducts, addToCart, removeFromCart,
-  filterCategory, shopSearch, openCart, clearCart,
+  filterCategory, shopSearch, setTileFilter, openCart, clearCart,
   proceedToCheckout, openTileQuotation, requestTileSample,
   submitSampleRequest, selectDeliveryAddress,
 };
