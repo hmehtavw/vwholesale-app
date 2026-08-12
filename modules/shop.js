@@ -916,6 +916,8 @@ let _shopCategory = null;
 let _shopSearch = '';
 let _shopSizeFilter = null;
 let _shopSeriesFilter = null;
+let _shopGridOffset = 0;
+const SHOP_PAGE_SIZE = 30;
 
 async function renderShopPage() {
   const prof = VW_AUTH.getCurrentProfile();
@@ -1152,25 +1154,28 @@ async function renderShopPage() {
 }
 
 
-async function loadShopProducts(category, search) {
+async function loadShopProducts(category, search, opts = {}) {
   // After category tap — fill the grid
   if (category || search) {
     const container = document.getElementById('shop-products-grid');
     if (!container) return;
-    container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px">Loading...</div>';
+    const append = !!opts.append;
+    if (!append) { _shopGridOffset = 0; container.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px">Loading...</div>'; }
 
     let query = VW_DB.client.from('products')
-      .select('id,name,brand,category,subcategory,price,vwp,mrp,stock,unit,image_url,photos')
-      .eq('is_active', true).order('stock', { ascending: false }).limit(40);
+      .select('id,name,brand,category,subcategory,tile_size_label,price,vwp,mrp,stock,unit,image_url,photos')
+      .eq('is_active', true).order('name', { ascending: true })
+      .range(_shopGridOffset, _shopGridOffset + SHOP_PAGE_SIZE - 1);
 
     if (category) query = query.eq('category', category);
     if (search)   query = query.ilike('name', `%${search}%`);
     if (category === 'Tiles' && _shopSizeFilter)   query = query.eq('tile_size_label', _shopSizeFilter);
     if (category === 'Tiles' && _shopSeriesFilter) query = query.eq('subcategory', _shopSeriesFilter);
 
-    const { data: products } = await query;
+    const { data: products, error } = await query;
+    if (error) { console.error('loadShopProducts query failed:', error); throw error; }
 
-    if (!products?.length) {
+    if (!products?.length && !append) {
       container.innerHTML = `<div style="text-align:center;padding:40px;color:#888">
         <div style="font-size:40px;margin-bottom:8px">${search ? '🔍' : '📦'}</div>
         <div style="font-size:14px;font-weight:700;color:#333">${search ? 'No results for "'+search+'"' : 'Coming soon!'}</div>
@@ -1178,8 +1183,25 @@ async function loadShopProducts(category, search) {
       </div>`;
       return;
     }
-    container.style.cssText = 'background:#fff;padding:0 12px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px';
-    container.innerHTML = products.map(p => homeRunProductCard(p)).join('');
+
+    const cardsHtml = (products || []).map(p => homeRunProductCard(p)).join('');
+    const hasMore = (products || []).length === SHOP_PAGE_SIZE;
+    _shopGridOffset += (products || []).length;
+
+    const loadMoreHtml = hasMore ? `
+      <button id="shop-load-more-btn" onclick="VW_SHOP.loadMoreProducts('${category||''}','${(search||'').replace(/'/g,"\\'")}')"
+        style="grid-column:1/-1;padding:12px;border-radius:10px;border:1.5px solid #2a7a3b;background:#fff;color:#2a7a3b;font-weight:700;font-size:13px;cursor:pointer;margin-top:6px">
+        Load More
+      </button>` : '';
+
+    if (append) {
+      const oldBtn = document.getElementById('shop-load-more-btn');
+      if (oldBtn) oldBtn.remove();
+      container.insertAdjacentHTML('beforeend', cardsHtml + loadMoreHtml);
+    } else {
+      container.style.cssText = 'background:#fff;padding:0 12px 12px;display:grid;grid-template-columns:1fr 1fr;gap:10px';
+      container.innerHTML = cardsHtml + loadMoreHtml;
+    }
     return;
   }
 
@@ -1251,28 +1273,31 @@ function homeRunProductCard(p) {
   const cat    = SHOP_CATEGORIES.find(c => c.key === p.category);
   const icon   = cat?.icon || '📦';
   const color  = cat?.color || '#6B7280';
+  const isMadeToOrder = p.category === 'Tiles'; // sourced on request, not pre-stocked — no fast-delivery promise
+  const addLabel = isMadeToOrder ? 'Order' : 'Add';
 
   return `
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;position:relative">
-    <div style="height:110px;background:${img ? '#f3f4f6' : color+'18'};display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+    <div style="height:130px;background:${img ? '#f3f4f6' : color+'18'};display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
       ${img
-        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" loading="lazy">`
+        ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover" loading="lazy" onerror="this.style.display='none';this.parentElement.innerHTML='<span style=\\'font-size:36px\\'>${icon}</span>'">`
         : `<span style="font-size:36px">${icon}</span>`}
       ${disc > 0 ? `<div style="position:absolute;top:6px;left:6px;background:#2a7a3b;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px">${disc}% OFF</div>` : ''}
+      ${isMadeToOrder ? `<div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.6);color:#fff;font-size:8px;font-weight:700;padding:2px 6px;border-radius:4px">ON REQUEST</div>` : ''}
     </div>
     <div style="padding:8px">
-      ${p.brand ? `<div style="font-size:9px;color:#888;font-weight:600;margin-bottom:2px">${p.brand}</div>` : ''}
-      <div style="font-size:11px;font-weight:700;line-height:1.3;color:#1a1a1a;margin-bottom:4px;min-height:28px">${p.name}</div>
+      ${p.brand ? `<div style="font-size:9px;color:#888;font-weight:600;margin-bottom:2px">${p.brand}${p.subcategory?' · '+p.subcategory:''}</div>` : ''}
+      <div style="font-size:11px;font-weight:700;line-height:1.3;color:#1a1a1a;margin-bottom:4px;min-height:28px">${p.name}${p.tile_size_label?` <span style="font-weight:500;color:#999">(${p.tile_size_label}mm)</span>`:''}</div>
       <div style="display:flex;align-items:baseline;gap:3px;margin-bottom:6px">
         <span style="font-size:14px;font-weight:900;color:#1a1a1a">₹${price.toLocaleString('en-IN')}</span>
-        <span style="font-size:9px;color:#888">${p.unit||'pc'}</span>
+        <span style="font-size:9px;color:#888">/${p.unit==='SQFT'?'sqft':(p.unit||'pc')}</span>
         ${mrp > price ? `<span style="font-size:9px;color:#bbb;text-decoration:line-through">₹${mrp.toLocaleString('en-IN')}</span>` : ''}
       </div>
-      ${oos
+      ${oos && !isMadeToOrder
         ? `<div style="text-align:center;padding:6px;background:#f3f4f6;border-radius:6px;font-size:10px;color:#888">Out of Stock</div>`
         : qty === 0
           ? `<div style="display:flex;align-items:center;justify-content:space-between;border:1.5px solid #2a7a3b;border-radius:8px;overflow:hidden">
-              <button onclick="VW_SHOP.addToCart(${p.id})" style="flex:1;padding:7px;background:none;border:none;font-size:11px;font-weight:800;color:#2a7a3b;cursor:pointer">+ Add</button>
+              <button onclick="VW_SHOP.addToCart(${p.id})" style="flex:1;padding:7px;background:none;border:none;font-size:11px;font-weight:800;color:#2a7a3b;cursor:pointer">+ ${addLabel}</button>
               <div style="width:1px;height:30px;background:#2a7a3b;opacity:0.3"></div>
               <div style="width:36px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#2a7a3b;cursor:pointer" onclick="VW_SHOP.addToCart(${p.id})">+</div>
             </div>`
@@ -1294,7 +1319,7 @@ async function filterCategory(cat) {
       const root = document.getElementById('main-content');
       if (root) root.innerHTML = html;
       loadShopProducts(null, '');
-    });
+    }).catch(e => { console.error('renderShopPage failed:', e); showToast('Could not load home page', 'error'); });
     return;
   }
 
@@ -1304,33 +1329,50 @@ async function filterCategory(cat) {
 
   const catCfg = SHOP_CATEGORIES.find(c => c.key === cat) || { icon:'📦', label: cat, color:'#666' };
 
-  // TILES: fetch distinct sizes + series for faceted filtering
+  // TILES: fetch distinct sizes + series for faceted filtering.
+  // Wrapped defensively — if this fails for any reason (network hiccup etc),
+  // the category page still renders with an empty filter bar rather than
+  // leaving the user on a half-built or stuck page.
   let filterChipsHtml = '';
   if (cat === 'Tiles') {
-    const { data: facetRows } = await VW_DB.client.from('products')
-      .select('tile_size_label, subcategory').eq('category', 'Tiles').eq('is_active', true);
-    const sizes = [...new Set((facetRows || []).map(r => r.tile_size_label).filter(Boolean))].sort();
-    const seriesList = [...new Set((facetRows || []).map(r => r.subcategory).filter(Boolean))].sort();
+    try {
+      const { data: facetRows, error: facetErr } = await VW_DB.client.from('products')
+        .select('tile_size_label, subcategory').eq('category', 'Tiles').eq('is_active', true).limit(1000);
+      if (facetErr) throw facetErr;
+      const sizes = [...new Set((facetRows || []).map(r => r.tile_size_label).filter(Boolean))]
+        .sort((a,b) => (parseInt(a)||0) - (parseInt(b)||0));
+      const seriesList = [...new Set((facetRows || []).map(r => r.subcategory).filter(Boolean))].sort();
 
-    const chipRow = (label, options, current, kind) => `
-    <div style="margin-bottom:4px">
-      <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin:6px 0 4px 2px">${label}</div>
-      <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">
-        <button onclick="VW_SHOP.setTileFilter('${kind}',null)"
-          style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
-            border:${!current?'2px solid #2a7a3b':'1px solid #ddd'};background:${!current?'#eafaf0':'#fff'};color:${!current?'#2a7a3b':'#555'}">All</button>
-        ${options.map(o => `
-        <button onclick="VW_SHOP.setTileFilter('${kind}','${o.replace(/'/g,"\\'")}')"
-          style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
-            border:${current===o?'2px solid #2a7a3b':'1px solid #ddd'};background:${current===o?'#eafaf0':'#fff'};color:${current===o?'#2a7a3b':'#555'}">${o}</button>`).join('')}
-      </div>
-    </div>`;
+      const sizeChips = `
+      <div style="margin-bottom:6px">
+        <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin:6px 0 4px 2px">Size (mm)</div>
+        <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px">
+          <button onclick="VW_SHOP.setTileFilter('size',null)"
+            style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
+              border:${!_shopSizeFilter?'2px solid #2a7a3b':'1px solid #ddd'};background:${!_shopSizeFilter?'#eafaf0':'#fff'};color:${!_shopSizeFilter?'#2a7a3b':'#555'}">All Sizes</button>
+          ${sizes.map(s => `
+          <button onclick="VW_SHOP.setTileFilter('size','${s.replace(/'/g,"\\'")}')"
+            style="flex:0 0 auto;padding:6px 12px;border-radius:16px;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer;
+              border:${_shopSizeFilter===s?'2px solid #2a7a3b':'1px solid #ddd'};background:${_shopSizeFilter===s?'#eafaf0':'#fff'};color:${_shopSizeFilter===s?'#2a7a3b':'#555'}">${s}</button>`).join('')}
+        </div>
+      </div>`;
 
-    filterChipsHtml = `
-    <div style="padding:0 14px 4px">
-      ${chipRow('Size (mm)', sizes, _shopSizeFilter, 'size')}
-      ${chipRow('Finish / Series', seriesList, _shopSeriesFilter, 'series')}
-    </div>`;
+      // 26+ finish/series values — a dropdown scales far better here than a chip row
+      const seriesDropdown = seriesList.length ? `
+      <div style="margin-bottom:4px">
+        <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;margin:4px 0 4px 2px">Finish / Series</div>
+        <select onchange="VW_SHOP.setTileFilter('series', this.value || null)"
+          style="width:100%;padding:9px 10px;border-radius:10px;border:1px solid #ddd;font-size:12px;color:#1a1a1a;background:#fff">
+          <option value="">All Finishes (${seriesList.length})</option>
+          ${seriesList.map(s => `<option value="${s.replace(/"/g,'&quot;')}" ${_shopSeriesFilter===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>` : '';
+
+      filterChipsHtml = `<div style="padding:0 14px 4px">${sizeChips}${seriesDropdown}</div>`;
+    } catch (e) {
+      console.error('Tile filter facet load failed:', e);
+      filterChipsHtml = `<div style="padding:8px 14px;font-size:11px;color:#b3261e">Filters temporarily unavailable — showing all tiles.</div>`;
+    }
   }
 
   root.innerHTML = `
@@ -1348,6 +1390,7 @@ async function filterCategory(cat) {
       <div style="width:36px;height:36px;background:${catCfg.color}18;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px">${catCfg.icon}</div>
       <div style="flex:1">
         <div style="font-size:16px;font-weight:900;color:#1a1a1a">${catCfg.label}</div>
+        ${cat === 'Tiles' ? `<div style="font-size:10px;color:#888">Sourced from Kajaria on request</div>` : ''}
       </div>
       <button onclick="VW_SHOP.openCart()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#333;position:relative;padding:0">
         🛍 <span id="cat-cart-count" style="position:absolute;top:-4px;right:-4px;background:#2a7a3b;color:#fff;border-radius:50%;width:16px;height:16px;font-size:9px;font-weight:900;display:${Object.values(_shopCart).reduce((a,b)=>a+b,0)>0?'flex':'none'};align-items:center;justify-content:center">${Object.values(_shopCart).reduce((a,b)=>a+b,0)}</span>
@@ -1372,7 +1415,13 @@ async function filterCategory(cat) {
     </div>
   </div>`;
 
-  loadShopProducts(cat, '');
+  try {
+    await loadShopProducts(cat, '');
+  } catch (e) {
+    console.error('loadShopProducts failed:', e);
+    const grid = document.getElementById('shop-products-grid');
+    if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:#b3261e;font-size:13px">Could not load products — please try again.</div>`;
+  }
 }
 
 function shopSearch(val) {
@@ -1384,7 +1433,16 @@ function shopSearch(val) {
 function setTileFilter(kind, val) {
   if (kind === 'size') _shopSizeFilter = val;
   if (kind === 'series') _shopSeriesFilter = val;
-  filterCategory(_shopCategory); // full re-render so chip highlighting updates too
+  filterCategory(_shopCategory); // full re-render so chip/dropdown state updates too
+}
+
+async function loadMoreProducts(category, search) {
+  try {
+    await loadShopProducts(category || null, search || '', { append: true });
+  } catch (e) {
+    console.error('loadMoreProducts failed:', e);
+    showToast('Could not load more — please try again', 'error');
+  }
 }
 
 async function openCart() {
@@ -1567,7 +1625,7 @@ function selectDeliveryAddress() {
 
 window.VW_SHOP = {
   renderShopPage, loadShopProducts, addToCart, removeFromCart,
-  filterCategory, shopSearch, setTileFilter, openCart, clearCart,
+  filterCategory, shopSearch, setTileFilter, loadMoreProducts, openCart, clearCart,
   proceedToCheckout, openTileQuotation, requestTileSample,
   submitSampleRequest, selectDeliveryAddress,
 };
