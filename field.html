@@ -1,0 +1,1890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0F1923">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VW Field">
+<title>V Wholesale Field</title>
+<link rel="manifest" href="/field-manifest.json">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyPlaceholderKeyReplaceMe&libraries=places&callback=initMapLib" async defer></script>
+
+<style>
+:root {
+  --base: #0F1923;
+  --surface: #1A2634;
+  --surface2: #243040;
+  --accent: #F5A623;
+  --accent-soft: rgba(245,166,35,0.12);
+  --accent-dim: #C4841A;
+  --success: #22C55E;
+  --success-soft: rgba(34,197,94,0.12);
+  --danger: #EF4444;
+  --danger-soft: rgba(239,68,68,0.12);
+  --warning: #F59E0B;
+  --text: #F0F4F8;
+  --text2: #8FA3B8;
+  --text3: #506070;
+  --border: #2A3A4A;
+  --border2: #1E2E3E;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --nav-h: 68px;
+  --header-h: 60px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: var(--base); color: var(--text); font-family: 'Inter', -apple-system, sans-serif; font-size: 15px; line-height: 1.5; overflow: hidden; }
+
+/* ── SCREENS ── */
+.screen { position: fixed; inset: 0; display: none; flex-direction: column; background: var(--base); }
+.screen.active { display: flex; }
+
+/* ── HEADER ── */
+.header {
+  height: var(--header-h); min-height: var(--header-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 18px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: relative; z-index: 10;
+}
+.header-logo { display: flex; align-items: center; gap: 10px; }
+.header-logo-mark {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: var(--accent); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; color: var(--base); letter-spacing: -0.5px;
+}
+.header-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.header-sub { font-size: 12px; color: var(--text2); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.icon-btn {
+  width: 38px; height: 38px; border-radius: 10px; border: none;
+  background: var(--surface2); color: var(--text); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+
+/* ── SCROLL BODY ── */
+.body { flex: 1; overflow-y: auto; padding: calc(var(--nav-h) + 0px) 0 0; }
+.body.no-nav { padding-bottom: 0; }
+.pad { padding: 16px; }
+
+/* ── BOTTOM NAV ── */
+.nav {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--nav-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex; align-items: stretch;
+  z-index: 100;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; cursor: pointer;
+  border: none; background: none; color: var(--text3);
+  font-size: 11px; font-weight: 500; transition: color .15s;
+  padding: 8px 0;
+}
+.nav-item.active { color: var(--accent); }
+.nav-item svg { width: 22px; height: 22px; }
+.nav-badge {
+  position: absolute; top: 6px; right: calc(50% - 16px);
+  background: var(--danger); color: #fff; border-radius: 10px;
+  font-size: 10px; font-weight: 700; padding: 1px 5px; min-width: 16px; text-align: center;
+}
+.nav-center-wrap { position: relative; flex: 1; display: flex; justify-content: center; align-items: center; }
+.nav-center-btn {
+  width: 54px; height: 54px; border-radius: 50%; border: 3px solid var(--base);
+  background: var(--accent); color: var(--base); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 26px;
+  margin-bottom: 6px; box-shadow: 0 4px 16px rgba(245,166,35,.4);
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 12px;
+}
+.card-accent { border-left: 3px solid var(--accent); }
+.card-success { border-left: 3px solid var(--success); }
+.card-danger { border-left: 3px solid var(--danger); }
+
+/* ── STAT TILES ── */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat-tile {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 14px 12px;
+}
+.stat-value {
+  font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700;
+  color: var(--accent); line-height: 1.1;
+}
+.stat-label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+.stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+/* ── PROGRESS BAR ── */
+.progress-wrap { margin: 4px 0 0; }
+.progress-bar {
+  height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
+}
+.progress-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width .4s; }
+.progress-fill.success { background: var(--success); }
+
+/* ── PUNCH CARD ── */
+.punch-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 18px; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.punch-info .punch-status { font-size: 13px; color: var(--text2); }
+.punch-info .punch-time { font-size: 22px; font-weight: 700; font-family: 'JetBrains Mono', monospace; color: var(--text); margin-top: 2px; }
+.punch-info .punch-loc { font-size: 12px; color: var(--text3); margin-top: 3px; }
+.punch-btn {
+  padding: 12px 20px; border-radius: 10px; border: none;
+  font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.punch-btn.in { background: var(--accent); color: var(--base); }
+.punch-btn.out { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+
+/* ── VISIT PILL LIST ── */
+.visit-item {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px;
+  display: flex; align-items: flex-start; gap: 12px; cursor: pointer;
+  transition: border-color .15s;
+}
+.visit-item:active { border-color: var(--accent); }
+.visit-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--success); margin-top: 5px; flex-shrink: 0; }
+.visit-dot.pending { background: var(--warning); }
+.visit-dot.assigned { background: var(--text3); }
+.visit-info { flex: 1; min-width: 0; }
+.visit-name { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visit-addr { font-size: 12px; color: var(--text2); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.visit-meta { font-size: 11px; color: var(--text3); margin-top: 4px; display: flex; gap: 8px; }
+.visit-stage { font-size: 11px; padding: 2px 7px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-weight: 500; flex-shrink: 0; }
+
+/* ── FORMS ── */
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; display: block; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-label .req { color: var(--danger); margin-left: 2px; }
+.form-input, .form-select, .form-textarea {
+  width: 100%; background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: var(--radius-sm); padding: 12px 14px;
+  font-size: 15px; font-family: inherit; outline: none;
+  transition: border-color .15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--accent); }
+.form-select { appearance: none; }
+.form-textarea { min-height: 80px; resize: vertical; }
+.form-input::placeholder, .form-textarea::placeholder { color: var(--text3); }
+
+/* ── BUTTONS ── */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 14px 20px; border-radius: var(--radius); border: none;
+  font-size: 15px; font-weight: 600; cursor: pointer; width: 100%;
+  transition: opacity .15s; font-family: inherit;
+}
+.btn:active { opacity: 0.8; }
+.btn-primary { background: var(--accent); color: var(--base); }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-sm { padding: 9px 16px; font-size: 13px; border-radius: 8px; }
+.btn-ghost { background: transparent; color: var(--text2); }
+.btn[disabled] { opacity: 0.4; pointer-events: none; }
+.btn-row { display: flex; gap: 10px; }
+.btn-row .btn { flex: 1; }
+
+/* ── PHOTO CAPTURE ── */
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.photo-slot {
+  aspect-ratio: 1; border-radius: var(--radius-sm); border: 1px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; cursor: pointer; background: var(--surface2); overflow: hidden;
+  position: relative;
+}
+.photo-slot img { width: 100%; height: 100%; object-fit: cover; }
+.photo-slot .photo-label { font-size: 10px; color: var(--text3); text-align: center; padding: 0 4px; }
+.photo-slot .photo-icon { font-size: 20px; }
+.photo-slot.filled .photo-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity .2s;
+}
+.photo-slot.filled:hover .photo-overlay { opacity: 1; }
+.photo-del { font-size: 20px; cursor: pointer; }
+input[type=file] { display: none; }
+
+/* ── MAP CONTAINER ── */
+.map-container {
+  height: 200px; border-radius: var(--radius); overflow: hidden;
+  border: 1px solid var(--border); background: var(--surface2);
+  position: relative;
+}
+.map-placeholder {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--text3); font-size: 13px;
+}
+.map-pin-info {
+  margin-top: 8px; padding: 10px 12px; background: var(--surface2);
+  border-radius: var(--radius-sm); font-size: 12px; color: var(--text2);
+}
+
+/* ── CONTACT ROWS ── */
+.contact-row {
+  background: var(--surface2); border-radius: var(--radius-sm);
+  padding: 12px; margin-bottom: 8px; position: relative;
+}
+.contact-role-tag {
+  font-size: 10px; font-weight: 600; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.contact-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.contact-del {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: none; color: var(--text3); cursor: pointer; font-size: 16px;
+}
+.add-contact-btn {
+  display: flex; align-items: center; gap: 6px; padding: 10px;
+  background: var(--accent-soft); border: 1px dashed var(--accent);
+  border-radius: var(--radius-sm); cursor: pointer; color: var(--accent);
+  font-size: 13px; font-weight: 600; width: 100%; justify-content: center;
+}
+
+/* ── CHIP SELECTOR ── */
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
+  cursor: pointer; transition: all .15s;
+}
+.chip.selected { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* ── ALERT BANNER ── */
+.alert-banner {
+  padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 12px;
+  font-size: 13px; display: flex; align-items: flex-start; gap: 10px;
+}
+.alert-banner.warn { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.3); color: #FBBF24; }
+.alert-banner.info { background: var(--accent-soft); border: 1px solid rgba(245,166,35,.3); color: var(--accent); }
+.alert-banner.success { background: var(--success-soft); border: 1px solid rgba(34,197,94,.3); color: var(--success); }
+
+/* ── AI ANALYSIS ── */
+.ai-card {
+  background: linear-gradient(135deg, rgba(245,166,35,.08), rgba(34,197,94,.05));
+  border: 1px solid rgba(245,166,35,.25); border-radius: var(--radius); padding: 16px;
+  margin-top: 16px;
+}
+.ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.ai-badge { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.08em; }
+.ai-req-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ai-req-chip {
+  padding: 4px 10px; border-radius: 20px;
+  background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 500;
+}
+.ai-value-range {
+  font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700;
+  color: var(--success);
+}
+
+/* ── LOGIN SCREEN ── */
+#screen-login {
+  background: var(--base);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px 24px;
+}
+.login-logo {
+  width: 72px; height: 72px; border-radius: 20px; background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800; color: var(--base); margin-bottom: 32px;
+  letter-spacing: -1px;
+}
+.login-headline { font-size: 24px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+.login-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 40px; }
+.login-form { width: 100%; max-width: 360px; }
+.phone-input-wrap { display: flex; align-items: center; gap: 0; margin-bottom: 12px; }
+.phone-prefix {
+  background: var(--surface2); border: 1px solid var(--border); border-right: none;
+  padding: 12px 14px; border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  color: var(--text2); font-size: 15px; white-space: nowrap;
+}
+.phone-input-wrap .form-input {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.otp-wrap { display: flex; gap: 8px; justify-content: center; margin: 16px 0; }
+.otp-digit {
+  width: 46px; height: 56px; text-align: center; font-size: 24px; font-weight: 700;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+  color: var(--text); font-family: 'JetBrains Mono', monospace; outline: none;
+}
+.otp-digit:focus { border-color: var(--accent); }
+
+/* ── SECTION HEADER ── */
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section-title { font-size: 13px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; }
+.section-action { font-size: 13px; color: var(--accent); font-weight: 600; cursor: pointer; }
+
+/* ── MODAL SHEET ── */
+.sheet-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+  display: none; align-items: flex-end;
+}
+.sheet-backdrop.open { display: flex; }
+.sheet {
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  width: 100%; max-height: 92vh; overflow-y: auto;
+  padding: 0 0 env(safe-area-inset-bottom);
+}
+.sheet-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 12px auto 0; }
+.sheet-header { padding: 16px 20px 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border2); }
+.sheet-title { font-size: 17px; font-weight: 700; }
+.sheet-close { font-size: 22px; color: var(--text3); cursor: pointer; background: none; border: none; color: var(--text2); }
+.sheet-body { padding: 20px; }
+
+/* ── LIVE INDICATOR ── */
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); display: inline-block; margin-right: 4px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+/* ── SKELETON ── */
+.skeleton { background: var(--surface2); border-radius: 6px; animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+
+/* ── DIVIDER ── */
+.divider { height: 1px; background: var(--border2); margin: 16px 0; }
+
+/* ── MISC ── */
+.text-accent { color: var(--accent); }
+.text-success { color: var(--success); }
+.text-danger { color: var(--danger); }
+.text-muted { color: var(--text2); }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.mt-8 { margin-top: 8px; }
+.mt-12 { margin-top: 12px; }
+.mt-16 { margin-top: 16px; }
+.fw-700 { font-weight: 700; }
+.hidden { display: none !important; }
+.center { text-align: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     LOGIN SCREEN
+═══════════════════════════════════════════════ -->
+<div class="screen active" id="screen-login">
+  <div class="login-logo">VW</div>
+  <h1 class="login-headline">V Wholesale Field</h1>
+  <p class="login-sub">Sign in with your registered mobile number</p>
+
+  <div class="login-form" id="login-phone-step">
+    <div class="form-group">
+      <div class="phone-input-wrap">
+        <div class="phone-prefix">+91</div>
+        <input class="form-input" id="input-phone" type="tel" inputmode="numeric"
+               maxlength="10" placeholder="10-digit mobile number" autocomplete="tel">
+      </div>
+    </div>
+    <button class="btn btn-primary" id="btn-send-otp">Send OTP</button>
+    <p class="center mt-12" style="font-size:12px;color:var(--text3);">
+      Only registered field staff can sign in
+    </p>
+  </div>
+
+  <div class="login-form hidden" id="login-otp-step">
+    <p class="center text-muted" style="margin-bottom:16px;font-size:14px;" id="otp-sent-msg"></p>
+    <div class="otp-wrap" id="otp-wrap">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+      <input class="otp-digit" type="text" inputmode="numeric" maxlength="1">
+    </div>
+    <button class="btn btn-primary mt-12" id="btn-verify-otp">Verify & Sign In</button>
+    <button class="btn btn-ghost mt-8" id="btn-resend-otp">Resend OTP</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN APP WRAPPER (shown after login)
+═══════════════════════════════════════════════ -->
+<div class="screen" id="screen-app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">
+      <div class="header-logo-mark">VW</div>
+      <div>
+        <div class="header-title" id="hdr-name">Field App</div>
+        <div class="header-sub" id="hdr-role">—</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div style="font-size:12px;color:var(--text2);text-align:right;">
+        <span class="live-dot"></span>
+        <span id="hdr-time">—</span>
+      </div>
+      <button class="icon-btn" id="btn-profile-icon">👤</button>
+    </div>
+  </div>
+
+  <!-- TAB CONTENTS -->
+  <div class="body" id="tab-home" style="padding-bottom: calc(var(--nav-h) + 16px);">
+    <div class="pad">
+
+      <!-- Punch status -->
+      <div class="punch-card" id="punch-card">
+        <div class="punch-info">
+          <div class="punch-status" id="punch-label">Not punched in</div>
+          <div class="punch-time" id="punch-time">--:--</div>
+          <div class="punch-loc" id="punch-loc">Tap to start your day</div>
+        </div>
+        <button class="punch-btn in" id="punch-btn" onclick="openPunchSheet()">Punch In</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stat-grid">
+        <div class="stat-tile">
+          <div class="stat-value" id="stat-visits">0</div>
+          <div class="stat-label">Visits today</div>
+          <div class="progress-wrap">
+            <div class="progress-bar"><div class="progress-fill" id="visits-bar" style="width:0%"></div></div>
+          </div>
+          <div class="stat-sub" id="stat-target">Target: 15</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value" id="stat-km">0</div>
+          <div class="stat-label">km today</div>
+          <div class="stat-sub" id="stat-fuel">₹0 fuel</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value" id="stat-month-visits">0</div>
+          <div class="stat-label">This month</div>
+          <div class="stat-sub">total visits</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-value" id="stat-billing">0</div>
+          <div class="stat-label">Billing (L)</div>
+          <div class="progress-wrap">
+            <div class="progress-bar"><div class="progress-fill" id="billing-bar" style="width:0%"></div></div>
+          </div>
+          <div class="stat-sub" id="stat-billing-target">Target: ₹10L</div>
+        </div>
+      </div>
+
+      <!-- Incentive tier -->
+      <div class="card card-accent" id="incentive-card">
+        <div class="flex-between">
+          <div>
+            <div style="font-size:12px;color:var(--text2);">This month's tier</div>
+            <div style="font-size:20px;font-weight:700;margin-top:2px;" id="incentive-tier">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:12px;color:var(--text2);">Payout</div>
+            <div class="mono" style="font-size:18px;font-weight:700;color:var(--success);" id="incentive-payout">—</div>
+          </div>
+        </div>
+        <div class="progress-wrap mt-8">
+          <div class="progress-bar" style="height:6px;"><div class="progress-fill" id="incentive-bar" style="width:0%"></div></div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px;" id="incentive-next">Complete more visits to unlock Silver</div>
+      </div>
+
+      <!-- Assigned visits -->
+      <div class="section-header mt-16">
+        <div class="section-title">Assigned to you</div>
+        <div class="section-action" onclick="showTab('visits')">See all</div>
+      </div>
+      <div id="assigned-list">
+        <div style="text-align:center;padding:24px 0;color:var(--text3);font-size:14px;">No assignments today</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- VISITS TAB -->
+  <div class="body hidden" id="tab-visits" style="padding-bottom: calc(var(--nav-h) + 16px);">
+    <div class="pad">
+      <div class="section-header">
+        <div class="section-title">Today's visits</div>
+        <div id="visits-count-badge" style="font-size:13px;color:var(--text2);"></div>
+      </div>
+      <div id="visits-list">
+        <div style="text-align:center;padding:40px 0;color:var(--text3);font-size:14px;">No visits yet today</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAP TAB -->
+  <div class="body hidden" id="tab-map" style="padding-bottom: calc(var(--nav-h) + 16px);">
+    <div class="pad">
+      <div class="section-header">
+        <div class="section-title">Live field map</div>
+        <div class="live-dot"></div>
+      </div>
+      <div class="map-container" id="live-map-container">
+        <div class="map-placeholder">
+          <div style="font-size:32px;">🗺️</div>
+          <div>Map loading…</div>
+          <div style="font-size:11px;">Showing today's route & site pins</div>
+        </div>
+      </div>
+      <div class="card mt-12">
+        <div class="section-title" style="margin-bottom:10px;">Today's route</div>
+        <div id="route-summary" style="color:var(--text3);font-size:13px;">No location data yet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE TAB -->
+  <div class="body hidden" id="tab-profile" style="padding-bottom: calc(var(--nav-h) + 16px);">
+    <div class="pad">
+      <div style="text-align:center;padding:24px 0 20px;">
+        <div style="width:72px;height:72px;border-radius:50%;background:var(--surface2);border:2px solid var(--accent);
+             display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px;" id="profile-avatar">👤</div>
+        <div style="font-size:20px;font-weight:700;" id="profile-name">—</div>
+        <div style="font-size:13px;color:var(--text2);margin-top:4px;" id="profile-desig">—</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="profile-city">—</div>
+      </div>
+
+      <div class="card">
+        <div class="section-title" style="margin-bottom:12px;">Performance</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;">
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--accent);" id="perf-visits">—</div>
+            <div style="font-size:11px;color:var(--text3);">Visits</div>
+          </div>
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--success);" id="perf-quality">—</div>
+            <div style="font-size:11px;color:var(--text3);">Quality</div>
+          </div>
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;" id="perf-tier">—</div>
+            <div style="font-size:11px;color:var(--text3);">Tier</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-12">
+        <div class="section-title" style="margin-bottom:12px;">Fuel this month</div>
+        <div class="flex-between">
+          <div style="font-size:13px;color:var(--text2);">Total km</div>
+          <div class="mono" style="font-weight:700;" id="perf-km">—</div>
+        </div>
+        <div class="divider"></div>
+        <div class="flex-between">
+          <div style="font-size:13px;color:var(--text2);">Reimbursement</div>
+          <div class="mono text-success fw-700" id="perf-fuel">—</div>
+        </div>
+      </div>
+
+      <button class="btn btn-secondary mt-16" onclick="signOut()">Sign out</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav">
+    <button class="nav-item active" data-tab="home" onclick="showTab('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      Home
+    </button>
+    <button class="nav-item" data-tab="visits" onclick="showTab('visits')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/>
+      </svg>
+      Visits
+    </button>
+    <!-- Centre FAB -->
+    <div class="nav-center-wrap">
+      <button class="nav-center-btn" onclick="openNewVisitSheet()" title="Log new visit">＋</button>
+    </div>
+    <button class="nav-item" data-tab="map" onclick="showTab('map')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+        <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+      </svg>
+      Map
+    </button>
+    <button class="nav-item" data-tab="profile" onclick="showTab('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+      Profile
+    </button>
+  </nav>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PUNCH IN/OUT SHEET
+═══════════════════════════════════════════════ -->
+<div class="sheet-backdrop" id="sheet-punch">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="punch-sheet-title">Punch In</div>
+      <button class="sheet-close" onclick="closeSheet('sheet-punch')">✕</button>
+    </div>
+    <div class="sheet-body">
+
+      <div id="punch-in-form">
+        <!-- Selfie -->
+        <div class="form-group">
+          <label class="form-label">Selfie <span class="req">*</span></label>
+          <div class="photo-slot" style="aspect-ratio:4/3;width:100%;border-radius:12px;" onclick="capturePhoto('selfie-capture', 'selfie-preview')">
+            <img id="selfie-preview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:12px;">
+            <div id="selfie-placeholder">
+              <div class="photo-icon">🤳</div>
+              <div class="photo-label">Tap to take selfie</div>
+            </div>
+            <input type="file" id="selfie-capture" accept="image/*" capture="user" onchange="previewPhoto(this,'selfie-preview','selfie-placeholder')">
+          </div>
+        </div>
+
+        <!-- Odometer In -->
+        <div class="form-group">
+          <label class="form-label">Odometer reading (km) <span class="req">*</span></label>
+          <input class="form-input mono" id="odo-in" type="number" inputmode="numeric" placeholder="e.g. 12450">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Odometer photo <span class="req">*</span></label>
+          <div class="photo-slot" style="aspect-ratio:16/7;width:100%;border-radius:10px;" onclick="capturePhoto('odo-in-capture', 'odo-in-preview')">
+            <img id="odo-in-preview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;">
+            <div id="odo-in-placeholder">
+              <div class="photo-icon">🏍️</div>
+              <div class="photo-label">Tap to photo odometer</div>
+            </div>
+            <input type="file" id="odo-in-capture" accept="image/*" capture="environment" onchange="previewPhoto(this,'odo-in-preview','odo-in-placeholder')">
+          </div>
+        </div>
+
+        <!-- GPS -->
+        <div class="alert-banner info" id="gps-status-in">
+          <span>📍</span> <span id="gps-status-text-in">Getting your location…</span>
+        </div>
+
+        <button class="btn btn-primary" id="btn-do-punchin" onclick="doPunchIn()">Start Day</button>
+      </div>
+
+      <div id="punch-out-form" class="hidden">
+        <!-- Odometer Out -->
+        <div class="form-group">
+          <label class="form-label">Odometer reading now (km) <span class="req">*</span></label>
+          <input class="form-input mono" id="odo-out" type="number" inputmode="numeric" placeholder="e.g. 12530">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Odometer photo <span class="req">*</span></label>
+          <div class="photo-slot" style="aspect-ratio:16/7;width:100%;border-radius:10px;" onclick="capturePhoto('odo-out-capture', 'odo-out-preview')">
+            <img id="odo-out-preview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:10px;">
+            <div id="odo-out-placeholder">
+              <div class="photo-icon">🏍️</div>
+              <div class="photo-label">Tap to photo odometer</div>
+            </div>
+            <input type="file" id="odo-out-capture" accept="image/*" capture="environment" onchange="previewPhoto(this,'odo-out-preview','odo-out-placeholder')">
+          </div>
+        </div>
+
+        <div class="card" id="fuel-preview-card" style="display:none;">
+          <div class="flex-between">
+            <span style="color:var(--text2);font-size:13px;">Distance today</span>
+            <span class="mono fw-700" id="fuel-km-calc">— km</span>
+          </div>
+          <div class="flex-between mt-8">
+            <span style="color:var(--text2);font-size:13px;">Fuel reimbursement</span>
+            <span class="mono fw-700 text-success" id="fuel-rs-calc">₹—</span>
+          </div>
+        </div>
+
+        <button class="btn btn-danger mt-12" id="btn-do-punchout" onclick="doPunchOut()">End Day</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     NEW VISIT SHEET
+═══════════════════════════════════════════════ -->
+<div class="sheet-backdrop" id="sheet-visit">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="visit-sheet-title">Log Site Visit</div>
+      <button class="sheet-close" onclick="closeSheet('sheet-visit')">✕</button>
+    </div>
+    <div class="sheet-body" id="visit-form-body">
+
+      <!-- Step indicator -->
+      <div style="display:flex;gap:4px;margin-bottom:20px;" id="visit-steps">
+        <div class="step-dot active" data-step="1" style="flex:1;height:4px;border-radius:2px;background:var(--accent);"></div>
+        <div class="step-dot" data-step="2" style="flex:1;height:4px;border-radius:2px;background:var(--border);"></div>
+        <div class="step-dot" data-step="3" style="flex:1;height:4px;border-radius:2px;background:var(--border);"></div>
+        <div class="step-dot" data-step="4" style="flex:1;height:4px;border-radius:2px;background:var(--border);"></div>
+      </div>
+
+      <!-- STEP 1: Site Location -->
+      <div id="visit-step-1">
+        <div style="font-size:16px;font-weight:700;margin-bottom:16px;">📍 Site Location</div>
+
+        <div class="form-group">
+          <label class="form-label">Site name / project name</label>
+          <input class="form-input" id="vs-site-name" type="text" placeholder="e.g. Krishna Residency Block B">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Pin site on map <span class="req">*</span></label>
+          <div class="map-container" id="visit-map">
+            <div class="map-placeholder">
+              <div style="font-size:28px;">📍</div>
+              <div>Tap to set site location</div>
+              <button class="btn btn-sm btn-secondary mt-8" onclick="getCurrentLocationForVisit()" style="width:auto;padding:8px 16px;">Use my location</button>
+            </div>
+          </div>
+          <div class="map-pin-info hidden" id="visit-pin-info">
+            <span id="visit-pin-addr">—</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Area / locality <span class="req">*</span></label>
+          <input class="form-input" id="vs-area" type="text" placeholder="e.g. Bhavanipuram, Vijayawada">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">City <span class="req">*</span></label>
+          <input class="form-input" id="vs-city" type="text" placeholder="Vijayawada">
+        </div>
+
+        <button class="btn btn-primary" onclick="visitNextStep(2)">Next: Site Details →</button>
+      </div>
+
+      <!-- STEP 2: Site Details -->
+      <div id="visit-step-2" class="hidden">
+        <div style="font-size:16px;font-weight:700;margin-bottom:16px;">🏗️ Site Details</div>
+
+        <div class="form-group">
+          <label class="form-label">Construction stage <span class="req">*</span></label>
+          <select class="form-select" id="vs-stage">
+            <option value="">Select stage…</option>
+            <option value="foundation">Foundation / Excavation</option>
+            <option value="structure">Structure / Columns</option>
+            <option value="brick_work">Brick Work</option>
+            <option value="plastering">Plastering</option>
+            <option value="tiling_ready">Tiling Ready</option>
+            <option value="tiling_in_progress">Tiling In Progress</option>
+            <option value="finishing">Finishing / Paint</option>
+            <option value="handover">Near Handover</option>
+            <option value="renovation">Renovation</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Project type</label>
+          <div class="chip-row" id="project-type-chips">
+            <div class="chip" data-val="residential_house">House</div>
+            <div class="chip" data-val="apartment">Apartment</div>
+            <div class="chip" data-val="villa">Villa</div>
+            <div class="chip" data-val="commercial">Commercial</div>
+            <div class="chip" data-val="hotel">Hotel / Hospitality</div>
+            <div class="chip" data-val="renovation">Renovation</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Estimated area (sq ft)</label>
+          <input class="form-input mono" id="vs-sqft" type="number" inputmode="numeric" placeholder="e.g. 2400">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Estimated project value (₹)</label>
+          <input class="form-input mono" id="vs-value" type="number" inputmode="numeric" placeholder="e.g. 1500000">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Competitor materials spotted</label>
+          <div class="chip-row" id="competitor-chips">
+            <div class="chip" data-val="kajaria">Kajaria</div>
+            <div class="chip" data-val="asian_paints">Asian Paints</div>
+            <div class="chip" data-val="berger">Berger</div>
+            <div class="chip" data-val="somany">Somany</div>
+            <div class="chip" data-val="johnson">Johnson</div>
+            <div class="chip" data-val="hindware">Hindware</div>
+            <div class="chip" data-val="cera">Cera</div>
+            <div class="chip" data-val="polycab">Polycab</div>
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="visitNextStep(1)">← Back</button>
+          <button class="btn btn-primary" onclick="visitNextStep(3)">Next: Contacts →</button>
+        </div>
+      </div>
+
+      <!-- STEP 3: Contacts -->
+      <div id="visit-step-3" class="hidden">
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">👥 Site Contacts</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Add as many contacts as possible — every number matters</div>
+
+        <div id="contacts-list"></div>
+
+        <div class="chip-row" style="margin-bottom:16px;" id="add-contact-roles">
+          <div class="chip" onclick="addContact('Owner')">+ Owner</div>
+          <div class="chip" onclick="addContact('Contractor')">+ Contractor</div>
+          <div class="chip" onclick="addContact('Builder')">+ Builder</div>
+          <div class="chip" onclick="addContact('Architect')">+ Architect</div>
+          <div class="chip" onclick="addContact('Interior')">+ Interior</div>
+          <div class="chip" onclick="addContact('Site Supervisor')">+ Supervisor</div>
+          <div class="chip" onclick="addContact('Electrician')">+ Electrician</div>
+          <div class="chip" onclick="addContact('Plumber')">+ Plumber</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Follow-up date <span class="req">*</span></label>
+          <input class="form-input" id="vs-followup" type="date">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notes</label>
+          <textarea class="form-textarea" id="vs-notes" placeholder="What did you discuss? Any specific requirements mentioned?"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Referral — who sent you here?</label>
+          <input class="form-input" id="vs-referral" type="text" placeholder="e.g. Ravi Contractor, Walk-in, Assignment">
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="visitNextStep(2)">← Back</button>
+          <button class="btn btn-primary" onclick="visitNextStep(4)">Next: Photos →</button>
+        </div>
+      </div>
+
+      <!-- STEP 4: Photos + Submit -->
+      <div id="visit-step-4" class="hidden">
+        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">📸 Site Photos</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Minimum 1 required. Capture what you see — the AI will analyse it.</div>
+
+        <div class="photo-grid" id="site-photo-grid">
+          <!-- slots added dynamically -->
+        </div>
+
+        <button class="add-contact-btn mt-12" id="add-photo-btn" onclick="addPhotoSlot()">
+          + Add photo
+        </button>
+
+        <!-- Photo slot labels guide -->
+        <div style="margin:16px 0;padding:12px;background:var(--surface2);border-radius:8px;">
+          <div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:6px;">WHAT TO CAPTURE</div>
+          <div style="font-size:12px;color:var(--text3);line-height:1.8;">
+            🏠 Site exterior &nbsp;·&nbsp; 🪟 Floor / slab &nbsp;·&nbsp; 🚿 Bathroom rough-in<br>
+            🍳 Kitchen area &nbsp;·&nbsp; 🧱 Walls &nbsp;·&nbsp; 🏷️ Competitor materials
+          </div>
+        </div>
+
+        <!-- AI will appear here after submit -->
+        <div id="ai-result-area" class="hidden">
+          <div class="ai-card">
+            <div class="ai-header">
+              <span style="font-size:18px;">🤖</span>
+              <span class="ai-badge">AI SITE ANALYSIS</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--text3);" id="ai-stage-detected"></span>
+            </div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">Requirements detected</div>
+            <div class="ai-req-list" id="ai-req-chips"></div>
+            <div class="flex-between">
+              <div style="font-size:12px;color:var(--text2);">Estimated value range</div>
+              <div class="ai-value-range" id="ai-value-range">—</div>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:8px;">AI suggestion</div>
+            <div style="font-size:13px;color:var(--text);" id="ai-suggestion-text">—</div>
+          </div>
+        </div>
+
+        <div class="btn-row mt-16">
+          <button class="btn btn-secondary" onclick="visitNextStep(3)">← Back</button>
+          <button class="btn btn-primary" id="btn-submit-visit" onclick="submitVisit()">
+            Submit Visit
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     VISIT DETAIL SHEET
+═══════════════════════════════════════════════ -->
+<div class="sheet-backdrop" id="sheet-visit-detail">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <div class="sheet-title" id="vd-title">Site Visit</div>
+      <button class="sheet-close" onclick="closeSheet('sheet-visit-detail')">✕</button>
+    </div>
+    <div class="sheet-body" id="vd-body">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     TOAST
+═══════════════════════════════════════════════ -->
+<div id="toast" style="position:fixed;bottom:calc(var(--nav-h)+16px);left:16px;right:16px;
+     background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+     padding:14px 16px;font-size:14px;font-weight:500;z-index:9999;
+     transform:translateY(20px);opacity:0;transition:all .25s;pointer-events:none;"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════
+const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTA0MDA0NzcsImV4cCI6MjAyNTk3NjQ3N30.placeholder';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const FIELD_ROLES = ['Field Executive','Team Leader','Mapping Executive','ASM','Cluster Head','Region Head'];
+const LOC_INTERVAL_MS = 2 * 60 * 1000; // 2 min
+
+// ── State ──
+let currentUser = null;      // staff row
+let currentAttendance = null;
+let locationWatcher = null;
+let locPingTimer = null;
+let lastLocation = null;
+let visitContacts = [];
+let visitPhotos = [];
+let visitPinLat = null;
+let visitPinLng = null;
+let visitProjectType = null;
+let visitCompetitors = [];
+let visitCurrentStep = 1;
+let mapInitialized = false;
+let googleMap = null;
+let visitMapObj = null;
+let visitMarker = null;
+let photoCounter = 0;
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+window.initMapLib = () => { mapInitialized = true; };
+
+document.addEventListener('DOMContentLoaded', async () => {
+  initClockTick();
+  await checkSession();
+  initOtpInputs();
+  initChips();
+  initOdoLiveCalc();
+  addPhotoSlot(); // default first slot
+});
+
+async function checkSession() {
+  const saved = localStorage.getItem('vw_field_staff');
+  if (!saved) return;
+  try {
+    const staffId = JSON.parse(saved);
+    const { data } = await sb.from('staff').select('*').eq('id', staffId).single();
+    if (data && isFieldRole(data)) {
+      currentUser = data;
+      await afterLogin();
+    } else {
+      localStorage.removeItem('vw_field_staff');
+    }
+  } catch(e) { localStorage.removeItem('vw_field_staff'); }
+}
+
+function isFieldRole(staff) {
+  return FIELD_ROLES.some(r => 
+    (staff.role||'').toLowerCase().includes(r.toLowerCase()) ||
+    (staff.designation||'').toLowerCase().includes(r.toLowerCase())
+  ) || (staff.department||'').toLowerCase() === 'field';
+}
+
+// ══════════════════════════════════════════════
+// AUTH — OTP
+// ══════════════════════════════════════════════
+// Stored OTPs in-memory (in prod, use edge function + SMS)
+const otpStore = {};
+
+document.getElementById('btn-send-otp').onclick = async () => {
+  const phone = document.getElementById('input-phone').value.trim().replace(/\D/g,'');
+  if (phone.length !== 10) { showToast('Enter a valid 10-digit number'); return; }
+
+  const btn = document.getElementById('btn-send-otp');
+  btn.disabled = true; btn.textContent = 'Checking…';
+
+  const { data } = await sb.from('staff').select('id,name,phone,role,designation,department,active')
+    .eq('phone', phone).eq('active', true).single();
+
+  if (!data || !isFieldRole(data)) {
+    showToast('Number not found in field team roster');
+    btn.disabled = false; btn.textContent = 'Send OTP';
+    return;
+  }
+
+  // Generate 6-digit OTP (in prod: call edge function to send via SMS/WhatsApp)
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore[phone] = { otp, expires: Date.now() + 10*60*1000, staffId: data.id };
+  console.log(`[DEV] OTP for ${phone}: ${otp}`); // Remove in production
+
+  document.getElementById('otp-sent-msg').textContent = `OTP sent to +91 ${phone}`;
+  document.getElementById('login-phone-step').classList.add('hidden');
+  document.getElementById('login-otp-step').classList.remove('hidden');
+  document.querySelector('.otp-digit').focus();
+  btn.disabled = false; btn.textContent = 'Send OTP';
+  showToast(`OTP: ${otp}`, 6000); // Dev only — remove in prod
+};
+
+document.getElementById('btn-verify-otp').onclick = async () => {
+  const phone = document.getElementById('input-phone').value.trim().replace(/\D/g,'');
+  const digits = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('');
+  if (digits.length !== 6) { showToast('Enter the 6-digit OTP'); return; }
+
+  const record = otpStore[phone];
+  if (!record || record.otp !== digits || Date.now() > record.expires) {
+    showToast('Invalid or expired OTP'); return;
+  }
+
+  const { data } = await sb.from('staff').select('*').eq('id', record.staffId).single();
+  if (!data) { showToast('Staff record not found'); return; }
+
+  currentUser = data;
+  localStorage.setItem('vw_field_staff', JSON.stringify(data.id));
+  delete otpStore[phone];
+  await afterLogin();
+};
+
+document.getElementById('btn-resend-otp').onclick = () => {
+  document.getElementById('login-otp-step').classList.add('hidden');
+  document.getElementById('login-phone-step').classList.remove('hidden');
+};
+
+function initOtpInputs() {
+  const digits = document.querySelectorAll('.otp-digit');
+  digits.forEach((d, i) => {
+    d.addEventListener('input', () => {
+      if (d.value && i < digits.length - 1) digits[i+1].focus();
+    });
+    d.addEventListener('keydown', e => {
+      if (e.key === 'Backspace' && !d.value && i > 0) digits[i-1].focus();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════
+// POST-LOGIN
+// ══════════════════════════════════════════════
+async function afterLogin() {
+  showScreen('screen-app');
+  document.getElementById('hdr-name').textContent = currentUser.name;
+  document.getElementById('hdr-role').textContent = currentUser.designation || currentUser.role || 'Field';
+  document.getElementById('profile-name').textContent = currentUser.name;
+  document.getElementById('profile-desig').textContent = currentUser.designation || currentUser.role;
+  document.getElementById('profile-city').textContent = currentUser.city || 'Vijayawada';
+
+  await loadTodayData();
+  startLocationTracking();
+}
+
+async function loadTodayData() {
+  const today = new Date().toISOString().split('T')[0];
+  
+  // Today's attendance
+  const { data: att } = await sb.from('attendance')
+    .select('*').eq('staff_id', currentUser.id)
+    .gte('date', today + 'T00:00:00').lte('date', today + 'T23:59:59')
+    .single();
+  
+  if (att) {
+    currentAttendance = att;
+    const punchTime = new Date(att.date);
+    document.getElementById('punch-label').textContent = att.punch_out ? 'Day ended' : 'Punched in since';
+    document.getElementById('punch-time').textContent = punchTime.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+    const btn = document.getElementById('punch-btn');
+    if (att.punch_out) {
+      btn.textContent = 'Done ✓';
+      btn.className = 'punch-btn';
+      btn.style.background = 'var(--success-soft)';
+      btn.style.color = 'var(--success)';
+      btn.style.border = '1px solid var(--success)';
+      btn.onclick = null;
+    } else {
+      btn.textContent = 'Punch Out';
+      btn.className = 'punch-btn out';
+      btn.onclick = openPunchSheet;
+    }
+  }
+
+  // Today's visits
+  const { data: visits } = await sb.from('field_visits')
+    .select('*').eq('executive_id', currentUser.id.toString())
+    .gte('created_at', today + 'T00:00:00').order('created_at', {ascending:false});
+  
+  const count = visits?.length || 0;
+  document.getElementById('stat-visits').textContent = count;
+  const target = getDesignationTarget();
+  const pct = Math.min(100, Math.round(count / target * 100));
+  document.getElementById('visits-bar').style.width = pct + '%';
+  if (pct >= 100) document.getElementById('visits-bar').classList.add('success');
+  document.getElementById('stat-target').textContent = `Target: ${target}`;
+
+  renderVisitsList(visits || []);
+  renderAssignedList();
+  updateIncentiveTile(count, target);
+
+  // KM today
+  if (currentAttendance?.odo_in_reading) {
+    document.getElementById('stat-km').textContent = currentAttendance.km_travelled || '—';
+    document.getElementById('stat-fuel').textContent = currentAttendance.fuel_reimbursement ? `₹${currentAttendance.fuel_reimbursement}` : '—';
+  }
+}
+
+function getDesignationTarget() {
+  const desig = (currentUser.designation || currentUser.role || '').toLowerCase();
+  if (desig.includes('mapping')) return 25;
+  return 15;
+}
+
+function updateIncentiveTile(visits, target) {
+  const pct = Math.min(100, Math.round(visits / target * 100));
+  document.getElementById('incentive-bar').style.width = pct + '%';
+  if (pct < 60) {
+    document.getElementById('incentive-tier').textContent = 'Bronze track';
+    document.getElementById('incentive-tier').style.color = '#CD7F32';
+    document.getElementById('incentive-payout').textContent = 'Keep going';
+    document.getElementById('incentive-next').textContent = `${target - visits} more visits to hit target`;
+  } else if (pct < 100) {
+    document.getElementById('incentive-tier').textContent = '🥈 Silver track';
+    document.getElementById('incentive-payout').textContent = 'On track';
+    document.getElementById('incentive-next').textContent = `${target - visits} more to hit Gold`;
+  } else {
+    document.getElementById('incentive-tier').textContent = '🥇 Gold — Target Hit!';
+    document.getElementById('incentive-tier').style.color = 'var(--accent)';
+    document.getElementById('incentive-bar').classList.add('success');
+    document.getElementById('incentive-next').textContent = 'Outstanding work today!';
+  }
+}
+
+// ══════════════════════════════════════════════
+// VISIT LIST RENDER
+// ══════════════════════════════════════════════
+function renderVisitsList(visits) {
+  const el = document.getElementById('visits-list');
+  document.getElementById('visits-count-badge').textContent = `${visits.length} visits`;
+  if (!visits.length) {
+    el.innerHTML = '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:14px;">No visits yet today</div>';
+    return;
+  }
+  el.innerHTML = visits.map(v => `
+    <div class="visit-item" onclick="showVisitDetail(${v.id})">
+      <div class="visit-dot ${v.status === 'completed' ? '' : 'pending'}"></div>
+      <div class="visit-info">
+        <div class="visit-name">${v.customer_name || v.site_address || 'Site Visit'}</div>
+        <div class="visit-addr">${v.site_address || '—'}</div>
+        <div class="visit-meta">
+          <span>${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
+          ${v.visit_quality_score ? `<span>Quality: ${Math.round(v.visit_quality_score)}%</span>` : ''}
+        </div>
+      </div>
+      ${v.construction_stage ? `<div class="visit-stage">${stageLabel(v.construction_stage)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function renderAssignedList() {
+  const today = new Date().toISOString().split('T')[0];
+  const { data } = await sb.from('field_visit_assignments')
+    .select('*').eq('assigned_to_staff_id', currentUser.id)
+    .eq('scheduled_date', today).neq('status','completed').neq('status','cancelled')
+    .order('priority', {ascending: false}).limit(3);
+  
+  const el = document.getElementById('assigned-list');
+  if (!data?.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:13px;">No assignments for today</div>';
+    return;
+  }
+  el.innerHTML = data.map(a => `
+    <div class="visit-item" style="border-left: 3px solid ${a.priority==='urgent'?'var(--danger)':a.priority==='high'?'var(--warning)':'var(--border)'}">
+      <div class="visit-dot assigned"></div>
+      <div class="visit-info">
+        <div class="visit-name">${a.site_name || 'Site Visit'}</div>
+        <div class="visit-addr">${a.site_address || '—'}</div>
+        <div class="visit-meta"><span>${a.priority?.toUpperCase()}</span><span>${a.notes||''}</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function stageLabel(s) {
+  const map = {
+    foundation:'Foundation', structure:'Structure', brick_work:'Brick Work',
+    plastering:'Plastering', tiling_ready:'Tiling Ready',
+    tiling_in_progress:'Tiling', finishing:'Finishing', handover:'Handover', renovation:'Renovation'
+  };
+  return map[s] || s;
+}
+
+async function showVisitDetail(id) {
+  const { data: v } = await sb.from('field_visits').select('*').eq('id', id).single();
+  if (!v) return;
+  document.getElementById('vd-title').textContent = v.customer_name || 'Site Visit';
+  document.getElementById('vd-body').innerHTML = `
+    <div class="card card-accent">
+      <div class="flex-between">
+        <div style="font-size:13px;color:var(--text2);">Stage</div>
+        <div class="visit-stage">${stageLabel(v.construction_stage || '')}</div>
+      </div>
+      <div class="flex-between mt-8">
+        <div style="font-size:13px;color:var(--text2);">Quality score</div>
+        <div class="mono fw-700 text-accent">${v.visit_quality_score ? Math.round(v.visit_quality_score)+'%' : '—'}</div>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:6px;font-weight:600;margin-top:12px;">SITE ADDRESS</div>
+    <div style="font-size:14px;">${v.site_address || '—'}</div>
+    ${v.site_contacts?.length ? `
+      <div style="font-size:13px;color:var(--text2);margin:12px 0 6px;font-weight:600;">CONTACTS</div>
+      ${v.site_contacts.map(c => `
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border2);">
+          <div>
+            <div style="font-size:12px;color:var(--accent);">${c.role}</div>
+            <div style="font-weight:600;">${c.name}</div>
+          </div>
+          <a href="tel:${c.phone}" style="color:var(--success);font-size:13px;text-decoration:none;align-self:center;">📞 Call</a>
+        </div>
+      `).join('')}
+    ` : ''}
+    ${v.notes ? `
+      <div style="font-size:13px;color:var(--text2);margin:12px 0 6px;font-weight:600;">NOTES</div>
+      <div style="font-size:14px;color:var(--text);">${v.notes}</div>
+    ` : ''}
+    ${v.next_action_date ? `
+      <div class="alert-banner info mt-12">
+        <span>📅</span> <span>Follow-up: ${v.next_action_date}</span>
+      </div>
+    ` : ''}
+    ${v.ai_analysis ? renderAICard(v) : ''}
+    <button class="btn btn-secondary mt-16" onclick="openFollowupVisit(${v.id})">Log Follow-up Visit</button>
+    <button class="btn btn-primary mt-8" onclick="shareOnWhatsApp(${v.id})">📲 Share on WhatsApp</button>
+  `;
+  openSheet('sheet-visit-detail');
+}
+
+function renderAICard(v) {
+  if (!v.ai_requirements?.length) return '';
+  return `
+    <div class="ai-card mt-12">
+      <div class="ai-header">
+        <span>🤖</span><span class="ai-badge">AI ANALYSIS</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text3);">${v.ai_stage_detected||''}</span>
+      </div>
+      <div class="ai-req-list">${v.ai_requirements.map(r=>`<div class="ai-req-chip">${r}</div>`).join('')}</div>
+      ${v.ai_estimated_value_min ? `<div class="ai-value-range">₹${lakh(v.ai_estimated_value_min)}L – ₹${lakh(v.ai_estimated_value_max)}L</div>` : ''}
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════
+// PUNCH IN / OUT
+// ══════════════════════════════════════════════
+function openPunchSheet() {
+  if (!currentAttendance) {
+    document.getElementById('punch-sheet-title').textContent = 'Punch In — Start Day';
+    document.getElementById('punch-in-form').classList.remove('hidden');
+    document.getElementById('punch-out-form').classList.add('hidden');
+    getCurrentGPS(pos => {
+      lastLocation = pos;
+      document.getElementById('gps-status-text-in').textContent =
+        `Location: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+    });
+  } else if (!currentAttendance.punch_out) {
+    document.getElementById('punch-sheet-title').textContent = 'Punch Out — End Day';
+    document.getElementById('punch-in-form').classList.add('hidden');
+    document.getElementById('punch-out-form').classList.remove('hidden');
+  } else {
+    showToast('Day already ended'); return;
+  }
+  openSheet('sheet-punch');
+}
+
+async function doPunchIn() {
+  const selfie = document.getElementById('selfie-capture').files[0];
+  const odoIn = parseFloat(document.getElementById('odo-in').value);
+  const odoPhoto = document.getElementById('odo-in-capture').files[0];
+
+  if (!selfie) { showToast('Please take a selfie first'); return; }
+  if (!odoIn || isNaN(odoIn)) { showToast('Enter your odometer reading'); return; }
+  if (!odoPhoto) { showToast('Please photo your odometer'); return; }
+
+  const btn = document.getElementById('btn-do-punchin');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const now = new Date();
+    const selfieUrl = await uploadPhoto(selfie, `attendance/${currentUser.id}/${now.toISOString()}_selfie`);
+    const odoUrl = await uploadPhoto(odoPhoto, `attendance/${currentUser.id}/${now.toISOString()}_odo_in`);
+    const fuelRate = await getFuelRate();
+
+    const { data: att, error } = await sb.from('attendance').insert({
+      staff_id: currentUser.id,
+      date: now.toISOString(),
+      status: 'present',
+      punch_in: now.toTimeString().split(' ')[0],
+      check_in_lat: lastLocation?.coords?.latitude,
+      check_in_lng: lastLocation?.coords?.longitude,
+      check_in_selfie_url: selfieUrl,
+      odo_in_reading: odoIn,
+      odo_in_photo_url: odoUrl,
+      fuel_rate_used: fuelRate,
+      city: currentUser.city || 'Vijayawada'
+    }).select().single();
+
+    if (error) throw error;
+    currentAttendance = att;
+
+    // Update UI
+    document.getElementById('punch-label').textContent = 'Punched in since';
+    document.getElementById('punch-time').textContent = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    const pbtn = document.getElementById('punch-btn');
+    pbtn.textContent = 'Punch Out'; pbtn.className = 'punch-btn out';
+
+    closeSheet('sheet-punch');
+    showToast('✅ Punched in! Good luck today.');
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = 'Start Day';
+}
+
+async function doPunchOut() {
+  const odoOut = parseFloat(document.getElementById('odo-out').value);
+  const odoPhoto = document.getElementById('odo-out-capture').files[0];
+  if (!odoOut || isNaN(odoOut)) { showToast('Enter your final odometer reading'); return; }
+  if (!odoPhoto) { showToast('Please photo your odometer'); return; }
+
+  const btn = document.getElementById('btn-do-punchout');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const now = new Date();
+    const odoUrl = await uploadPhoto(odoPhoto, `attendance/${currentUser.id}/${now.toISOString()}_odo_out`);
+    const { error } = await sb.from('attendance').update({
+      punch_out: now.toTimeString().split(' ')[0],
+      odo_out_reading: odoOut,
+      odo_out_photo_url: odoUrl,
+      updated_at: now.toISOString()
+    }).eq('id', currentAttendance.id);
+    if (error) throw error;
+
+    const km = odoOut - (currentAttendance.odo_in_reading || 0);
+    const fuel = km * (currentAttendance.fuel_rate_used || 2.5);
+    closeSheet('sheet-punch');
+    showToast(`✅ Day ended! ${km} km · ₹${fuel.toFixed(0)} fuel`);
+    await loadTodayData();
+  } catch(e) { showToast('Error: ' + e.message); }
+  btn.disabled = false; btn.textContent = 'End Day';
+}
+
+function initOdoLiveCalc() {
+  document.getElementById('odo-out').addEventListener('input', () => {
+    const out = parseFloat(document.getElementById('odo-out').value);
+    const inn = currentAttendance?.odo_in_reading || 0;
+    if (out && inn && out > inn) {
+      const km = out - inn;
+      const rate = currentAttendance?.fuel_rate_used || 2.5;
+      document.getElementById('fuel-km-calc').textContent = km + ' km';
+      document.getElementById('fuel-rs-calc').textContent = '₹' + (km * rate).toFixed(0);
+      document.getElementById('fuel-preview-card').style.display = '';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+// VISIT FORM — MULTI-STEP
+// ══════════════════════════════════════════════
+function openNewVisitSheet() {
+  if (!currentAttendance) {
+    showToast('Please punch in first to log visits'); return;
+  }
+  resetVisitForm();
+  document.getElementById('visit-sheet-title').textContent = 'Log Site Visit';
+  openSheet('sheet-visit');
+}
+
+function resetVisitForm() {
+  visitContacts = [];
+  visitPhotos = [];
+  visitPinLat = null; visitPinLng = null;
+  visitProjectType = null; visitCompetitors = [];
+  visitCurrentStep = 1;
+  photoCounter = 0;
+  document.getElementById('vs-site-name').value = '';
+  document.getElementById('vs-area').value = '';
+  document.getElementById('vs-city').value = currentUser.city || 'Vijayawada';
+  document.getElementById('vs-stage').value = '';
+  document.getElementById('vs-sqft').value = '';
+  document.getElementById('vs-value').value = '';
+  document.getElementById('vs-notes').value = '';
+  document.getElementById('vs-referral').value = '';
+  document.getElementById('vs-followup').value = '';
+  document.getElementById('contacts-list').innerHTML = '';
+  document.getElementById('site-photo-grid').innerHTML = '';
+  document.getElementById('ai-result-area').classList.add('hidden');
+  document.getElementById('visit-pin-info').classList.add('hidden');
+  document.querySelectorAll('#project-type-chips .chip').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('#competitor-chips .chip').forEach(c=>c.classList.remove('selected'));
+  visitNextStep(1, true);
+  addPhotoSlot();
+  // Set default followup to tomorrow
+  const tmr = new Date(); tmr.setDate(tmr.getDate()+1);
+  document.getElementById('vs-followup').value = tmr.toISOString().split('T')[0];
+}
+
+function visitNextStep(step, silent) {
+  const valid = silent || validateStep(visitCurrentStep);
+  if (!valid) return;
+  [1,2,3,4].forEach(s => {
+    document.getElementById(`visit-step-${s}`).classList.toggle('hidden', s !== step);
+    document.querySelector(`.step-dot[data-step="${s}"]`).style.background = s <= step ? 'var(--accent)' : 'var(--border)';
+  });
+  visitCurrentStep = step;
+  document.querySelector('.sheet-body').scrollTop = 0;
+}
+
+function validateStep(step) {
+  if (step === 1) {
+    if (!visitPinLat) { showToast('Please pin the site location on map'); return false; }
+    if (!document.getElementById('vs-area').value.trim()) { showToast('Enter the area / locality'); return false; }
+    return true;
+  }
+  if (step === 2) {
+    if (!document.getElementById('vs-stage').value) { showToast('Select construction stage'); return false; }
+    return true;
+  }
+  if (step === 3) {
+    if (!document.getElementById('vs-followup').value) { showToast('Set a follow-up date'); return false; }
+    return true;
+  }
+  return true;
+}
+
+function initChips() {
+  document.getElementById('project-type-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    document.querySelectorAll('#project-type-chips .chip').forEach(c=>c.classList.remove('selected'));
+    chip.classList.add('selected');
+    visitProjectType = chip.dataset.val;
+  });
+  document.getElementById('competitor-chips').addEventListener('click', e => {
+    const chip = e.target.closest('.chip'); if (!chip) return;
+    chip.classList.toggle('selected');
+    visitCompetitors = [...document.querySelectorAll('#competitor-chips .chip.selected')].map(c=>c.dataset.val);
+  });
+}
+
+// ── Contacts ──
+function addContact(role) {
+  const id = Date.now();
+  visitContacts.push({ id, role, name:'', phone:'', whatsapp:'' });
+  renderContactsList();
+}
+
+function renderContactsList() {
+  document.getElementById('contacts-list').innerHTML = visitContacts.map(c => `
+    <div class="contact-row" id="contact-${c.id}">
+      <div class="contact-role-tag">${c.role}</div>
+      <button class="contact-del" onclick="removeContact(${c.id})">✕</button>
+      <div class="contact-fields">
+        <input class="form-input" style="font-size:13px;padding:9px 10px;" placeholder="Name"
+               value="${c.name}" oninput="updateContact(${c.id},'name',this.value)">
+        <input class="form-input" style="font-size:13px;padding:9px 10px;" placeholder="Phone" 
+               type="tel" inputmode="numeric" maxlength="10"
+               value="${c.phone}" oninput="updateContact(${c.id},'phone',this.value)">
+      </div>
+      <input class="form-input" style="font-size:13px;padding:9px 10px;margin-top:6px;" placeholder="WhatsApp (if different)"
+             type="tel" inputmode="numeric" maxlength="10"
+             value="${c.whatsapp}" oninput="updateContact(${c.id},'whatsapp',this.value)">
+    </div>
+  `).join('');
+}
+
+function updateContact(id, field, val) {
+  const c = visitContacts.find(x => x.id === id);
+  if (c) c[field] = val;
+}
+function removeContact(id) {
+  visitContacts = visitContacts.filter(x => x.id !== id);
+  renderContactsList();
+}
+
+// ── Photos ──
+function addPhotoSlot() {
+  const grid = document.getElementById('site-photo-grid');
+  const id = ++photoCounter;
+  const slot = document.createElement('div');
+  slot.className = 'photo-slot';
+  slot.id = `photo-slot-${id}`;
+  slot.innerHTML = `
+    <span class="photo-icon">📷</span>
+    <span class="photo-label">Tap to capture</span>
+    <input type="file" id="photo-input-${id}" accept="image/*" capture="environment"
+           onchange="handlePhotoCapture(${id}, this)">
+  `;
+  slot.onclick = () => document.getElementById(`photo-input-${id}`).click();
+  grid.appendChild(slot);
+}
+
+function handlePhotoCapture(id, input) {
+  const file = input.files[0]; if (!file) return;
+  const slot = document.getElementById(`photo-slot-${id}`);
+  const url = URL.createObjectURL(file);
+  slot.innerHTML = `
+    <img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;">
+    <div class="photo-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;" 
+         onmouseenter="this.style.opacity=1" onmouseleave="this.style.opacity=0">
+      <span onclick="removePhotoSlot(${id})" style="font-size:24px;cursor:pointer;">🗑️</span>
+    </div>
+  `;
+  visitPhotos.push({ slotId: id, file, url });
+}
+
+function removePhotoSlot(id) {
+  document.getElementById(`photo-slot-${id}`)?.remove();
+  visitPhotos = visitPhotos.filter(p => p.slotId !== id);
+}
+
+// ── Location for visit map ──
+function getCurrentLocationForVisit() {
+  getCurrentGPS(pos => {
+    visitPinLat = pos.coords.latitude;
+    visitPinLng = pos.coords.longitude;
+    document.getElementById('visit-pin-info').classList.remove('hidden');
+    document.getElementById('visit-pin-addr').textContent = 
+      `${visitPinLat.toFixed(5)}, ${visitPinLng.toFixed(5)} (GPS)`;
+    document.getElementById('visit-map').innerHTML = `
+      <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;color:var(--success);">
+        <div style="font-size:32px;">📍</div>
+        <div style="font-size:13px;">Location captured</div>
+        <div style="font-size:11px;color:var(--text3);">${visitPinLat.toFixed(4)}, ${visitPinLng.toFixed(4)}</div>
+      </div>
+    `;
+  }, () => showToast('Could not get location — check GPS permissions'));
+}
+
+// ── Submit visit ──
+async function submitVisit() {
+  if (!visitPhotos.length) { showToast('Add at least 1 site photo'); return; }
+  const btn = document.getElementById('btn-submit-visit');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    // Upload photos
+    const photoUrls = [];
+    for (const p of visitPhotos) {
+      const url = await uploadPhoto(p.file, `field_visits/${currentUser.id}/${Date.now()}_${p.slotId}`);
+      photoUrls.push({ slotId: p.slotId, url });
+    }
+
+    const desig = currentUser.designation || currentUser.role || 'Field Executive';
+    const visitData = {
+      executive_id: currentUser.id.toString(),
+      executive_name: currentUser.name,
+      site_address: `${document.getElementById('vs-area').value}, ${document.getElementById('vs-city').value}`,
+      site_lat: visitPinLat, site_lng: visitPinLng,
+      customer_name: document.getElementById('vs-site-name').value || null,
+      check_in_at: new Date().toISOString(),
+      check_in_lat: visitPinLat, check_in_lng: visitPinLng,
+      status: 'completed',
+      city: document.getElementById('vs-city').value,
+      construction_stage: document.getElementById('vs-stage').value,
+      project_type: visitProjectType,
+      estimated_sqft: parseFloat(document.getElementById('vs-sqft').value) || null,
+      estimated_value: parseFloat(document.getElementById('vs-value').value) || null,
+      site_contacts: visitContacts.filter(c => c.name || c.phone),
+      site_photos: photoUrls,
+      competitor_products: visitCompetitors,
+      notes: document.getElementById('vs-notes').value,
+      referral_source: document.getElementById('vs-referral').value,
+      next_action_date: document.getElementById('vs-followup').value,
+      next_action: 'follow_up',
+      designation_at_visit: desig,
+      visit_type: desig.toLowerCase().includes('mapping') ? 'mapping' : desig.toLowerCase().includes('team leader') ? 'tl' : 'field_exec',
+      visit_quality_score: computeQualityScore()
+    };
+
+    const { data: visit, error } = await sb.from('field_visits').insert(visitData).select().single();
+    if (error) throw error;
+
+    showToast('✅ Visit saved!');
+
+    // AI analysis (async, non-blocking)
+    if (photoUrls.length > 0) {
+      btn.textContent = '🤖 Analysing…';
+      runAIAnalysis(visit.id, photoUrls.map(p=>p.url), visitData);
+    } else {
+      closeSheet('sheet-visit');
+      await loadTodayData();
+    }
+  } catch(e) {
+    showToast('Error: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Submit Visit';
+  }
+}
+
+function computeQualityScore() {
+  let score = 0;
+  if (visitPinLat) score += 20;
+  if (document.getElementById('vs-stage').value) score += 20;
+  if (visitContacts.filter(c=>c.phone).length >= 1) score += 20;
+  if (visitPhotos.length >= 2) score += 20;
+  if (document.getElementById('vs-followup').value) score += 10;
+  if (document.getElementById('vs-notes').value.length > 20) score += 10;
+  return score;
+}
+
+// ── AI Analysis ──
+async function runAIAnalysis(visitId, photoUrls, visitData) {
+  const btn = document.getElementById('btn-submit-visit');
+  try {
+    const prompt = `You are a construction site analyst for V Wholesale, a building materials retailer in India.
+Analyse these site photos and provide a structured JSON response ONLY (no other text):
+{
+  "stage_detected": "one of: foundation/structure/brick_work/plastering/tiling_ready/tiling_in_progress/finishing/handover/renovation",
+  "requirements": ["list of materials needed, e.g. Tiles, Granite, Sanitaryware, Paint, Plywood, Waterproofing, CP Fittings, Electrical Wires, PVC Pipes"],
+  "estimated_value_min": <number in INR>,
+  "estimated_value_max": <number in INR>,
+  "estimated_sqft": <number or null>,
+  "suggestion": "2-3 sentence actionable suggestion for the field sales rep"
+}
+Site context: Stage selected by rep: ${visitData.construction_stage || 'unknown'}, Project type: ${visitData.project_type || 'unknown'}, Area: ${visitData.estimated_sqft || 'unknown'} sqft`;
+
+    // Call vision API via our edge function proxy
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-site-analysis`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
+      body: JSON.stringify({ visitId, photoUrls, prompt })
+    });
+    
+    if (!res.ok) throw new Error('AI service error');
+    const ai = await res.json();
+
+    // Update visit with AI results
+    await sb.from('field_visits').update({
+      ai_analysis: ai,
+      ai_stage_detected: ai.stage_detected,
+      ai_requirements: ai.requirements,
+      ai_estimated_value_min: ai.estimated_value_min,
+      ai_estimated_value_max: ai.estimated_value_max,
+      ai_product_suggestions: []
+    }).eq('id', visitId);
+
+    // Show AI result in form
+    document.getElementById('ai-result-area').classList.remove('hidden');
+    document.getElementById('ai-req-chips').innerHTML = (ai.requirements||[]).map(r=>`<div class="ai-req-chip">${r}</div>`).join('');
+    document.getElementById('ai-value-range').textContent = ai.estimated_value_min ? 
+      `₹${lakh(ai.estimated_value_min)}L – ₹${lakh(ai.estimated_value_max)}L` : '—';
+    document.getElementById('ai-stage-detected').textContent = ai.stage_detected || '';
+    document.getElementById('ai-suggestion-text').textContent = ai.suggestion || '';
+
+    btn.textContent = 'Done ✓'; btn.disabled = true;
+    setTimeout(async () => {
+      closeSheet('sheet-visit');
+      await loadTodayData();
+    }, 3000);
+  } catch(e) {
+    closeSheet('sheet-visit');
+    await loadTodayData();
+  }
+}
+
+async function openFollowupVisit(parentId) {
+  closeSheet('sheet-visit-detail');
+  const { data: parent } = await sb.from('field_visits').select('*').eq('id', parentId).single();
+  if (!parent) return;
+  resetVisitForm();
+  // Pre-fill from parent
+  if (parent.site_lat) { visitPinLat = parent.site_lat; visitPinLng = parent.site_lng; }
+  if (parent.site_contacts) { visitContacts = parent.site_contacts.map(c=>({...c, id: Date.now()+Math.random()})); renderContactsList(); }
+  document.getElementById('vs-area').value = parent.site_address || '';
+  document.getElementById('vs-city').value = parent.city || '';
+  document.getElementById('vs-stage').value = parent.construction_stage || '';
+  document.getElementById('vs-site-name').value = parent.customer_name || '';
+  document.getElementById('visit-sheet-title').textContent = 'Follow-up Visit';
+  // Mark pin as captured
+  if (visitPinLat) {
+    document.getElementById('visit-pin-info').classList.remove('hidden');
+    document.getElementById('visit-pin-addr').textContent = `Revisiting: ${parent.site_address}`;
+    document.getElementById('visit-map').innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;color:var(--success);flex-direction:column;gap:4px;"><div style="font-size:32px;">📍</div><div style="font-size:13px;">Previous location reused</div></div>`;
+  }
+  openSheet('sheet-visit');
+}
+
+// ══════════════════════════════════════════════
+// LOCATION TRACKING
+// ══════════════════════════════════════════════
+function startLocationTracking() {
+  if (!navigator.geolocation) return;
+  
+  // Initial ping
+  pingLocation();
+  
+  // Interval ping every 2 min
+  locPingTimer = setInterval(pingLocation, LOC_INTERVAL_MS);
+}
+
+function pingLocation() {
+  if (!currentUser || !currentAttendance || currentAttendance.punch_out) return;
+  getCurrentGPS(async pos => {
+    lastLocation = pos;
+    const speed = pos.coords.speed ? pos.coords.speed * 3.6 : null; // m/s to km/h
+    await sb.from('field_location_log').insert({
+      staff_id: currentUser.id,
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      accuracy_m: pos.coords.accuracy,
+      battery_pct: null, // Battery API deprecated, skip
+      is_moving: speed ? speed > 2 : null,
+      speed_kmh: speed,
+      recorded_at: new Date().toISOString(),
+      city: currentUser.city || 'Vijayawada',
+      attendance_id: currentAttendance?.id
+    });
+  }, () => {}); // Silently fail — don't bother user
+}
+
+function stopLocationTracking() {
+  if (locPingTimer) clearInterval(locPingTimer);
+  if (locationWatcher) navigator.geolocation.clearWatch(locationWatcher);
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function getCurrentGPS(success, fail) {
+  navigator.geolocation.getCurrentPosition(success, fail || (()=>{}), {
+    enableHighAccuracy: true, timeout: 10000, maximumAge: 60000
+  });
+}
+
+async function uploadPhoto(file, path) {
+  if (!file) return null;
+  // Compress before upload
+  const compressed = await compressImage(file, 0.7, 1200);
+  const { data, error } = await sb.storage.from('field-media').upload(
+    path + '.jpg', compressed, { contentType: 'image/jpeg', upsert: true }
+  );
+  if (error) throw error;
+  const { data: urlData } = sb.storage.from('field-media').getPublicUrl(path + '.jpg');
+  return urlData.publicUrl;
+}
+
+function compressImage(file, quality, maxWidth) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxWidth / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
+function capturePhoto(inputId, previewId) {
+  document.getElementById(inputId).click();
+}
+
+function previewPhoto(input, previewId, placeholderId) {
+  const file = input.files[0]; if (!file) return;
+  const preview = document.getElementById(previewId);
+  const placeholder = document.getElementById(placeholderId);
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  if (placeholder) placeholder.style.display = 'none';
+}
+
+async function getFuelRate() {
+  const desig = currentUser.designation || currentUser.role || 'Field Executive';
+  const { data } = await sb.from('field_incentive_rules')
+    .select('fuel_rate_per_km').eq('designation', desig).single();
+  return data?.fuel_rate_per_km || 2.5;
+}
+
+function shareOnWhatsApp(visitId) {
+  const url = `https://wa.me/?text=${encodeURIComponent(`V Wholesale Field Visit Report — ${currentUser.name}\nDate: ${new Date().toLocaleDateString('en-IN')}\nFor more details contact your V Wholesale representative.`)}`;
+  window.open(url, '_blank');
+}
+
+function lakh(n) { return n ? (n / 100000).toFixed(1) : '—'; }
+
+async function signOut() {
+  stopLocationTracking();
+  currentUser = null; currentAttendance = null;
+  localStorage.removeItem('vw_field_staff');
+  showScreen('screen-login');
+  document.getElementById('input-phone').value = '';
+  document.getElementById('login-otp-step').classList.add('hidden');
+  document.getElementById('login-phone-step').classList.remove('hidden');
+}
+
+// ══════════════════════════════════════════════
+// UI UTILS
+// ══════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function showTab(tab) {
+  ['home','visits','map','profile'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
+    document.querySelector(`.nav-item[data-tab="${t}"]`)?.classList.toggle('active', t === tab);
+  });
+}
+
+function openSheet(id) { document.getElementById(id).classList.add('open'); }
+function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+
+document.querySelectorAll('.sheet-backdrop').forEach(b => {
+  b.addEventListener('click', e => { if (e.target === b) b.classList.remove('open'); });
+});
+
+let toastTimer;
+function showToast(msg, duration=3000) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.transform = 'translateY(0)'; t.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    t.style.transform = 'translateY(20px)'; t.style.opacity = '0';
+  }, duration);
+}
+
+function initClockTick() {
+  const update = () => {
+    const now = new Date();
+    document.getElementById('hdr-time').textContent = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  };
+  update();
+  setInterval(update, 30000);
+}
+</script>
+</body>
+</html>
