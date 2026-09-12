@@ -800,27 +800,97 @@ input[type=file] { display: none; }
           </div>
         </div>
 
+        <!-- SqFt: Room Count Method -->
         <div class="form-group">
-          <label class="form-label">Estimated area (sq ft)</label>
-          <input class="form-input mono" id="vs-sqft" type="number" inputmode="numeric" placeholder="e.g. 2400">
+          <label class="form-label">Rooms on site <span style="font-size:10px;color:var(--text3);font-weight:400">(helps estimate area)</span></label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;" id="room-count-grid">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Bedrooms</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="adjRoom('beds',-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">−</button>
+                <span id="room-beds" style="font-size:18px;font-weight:700;min-width:20px;text-align:center;">0</span>
+                <button onclick="adjRoom('beds',1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">+</button>
+              </div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Bathrooms</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="adjRoom('baths',-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">−</button>
+                <span id="room-baths" style="font-size:18px;font-weight:700;min-width:20px;text-align:center;">0</span>
+                <button onclick="adjRoom('baths',1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">+</button>
+              </div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Floors</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <button onclick="adjRoom('floors',-1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">−</button>
+                <span id="room-floors" style="font-size:18px;font-weight:700;min-width:20px;text-align:center;">1</span>
+                <button onclick="adjRoom('floors',1)" style="width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:16px;cursor:pointer;">+</button>
+              </div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px;">
+              <div style="font-size:11px;color:var(--text2);margin-bottom:6px;">Plot size</div>
+              <input class="form-input" id="room-plot" type="text" placeholder="e.g. 30×40" style="padding:4px 8px;font-size:13px;margin:0;" oninput="calcSqft()">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;" id="room-extras">
+            <div class="chip" data-room="living" onclick="toggleRoomExtra(this)">Living room</div>
+            <div class="chip" data-room="kitchen" onclick="toggleRoomExtra(this)">Kitchen</div>
+            <div class="chip" data-room="pooja" onclick="toggleRoomExtra(this)">Pooja room</div>
+            <div class="chip" data-room="parking" onclick="toggleRoomExtra(this)">Parking</div>
+            <div class="chip" data-room="terrace" onclick="toggleRoomExtra(this)">Terrace</div>
+            <div class="chip" data-room="balcony" onclick="toggleRoomExtra(this)">Balcony</div>
+          </div>
+        </div>
+
+        <!-- SqFt estimate display -->
+        <div id="sqft-estimate-box" style="display:none;background:var(--accent-soft);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:16px;">
+          <div style="font-size:11px;color:var(--accent);font-weight:600;margin-bottom:2px;">ESTIMATED AREA</div>
+          <div style="font-size:20px;font-weight:700;color:var(--text);" id="sqft-estimate-val">—</div>
+          <div style="font-size:11px;color:var(--text3);" id="sqft-estimate-method">Based on room count</div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Estimated project value (₹)</label>
-          <input class="form-input mono" id="vs-value" type="number" inputmode="numeric" placeholder="e.g. 1500000">
+          <label class="form-label">Or enter exact sqft if known</label>
+          <input class="form-input mono" id="vs-sqft" type="number" inputmode="numeric" placeholder="Leave blank to use estimate above">
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Competitor & Customer Requirements — full rethink -->
+        <div class="form-group">
+          <label class="form-label">Competitor materials on site</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input class="form-input" id="competitor-text" type="text" placeholder="Type brand name (e.g. Orient, Nitco, Jaquar…)" style="flex:1;">
+            <button onclick="addCompetitorEntry()" style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;white-space:nowrap;font-size:13px;">Add</button>
+          </div>
+          <div id="competitor-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Competitor materials spotted</label>
-          <div class="chip-row" id="competitor-chips">
-            <div class="chip" data-val="kajaria">Kajaria</div>
-            <div class="chip" data-val="asian_paints">Asian Paints</div>
-            <div class="chip" data-val="berger">Berger</div>
-            <div class="chip" data-val="somany">Somany</div>
-            <div class="chip" data-val="johnson">Johnson</div>
-            <div class="chip" data-val="hindware">Hindware</div>
-            <div class="chip" data-val="cera">Cera</div>
-            <div class="chip" data-val="polycab">Polycab</div>
+          <label class="form-label">Has customer decided on any brand?</label>
+          <div style="display:flex;flex-direction:column;gap:8px;" id="decided-brands-list"></div>
+          <button onclick="addDecidedBrand()" class="add-contact-btn" style="margin-top:8px;">+ Add decided brand</button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">What does customer need? <span style="font-size:10px;color:var(--text3)">(select all — flags relevant departments)</span></label>
+          <div class="chip-row" id="customer-req-chips">
+            <div class="chip" data-req="Tiles" data-dept="Tiles">Tiles / Granite / Marble</div>
+            <div class="chip" data-req="Sanitaryware" data-dept="Sanitaryware">Sanitaryware / CP Fittings</div>
+            <div class="chip" data-req="Paints" data-dept="Paints">Paints</div>
+            <div class="chip" data-req="Plywood" data-dept="Plywood">Plywood / Laminates</div>
+            <div class="chip" data-req="Pipes" data-dept="Pipes">PVC Pipes</div>
+            <div class="chip" data-req="Electrical" data-dept="Electrical">Electrical Wires</div>
+            <div class="chip" data-req="Waterproofing" data-dept="Waterproofing">Waterproofing</div>
+            <div class="chip" data-req="Interior" data-dept="Interior" style="border-color:var(--warning);">🎨 Interior Design</div>
+            <div class="chip" data-req="Construction" data-dept="Projects" style="border-color:var(--warning);">🏗️ Full Construction</div>
+            <div class="chip" data-req="Architect" data-dept="Projects" style="border-color:var(--warning);">📐 Architect / Drawing</div>
+            <div class="chip" data-req="Modular" data-dept="Furniture" style="border-color:var(--warning);">🪑 Modular Kitchen</div>
+            <div class="chip" data-req="FalseCeiling" data-dept="Vendor" style="border-color:var(--warning);">🏠 False Ceiling</div>
+          </div>
+          <div id="dept-flag-notice" style="display:none;margin-top:10px;padding:8px 12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;font-size:12px;color:#FBBF24;">
+            ⚡ Tasks will be created for: <span id="dept-flag-list"></span>
           </div>
         </div>
 
@@ -871,7 +941,10 @@ input[type=file] { display: none; }
 
       <!-- STEP 4: Photos + Submit -->
       <div id="visit-step-4" class="hidden">
-        <div style="font-size:16px;font-weight:700;margin-bottom:6px;">📸 Site Photos</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="font-size:16px;font-weight:700;">📸 Site Photos</div>
+          <button onclick="showQualityBreakdown()" style="font-size:12px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:600;" id="quality-score-btn">Quality: —%</button>
+        </div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Minimum 1 required. Capture what you see — the AI will analyse it.</div>
 
         <div class="photo-grid" id="site-photo-grid">
@@ -1549,9 +1622,26 @@ function resetVisitForm() {
   visitContacts = [];
   visitPhotos = [];
   visitPinLat = null; visitPinLng = null;
-  visitProjectType = null; visitCompetitors = [];
+  visitProjectType = null;
   visitCurrentStep = 1;
   photoCounter = 0;
+  competitorEntries = [];
+  decidedBrands = [];
+  customerRequirements = [];
+  deptFlags = [];
+  roomCounts.beds = 0; roomCounts.baths = 0; roomCounts.floors = 1;
+  roomExtras.clear();
+  renderCompetitorList();
+  renderDecidedBrands();
+  document.getElementById('competitor-text').value = '';
+  document.getElementById('room-plot').value = '';
+  document.getElementById('sqft-estimate-box').style.display = 'none';
+  document.getElementById('dept-flag-notice').style.display = 'none';
+  document.querySelectorAll('#room-extras .chip').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('#customer-req-chips .chip').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('room-beds').textContent = '0';
+  document.getElementById('room-baths').textContent = '0';
+  document.getElementById('room-floors').textContent = '1';
   document.getElementById('vs-site-name').value = '';
   document.getElementById('vs-area').value = '';
   document.getElementById('vs-city').value = currentUser.city || 'Vijayawada';
@@ -1602,6 +1692,116 @@ function validateStep(step) {
   return true;
 }
 
+// ── Room counters ──
+const roomCounts = { beds: 0, baths: 0, floors: 1 };
+const roomExtras = new Set();
+
+function adjRoom(key, delta) {
+  roomCounts[key] = Math.max(key === 'floors' ? 1 : 0, (roomCounts[key] || 0) + delta);
+  document.getElementById(`room-${key}`).textContent = roomCounts[key];
+  calcSqft();
+}
+
+function toggleRoomExtra(el) {
+  el.classList.toggle('selected');
+  const r = el.dataset.room;
+  roomExtras.has(r) ? roomExtras.delete(r) : roomExtras.add(r);
+  calcSqft();
+}
+
+function calcSqft() {
+  const beds = roomCounts.beds, baths = roomCounts.baths, floors = roomCounts.floors;
+  const plotRaw = document.getElementById('room-plot').value.trim();
+  let est = null, method = '';
+
+  // Method 1: plot × floors
+  if (plotRaw) {
+    const parts = plotRaw.toLowerCase().replace('x','×').split('×').map(p => parseFloat(p.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      est = Math.round(parts[0] * parts[1] * floors * 0.6);
+      method = `${plotRaw} plot × ${floors} floor(s) × 0.6 ratio`;
+    }
+  }
+
+  // Method 2: room count estimate
+  if (!est && beds > 0) {
+    const basePerBed = 350; // sqft per bedroom (Indian standard)
+    const base = beds * basePerBed;
+    const extras = (roomExtras.has('living') ? 200 : 0) +
+                   (roomExtras.has('kitchen') ? 120 : 0) +
+                   (roomExtras.has('parking') ? 100 : 0) +
+                   (roomExtras.has('terrace') ? 150 : 0) +
+                   (roomExtras.has('pooja') ? 40 : 0) +
+                   (roomExtras.has('balcony') ? 60 : 0);
+    est = (base + extras) * floors;
+    method = `${beds} BHK + extras × ${floors} floor(s)`;
+  }
+
+  if (est) {
+    document.getElementById('sqft-estimate-box').style.display = '';
+    document.getElementById('sqft-estimate-val').textContent = `~${est.toLocaleString('en-IN')} sqft`;
+    document.getElementById('sqft-estimate-method').textContent = method;
+  }
+}
+
+// ── Competitor entries ──
+let competitorEntries = [];
+function addCompetitorEntry() {
+  const val = document.getElementById('competitor-text').value.trim();
+  if (!val) return;
+  competitorEntries.push(val);
+  document.getElementById('competitor-text').value = '';
+  renderCompetitorList();
+}
+function renderCompetitorList() {
+  document.getElementById('competitor-list').innerHTML = competitorEntries.map((e, i) => `
+    <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);
+         border-radius:20px;padding:4px 10px;font-size:12px;">
+      <span>${e}</span>
+      <span onclick="competitorEntries.splice(${i},1);renderCompetitorList();" 
+            style="cursor:pointer;color:var(--text3);font-size:14px;">✕</span>
+    </div>`).join('');
+}
+// Allow Enter key to add
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('competitor-text')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addCompetitorEntry(); }
+  });
+});
+
+// ── Decided brands ──
+let decidedBrands = [];
+function addDecidedBrand() {
+  const id = Date.now();
+  decidedBrands.push({ id, category: '', brand: '' });
+  renderDecidedBrands();
+}
+function renderDecidedBrands() {
+  document.getElementById('decided-brands-list').innerHTML = decidedBrands.map(b => `
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select class="form-select" style="flex:1;padding:9px 10px;font-size:13px;"
+              onchange="updateBrand(${b.id},'category',this.value)">
+        <option value="">Category…</option>
+        <option value="Tiles">Tiles</option><option value="Granite">Granite</option>
+        <option value="Sanitaryware">Sanitaryware</option><option value="CP Fittings">CP Fittings</option>
+        <option value="Paints">Paints</option><option value="Plywood">Plywood</option>
+        <option value="Pipes">Pipes</option><option value="Electrical">Electrical</option>
+      </select>
+      <input class="form-input" style="flex:1;padding:9px 10px;font-size:13px;" placeholder="Brand name"
+             value="${b.brand}" oninput="updateBrand(${b.id},'brand',this.value)">
+      <button onclick="decidedBrands=decidedBrands.filter(x=>x.id!==${b.id});renderDecidedBrands();"
+              style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;">✕</button>
+    </div>`).join('');
+}
+function updateBrand(id, field, val) {
+  const b = decidedBrands.find(x => x.id === id);
+  if (b) b[field] = val;
+}
+
+// ── Customer requirements chips ──
+let customerRequirements = [];
+let deptFlags = [];
+
 function initChips() {
   document.getElementById('project-type-chips').addEventListener('click', e => {
     const chip = e.target.closest('.chip'); if (!chip) return;
@@ -1609,10 +1809,22 @@ function initChips() {
     chip.classList.add('selected');
     visitProjectType = chip.dataset.val;
   });
-  document.getElementById('competitor-chips').addEventListener('click', e => {
+
+  document.getElementById('customer-req-chips').addEventListener('click', e => {
     const chip = e.target.closest('.chip'); if (!chip) return;
     chip.classList.toggle('selected');
-    visitCompetitors = [...document.querySelectorAll('#competitor-chips .chip.selected')].map(c=>c.dataset.val);
+    customerRequirements = [...document.querySelectorAll('#customer-req-chips .chip.selected')].map(c => c.dataset.req);
+    deptFlags = [...new Set([...document.querySelectorAll('#customer-req-chips .chip.selected')].map(c => c.dataset.dept))];
+    // Show dept flag notice
+    const specialDepts = ['Interior','Projects','Furniture','Vendor'];
+    const flagged = deptFlags.filter(d => specialDepts.includes(d));
+    const notice = document.getElementById('dept-flag-notice');
+    if (flagged.length) {
+      notice.style.display = '';
+      document.getElementById('dept-flag-list').textContent = flagged.join(', ');
+    } else {
+      notice.style.display = 'none';
+    }
   });
 }
 
@@ -1670,6 +1882,12 @@ function addPhotoSlot() {
 
 function handlePhotoCapture(id, input) {
   const file = input.files[0]; if (!file) return;
+  // Update quality score display
+  setTimeout(() => {
+    const { score } = computeQualityScore();
+    const btn = document.getElementById('quality-score-btn');
+    if (btn) { btn.textContent = `Quality: ${score}%`; btn.style.color = score >= 100 ? 'var(--success)' : score >= 60 ? 'var(--accent)' : 'var(--danger)'; }
+  }, 100);
   const slot = document.getElementById(`photo-slot-${id}`);
   const url = URL.createObjectURL(file);
   slot.innerHTML = `
@@ -1732,28 +1950,40 @@ async function submitVisit() {
       city: document.getElementById('vs-city').value,
       construction_stage: document.getElementById('vs-stage').value,
       project_type: visitProjectType,
-      estimated_sqft: parseFloat(document.getElementById('vs-sqft').value) || null,
+      estimated_sqft: parseFloat(document.getElementById('vs-sqft').value) || estimateSqft() || null,
       estimated_value: parseFloat(document.getElementById('vs-value').value) || null,
       site_contacts: visitContacts.filter(c => c.name || c.phone),
       site_photos: photoUrls,
-      competitor_products: visitCompetitors,
+      competitor_products: competitorEntries,
+      competitor_details: decidedBrands.filter(b => b.category || b.brand),
+      customer_requirements: customerRequirements,
+      dept_flags: deptFlags,
+      room_count: { beds: roomCounts.beds, baths: roomCounts.baths, floors: roomCounts.floors, extras: [...roomExtras] },
+      plot_size: document.getElementById('room-plot').value.trim() || null,
       notes: document.getElementById('vs-notes').value,
       referral_source: document.getElementById('vs-referral').value,
       next_action_date: document.getElementById('vs-followup').value,
       next_action: 'follow_up',
       designation_at_visit: desig,
       visit_type: desig.toLowerCase().includes('mapping') ? 'mapping' : desig.toLowerCase().includes('team leader') ? 'tl' : 'field_exec',
-      visit_quality_score: computeQualityScore()
+      visit_quality_score: computeQualityScore().score,
+      quality_breakdown: computeQualityScore().checks
     };
 
     const { data: visit, error } = await sb.from('field_visits').insert(visitData).select().single();
     if (error) throw error;
 
+    // Create cross-department tasks for flagged departments
+    if (deptFlags.length > 0) {
+      await createDeptTasks(visit.id, visitData, deptFlags).catch(() => {});
+    }
+
     // Visit saved — go home immediately, AI runs in background
     closeSheet('sheet-visit');
     showTab('home');
     await loadTodayData();
-    showToast('✅ Visit saved! AI analysing photos…');
+    const deptMsg = deptFlags.length ? ` + ${deptFlags.length} dept task(s) created` : '';
+    showToast('✅ Visit saved! AI analysing photos…' + deptMsg);
     if (photoUrls.length > 0) {
       runAIAnalysis(visit.id, photoUrls.map(p=>p.url), visitData).catch(() => {});
     }
@@ -1763,15 +1993,64 @@ async function submitVisit() {
   }
 }
 
+function estimateSqft() {
+  const beds = roomCounts.beds, floors = roomCounts.floors;
+  const plotRaw = document.getElementById('room-plot')?.value?.trim();
+  if (plotRaw) {
+    const parts = plotRaw.toLowerCase().replace('x','×').split('×').map(p => parseFloat(p.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) return Math.round(parts[0]*parts[1]*floors*0.6);
+  }
+  if (beds > 0) {
+    const extras = (roomExtras.has('living')?200:0)+(roomExtras.has('kitchen')?120:0)+(roomExtras.has('parking')?100:0)+(roomExtras.has('terrace')?150:0)+(roomExtras.has('pooja')?40:0)+(roomExtras.has('balcony')?60:0);
+    return (beds*350+extras)*floors;
+  }
+  return null;
+}
+
 function computeQualityScore() {
-  let score = 0;
-  if (visitPinLat) score += 20;
-  if (document.getElementById('vs-stage').value) score += 20;
-  if (visitContacts.filter(c=>c.phone).length >= 1) score += 20;
-  if (visitPhotos.length >= 2) score += 20;
-  if (document.getElementById('vs-followup').value) score += 10;
-  if (document.getElementById('vs-notes').value.length > 20) score += 10;
-  return score;
+  const checks = [
+    { key:'location', label:'Site pinned on map', pts:20, met: !!visitPinLat },
+    { key:'stage', label:'Construction stage', pts:20, met: !!document.getElementById('vs-stage').value },
+    { key:'contact', label:'At least 1 contact with phone', pts:20, met: visitContacts.filter(c=>c.phone).length >= 1 },
+    { key:'photos', label:'Minimum 2 site photos', pts:20, met: visitPhotos.length >= 2 },
+    { key:'followup', label:'Follow-up date set', pts:10, met: !!document.getElementById('vs-followup').value },
+    { key:'notes', label:'Notes / conversation captured', pts:10, met: document.getElementById('vs-notes').value.length > 20 },
+  ];
+  const score = checks.reduce((s, c) => s + (c.met ? c.pts : 0), 0);
+  return { score, checks };
+}
+
+function showQualityBreakdown() {
+  const { score, checks } = computeQualityScore();
+  const missing = checks.filter(c => !c.met);
+  if (!missing.length) return; // 100% — nothing to show
+  const msg = missing.map(c => `❌ ${c.label} (+${c.pts}pts)`).join('\n');
+  showToast(`Score: ${score}% — missing:\n${missing.map(c=>c.label).join(', ')}`, 6000);
+}
+
+// ── Department Task Creation ──
+async function createDeptTasks(visitId, visitData, flags) {
+  const deptLabelMap = {
+    'Tiles': 'Tiles / Granite / Marble', 'Sanitaryware': 'Sanitaryware / CP Fittings',
+    'Paints': 'Paints', 'Plywood': 'Plywood / Laminates', 'Pipes': 'PVC Pipes',
+    'Electrical': 'Electrical Wires', 'Waterproofing': 'Waterproofing',
+    'Interior': 'Interior Design', 'Projects': 'Construction / Architect',
+    'Furniture': 'Modular Kitchen / Furniture', 'Vendor': 'False Ceiling / Gypsum',
+  };
+  const tasks = flags.map(dept => ({
+    visit_id: visitId,
+    department: dept,
+    title: `Field Lead — ${deptLabelMap[dept] || dept}`,
+    description: `Site: ${visitData.site_address || ''}. Stage: ${visitData.construction_stage || ''}. Rep: ${currentUser.name}. Customer needs: ${deptLabelMap[dept]}.`,
+    status: 'open',
+    priority: ['Interior','Projects','Furniture'].includes(dept) ? 'high' : 'normal',
+    type: 'field_lead',
+    follow_up_date: visitData.next_action_date || null,
+    created_by: currentUser.name,
+  }));
+  if (tasks.length) {
+    await sb.from('tasks').insert(tasks);
+  }
 }
 
 // ── AI Analysis ──
