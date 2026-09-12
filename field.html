@@ -1213,7 +1213,7 @@ async function loadTodayData() {
 
   // Today's visits
   const { data: visits } = await sb.from('field_visits')
-    .select('*').eq('executive_id', currentUser.id.toString())
+    .select('*').eq('staff_id', currentUser.id)
     .gte('created_at', today + 'T00:00:00').order('created_at', {ascending:false});
   
   const count = visits?.length || 0;
@@ -1682,7 +1682,7 @@ async function submitVisit() {
 
     const desig = currentUser.designation || currentUser.role || 'Field Executive';
     const visitData = {
-      executive_id: currentUser.id.toString(),
+      staff_id: currentUser.id,
       executive_name: currentUser.name,
       site_address: `${document.getElementById('vs-area').value}, ${document.getElementById('vs-city').value}`,
       site_lat: visitPinLat, site_lng: visitPinLng,
