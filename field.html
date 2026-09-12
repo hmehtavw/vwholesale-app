@@ -1106,7 +1106,80 @@ async function afterLogin() {
   document.getElementById('profile-city').textContent = currentUser.city || 'Vijayawada';
 
   await loadTodayData();
-  startLocationTracking();
+  await requestPermissions();
+}
+
+async function requestPermissions() {
+  const camStatus = await navigator.permissions?.query({ name: 'camera' }).catch(() => null);
+  const gpsStatus = await navigator.permissions?.query({ name: 'geolocation' }).catch(() => null);
+  const needsCam = !camStatus || camStatus.state === 'prompt';
+  const needsGps = !gpsStatus || gpsStatus.state === 'prompt';
+  if (!needsCam && !needsGps) { startLocationTracking(); return; }
+  showPermissionSheet(needsCam, needsGps);
+}
+
+function showPermissionSheet(needsCam, needsGps) {
+  const existing = document.getElementById('sheet-permissions');
+  if (existing) existing.remove();
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-backdrop open';
+  sheet.id = 'sheet-permissions';
+  sheet.innerHTML = `
+    <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header" style="border:none;"><div class="sheet-title">App Permissions</div></div>
+      <div class="sheet-body">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:40px;margin-bottom:8px;">&#x1F510;</div>
+          <div style="font-size:14px;color:var(--text2);">V Wholesale Field needs a few permissions to work properly</div>
+        </div>
+        ${needsGps ? `<div class="card card-accent" style="margin-bottom:10px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="font-size:24px;">&#x1F4CD;</div>
+            <div><div style="font-weight:600;margin-bottom:4px;">Location</div>
+            <div style="font-size:13px;color:var(--text2);">Used for attendance check-in, site visit pinning, and live tracking while on duty. Only active when punched in.</div></div>
+          </div></div>` : ''}
+        ${needsCam ? `<div class="card card-accent" style="margin-bottom:10px;">
+          <div style="display:flex;align-items:flex-start;gap:12px;">
+            <div style="font-size:24px;">&#x1F4F7;</div>
+            <div><div style="font-weight:600;margin-bottom:4px;">Camera</div>
+            <div style="font-size:13px;color:var(--text2);">Used for selfie at punch-in, odometer photos, and site visit photos for AI analysis.</div></div>
+          </div></div>` : ''}
+        <div style="font-size:12px;color:var(--text3);text-align:center;margin:16px 0 20px;">
+          Location is tracked only during working hours while punched in. Photos are stored securely for work records only.
+        </div>
+        <button class="btn btn-primary" id="btn-grant-permissions">Allow Permissions</button>
+        <button class="btn btn-ghost mt-8" id="btn-skip-permissions" style="font-size:13px;">I'll allow later (some features won't work)</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+
+  document.getElementById('btn-grant-permissions').onclick = async () => {
+    if (needsGps) {
+      await new Promise(resolve => {
+        navigator.geolocation.getCurrentPosition(
+          pos => { lastLocation = pos; resolve(pos); },
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: 15000 }
+        );
+      });
+    }
+    if (needsCam) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream.getTracks().forEach(t => t.stop());
+      } catch(e) { /* user denied — they can grant from settings */ }
+    }
+    sheet.remove();
+    startLocationTracking();
+    showToast('Permissions set — ready to go');
+  };
+
+  document.getElementById('btn-skip-permissions').onclick = () => {
+    sheet.remove();
+    startLocationTracking();
+    showToast('Some features need permissions to work', 4000);
+  };
 }
 
 async function loadTodayData() {
