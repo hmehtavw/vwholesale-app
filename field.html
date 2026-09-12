@@ -995,18 +995,39 @@ async function checkSession() {
   const saved = localStorage.getItem('vw_field_staff');
   if (!saved) return;
   try {
-    const staffId = JSON.parse(saved);
-    if (!staffId) return;
-    const { data } = await sb.from('staff').select('*').eq('id', staffId).single();
-    if (data && isFieldRole(data)) {
-      currentUser = data;
+    const parsed = JSON.parse(saved);
+    if (!parsed) return;
+
+    // Support both old format (just id) and new format (full object)
+    const staffObj = typeof parsed === 'object' && parsed.name ? parsed : null;
+    const staffId  = staffObj ? staffObj.id : parsed;
+
+    if (staffObj && isFieldRole(staffObj)) {
+      // Full object saved — log in immediately without network call
+      currentUser = staffObj;
       await afterLogin();
+      // Re-validate in background silently — update stored record if changed
+      sb.from('staff').select('*').eq('id', staffId).single().then(({ data }) => {
+        if (data && isFieldRole(data)) {
+          currentUser = data;
+          localStorage.setItem('vw_field_staff', JSON.stringify(data));
+          // Refresh name/role in header silently
+          document.getElementById('hdr-name').textContent = data.name;
+          document.getElementById('hdr-role').textContent = data.designation || data.role || 'Field';
+        }
+      }).catch(() => {}); // Network error — stay logged in with cached data
+    } else {
+      // Old format: just an ID — fetch once then upgrade to full object
+      const { data } = await sb.from('staff').select('*').eq('id', staffId).single();
+      if (data && isFieldRole(data)) {
+        currentUser = data;
+        localStorage.setItem('vw_field_staff', JSON.stringify(data)); // upgrade format
+        await afterLogin();
+      }
     }
-    // Never clear session on failed lookup — network may be flaky on field
-    // Only explicit signOut() clears it
   } catch(e) {
-    // Keep saved session on network/parse error — retry on next visibility
-    console.warn('Session check failed, keeping saved session:', e.message);
+    // Never wipe session on error — user stays logged in
+    console.warn('Session check error (staying logged in):', e.message);
   }
 }
 
@@ -1089,7 +1110,7 @@ document.getElementById('btn-verify-otp').onclick = async () => {
   }
 
   currentUser = result.staff;
-  localStorage.setItem('vw_field_staff', JSON.stringify(result.staff.id));
+  localStorage.setItem('vw_field_staff', JSON.stringify(result.staff)); // store full record
   await afterLogin();
   btn.disabled = false; btn.textContent = 'Verify & Sign In';
 };
@@ -1929,6 +1950,7 @@ function shareOnWhatsApp(visitId) {
 function lakh(n) { return n ? (n / 100000).toFixed(1) : '—'; }
 
 async function signOut() {
+  if (!confirm('Sign out? You will need OTP to sign in again.')) return;
   stopLocationTracking();
   currentUser = null; currentAttendance = null;
   localStorage.removeItem('vw_field_staff');
