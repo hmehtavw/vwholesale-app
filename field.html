@@ -952,7 +952,7 @@ input[type=file] { display: none; }
 // CONFIG
 // ══════════════════════════════════════════════
 const SUPABASE_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTA0MDA0NzcsImV4cCI6MjAyNTk3NjQ3N30.placeholder';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 const FIELD_ROLES = ['Field Executive','Team Leader','Mapping Executive','ASM','Cluster Head','Region Head'];
@@ -1014,62 +1014,72 @@ function isFieldRole(staff) {
 }
 
 // ══════════════════════════════════════════════
-// AUTH — OTP
+// AUTH — OTP via edge function
 // ══════════════════════════════════════════════
-// Stored OTPs in-memory (in prod, use edge function + SMS)
-const otpStore = {};
+const OTP_FN = `${SUPABASE_URL}/functions/v1/field-otp`;
+
+async function callOTPFn(body) {
+  const res = await fetch(OTP_FN, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
 
 document.getElementById('btn-send-otp').onclick = async () => {
   const phone = document.getElementById('input-phone').value.trim().replace(/\D/g,'');
   if (phone.length !== 10) { showToast('Enter a valid 10-digit number'); return; }
 
   const btn = document.getElementById('btn-send-otp');
-  btn.disabled = true; btn.textContent = 'Checking…';
+  btn.disabled = true; btn.textContent = 'Sending…';
 
-  const { data } = await sb.from('staff').select('id,name,phone,role,designation,department,active')
-    .eq('phone', phone).eq('active', true).single();
+  const result = await callOTPFn({ phone, action: 'send' });
 
-  if (!data || !isFieldRole(data)) {
-    showToast('Number not found in field team roster');
+  if (result.error) {
+    showToast(result.error);
     btn.disabled = false; btn.textContent = 'Send OTP';
     return;
   }
 
-  // Generate 6-digit OTP (in prod: call edge function to send via SMS/WhatsApp)
-  const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  otpStore[phone] = { otp, expires: Date.now() + 10*60*1000, staffId: data.id };
-  console.log(`[DEV] OTP for ${phone}: ${otp}`); // Remove in production
-
-  document.getElementById('otp-sent-msg').textContent = `OTP sent to +91 ${phone}`;
+  document.getElementById('otp-sent-msg').textContent =
+    `OTP sent to +91 ${phone} on WhatsApp`;
   document.getElementById('login-phone-step').classList.add('hidden');
   document.getElementById('login-otp-step').classList.remove('hidden');
   document.querySelector('.otp-digit').focus();
   btn.disabled = false; btn.textContent = 'Send OTP';
-  showToast(`OTP: ${otp}`, 6000); // Dev only — remove in prod
+
+  // Dev fallback: if WA not configured, edge fn returns dev_otp
+  if (result.dev_otp) showToast(`Dev OTP: ${result.dev_otp}`, 30000);
+  else showToast(`OTP sent to WhatsApp ✓`);
 };
 
 document.getElementById('btn-verify-otp').onclick = async () => {
   const phone = document.getElementById('input-phone').value.trim().replace(/\D/g,'');
-  const digits = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('');
-  if (digits.length !== 6) { showToast('Enter the 6-digit OTP'); return; }
+  const otp = [...document.querySelectorAll('.otp-digit')].map(i => i.value).join('');
+  if (otp.length !== 6) { showToast('Enter the 6-digit OTP'); return; }
 
-  const record = otpStore[phone];
-  if (!record || record.otp !== digits || Date.now() > record.expires) {
-    showToast('Invalid or expired OTP'); return;
+  const btn = document.getElementById('btn-verify-otp');
+  btn.disabled = true; btn.textContent = 'Verifying…';
+
+  const result = await callOTPFn({ phone, action: 'verify', otp });
+
+  if (result.error) {
+    showToast(result.error);
+    btn.disabled = false; btn.textContent = 'Verify & Sign In';
+    return;
   }
 
-  const { data } = await sb.from('staff').select('*').eq('id', record.staffId).single();
-  if (!data) { showToast('Staff record not found'); return; }
-
-  currentUser = data;
-  localStorage.setItem('vw_field_staff', JSON.stringify(data.id));
-  delete otpStore[phone];
+  currentUser = result.staff;
+  localStorage.setItem('vw_field_staff', JSON.stringify(result.staff.id));
   await afterLogin();
+  btn.disabled = false; btn.textContent = 'Verify & Sign In';
 };
 
 document.getElementById('btn-resend-otp').onclick = () => {
   document.getElementById('login-otp-step').classList.add('hidden');
   document.getElementById('login-phone-step').classList.remove('hidden');
+  document.querySelectorAll('.otp-digit').forEach(d => d.value = '');
 };
 
 function initOtpInputs() {
@@ -1658,23 +1668,21 @@ function computeQualityScore() {
 async function runAIAnalysis(visitId, photoUrls, visitData) {
   const btn = document.getElementById('btn-submit-visit');
   try {
-    const prompt = `You are a construction site analyst for V Wholesale, a building materials retailer in India.
-Analyse these site photos and provide a structured JSON response ONLY (no other text):
-{
-  "stage_detected": "one of: foundation/structure/brick_work/plastering/tiling_ready/tiling_in_progress/finishing/handover/renovation",
-  "requirements": ["list of materials needed, e.g. Tiles, Granite, Sanitaryware, Paint, Plywood, Waterproofing, CP Fittings, Electrical Wires, PVC Pipes"],
-  "estimated_value_min": <number in INR>,
-  "estimated_value_max": <number in INR>,
-  "estimated_sqft": <number or null>,
-  "suggestion": "2-3 sentence actionable suggestion for the field sales rep"
-}
-Site context: Stage selected by rep: ${visitData.construction_stage || 'unknown'}, Project type: ${visitData.project_type || 'unknown'}, Area: ${visitData.estimated_sqft || 'unknown'} sqft`;
 
-    // Call vision API via our edge function proxy
+    // Call vision API via edge function
     const res = await fetch(`${SUPABASE_URL}/functions/v1/ai-site-analysis`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
-      body: JSON.stringify({ visitId, photoUrls, prompt })
+      body: JSON.stringify({
+        visitId,
+        photoUrls,
+        context: {
+          stage: visitData.construction_stage,
+          projectType: visitData.project_type,
+          sqft: visitData.estimated_sqft,
+          city: visitData.city
+        }
+      })
     });
     
     if (!res.ok) throw new Error('AI service error');
