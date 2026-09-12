@@ -996,15 +996,33 @@ async function checkSession() {
   if (!saved) return;
   try {
     const staffId = JSON.parse(saved);
+    if (!staffId) return;
     const { data } = await sb.from('staff').select('*').eq('id', staffId).single();
     if (data && isFieldRole(data)) {
       currentUser = data;
       await afterLogin();
-    } else {
-      localStorage.removeItem('vw_field_staff');
     }
-  } catch(e) { localStorage.removeItem('vw_field_staff'); }
+    // Never clear session on failed lookup — network may be flaky on field
+    // Only explicit signOut() clears it
+  } catch(e) {
+    // Keep saved session on network/parse error — retry on next visibility
+    console.warn('Session check failed, keeping saved session:', e.message);
+  }
 }
+
+// Restore session when app returns from background (call, notification, back button)
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && !currentUser) {
+    await checkSession();
+  }
+});
+
+// Handle page restored from bfcache (Android back button)
+window.addEventListener('pageshow', async (e) => {
+  if (e.persisted && !currentUser) {
+    await checkSession();
+  }
+});
 
 function isFieldRole(staff) {
   return FIELD_ROLES.some(r => 
@@ -1710,15 +1728,13 @@ async function submitVisit() {
     const { data: visit, error } = await sb.from('field_visits').insert(visitData).select().single();
     if (error) throw error;
 
-    showToast('✅ Visit saved!');
-
-    // AI analysis (async, non-blocking)
+    // Visit saved — go home immediately, AI runs in background
+    closeSheet('sheet-visit');
+    showTab('home');
+    await loadTodayData();
+    showToast('✅ Visit saved! AI analysing photos…');
     if (photoUrls.length > 0) {
-      btn.textContent = '🤖 Analysing…';
-      runAIAnalysis(visit.id, photoUrls.map(p=>p.url), visitData);
-    } else {
-      closeSheet('sheet-visit');
-      await loadTodayData();
+      runAIAnalysis(visit.id, photoUrls.map(p=>p.url), visitData).catch(() => {});
     }
   } catch(e) {
     showToast('Error: ' + e.message);
@@ -1779,14 +1795,11 @@ async function runAIAnalysis(visitId, photoUrls, visitData) {
     document.getElementById('ai-stage-detected').textContent = ai.stage_detected || '';
     document.getElementById('ai-suggestion-text').textContent = ai.suggestion || '';
 
-    btn.textContent = 'Done ✓'; btn.disabled = true;
-    setTimeout(async () => {
-      closeSheet('sheet-visit');
-      await loadTodayData();
-    }, 3000);
+    // AI done — show toast, user already on home screen
+    showToast('🤖 AI analysis complete');
   } catch(e) {
-    closeSheet('sheet-visit');
-    await loadTodayData();
+    // AI failed silently — visit saved, user on home screen
+    console.warn('AI analysis failed:', e.message);
   }
 }
 
