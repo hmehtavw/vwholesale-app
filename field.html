@@ -1298,16 +1298,21 @@ async function loadTodayData() {
   const today = new Date().toISOString().split('T')[0];
   
   // Today's attendance
+  // Use 24h window to avoid UTC/IST mismatch — attendance stored in UTC
+  const since24h = new Date(Date.now() - 24*60*60*1000).toISOString();
   const { data: att } = await sb.from('attendance')
     .select('*').eq('staff_id', currentUser.id)
-    .gte('date', today + 'T00:00:00').lte('date', today + 'T23:59:59')
+    .gte('date', since24h)
+    .order('date', {ascending: false})
+    .limit(1)
     .single();
   
   if (att) {
     currentAttendance = att;
-    const punchTime = new Date(att.date);
     document.getElementById('punch-label').textContent = att.punch_out ? 'Day ended' : 'Punched in since';
-    document.getElementById('punch-time').textContent = punchTime.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+    // punch_in is stored as HH:MM:SS string — display directly
+    const punchTimeStr = att.punch_in ? att.punch_in.slice(0,5) : '--:--';
+    document.getElementById('punch-time').textContent = punchTimeStr;
     const btn = document.getElementById('punch-btn');
     if (att.punch_out) {
       btn.textContent = 'Done ✓';
@@ -1610,9 +1615,9 @@ function initOdoLiveCalc() {
 // VISIT FORM — MULTI-STEP
 // ══════════════════════════════════════════════
 function openNewVisitSheet() {
-  if (!currentAttendance) {
-    showToast('Please punch in first to log visits'); return;
-  }
+  // Allow visit logging even if not punched in / punched out
+  // Field reality: rep may forget punch-in but still needs to log site visits
+  if (!currentUser) { showToast('Please sign in first'); return; }
   resetVisitForm();
   document.getElementById('visit-sheet-title').textContent = 'Log Site Visit';
   openSheet('sheet-visit');
@@ -2139,7 +2144,7 @@ function startLocationTracking() {
 }
 
 function pingLocation() {
-  if (!currentUser || !currentAttendance || currentAttendance.punch_out) return;
+  if (!currentUser || !currentAttendance) return;
   getCurrentGPS(async pos => {
     lastLocation = pos;
     const speed = pos.coords.speed ? pos.coords.speed * 3.6 : null; // m/s to km/h
