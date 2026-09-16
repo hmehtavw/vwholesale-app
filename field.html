@@ -1676,28 +1676,29 @@ function resetVisitForm() {
   roomExtras.clear();
   renderCompetitorList();
   renderDecidedBrands();
-  document.getElementById('competitor-text').value = '';
-  document.getElementById('room-plot').value = '';
-  document.getElementById('sqft-estimate-box').style.display = 'none';
-  document.getElementById('dept-flag-notice').style.display = 'none';
+  // Safe reset — null-check every element to avoid crashes
+  const safe = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
+  safe('competitor-text', el => el.value = '');
+  safe('room-plot', el => el.value = '');
+  safe('sqft-estimate-box', el => el.style.display = 'none');
+  safe('dept-flag-notice', el => el.style.display = 'none');
+  safe('room-beds', el => el.textContent = '0');
+  safe('room-baths', el => el.textContent = '0');
+  safe('room-floors', el => el.textContent = '1');
+  safe('vs-site-name', el => el.value = '');
+  safe('vs-area', el => el.value = '');
+  safe('vs-city', el => el.value = currentUser?.city || 'Vijayawada');
+  safe('vs-stage', el => el.value = '');
+  safe('vs-sqft', el => el.value = '');
+  safe('vs-notes', el => el.value = '');
+  safe('vs-referral', el => el.value = '');
+  safe('vs-followup', el => el.value = '');
+  safe('contacts-list', el => el.innerHTML = '');
+  safe('site-photo-grid', el => el.innerHTML = '');
+  safe('ai-result-area', el => el.classList.add('hidden'));
+  safe('visit-pin-info', el => el.classList.add('hidden'));
   document.querySelectorAll('#room-extras .chip').forEach(c=>c.classList.remove('selected'));
   document.querySelectorAll('#customer-req-chips .chip').forEach(c=>c.classList.remove('selected'));
-  document.getElementById('room-beds').textContent = '0';
-  document.getElementById('room-baths').textContent = '0';
-  document.getElementById('room-floors').textContent = '1';
-  document.getElementById('vs-site-name').value = '';
-  document.getElementById('vs-area').value = '';
-  document.getElementById('vs-city').value = currentUser.city || 'Vijayawada';
-  document.getElementById('vs-stage').value = '';
-  document.getElementById('vs-sqft').value = '';
-  document.getElementById('vs-value').value = '';
-  document.getElementById('vs-notes').value = '';
-  document.getElementById('vs-referral').value = '';
-  document.getElementById('vs-followup').value = '';
-  document.getElementById('contacts-list').innerHTML = '';
-  document.getElementById('site-photo-grid').innerHTML = '';
-  document.getElementById('ai-result-area').classList.add('hidden');
-  document.getElementById('visit-pin-info').classList.add('hidden');
   document.querySelectorAll('#project-type-chips .chip').forEach(c=>c.classList.remove('selected'));
   visitNextStep(1, true);
   addPhotoSlot();
@@ -1993,7 +1994,7 @@ async function submitVisit() {
       construction_stage: document.getElementById('vs-stage').value,
       project_type: visitProjectType,
       estimated_sqft: parseFloat(document.getElementById('vs-sqft').value) || estimateSqft() || null,
-      estimated_value: parseFloat(document.getElementById('vs-value').value) || null,
+      estimated_value: parseFloat(document.getElementById('vs-sqft')?.dataset?.estimatedValue) || null,
       site_contacts: visitContacts.filter(c => c.name || c.phone),
       site_photos: photoUrls,
       competitor_products: competitorEntries,
@@ -2360,7 +2361,7 @@ function showInstallBanner() {
     </div>
     <button onclick="installApp()" style="background:var(--accent);color:var(--base);border:none;
       border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;">Install</button>
-    <button onclick="document.getElementById('install-banner').remove();localStorage.setItem('vw_field_installed','dismissed');"
+    <button onclick="document.getElementById('install-banner')?.remove();localStorage.setItem('vw_field_installed','dismissed');"
       style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px;">✕</button>
   `;
   document.body.appendChild(banner);
