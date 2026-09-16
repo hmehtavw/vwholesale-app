@@ -12,6 +12,7 @@
 <meta http-equiv="Expires" content="0">
 <title>V Wholesale Field</title>
 <link rel="manifest" href="/field-manifest.json">
+<link rel="apple-touch-icon" href="/icons/field-icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1222,6 +1223,7 @@ async function afterLogin() {
 
   await loadTodayData();
   await requestPermissions();
+  setTimeout(showIOSInstallHint, 2000);
 }
 
 async function requestPermissions() {
@@ -2311,6 +2313,84 @@ function initClockTick() {
   };
   update();
   setInterval(update, 30000);
+}
+
+// ── PWA: Service Worker + Install Prompt ──
+let deferredInstallPrompt = null;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/field-sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
+
+// Capture install prompt for Android Chrome "Add to Home Screen"
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  // Show install banner after login
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if (!deferredInstallPrompt) return;
+  if (localStorage.getItem('vw_field_installed')) return;
+  
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.style.cssText = 'position:fixed;bottom:calc(var(--nav-h) + 12px);left:16px;right:16px;' +
+    'background:var(--surface);border:1px solid var(--accent);border-radius:14px;' +
+    'padding:14px 16px;display:flex;align-items:center;gap:12px;z-index:500;' +
+    'box-shadow:0 4px 20px rgba(0,0,0,.4);';
+  banner.innerHTML = \`
+    <div style="font-size:28px;">📲</div>
+    <div style="flex:1;">
+      <div style="font-weight:600;font-size:14px;">Install Field App</div>
+      <div style="font-size:12px;color:var(--text2);">Add to home screen for quick access</div>
+    </div>
+    <button onclick="installApp()" style="background:var(--accent);color:var(--base);border:none;
+      border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;">Install</button>
+    <button onclick="document.getElementById('install-banner').remove();localStorage.setItem('vw_field_installed','dismissed');"
+      style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px;">✕</button>
+  \`;
+  document.body.appendChild(banner);
+}
+
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const { outcome } = await deferredInstallPrompt.userChoice;
+  if (outcome === 'accepted') {
+    localStorage.setItem('vw_field_installed', 'true');
+    document.getElementById('install-banner')?.remove();
+    showToast('✅ App installed! Find it on your home screen.');
+  }
+  deferredInstallPrompt = null;
+}
+
+// iOS Safari: show manual instructions since beforeinstallprompt not supported
+function showIOSInstallHint() {
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isInStandaloneMode = window.navigator.standalone;
+  if (isIOS && !isInStandaloneMode && !localStorage.getItem('vw_field_installed')) {
+    const hint = document.createElement('div');
+    hint.style.cssText = 'position:fixed;bottom:calc(var(--nav-h)+12px);left:16px;right:16px;' +
+      'background:var(--surface);border:1px solid var(--accent);border-radius:14px;' +
+      'padding:14px 16px;z-index:500;font-size:13px;';
+    hint.innerHTML = \`
+      <div style="font-weight:600;margin-bottom:6px;">📲 Install on iPhone</div>
+      <div style="color:var(--text2);line-height:1.6;">
+        Tap the <strong>Share button</strong> (box with arrow) at the bottom of Safari,
+        then tap <strong>"Add to Home Screen"</strong>
+      </div>
+      <button onclick="this.parentElement.remove();localStorage.setItem('vw_field_installed','ios-dismissed');"
+        style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);
+        border-radius:8px;padding:8px 14px;color:var(--text);font-size:13px;cursor:pointer;width:100%;">Got it</button>
+    \`;
+    document.body.appendChild(hint);
+  }
 }
 </script>
 </body>
