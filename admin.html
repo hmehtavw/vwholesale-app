@@ -198,6 +198,7 @@ html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',sys
       <button class="sb-item" onclick="loadPage('fieldfuel')" id="nav-fieldfuel"><span class="sb-icon">⛽</span>Fuel & Attendance</button>
       <button class="sb-item" onclick="loadPage('fieldincentives')" id="nav-fieldincentives"><span class="sb-icon">🏆</span>Incentives & Targets</button>
       <button class="sb-item" onclick="loadPage('orgchart')" id="nav-orgchart"><span class="sb-icon">🏢</span>Org Structure</button>
+      <button class="sb-item" onclick="loadPage('territories')" id="nav-territories"><span class="sb-icon">🗺️</span>Territory Map</button>
       <div class="sb-section">Settings</div>
       <button class="sb-item" onclick="loadPage('staff')" id="nav-staff"><span class="sb-icon">👤</span>Staff</button>
       <button class="sb-item" onclick="loadPage('import')" id="nav-import"><span class="sb-icon">📥</span>Data Import</button>
@@ -361,7 +362,7 @@ async function loadPage(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Loading…</div>';
   document.getElementById('sidebar').classList.remove('open');
-  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing, field:loadFieldMap, fieldteam:loadFieldTeam, fieldvisits:loadFieldVisits, fieldfuel:loadFieldFuel, fieldincentives:loadFieldIncentives, orgchart:loadOrgChart};
+  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing, field:loadFieldMap, fieldteam:loadFieldTeam, fieldvisits:loadFieldVisits, fieldfuel:loadFieldFuel, fieldincentives:loadFieldIncentives, orgchart:loadOrgChart, territories:loadTerritories};
   if (pages[page]) await pages[page]();
 }
 
@@ -3045,6 +3046,369 @@ async function saveTLAreas() {
   document.getElementById('tl-area-modal').style.display = 'none';
   loadOrgChart();
 }
+
+
+// ══════════════════════════════════════════════════════════
+// TERRITORY MAP — Draw & Assign Polygons
+// ══════════════════════════════════════════════════════════
+
+const MAPS_KEY = 'AIzaSyBkq4nz2ruJUplPk2KVr2eB6tl-ixQB_-w';
+let territoryMap = null;
+let drawingManager = null;
+let territoryPolygons = []; // rendered polygon overlays
+let editingPolygon = null;
+let territories = [];
+let territoryVerticals = [];
+let territoryStaff = [];
+
+async function loadTerritories() {
+  setPageTitle('Territory Map');
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;height:calc(100vh - 120px);">
+
+      <!-- Left panel -->
+      <div style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;">
+
+        <!-- Draw controls -->
+        <div class="card" style="margin-bottom:0;">
+          <div class="card-title">Draw Territory</div>
+          <div style="display:grid;gap:10px;">
+            <div>
+              <label class="form-lbl">Vertical *</label>
+              <select class="form-sel" id="t-vertical" onchange="updateTLDropdown()">
+                <option value="">Select vertical…</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-lbl">Assign to TL *</label>
+              <select class="form-sel" id="t-staff">
+                <option value="">Select TL / Exec…</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-lbl">Territory Name *</label>
+              <input class="form-inp" id="t-name" placeholder="e.g. Sabeer — VJA South">
+            </div>
+            <div>
+              <label class="form-lbl">Color</label>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;" id="t-colors">
+                ${['#F5A623','#3B82F6','#22C55E','#EF4444','#A855F7','#06B6D4','#F59E0B','#EC4899'].map(c=>
+                  `<div onclick="selectColor('${c}')" data-color="${c}"
+                    style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;
+                    border:2px solid transparent;transition:border .15s;" title="${c}"></div>`
+                ).join('')}
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:12px;" onclick="startDrawing()">
+            ✏️ Draw on Map
+          </button>
+          <div id="draw-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(59,130,246,.1);
+               border:1px solid rgba(59,130,246,.3);border-radius:8px;font-size:12px;color:var(--b);">
+            Click on map to draw polygon. Double-click to finish.
+          </div>
+        </div>
+
+        <!-- Existing territories -->
+        <div class="card" style="margin-bottom:0;flex:1;">
+          <div class="card-title">
+            Territories
+            <span id="territory-count" style="font-size:11px;color:var(--t3);font-weight:400;"></span>
+          </div>
+          <div id="territory-list" style="display:flex;flex-direction:column;gap:8px;">
+            <div style="color:var(--t3);font-size:13px;text-align:center;padding:20px;">Loading…</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Map -->
+      <div style="border-radius:14px;overflow:hidden;border:1px solid var(--bdr);position:relative;">
+        <div id="territory-map" style="width:100%;height:100%;"></div>
+        <div id="map-loading" style="position:absolute;inset:0;background:var(--card);display:flex;
+             align-items:center;justify-content:center;flex-direction:column;gap:8px;">
+          <div style="font-size:24px;">🗺️</div>
+          <div style="font-size:13px;color:var(--t2);">Loading map…</div>
+        </div>
+      </div>
+    </div>`;
+
+  // Load data
+  [territoryVerticals, territoryStaff, territories] = await Promise.all([
+    sbFetch('org_verticals?select=*&order=display_order&active=eq.true').catch(()=>[]),
+    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(()=>[]),
+    sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]),
+  ]);
+
+  // Populate vertical dropdown
+  const vSel = document.getElementById('t-vertical');
+  (territoryVerticals||[]).forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.code; opt.textContent = v.name + ' — ' + v.brand;
+    vSel.appendChild(opt);
+  });
+
+  renderTerritoryList();
+  loadMapsScript();
+}
+
+function updateTLDropdown() {
+  const vertical = document.getElementById('t-vertical').value;
+  const sel = document.getElementById('t-staff');
+  sel.innerHTML = '<option value="">Select TL / Exec…</option>';
+  (territoryStaff||[])
+    .filter(s => !vertical || s.vertical === vertical)
+    .forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id; opt.textContent = s.name + ' (' + (s.designation||s.role||'—') + ')';
+      sel.appendChild(opt);
+    });
+}
+
+function selectColor(color) {
+  document.querySelectorAll('#t-colors div').forEach(d => {
+    d.style.border = d.dataset.color === color ? '2px solid white' : '2px solid transparent';
+    d.style.boxShadow = d.dataset.color === color ? '0 0 0 2px '+d.dataset.color : 'none';
+  });
+  document.getElementById('t-colors').dataset.selected = color;
+}
+
+function getSelectedColor() {
+  return document.getElementById('t-colors').dataset.selected || '#F5A623';
+}
+
+function loadMapsScript() {
+  if (window.google?.maps) { initTerritoryMap(); return; }
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
+  script.async = true; script.defer = true;
+  document.head.appendChild(script);
+  window.initTerritoryMap = initTerritoryMap;
+}
+
+function initTerritoryMap() {
+  document.getElementById('map-loading').style.display = 'none';
+
+  territoryMap = new google.maps.Map(document.getElementById('territory-map'), {
+    center: { lat: 16.5062, lng: 80.6480 }, // Vijayawada
+    zoom: 11,
+    mapTypeId: 'roadmap',
+    styles: [
+      { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+      { elementType: 'labels.text.stroke', stylers: [{ color: '#1e293b' }] },
+      { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+    ],
+    disableDefaultUI: false,
+    zoomControl: true,
+  });
+
+  drawingManager = new google.maps.drawing.DrawingManager({
+    drawingMode: null,
+    drawingControl: false,
+    polygonOptions: {
+      fillColor: getSelectedColor(),
+      fillOpacity: 0.25,
+      strokeColor: getSelectedColor(),
+      strokeWeight: 2,
+      editable: true,
+      draggable: false,
+    },
+  });
+  drawingManager.setMap(territoryMap);
+
+  google.maps.event.addListener(drawingManager, 'polygoncomplete', onPolygonDrawn);
+
+  // Render existing territories on map
+  renderTerritoriesOnMap();
+}
+
+function startDrawing() {
+  if (!territoryMap) { alert('Map not loaded yet'); return; }
+  if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
+  if (!document.getElementById('t-staff').value) { alert('Select a TL / Executive first'); return; }
+  if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
+
+  const color = getSelectedColor();
+  drawingManager.setOptions({
+    polygonOptions: {
+      fillColor: color, fillOpacity: 0.25,
+      strokeColor: color, strokeWeight: 2,
+      editable: true,
+    }
+  });
+  drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
+  document.getElementById('draw-hint').style.display = 'block';
+}
+
+function onPolygonDrawn(polygon) {
+  drawingManager.setDrawingMode(null);
+  document.getElementById('draw-hint').style.display = 'none';
+  editingPolygon = polygon;
+
+  // Extract coordinates
+  const coords = polygon.getPath().getArray().map(latlng => [latlng.lng(), latlng.lat()]);
+  coords.push(coords[0]); // close polygon
+
+  const geojson = {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [coords] },
+    properties: {}
+  };
+
+  // Show save confirmation
+  showSaveConfirm(geojson, polygon);
+}
+
+function showSaveConfirm(geojson, polygonOverlay) {
+  const existing = document.getElementById('save-confirm-panel');
+  if (existing) existing.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'save-confirm-panel';
+  panel.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1E293B;border:1px solid #3B82F6;' +
+    'border-radius:14px;padding:16px 20px;z-index:999;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+  panel.innerHTML = `
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Save Territory?</div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:14px;">
+      ${document.getElementById('t-name').value} — 
+      ${(territoryStaff||[]).find(s=>s.id==document.getElementById('t-staff').value)?.name||'Unknown'}
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveTerritory(${JSON.stringify(geojson).replace(/"/g,'&quot;')})"
+        style="flex:1;padding:9px;border-radius:8px;background:#3B82F6;border:none;color:#fff;
+        font-weight:700;cursor:pointer;font-size:13px;">Save Territory</button>
+      <button onclick="cancelDraw()"
+        style="padding:9px 14px;border-radius:8px;background:#1e293b;border:1px solid #334155;
+        color:#94a3b8;cursor:pointer;font-size:13px;">Cancel</button>
+    </div>`;
+  document.body.appendChild(panel);
+}
+
+async function saveTerritory(geojson) {
+  const payload = {
+    name: document.getElementById('t-name').value.trim(),
+    vertical_code: document.getElementById('t-vertical').value,
+    staff_id: parseInt(document.getElementById('t-staff').value) || null,
+    color: getSelectedColor(),
+    polygon_geojson: geojson,
+    active: true,
+  };
+
+  const result = await sbFetch('territories', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+    headers: { 'Prefer': 'return=representation', 'Content-Type': 'application/json' }
+  }).catch(e => { alert('Error saving: ' + e.message); return null; });
+
+  document.getElementById('save-confirm-panel')?.remove();
+
+  if (result) {
+    territories = await sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]);
+    renderTerritoryList();
+    renderTerritoriesOnMap();
+    // Reset form
+    document.getElementById('t-name').value = '';
+    toast('Territory saved ✓', 'ok');
+  }
+}
+
+function cancelDraw() {
+  editingPolygon?.setMap(null);
+  editingPolygon = null;
+  document.getElementById('save-confirm-panel')?.remove();
+  drawingManager.setDrawingMode(null);
+}
+
+function renderTerritoriesOnMap() {
+  // Clear existing overlays
+  territoryPolygons.forEach(p => p.setMap(null));
+  territoryPolygons = [];
+
+  (territories||[]).forEach(t => {
+    if (!t.polygon_geojson?.geometry?.coordinates) return;
+    const coords = t.polygon_geojson.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+    const color = t.color || '#F5A623';
+
+    const poly = new google.maps.Polygon({
+      paths: coords,
+      fillColor: color, fillOpacity: 0.2,
+      strokeColor: color, strokeWeight: 2,
+      map: territoryMap,
+    });
+
+    // Info window on click
+    const iw = new google.maps.InfoWindow();
+    poly.addListener('click', e => {
+      iw.setContent(`
+        <div style="font-family:sans-serif;padding:4px;">
+          <div style="font-weight:700;font-size:14px;">${t.name}</div>
+          <div style="color:#666;font-size:12px;margin-top:2px;">${t.staff?.name||'Unassigned'}</div>
+          <div style="color:#666;font-size:11px;">${t.staff?.designation||''}</div>
+          <button onclick="deleteTerritory(${t.id})" 
+            style="margin-top:8px;padding:4px 10px;border-radius:6px;background:#EF4444;
+            border:none;color:#fff;font-size:11px;cursor:pointer;">Delete</button>
+        </div>`);
+      iw.setPosition(e.latLng);
+      iw.open(territoryMap);
+    });
+
+    // Label
+    const center = getPolygonCenter(coords);
+    new google.maps.Marker({
+      position: center, map: territoryMap,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+      label: { text: t.name.split('—').pop().trim().substring(0,15), color: color, fontSize: '11px', fontWeight: '700' }
+    });
+
+    territoryPolygons.push(poly);
+  });
+}
+
+function getPolygonCenter(coords) {
+  const lat = coords.reduce((s,c) => s+c.lat, 0) / coords.length;
+  const lng = coords.reduce((s,c) => s+c.lng, 0) / coords.length;
+  return { lat, lng };
+}
+
+function renderTerritoryList() {
+  const el = document.getElementById('territory-list');
+  const count = document.getElementById('territory-count');
+  if (count) count.textContent = `(${territories?.length||0})`;
+  if (!territories?.length) {
+    el.innerHTML = '<div style="color:var(--t3);font-size:13px;text-align:center;padding:20px;">No territories yet — draw one on the map</div>';
+    return;
+  }
+  el.innerHTML = (territories||[]).map(t => `
+    <div style="background:var(--card2);border-radius:10px;padding:10px 12px;border-left:3px solid ${t.color||'#F5A623'};">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;">
+        <div style="min-width:0;">
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px;">${t.staff?.name||'Unassigned'} · ${t.staff?.designation||'—'}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:2px;">${(territoryVerticals||[]).find(v=>v.code===t.vertical_code)?.name||t.vertical_code}</div>
+        </div>
+        <button onclick="deleteTerritory(${t.id})"
+          style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0;flex-shrink:0;">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+async function deleteTerritory(id) {
+  if (!confirm('Delete this territory?')) return;
+  await sbFetch(`territories?id=eq.${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active: false }),
+    headers: { 'Prefer': 'return=minimal' }
+  });
+  territories = territories.filter(t => t.id !== id);
+  renderTerritoryList();
+  renderTerritoriesOnMap();
+  toast('Territory deleted', 'ok');
+}
+
+window.deleteTerritory = deleteTerritory;
 
 
 // ── INIT ──

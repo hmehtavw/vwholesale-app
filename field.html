@@ -2552,6 +2552,118 @@ function getCurrentLocationForVisit() {
 }
 
 // ── Submit visit ──
+// ── Territory check ──
+async function checkTerritory(lat, lng) {
+  if (!currentUser?.id) return { outsideTerritory: false };
+  try {
+    // Get this rep's territories
+    const terrs = await sb.from('territories')
+      .select('id,name,polygon_geojson,staff_id')
+      .eq('staff_id', currentUser.id).eq('active', true);
+    
+    if (!terrs.data?.length) return { outsideTerritory: false }; // no territory set = no restriction
+    
+    // Check if point is inside any territory polygon
+    for (const t of terrs.data) {
+      if (pointInPolygon(lat, lng, t.polygon_geojson?.geometry?.coordinates?.[0])) {
+        return { outsideTerritory: false, territory: t };
+      }
+    }
+    return { outsideTerritory: true, territories: terrs.data };
+  } catch(e) {
+    return { outsideTerritory: false }; // fail open — network error shouldn't block work
+  }
+}
+
+function pointInPolygon(lat, lng, coords) {
+  // Ray casting algorithm
+  if (!coords?.length) return true;
+  let inside = false;
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const [xi, yi] = coords[i]; // [lng, lat]
+    const [xj, yj] = coords[j];
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < (xj - xi) * (lat - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function showCrossTerritoryPrompt(check) {
+  const existing = document.getElementById('sheet-cross-territory');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-backdrop';
+  sheet.id = 'sheet-cross-territory';
+  sheet.innerHTML = `
+    <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">Outside Your Territory ⚠️</div>
+        <button class="sheet-close" onclick="document.getElementById('sheet-cross-territory').classList.remove('open');">✕</button>
+      </div>
+      <div class="sheet-body">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:40px;margin-bottom:10px;">📍</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:6px;">This site is outside your assigned territory</div>
+          <div style="font-size:13px;color:var(--text2);">Your manager will be notified. Please provide a reason to continue.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Reason for visiting outside territory <span class="req">*</span></label>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+            ${['Customer specifically requested me','Covering for absent colleague','High-value lead — manager approved','Site is near territory boundary','Other'].map(r=>`
+              <div onclick="selectCTReason(this,'${r}')"
+                style="padding:10px 14px;background:var(--surface2);border:1px solid var(--border);
+                border-radius:8px;font-size:13px;cursor:pointer;transition:all .15s;"
+                data-reason="${r}">${r}</div>`).join('')}
+          </div>
+          <input class="form-input" id="ct-other-reason" placeholder="Or type your reason…" style="display:none;">
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-secondary" onclick="document.getElementById('sheet-cross-territory').classList.remove('open');">
+            ← Go back
+          </button>
+          <button class="btn btn-primary" id="btn-ct-submit" onclick="submitWithCrossTerritory()" disabled>
+            Submit with reason
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(sheet);
+  setTimeout(() => sheet.classList.add('open'), 10);
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.classList.remove('open'); });
+}
+
+let selectedCTReason = null;
+
+function selectCTReason(el, reason) {
+  document.querySelectorAll('[data-reason]').forEach(d => {
+    d.style.background = 'var(--surface2)';
+    d.style.borderColor = 'var(--border)';
+    d.style.color = 'var(--text)';
+  });
+  el.style.background = 'var(--accent-soft)';
+  el.style.borderColor = 'var(--accent)';
+  el.style.color = 'var(--accent)';
+  selectedCTReason = reason;
+  document.getElementById('ct-other-reason').style.display = reason === 'Other' ? '' : 'none';
+  document.getElementById('btn-ct-submit').disabled = false;
+}
+
+async function submitWithCrossTerritory() {
+  const reason = selectedCTReason === 'Other'
+    ? document.getElementById('ct-other-reason').value.trim() || 'Other'
+    : selectedCTReason;
+  if (!reason) { showToast('Please select a reason'); return; }
+  document.getElementById('sheet-cross-territory').classList.remove('open');
+  setTimeout(() => document.getElementById('sheet-cross-territory')?.remove(), 300);
+  await submitVisit(true, reason);
+}
+
 function showQualityGate(score, checks) {
   const missing = checks.filter(c => !c.met);
   const existing = document.getElementById('sheet-quality-gate');
@@ -2649,7 +2761,7 @@ function showQualityGate(score, checks) {
   sheet.addEventListener('click', e => { if (e.target === sheet) sheet.classList.remove('open'); });
 }
 
-async function submitVisit(forceSubmit = false) {
+async function submitVisit(forceSubmit = false, crossTerritoryReason = null) {
   if (!visitPhotos.length) { showToast('Add at least 1 site photo'); return; }
 
   // Quality gate — min 90% for incentive qualification
@@ -2657,6 +2769,15 @@ async function submitVisit(forceSubmit = false) {
   if (score < 90 && !forceSubmit) {
     showQualityGate(score, checks);
     return;
+  }
+
+  // Territory boundary check
+  if (visitPinLat && !crossTerritoryReason) {
+    const territoryCheck = await checkTerritory(visitPinLat, visitPinLng);
+    if (territoryCheck.outsideTerritory) {
+      showCrossTerritoryPrompt(territoryCheck);
+      return;
+    }
   }
 
   const btn = document.getElementById('btn-submit-visit');
@@ -2700,7 +2821,9 @@ async function submitVisit(forceSubmit = false) {
       designation_at_visit: desig,
       visit_type: desig.toLowerCase().includes('mapping') ? 'mapping' : desig.toLowerCase().includes('team leader') ? 'tl' : 'field_exec',
       visit_quality_score: computeQualityScore().score,
-      quality_breakdown: computeQualityScore().checks
+      quality_breakdown: computeQualityScore().checks,
+      cross_territory: !!crossTerritoryReason,
+      cross_territory_reason: crossTerritoryReason || null
     };
 
     const { data: visit, error } = await sb.from('field_visits').insert(visitData).select().single();
