@@ -191,6 +191,12 @@ html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',sys
       <button class="sb-item" onclick="loadPage('commissions')" id="nav-commissions"><span class="sb-icon">💸</span>Commissions</button>
       <button class="sb-item" onclick="loadPage('referrals')" id="nav-referrals"><span class="sb-icon">🔗</span>Referrals</button>
       <button class="sb-item" onclick="loadPage('marketing')" id="nav-marketing"><span class="sb-icon">📣</span>Marketing</button>
+      <div class="sb-section">Field Intelligence</div>
+      <button class="sb-item" onclick="loadPage('field')" id="nav-field"><span class="sb-icon">🗺️</span>Live Field Map</button>
+      <button class="sb-item" onclick="loadPage('fieldteam')" id="nav-fieldteam"><span class="sb-icon">👥</span>Field Team</button>
+      <button class="sb-item" onclick="loadPage('fieldvisits')" id="nav-fieldvisits"><span class="sb-icon">📍</span>Site Visits</button>
+      <button class="sb-item" onclick="loadPage('fieldfuel')" id="nav-fieldfuel"><span class="sb-icon">⛽</span>Fuel & Attendance</button>
+      <button class="sb-item" onclick="loadPage('fieldincentives')" id="nav-fieldincentives"><span class="sb-icon">🏆</span>Incentives & Targets</button>
       <div class="sb-section">Settings</div>
       <button class="sb-item" onclick="loadPage('staff')" id="nav-staff"><span class="sb-icon">👤</span>Staff</button>
       <button class="sb-item" onclick="loadPage('import')" id="nav-import"><span class="sb-icon">📥</span>Data Import</button>
@@ -354,7 +360,7 @@ async function loadPage(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Loading…</div>';
   document.getElementById('sidebar').classList.remove('open');
-  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing};
+  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing, field:loadFieldMap, fieldteam:loadFieldTeam, fieldvisits:loadFieldVisits, fieldfuel:loadFieldFuel, fieldincentives:loadFieldIncentives};
   if (pages[page]) await pages[page]();
 }
 
@@ -2105,6 +2111,602 @@ async function loadMarketing() {
     </div>`;
 }
 
+
+// ══════════════════════════════════════════════════════════
+// FIELD INTELLIGENCE
+// ══════════════════════════════════════════════════════════
+
+function fieldStageLabel(s) {
+  const map = {foundation:'Foundation',structure:'Structure',brick_work:'Brick Work',
+    plastering:'Plastering',tiling_ready:'Tiling Ready',tiling_in_progress:'Tiling',
+    finishing:'Finishing',handover:'Handover',renovation:'Renovation'};
+  return map[s] || s || '—';
+}
+
+function getCycleRange() {
+  const now = new Date();
+  const d = now.getDate();
+  let start, end;
+  if (d >= 21) {
+    start = new Date(now.getFullYear(), now.getMonth(), 21);
+    end   = new Date(now.getFullYear(), now.getMonth()+1, 20, 23, 59, 59);
+  } else {
+    start = new Date(now.getFullYear(), now.getMonth()-1, 21);
+    end   = new Date(now.getFullYear(), now.getMonth(), 20, 23, 59, 59);
+  }
+  const opts = {day:'numeric',month:'short'};
+  return { start, end, label: `${start.toLocaleDateString('en-IN',opts)} – ${end.toLocaleDateString('en-IN',opts)}` };
+}
+
+// ── 1. LIVE FIELD MAP ──
+async function loadFieldMap() {
+  setPageTitle('Live Field Map');
+  const { start, end, label } = getCycleRange();
+
+  // Get all field staff with last location
+  const { data: staff } = await sbFetch(`staff?select=id,name,designation,role&active=eq.true&department=eq.Field`).catch(()=>[]);
+  const ids = (staff||[]).map(s=>s.id);
+
+  let locRows = [];
+  if (ids.length) {
+    locRows = await sbFetch(`field_location_log?select=staff_id,lat,lng,recorded_at,speed_kmh,is_moving&staff_id=in.(${ids.join(',')})&order=recorded_at.desc&limit=${ids.length*5}`).catch(()=>[]);
+  }
+
+  // Last loc per rep
+  const lastLoc = {};
+  (locRows||[]).forEach(l => { if (!lastLoc[l.staff_id]) lastLoc[l.staff_id] = l; });
+
+  // Today's visit count per rep
+  const todayIST = new Date(new Date().getTime() + 5.5*60*60*1000).toISOString().split('T')[0];
+  let visitCounts = {};
+  if (ids.length) {
+    const vrows = await sbFetch(`field_visits?select=staff_id&staff_id=in.(${ids.join(',')})&created_at=gte.${todayIST}T00:00:00+05:30`).catch(()=>[]);
+    (vrows||[]).forEach(v => { visitCounts[v.staff_id] = (visitCounts[v.staff_id]||0)+1; });
+  }
+
+  const repCards = (staff||[]).map(s => {
+    const loc = lastLoc[s.id];
+    const locAge = loc ? Math.round((Date.now()-new Date(loc.recorded_at))/60000) : null;
+    const isLive = locAge !== null && locAge <= 5;
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--bdr);">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--card2);
+             border:2px solid ${isLive?'var(--green)':'var(--bdr)'};
+             display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">👤</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;">${s.name}</div>
+          <div style="font-size:11px;color:var(--t3);">${s.designation||s.role}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:20px;font-weight:900;color:${(visitCounts[s.id]||0)>=15?'var(--green)':'var(--t1)'};">${visitCounts[s.id]||0}</div>
+          <div style="font-size:10px;color:var(--t3);">visits</div>
+        </div>
+        <div style="text-align:right;min-width:80px;">
+          ${isLive ? `<span class="badge badge-green">🟢 Live ${locAge}m ago</span>` :
+            loc ? `<span class="badge badge-grey">${locAge}m ago</span>` :
+            `<span class="badge badge-red">No signal</span>`}
+          ${loc ? `<div style="font-size:10px;color:var(--t3);margin-top:4px;">${parseFloat(loc.lat).toFixed(4)}, ${parseFloat(loc.lng).toFixed(4)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="stat-card">
+        <div class="stat-val" style="color:var(--green);">${(staff||[]).filter(s=>lastLoc[s.id]&&Math.round((Date.now()-new Date(lastLoc[s.id].recorded_at))/60000)<=5).length}</div>
+        <div class="stat-lbl">Active now</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${Object.values(visitCounts).reduce((a,b)=>a+b,0)}</div>
+        <div class="stat-lbl">Visits today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${(staff||[]).length}</div>
+        <div class="stat-lbl">Total field staff</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📍 Live Locations — All Field Reps</div>
+      <div style="background:var(--card2);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;color:var(--t3);font-size:13px;">
+        🗺️ Google Maps integration — add Maps API key to enable live map view<br>
+        <span style="font-size:11px;">Coordinates being tracked every 2 min</span>
+      </div>
+      ${repCards || '<div style="color:var(--t3);font-size:13px;text-align:center;padding:20px;">No field staff found</div>'}
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ Open Alerts</div>
+      <div id="field-alerts-list" style="color:var(--t3);font-size:13px;">Loading…</div>
+    </div>`;
+
+  // Load alerts
+  const alerts = await sbFetch(`field_alerts?select=*,staff:staff_id(name)&resolved_at=is.null&order=triggered_at.desc&limit=20`).catch(()=>[]);
+  const alertsEl = document.getElementById('field-alerts-list');
+  if (alertsEl) {
+    if (!alerts?.length) { alertsEl.textContent = 'No open alerts'; return; }
+    alertsEl.innerHTML = `<table class="tbl"><thead><tr><th>Rep</th><th>Alert</th><th>Time</th><th>Action</th></tr></thead><tbody>
+      ${alerts.map(a=>`<tr>
+        <td>${a.staff?.name||'—'}</td>
+        <td><span class="badge ${a.severity==='escalation'?'badge-red':a.severity==='warning'?'badge-amber':'badge-grey'}">${a.alert_type}</span></td>
+        <td style="color:var(--t3);">${new Date(a.triggered_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
+        <td><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="resolveAlert(${a.id})">Resolve</button></td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+}
+
+async function resolveAlert(id) {
+  await sbFetch(`field_alerts?id=eq.${id}`, {method:'PATCH',body:JSON.stringify({resolved_at:new Date().toISOString()}),headers:{'Prefer':'return=minimal'}}).catch(()=>{});
+  loadFieldMap();
+}
+
+// ── 2. FIELD TEAM MANAGEMENT ──
+async function loadFieldTeam() {
+  setPageTitle('Field Team');
+  document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
+
+  const staff = await sbFetch(`staff?select=id,name,phone,designation,role,department,active&department=eq.Field&order=name`).catch(()=>[]);
+  const { start, end, label } = getCycleRange();
+
+  // Get cycle stats per person
+  let cycleVisits = {}, cycleKm = {}, cycleFuel = {};
+  const ids = (staff||[]).map(s=>s.id);
+  if (ids.length) {
+    const [vrows, atrows] = await Promise.all([
+      sbFetch(`field_visits?select=staff_id&staff_id=in.(${ids.join(',')})&created_at=gte.${start.toISOString()}&created_at=lte.${end.toISOString()}`).catch(()=>[]),
+      sbFetch(`attendance?select=staff_id,km_travelled,fuel_reimbursement&staff_id=in.(${ids.join(',')})&date=gte.${start.toISOString()}&date=lte.${end.toISOString()}`).catch(()=>[]),
+    ]);
+    (vrows||[]).forEach(v => { cycleVisits[v.staff_id] = (cycleVisits[v.staff_id]||0)+1; });
+    (atrows||[]).forEach(a => {
+      cycleKm[a.staff_id] = (cycleKm[a.staff_id]||0) + (parseFloat(a.km_travelled)||0);
+      cycleFuel[a.staff_id] = (cycleFuel[a.staff_id]||0) + (parseFloat(a.fuel_reimbursement)||0);
+    });
+  }
+
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="font-size:12px;color:var(--t3);">Cycle: ${label}</div>
+      <button class="btn btn-primary" style="padding:8px 16px;font-size:13px;" onclick="showAddStaffModal()">+ Add Staff</button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Name</th><th>Designation</th><th>Phone</th>
+          <th>Cycle Visits</th><th>Cycle km</th><th>Fuel Due</th>
+          <th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${(staff||[]).map(s => `<tr>
+            <td style="font-weight:700;">${s.name}</td>
+            <td>${s.designation||s.role||'—'}</td>
+            <td style="font-family:monospace;">${s.phone||'—'}</td>
+            <td style="font-weight:700;color:${(cycleVisits[s.id]||0)>=15?'var(--green)':'var(--t1)'};">${cycleVisits[s.id]||0}</td>
+            <td>${Math.round(cycleKm[s.id]||0)} km</td>
+            <td style="color:var(--gold);">₹${Math.round(cycleFuel[s.id]||0).toLocaleString('en-IN')}</td>
+            <td><span class="badge ${s.active?'badge-green':'badge-red'}">${s.active?'Active':'Inactive'}</span></td>
+            <td>
+              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;margin-right:4px;" onclick="editStaffModal(${JSON.stringify(s).replace(/"/g,'&quot;')})">Edit</button>
+              <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;color:var(--red);" onclick="toggleStaffActive(${s.id},${s.active})">${s.active?'Deactivate':'Activate'}</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Add/Edit Staff Modal -->
+    <div id="staff-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;display:none;align-items:center;justify-content:center;">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:440px;max-width:90vw;border:1px solid var(--bdr);">
+        <div style="font-size:16px;font-weight:800;margin-bottom:20px;" id="staff-modal-title">Add Field Staff</div>
+        <div style="display:grid;gap:12px;">
+          <div><label class="form-lbl">Full Name *</label><input class="form-inp" id="sf-name" placeholder="Shaikh Sabeer"></div>
+          <div><label class="form-lbl">Phone *</label><input class="form-inp" id="sf-phone" type="tel" maxlength="10" placeholder="10-digit mobile"></div>
+          <div><label class="form-lbl">Designation *</label>
+            <select class="form-sel" id="sf-desig">
+              <option value="">Select…</option>
+              <option value="Mapping Executive">Mapping Executive</option>
+              <option value="Field Executive">Field Executive</option>
+              <option value="Team Leader Projects">Team Leader Projects</option>
+              <option value="Team Leader Retail">Team Leader Retail</option>
+              <option value="Team Leader B2B">Team Leader B2B</option>
+              <option value="ASM">ASM</option>
+              <option value="ASM B2B">ASM B2B</option>
+              <option value="ASM Retail">ASM Retail</option>
+              <option value="ASM Projects">ASM Projects</option>
+              <option value="Cluster Head">Cluster Head</option>
+              <option value="Region Head">Region Head</option>
+            </select>
+          </div>
+          <div><label class="form-lbl">Role</label>
+            <select class="form-sel" id="sf-role">
+              <option value="Mapping Executive">Mapping Executive</option>
+              <option value="Field Executive">Field Executive</option>
+              <option value="Team Leader">Team Leader</option>
+              <option value="ASM">ASM</option>
+              <option value="Cluster Head">Cluster Head</option>
+              <option value="Region Head">Region Head</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <div style="flex:1;"><label class="form-lbl">Territory / Corridor</label><input class="form-inp" id="sf-territory" placeholder="e.g. VJA-Rajahmundry"></div>
+            <div style="flex:1;"><label class="form-lbl">City</label><input class="form-inp" id="sf-city-field" placeholder="Vijayawada"></div>
+          </div>
+        </div>
+        <input type="hidden" id="sf-edit-id">
+        <div style="display:flex;gap:10px;margin-top:20px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="saveStaffModal()">Save</button>
+          <button class="btn btn-ghost" style="flex:1;" onclick="document.getElementById('staff-modal').style.display='none'">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showAddStaffModal() {
+  document.getElementById('sf-edit-id').value = '';
+  document.getElementById('sf-name').value = '';
+  document.getElementById('sf-phone').value = '';
+  document.getElementById('sf-desig').value = '';
+  document.getElementById('sf-role').value = 'Field Executive';
+  document.getElementById('sf-territory').value = '';
+  document.getElementById('sf-city-field').value = 'Vijayawada';
+  document.getElementById('staff-modal-title').textContent = 'Add Field Staff';
+  document.getElementById('staff-modal').style.display = 'flex';
+}
+
+function editStaffModal(s) {
+  document.getElementById('sf-edit-id').value = s.id;
+  document.getElementById('sf-name').value = s.name||'';
+  document.getElementById('sf-phone').value = s.phone||'';
+  document.getElementById('sf-desig').value = s.designation||'';
+  document.getElementById('sf-role').value = s.role||'Field Executive';
+  document.getElementById('staff-modal-title').textContent = 'Edit Staff — ' + s.name;
+  document.getElementById('staff-modal').style.display = 'flex';
+}
+
+async function saveStaffModal() {
+  const id = document.getElementById('sf-edit-id').value;
+  const payload = {
+    name: document.getElementById('sf-name').value.trim(),
+    phone: document.getElementById('sf-phone').value.trim().replace(/\D/g,'').slice(-10),
+    designation: document.getElementById('sf-desig').value,
+    role: document.getElementById('sf-role').value,
+    department: 'Field',
+    active: true,
+  };
+  if (!payload.name || !payload.phone || !payload.designation) { alert('Name, phone and designation are required'); return; }
+  if (id) {
+    await sbFetch(`staff?id=eq.${id}`, {method:'PATCH',body:JSON.stringify(payload),headers:{'Prefer':'return=minimal'}}).catch(e=>alert('Error: '+e.message));
+  } else {
+    await sbFetch('staff', {method:'POST',body:JSON.stringify(payload),headers:{'Prefer':'return=minimal'}}).catch(e=>alert('Error: '+e.message));
+  }
+  document.getElementById('staff-modal').style.display = 'none';
+  loadFieldTeam();
+}
+
+async function toggleStaffActive(id, current) {
+  if (!confirm(`${current?'Deactivate':'Activate'} this staff member?`)) return;
+  await sbFetch(`staff?id=eq.${id}`, {method:'PATCH',body:JSON.stringify({active:!current}),headers:{'Prefer':'return=minimal'}}).catch(()=>{});
+  loadFieldTeam();
+}
+
+// ── 3. SITE VISITS ──
+async function loadFieldVisits() {
+  setPageTitle('Site Visits');
+  document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
+
+  const visits = await sbFetch('field_visits?select=id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,city,customer_requirements,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,site_contacts,notes,next_action_date,is_followup,visit_number,competitor_products,dept_flags&order=created_at.desc&limit=100').catch(()=>[]);
+
+  const rows = (visits||[]).map(v => {
+    const contacts = v.site_contacts?.length || 0;
+    const score = v.visit_quality_score ? Math.round(v.visit_quality_score) : 0;
+    const scoreColor = score >= 90 ? 'var(--green)' : score >= 60 ? 'var(--gold)' : 'var(--red)';
+    const aiVal = v.ai_estimated_value_min ? `₹${(v.ai_estimated_value_min/100000).toFixed(1)}L–₹${(v.ai_estimated_value_max/100000).toFixed(1)}L` : '—';
+    return `<tr onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
+      <td>${new Date(v.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="font-weight:700;">${v.executive_name||'—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.site_address||'—'}</td>
+      <td><span class="badge badge-blue">${fieldStageLabel(v.construction_stage)}</span></td>
+      <td style="font-weight:700;color:${scoreColor};">${score}%</td>
+      <td>${contacts} contacts</td>
+      <td style="color:var(--gold);">${aiVal}</td>
+      <td>${v.next_action_date ? new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+      <input class="form-inp" id="fv-search" placeholder="Search by rep or site…" style="max-width:260px;" oninput="filterVisitsTable(this.value)">
+      <select class="form-sel" style="max-width:180px;" onchange="filterVisitsByStage(this.value)">
+        <option value="">All stages</option>
+        <option value="foundation">Foundation</option>
+        <option value="structure">Structure</option>
+        <option value="plastering">Plastering</option>
+        <option value="tiling_ready">Tiling Ready</option>
+        <option value="finishing">Finishing</option>
+      </select>
+      <select class="form-sel" style="max-width:160px;" onchange="filterVisitsByScore(this.value)">
+        <option value="">All scores</option>
+        <option value="high">90%+ (Qualified)</option>
+        <option value="mid">60–89%</option>
+        <option value="low">Below 60%</option>
+      </select>
+    </div>
+
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table class="tbl" id="visits-table">
+        <thead><tr>
+          <th>Date/Time</th><th>Rep</th><th>Site</th><th>Stage</th>
+          <th>Quality</th><th>Contacts</th><th>AI Value</th><th>Follow-up</th>
+        </tr></thead>
+        <tbody id="visits-tbody">${rows}</tbody>
+      </table>
+    </div>
+
+    <!-- Visit Detail Panel -->
+    <div id="visit-detail-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:480px;
+         background:var(--card);border-left:1px solid var(--bdr);overflow-y:auto;z-index:200;padding:24px;">
+      <button onclick="document.getElementById('visit-detail-panel').style.display='none'"
+        style="position:absolute;top:16px;right:16px;background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;">✕</button>
+      <div id="visit-detail-content">—</div>
+    </div>`;
+}
+
+async function showVisitDetail(id) {
+  const panel = document.getElementById('visit-detail-panel');
+  const content = document.getElementById('visit-detail-content');
+  panel.style.display = 'block';
+  content.innerHTML = '<div style="color:var(--t3);padding:40px 0;text-align:center;">Loading…</div>';
+
+  const vArr = await sbFetch(`field_visits?id=eq.${id}&select=*&limit=1`).catch(()=>[]);
+  const v = vArr?.[0];
+  if (!v) { content.innerHTML = '<div style="color:var(--t3);">Visit not found</div>'; return; }
+
+  const score = Math.round(v.visit_quality_score||0);
+  const scoreColor = score>=90?'var(--green)':score>=60?'var(--gold)':'var(--red)';
+
+  content.innerHTML = `
+    <div style="margin-bottom:20px;">
+      <div style="font-size:18px;font-weight:800;margin-bottom:4px;">${v.site_address||'Site Visit'}</div>
+      <div style="font-size:12px;color:var(--t3);">${v.executive_name||'—'} · ${new Date(v.created_at).toLocaleString('en-IN')}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:var(--card2);border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:var(--t3);">STAGE</div>
+        <div style="font-weight:700;margin-top:4px;">${fieldStageLabel(v.construction_stage)}</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:var(--t3);">QUALITY SCORE</div>
+        <div style="font-weight:700;color:${scoreColor};margin-top:4px;">${score}%</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:var(--t3);">EST. SQ FT</div>
+        <div style="font-weight:700;margin-top:4px;">${v.estimated_sqft ? v.estimated_sqft.toLocaleString('en-IN') + ' sqft' : '—'}</div>
+      </div>
+      <div style="background:var(--card2);border-radius:10px;padding:12px;">
+        <div style="font-size:11px;color:var(--t3);">AI VALUE RANGE</div>
+        <div style="font-weight:700;color:var(--gold);margin-top:4px;">${v.ai_estimated_value_min ? '₹'+(v.ai_estimated_value_min/100000).toFixed(1)+'L – ₹'+(v.ai_estimated_value_max/100000).toFixed(1)+'L' : '—'}</div>
+      </div>
+    </div>
+
+    ${v.site_contacts?.length ? `
+      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">CONTACTS (${v.site_contacts.length})</div>
+      ${v.site_contacts.map(c=>`
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
+          <div>
+            <div style="font-size:11px;color:var(--b);">${c.role||'Contact'}</div>
+            <div style="font-weight:600;">${c.name||'—'}</div>
+          </div>
+          <a href="tel:${c.phone}" style="color:var(--green);font-size:13px;text-decoration:none;align-self:center;">📞 ${c.phone||''}</a>
+        </div>`).join('')}
+      <div style="margin-bottom:16px;"></div>` : ''}
+
+    ${v.ai_requirements?.length ? `
+      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">AI DETECTED REQUIREMENTS</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+        ${v.ai_requirements.map(r=>`<span style="padding:4px 10px;border-radius:20px;background:rgba(59,130,246,.15);color:var(--b);font-size:12px;font-weight:600;">${r}</span>`).join('')}
+      </div>` : ''}
+
+    ${v.notes ? `
+      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:6px;">NOTES</div>
+      <div style="font-size:13px;color:var(--t2);background:var(--card2);border-radius:8px;padding:12px;margin-bottom:16px;">${v.notes}</div>` : ''}
+
+    ${v.next_action_date ? `
+      <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 14px;font-size:13px;">
+        📅 Follow-up: <strong>${new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</strong>
+      </div>` : ''}
+
+    ${v.site_photos?.length ? `
+      <div style="margin-top:16px;">
+        <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">SITE PHOTOS (${v.site_photos.length})</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
+          ${v.site_photos.map(p=>`<img src="${p.url||p}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="window.open('${p.url||p}','_blank')">`).join('')}
+        </div>
+      </div>` : ''}`;
+}
+
+function filterVisitsTable(q) {
+  const rows = document.querySelectorAll('#visits-tbody tr');
+  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none'; });
+}
+function filterVisitsByStage(stage) {
+  const rows = document.querySelectorAll('#visits-tbody tr');
+  rows.forEach(r => { r.style.display = !stage || r.querySelector('td:nth-child(4)')?.textContent.toLowerCase().includes(stage.replace('_',' ').toLowerCase()) ? '' : 'none'; });
+}
+function filterVisitsByScore(band) {
+  const rows = document.querySelectorAll('#visits-tbody tr');
+  rows.forEach(r => {
+    const score = parseInt(r.querySelector('td:nth-child(5)')?.textContent) || 0;
+    const show = !band || (band==='high'&&score>=90) || (band==='mid'&&score>=60&&score<90) || (band==='low'&&score<60);
+    r.style.display = show ? '' : 'none';
+  });
+}
+
+// ── 4. FUEL & ATTENDANCE ──
+async function loadFieldFuel() {
+  setPageTitle('Fuel & Attendance');
+  document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
+
+  const { start, end, label } = getCycleRange();
+  const atts = await sbFetch(`attendance?select=*,staff:staff_id(name,designation)&date=gte.${start.toISOString()}&date=lte.${end.toISOString()}&order=date.desc`).catch(()=>[]);
+
+  // Group by staff
+  const byStaff = {};
+  (atts||[]).forEach(a => {
+    const name = a.staff?.name || a.staff_id;
+    if (!byStaff[name]) byStaff[name] = { name, desig: a.staff?.designation||'—', days:0, totalKm:0, totalFuel:0 };
+    byStaff[name].days++;
+    byStaff[name].totalKm += parseFloat(a.km_travelled||0);
+    byStaff[name].totalFuel += parseFloat(a.fuel_reimbursement||0);
+  });
+
+  const totalFuel = Object.values(byStaff).reduce((s,r)=>s+r.totalFuel,0);
+
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <div style="font-size:13px;font-weight:700;">Cycle: ${label}</div>
+        <div style="font-size:11px;color:var(--t3);">Fuel paid with salary on 20th</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:24px;font-weight:900;color:var(--gold);">₹${Math.round(totalFuel).toLocaleString('en-IN')}</div>
+        <div style="font-size:11px;color:var(--t3);">Total fuel due this cycle</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Staff</th><th>Designation</th><th>Days Active</th>
+          <th>Total km</th><th>Rate</th><th>Fuel Due</th><th>Status</th>
+        </tr></thead>
+        <tbody>
+          ${Object.values(byStaff).map(r=>`<tr>
+            <td style="font-weight:700;">${r.name}</td>
+            <td>${r.desig}</td>
+            <td>${r.days}</td>
+            <td>${Math.round(r.totalKm)} km</td>
+            <td style="color:var(--t3);">₹2.5/km</td>
+            <td style="font-weight:700;color:var(--gold);">₹${Math.round(r.totalFuel).toLocaleString('en-IN')}</td>
+            <td><span class="badge badge-amber">Due with salary</span></td>
+          </tr>`).join('')}
+          <tr style="background:var(--card2);">
+            <td colspan="3" style="font-weight:800;">TOTAL</td>
+            <td style="font-weight:800;">${Math.round(Object.values(byStaff).reduce((s,r)=>s+r.totalKm,0))} km</td>
+            <td>—</td>
+            <td style="font-weight:800;color:var(--gold);">₹${Math.round(totalFuel).toLocaleString('en-IN')}</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📅 Daily Attendance — This Cycle</div>
+      <div style="overflow-x:auto;">
+        <table class="tbl">
+          <thead><tr><th>Date</th><th>Staff</th><th>Punch In</th><th>Punch Out</th><th>km</th><th>Fuel</th><th>Selfie</th></tr></thead>
+          <tbody>
+            ${(atts||[]).map(a=>`<tr>
+              <td>${new Date(a.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</td>
+              <td style="font-weight:700;">${a.staff?.name||'—'}</td>
+              <td>${a.punch_in?.slice(0,5)||'—'}</td>
+              <td>${a.punch_out?.slice(0,5)||'—'}</td>
+              <td>${a.km_travelled||'—'}</td>
+              <td style="color:var(--gold);">₹${Math.round(a.fuel_reimbursement||0)}</td>
+              <td>${a.check_in_selfie_url ? `<a href="${a.check_in_selfie_url}" target="_blank" style="color:var(--b);font-size:11px;">View</a>` : '—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── 5. INCENTIVES & TARGETS ──
+async function loadFieldIncentives() {
+  setPageTitle('Incentives & Targets');
+  document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
+
+  const rules = await sbFetch('field_incentive_rules?select=*&order=designation').catch(()=>[]);
+
+  const rows = (rules||[]).map(r => `
+    <tr>
+      <td style="font-weight:700;">${r.designation}</td>
+      <td style="color:var(--gold);">₹${r.fuel_rate_per_km}/km</td>
+      <td>${r.daily_visit_target||'—'}</td>
+      <td>₹${r.monthly_billing_target_bronze ? (r.monthly_billing_target_bronze/100000).toFixed(1)+'L' : '—'}</td>
+      <td>₹${r.monthly_billing_target_silver ? (r.monthly_billing_target_silver/100000).toFixed(1)+'L' : '—'}</td>
+      <td>₹${r.monthly_billing_target_gold ? (r.monthly_billing_target_gold/100000).toFixed(1)+'L' : '—'}</td>
+      <td>${r.personal_contribution_pct ? r.personal_contribution_pct+'%' : '—'}</td>
+      <td><span class="badge ${r.payout_drop_if_floor_missed?'badge-amber':'badge-grey'}">${r.target_type||'individual'}</span></td>
+      <td><button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="editIncentiveRule(${r.id})">Edit</button></td>
+    </tr>`).join('');
+
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="margin-bottom:14px;padding:14px 16px;background:rgba(245,200,66,.08);border-color:rgba(245,200,66,.3);">
+      <div style="font-size:13px;font-weight:700;color:var(--gold);margin-bottom:4px;">📋 Incentive Rules — 21st to 20th Cycle</div>
+      <div style="font-size:12px;color:var(--t3);">Minimum 90% visit quality score required to qualify. Bronze = minimum payout, Gold = full payout.</div>
+    </div>
+
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table class="tbl">
+        <thead><tr>
+          <th>Designation</th><th>Fuel Rate</th><th>Daily Target</th>
+          <th>Bronze</th><th>Silver</th><th>Gold</th>
+          <th>Personal Floor</th><th>Target Type</th><th>Edit</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <!-- Edit Rule Panel -->
+    <div id="incentive-edit-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:420px;
+         background:var(--card);border-left:1px solid var(--bdr);padding:24px;overflow-y:auto;z-index:200;">
+      <button onclick="document.getElementById('incentive-edit-panel').style.display='none'"
+        style="position:absolute;top:16px;right:16px;background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;">✕</button>
+      <div id="incentive-edit-content">—</div>
+    </div>`;
+}
+
+async function editIncentiveRule(id) {
+  const rArr = await sbFetch(`field_incentive_rules?id=eq.${id}&select=*&limit=1`).catch(()=>[]);
+  const r = rArr?.[0];
+  if (!r) return;
+  const panel = document.getElementById('incentive-edit-panel');
+  panel.style.display = 'block';
+  document.getElementById('incentive-edit-content').innerHTML = `
+    <div style="font-size:16px;font-weight:800;margin-bottom:20px;">${r.designation}</div>
+    <div style="display:grid;gap:12px;">
+      <div><label class="form-lbl">Fuel Rate (₹/km)</label><input class="form-inp" id="ir-fuel" type="number" step="0.5" value="${r.fuel_rate_per_km||2.5}"></div>
+      <div><label class="form-lbl">Daily Visit Target</label><input class="form-inp" id="ir-daily" type="number" value="${r.daily_visit_target||''}"></div>
+      <div><label class="form-lbl">Bronze Billing Target (₹)</label><input class="form-inp" id="ir-bronze" type="number" value="${r.monthly_billing_target_bronze||''}"></div>
+      <div><label class="form-lbl">Bronze Payout (₹)</label><input class="form-inp" id="ir-bronze-pay" type="number" value="${r.incentive_bronze||''}"></div>
+      <div><label class="form-lbl">Silver Billing Target (₹)</label><input class="form-inp" id="ir-silver" type="number" value="${r.monthly_billing_target_silver||''}"></div>
+      <div><label class="form-lbl">Silver Payout (₹)</label><input class="form-inp" id="ir-silver-pay" type="number" value="${r.incentive_silver||''}"></div>
+      <div><label class="form-lbl">Gold Billing Target (₹)</label><input class="form-inp" id="ir-gold" type="number" value="${r.monthly_billing_target_gold||''}"></div>
+      <div><label class="form-lbl">Gold Payout (₹)</label><input class="form-inp" id="ir-gold-pay" type="number" value="${r.incentive_gold||''}"></div>
+      <div><label class="form-lbl">Personal Contribution Floor (%)</label><input class="form-inp" id="ir-floor-pct" type="number" value="${r.personal_contribution_pct||''}"></div>
+    </div>
+    <button class="btn btn-primary" style="width:100%;margin-top:20px;" onclick="saveIncentiveRule(${id})">Save Changes</button>`;
+}
+
+async function saveIncentiveRule(id) {
+  const payload = {
+    fuel_rate_per_km: parseFloat(document.getElementById('ir-fuel').value)||2.5,
+    daily_visit_target: parseInt(document.getElementById('ir-daily').value)||null,
+    monthly_billing_target_bronze: parseFloat(document.getElementById('ir-bronze').value)||null,
+    incentive_bronze: parseFloat(document.getElementById('ir-bronze-pay').value)||null,
+    monthly_billing_target_silver: parseFloat(document.getElementById('ir-silver').value)||null,
+    incentive_silver: parseFloat(document.getElementById('ir-silver-pay').value)||null,
+    monthly_billing_target_gold: parseFloat(document.getElementById('ir-gold').value)||null,
+    incentive_gold: parseFloat(document.getElementById('ir-gold-pay').value)||null,
+    personal_contribution_pct: parseFloat(document.getElementById('ir-floor-pct').value)||null,
+  };
+  await sbFetch(`field_incentive_rules?id=eq.${id}`, {method:'PATCH', body:JSON.stringify(payload), headers:{'Prefer':'return=minimal'}});
+  document.getElementById('incentive-edit-panel').style.display = 'none';
+  loadFieldIncentives();
+}
 
 // ── INIT ──
 const savedSession = localStorage.getItem('vw_admin_session');
