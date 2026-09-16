@@ -1484,11 +1484,22 @@ async function loadTeamVisits(visitRows) {
 }
 
 async function requestPermissions() {
+  // Only show permission sheet once — if already shown, just start tracking
+  if (localStorage.getItem('vw_field_perms_shown')) {
+    startLocationTracking();
+    return;
+  }
+  // Check actual permission states
   const camStatus = await navigator.permissions?.query({ name: 'camera' }).catch(() => null);
   const gpsStatus = await navigator.permissions?.query({ name: 'geolocation' }).catch(() => null);
   const needsCam = !camStatus || camStatus.state === 'prompt';
   const needsGps = !gpsStatus || gpsStatus.state === 'prompt';
-  if (!needsCam && !needsGps) { startLocationTracking(); return; }
+  // If both already granted, mark as shown and skip
+  if (!needsCam && !needsGps) {
+    localStorage.setItem('vw_field_perms_shown', '1');
+    startLocationTracking();
+    return;
+  }
   showPermissionSheet(needsCam, needsGps);
 }
 
@@ -1550,6 +1561,7 @@ function showPermissionSheet(needsCam, needsGps) {
     }
     sheet.classList.remove('open');
     setTimeout(() => sheet.remove(), 300);
+    localStorage.setItem('vw_field_perms_shown', '1');
     startLocationTracking();
     showToast('Permissions set — ready to go');
   };
@@ -1557,6 +1569,7 @@ function showPermissionSheet(needsCam, needsGps) {
   document.getElementById('btn-skip-permissions').onclick = () => {
     sheet.classList.remove('open');
     setTimeout(() => sheet.remove(), 300);
+    localStorage.setItem('vw_field_perms_shown', '1');
     startLocationTracking();
     showToast('Some features need permissions to work', 4000);
   };
@@ -1837,8 +1850,18 @@ function renderAICard(v) {
 // ══════════════════════════════════════════════
 // PUNCH IN / OUT
 // ══════════════════════════════════════════════
+function isManagerDesig() {
+  const r = ((currentUser?.designation||'') + ' ' + (currentUser?.role||'')).toLowerCase();
+  return r.includes('asm') || r.includes('cluster head') || r.includes('region head');
+}
+
 function openPunchSheet() {
   if (!currentAttendance) {
+    // ASM and above: simple punch-in, no selfie/odometer needed
+    if (isManagerDesig()) {
+      managerPunchIn();
+      return;
+    }
     document.getElementById('punch-sheet-title').textContent = 'Punch In — Start Day';
     document.getElementById('punch-in-form').classList.remove('hidden');
     document.getElementById('punch-out-form').classList.add('hidden');
@@ -1848,6 +1871,7 @@ function openPunchSheet() {
         `Location: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
     });
   } else if (!currentAttendance.punch_out) {
+    if (isManagerDesig()) { managerPunchOut(); return; }
     document.getElementById('punch-sheet-title').textContent = 'Punch Out — End Day';
     document.getElementById('punch-in-form').classList.add('hidden');
     document.getElementById('punch-out-form').classList.remove('hidden');
@@ -1855,6 +1879,42 @@ function openPunchSheet() {
     showToast('Day already ended'); return;
   }
   openSheet('sheet-punch');
+}
+
+async function managerPunchIn() {
+  const btn = document.getElementById('punch-btn');
+  btn.disabled = true; btn.textContent = 'Starting…';
+  try {
+    const now = new Date();
+    getCurrentGPS(async pos => { lastLocation = pos; }, () => {});
+    const { data: att, error } = await sb.from('attendance').insert({
+      staff_id: currentUser.id,
+      date: new Date().toISOString(),
+      status: 'present',
+      punch_in: new Date().toLocaleTimeString('en-IN', {hour12:false}),
+      check_in_lat: lastLocation?.coords?.latitude || null,
+      check_in_lng: lastLocation?.coords?.longitude || null,
+      city: currentUser.city || 'Vijayawada'
+    }).select().single();
+    if (error) throw error;
+    currentAttendance = att;
+    document.getElementById('punch-label').textContent = 'Punched in since';
+    document.getElementById('punch-time').textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    btn.textContent = 'Punch Out'; btn.className = 'punch-btn out'; btn.disabled = false;
+    btn.onclick = openPunchSheet;
+    showToast('✅ Day started');
+  } catch(e) { showToast('Error: ' + e.message); btn.disabled = false; btn.textContent = 'Start Day'; }
+}
+
+async function managerPunchOut() {
+  if (!confirm('End your day?')) return;
+  try {
+    await sb.from('attendance').update({
+      punch_out: new Date().toLocaleTimeString('en-IN',{hour12:false})
+    }).eq('id', currentAttendance.id);
+    showToast('✅ Day ended');
+    await loadTodayData();
+  } catch(e) { showToast('Error: ' + e.message); }
 }
 
 async function doPunchIn() {
