@@ -2164,6 +2164,24 @@ async function loadFieldMap() {
     (vrows||[]).forEach(v => { visitCounts[v.staff_id] = (visitCounts[v.staff_id]||0)+1; });
   }
 
+  // Build quick map links
+  setTimeout(() => {
+    const mapLinks = document.getElementById('field-map-links');
+    if (mapLinks) {
+      mapLinks.innerHTML = (staff||[]).map(s => {
+        const loc = lastLoc[s.id];
+        if (!loc) return `<span style="padding:6px 12px;border-radius:20px;background:var(--card);border:1px solid var(--bdr);font-size:12px;color:var(--t3);">${s.name.split(' ')[0]}: No signal</span>`;
+        const age = Math.round((Date.now()-new Date(loc.recorded_at))/60000);
+        return `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank"
+          style="padding:6px 12px;border-radius:20px;background:${age<=5?'rgba(34,197,94,.15)':'var(--card)'};
+          border:1px solid ${age<=5?'var(--green)':'var(--bdr)'};font-size:12px;color:${age<=5?'var(--green)':'var(--t2)'};
+          text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+          📍 ${s.name.split(' ')[0]} <span style="color:var(--t3);font-size:10px;">${age}m ago</span>
+        </a>`;
+      }).join('');
+    }
+  }, 100);
+
   const repCards = (staff||[]).map(s => {
     const loc = lastLoc[s.id];
     const locAge = loc ? Math.round((Date.now()-new Date(loc.recorded_at))/60000) : null;
@@ -2185,7 +2203,9 @@ async function loadFieldMap() {
           ${isLive ? `<span class="badge badge-green">🟢 Live ${locAge}m ago</span>` :
             loc ? `<span class="badge badge-grey">${locAge}m ago</span>` :
             `<span class="badge badge-red">No signal</span>`}
-          ${loc ? `<div style="font-size:10px;color:var(--t3);margin-top:4px;">${parseFloat(loc.lat).toFixed(4)}, ${parseFloat(loc.lng).toFixed(4)}</div>` : ''}
+          ${loc ? `<a href="https://www.google.com/maps?q=${loc.lat},${loc.lng}" target="_blank" 
+              style="font-size:11px;color:var(--b);margin-top:4px;display:block;text-decoration:none;">
+              📍 Open in Maps</a>` : ''}
         </div>
       </div>`;
   }).join('');
@@ -2208,9 +2228,11 @@ async function loadFieldMap() {
 
     <div class="card">
       <div class="card-title">📍 Live Locations — All Field Reps</div>
-      <div style="background:var(--card2);border-radius:10px;padding:16px;margin-bottom:16px;text-align:center;color:var(--t3);font-size:13px;">
-        🗺️ Google Maps integration — add Maps API key to enable live map view<br>
-        <span style="font-size:11px;">Coordinates being tracked every 2 min</span>
+      <div style="background:var(--card2);border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="text-align:center;color:var(--t3);font-size:13px;margin-bottom:12px;">
+          🗺️ Live coordinates tracked every 2 min — click any rep to open location in Google Maps
+        </div>
+        <div id="field-map-links" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
       </div>
       ${repCards || '<div style="color:var(--t3);font-size:13px;text-align:center;padding:20px;">No field staff found</div>'}
     </div>
