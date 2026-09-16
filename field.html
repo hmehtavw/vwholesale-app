@@ -1237,7 +1237,7 @@ function showPermissionSheet(needsCam, needsGps) {
   const existing = document.getElementById('sheet-permissions');
   if (existing) existing.remove();
   const sheet = document.createElement('div');
-  sheet.className = 'sheet-backdrop open';
+  sheet.className = 'sheet-backdrop';
   sheet.id = 'sheet-permissions';
   sheet.innerHTML = `
     <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
@@ -1268,6 +1268,10 @@ function showPermissionSheet(needsCam, needsGps) {
       </div>
     </div>`;
   document.body.appendChild(sheet);
+  // Small delay so DOM is ready, then open
+  setTimeout(() => sheet.classList.add('open'), 10);
+  // Register backdrop click-to-close for dynamically added sheet
+  sheet.addEventListener('click', e => { if (e.target === sheet) { sheet.classList.remove('open'); setTimeout(() => sheet.remove(), 300); startLocationTracking(); } });
 
   document.getElementById('btn-grant-permissions').onclick = async () => {
     if (needsGps) {
@@ -1285,13 +1289,15 @@ function showPermissionSheet(needsCam, needsGps) {
         stream.getTracks().forEach(t => t.stop());
       } catch(e) { /* user denied — they can grant from settings */ }
     }
-    sheet.remove();
+    sheet.classList.remove('open');
+    setTimeout(() => sheet.remove(), 300);
     startLocationTracking();
     showToast('Permissions set — ready to go');
   };
 
   document.getElementById('btn-skip-permissions').onclick = () => {
-    sheet.remove();
+    sheet.classList.remove('open');
+    setTimeout(() => sheet.remove(), 300);
     startLocationTracking();
     showToast('Some features need permissions to work', 4000);
   };
@@ -1638,6 +1644,8 @@ function openNewVisitSheet() {
   // Allow visit logging even if not punched in / punched out
   // Field reality: rep may forget punch-in but still needs to log site visits
   if (!currentUser) { showToast('Please sign in first'); return; }
+  // Safety: remove any orphaned dynamic sheets (e.g. permissions) that may block taps
+  document.querySelectorAll('.sheet-backdrop:not(#sheet-punch):not(#sheet-visit):not(#sheet-visit-detail)').forEach(el => el.remove());
   resetVisitForm();
   document.getElementById('visit-sheet-title').textContent = 'Log Site Visit';
   openSheet('sheet-visit');
