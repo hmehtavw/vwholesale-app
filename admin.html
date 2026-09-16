@@ -2736,23 +2736,21 @@ async function loadOrgChart() {
   setPageTitle('Org Structure');
   document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);text-align:center;padding:40px;">Loading…</div>`;
 
-  const [staff, verticals, corridors] = await Promise.all([
-    sbFetch('staff?select=id,name,designation,role,vertical,corridor,reporting_to,active,phone&active=eq.true&department=eq.Field&order=name').catch(()=>[]),
+  const [staff, verticals, corridors, tlAreas] = await Promise.all([
+    sbFetch('staff?select=id,name,designation,role,vertical,corridor,reporting_to,active,phone,area_notes&active=eq.true&department=eq.Field&order=name').catch(()=>[]),
     sbFetch('org_verticals?select=*&order=display_order').catch(()=>[]),
     sbFetch('org_corridors?select=*&order=id').catch(()=>[]),
+    sbFetch('tl_area_assignments?select=*').catch(()=>[]),
   ]);
 
-  const vertMap = {};
-  (verticals||[]).forEach(v => { vertMap[v.code] = v; });
   const corrMap = {};
   (corridors||[]).forEach(c => { corrMap[c.code] = c; });
 
-  // Build hierarchy: group staff by vertical
-  const byVertical = {};
-  (staff||[]).forEach(s => {
-    const v = s.vertical || 'unassigned';
-    if (!byVertical[v]) byVertical[v] = [];
-    byVertical[v].push(s);
+  // Build TL area map: staffId → [corridor codes]
+  const tlAreaMap = {};
+  (tlAreas||[]).forEach(a => {
+    if (!tlAreaMap[a.staff_id]) tlAreaMap[a.staff_id] = [];
+    tlAreaMap[a.staff_id].push(a.corridor_code);
   });
 
   const verticalColors = {
@@ -2760,81 +2758,123 @@ async function loadOrgChart() {
     vbuild:'#EF4444', vdesign:'#A855F7', vmaas:'#06B6D4', unassigned:'#64748B'
   };
 
+  const byVertical = {};
+  (staff||[]).forEach(s => {
+    const v = s.vertical || 'unassigned';
+    if (!byVertical[v]) byVertical[v] = [];
+    byVertical[v].push(s);
+  });
+
   const verticalHTML = (verticals||[]).map(v => {
     const vStaff = byVertical[v.code] || [];
-    const asms = vStaff.filter(s => (s.designation||s.role||'').toLowerCase().includes('asm'));
-    const tls  = vStaff.filter(s => (s.designation||s.role||'').toLowerCase().includes('team leader') || (s.designation||s.role||'').toLowerCase().includes('tl'));
+    const asms  = vStaff.filter(s => (s.designation||s.role||'').toLowerCase().includes('asm'));
+    const tls   = vStaff.filter(s => (s.designation||s.role||'').toLowerCase().includes('team leader'));
     const execs = vStaff.filter(s => !asms.find(a=>a.id===s.id) && !tls.find(t=>t.id===s.id));
     const color = verticalColors[v.code] || '#64748B';
+    const maxTL = v.max_tl_count || 1;
+    const tlSlotsFilled = tls.length;
+    const tlSlotsOpen = Math.max(0, maxTL - tlSlotsFilled);
+
+    // TL cards with area assignment
+    const tlCards = [
+      ...tls.map(s => {
+        const areas = (tlAreaMap[s.id]||[]).map(c => corrMap[c]?.name || c);
+        return `
+        <div style="background:var(--card2);border-radius:10px;padding:12px;border:1px solid var(--bdr);position:relative;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">${s.name}</div>
+              <div style="font-size:11px;color:var(--t3);">${s.designation||s.role}</div>
+            </div>
+            <button onclick="editTLAreas(${s.id},'${v.code}',${JSON.stringify(tlAreaMap[s.id]||[]).replace(/"/g,"'")})"
+              style="padding:3px 8px;border-radius:6px;background:${color}15;border:1px solid ${color}33;
+              color:${color};font-size:11px;cursor:pointer;white-space:nowrap;">✏️ Areas</button>
+          </div>
+          ${areas.length ? `
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+              ${areas.map(a=>`<span style="padding:2px 8px;border-radius:12px;font-size:11px;background:${color}15;color:${color};border:1px solid ${color}33;">${a}</span>`).join('')}
+            </div>` : `
+            <div style="font-size:11px;color:var(--t3);font-style:italic;">No areas assigned yet</div>`}
+          ${s.area_notes ? `<div style="font-size:11px;color:var(--t3);margin-top:6px;">📝 ${s.area_notes}</div>` : ''}
+        </div>`;
+      }),
+      // Empty slots
+      ...Array(tlSlotsOpen).fill(0).map((_,i) => `
+        <div style="background:var(--card2);border-radius:10px;padding:12px;border:1px dashed var(--bdr);
+             display:flex;align-items:center;justify-content:center;min-height:80px;">
+          <button onclick="showAddStaffToVertical('${v.code}','Team Leader')"
+            style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:13px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:4px;">+</div>
+            <div>Add TL ${tlSlotsFilled + i + 1}/${maxTL}</div>
+          </button>
+        </div>`)
+    ].join('');
 
     return `
     <div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;overflow:hidden;margin-bottom:14px;">
-      <!-- Vertical header -->
       <div style="background:${color}18;border-bottom:2px solid ${color};padding:14px 16px;display:flex;align-items:center;justify-content:space-between;">
         <div>
           <div style="font-size:14px;font-weight:800;color:${color};">${v.name}</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:2px;">${v.brand} · ${vStaff.length} staff</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px;">
+            ${v.brand} &nbsp;·&nbsp;
+            <span style="color:${tlSlotsFilled>=maxTL?'var(--green)':'var(--gold)'};">${tlSlotsFilled}/${maxTL} TLs</span>
+            &nbsp;·&nbsp; ${execs.length} execs
+          </div>
         </div>
-        <button onclick="showAddStaffToVertical('${v.code}')"
+        <button onclick="showAddStaffToVertical('${v.code}','')"
           style="padding:6px 12px;border-radius:8px;background:${color}22;border:1px solid ${color}44;
-          color:${color};font-size:12px;font-weight:700;cursor:pointer;">+ Add</button>
+          color:${color};font-size:12px;font-weight:700;cursor:pointer;">+ Add Staff</button>
       </div>
 
       <div style="padding:14px 16px;">
-        <!-- ASMs -->
+        <!-- ASM -->
         ${asms.length ? `
-          <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">ASM</div>
+          <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">ASM</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
-            ${asms.map(s => staffChip(s, color, corrMap)).join('')}
+            ${asms.map(s=>`
+              <div style="display:flex;align-items:center;gap:8px;background:${color}15;border:1px solid ${color}33;border-radius:20px;padding:6px 14px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:${color};"></div>
+                <span style="font-size:13px;font-weight:700;">${s.name}</span>
+                <span style="font-size:10px;color:var(--t3);">ASM</span>
+              </div>`).join('')}
           </div>` : `
-          <div style="font-size:12px;color:var(--t3);margin-bottom:14px;padding:10px;background:var(--card2);border-radius:8px;text-align:center;">
-            No ASM assigned yet — <button onclick="showAddStaffToVertical('${v.code}')" style="background:none;border:none;color:${color};cursor:pointer;font-weight:700;">+ Add ASM</button>
+          <div style="font-size:12px;color:var(--t3);margin-bottom:14px;padding:8px;background:var(--card2);border-radius:8px;text-align:center;">
+            No ASM — <button onclick="showAddStaffToVertical('${v.code}','ASM')" style="background:none;border:none;color:${color};cursor:pointer;font-weight:700;">+ Assign ASM</button>
           </div>`}
 
-        <!-- TLs -->
-        <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">TEAM LEADERS</div>
-        ${tls.length ? `
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:14px;">
-            ${tls.map(s => staffCard(s, color, corrMap)).join('')}
-          </div>` : `
-          <div style="font-size:12px;color:var(--t3);margin-bottom:14px;padding:10px;background:var(--card2);border-radius:8px;text-align:center;">
-            No TLs yet — <button onclick="showAddStaffToVertical('${v.code}')" style="background:none;border:none;color:${color};cursor:pointer;font-weight:700;">+ Add TL</button>
-          </div>`}
-
-        <!-- Corridors grid -->
-        <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">CORRIDORS</div>
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
-          ${(corridors||[]).map(c => {
-            const corrStaff = vStaff.filter(s => s.corridor === c.code);
-            return `
-            <div style="background:var(--card2);border-radius:8px;padding:10px;border:1px solid var(--bdr);">
-              <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px;">📍 ${c.name}</div>
-              ${corrStaff.length ? corrStaff.map(s=>`
-                <div style="display:flex;align-items:center;gap:6px;padding:4px 0;">
-                  <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
-                  <div style="font-size:12px;">${s.name}</div>
-                  <div style="font-size:10px;color:var(--t3);">${s.designation||s.role||''}</div>
-                </div>`).join('') :
-                `<div style="font-size:11px;color:var(--t3);">Vacant</div>`}
-            </div>`;
-          }).join('')}
+        <!-- TL Slots -->
+        <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+          TEAM LEADERS (${tlSlotsFilled}/${maxTL})
         </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:14px;">
+          ${tlCards}
+        </div>
+
+        <!-- Execs summary -->
+        ${execs.length ? `
+          <div style="font-size:10px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">EXECUTIVES (${execs.length})</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${execs.map(s=>`
+              <span style="padding:4px 10px;border-radius:20px;font-size:11px;background:var(--card2);border:1px solid var(--bdr);color:var(--t2);">
+                ${s.name} <span style="color:var(--t3);">${s.designation||s.role||''}</span>
+              </span>`).join('')}
+          </div>` : ''}
       </div>
     </div>`;
   }).join('');
 
-  // Unassigned staff
+  // Unassigned
   const unassigned = (staff||[]).filter(s => !s.vertical);
   const unassignedHTML = unassigned.length ? `
-    <div style="background:var(--card);border:1px solid var(--bdr);border-radius:14px;padding:16px;margin-bottom:14px;">
-      <div style="font-size:13px;font-weight:800;color:var(--t3);margin-bottom:12px;">⚠️ Unassigned Staff (${unassigned.length})</div>
+    <div style="background:var(--card);border:1px solid var(--red);border-radius:14px;padding:16px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:10px;">⚠️ ${unassigned.length} Staff Not Assigned to Any Vertical</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
         ${unassigned.map(s=>`
-          <div style="display:flex;align-items:center;gap:8px;background:var(--card2);border-radius:8px;padding:8px 12px;border:1px solid var(--bdr);">
+          <div style="display:flex;align-items:center;gap:8px;background:var(--card2);border-radius:8px;padding:8px 12px;">
             <span style="font-weight:600;font-size:13px;">${s.name}</span>
             <span style="font-size:11px;color:var(--t3);">${s.designation||s.role||'—'}</span>
-            <button onclick="assignStaffVertical(${s.id})"
-              style="padding:3px 8px;border-radius:6px;background:var(--blt);border:1px solid var(--b);color:var(--b);font-size:11px;cursor:pointer;">Assign</button>
+            <button onclick="quickAssignVertical(${s.id})" 
+              style="padding:3px 8px;border-radius:6px;background:var(--blt);border:1px solid var(--b);color:var(--b);font-size:11px;cursor:pointer;">Assign →</button>
           </div>`).join('')}
       </div>
     </div>` : '';
@@ -2842,21 +2882,21 @@ async function loadOrgChart() {
   document.getElementById('page-content').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <div>
-        <div style="font-size:13px;font-weight:700;">6 Verticals · 4 Corridors · ${(staff||[]).length} Staff</div>
-        <div style="font-size:11px;color:var(--t3);">Expanding to State Head → AP as you grow</div>
+        <div style="font-size:14px;font-weight:800;">${(staff||[]).length} Field Staff across 6 Verticals · 4 Corridors</div>
+        <div style="font-size:11px;color:var(--t3);margin-top:2px;">State Head (AP) tier available when you expand</div>
       </div>
-      <button class="btn btn-primary" style="padding:8px 16px;font-size:13px;" onclick="showAddStaffToVertical('')">+ Add Staff</button>
+      <button class="btn btn-primary" style="padding:8px 16px;font-size:13px;" onclick="showAddStaffToVertical('','')">+ Add Staff</button>
     </div>
     ${unassignedHTML}
     ${verticalHTML}
 
-    <!-- Add Staff Modal -->
-    <div id="org-staff-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:999;align-items:center;justify-content:center;">
-      <div style="background:var(--card);border-radius:16px;padding:24px;width:440px;max-width:90vw;border:1px solid var(--bdr);max-height:90vh;overflow-y:auto;">
-        <div style="font-size:16px;font-weight:800;margin-bottom:20px;">Add / Assign Field Staff</div>
+    <!-- Add/Edit Staff Modal -->
+    <div id="org-staff-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:440px;max-width:90vw;max-height:90vh;overflow-y:auto;border:1px solid var(--bdr);">
+        <div style="font-size:16px;font-weight:800;margin-bottom:20px;" id="org-modal-title">Add Field Staff</div>
         <div style="display:grid;gap:12px;">
           <div><label class="form-lbl">Full Name *</label><input class="form-inp" id="org-sf-name" placeholder="Full name"></div>
-          <div><label class="form-lbl">Phone *</label><input class="form-inp" id="org-sf-phone" type="tel" maxlength="10" placeholder="10-digit"></div>
+          <div><label class="form-lbl">Phone *</label><input class="form-inp" id="org-sf-phone" type="tel" maxlength="10" placeholder="10-digit mobile"></div>
           <div><label class="form-lbl">Designation *</label>
             <select class="form-sel" id="org-sf-desig">
               <option value="">Select…</option>
@@ -2864,19 +2904,13 @@ async function loadOrgChart() {
               <option value="Field Executive">Field Executive</option>
               <option value="Team Leader">Team Leader</option>
               <option value="ASM">ASM</option>
-              <option value="State Head">State Head</option>
+              <option value="State Head">State Head (AP)</option>
             </select>
           </div>
           <div><label class="form-lbl">Vertical *</label>
             <select class="form-sel" id="org-sf-vertical">
-              <option value="">Select…</option>
-              ${(verticals||[]).map(v=>`<option value="${v.code}">${v.name} (${v.brand})</option>`).join('')}
-            </select>
-          </div>
-          <div><label class="form-lbl">Corridor</label>
-            <select class="form-sel" id="org-sf-corridor">
-              <option value="">Select…</option>
-              ${(corridors||[]).map(c=>`<option value="${c.code}">${c.name}</option>`).join('')}
+              <option value="">Select vertical…</option>
+              ${(verticals||[]).map(v=>`<option value="${v.code}">${v.name} — ${v.brand}</option>`).join('')}
             </select>
           </div>
           <div><label class="form-lbl">Reports To</label>
@@ -2893,78 +2927,125 @@ async function loadOrgChart() {
           <button class="btn btn-ghost" style="flex:1;" onclick="document.getElementById('org-staff-modal').style.display='none'">Cancel</button>
         </div>
       </div>
+    </div>
+
+    <!-- TL Area Assignment Modal -->
+    <div id="tl-area-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:420px;max-width:90vw;border:1px solid var(--bdr);">
+        <div style="font-size:16px;font-weight:800;margin-bottom:6px;">Assign Areas to TL</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:16px;" id="tl-area-modal-sub">Select which corridors this TL covers</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;" id="tl-area-corridors">
+          ${(corridors||[]).map(c=>`
+            <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border-radius:8px;cursor:pointer;border:1px solid var(--bdr);">
+              <input type="checkbox" id="tl-corr-${c.code}" value="${c.code}"
+                style="width:16px;height:16px;accent-color:var(--b);">
+              <div>
+                <div style="font-size:13px;font-weight:600;">${c.name}</div>
+                <div style="font-size:11px;color:var(--t3);">${c.from_city} → ${c.to_city}</div>
+              </div>
+            </label>`).join('')}
+        </div>
+        <div><label class="form-lbl">Notes (optional)</label>
+          <input class="form-inp" id="tl-area-notes" placeholder="e.g. Focus on industrial areas in Khammam">
+        </div>
+        <input type="hidden" id="tl-area-staff-id">
+        <input type="hidden" id="tl-area-vertical-code">
+        <div style="display:flex;gap:10px;margin-top:16px;">
+          <button class="btn btn-primary" style="flex:1;" onclick="saveTLAreas()">Save Areas</button>
+          <button class="btn btn-ghost" style="flex:1;" onclick="document.getElementById('tl-area-modal').style.display='none'">Cancel</button>
+        </div>
+      </div>
     </div>`;
 }
 
-function staffChip(s, color, corrMap) {
-  return `<div style="display:flex;align-items:center;gap:8px;background:${color}15;border:1px solid ${color}33;border-radius:20px;padding:6px 12px;">
-    <div style="width:8px;height:8px;border-radius:50%;background:${color};"></div>
-    <span style="font-size:13px;font-weight:600;">${s.name}</span>
-    <span style="font-size:10px;color:var(--t3);">${s.designation||s.role||''}</span>
-  </div>`;
-}
 
-function staffCard(s, color, corrMap) {
-  const corr = s.corridor ? corrMap[s.corridor]?.name || s.corridor : 'No corridor';
-  return `<div style="background:var(--card2);border-radius:8px;padding:10px;border:1px solid var(--bdr);">
-    <div style="font-weight:700;font-size:13px;">${s.name}</div>
-    <div style="font-size:11px;color:var(--t3);margin-top:2px;">${s.designation||s.role||'—'}</div>
-    <div style="font-size:11px;color:${color};margin-top:4px;">📍 ${corr}</div>
-    <button onclick="assignStaffCorridor(${s.id})"
-      style="margin-top:6px;padding:3px 8px;border-radius:6px;background:var(--card);border:1px solid var(--bdr);
-      color:var(--t2);font-size:10px;cursor:pointer;">Change corridor</button>
-  </div>`;
-}
-
-function showAddStaffToVertical(verticalCode) {
+function showAddStaffToVertical(vertCode, desigPreset) {
   document.getElementById('org-sf-name').value = '';
   document.getElementById('org-sf-phone').value = '';
-  document.getElementById('org-sf-desig').value = '';
-  document.getElementById('org-sf-vertical').value = verticalCode || '';
-  document.getElementById('org-sf-corridor').value = '';
+  document.getElementById('org-sf-desig').value = desigPreset || '';
+  document.getElementById('org-sf-vertical').value = vertCode || '';
   document.getElementById('org-sf-reports').value = '';
   document.getElementById('org-sf-edit-id').value = '';
+  document.getElementById('org-modal-title').textContent = 'Add Field Staff';
   document.getElementById('org-staff-modal').style.display = 'flex';
 }
 
-function assignStaffVertical(staffId) {
+function quickAssignVertical(staffId) {
   document.getElementById('org-sf-edit-id').value = staffId;
+  document.getElementById('org-sf-name').value = '';
+  document.getElementById('org-modal-title').textContent = 'Assign to Vertical';
   document.getElementById('org-staff-modal').style.display = 'flex';
-}
-
-async function assignStaffCorridor(staffId) {
-  const corridors = await sbFetch('org_corridors?select=*&order=id').catch(()=>[]);
-  const corrList = corridors.map(c=>c.code+': '+c.name).join('\n');
-  const choice = prompt('Enter corridor code:\n' + corrList);
-  if (!choice) return;
-  await sbFetch(`staff?id=eq.${staffId}`, {method:'PATCH', body:JSON.stringify({corridor:choice.trim()}), headers:{'Prefer':'return=minimal'}});
-  loadOrgChart();
 }
 
 async function saveOrgStaff() {
   const id = document.getElementById('org-sf-edit-id').value;
+  const desig = document.getElementById('org-sf-desig').value;
   const payload = {
     name: document.getElementById('org-sf-name').value.trim(),
-    phone: document.getElementById('org-sf-phone').value.trim().replace(/\D/g,'').slice(-10),
-    designation: document.getElementById('org-sf-desig').value,
-    role: document.getElementById('org-sf-desig').value.includes('ASM') ? 'ASM' :
-          document.getElementById('org-sf-desig').value.includes('Team Leader') ? 'Team Leader' :
-          document.getElementById('org-sf-desig').value,
+    phone: document.getElementById('org-sf-phone').value.trim().replace(/[^0-9]/g,'').slice(-10),
+    designation: desig,
+    role: desig.includes('ASM') ? 'ASM' : desig.includes('Team Leader') ? 'Team Leader' :
+          desig.includes('State Head') ? 'State Head' : desig,
     vertical: document.getElementById('org-sf-vertical').value || null,
-    corridor: document.getElementById('org-sf-corridor').value || null,
-    reporting_to: document.getElementById('org-sf-reports').value || null,
+    reporting_to: parseInt(document.getElementById('org-sf-reports').value) || null,
     department: 'Field',
     active: true,
   };
   if (id) {
-    await sbFetch(`staff?id=eq.${id}`, {method:'PATCH', body:JSON.stringify(payload), headers:{'Prefer':'return=minimal'}}).catch(e=>alert(e.message));
+    // Only update filled fields when editing
+    const patch = {};
+    if (payload.vertical) patch.vertical = payload.vertical;
+    if (payload.reporting_to) patch.reporting_to = payload.reporting_to;
+    if (payload.designation) patch.designation = payload.designation;
+    await sbFetch(`staff?id=eq.${id}`, {method:'PATCH', body:JSON.stringify(patch), headers:{'Prefer':'return=minimal'}}).catch(e=>alert(e.message));
   } else {
-    if (!payload.name || !payload.phone) { alert('Name and phone required'); return; }
+    if (!payload.name || !payload.phone || !payload.designation || !payload.vertical) {
+      alert('Name, phone, designation and vertical are required'); return;
+    }
     await sbFetch('staff', {method:'POST', body:JSON.stringify(payload), headers:{'Prefer':'return=minimal'}}).catch(e=>alert(e.message));
   }
   document.getElementById('org-staff-modal').style.display = 'none';
   loadOrgChart();
 }
+
+function editTLAreas(staffId, verticalCode, currentAreas) {
+  document.getElementById('tl-area-staff-id').value = staffId;
+  document.getElementById('tl-area-vertical-code').value = verticalCode;
+  document.getElementById('tl-area-notes').value = '';
+  // Check boxes for current areas
+  document.querySelectorAll('[id^="tl-corr-"]').forEach(cb => {
+    cb.checked = currentAreas.includes(cb.value);
+  });
+  document.getElementById('tl-area-modal').style.display = 'flex';
+}
+
+async function saveTLAreas() {
+  const staffId = parseInt(document.getElementById('tl-area-staff-id').value);
+  const vertCode = document.getElementById('tl-area-vertical-code').value;
+  const notes = document.getElementById('tl-area-notes').value.trim();
+  const selected = [...document.querySelectorAll('[id^="tl-corr-"]:checked')].map(cb => cb.value);
+
+  // Delete existing assignments for this TL + vertical
+  await sbFetch(`tl_area_assignments?staff_id=eq.${staffId}&vertical_code=eq.${vertCode}`,
+    {method:'DELETE', headers:{'Prefer':'return=minimal'}}).catch(()=>{});
+
+  // Insert new assignments
+  if (selected.length) {
+    const rows = selected.map(c => ({
+      staff_id: staffId, corridor_code: c, vertical_code: vertCode, notes
+    }));
+    await sbFetch('tl_area_assignments', {method:'POST', body:JSON.stringify(rows), headers:{'Prefer':'return=minimal'}}).catch(e=>alert(e.message));
+  }
+
+  // Update area notes on staff record
+  if (notes) {
+    await sbFetch(`staff?id=eq.${staffId}`, {method:'PATCH', body:JSON.stringify({area_notes:notes}), headers:{'Prefer':'return=minimal'}}).catch(()=>{});
+  }
+
+  document.getElementById('tl-area-modal').style.display = 'none';
+  loadOrgChart();
+}
+
 
 // ── INIT ──
 const savedSession = localStorage.getItem('vw_admin_session');
