@@ -1327,11 +1327,11 @@ async function loadTeamData() {
   const { data: teamStaff } = await sb.from('staff')
     .select('id,name,designation,role,phone')
     .eq('active', true).eq('department', 'Field')
-    .neq('id', currentUser.id); // exclude self
+    ; // show all field staff including self for full picture
 
   if (!teamStaff?.length) {
     document.getElementById('team-rep-list').innerHTML =
-      '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">No team members yet</div>';
+      '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">No team members found.<br><span style="font-size:11px;">Make sure staff are added with department = Field</span></div>';
     return;
   }
 
@@ -1450,10 +1450,16 @@ async function loadTeamData() {
 async function loadTeamVisits(visitRows) {
   if (!visitRows) {
     // Re-fetch if called from refresh button
-    const { data } = await sb.from('field_visits')
-      .select('id,staff_id,created_at,site_address,construction_stage,visit_quality_score,executive_name,site_contacts')
-      .eq('department', 'Field').order('created_at', {ascending:false}).limit(20);
-    visitRows = data || [];
+    const { data: teamStaffForFeed } = await sb.from('staff')
+      .select('id').eq('active', true).eq('department', 'Field');
+    const feedIds = (teamStaffForFeed || []).map(s => s.id);
+    if (!feedIds.length) { visitRows = []; }
+    else {
+      const { data } = await sb.from('field_visits')
+        .select('id,staff_id,created_at,site_address,construction_stage,visit_quality_score,executive_name,site_contacts')
+        .in('staff_id', feedIds).order('created_at', {ascending:false}).limit(20);
+      visitRows = data || [];
+    }
   }
   const feed = document.getElementById('team-visits-feed');
   if (!visitRows.length) {
