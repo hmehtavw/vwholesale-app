@@ -1,22 +1,16 @@
-// V Wholesale Field — Service Worker
-// Caches the app shell so it works offline and survives browser cache clears
-// Session data stays in localStorage (separate from browser cache)
+// V Wholesale Field — Service Worker v5
+// Handles background location pings via periodic background sync
 
-const CACHE_NAME = 'vw-field-v4';
-const APP_SHELL = [
-  '/field.html',
-  '/field-manifest.json',
-];
+const CACHE_NAME = 'vw-field-v5';
+const APP_SHELL = ['/field.html', '/field-manifest.json'];
 
-// Install: cache app shell
+// Install
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
-  );
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(APP_SHELL)));
   self.skipWaiting();
 });
 
-// Activate: clean old caches
+// Activate — clean old caches
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -26,35 +20,54 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Fetch: network first for API calls, cache first for app shell
+// Fetch — serve app shell from cache
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // Always go to network for Supabase API and edge functions
-  if (url.hostname.includes('supabase.co') || 
-      url.hostname.includes('googleapis.com') ||
-      url.hostname.includes('graph.facebook.com')) {
-    return; // Let it go to network directly
-  }
-
-  // For the app shell: serve from cache, update in background
-  if (APP_SHELL.some(path => url.pathname.endsWith(path.replace('/', '')))) {
+  if (url.hostname.includes('supabase.co') || url.hostname.includes('googleapis.com')) return;
+  if (APP_SHELL.some(p => url.pathname.endsWith(p.replace('/',\'\')))) {
     e.respondWith(
       caches.open(CACHE_NAME).then(async cache => {
         const cached = await cache.match(e.request);
-        const fetchPromise = fetch(e.request).then(response => {
-          if (response.ok) cache.put(e.request, response.clone());
-          return response;
-        }).catch(() => cached);
-        // Return cached immediately, update in background
+        const fetchPromise = fetch(e.request).then(r => { if (r.ok) cache.put(e.request, r.clone()); return r; }).catch(() => cached);
         return cached || fetchPromise;
       })
     );
-    return;
   }
+});
 
-  // Everything else: network first
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
-  );
+// Background location ping via message from page
+self.addEventListener('message', async e => {
+  if (e.data?.type === 'LOCATION_PING') {
+    const { staffId, lat, lng, accuracy, speed, isMoving, anonKey, supabaseUrl, attendanceId, city } = e.data;
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/field_location_log`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': anonKey,
+          'Authorization': `Bearer ${anonKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          staff_id: staffId, lat, lng, accuracy_m: accuracy,
+          speed_kmh: speed, is_moving: isMoving,
+          recorded_at: new Date().toISOString(),
+          city: city || \'Vijayawada\',
+          attendance_id: attendanceId || null
+        })
+      });
+    } catch(e) { /* silently fail */ }
+  }
+});
+
+// Periodic background sync (Chrome Android only — best effort)
+self.addEventListener('periodicsync', e => {
+  if (e.tag === \'field-location\') {
+    e.waitUntil(
+      // Ask all open clients to send their location
+      self.clients.matchAll({ type: \'window\' }).then(clients => {
+        clients.forEach(c => c.postMessage({ type: \'REQUEST_LOCATION\' }));
+      })
+    );
+  }
 });

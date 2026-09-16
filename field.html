@@ -2660,20 +2660,41 @@ function pingLocation() {
   if (!currentUser || !currentAttendance) return;
   getCurrentGPS(async pos => {
     lastLocation = pos;
-    const speed = pos.coords.speed ? pos.coords.speed * 3.6 : null; // m/s to km/h
-    await sb.from('field_location_log').insert({
+    const speed = pos.coords.speed ? pos.coords.speed * 3.6 : null;
+    const isMoving = speed !== null ? speed > 2 : null;
+    const payload = {
       staff_id: currentUser.id,
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       accuracy_m: pos.coords.accuracy,
-      battery_pct: null, // Battery API deprecated, skip
-      is_moving: speed ? speed > 2 : null,
+      is_moving: isMoving,
       speed_kmh: speed,
       recorded_at: new Date().toISOString(),
       city: currentUser.city || 'Vijayawada',
-      attendance_id: currentAttendance?.id
-    });
-  }, () => {}); // Silently fail — don't bother user
+      attendance_id: currentAttendance?.id || null
+    };
+    // Try via service worker (survives tab backgrounding on Android)
+    if (navigator.serviceWorker?.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'LOCATION_PING',
+        ...payload,
+        staffId: currentUser.id,
+        anonKey: SUPABASE_ANON,
+        supabaseUrl: SUPABASE_URL,
+        attendanceId: currentAttendance?.id || null,
+      });
+    } else {
+      // Direct insert fallback
+      await sb.from('field_location_log').insert(payload).catch(() => {});
+    }
+  }, () => {});
+}
+
+// Listen for SW requesting location ping (periodic background sync trigger)
+if (navigator.serviceWorker) {
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'REQUEST_LOCATION') pingLocation();
+  });
 }
 
 function stopLocationTracking() {
@@ -2685,8 +2706,9 @@ function stopLocationTracking() {
 // HELPERS
 // ══════════════════════════════════════════════
 function getCurrentGPS(success, fail) {
+  if (!navigator.geolocation) { if (fail) fail(new Error('GPS not available')); return; }
   navigator.geolocation.getCurrentPosition(success, fail || (()=>{}), {
-    enableHighAccuracy: true, timeout: 10000, maximumAge: 60000
+    enableHighAccuracy: true, timeout: 15000, maximumAge: 30000
   });
 }
 
@@ -2807,7 +2829,16 @@ let deferredInstallPrompt = null;
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/field-sw.js')
-      .then(reg => console.log('SW registered:', reg.scope))
+      .then(async reg => {
+        console.log('SW registered:', reg.scope);
+        // Request periodic background sync for location (Chrome Android)
+        if ('periodicSync' in reg) {
+          try {
+            await reg.periodicSync.register('field-location', { minInterval: 2 * 60 * 1000 });
+            console.log('Periodic sync registered');
+          } catch(e) { console.log('Periodic sync not supported:', e.message); }
+        }
+      })
       .catch(err => console.log('SW registration failed:', err));
   });
 }
