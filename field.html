@@ -1314,13 +1314,30 @@ async function loadTodayData() {
     const punchTimeStr = att.punch_in ? att.punch_in.slice(0,5) : '--:--';
     document.getElementById('punch-time').textContent = punchTimeStr;
     const btn = document.getElementById('punch-btn');
-    if (att.punch_out) {
+    // Check if this attendance is from a previous day
+    const attDate = new Date(att.date);
+    const todayDate = new Date();
+    const isToday = attDate.toDateString() === todayDate.toDateString() ||
+      // UTC day comparison for IST offset
+      (todayDate - attDate) < 20 * 60 * 60 * 1000;
+
+    if (att.punch_out && isToday) {
+      // Today's session ended
       btn.textContent = 'Done ✓';
       btn.className = 'punch-btn';
       btn.style.background = 'var(--success-soft)';
       btn.style.color = 'var(--success)';
       btn.style.border = '1px solid var(--success)';
       btn.onclick = null;
+    } else if (att.punch_out && !isToday) {
+      // Previous day ended — show Start New Day
+      btn.textContent = 'Start Day';
+      btn.className = 'punch-btn in';
+      btn.style = '';
+      currentAttendance = null; // Reset so new punch-in is allowed
+      document.getElementById('punch-label').textContent = 'New day — punch in to start';
+      document.getElementById('punch-time').textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      btn.onclick = openPunchSheet;
     } else {
       btn.textContent = 'Punch Out';
       btn.className = 'punch-btn out';
