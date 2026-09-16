@@ -1643,14 +1643,22 @@ function initOdoLiveCalc() {
 // VISIT FORM — MULTI-STEP
 // ══════════════════════════════════════════════
 function openNewVisitSheet() {
-  // Allow visit logging even if not punched in / punched out
-  // Field reality: rep may forget punch-in but still needs to log site visits
+  console.log('openNewVisitSheet called, currentUser:', currentUser?.name);
+  // Remove any orphaned dynamic sheets
+  document.querySelectorAll('.sheet-backdrop:not(#sheet-punch):not(#sheet-visit):not(#sheet-visit-detail)').forEach(el => {
+    console.log('Removing orphaned sheet:', el.id);
+    el.remove();
+  });
   if (!currentUser) { showToast('Please sign in first'); return; }
-  // Safety: remove any orphaned dynamic sheets (e.g. permissions) that may block taps
-  document.querySelectorAll('.sheet-backdrop:not(#sheet-punch):not(#sheet-visit):not(#sheet-visit-detail)').forEach(el => el.remove());
-  resetVisitForm();
-  document.getElementById('visit-sheet-title').textContent = 'Log Site Visit';
-  openSheet('sheet-visit');
+  try {
+    resetVisitForm();
+    document.getElementById('visit-sheet-title').textContent = 'Log Site Visit';
+    openSheet('sheet-visit');
+    console.log('sheet-visit opened');
+  } catch(e) {
+    console.error('openNewVisitSheet error:', e);
+    showToast('Error: ' + e.message);
+  }
 }
 
 function resetVisitForm() {
@@ -2344,7 +2352,7 @@ function showInstallBanner() {
     'background:var(--surface);border:1px solid var(--accent);border-radius:14px;' +
     'padding:14px 16px;display:flex;align-items:center;gap:12px;z-index:500;' +
     'box-shadow:0 4px 20px rgba(0,0,0,.4);';
-  banner.innerHTML = \`
+  banner.innerHTML = `
     <div style="font-size:28px;">📲</div>
     <div style="flex:1;">
       <div style="font-weight:600;font-size:14px;">Install Field App</div>
@@ -2354,7 +2362,7 @@ function showInstallBanner() {
       border-radius:8px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;">Install</button>
     <button onclick="document.getElementById('install-banner').remove();localStorage.setItem('vw_field_installed','dismissed');"
       style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;padding:4px;">✕</button>
-  \`;
+  `;
   document.body.appendChild(banner);
 }
 
@@ -2379,7 +2387,7 @@ function showIOSInstallHint() {
     hint.style.cssText = 'position:fixed;bottom:calc(var(--nav-h)+12px);left:16px;right:16px;' +
       'background:var(--surface);border:1px solid var(--accent);border-radius:14px;' +
       'padding:14px 16px;z-index:500;font-size:13px;';
-    hint.innerHTML = \`
+    hint.innerHTML = `
       <div style="font-weight:600;margin-bottom:6px;">📲 Install on iPhone</div>
       <div style="color:var(--text2);line-height:1.6;">
         Tap the <strong>Share button</strong> (box with arrow) at the bottom of Safari,
@@ -2388,7 +2396,7 @@ function showIOSInstallHint() {
       <button onclick="this.parentElement.remove();localStorage.setItem('vw_field_installed','ios-dismissed');"
         style="margin-top:10px;background:var(--surface2);border:1px solid var(--border);
         border-radius:8px;padding:8px 14px;color:var(--text);font-size:13px;cursor:pointer;width:100%;">Got it</button>
-    \`;
+    `;
     document.body.appendChild(hint);
   }
 }
