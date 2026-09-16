@@ -1672,6 +1672,9 @@ async function loadTodayData() {
   renderVisitsList(visits || []);
   renderAssignedList();
   updateIncentiveTile(count, target);
+  // Update persistent notification with latest stats
+  const cycleKmTotal = parseFloat(currentAttendance?.km_travelled || 0);
+  updateTrackingNotification(count, cycleKmTotal);
 
   // ── Cycle stats (21st–20th) ──
   const [{ data: cycleAtts }, { data: cycleVisits }] = await Promise.all([
@@ -2646,14 +2649,45 @@ async function openFollowupVisit(parentId) {
 // ══════════════════════════════════════════════
 // LOCATION TRACKING
 // ══════════════════════════════════════════════
-function startLocationTracking() {
+async function startLocationTracking() {
   if (!navigator.geolocation) return;
-  
-  // Initial ping
+
+  // Request notification permission for persistent tracking notification
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+
+  // Initial ping immediately
   pingLocation();
-  
-  // Interval ping every 2 min
+
+  // Tell service worker to start background tracking loop
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'START_TRACKING',
+      staffId: currentUser.id,
+      name: currentUser.name,
+      anonKey: SUPABASE_ANON,
+      supabaseUrl: SUPABASE_URL,
+      attendanceId: currentAttendance?.id || null,
+      city: currentUser.city || 'Vijayawada',
+      visits: 0,
+      km: 0
+    });
+  }
+
+  // Keep setInterval as fallback (when SW not yet active)
+  if (locPingTimer) clearInterval(locPingTimer);
   locPingTimer = setInterval(pingLocation, LOC_INTERVAL_MS);
+}
+
+function updateTrackingNotification(visits, km) {
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({
+      type: 'UPDATE_STATS',
+      visits, km,
+      name: currentUser?.name || 'Field'
+    });
+  }
 }
 
 function pingLocation() {
@@ -2682,6 +2716,10 @@ function pingLocation() {
         anonKey: SUPABASE_ANON,
         supabaseUrl: SUPABASE_URL,
         attendanceId: currentAttendance?.id || null,
+        // Cache last known position for closed-app fallback
+        lastLat: pos.coords.latitude,
+        lastLng: pos.coords.longitude,
+        lastAccuracy: pos.coords.accuracy,
       });
     } else {
       // Direct insert fallback
@@ -2690,16 +2728,29 @@ function pingLocation() {
   }, () => {});
 }
 
-// Listen for SW requesting location ping (periodic background sync trigger)
+// Listen for messages from service worker
 if (navigator.serviceWorker) {
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.type === 'REQUEST_LOCATION') pingLocation();
+    if (e.data?.type === 'REQUEST_LOCATION') {
+      pingLocation();
+    }
+    if (e.data?.type === 'PUNCH_OUT_FROM_NOTIFICATION') {
+      // Rep tapped "Punch Out" on notification
+      if (currentAttendance && !currentAttendance.punch_out) {
+        openPunchSheet();
+        showToast('Punch out from notification');
+      }
+    }
   });
 }
 
 function stopLocationTracking() {
-  if (locPingTimer) clearInterval(locPingTimer);
-  if (locationWatcher) navigator.geolocation.clearWatch(locationWatcher);
+  if (locPingTimer) { clearInterval(locPingTimer); locPingTimer = null; }
+  if (locationWatcher) { navigator.geolocation.clearWatch(locationWatcher); locationWatcher = null; }
+  // Tell SW to stop background tracking and dismiss notification
+  if (navigator.serviceWorker?.controller) {
+    navigator.serviceWorker.controller.postMessage({ type: 'STOP_TRACKING' });
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -2830,16 +2881,37 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/field-sw.js')
       .then(async reg => {
-        console.log('SW registered:', reg.scope);
-        // Request periodic background sync for location (Chrome Android)
+        // Wait for SW to be active
+        if (reg.installing) {
+          await new Promise(resolve => {
+            reg.installing.addEventListener('statechange', e => {
+              if (e.target.state === 'activated') resolve();
+            });
+          });
+        }
+        // Periodic background sync (Chrome Android)
         if ('periodicSync' in reg) {
           try {
-            await reg.periodicSync.register('field-location', { minInterval: 2 * 60 * 1000 });
-            console.log('Periodic sync registered');
-          } catch(e) { console.log('Periodic sync not supported:', e.message); }
+            const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+            if (status.state === 'granted') {
+              await reg.periodicSync.register('field-location', { minInterval: 2 * 60 * 1000 });
+            }
+          } catch(e) { /* not supported */ }
+        }
+        // If already logged in and punched in, restart SW tracking
+        if (currentUser && currentAttendance && !currentAttendance.punch_out) {
+          navigator.serviceWorker.controller?.postMessage({
+            type: 'START_TRACKING',
+            staffId: currentUser.id,
+            name: currentUser.name,
+            anonKey: SUPABASE_ANON,
+            supabaseUrl: SUPABASE_URL,
+            attendanceId: currentAttendance?.id || null,
+            city: currentUser.city || 'Vijayawada',
+          });
         }
       })
-      .catch(err => console.log('SW registration failed:', err));
+      .catch(err => console.warn('SW registration failed:', err));
   });
 }
 
