@@ -1483,6 +1483,214 @@ async function loadTeamVisits(visitRows) {
   `).join('');
 }
 
+function requestNotificationPermission() {
+  return new Promise(resolve => {
+    const existing = document.getElementById('sheet-notif-explain');
+    if (existing) existing.remove();
+
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet-backdrop';
+    sheet.id = 'sheet-notif-explain';
+    sheet.innerHTML = `
+      <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header" style="border:none;">
+          <div class="sheet-title">Enable Tracking Notification</div>
+        </div>
+        <div class="sheet-body">
+
+          <div style="text-align:center;margin-bottom:20px;">
+            <div style="font-size:48px;margin-bottom:12px;">🔔</div>
+            <div style="font-size:15px;font-weight:600;margin-bottom:8px;">
+              Keep location running in background
+            </div>
+            <div style="font-size:13px;color:var(--text2);line-height:1.6;">
+              A notification will show on your phone while you're on duty.
+              This keeps your location active even when the screen is off.
+            </div>
+          </div>
+
+          <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:20px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">
+              What you'll see on your phone
+            </div>
+            <div style="background:var(--surface);border-radius:8px;padding:12px;border:1px solid var(--border);">
+              <div style="display:flex;align-items:flex-start;gap:10px;">
+                <div style="width:32px;height:32px;border-radius:8px;background:var(--accent);
+                     display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;
+                     color:var(--base);flex-shrink:0;">VW</div>
+                <div>
+                  <div style="font-size:13px;font-weight:600;">🟢 V Wholesale Field — Tracking Active</div>
+                  <div style="font-size:12px;color:var(--text2);margin-top:2px;">Your name · visits today · km today</div>
+                </div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-top:8px;text-align:center;">
+              Notification stays until you punch out
+            </div>
+          </div>
+
+          <button class="btn btn-primary" id="btn-allow-notif">
+            Allow Notification
+          </button>
+          <button class="btn btn-ghost mt-8" style="font-size:13px;color:var(--text3);"
+            id="btn-skip-notif">
+            Skip — location may stop in background
+          </button>
+
+        </div>
+      </div>`;
+
+    document.body.appendChild(sheet);
+    setTimeout(() => sheet.classList.add('open'), 10);
+
+    document.getElementById('btn-allow-notif').onclick = async () => {
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 300);
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        showBatterySetupTip();
+      }
+      resolve(permission);
+    };
+
+    document.getElementById('btn-skip-notif').onclick = () => {
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 300);
+      resolve('denied');
+    };
+
+    sheet.addEventListener('click', e => {
+      if (e.target === sheet) {
+        sheet.classList.remove('open');
+        setTimeout(() => sheet.remove(), 300);
+        resolve('dismissed');
+      }
+    });
+  });
+}
+
+function showBatterySetupTip() {
+  if (localStorage.getItem('vw_field_battery_tip_shown')) return;
+
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-backdrop';
+  sheet.id = 'sheet-battery-tip';
+  sheet.innerHTML = `
+    <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header" style="border:none;">
+        <div class="sheet-title">One-Time Phone Setup</div>
+      </div>
+      <div class="sheet-body">
+
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="font-size:48px;margin-bottom:10px;">🔋</div>
+          <div style="font-size:15px;font-weight:600;margin-bottom:6px;">
+            Allow background activity
+          </div>
+          <div style="font-size:13px;color:var(--text2);line-height:1.6;">
+            Android stops apps in the background to save battery.
+            Do this once so your location keeps running while on duty.
+          </div>
+        </div>
+
+        <!-- Step by step -->
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+
+          <div style="display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border-radius:10px;padding:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--base);
+                 display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;">1</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;">Open Android Settings</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px;">
+                Swipe down → tap ⚙️ Settings icon
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border-radius:10px;padding:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--base);
+                 display:flex;align-items:center;justify-content:middle;font-size:14px;font-weight:800;flex-shrink:0;align-items:center;justify-content:center;">2</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;">Go to Apps</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px;">
+                Tap <strong>Apps</strong> or <strong>Application Manager</strong>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border-radius:10px;padding:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--base);
+                 display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;">3</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;">Find Chrome</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px;">
+                Scroll and tap <strong>Chrome</strong> browser
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;background:var(--surface2);border-radius:10px;padding:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--base);
+                 display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;">4</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;">Tap Battery</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px;">
+                Inside Chrome settings, tap <strong>Battery</strong>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:flex-start;
+               background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:12px;">
+            <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--base);
+                 display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;flex-shrink:0;">5</div>
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--accent);">Select "Unrestricted"</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px;">
+                Change from <em>Optimized</em> to <strong style="color:var(--accent);">Unrestricted</strong>
+                — this lets the app run in background
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="background:var(--success-soft);border:1px solid rgba(34,197,94,.3);border-radius:10px;
+             padding:12px 14px;font-size:12px;color:var(--success);margin-bottom:16px;">
+          ✅ Do this once — never needed again. Takes about 30 seconds.
+        </div>
+
+        <button class="btn btn-primary" onclick="
+          localStorage.setItem('vw_field_battery_tip_shown', '1');
+          document.getElementById('sheet-battery-tip').classList.remove('open');
+          setTimeout(() => document.getElementById('sheet-battery-tip')?.remove(), 300);
+        ">
+          Done — I've set it up
+        </button>
+        <button class="btn btn-ghost mt-8" style="font-size:13px;" onclick="
+          localStorage.setItem('vw_field_battery_tip_shown', '1');
+          document.getElementById('sheet-battery-tip').classList.remove('open');
+          setTimeout(() => document.getElementById('sheet-battery-tip')?.remove(), 300);
+        ">
+          I'll do it later
+        </button>
+
+      </div>
+    </div>`;
+
+  document.body.appendChild(sheet);
+  setTimeout(() => sheet.classList.add('open'), 400); // slight delay after notif permission
+  sheet.addEventListener('click', e => {
+    if (e.target === sheet) {
+      localStorage.setItem('vw_field_battery_tip_shown', '1');
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 300);
+    }
+  });
+}
+
 async function requestPermissions() {
   // Only show permission sheet once — if already shown, just start tracking
   if (localStorage.getItem('vw_field_perms_shown')) {
@@ -2652,9 +2860,14 @@ async function openFollowupVisit(parentId) {
 async function startLocationTracking() {
   if (!navigator.geolocation) return;
 
-  // Request notification permission for persistent tracking notification
+  // Request notification permission with explanation first
   if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission();
+    await requestNotificationPermission();
+  } else if (Notification.permission === 'granted') {
+    // Already granted — show battery setup tip if not done yet
+    if (!localStorage.getItem('vw_field_battery_tip_shown')) {
+      showBatterySetupTip();
+    }
   }
 
   // Initial ping immediately
