@@ -1307,9 +1307,13 @@ function isManagerRole(staff) {
          r.includes('cluster head') || r.includes('region head');
 }
 
-function showTeamTabIfManager() {
+async function showTeamTabIfManager() {
   if (!currentUser) return;
-  if (isManagerRole(currentUser)) {
+  if (!isManagerRole(currentUser)) return;
+  // Only show team tab if someone actually reports to this person
+  const { data } = await sb.from('staff')
+    .select('id').eq('reporting_to', currentUser.id).eq('active', true).limit(1);
+  if (data?.length > 0) {
     const navTeam = document.getElementById('nav-team');
     if (navTeam) navTeam.style.display = '';
   }
@@ -1323,11 +1327,11 @@ async function loadTeamData() {
   const since24h = new Date(Date.now() - 24*60*60*1000).toISOString();
   const since2min = new Date(Date.now() - 2*60*1000).toISOString();
 
-  // Get all field staff (in production: filter by reporting_to = currentUser.id)
+  // Only show staff who directly report to this person
   const { data: teamStaff } = await sb.from('staff')
     .select('id,name,designation,role,phone')
-    .eq('active', true).eq('department', 'Field')
-    ; // show all field staff including self for full picture
+    .eq('active', true)
+    .eq('reporting_to', currentUser.id);
 
   if (!teamStaff?.length) {
     document.getElementById('team-rep-list').innerHTML =
