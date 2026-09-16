@@ -1042,7 +1042,7 @@ let visitPhotos = [];
 let visitPinLat = null;
 let visitPinLng = null;
 let visitProjectType = null;
-let visitCompetitors = [];
+// visitCompetitors replaced by competitorEntries array
 let visitCurrentStep = 1;
 let mapInitialized = false;
 let googleMap = null;
@@ -1678,7 +1678,6 @@ function resetVisitForm() {
   document.getElementById('ai-result-area').classList.add('hidden');
   document.getElementById('visit-pin-info').classList.add('hidden');
   document.querySelectorAll('#project-type-chips .chip').forEach(c=>c.classList.remove('selected'));
-  document.querySelectorAll('#competitor-chips .chip').forEach(c=>c.classList.remove('selected'));
   visitNextStep(1, true);
   addPhotoSlot();
   // Set default followup to tomorrow
