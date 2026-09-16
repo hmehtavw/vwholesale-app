@@ -568,6 +568,53 @@ input[type=file] { display: none; }
     </div>
   </div>
 
+  <!-- TEAM TAB (visible to TL, ASM, Cluster Head, Region Head) -->
+  <div class="body hidden" id="tab-team" style="padding-bottom: calc(var(--nav-h) + 16px);">
+    <div class="pad">
+      <div class="section-header">
+        <div class="section-title">My Team — Today</div>
+        <div style="font-size:11px;color:var(--text3);" id="team-updated">—</div>
+      </div>
+
+      <!-- Team summary bar -->
+      <div class="card" style="margin-bottom:14px;padding:14px 16px;">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;">
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--accent);" id="team-active">—</div>
+            <div style="font-size:11px;color:var(--text3);">Active now</div>
+          </div>
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;" id="team-total-visits">—</div>
+            <div style="font-size:11px;color:var(--text3);">Visits today</div>
+          </div>
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--success);" id="team-on-target">—</div>
+            <div style="font-size:11px;color:var(--text3);">On target</div>
+          </div>
+          <div>
+            <div class="mono" style="font-size:22px;font-weight:700;color:var(--warning);" id="team-alerts">—</div>
+            <div style="font-size:11px;color:var(--text3);">Alerts</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rep cards -->
+      <div id="team-rep-list">
+        <div style="text-align:center;padding:40px 0;color:var(--text3);">Loading team…</div>
+      </div>
+
+      <!-- Today's visit feed -->
+      <div class="section-header mt-16">
+        <div class="section-title">Recent visits — all reps</div>
+        <div class="section-action" onclick="loadTeamVisits()">Refresh</div>
+      </div>
+      <div id="team-visits-feed">
+        <div style="text-align:center;padding:20px 0;color:var(--text3);font-size:13px;">Loading…</div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- PROFILE TAB -->
   <div class="body hidden" id="tab-profile" style="padding-bottom: calc(var(--nav-h) + 16px);">
     <div class="pad">
@@ -638,6 +685,13 @@ input[type=file] { display: none; }
         <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
       </svg>
       Map
+    </button>
+    <button class="nav-item" data-tab="team" onclick="showTab('team')" id="nav-team" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+      </svg>
+      Team
     </button>
     <button class="nav-item" data-tab="profile" onclick="showTab('profile')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1243,6 +1297,184 @@ async function afterLogin() {
   await loadTodayData();
   await requestPermissions();
   setTimeout(showIOSInstallHint, 2000);
+  showTeamTabIfManager();
+}
+
+// ── Manager role detection ──
+function isManagerRole(staff) {
+  const r = ((staff.designation || '') + ' ' + (staff.role || '')).toLowerCase();
+  return r.includes('team leader') || r.includes('tl') || r.includes('asm') ||
+         r.includes('cluster head') || r.includes('region head');
+}
+
+function showTeamTabIfManager() {
+  if (!currentUser) return;
+  if (isManagerRole(currentUser)) {
+    const navTeam = document.getElementById('nav-team');
+    if (navTeam) navTeam.style.display = '';
+  }
+}
+
+// ── Team data loading ──
+async function loadTeamData() {
+  const now = new Date();
+  const todayIST = new Date(now.getTime() + 5.5*60*60*1000);
+  const todayStr = todayIST.toISOString().split('T')[0];
+  const since24h = new Date(Date.now() - 24*60*60*1000).toISOString();
+  const since2min = new Date(Date.now() - 2*60*1000).toISOString();
+
+  // Get all field staff (in production: filter by reporting_to = currentUser.id)
+  const { data: teamStaff } = await sb.from('staff')
+    .select('id,name,designation,role,phone')
+    .eq('active', true).eq('department', 'Field')
+    .neq('id', currentUser.id); // exclude self
+
+  if (!teamStaff?.length) {
+    document.getElementById('team-rep-list').innerHTML =
+      '<div style="text-align:center;padding:40px 0;color:var(--text3);font-size:13px;">No team members yet</div>';
+    return;
+  }
+
+  const staffIds = teamStaff.map(s => s.id);
+
+  // Parallel fetch: today's attendance, today's visits, last location
+  const [{ data: attRows }, { data: visitRows }, { data: locRows }, { data: alertRows }] = await Promise.all([
+    sb.from('attendance').select('staff_id,punch_in,punch_out,km_travelled,odo_in_reading')
+      .in('staff_id', staffIds).gte('date', since24h),
+    sb.from('field_visits').select('id,staff_id,created_at,site_address,construction_stage,visit_quality_score')
+      .in('staff_id', staffIds).gte('created_at', todayStr + 'T00:00:00+05:30')
+      .order('created_at', {ascending:false}),
+    sb.from('field_location_log').select('staff_id,lat,lng,recorded_at,is_moving,speed_kmh')
+      .in('staff_id', staffIds).order('recorded_at', {ascending:false}).limit(staffIds.length * 3),
+    sb.from('field_alerts').select('staff_id,alert_type,severity,triggered_at')
+      .in('staff_id', staffIds).is('resolved_at', null)
+      .gte('triggered_at', todayStr + 'T00:00:00+05:30'),
+  ]);
+
+  // Build per-rep data map
+  const repData = {};
+  teamStaff.forEach(s => { repData[s.id] = { ...s, att:null, visits:[], lastLoc:null, alerts:[] }; });
+  (attRows||[]).forEach(a => { if (repData[a.staff_id]) repData[a.staff_id].att = a; });
+  (visitRows||[]).forEach(v => { if (repData[v.staff_id]) repData[v.staff_id].visits.push(v); });
+  (alertRows||[]).forEach(a => { if (repData[a.staff_id]) repData[a.staff_id].alerts.push(a); });
+
+  // Last location per rep (already ordered desc)
+  const seenLoc = new Set();
+  (locRows||[]).forEach(l => {
+    if (!seenLoc.has(l.staff_id)) { seenLoc.add(l.staff_id); if (repData[l.staff_id]) repData[l.staff_id].lastLoc = l; }
+  });
+
+  // Summary stats
+  const active = Object.values(repData).filter(r => r.att && !r.att.punch_out).length;
+  const totalVisits = Object.values(repData).reduce((s,r) => s + r.visits.length, 0);
+  const target = 15;
+  const onTarget = Object.values(repData).filter(r => r.visits.length >= Math.ceil(target * 0.6)).length;
+  const totalAlerts = Object.values(repData).reduce((s,r) => s + r.alerts.length, 0);
+
+  document.getElementById('team-active').textContent = active;
+  document.getElementById('team-total-visits').textContent = totalVisits;
+  document.getElementById('team-on-target').textContent = onTarget;
+  document.getElementById('team-alerts').textContent = totalAlerts || '—';
+  document.getElementById('team-updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+
+  // Render rep cards
+  document.getElementById('team-rep-list').innerHTML = Object.values(repData).map(r => {
+    const isActive = r.att && !r.att.punch_out;
+    const locAge = r.lastLoc ? Math.round((Date.now() - new Date(r.lastLoc.recorded_at)) / 60000) : null;
+    const isLive = locAge !== null && locAge <= 5;
+    const visitCount = r.visits.length;
+    const visitPct = Math.min(100, Math.round(visitCount / target * 100));
+    const hasAlerts = r.alerts.length > 0;
+    const avgQuality = r.visits.length ?
+      Math.round(r.visits.reduce((s,v) => s + (v.visit_quality_score||0), 0) / r.visits.length) : null;
+
+    return `
+    <div class="card ${hasAlerts ? 'card-danger' : isActive ? 'card-success' : ''}" style="margin-bottom:10px;">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <!-- Avatar + status -->
+        <div style="position:relative;">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--surface2);
+               border:2px solid ${isActive ? 'var(--success)' : 'var(--border)'};
+               display:flex;align-items:center;justify-content:center;font-size:18px;">👤</div>
+          ${isLive ? '<div style="position:absolute;bottom:0;right:0;width:12px;height:12px;border-radius:50%;background:var(--success);border:2px solid var(--surface);"><div class="live-dot" style="width:8px;height:8px;margin:0;"></div></div>' : ''}
+        </div>
+
+        <!-- Name + designation -->
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;">${r.name}</div>
+          <div style="font-size:11px;color:var(--text2);">${r.designation || r.role}</div>
+          <div style="font-size:11px;margin-top:3px;color:${isActive ? 'var(--success)' : 'var(--text3)'};">
+            ${isActive ? '🟢 Punched in' : r.att?.punch_out ? '⚫ Day ended' : '🔴 Not punched in'}
+            ${isLive ? ` · 📍 ${locAge}m ago` : ''}
+          </div>
+        </div>
+
+        <!-- Visit count -->
+        <div style="text-align:right;">
+          <div class="mono" style="font-size:24px;font-weight:700;
+               color:${visitPct>=100?'var(--success)':visitPct>=60?'var(--accent)':'var(--text)'};">
+            ${visitCount}
+          </div>
+          <div style="font-size:10px;color:var(--text3);">/${target} visits</div>
+        </div>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="progress-wrap" style="margin:10px 0 8px;">
+        <div class="progress-bar">
+          <div class="progress-fill ${visitPct>=100?'success':''}" style="width:${visitPct}%"></div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--text2);">
+        ${r.att?.km_travelled ? `<span>🛣️ ${r.att.km_travelled} km</span>` : ''}
+        ${avgQuality !== null ? `<span>⭐ ${avgQuality}% quality</span>` : ''}
+        ${hasAlerts ? `<span style="color:var(--danger);">⚠️ ${r.alerts.length} alert${r.alerts.length>1?'s':''}</span>` : ''}
+        ${r.visits[0] ? `<span>Last: ${new Date(r.visits[0].created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>` : '<span>No visits yet</span>'}
+      </div>
+
+      <!-- Last visit -->
+      ${r.visits[0] ? `
+        <div style="margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:8px;font-size:12px;">
+          <span style="color:var(--text2);">Last visit:</span> ${r.visits[0].site_address || 'Site visit'}
+          ${r.visits[0].construction_stage ? `<span class="visit-stage" style="margin-left:6px;font-size:10px;">${stageLabel(r.visits[0].construction_stage)}</span>` : ''}
+        </div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Load visit feed
+  loadTeamVisits(visitRows || []);
+}
+
+async function loadTeamVisits(visitRows) {
+  if (!visitRows) {
+    // Re-fetch if called from refresh button
+    const { data } = await sb.from('field_visits')
+      .select('id,staff_id,created_at,site_address,construction_stage,visit_quality_score,executive_name,site_contacts')
+      .eq('department', 'Field').order('created_at', {ascending:false}).limit(20);
+    visitRows = data || [];
+  }
+  const feed = document.getElementById('team-visits-feed');
+  if (!visitRows.length) {
+    feed.innerHTML = '<div style="text-align:center;padding:20px 0;color:var(--text3);font-size:13px;">No visits today yet</div>';
+    return;
+  }
+  feed.innerHTML = visitRows.slice(0,15).map(v => `
+    <div style="display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2);align-items:flex-start;">
+      <div style="font-size:20px;margin-top:2px;">📍</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${v.site_address || 'Site Visit'}
+        </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px;">
+          ${v.executive_name || 'Rep'} · ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+          ${v.visit_quality_score ? ` · ${Math.round(v.visit_quality_score)}% quality` : ''}
+        </div>
+      </div>
+      ${v.construction_stage ? `<div class="visit-stage" style="flex-shrink:0;font-size:10px;">${stageLabel(v.construction_stage)}</div>` : ''}
+    </div>
+  `).join('');
 }
 
 async function requestPermissions() {
@@ -2468,10 +2700,12 @@ function showScreen(id) {
 }
 
 function showTab(tab) {
-  ['home','visits','map','profile'].forEach(t => {
-    document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
+  ['home','visits','map','team','profile'].forEach(t => {
+    const tabEl = document.getElementById(`tab-${t}`);
+    if (tabEl) tabEl.classList.toggle('hidden', t !== tab);
     document.querySelector(`.nav-item[data-tab="${t}"]`)?.classList.toggle('active', t === tab);
   });
+  if (tab === 'team') loadTeamData();
 }
 
 function openSheet(id) { document.getElementById(id).classList.add('open'); }
