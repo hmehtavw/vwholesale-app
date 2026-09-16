@@ -456,7 +456,9 @@ input[type=file] { display: none; }
       </div>
 
       <!-- Stats -->
-      <div class="stat-grid">
+      <!-- Daily stats -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:8px;">TODAY</div>
+      <div class="stat-grid" style="margin-bottom:14px;">
         <div class="stat-tile">
           <div class="stat-value" id="stat-visits">0</div>
           <div class="stat-label">Visits today</div>
@@ -468,20 +470,37 @@ input[type=file] { display: none; }
         <div class="stat-tile">
           <div class="stat-value" id="stat-km">0</div>
           <div class="stat-label">km today</div>
-          <div class="stat-sub" id="stat-fuel">₹0 fuel</div>
+          <div class="stat-sub" id="stat-km-fuel">₹0 fuel</div>
+        </div>
+      </div>
+
+      <!-- Monthly cycle stats (21st–20th) -->
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:8px;" id="cycle-label">THIS CYCLE</div>
+      <div class="stat-grid" style="margin-bottom:14px;">
+        <div class="stat-tile">
+          <div class="stat-value" id="stat-cycle-visits">0</div>
+          <div class="stat-label">Cycle visits</div>
+          <div class="stat-sub" id="stat-cycle-days">—</div>
         </div>
         <div class="stat-tile">
-          <div class="stat-value" id="stat-month-visits">0</div>
-          <div class="stat-label">This month</div>
-          <div class="stat-sub">total visits</div>
+          <div class="stat-value" id="stat-cycle-km">0</div>
+          <div class="stat-label">Cycle km</div>
+          <div class="stat-sub" id="stat-cycle-fuel" style="color:var(--accent);">₹0 fuel due</div>
         </div>
-        <div class="stat-tile">
-          <div class="stat-value" id="stat-billing">0</div>
-          <div class="stat-label">Billing (L)</div>
-          <div class="progress-wrap">
+        <div class="stat-tile" style="grid-column:span 2;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div class="stat-value" id="stat-billing">0L</div>
+              <div class="stat-label">Billing this cycle</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:11px;color:var(--text2);">Target</div>
+              <div class="mono" style="font-size:16px;font-weight:700;" id="stat-billing-target">₹10L</div>
+            </div>
+          </div>
+          <div class="progress-wrap mt-8">
             <div class="progress-bar"><div class="progress-fill" id="billing-bar" style="width:0%"></div></div>
           </div>
-          <div class="stat-sub" id="stat-billing-target">Target: ₹10L</div>
         </div>
       </div>
 
@@ -1305,11 +1324,37 @@ function showPermissionSheet(needsCam, needsGps) {
   };
 }
 
+// ── Cycle date helpers (21st–20th) ──
+function getCycleDates() {
+  const now = new Date();
+  const d = now.getDate();
+  let cycleStart, cycleEnd;
+  if (d >= 21) {
+    cycleStart = new Date(now.getFullYear(), now.getMonth(), 21);
+    cycleEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 20, 23, 59, 59);
+  } else {
+    cycleStart = new Date(now.getFullYear(), now.getMonth() - 1, 21);
+    cycleEnd   = new Date(now.getFullYear(), now.getMonth(), 20, 23, 59, 59);
+  }
+  return { cycleStart, cycleEnd };
+}
+
+function fmtCycleLabel(start, end) {
+  const opts = { day:'numeric', month:'short' };
+  return `${start.toLocaleDateString('en-IN', opts)} – ${end.toLocaleDateString('en-IN', opts)}`;
+}
+
 async function loadTodayData() {
-  const today = new Date().toISOString().split('T')[0];
-  
-  // Today's attendance
-  // Use 24h window to avoid UTC/IST mismatch — attendance stored in UTC
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+  const { cycleStart, cycleEnd } = getCycleDates();
+
+  // Update cycle label
+  const cycleEl = document.getElementById('cycle-label');
+  if (cycleEl) cycleEl.textContent = `THIS CYCLE (${fmtCycleLabel(cycleStart, cycleEnd)})`;
+
+  // ── Today's attendance (24h window for UTC/IST safety) ──
   const since24h = new Date(Date.now() - 24*60*60*1000).toISOString();
   const { data: att } = await sb.from('attendance')
     .select('*').eq('staff_id', currentUser.id)
@@ -1317,23 +1362,18 @@ async function loadTodayData() {
     .order('date', {ascending: false})
     .limit(1)
     .single();
-  
+
   if (att) {
     currentAttendance = att;
     document.getElementById('punch-label').textContent = att.punch_out ? 'Day ended' : 'Punched in since';
-    // punch_in is stored as HH:MM:SS string — display directly
     const punchTimeStr = att.punch_in ? att.punch_in.slice(0,5) : '--:--';
     document.getElementById('punch-time').textContent = punchTimeStr;
     const btn = document.getElementById('punch-btn');
-    // Check if this attendance is from a previous day
     const attDate = new Date(att.date);
-    const todayDate = new Date();
-    const isToday = attDate.toDateString() === todayDate.toDateString() ||
-      // UTC day comparison for IST offset
-      (todayDate - attDate) < 20 * 60 * 60 * 1000;
+    const isToday = attDate.toDateString() === now.toDateString() ||
+      (now - attDate) < 20 * 60 * 60 * 1000;
 
     if (att.punch_out && isToday) {
-      // Today's session ended
       btn.textContent = 'Done ✓';
       btn.className = 'punch-btn';
       btn.style.background = 'var(--success-soft)';
@@ -1341,26 +1381,35 @@ async function loadTodayData() {
       btn.style.border = '1px solid var(--success)';
       btn.onclick = null;
     } else if (att.punch_out && !isToday) {
-      // Previous day ended — show Start New Day
       btn.textContent = 'Start Day';
       btn.className = 'punch-btn in';
       btn.style = '';
-      currentAttendance = null; // Reset so new punch-in is allowed
+      currentAttendance = null;
       document.getElementById('punch-label').textContent = 'New day — punch in to start';
-      document.getElementById('punch-time').textContent = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('punch-time').textContent = now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
       btn.onclick = openPunchSheet;
     } else {
       btn.textContent = 'Punch Out';
       btn.className = 'punch-btn out';
       btn.onclick = openPunchSheet;
     }
+
+    // ── Daily km ──
+    const kmToday = att.km_travelled || 0;
+    const fuelToday = att.fuel_reimbursement || 0;
+    document.getElementById('stat-km').textContent = kmToday || '—';
+    const kmFuelEl = document.getElementById('stat-km-fuel');
+    if (kmFuelEl) kmFuelEl.textContent = fuelToday ? `₹${parseFloat(fuelToday).toFixed(0)} fuel today` : '₹0 fuel';
   }
 
-  // Today's visits
+  // ── Today's visits (UTC-safe: use IST midnight range) ──
+  const todayIST = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+  const todayStr = todayIST.toISOString().split('T')[0];
   const { data: visits } = await sb.from('field_visits')
     .select('*').eq('staff_id', currentUser.id)
-    .gte('created_at', today + 'T00:00:00').order('created_at', {ascending:false});
-  
+    .gte('created_at', todayStr + 'T00:00:00+05:30')
+    .order('created_at', {ascending: false});
+
   const count = visits?.length || 0;
   document.getElementById('stat-visits').textContent = count;
   const target = getDesignationTarget();
@@ -1373,10 +1422,33 @@ async function loadTodayData() {
   renderAssignedList();
   updateIncentiveTile(count, target);
 
-  // KM today
-  if (currentAttendance?.odo_in_reading) {
-    document.getElementById('stat-km').textContent = currentAttendance.km_travelled || '—';
-    document.getElementById('stat-fuel').textContent = currentAttendance.fuel_reimbursement ? `₹${currentAttendance.fuel_reimbursement}` : '—';
+  // ── Cycle stats (21st–20th) ──
+  const [{ data: cycleAtts }, { data: cycleVisits }] = await Promise.all([
+    sb.from('attendance').select('km_travelled,fuel_reimbursement')
+      .eq('staff_id', currentUser.id)
+      .gte('date', cycleStart.toISOString())
+      .lte('date', cycleEnd.toISOString()),
+    sb.from('field_visits').select('id,created_at')
+      .eq('staff_id', currentUser.id)
+      .gte('created_at', cycleStart.toISOString())
+      .lte('created_at', cycleEnd.toISOString()),
+  ]);
+
+  const cycleKm   = (cycleAtts || []).reduce((s, r) => s + (parseFloat(r.km_travelled) || 0), 0);
+  const cycleFuel = (cycleAtts || []).reduce((s, r) => s + (parseFloat(r.fuel_reimbursement) || 0), 0);
+  const cycleVCount = cycleVisits?.length || 0;
+
+  const cycleVisitsEl = document.getElementById('stat-cycle-visits');
+  const cycleKmEl = document.getElementById('stat-cycle-km');
+  const cycleFuelEl = document.getElementById('stat-cycle-fuel');
+  const cycleDaysEl = document.getElementById('stat-cycle-days');
+
+  if (cycleVisitsEl) cycleVisitsEl.textContent = cycleVCount;
+  if (cycleKmEl) cycleKmEl.textContent = Math.round(cycleKm) || '—';
+  if (cycleFuelEl) cycleFuelEl.textContent = cycleFuel ? `₹${Math.round(cycleFuel).toLocaleString('en-IN')} fuel due` : '₹0 fuel';
+  if (cycleDaysEl) {
+    const daysLeft = Math.max(0, Math.ceil((cycleEnd - now) / (1000*60*60*24)));
+    cycleDaysEl.textContent = `${daysLeft} days left in cycle`;
   }
 }
 
@@ -1967,8 +2039,113 @@ function getCurrentLocationForVisit() {
 }
 
 // ── Submit visit ──
-async function submitVisit() {
+function showQualityGate(score, checks) {
+  const missing = checks.filter(c => !c.met);
+  const existing = document.getElementById('sheet-quality-gate');
+  if (existing) existing.remove();
+
+  const sheet = document.createElement('div');
+  sheet.className = 'sheet-backdrop';
+  sheet.id = 'sheet-quality-gate';
+
+  const missingRows = missing.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+         padding:12px 0;border-bottom:1px solid var(--border2);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;">❌</span>
+        <div>
+          <div style="font-size:14px;font-weight:500;">${c.label}</div>
+          <div style="font-size:12px;color:var(--text3);">+${c.pts} points</div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  const doneRows = checks.filter(c => c.met).map(c => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;opacity:.6;">
+      <span style="font-size:16px;">✅</span>
+      <div style="font-size:13px;color:var(--text2);">${c.label}</div>
+    </div>`).join('');
+
+  const ptsNeeded = 90 - score;
+  sheet.innerHTML = `
+    <div class="sheet" style="padding-bottom:env(safe-area-inset-bottom);">
+      <div class="sheet-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title">Boost Your Score 🎯</div>
+        <button class="sheet-close" onclick="document.getElementById('sheet-quality-gate').classList.remove('open');">✕</button>
+      </div>
+      <div class="sheet-body">
+        <!-- Score ring -->
+        <div style="text-align:center;margin-bottom:20px;">
+          <div style="position:relative;display:inline-block;">
+            <svg width="100" height="100" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="8"/>
+              <circle cx="50" cy="50" r="42" fill="none"
+                stroke="${score >= 90 ? 'var(--success)' : score >= 60 ? 'var(--accent)' : 'var(--danger)'}"
+                stroke-width="8" stroke-linecap="round"
+                stroke-dasharray="${2 * Math.PI * 42}"
+                stroke-dashoffset="${2 * Math.PI * 42 * (1 - score/100)}"
+                transform="rotate(-90 50 50)"/>
+              <text x="50" y="46" text-anchor="middle" fill="var(--text)"
+                font-size="20" font-weight="700" font-family="JetBrains Mono,monospace">${score}%</text>
+              <text x="50" y="62" text-anchor="middle" fill="var(--text3)" font-size="10">score</text>
+            </svg>
+          </div>
+          <div style="margin-top:10px;">
+            ${score < 90 ? `
+              <div style="font-size:15px;font-weight:600;color:var(--accent);">
+                Add ${ptsNeeded} more points to qualify for incentives!
+              </div>
+              <div style="font-size:12px;color:var(--text2);margin-top:4px;">
+                Min 90% required for incentive qualification
+              </div>` : `
+              <div style="font-size:15px;font-weight:600;color:var(--success);">
+                Great work! You qualify for incentives 🎉
+              </div>`}
+          </div>
+        </div>
+
+        ${missing.length ? `
+          <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">
+            WHAT'S MISSING
+          </div>
+          ${missingRows}
+          <div style="margin-top:16px;font-size:12px;color:var(--text3);">
+            Go back and complete these to hit 90%
+          </div>` : ''}
+
+        ${doneRows ? `
+          <div style="margin-top:16px;">
+            ${doneRows}
+          </div>` : ''}
+
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn btn-secondary" onclick="document.getElementById('sheet-quality-gate').classList.remove('open');">
+            ← Complete it
+          </button>
+          <button class="btn btn-ghost" style="font-size:13px;color:var(--text3);"
+            onclick="document.getElementById('sheet-quality-gate').classList.remove('open');submitVisit(true);">
+            Submit anyway (${score}%)
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(sheet);
+  setTimeout(() => sheet.classList.add('open'), 10);
+  sheet.addEventListener('click', e => { if (e.target === sheet) sheet.classList.remove('open'); });
+}
+
+async function submitVisit(forceSubmit = false) {
   if (!visitPhotos.length) { showToast('Add at least 1 site photo'); return; }
+
+  // Quality gate — min 90% for incentive qualification
+  const { score, checks } = computeQualityScore();
+  if (score < 90 && !forceSubmit) {
+    showQualityGate(score, checks);
+    return;
+  }
+
   const btn = document.getElementById('btn-submit-visit');
   btn.disabled = true; btn.textContent = 'Saving…';
 
