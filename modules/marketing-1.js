@@ -5689,8 +5689,8 @@ async function calGenerateGifSlideshow(calendarId) {
     const { data: item } = await sb.from('content_calendar').select('*').eq('id', calendarId).single();
     if (!item) throw new Error('Calendar item not found');
 
-    const RAIL_URL = 'https://vwholesale-render-worker-production.up.railway.app';
-    const RAIL_SECRET = 'vw-render-2026-secret';
+    const RAIL_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/render-proxy';
+    const RAIL_SECRET = null; // Secret now server-side only
 
     // Check if Railway already processed this (gif_status = 'ready')
     if (item.gif_status === 'ready') {
@@ -5713,9 +5713,9 @@ async function calGenerateGifSlideshow(calendarId) {
       updated_at: new Date().toISOString()
     }).eq('id', calendarId);
 
-    const fireRes = await fetch(RAIL_URL + '/render', {
+    const fireRes = await fetch(RAIL_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-worker-secret': RAIL_SECRET },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window._SB_ANON_KEY || ''}` },
       body: JSON.stringify({ action: 'gif_slideshow', calendar_id: parseInt(calendarId) })
     });
     const fireData = await fireRes.json();
@@ -5726,7 +5726,7 @@ async function calGenerateGifSlideshow(calendarId) {
     // Poll progress from Railway every 10s and show in toast
     const pollInterval = setInterval(async () => {
       try {
-        const pr = await fetch(RAIL_URL + '/progress/' + calendarId);
+        const pr = await fetch(RAIL_URL.replace('/render','') + '/progress/' + calendarId);
         if (!pr.ok) { console.warn('[gif-poll] progress HTTP ' + pr.status); return; }
         const pd = await pr.json();
         if (pd.status === 'ready') {
