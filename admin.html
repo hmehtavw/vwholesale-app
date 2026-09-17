@@ -2542,6 +2542,15 @@ async function showVisitDetail(id) {
       <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:6px;">NOTES</div>
       <div style="font-size:13px;color:var(--t2);background:var(--card2);border-radius:8px;padding:12px;margin-bottom:16px;">${v.notes}</div>` : ''}
 
+    ${v.followup_questions?.length ? `
+      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">🤖 AI FOLLOW-UP QUESTIONS</div>
+      <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px;margin-bottom:16px;">
+        ${v.followup_questions.map((q,i) => `
+          <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
+            <span style="color:var(--gold);font-weight:700;">${i+1}.</span> ${q.question || q}
+          </div>`).join('')}
+      </div>` : ''}
+
     ${v.next_action_date ? `
       <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 14px;font-size:13px;">
         📅 Follow-up: <strong>${new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</strong>

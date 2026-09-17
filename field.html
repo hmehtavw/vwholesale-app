@@ -2856,6 +2856,8 @@ async function submitVisit(forceSubmit = false, crossTerritoryReason = null) {
     if (photoUrls.length > 0) {
       runAIAnalysis(visit.id, photoUrls.map(p=>p.url), visitData).catch(() => {});
     }
+    // Always generate follow-up questions (even without photos)
+    generateFollowupQuestions(visit.id).catch(() => {});
   } catch(e) {
     showToast('Error: ' + e.message);
     btn.disabled = false; btn.textContent = 'Submit Visit';
@@ -2923,6 +2925,16 @@ async function createDeptTasks(visitId, visitData, flags) {
 }
 
 // ── AI Analysis ──
+async function generateFollowupQuestions(visitId) {
+  try {
+    await fetch(`${SUPABASE_URL}/functions/v1/field-followup-questions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON}` },
+      body: JSON.stringify({ parentVisitId: visitId, staffId: currentUser.id })
+    });
+  } catch(e) { /* silently fail */ }
+}
+
 async function runAIAnalysis(visitId, photoUrls, visitData) {
   const btn = document.getElementById('btn-submit-visit');
   try {
