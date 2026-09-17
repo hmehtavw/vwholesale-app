@@ -2439,6 +2439,12 @@ async function loadFieldVisits() {
   }).join('');
 
   document.getElementById('page-content').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <div style="font-size:12px;color:var(--t3);" id="fv-ai-status"></div>
+      <button onclick="retryAIBulk()" style="padding:7px 14px;border-radius:8px;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.3);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;">
+        🤖 Retry AI on missing visits
+      </button>
+    </div>
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       <input class="form-inp" id="fv-search" placeholder="Search by rep or site…" style="max-width:260px;" oninput="filterVisitsTable(this.value)">
       <select class="form-sel" style="max-width:180px;" onchange="filterVisitsByStage(this.value)">
@@ -3409,6 +3415,68 @@ async function deleteTerritory(id) {
 }
 
 window.deleteTerritory = deleteTerritory;
+
+
+// ── AI RETRY FUNCTIONS ──
+const SUPABASE_URL_ADMIN = 'https://ndamdnlsuktucqtcbhgp.supabase.co';
+const SUPABASE_ANON_ADMIN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MTg1MzgsImV4cCI6MjA5Njk5NDUzOH0.7pGJu4bbNhl4E-4Do24jS9_p6nLUa1eN4JXQSqEF9VU';
+
+async function retryAISingle(visitId, photos) {
+  const photoUrls = (photos||[]).map(p => p.url || p).filter(Boolean);
+  if (!photoUrls.length) { toast('No photos found for AI analysis', 'warn'); return; }
+  toast('Running AI analysis...', 'info');
+  try {
+    const res = await fetch(SUPABASE_URL_ADMIN + '/functions/v1/ai-site-analysis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_ADMIN },
+      body: JSON.stringify({ visitId, photoUrls, context: {} })
+    });
+    const data = await res.json();
+    if (data.success) {
+      toast('AI analysis complete ✓', 'ok');
+      setTimeout(() => loadFieldVisits(), 1000);
+    } else {
+      toast('AI error: ' + (data.error || 'unknown'), 'warn');
+    }
+  } catch(e) { toast('AI failed: ' + e.message, 'warn'); }
+}
+
+async function retryAIBulk() {
+  const statusEl = document.getElementById('fv-ai-status');
+  if (statusEl) statusEl.textContent = 'Loading visits without AI...';
+  
+  const visits = await sbFetch('field_visits?select=id,site_photos,construction_stage,city&ai_stage_detected=is.null&order=created_at.desc&limit=20').catch(()=>[]);
+  const needsAI = (visits||[]).filter(v => v.site_photos?.length);
+  
+  if (!needsAI.length) { 
+    if (statusEl) statusEl.textContent = 'All visits have AI analysis ✓';
+    return; 
+  }
+  
+  if (statusEl) statusEl.textContent = `Running AI on ${needsAI.length} visits...`;
+  
+  let done = 0;
+  for (const v of needsAI) {
+    const photoUrls = (v.site_photos||[]).map(p => p.url || p).filter(Boolean);
+    if (!photoUrls.length) continue;
+    try {
+      await fetch(SUPABASE_URL_ADMIN + '/functions/v1/ai-site-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_ADMIN },
+        body: JSON.stringify({ visitId: v.id, photoUrls, context: { stage: v.construction_stage, city: v.city } })
+      });
+      done++;
+      if (statusEl) statusEl.textContent = `AI analysis: ${done}/${needsAI.length} done...`;
+      await new Promise(r => setTimeout(r, 1500)); // rate limit
+    } catch(e) { console.warn('AI retry failed for visit', v.id, e); }
+  }
+  
+  if (statusEl) statusEl.textContent = `✓ AI analysis complete for ${done} visits`;
+  setTimeout(() => loadFieldVisits(), 1000);
+}
+
+window.retryAISingle = retryAISingle;
+window.retryAIBulk = retryAIBulk;
 
 
 // ── INIT ──
