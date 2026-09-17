@@ -3234,23 +3234,19 @@ function getSelectedColor() {
 }
 
 function loadMapsScript() {
-  if (window.google?.maps?.drawing) { initTerritoryMap(); return; }
-  // Expose callback globally BEFORE script loads
   window.initTerritoryMap = initTerritoryMap;
-  if (window.google?.maps && !window.google?.maps?.drawing) {
-    // Maps loaded but drawing library missing — reload with drawing
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
-    script.async = true; script.defer = true;
-    document.head.appendChild(script);
+  // If drawing library already loaded, init immediately
+  if (window.google && window.google.maps && window.google.maps.drawing) {
+    initTerritoryMap();
     return;
   }
-  if (!window.google) {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
-    script.async = true; script.defer = true;
-    document.head.appendChild(script);
-  }
+  // Remove any existing Maps script (might be loaded without drawing library)
+  document.querySelectorAll('script[src*="maps.googleapis.com"]').forEach(s => s.remove());
+  // Load fresh with drawing library
+  const script = document.createElement('script');
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=drawing&callback=initTerritoryMap';
+  script.async = true;
+  document.head.appendChild(script);
 }
 
 function initTerritoryMap() {
@@ -3313,11 +3309,21 @@ function startDrawing(mode) {
   if (!document.getElementById('t-staff').value) { alert('Select a TL first'); return; }
   if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
 
-  // If map not ready yet, wait for it
+  // If map not ready yet, wait and retry up to 5 seconds
   if (!territoryMap || !drawingManager) {
     const hintEl = document.getElementById('draw-hint');
-    if (hintEl) { hintEl.textContent = 'Map loading… try again in a moment'; hintEl.style.display = 'block'; }
-    setTimeout(() => startDrawing(mode), 1000);
+    if (hintEl) { hintEl.textContent = '⏳ Map initialising… clicking again in 2 seconds'; hintEl.style.display = 'block'; }
+    let attempts = 0;
+    const wait = setInterval(() => {
+      attempts++;
+      if (territoryMap && drawingManager) {
+        clearInterval(wait);
+        startDrawing(mode);
+      } else if (attempts > 5) {
+        clearInterval(wait);
+        if (hintEl) hintEl.textContent = '❌ Map failed to load. Please refresh the page.';
+      }
+    }, 1000);
     return;
   }
 
