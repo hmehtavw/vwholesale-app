@@ -3234,23 +3234,28 @@ function getSelectedColor() {
 }
 
 function loadMapsScript() {
-  window.initTerritoryMap = initTerritoryMap;
-  // If drawing library already loaded, init immediately
-  if (window.google && window.google.maps && window.google.maps.drawing) {
-    initTerritoryMap();
-    return;
-  }
-  // Remove any existing Maps script (might be loaded without drawing library)
-  document.querySelectorAll('script[src*="maps.googleapis.com"]').forEach(s => s.remove());
-  // Load fresh with drawing library
+  window._vwMapCallback = initTerritoryMap;
+  // Always remove old scripts and reload fresh with drawing library
+  document.querySelectorAll('script[src*="maps.googleapis"]').forEach(s => s.remove());
+  delete window.google;
   const script = document.createElement('script');
-  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=drawing&callback=initTerritoryMap';
+  script.id = 'vw-maps-script';
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=drawing&v=weekly&callback=_vwMapCallback';
   script.async = true;
+  script.onerror = () => {
+    document.getElementById('map-loading').innerHTML = '<div style="color:#EF4444;padding:20px;">Maps failed to load. Check API key restrictions.</div>';
+  };
   document.head.appendChild(script);
 }
 
 function initTerritoryMap() {
+  try {
   document.getElementById('map-loading').style.display = 'none';
+  if (!google?.maps?.drawing) {
+    document.getElementById('map-loading').innerHTML = '<div style="color:#EF4444;padding:20px;text-align:center;">Drawing library not loaded.<br>Please refresh the page.</div>';
+    document.getElementById('map-loading').style.display = 'flex';
+    return;
+  }
 
   territoryMap = new google.maps.Map(document.getElementById('territory-map'), {
     center: { lat: 16.5062, lng: 80.6480 }, // Vijayawada
@@ -3301,6 +3306,12 @@ function initTerritoryMap() {
 
   // Render existing territories on map
   renderTerritoriesOnMap();
+  console.log('[VW] Map + Drawing library ready ✓');
+  } catch(e) {
+    console.error('[VW] Map init error:', e);
+    const el = document.getElementById('map-loading');
+    if (el) { el.innerHTML = '<div style="color:#EF4444;padding:20px;text-align:center;">Map error: ' + e.message + '</div>'; el.style.display='flex'; }
+  }
 }
 
 function startDrawing(mode) {
