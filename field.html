@@ -3273,6 +3273,23 @@ function showToast(msg, duration=3000) {
   }, duration);
 }
 
+// Global error handler — catches Android low memory and other OS errors
+window.addEventListener('error', e => {
+  const msg = e?.message || '';
+  if (msg.toLowerCase().includes('memory') || msg.toLowerCase().includes('quota')) {
+    showToast('Low memory detected — please close other apps and try again', 5000);
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('unhandledrejection', e => {
+  const msg = String(e?.reason?.message || e?.reason || '');
+  if (msg.toLowerCase().includes('memory') || msg.toLowerCase().includes('quota')) {
+    showToast('Low memory — close other apps and retry', 5000);
+    e.preventDefault();
+  }
+});
+
 function initClockTick() {
   const update = () => {
     const now = new Date();
