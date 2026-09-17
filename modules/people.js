@@ -125,6 +125,41 @@ async function renderCRM() {
     </div>
   </div>` : ''}
 
+  <!-- FIELD VISITS SECTION -->
+  <div class="card">
+    <div class="card-header-row">
+      <h3 class="card-title">📍 Field Visits</h3>
+      <div id="field-visits-meta" style="font-size:12px;color:var(--text-muted);">Loading…</div>
+    </div>
+    <!-- Filter row -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <select id="fv-filter-rep" onchange="loadFieldVisitsCRM()" style="flex:1;min-width:120px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;">
+        <option value="">All reps</option>
+      </select>
+      <select id="fv-filter-stage" onchange="loadFieldVisitsCRM()" style="flex:1;min-width:130px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;">
+        <option value="">All stages</option>
+        <option value="foundation">Foundation</option>
+        <option value="structure">Structure</option>
+        <option value="plastering">Plastering</option>
+        <option value="tiling_ready">Tiling Ready</option>
+        <option value="tiling_in_progress">Tiling In Progress</option>
+        <option value="finishing">Finishing</option>
+        <option value="handover">Handover</option>
+        <option value="renovation">Renovation</option>
+      </select>
+      <select id="fv-filter-score" onchange="loadFieldVisitsCRM()" style="flex:1;min-width:120px;padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;">
+        <option value="">All quality</option>
+        <option value="high">90%+ Qualified</option>
+        <option value="mid">60–89%</option>
+        <option value="low">Below 60%</option>
+      </select>
+    </div>
+    <div id="field-visits-crm-list">
+      <div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Loading field visits…</div>
+    </div>
+    <button id="fv-load-more" onclick="loadMoreFieldVisits()" style="display:none;width:100%;margin-top:10px;padding:10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;color:var(--text-muted);">Load more visits</button>
+  </div>
+
   <div id="add-customer-form" class="inline-form" style="display:none">
     <h3 class="card-title">Add Customer</h3>
     <input type="text" id="new-cust-name" placeholder="Name *">
@@ -2141,3 +2176,210 @@ async function removeCustomerRefImage(customerId, idx) {
   openCustomer(customerId);
 }
 window.removeCustomerRefImage = removeCustomerRefImage;
+
+// ══════════════════════════════════════════════
+// FIELD VISITS CRM INTEGRATION
+// ══════════════════════════════════════════════
+
+let _fvOffset = 0;
+const _fvLimit = 20;
+
+async function loadFieldVisitsCRM(reset = true) {
+  if (reset) _fvOffset = 0;
+  const repFilter   = document.getElementById('fv-filter-rep')?.value || '';
+  const stageFilter = document.getElementById('fv-filter-stage')?.value || '';
+  const scoreFilter = document.getElementById('fv-filter-score')?.value || '';
+  const listEl      = document.getElementById('field-visits-crm-list');
+  const metaEl      = document.getElementById('field-visits-meta');
+  if (!listEl) return;
+
+  if (reset) listEl.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">Loading…</div>';
+
+  try {
+    let query = VW_DB.client.from('field_visits')
+      .select('id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,next_action_date,site_contacts,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,cross_territory,notes,is_followup,visit_number')
+      .order('created_at', { ascending: false })
+      .range(_fvOffset, _fvOffset + _fvLimit - 1);
+
+    if (repFilter)   query = query.eq('staff_id', repFilter);
+    if (stageFilter) query = query.eq('construction_stage', stageFilter);
+
+    const { data: visits, error } = await query;
+    if (error) throw error;
+
+    // Score filter client-side
+    let filtered = visits || [];
+    if (scoreFilter === 'high') filtered = filtered.filter(v => (v.visit_quality_score||0) >= 90);
+    else if (scoreFilter === 'mid') filtered = filtered.filter(v => (v.visit_quality_score||0) >= 60 && (v.visit_quality_score||0) < 90);
+    else if (scoreFilter === 'low') filtered = filtered.filter(v => (v.visit_quality_score||0) < 60);
+
+    if (metaEl) metaEl.textContent = `${filtered.length} visits shown`;
+
+    const stageLabel = s => ({
+      foundation:'Foundation', structure:'Structure', brick_work:'Brick Work',
+      plastering:'Plastering', tiling_ready:'Tiling Ready', tiling_in_progress:'Tiling',
+      finishing:'Finishing', handover:'Handover', renovation:'Renovation'
+    })[s] || s || '—';
+
+    const rows = filtered.map(v => {
+      const score = Math.round(v.visit_quality_score || 0);
+      const scoreColor = score >= 90 ? '#22C55E' : score >= 60 ? '#F5A623' : '#EF4444';
+      const contacts = v.site_contacts?.length || 0;
+      const aiVal = v.ai_estimated_value_min
+        ? `₹${(v.ai_estimated_value_min/100000).toFixed(1)}L–₹${(v.ai_estimated_value_max/100000).toFixed(1)}L`
+        : '';
+      const daysAgo = Math.floor((Date.now() - new Date(v.created_at)) / 86400000);
+      const when = daysAgo === 0 ? 'Today' : daysAgo === 1 ? 'Yesterday' : `${daysAgo}d ago`;
+
+      return `
+      <div class="cust-row" onclick="openFieldVisitDetail(${v.id})" style="border-left:3px solid ${scoreColor};">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${v.site_address || 'Site Visit'}
+            ${v.cross_territory ? '<span style="font-size:10px;background:#EF444420;color:#EF4444;padding:2px 6px;border-radius:10px;margin-left:6px;">⚠️ Cross-territory</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">
+            ${v.executive_name || '—'} · ${stageLabel(v.construction_stage)} · ${when}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;">
+            <span style="font-size:11px;font-weight:700;color:${scoreColor};">${score}% quality</span>
+            ${contacts ? `<span style="font-size:11px;color:var(--text-muted);">👥 ${contacts} contacts</span>` : ''}
+            ${aiVal ? `<span style="font-size:11px;color:#F5A623;">💰 ${aiVal}</span>` : ''}
+            ${v.ai_requirements?.length ? `<span style="font-size:11px;color:var(--text-muted);">${v.ai_requirements.slice(0,2).join(', ')}</span>` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          ${v.next_action_date ? `<div style="font-size:11px;color:var(--text-muted);">📅 ${new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    if (reset) {
+      listEl.innerHTML = rows || '<div style="text-align:center;padding:24px;color:var(--text-muted);font-size:13px;">No field visits yet</div>';
+    } else {
+      listEl.innerHTML += rows;
+    }
+
+    const loadMoreBtn = document.getElementById('fv-load-more');
+    if (loadMoreBtn) loadMoreBtn.style.display = filtered.length >= _fvLimit ? '' : 'none';
+
+    // Populate rep filter dropdown if first load
+    if (reset && _fvOffset === 0) {
+      const repSel = document.getElementById('fv-filter-rep');
+      if (repSel && repSel.options.length <= 1) {
+        const { data: reps } = await VW_DB.client.from('staff')
+          .select('id,name').eq('department','Field').eq('active',true).order('name');
+        (reps||[]).forEach(r => {
+          const opt = document.createElement('option');
+          opt.value = r.id; opt.textContent = r.name;
+          repSel.appendChild(opt);
+        });
+      }
+    }
+  } catch(e) {
+    if (listEl) listEl.innerHTML = `<div style="color:#EF4444;padding:16px;font-size:13px;">Error loading field visits: ${e.message}</div>`;
+  }
+}
+
+async function loadMoreFieldVisits() {
+  _fvOffset += _fvLimit;
+  await loadFieldVisitsCRM(false);
+}
+
+async function openFieldVisitDetail(id) {
+  const { data: v } = await VW_DB.client.from('field_visits').select('*').eq('id', id).single();
+  if (!v) return;
+
+  const score = Math.round(v.visit_quality_score || 0);
+  const scoreColor = score >= 90 ? '#22C55E' : score >= 60 ? '#F5A623' : '#EF4444';
+  const sheet = document.getElementById('bottom-sheet');
+  if (!sheet) return;
+
+  sheet.innerHTML = `
+    <div class="sheet-handle"></div>
+    <div style="padding:16px 20px;max-height:85vh;overflow-y:auto;">
+      <div style="font-size:17px;font-weight:800;margin-bottom:4px;">${v.site_address || 'Site Visit'}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+        ${v.executive_name || '—'} · ${new Date(v.created_at).toLocaleString('en-IN')}
+        ${v.cross_territory ? ' · <span style="color:#EF4444;">⚠️ Cross-territory: ' + v.cross_territory_reason + '</span>' : ''}
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Stage</div>
+          <div style="font-weight:700;margin-top:4px;">${v.construction_stage?.replace(/_/g,' ') || '—'}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Quality Score</div>
+          <div style="font-weight:700;color:${scoreColor};margin-top:4px;">${score}%</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Est. Sqft</div>
+          <div style="font-weight:700;margin-top:4px;">${v.estimated_sqft ? v.estimated_sqft.toLocaleString('en-IN') + ' sqft' : '—'}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;">
+          <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">AI Value Range</div>
+          <div style="font-weight:700;color:#F5A623;margin-top:4px;">${v.ai_estimated_value_min ? '₹'+(v.ai_estimated_value_min/100000).toFixed(1)+'L–₹'+(v.ai_estimated_value_max/100000).toFixed(1)+'L' : '—'}</div>
+        </div>
+      </div>
+
+      ${v.site_contacts?.length ? `
+        <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Contacts (${v.site_contacts.length})</div>
+        ${v.site_contacts.map(c => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
+            <div>
+              <div style="font-size:11px;color:#3B82F6;font-weight:600;">${c.role || 'Contact'}</div>
+              <div style="font-weight:600;font-size:14px;">${c.name || '—'}</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              ${c.phone ? `<a href="tel:${c.phone}" style="color:#22C55E;font-size:13px;text-decoration:none;">📞 Call</a>` : ''}
+              ${c.whatsapp || c.phone ? `<a href="https://wa.me/91${c.whatsapp||c.phone}" target="_blank" style="color:#25D366;font-size:13px;text-decoration:none;">💬 WA</a>` : ''}
+            </div>
+          </div>`).join('')}
+        <div style="margin-bottom:16px;"></div>` : ''}
+
+      ${v.ai_requirements?.length ? `
+        <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">AI Requirements</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+          ${v.ai_requirements.map(r => `<span style="padding:4px 10px;border-radius:20px;background:rgba(59,130,246,.15);color:#3B82F6;font-size:12px;font-weight:600;">${r}</span>`).join('')}
+        </div>` : ''}
+
+      ${v.notes ? `
+        <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Notes</div>
+        <div style="font-size:13px;background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;">${v.notes}</div>` : ''}
+
+      ${v.next_action_date ? `
+        <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;">
+          📅 Follow-up due: <strong>${new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</strong>
+        </div>` : ''}
+
+      ${v.site_photos?.length ? `
+        <div style="font-size:11px;font-weight:800;color:var(--text-muted);margin-bottom:8px;text-transform:uppercase;">Site Photos (${v.site_photos.length})</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:16px;">
+          ${v.site_photos.map(p => `<img src="${p.url||p}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="window.open('${p.url||p}','_blank')">`).join('')}
+        </div>` : ''}
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn-primary" style="flex:1;" onclick="closeSheet()">Close</button>
+        ${v.site_lat ? `<button class="btn-secondary" style="flex:1;" onclick="window.open('https://www.google.com/maps?q=${v.site_lat},${v.site_lng}','_blank')">📍 Open Map</button>` : ''}
+      </div>
+    </div>`;
+
+  sheet.classList.add('open');
+}
+
+// Auto-load field visits when CRM page renders
+document.addEventListener('DOMContentLoaded', () => {
+  // Watch for CRM page being shown
+  const observer = new MutationObserver(() => {
+    if (document.getElementById('field-visits-crm-list')) {
+      loadFieldVisitsCRM();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+});
+
+window.loadFieldVisitsCRM = loadFieldVisitsCRM;
+window.loadMoreFieldVisits = loadMoreFieldVisits;
+window.openFieldVisitDetail = openFieldVisitDetail;
