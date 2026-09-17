@@ -3072,10 +3072,28 @@ async function loadTerritories() {
 
   // Load data FIRST before setting innerHTML
   [territoryVerticals, territoryStaff, territories] = await Promise.all([
-    sbFetch('org_verticals?select=*&order=display_order&active=eq.true').catch(()=>[]),
-    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(()=>[]),
-    sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]),
+    sbFetch('org_verticals?select=*&order=display_order').catch(e=>{console.error('verticals:',e);return[];}),
+    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(e=>{console.error('staff:',e);return[];}),
+    sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(e=>{console.error('territories:',e);return[];}),
   ]);
+
+  // Fallback if DB returns empty (RLS or network issue)
+  if (!territoryVerticals || !territoryVerticals.length) {
+    territoryVerticals = [
+      {code:'b2b',     name:'B2B Shops & Dealers',        brand:'V Wholesale'},
+      {code:'retail',  name:'Retail & Residential',        brand:'V Wholesale'},
+      {code:'projects',name:'Projects (Govt/Hotels/Arch)', brand:'V Wholesale'},
+      {code:'vbuild',  name:'Construction as a Service',   brand:'V Build'},
+      {code:'vdesign', name:'Interior Design',             brand:'V Design'},
+      {code:'vmaas',   name:'Material as a Service',       brand:'V Maas'},
+    ];
+  }
+  if (!territoryStaff || !territoryStaff.length) {
+    territoryStaff = [
+      {id:28, name:'Himansu R Mehta',  designation:'ASM',                    vertical:'projects'},
+      {id:29, name:'Shaikh Sabeer',    designation:'Team Leader Projects',    vertical:'projects'},
+    ];
+  }
 
   // Build dropdown options HTML
   const verticalOpts = (territoryVerticals||[]).map(v =>
