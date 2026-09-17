@@ -94,6 +94,9 @@ async function renderCRM() {
     ${await renderFollowupAlerts(dueFollowups)}
   </div>` : ''}
 
+  <!-- FIELD VISIT FOLLOW-UPS -->
+  <div id="field-followup-alerts-section"></div>
+
   <div class="card">
     <div class="card-header-row">
       <h3 class="card-title">Customers</h3>
@@ -2383,3 +2386,116 @@ document.addEventListener('DOMContentLoaded', () => {
 window.loadFieldVisitsCRM = loadFieldVisitsCRM;
 window.loadMoreFieldVisits = loadMoreFieldVisits;
 window.openFieldVisitDetail = openFieldVisitDetail;
+
+// ══════════════════════════════════════════════
+// FIELD VISIT FOLLOW-UP ALERTS IN CRM
+// ══════════════════════════════════════════════
+
+async function loadFieldFollowupAlerts() {
+  const el = document.getElementById('field-followup-alerts-section');
+  if (!el) return;
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const threeDaysAgo = new Date(today - 3 * 86400000).toISOString().split('T')[0];
+
+  try {
+    // Overdue + due today field visit follow-ups
+    const { data: overdueVisits } = await VW_DB.client
+      .from('field_visits')
+      .select('id,executive_name,site_address,next_action_date,construction_stage,site_contacts,ai_estimated_value_min,staff_id')
+      .lte('next_action_date', todayStr)
+      .gte('next_action_date', threeDaysAgo) // last 3 days only to avoid noise
+      .order('next_action_date', { ascending: true })
+      .limit(10);
+
+    if (!overdueVisits?.length) { el.innerHTML = ''; return; }
+
+    const overdue = overdueVisits.filter(v => v.next_action_date < todayStr);
+    const dueToday = overdueVisits.filter(v => v.next_action_date === todayStr);
+
+    const stageLabel = s => ({
+      foundation:'Foundation', structure:'Structure', brick_work:'Brick Work',
+      plastering:'Plastering', tiling_ready:'Tiling Ready', tiling_in_progress:'Tiling',
+      finishing:'Finishing', handover:'Handover', renovation:'Renovation'
+    })[s] || s || '—';
+
+    const renderRow = (v, isOverdue) => {
+      const daysAgo = isOverdue
+        ? Math.floor((today - new Date(v.next_action_date)) / 86400000)
+        : 0;
+      const contact = v.site_contacts?.[0];
+      const aiVal = v.ai_estimated_value_min
+        ? `₹${(v.ai_estimated_value_min/100000).toFixed(1)}L`
+        : '';
+      return `
+      <div style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${v.site_address || 'Site Visit'}
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+            ${v.executive_name || '—'} · ${stageLabel(v.construction_stage)}
+            ${aiVal ? ` · <span style="color:#F5A623;">${aiVal}</span>` : ''}
+          </div>
+          ${contact ? `
+          <div style="font-size:11px;margin-top:4px;display:flex;gap:8px;">
+            <span style="color:var(--text-muted);">${contact.role}: ${contact.name}</span>
+            ${contact.phone ? `<a href="tel:${contact.phone}" style="color:#22C55E;text-decoration:none;">📞 Call</a>` : ''}
+            ${contact.phone ? `<a href="https://wa.me/91${contact.phone}" target="_blank" style="color:#25D366;text-decoration:none;">💬 WA</a>` : ''}
+          </div>` : ''}
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:11px;font-weight:700;color:${isOverdue?'#EF4444':'#F5A623'};">
+            ${isOverdue ? `${daysAgo}d overdue` : 'Due today'}
+          </div>
+          <button onclick="openFieldVisitDetail(${v.id})"
+            style="margin-top:4px;padding:4px 10px;border-radius:6px;background:var(--surface2);
+            border:1px solid var(--border);color:var(--text);font-size:11px;cursor:pointer;">
+            View →
+          </button>
+        </div>
+      </div>`;
+    };
+
+    el.innerHTML = `
+      <div class="alert-card" style="margin-bottom:12px;">
+        <div class="alert-title" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>📍 Field Follow-ups
+            ${overdue.length ? `<span style="background:#EF4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px;">${overdue.length} overdue</span>` : ''}
+            ${dueToday.length ? `<span style="background:#F5A623;color:#000;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:4px;">${dueToday.length} today</span>` : ''}
+          </span>
+          <button onclick="loadFieldFollowupAlerts()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;">↻ Refresh</button>
+        </div>
+        <div style="margin-top:6px;">
+          ${[...overdue, ...dueToday].map(v => renderRow(v, v.next_action_date < todayStr)).join('')}
+        </div>
+        ${overdueVisits.length >= 10 ? `
+        <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--text-muted);">
+          Showing 10 most recent — <a href="#" onclick="showTab('visits')" style="color:var(--accent);">see all in Field Visits</a>
+        </div>` : ''}
+      </div>`;
+
+  } catch(e) {
+    console.warn('Field follow-up alerts failed:', e.message);
+    el.innerHTML = '';
+  }
+}
+
+window.loadFieldFollowupAlerts = loadFieldFollowupAlerts;
+
+// Auto-load field follow-up alerts when CRM renders
+const _origLoadFieldVisits = window.loadFieldVisitsCRM;
+window.loadFieldVisitsCRM = async function(reset = true) {
+  if (_origLoadFieldVisits) await _origLoadFieldVisits(reset);
+  loadFieldFollowupAlerts();
+};
+
+// Also trigger on CRM page load via mutation observer
+const _fieldFUObserver = new MutationObserver(() => {
+  if (document.getElementById('field-followup-alerts-section')) {
+    loadFieldFollowupAlerts();
+    _fieldFUObserver.disconnect();
+  }
+});
+_fieldFUObserver.observe(document.body, { childList: true, subtree: true });
