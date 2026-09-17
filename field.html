@@ -1232,16 +1232,28 @@ document.getElementById('btn-send-otp').onclick = async () => {
     return;
   }
 
-  document.getElementById('otp-sent-msg').textContent =
-    `OTP for +91 ${phone} — shown below`;
+  // Show appropriate message based on delivery method
+  const isWhatsApp = result.delivery === 'whatsapp';
+  const sentMsg = isWhatsApp
+    ? `OTP sent to your WhatsApp (+91 ${phone})`
+    : `OTP for +91 ${phone}`;
+
+  document.getElementById('otp-sent-msg').textContent = sentMsg;
   document.getElementById('login-phone-step').classList.add('hidden');
   document.getElementById('login-otp-step').classList.remove('hidden');
   document.querySelector('.otp-digit').focus();
   btn.disabled = false; btn.textContent = 'Send OTP';
 
-  // Dev fallback: if WA not configured, edge fn returns dev_otp
-  if (result.dev_otp) showToast(`Dev OTP: ${result.dev_otp}`, 30000);
-  else showToast(`OTP sent to WhatsApp ✓`);
+  if (isWhatsApp) {
+    // WhatsApp delivered — rep checks their WA
+    showToast('OTP sent to WhatsApp ✅', 4000);
+  } else if (result.dev_otp) {
+    // Fallback: show on screen (until WA template approved)
+    showToast('Your OTP: ' + result.dev_otp, 60000);
+    // Also auto-fill OTP digits for convenience
+    const digits = result.dev_otp.toString().split('');
+    document.querySelectorAll('.otp-digit').forEach((d, i) => { d.value = digits[i] || ''; });
+  }
 };
 
 document.getElementById('btn-verify-otp').onclick = async () => {
