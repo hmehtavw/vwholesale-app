@@ -3082,7 +3082,7 @@ async function loadTerritories() {
   // Load data FIRST before setting innerHTML
   [territoryVerticals, territoryStaff, territories] = await Promise.all([
     sbFetch('org_verticals?select=*&order=display_order').catch(e=>{console.error('verticals:',e);return[];}),
-    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(e=>{console.error('staff:',e);return[];}),
+    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field&role=neq.ASM').catch(e=>{console.error('staff:',e);return[];}),
     sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(e=>{console.error('territories:',e);return[];}),
   ]);
 
@@ -3099,10 +3099,14 @@ async function loadTerritories() {
   }
   if (!territoryStaff || !territoryStaff.length) {
     territoryStaff = [
-      {id:28, name:'Himansu R Mehta',  designation:'ASM',                    vertical:'projects'},
-      {id:29, name:'Shaikh Sabeer',    designation:'Team Leader Projects',    vertical:'projects'},
+      {id:29, name:'Shaikh Sabeer', designation:'Team Leader Retail', vertical:'retail'},
     ];
   }
+  // Filter out ASMs — they manage territories, not assigned to them
+  territoryStaff = (territoryStaff||[]).filter(s => {
+    const r = ((s.role||'') + ' ' + (s.designation||'')).toLowerCase();
+    return !r.includes('asm') && !r.includes('cluster head') && !r.includes('region head') && !r.includes('state head');
+  });
 
   // Build dropdown options HTML
   const verticalOpts = (territoryVerticals||[]).map(v =>
@@ -3204,7 +3208,12 @@ function updateTLDropdown() {
   const sel = document.getElementById('t-staff');
   sel.innerHTML = '<option value="">Select TL / Exec…</option>';
   (territoryStaff||[])
-    .filter(s => !vertical || s.vertical === vertical)
+    .filter(s => {
+      const r = ((s.role||'') + ' ' + (s.designation||'')).toLowerCase();
+      const notAdmin = !r.includes('asm') && !r.includes('cluster head') && !r.includes('region head');
+      const matchVert = !vertical || s.vertical === vertical;
+      return notAdmin && matchVert;
+    })
     .forEach(s => {
       const opt = document.createElement('option');
       opt.value = s.id; opt.textContent = s.name + ' (' + (s.designation||s.role||'—') + ')';
