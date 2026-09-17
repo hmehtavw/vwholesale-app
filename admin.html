@@ -3146,13 +3146,31 @@ async function loadTerritories() {
     sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]),
   ]);
 
+  // Small delay to ensure DOM is ready after innerHTML set
+  await new Promise(r => setTimeout(r, 50));
+
   // Populate vertical dropdown
   const vSel = document.getElementById('t-vertical');
-  (territoryVerticals||[]).forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v.code; opt.textContent = v.name + ' — ' + v.brand;
-    vSel.appendChild(opt);
-  });
+  if (vSel) {
+    vSel.innerHTML = '<option value="">Select vertical…</option>';
+    (territoryVerticals||[]).forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v.code; opt.textContent = v.name + ' — ' + v.brand;
+      vSel.appendChild(opt);
+    });
+  }
+
+  // Pre-populate staff dropdown too
+  const sSel = document.getElementById('t-staff');
+  if (sSel) {
+    sSel.innerHTML = '<option value="">Select TL / Exec…</option>';
+    (territoryStaff||[]).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name + ' (' + (s.designation||s.role||'—') + ')';
+      sSel.appendChild(opt);
+    });
+  }
 
   renderTerritoryList();
   loadMapsScript();
