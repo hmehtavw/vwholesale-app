@@ -2,7 +2,7 @@
   "name": "V Wholesale Field",
   "short_name": "VW Field",
   "description": "V Wholesale Field Team App — Site visits, attendance, tracking",
-  "start_url": "/field.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "background_color": "#0F1923",
