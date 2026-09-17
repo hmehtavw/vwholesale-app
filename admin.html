@@ -3152,12 +3152,20 @@ async function loadTerritories() {
               </div>
             </div>
           </div>
-          <button class="btn btn-primary" style="margin-top:12px;" onclick="startDrawing()">
-            ✏️ Draw on Map
-          </button>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:12px;">
+            <button class="btn btn-primary" onclick="startDrawing('polygon')" style="font-size:12px;padding:8px 6px;">
+              ✏️ Polygon
+            </button>
+            <button class="btn btn-primary" onclick="startDrawing('circle')" style="font-size:12px;padding:8px 6px;">
+              ⭕ Circle
+            </button>
+            <button class="btn btn-primary" onclick="startDrawing('rectangle')" style="font-size:12px;padding:8px 6px;">
+              ▭ Rectangle
+            </button>
+          </div>
           <div id="draw-hint" style="display:none;margin-top:8px;padding:8px 10px;background:rgba(59,130,246,.1);
-               border:1px solid rgba(59,130,246,.3);border-radius:8px;font-size:12px;color:var(--b);">
-            Click on map to draw polygon. Double-click to finish.
+               border:1px solid rgba(59,130,246,.3);border-radius:8px;font-size:12px;color:var(--b);text-align:center;">
+            Click on map to draw. Double-click to finish.
           </div>
         </div>
 
@@ -3244,42 +3252,70 @@ function initTerritoryMap() {
     zoomControl: true,
   });
 
+  const color = getSelectedColor();
   drawingManager = new google.maps.drawing.DrawingManager({
     drawingMode: null,
-    drawingControl: false,
+    drawingControl: true,
+    drawingControlOptions: {
+      position: google.maps.ControlPosition.TOP_CENTER,
+      drawingModes: [
+        google.maps.drawing.OverlayType.POLYGON,
+        google.maps.drawing.OverlayType.CIRCLE,
+        google.maps.drawing.OverlayType.RECTANGLE,
+      ],
+    },
     polygonOptions: {
-      fillColor: getSelectedColor(),
-      fillOpacity: 0.25,
-      strokeColor: getSelectedColor(),
-      strokeWeight: 2,
-      editable: true,
-      draggable: false,
+      fillColor: color, fillOpacity: 0.25,
+      strokeColor: color, strokeWeight: 2, editable: true,
+    },
+    circleOptions: {
+      fillColor: color, fillOpacity: 0.25,
+      strokeColor: color, strokeWeight: 2, editable: true,
+    },
+    rectangleOptions: {
+      fillColor: color, fillOpacity: 0.25,
+      strokeColor: color, strokeWeight: 2, editable: true,
     },
   });
   drawingManager.setMap(territoryMap);
 
   google.maps.event.addListener(drawingManager, 'polygoncomplete', onPolygonDrawn);
+  google.maps.event.addListener(drawingManager, 'circlecomplete', onCircleDrawn);
+  google.maps.event.addListener(drawingManager, 'rectanglecomplete', onRectangleDrawn);
 
   // Render existing territories on map
   renderTerritoriesOnMap();
 }
 
-function startDrawing() {
+function startDrawing(mode) {
   if (!territoryMap) { alert('Map not loaded yet'); return; }
   if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
   if (!document.getElementById('t-staff').value) { alert('Select a TL / Executive first'); return; }
   if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
 
   const color = getSelectedColor();
+  const shapeOpts = {
+    fillColor: color, fillOpacity: 0.25,
+    strokeColor: color, strokeWeight: 2, editable: true,
+  };
   drawingManager.setOptions({
-    polygonOptions: {
-      fillColor: color, fillOpacity: 0.25,
-      strokeColor: color, strokeWeight: 2,
-      editable: true,
-    }
+    polygonOptions: shapeOpts,
+    circleOptions: shapeOpts,
+    rectangleOptions: shapeOpts,
   });
-  drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON);
-  document.getElementById('draw-hint').style.display = 'block';
+
+  const drawMode = mode === 'circle'    ? google.maps.drawing.OverlayType.CIRCLE
+                 : mode === 'rectangle' ? google.maps.drawing.OverlayType.RECTANGLE
+                 : google.maps.drawing.OverlayType.POLYGON;
+  drawingManager.setDrawingMode(drawMode);
+
+  const hints = {
+    circle: 'Click centre, drag to set radius. Release to finish.',
+    rectangle: 'Click and drag to draw rectangle.',
+    polygon: 'Click to add points. Double-click to finish.',
+  };
+  const hintEl = document.getElementById('draw-hint');
+  if (hintEl) { hintEl.textContent = hints[mode||'polygon']; hintEl.style.display = 'block'; }
 }
 
 function onPolygonDrawn(polygon) {
@@ -3354,11 +3390,65 @@ async function saveTerritory(geojson) {
   }
 }
 
+function onCircleDrawn(circle) {
+  drawingManager.setDrawingMode(null);
+  document.getElementById('draw-hint').style.display = 'none';
+  editingPolygon = circle;
+
+  // Convert circle to GeoJSON polygon (approximation with 64 points)
+  const center = circle.getCenter();
+  const radius = circle.getRadius();
+  const points = 64;
+  const coords = [];
+  for (let i = 0; i <= points; i++) {
+    const angle = (i / points) * 2 * Math.PI;
+    // Approximate lat/lng offset from radius in meters
+    const latOffset = (radius / 111320) * Math.cos(angle);
+    const lngOffset = (radius / (111320 * Math.cos(center.lat() * Math.PI / 180))) * Math.sin(angle);
+    coords.push([center.lng() + lngOffset, center.lat() + latOffset]);
+  }
+
+  const geojson = {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [coords] },
+    properties: { shape: 'circle', center_lat: center.lat(), center_lng: center.lng(), radius_m: radius }
+  };
+  showSaveConfirm(geojson, circle);
+}
+
+function onRectangleDrawn(rect) {
+  drawingManager.setDrawingMode(null);
+  document.getElementById('draw-hint').style.display = 'none';
+  editingPolygon = rect;
+
+  const bounds = rect.getBounds();
+  const ne = bounds.getNorthEast();
+  const sw = bounds.getSouthWest();
+  const coords = [
+    [sw.lng(), sw.lat()],
+    [ne.lng(), sw.lat()],
+    [ne.lng(), ne.lat()],
+    [sw.lng(), ne.lat()],
+    [sw.lng(), sw.lat()],
+  ];
+
+  const geojson = {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [coords] },
+    properties: { shape: 'rectangle' }
+  };
+  showSaveConfirm(geojson, rect);
+}
+
 function cancelDraw() {
-  editingPolygon?.setMap(null);
-  editingPolygon = null;
+  if (editingPolygon) {
+    editingPolygon.setMap ? editingPolygon.setMap(null) : null;
+    editingPolygon = null;
+  }
   document.getElementById('save-confirm-panel')?.remove();
   drawingManager.setDrawingMode(null);
+  const hintEl = document.getElementById('draw-hint');
+  if (hintEl) hintEl.style.display = 'none';
 }
 
 function renderTerritoriesOnMap() {
