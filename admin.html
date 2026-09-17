@@ -3069,6 +3069,23 @@ let territoryStaff = [];
 
 async function loadTerritories() {
   setPageTitle('Territory Map');
+
+  // Load data FIRST before setting innerHTML
+  [territoryVerticals, territoryStaff, territories] = await Promise.all([
+    sbFetch('org_verticals?select=*&order=display_order&active=eq.true').catch(()=>[]),
+    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(()=>[]),
+    sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]),
+  ]);
+
+  // Build dropdown options HTML
+  const verticalOpts = (territoryVerticals||[]).map(v =>
+    `<option value="${v.code}">${v.name} — ${v.brand}</option>`
+  ).join('');
+
+  const staffOpts = (territoryStaff||[]).map(s =>
+    `<option value="${s.id}">${s.name} (${s.designation||s.role||'—'})</option>`
+  ).join('');
+
   document.getElementById('page-content').innerHTML = `
     <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;height:calc(100vh - 120px);">
 
@@ -3083,12 +3100,14 @@ async function loadTerritories() {
               <label class="form-lbl">Vertical *</label>
               <select class="form-sel" id="t-vertical" onchange="updateTLDropdown()">
                 <option value="">Select vertical…</option>
+                ${verticalOpts}
               </select>
             </div>
             <div>
               <label class="form-lbl">Assign to TL *</label>
               <select class="form-sel" id="t-staff">
                 <option value="">Select TL / Exec…</option>
+                ${staffOpts}
               </select>
             </div>
             <div>
@@ -3139,38 +3158,7 @@ async function loadTerritories() {
       </div>
     </div>`;
 
-  // Load data
-  [territoryVerticals, territoryStaff, territories] = await Promise.all([
-    sbFetch('org_verticals?select=*&order=display_order&active=eq.true').catch(()=>[]),
-    sbFetch('staff?select=id,name,designation,role,vertical&active=eq.true&department=eq.Field').catch(()=>[]),
-    sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]),
-  ]);
-
-  // Small delay to ensure DOM is ready after innerHTML set
-  await new Promise(r => setTimeout(r, 50));
-
-  // Populate vertical dropdown
-  const vSel = document.getElementById('t-vertical');
-  if (vSel) {
-    vSel.innerHTML = '<option value="">Select vertical…</option>';
-    (territoryVerticals||[]).forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v.code; opt.textContent = v.name + ' — ' + v.brand;
-      vSel.appendChild(opt);
-    });
-  }
-
-  // Pre-populate staff dropdown too
-  const sSel = document.getElementById('t-staff');
-  if (sSel) {
-    sSel.innerHTML = '<option value="">Select TL / Exec…</option>';
-    (territoryStaff||[]).forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s.id;
-      opt.textContent = s.name + ' (' + (s.designation||s.role||'—') + ')';
-      sSel.appendChild(opt);
-    });
-  }
+  // Data already loaded above — just render list and init map
 
   renderTerritoryList();
   loadMapsScript();
