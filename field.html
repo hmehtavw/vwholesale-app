@@ -1233,7 +1233,7 @@ document.getElementById('btn-send-otp').onclick = async () => {
   }
 
   document.getElementById('otp-sent-msg').textContent =
-    `OTP sent to +91 ${phone} on WhatsApp`;
+    `OTP for +91 ${phone} — shown below`;
   document.getElementById('login-phone-step').classList.add('hidden');
   document.getElementById('login-otp-step').classList.remove('hidden');
   document.querySelector('.otp-digit').focus();
