@@ -3234,12 +3234,23 @@ function getSelectedColor() {
 }
 
 function loadMapsScript() {
-  if (window.google?.maps) { initTerritoryMap(); return; }
-  const script = document.createElement('script');
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
-  script.async = true; script.defer = true;
-  document.head.appendChild(script);
+  if (window.google?.maps?.drawing) { initTerritoryMap(); return; }
+  // Expose callback globally BEFORE script loads
   window.initTerritoryMap = initTerritoryMap;
+  if (window.google?.maps && !window.google?.maps?.drawing) {
+    // Maps loaded but drawing library missing — reload with drawing
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
+    script.async = true; script.defer = true;
+    document.head.appendChild(script);
+    return;
+  }
+  if (!window.google) {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${MAPS_KEY}&libraries=drawing&callback=initTerritoryMap`;
+    script.async = true; script.defer = true;
+    document.head.appendChild(script);
+  }
 }
 
 function initTerritoryMap() {
@@ -3297,34 +3308,48 @@ function initTerritoryMap() {
 }
 
 function startDrawing(mode) {
-  if (!territoryMap) { alert('Map not loaded yet'); return; }
+  // Validate form first
   if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
-  if (!document.getElementById('t-staff').value) { alert('Select a TL / Executive first'); return; }
+  if (!document.getElementById('t-staff').value) { alert('Select a TL first'); return; }
   if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
 
+  // If map not ready yet, wait for it
+  if (!territoryMap || !drawingManager) {
+    const hintEl = document.getElementById('draw-hint');
+    if (hintEl) { hintEl.textContent = 'Map loading… try again in a moment'; hintEl.style.display = 'block'; }
+    setTimeout(() => startDrawing(mode), 1000);
+    return;
+  }
+
   const color = getSelectedColor();
-  const shapeOpts = {
-    fillColor: color, fillOpacity: 0.25,
-    strokeColor: color, strokeWeight: 2, editable: true,
-  };
+  const shapeOpts = { fillColor: color, fillOpacity: 0.25, strokeColor: color, strokeWeight: 2, editable: true };
+
   drawingManager.setOptions({
-    polygonOptions: shapeOpts,
-    circleOptions: shapeOpts,
-    rectangleOptions: shapeOpts,
+    polygonOptions:   { ...shapeOpts },
+    circleOptions:    { ...shapeOpts },
+    rectangleOptions: { ...shapeOpts },
   });
 
-  const drawMode = mode === 'circle'    ? google.maps.drawing.OverlayType.CIRCLE
-                 : mode === 'rectangle' ? google.maps.drawing.OverlayType.RECTANGLE
-                 : google.maps.drawing.OverlayType.POLYGON;
+  let drawMode;
+  if (mode === 'circle')    drawMode = google.maps.drawing.OverlayType.CIRCLE;
+  else if (mode === 'rectangle') drawMode = google.maps.drawing.OverlayType.RECTANGLE;
+  else drawMode = google.maps.drawing.OverlayType.POLYGON;
+
   drawingManager.setDrawingMode(drawMode);
 
   const hints = {
-    circle: 'Click centre, drag to set radius. Release to finish.',
-    rectangle: 'Click and drag to draw rectangle.',
-    polygon: 'Click to add points. Double-click to finish.',
+    circle:    '👆 Click the city centre on map, then drag outward to set area size',
+    rectangle: '👆 Click and drag a rectangle over the area',
+    polygon:   '👆 Click points around the area. Double-click to finish',
   };
   const hintEl = document.getElementById('draw-hint');
-  if (hintEl) { hintEl.textContent = hints[mode||'polygon']; hintEl.style.display = 'block'; }
+  if (hintEl) {
+    hintEl.textContent = hints[mode] || hints.polygon;
+    hintEl.style.display = 'block';
+    hintEl.style.background = 'rgba(34,197,94,.15)';
+    hintEl.style.borderColor = 'rgba(34,197,94,.4)';
+    hintEl.style.color = '#22C55E';
+  }
 }
 
 function onPolygonDrawn(polygon) {
