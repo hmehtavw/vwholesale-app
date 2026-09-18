@@ -3240,7 +3240,7 @@ function loadMapsScript() {
   delete window.google;
   const script = document.createElement('script');
   script.id = 'vw-maps-script';
-  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=drawing&v=weekly&callback=_vwMapCallback';
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + MAPS_KEY + '&libraries=geometry&v=weekly&callback=_vwMapCallback';
   script.async = true;
   script.onerror = () => {
     document.getElementById('map-loading').innerHTML = '<div style="color:#EF4444;padding:20px;">Maps failed to load. Check API key restrictions.</div>';
@@ -3250,307 +3250,246 @@ function loadMapsScript() {
 
 function initTerritoryMap() {
   try {
-  document.getElementById('map-loading').style.display = 'none';
-  if (!google?.maps?.drawing) {
-    document.getElementById('map-loading').innerHTML = '<div style="color:#EF4444;padding:20px;text-align:center;">Drawing library not loaded.<br>Please refresh the page.</div>';
-    document.getElementById('map-loading').style.display = 'flex';
-    return;
-  }
+    document.getElementById('map-loading').style.display = 'none';
 
-  territoryMap = new google.maps.Map(document.getElementById('territory-map'), {
-    center: { lat: 16.5062, lng: 80.6480 }, // Vijayawada
-    zoom: 11,
-    mapTypeId: 'roadmap',
-    styles: [
-      { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-      { elementType: 'labels.text.stroke', stylers: [{ color: '#1e293b' }] },
-      { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-      { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-      { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
-      { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-    ],
-    disableDefaultUI: false,
-    zoomControl: true,
-  });
-
-  const color = getSelectedColor();
-  drawingManager = new google.maps.drawing.DrawingManager({
-    drawingMode: null,
-    drawingControl: true,
-    drawingControlOptions: {
-      position: google.maps.ControlPosition.TOP_CENTER,
-      drawingModes: [
-        google.maps.drawing.OverlayType.POLYGON,
-        google.maps.drawing.OverlayType.CIRCLE,
-        google.maps.drawing.OverlayType.RECTANGLE,
+    territoryMap = new google.maps.Map(document.getElementById('territory-map'), {
+      center: { lat: 16.5062, lng: 80.6480 },
+      zoom: 11,
+      mapTypeId: 'roadmap',
+      styles: [
+        { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#1e293b' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] },
+        { featureType: 'poi', stylers: [{ visibility: 'off' }] },
       ],
-    },
-    polygonOptions: {
-      fillColor: color, fillOpacity: 0.25,
-      strokeColor: color, strokeWeight: 2, editable: true,
-    },
-    circleOptions: {
-      fillColor: color, fillOpacity: 0.25,
-      strokeColor: color, strokeWeight: 2, editable: true,
-    },
-    rectangleOptions: {
-      fillColor: color, fillOpacity: 0.25,
-      strokeColor: color, strokeWeight: 2, editable: true,
-    },
-  });
-  drawingManager.setMap(territoryMap);
+      zoomControl: true,
+      streetViewControl: false,
+      mapTypeControl: true,
+    });
 
-  google.maps.event.addListener(drawingManager, 'polygoncomplete', onPolygonDrawn);
-  google.maps.event.addListener(drawingManager, 'circlecomplete', onCircleDrawn);
-  google.maps.event.addListener(drawingManager, 'rectanglecomplete', onRectangleDrawn);
-
-  // Render existing territories on map
-  renderTerritoriesOnMap();
-  console.log('[VW] Map + Drawing library ready ✓');
+    renderTerritoriesOnMap();
+    console.log('[VW] Territory map ready ✓');
   } catch(e) {
     console.error('[VW] Map init error:', e);
     const el = document.getElementById('map-loading');
-    if (el) { el.innerHTML = '<div style="color:#EF4444;padding:20px;text-align:center;">Map error: ' + e.message + '</div>'; el.style.display='flex'; }
+    if (el) { el.innerHTML = '<div style="color:#EF4444;padding:20px;text-align:center;">Map error: ' + e.message + '</div>'; el.style.display = 'flex'; }
   }
 }
 
-function startDrawing(mode) {
-  // Validate form first
-  if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
-  if (!document.getElementById('t-staff').value) { alert('Select a TL first'); return; }
-  if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
+// ── Custom drawing — no deprecated DrawingManager ──
+let drawPoints = [];       // polygon click points
+let drawPolyline = null;   // preview line while drawing
+let drawMarkers = [];      // click point markers
+let drawMode = null;       // 'polygon' | 'circle' | 'rectangle'
+let circleOverlay = null;
+let rectOverlay = null;
+let dragStart = null;
+let mapClickListener = null;
+let mapMouseListener = null;
+let mapDblClickListener = null;
 
-  // If map not ready yet, wait and retry up to 5 seconds
-  if (!territoryMap || !drawingManager) {
-    const hintEl = document.getElementById('draw-hint');
-    if (hintEl) { hintEl.textContent = '⏳ Map initialising… clicking again in 2 seconds'; hintEl.style.display = 'block'; }
-    let attempts = 0;
-    const wait = setInterval(() => {
-      attempts++;
-      if (territoryMap && drawingManager) {
-        clearInterval(wait);
-        startDrawing(mode);
-      } else if (attempts > 5) {
-        clearInterval(wait);
-        if (hintEl) hintEl.textContent = '❌ Map failed to load. Please refresh the page.';
-      }
-    }, 1000);
+function clearDrawListeners() {
+  if (mapClickListener)    google.maps.event.removeListener(mapClickListener);
+  if (mapMouseListener)    google.maps.event.removeListener(mapMouseListener);
+  if (mapDblClickListener) google.maps.event.removeListener(mapDblClickListener);
+  mapClickListener = mapMouseListener = mapDblClickListener = null;
+}
+
+function clearDrawPreview() {
+  drawMarkers.forEach(m => m.setMap(null)); drawMarkers = [];
+  if (drawPolyline) { drawPolyline.setMap(null); drawPolyline = null; }
+  if (circleOverlay) { circleOverlay.setMap(null); circleOverlay = null; }
+  if (rectOverlay)   { rectOverlay.setMap(null);   rectOverlay = null;   }
+  drawPoints = []; dragStart = null;
+}
+
+function startDrawing(mode) {
+  if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
+  if (!document.getElementById('t-staff').value)    { alert('Select a TL first'); return; }
+  if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
+  if (!territoryMap) {
+    setTimeout(() => startDrawing(mode), 800);
     return;
   }
 
+  clearDrawListeners();
+  clearDrawPreview();
+  drawMode = mode;
   const color = getSelectedColor();
-  const shapeOpts = { fillColor: color, fillOpacity: 0.25, strokeColor: color, strokeWeight: 2, editable: true };
-
-  drawingManager.setOptions({
-    polygonOptions:   { ...shapeOpts },
-    circleOptions:    { ...shapeOpts },
-    rectangleOptions: { ...shapeOpts },
-  });
-
-  let drawMode;
-  if (mode === 'circle')    drawMode = google.maps.drawing.OverlayType.CIRCLE;
-  else if (mode === 'rectangle') drawMode = google.maps.drawing.OverlayType.RECTANGLE;
-  else drawMode = google.maps.drawing.OverlayType.POLYGON;
-
-  drawingManager.setDrawingMode(drawMode);
 
   const hints = {
-    circle:    '👆 Click the city centre on map, then drag outward to set area size',
-    rectangle: '👆 Click and drag a rectangle over the area',
-    polygon:   '👆 Click points around the area. Double-click to finish',
+    polygon:   '👆 Click points around the area. Double-click last point to finish.',
+    circle:    '👆 Click the centre of the area, then click again to set the radius.',
+    rectangle: '👆 Click one corner, then click the opposite corner to finish.',
   };
   const hintEl = document.getElementById('draw-hint');
   if (hintEl) {
-    hintEl.textContent = hints[mode] || hints.polygon;
+    hintEl.textContent = hints[mode];
     hintEl.style.display = 'block';
     hintEl.style.background = 'rgba(34,197,94,.15)';
     hintEl.style.borderColor = 'rgba(34,197,94,.4)';
     hintEl.style.color = '#22C55E';
   }
-}
 
-function onPolygonDrawn(polygon) {
-  drawingManager.setDrawingMode(null);
-  document.getElementById('draw-hint').style.display = 'none';
-  editingPolygon = polygon;
+  // Change cursor
+  territoryMap.setOptions({ draggableCursor: 'crosshair' });
 
-  // Extract coordinates
-  const coords = polygon.getPath().getArray().map(latlng => [latlng.lng(), latlng.lat()]);
-  coords.push(coords[0]); // close polygon
+  if (mode === 'polygon') {
+    drawPolyline = new google.maps.Polyline({
+      path: [], strokeColor: color, strokeWeight: 2,
+      strokeOpacity: 0.8, map: territoryMap,
+    });
 
-  const geojson = {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [coords] },
-    properties: {}
-  };
+    mapClickListener = territoryMap.addListener('click', e => {
+      const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+      drawPoints.push(pt);
+      drawPolyline.getPath().push(e.latLng);
 
-  // Show save confirmation
-  showSaveConfirm(geojson, polygon);
-}
+      const marker = new google.maps.Marker({
+        position: pt, map: territoryMap,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5,
+                fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
+      });
+      drawMarkers.push(marker);
 
-function showSaveConfirm(geojson, polygonOverlay) {
-  const existing = document.getElementById('save-confirm-panel');
-  if (existing) existing.remove();
+      // Update hint
+      if (hintEl && drawPoints.length >= 3) {
+        hintEl.textContent = `${drawPoints.length} points — double-click to finish`;
+      }
+    });
 
-  const panel = document.createElement('div');
-  panel.id = 'save-confirm-panel';
-  panel.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1E293B;border:1px solid #3B82F6;' +
-    'border-radius:14px;padding:16px 20px;z-index:999;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-  panel.innerHTML = `
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Save Territory?</div>
-    <div style="font-size:12px;color:#94a3b8;margin-bottom:14px;">
-      ${document.getElementById('t-name').value} — 
-      ${(territoryStaff||[]).find(s=>s.id==document.getElementById('t-staff').value)?.name||'Unknown'}
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="saveTerritory(${JSON.stringify(geojson).replace(/"/g,'&quot;')})"
-        style="flex:1;padding:9px;border-radius:8px;background:#3B82F6;border:none;color:#fff;
-        font-weight:700;cursor:pointer;font-size:13px;">Save Territory</button>
-      <button onclick="cancelDraw()"
-        style="padding:9px 14px;border-radius:8px;background:#1e293b;border:1px solid #334155;
-        color:#94a3b8;cursor:pointer;font-size:13px;">Cancel</button>
-    </div>`;
-  document.body.appendChild(panel);
-}
+    mapDblClickListener = territoryMap.addListener('dblclick', e => {
+      if (drawPoints.length < 3) { alert('Add at least 3 points'); return; }
+      // Close polygon
+      const coords = [...drawPoints.map(p => [p.lng, p.lat])];
+      coords.push(coords[0]);
+      const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{shape:'polygon'} };
+      clearDrawListeners();
+      clearDrawPreview();
+      territoryMap.setOptions({ draggableCursor: null });
+      if (hintEl) hintEl.style.display = 'none';
+      showSaveConfirm(geojson, null);
+    });
 
-async function saveTerritory(geojson) {
-  const payload = {
-    name: document.getElementById('t-name').value.trim(),
-    vertical_code: document.getElementById('t-vertical').value,
-    staff_id: parseInt(document.getElementById('t-staff').value) || null,
-    color: getSelectedColor(),
-    polygon_geojson: geojson,
-    active: true,
-  };
+  } else if (mode === 'circle') {
+    let centerPt = null;
 
-  const result = await sbFetch('territories', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-    headers: { 'Prefer': 'return=representation', 'Content-Type': 'application/json' }
-  }).catch(e => { alert('Error saving: ' + e.message); return null; });
+    mapClickListener = territoryMap.addListener('click', e => {
+      if (!centerPt) {
+        // First click = centre
+        centerPt = e.latLng;
+        const marker = new google.maps.Marker({
+          position: centerPt, map: territoryMap,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7,
+                  fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
+        });
+        drawMarkers.push(marker);
+        if (hintEl) hintEl.textContent = '👆 Now click anywhere to set the territory radius';
 
-  document.getElementById('save-confirm-panel')?.remove();
+      } else {
+        // Second click = radius
+        const radius = google.maps.geometry?.spherical?.computeDistanceBetween(centerPt, e.latLng)
+          || haversineDistance(centerPt.lat(), centerPt.lng(), e.latLng.lat(), e.latLng.lng());
 
-  if (result) {
-    territories = await sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]);
-    renderTerritoryList();
-    renderTerritoriesOnMap();
-    // Reset form
-    document.getElementById('t-name').value = '';
-    toast('Territory saved ✓', 'ok');
+        // Build GeoJSON polygon from circle (64 points)
+        const coords = [];
+        for (let i = 0; i <= 64; i++) {
+          const angle = (i / 64) * 2 * Math.PI;
+          const latOff = (radius / 111320) * Math.cos(angle);
+          const lngOff = (radius / (111320 * Math.cos(centerPt.lat() * Math.PI / 180))) * Math.sin(angle);
+          coords.push([centerPt.lng() + lngOff, centerPt.lat() + latOff]);
+        }
+        const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] },
+          properties:{ shape:'circle', center_lat: centerPt.lat(), center_lng: centerPt.lng(), radius_m: radius } };
+
+        clearDrawListeners();
+        clearDrawPreview();
+        territoryMap.setOptions({ draggableCursor: null });
+        if (hintEl) hintEl.style.display = 'none';
+        showSaveConfirm(geojson, null);
+      }
+    });
+
+    // Live circle preview on mousemove
+    mapMouseListener = territoryMap.addListener('mousemove', e => {
+      if (!centerPt) return;
+      if (circleOverlay) circleOverlay.setMap(null);
+      const radius = haversineDistance(centerPt.lat(), centerPt.lng(), e.latLng.lat(), e.latLng.lng());
+      circleOverlay = new google.maps.Circle({
+        center: centerPt, radius, map: territoryMap,
+        fillColor: color, fillOpacity: 0.2,
+        strokeColor: color, strokeWeight: 2,
+      });
+    });
+
+  } else if (mode === 'rectangle') {
+    let corner1 = null;
+
+    mapClickListener = territoryMap.addListener('click', e => {
+      if (!corner1) {
+        corner1 = e.latLng;
+        const marker = new google.maps.Marker({
+          position: corner1, map: territoryMap,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7,
+                  fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
+        });
+        drawMarkers.push(marker);
+        if (hintEl) hintEl.textContent = '👆 Now click the opposite corner';
+      } else {
+        // Build rectangle coords
+        const sw = { lat: Math.min(corner1.lat(), e.latLng.lat()), lng: Math.min(corner1.lng(), e.latLng.lng()) };
+        const ne = { lat: Math.max(corner1.lat(), e.latLng.lat()), lng: Math.max(corner1.lng(), e.latLng.lng()) };
+        const coords = [
+          [sw.lng, sw.lat], [ne.lng, sw.lat],
+          [ne.lng, ne.lat], [sw.lng, ne.lat], [sw.lng, sw.lat],
+        ];
+        const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{ shape:'rectangle' } };
+
+        clearDrawListeners();
+        clearDrawPreview();
+        territoryMap.setOptions({ draggableCursor: null });
+        if (hintEl) hintEl.style.display = 'none';
+        showSaveConfirm(geojson, null);
+      }
+    });
+
+    // Live rect preview
+    mapMouseListener = territoryMap.addListener('mousemove', e => {
+      if (!corner1) return;
+      if (rectOverlay) rectOverlay.setMap(null);
+      const bounds = new google.maps.LatLngBounds(
+        { lat: Math.min(corner1.lat(), e.latLng.lat()), lng: Math.min(corner1.lng(), e.latLng.lng()) },
+        { lat: Math.max(corner1.lat(), e.latLng.lat()), lng: Math.max(corner1.lng(), e.latLng.lng()) }
+      );
+      rectOverlay = new google.maps.Rectangle({
+        bounds, map: territoryMap,
+        fillColor: color, fillOpacity: 0.2,
+        strokeColor: color, strokeWeight: 2,
+      });
+    });
   }
 }
 
-function onCircleDrawn(circle) {
-  drawingManager.setDrawingMode(null);
-  document.getElementById('draw-hint').style.display = 'none';
-  editingPolygon = circle;
-
-  // Convert circle to GeoJSON polygon (approximation with 64 points)
-  const center = circle.getCenter();
-  const radius = circle.getRadius();
-  const points = 64;
-  const coords = [];
-  for (let i = 0; i <= points; i++) {
-    const angle = (i / points) * 2 * Math.PI;
-    // Approximate lat/lng offset from radius in meters
-    const latOffset = (radius / 111320) * Math.cos(angle);
-    const lngOffset = (radius / (111320 * Math.cos(center.lat() * Math.PI / 180))) * Math.sin(angle);
-    coords.push([center.lng() + lngOffset, center.lat() + latOffset]);
-  }
-
-  const geojson = {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [coords] },
-    properties: { shape: 'circle', center_lat: center.lat(), center_lng: center.lng(), radius_m: radius }
-  };
-  showSaveConfirm(geojson, circle);
-}
-
-function onRectangleDrawn(rect) {
-  drawingManager.setDrawingMode(null);
-  document.getElementById('draw-hint').style.display = 'none';
-  editingPolygon = rect;
-
-  const bounds = rect.getBounds();
-  const ne = bounds.getNorthEast();
-  const sw = bounds.getSouthWest();
-  const coords = [
-    [sw.lng(), sw.lat()],
-    [ne.lng(), sw.lat()],
-    [ne.lng(), ne.lat()],
-    [sw.lng(), ne.lat()],
-    [sw.lng(), sw.lat()],
-  ];
-
-  const geojson = {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [coords] },
-    properties: { shape: 'rectangle' }
-  };
-  showSaveConfirm(geojson, rect);
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLng/2) * Math.sin(dLng/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
 function cancelDraw() {
-  if (editingPolygon) {
-    editingPolygon.setMap ? editingPolygon.setMap(null) : null;
-    editingPolygon = null;
-  }
+  clearDrawListeners();
+  clearDrawPreview();
+  if (territoryMap) territoryMap.setOptions({ draggableCursor: null });
   document.getElementById('save-confirm-panel')?.remove();
-  drawingManager.setDrawingMode(null);
   const hintEl = document.getElementById('draw-hint');
   if (hintEl) hintEl.style.display = 'none';
-}
-
-function renderTerritoriesOnMap() {
-  // Clear existing overlays
-  territoryPolygons.forEach(p => p.setMap(null));
-  territoryPolygons = [];
-
-  (territories||[]).forEach(t => {
-    if (!t.polygon_geojson?.geometry?.coordinates) return;
-    const coords = t.polygon_geojson.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
-    const color = t.color || '#F5A623';
-
-    const poly = new google.maps.Polygon({
-      paths: coords,
-      fillColor: color, fillOpacity: 0.2,
-      strokeColor: color, strokeWeight: 2,
-      map: territoryMap,
-    });
-
-    // Info window on click
-    const iw = new google.maps.InfoWindow();
-    poly.addListener('click', e => {
-      iw.setContent(`
-        <div style="font-family:sans-serif;padding:4px;">
-          <div style="font-weight:700;font-size:14px;">${t.name}</div>
-          <div style="color:#666;font-size:12px;margin-top:2px;">${t.staff?.name||'Unassigned'}</div>
-          <div style="color:#666;font-size:11px;">${t.staff?.designation||''}</div>
-          <button onclick="deleteTerritory(${t.id})" 
-            style="margin-top:8px;padding:4px 10px;border-radius:6px;background:#EF4444;
-            border:none;color:#fff;font-size:11px;cursor:pointer;">Delete</button>
-        </div>`);
-      iw.setPosition(e.latLng);
-      iw.open(territoryMap);
-    });
-
-    // Label
-    const center = getPolygonCenter(coords);
-    new google.maps.Marker({
-      position: center, map: territoryMap,
-      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
-      label: { text: t.name.split('—').pop().trim().substring(0,15), color: color, fontSize: '11px', fontWeight: '700' }
-    });
-
-    territoryPolygons.push(poly);
-  });
-}
-
-function getPolygonCenter(coords) {
-  const lat = coords.reduce((s,c) => s+c.lat, 0) / coords.length;
-  const lng = coords.reduce((s,c) => s+c.lng, 0) / coords.length;
-  return { lat, lng };
+  drawMode = null;
 }
 
 function renderTerritoryList() {
