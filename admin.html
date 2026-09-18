@@ -3516,6 +3516,90 @@ function cancelDraw() {
   drawMode = null;
 }
 
+function showSaveConfirm(geojson, _unused) {
+  document.getElementById('save-confirm-panel')?.remove();
+  const name = document.getElementById('t-name').value.trim();
+  const staffId = document.getElementById('t-staff').value;
+  const staffName = document.getElementById('t-staff').options[document.getElementById('t-staff').selectedIndex]?.text || 'Unknown';
+
+  const panel = document.createElement('div');
+  panel.id = 'save-confirm-panel';
+  panel.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1E293B;border:1px solid #22C55E;' +
+    'border-radius:14px;padding:18px 20px;z-index:9999;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,.6);';
+  panel.innerHTML = `
+    <div style="font-size:14px;font-weight:700;color:#22C55E;margin-bottom:4px;">✓ Territory drawn</div>
+    <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;">${name} — ${staffName.split('(')[0].trim()}</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="saveTerritory(${JSON.stringify(JSON.stringify(geojson))})"
+        style="flex:1;padding:10px;border-radius:8px;background:#22C55E;border:none;color:#fff;
+        font-weight:700;cursor:pointer;font-size:13px;">💾 Save Territory</button>
+      <button onclick="cancelDraw()"
+        style="padding:10px 14px;border-radius:8px;background:#1e293b;border:1px solid #334155;
+        color:#94a3b8;cursor:pointer;font-size:13px;">Cancel</button>
+    </div>`;
+  document.body.appendChild(panel);
+
+  // Store geojson for save
+  window._pendingGeoJSON = geojson;
+}
+
+async function saveTerritory(geojsonStr) {
+  const geojson = typeof geojsonStr === 'string' ? JSON.parse(geojsonStr) : (window._pendingGeoJSON || geojsonStr);
+  const name    = document.getElementById('t-name').value.trim();
+  const vertCode = document.getElementById('t-vertical').value;
+  const staffId  = parseInt(document.getElementById('t-staff').value) || null;
+  const color    = getSelectedColor();
+
+  if (!name || !vertCode) { alert('Name and vertical required'); return; }
+
+  const payload = {
+    name, vertical_code: vertCode, staff_id: staffId,
+    color, polygon_geojson: geojson, active: true,
+  };
+
+  try {
+    const result = await sbFetch('territories', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Prefer': 'return=representation', 'Content-Type': 'application/json' }
+    });
+
+    document.getElementById('save-confirm-panel')?.remove();
+    document.getElementById('circle-radius-panel')?.remove();
+    document.getElementById('finish-polygon-btn')?.remove();
+    clearDrawListeners();
+    clearDrawPreview();
+    if (territoryMap) territoryMap.setOptions({ draggableCursor: null });
+    window._pendingGeoJSON = null;
+
+    // Reload territories
+    territories = await sbFetch('territories?select=*,staff:staff_id(name,designation)&active=eq.true&order=created_at.desc').catch(()=>[]);
+    renderTerritoryList();
+    renderTerritoriesOnMap();
+
+    // Reset form
+    document.getElementById('t-name').value = '';
+    toast('Territory saved ✓', 'ok');
+  } catch(e) {
+    console.error('Save territory error:', e);
+    alert('Error saving territory: ' + e.message);
+  }
+}
+
+async function deleteTerritory(id) {
+  if (!confirm('Delete this territory?')) return;
+  await sbFetch(`territories?id=eq.${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ active: false }),
+    headers: { 'Prefer': 'return=minimal' }
+  });
+  territories = territories.filter(t => t.id !== id);
+  renderTerritoryList();
+  renderTerritoriesOnMap();
+  toast('Territory deleted', 'ok');
+}
+window.deleteTerritory = deleteTerritory;
+
 function renderTerritoriesOnMap() {
   if (!territoryMap) return;
   // Clear existing overlays
