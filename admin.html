@@ -3774,9 +3774,49 @@ if (savedSession && savedProfile) {
   try {
     _adminSession = JSON.parse(savedSession);
     _adminProfile = JSON.parse(savedProfile);
-    startAdminApp();
+
+    // Check if JWT is expired or expiring soon (within 10 min)
+    const exp = _adminSession?.expires_at || _adminSession?.expires_in;
+    const expiresAt = _adminSession?.expires_at
+      ? new Date(_adminSession.expires_at * 1000)
+      : new Date(Date.now() + (_adminSession?.expires_in || 3600) * 1000);
+    const tenMinFromNow = new Date(Date.now() + 10 * 60 * 1000);
+
+    if (expiresAt < tenMinFromNow && _adminSession?.refresh_token) {
+      // Refresh silently
+      fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+        body: JSON.stringify({ refresh_token: _adminSession.refresh_token })
+      }).then(r => r.json()).then(data => {
+        if (data.access_token) {
+          _adminSession = data;
+          localStorage.setItem('vw_admin_session', JSON.stringify(data));
+        }
+      }).catch(() => {}).finally(() => startAdminApp());
+    } else {
+      startAdminApp();
+    }
   } catch(e) { /* show login */ }
 }
+
+// Auto-refresh token every 30 minutes while admin is open
+setInterval(async () => {
+  if (!_adminSession?.refresh_token) return;
+  try {
+    const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+      body: JSON.stringify({ refresh_token: _adminSession.refresh_token })
+    });
+    const data = await r.json();
+    if (data.access_token) {
+      _adminSession = data;
+      localStorage.setItem('vw_admin_session', JSON.stringify(data));
+    }
+  } catch(e) { console.warn('Token refresh failed:', e); }
+}, 30 * 60 * 1000);
+
 </script>
 </body>
 </html>
