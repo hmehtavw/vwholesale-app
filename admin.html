@@ -3492,6 +3492,55 @@ function cancelDraw() {
   drawMode = null;
 }
 
+function renderTerritoriesOnMap() {
+  if (!territoryMap) return;
+  // Clear existing overlays
+  territoryPolygons.forEach(p => p.setMap(null));
+  territoryPolygons = [];
+
+  (territories||[]).forEach(t => {
+    if (!t.polygon_geojson?.geometry?.coordinates) return;
+    const coords = t.polygon_geojson.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
+    const color = t.color || '#F5A623';
+
+    const poly = new google.maps.Polygon({
+      paths: coords,
+      fillColor: color, fillOpacity: 0.2,
+      strokeColor: color, strokeWeight: 2,
+      map: territoryMap,
+    });
+
+    // Info window on click
+    const iw = new google.maps.InfoWindow();
+    poly.addListener('click', e => {
+      iw.setContent(`<div style="font-family:sans-serif;padding:4px;">
+        <div style="font-weight:700;font-size:14px;">${t.name}</div>
+        <div style="color:#666;font-size:12px;margin-top:2px;">${t.staff?.name||'Unassigned'}</div>
+        <button onclick="deleteTerritory(${t.id})"
+          style="margin-top:8px;padding:4px 10px;border-radius:6px;background:#EF4444;
+          border:none;color:#fff;font-size:11px;cursor:pointer;">Delete</button>
+      </div>`);
+      iw.setPosition(e.latLng);
+      iw.open(territoryMap);
+    });
+
+    // Label at polygon centre
+    const lats = coords.map(c => c.lat);
+    const lngs = coords.map(c => c.lng);
+    const centerLat = (Math.max(...lats) + Math.min(...lats)) / 2;
+    const centerLng = (Math.max(...lngs) + Math.min(...lngs)) / 2;
+
+    new google.maps.Marker({
+      position: { lat: centerLat, lng: centerLng },
+      map: territoryMap,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 0 },
+      label: { text: t.name.split('—').pop().trim().substring(0, 15), color, fontSize: '11px', fontWeight: '700' }
+    });
+
+    territoryPolygons.push(poly);
+  });
+}
+
 function renderTerritoryList() {
   const el = document.getElementById('territory-list');
   const count = document.getElementById('territory-count');
