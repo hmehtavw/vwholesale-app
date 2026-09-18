@@ -3309,122 +3309,55 @@ function startDrawing(mode) {
   if (!document.getElementById('t-vertical').value) { alert('Select a vertical first'); return; }
   if (!document.getElementById('t-staff').value)    { alert('Select a TL first'); return; }
   if (!document.getElementById('t-name').value.trim()) { alert('Enter a territory name'); return; }
-  if (!territoryMap) {
-    setTimeout(() => startDrawing(mode), 800);
-    return;
-  }
+  if (!territoryMap) { setTimeout(() => startDrawing(mode), 800); return; }
 
   clearDrawListeners();
   clearDrawPreview();
   drawMode = mode;
   const color = getSelectedColor();
 
-  const hints = {
-    polygon:   '👆 Click points around the area. Double-click last point to finish.',
-    circle:    '👆 Click the centre of the area, then click again to set the radius.',
-    rectangle: '👆 Click one corner, then click the opposite corner to finish.',
-  };
   const hintEl = document.getElementById('draw-hint');
-  if (hintEl) {
-    hintEl.textContent = hints[mode];
-    hintEl.style.display = 'block';
-    hintEl.style.background = 'rgba(34,197,94,.15)';
-    hintEl.style.borderColor = 'rgba(34,197,94,.4)';
-    hintEl.style.color = '#22C55E';
-  }
 
-  // Change cursor
-  territoryMap.setOptions({ draggableCursor: 'crosshair' });
+  if (mode === 'circle') {
+    // Show radius input panel
+    showCircleRadiusPanel(color, hintEl);
 
-  if (mode === 'polygon') {
+  } else if (mode === 'polygon') {
+    if (hintEl) {
+      hintEl.textContent = '👆 Click points on map. Click first point again OR press Finish to close.';
+      hintEl.style.display = 'block';
+      hintEl.style.cssText += 'background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.4);color:#22C55E;';
+    }
+    territoryMap.setOptions({ draggableCursor: 'crosshair' });
+
     drawPolyline = new google.maps.Polyline({
-      path: [], strokeColor: color, strokeWeight: 2,
-      strokeOpacity: 0.8, map: territoryMap,
+      path: [], strokeColor: color, strokeWeight: 2, strokeOpacity: 0.8, map: territoryMap,
     });
 
     mapClickListener = territoryMap.addListener('click', e => {
       const pt = { lat: e.latLng.lat(), lng: e.latLng.lng() };
       drawPoints.push(pt);
       drawPolyline.getPath().push(e.latLng);
-
       const marker = new google.maps.Marker({
         position: pt, map: territoryMap,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 5,
+        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6,
                 fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 1 }
       });
       drawMarkers.push(marker);
-
-      // Update hint
       if (hintEl && drawPoints.length >= 3) {
-        hintEl.textContent = `${drawPoints.length} points — double-click to finish`;
+        hintEl.textContent = drawPoints.length + ' points — click Finish button to save';
       }
     });
 
-    mapDblClickListener = territoryMap.addListener('dblclick', e => {
-      if (drawPoints.length < 3) { alert('Add at least 3 points'); return; }
-      // Close polygon
-      const coords = [...drawPoints.map(p => [p.lng, p.lat])];
-      coords.push(coords[0]);
-      const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{shape:'polygon'} };
-      clearDrawListeners();
-      clearDrawPreview();
-      territoryMap.setOptions({ draggableCursor: null });
-      if (hintEl) hintEl.style.display = 'none';
-      showSaveConfirm(geojson, null);
-    });
-
-  } else if (mode === 'circle') {
-    let centerPt = null;
-
-    mapClickListener = territoryMap.addListener('click', e => {
-      if (!centerPt) {
-        // First click = centre
-        centerPt = e.latLng;
-        const marker = new google.maps.Marker({
-          position: centerPt, map: territoryMap,
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7,
-                  fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
-        });
-        drawMarkers.push(marker);
-        if (hintEl) hintEl.textContent = '👆 Now click anywhere to set the territory radius';
-
-      } else {
-        // Second click = radius
-        const radius = google.maps.geometry?.spherical?.computeDistanceBetween(centerPt, e.latLng)
-          || haversineDistance(centerPt.lat(), centerPt.lng(), e.latLng.lat(), e.latLng.lng());
-
-        // Build GeoJSON polygon from circle (64 points)
-        const coords = [];
-        for (let i = 0; i <= 64; i++) {
-          const angle = (i / 64) * 2 * Math.PI;
-          const latOff = (radius / 111320) * Math.cos(angle);
-          const lngOff = (radius / (111320 * Math.cos(centerPt.lat() * Math.PI / 180))) * Math.sin(angle);
-          coords.push([centerPt.lng() + lngOff, centerPt.lat() + latOff]);
-        }
-        const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] },
-          properties:{ shape:'circle', center_lat: centerPt.lat(), center_lng: centerPt.lng(), radius_m: radius } };
-
-        clearDrawListeners();
-        clearDrawPreview();
-        territoryMap.setOptions({ draggableCursor: null });
-        if (hintEl) hintEl.style.display = 'none';
-        showSaveConfirm(geojson, null);
-      }
-    });
-
-    // Live circle preview on mousemove
-    mapMouseListener = territoryMap.addListener('mousemove', e => {
-      if (!centerPt) return;
-      if (circleOverlay) circleOverlay.setMap(null);
-      const radius = haversineDistance(centerPt.lat(), centerPt.lng(), e.latLng.lat(), e.latLng.lng());
-      circleOverlay = new google.maps.Circle({
-        center: centerPt, radius, map: territoryMap,
-        fillColor: color, fillOpacity: 0.2,
-        strokeColor: color, strokeWeight: 2,
-      });
-    });
+    // Show finish button
+    showFinishButton(color);
 
   } else if (mode === 'rectangle') {
+    if (hintEl) {
+      hintEl.textContent = '👆 Click first corner, then click opposite corner to finish.';
+      hintEl.style.display = 'block';
+    }
+    territoryMap.setOptions({ draggableCursor: 'crosshair' });
     let corner1 = null;
 
     mapClickListener = territoryMap.addListener('click', e => {
@@ -3436,17 +3369,12 @@ function startDrawing(mode) {
                   fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2 }
         });
         drawMarkers.push(marker);
-        if (hintEl) hintEl.textContent = '👆 Now click the opposite corner';
+        if (hintEl) hintEl.textContent = '👆 Now click the opposite corner to finish';
       } else {
-        // Build rectangle coords
         const sw = { lat: Math.min(corner1.lat(), e.latLng.lat()), lng: Math.min(corner1.lng(), e.latLng.lng()) };
         const ne = { lat: Math.max(corner1.lat(), e.latLng.lat()), lng: Math.max(corner1.lng(), e.latLng.lng()) };
-        const coords = [
-          [sw.lng, sw.lat], [ne.lng, sw.lat],
-          [ne.lng, ne.lat], [sw.lng, ne.lat], [sw.lng, sw.lat],
-        ];
+        const coords = [[sw.lng,sw.lat],[ne.lng,sw.lat],[ne.lng,ne.lat],[sw.lng,ne.lat],[sw.lng,sw.lat]];
         const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{ shape:'rectangle' } };
-
         clearDrawListeners();
         clearDrawPreview();
         territoryMap.setOptions({ draggableCursor: null });
@@ -3454,23 +3382,117 @@ function startDrawing(mode) {
         showSaveConfirm(geojson, null);
       }
     });
-
-    // Live rect preview
-    mapMouseListener = territoryMap.addListener('mousemove', e => {
-      if (!corner1) return;
-      if (rectOverlay) rectOverlay.setMap(null);
-      const bounds = new google.maps.LatLngBounds(
-        { lat: Math.min(corner1.lat(), e.latLng.lat()), lng: Math.min(corner1.lng(), e.latLng.lng()) },
-        { lat: Math.max(corner1.lat(), e.latLng.lat()), lng: Math.max(corner1.lng(), e.latLng.lng()) }
-      );
-      rectOverlay = new google.maps.Rectangle({
-        bounds, map: territoryMap,
-        fillColor: color, fillOpacity: 0.2,
-        strokeColor: color, strokeWeight: 2,
-      });
-    });
   }
 }
+
+function showCircleRadiusPanel(color, hintEl) {
+  // Remove existing panel
+  document.getElementById('circle-radius-panel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'circle-radius-panel';
+  panel.style.cssText = 'margin-top:10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:14px;';
+  panel.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#22C55E;margin-bottom:10px;">⭕ Circle Territory</div>
+    <div style="font-size:12px;color:var(--t2);margin-bottom:10px;">
+      👆 Click anywhere on the map to set the <strong>centre</strong>, then set radius below.
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--t3);white-space:nowrap;">Radius (km)</label>
+      <input type="number" id="circle-radius-km" value="15" min="1" max="200"
+        style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid var(--bdr);
+        background:var(--card2);color:var(--t1);font-size:13px;">
+    </div>
+    <div id="circle-centre-status" style="font-size:12px;color:var(--t3);margin-bottom:10px;">
+      No centre selected yet — click on map
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button id="btn-save-circle" onclick="saveCircleTerritory('${color}')" disabled
+        style="flex:1;padding:9px;border-radius:8px;background:#22C55E;border:none;color:#fff;
+        font-weight:700;cursor:pointer;font-size:13px;opacity:.4;">Save Territory</button>
+      <button onclick="cancelDraw()"
+        style="padding:9px 14px;border-radius:8px;background:var(--card2);border:1px solid var(--bdr);
+        color:var(--t3);cursor:pointer;font-size:13px;">Cancel</button>
+    </div>`;
+  document.getElementById('draw-hint').insertAdjacentElement('afterend', panel);
+  if (hintEl) hintEl.style.display = 'none';
+
+  territoryMap.setOptions({ draggableCursor: 'crosshair' });
+  let circleCentre = null;
+  let circlePreview = null;
+
+  mapClickListener = territoryMap.addListener('click', e => {
+    circleCentre = e.latLng;
+    if (circlePreview) circlePreview.setMap(null);
+
+    const radiusKm = parseFloat(document.getElementById('circle-radius-km')?.value || 15);
+    circlePreview = new google.maps.Circle({
+      center: circleCentre, radius: radiusKm * 1000, map: territoryMap,
+      fillColor: color, fillOpacity: 0.2, strokeColor: color, strokeWeight: 2, editable: false,
+    });
+
+    document.getElementById('circle-centre-status').textContent =
+      '✓ Centre: ' + circleCentre.lat().toFixed(4) + ', ' + circleCentre.lng().toFixed(4);
+    const btn = document.getElementById('btn-save-circle');
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+    drawMarkers.push(circlePreview);
+
+    // Update preview when radius changes
+    document.getElementById('circle-radius-km').oninput = () => {
+      const r = parseFloat(document.getElementById('circle-radius-km').value || 15) * 1000;
+      circlePreview.setRadius(r);
+    };
+  });
+
+  // Store centre for save function
+  window._circleCentreRef = () => circleCentre;
+}
+
+function saveCircleTerritory(color) {
+  const centre = window._circleCentreRef?.();
+  if (!centre) { alert('Click on map to set centre first'); return; }
+  const radiusM = parseFloat(document.getElementById('circle-radius-km')?.value || 15) * 1000;
+
+  // Build GeoJSON polygon from circle
+  const coords = [];
+  for (let i = 0; i <= 64; i++) {
+    const angle = (i / 64) * 2 * Math.PI;
+    const latOff = (radiusM / 111320) * Math.cos(angle);
+    const lngOff = (radiusM / (111320 * Math.cos(centre.lat() * Math.PI / 180))) * Math.sin(angle);
+    coords.push([centre.lng() + lngOff, centre.lat() + latOff]);
+  }
+  const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] },
+    properties:{ shape:'circle', center_lat: centre.lat(), center_lng: centre.lng(), radius_m: radiusM } };
+
+  clearDrawListeners();
+  clearDrawPreview();
+  document.getElementById('circle-radius-panel')?.remove();
+  territoryMap.setOptions({ draggableCursor: null });
+  showSaveConfirm(geojson, null);
+}
+
+function showFinishButton(color) {
+  document.getElementById('finish-polygon-btn')?.remove();
+  const btn = document.createElement('button');
+  btn.id = 'finish-polygon-btn';
+  btn.textContent = '✓ Finish Polygon';
+  btn.style.cssText = 'margin-top:10px;width:100%;padding:10px;border-radius:8px;background:#22C55E;' +
+    'border:none;color:#fff;font-weight:700;cursor:pointer;font-size:13px;';
+  btn.onclick = () => {
+    if (drawPoints.length < 3) { alert('Add at least 3 points'); return; }
+    const coords = drawPoints.map(p => [p.lng, p.lat]);
+    coords.push(coords[0]);
+    const geojson = { type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties:{ shape:'polygon' } };
+    clearDrawListeners();
+    clearDrawPreview();
+    territoryMap.setOptions({ draggableCursor: null });
+    document.getElementById('finish-polygon-btn')?.remove();
+    document.getElementById('draw-hint').style.display = 'none';
+    showSaveConfirm(geojson, null);
+  };
+  document.getElementById('draw-hint').insertAdjacentElement('afterend', btn);
+}
+
 
 function haversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -3487,6 +3509,8 @@ function cancelDraw() {
   clearDrawPreview();
   if (territoryMap) territoryMap.setOptions({ draggableCursor: null });
   document.getElementById('save-confirm-panel')?.remove();
+  document.getElementById('circle-radius-panel')?.remove();
+  document.getElementById('finish-polygon-btn')?.remove();
   const hintEl = document.getElementById('draw-hint');
   if (hintEl) hintEl.style.display = 'none';
   drawMode = null;
