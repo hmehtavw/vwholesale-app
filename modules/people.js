@@ -2366,6 +2366,10 @@ async function openFieldVisitDetail(id) {
         <button class="btn-primary" style="flex:1;" onclick="closeSheet()">Close</button>
         ${v.site_lat ? `<button class="btn-secondary" style="flex:1;" onclick="window.open('https://www.google.com/maps?q=${v.site_lat},${v.site_lng}','_blank')">📍 Open Map</button>` : ''}
       </div>
+      <button onclick="showAssignVisitModal(${v.id})"
+        style="margin-top:8px;width:100%;padding:11px;border-radius:8px;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.4);color:#F5A623;font-weight:700;font-size:13px;cursor:pointer;">
+        👤 Assign to Field Rep
+      </button>
     </div>`;
 
   sheet.classList.add('open');
@@ -2499,3 +2503,109 @@ const _fieldFUObserver = new MutationObserver(() => {
   }
 });
 _fieldFUObserver.observe(document.body, { childList: true, subtree: true });
+
+// ══════════════════════════════════════════════
+// ASSIGN SITE VISIT TO FIELD REP (Staff.html CRM)
+// ══════════════════════════════════════════════
+
+async function showAssignVisitModal(visitId) {
+  // Get field staff
+  const { data: fieldStaff } = await VW_DB.client
+    .from('staff')
+    .select('id,name,designation,role')
+    .eq('active', true)
+    .eq('department', 'Field')
+    .order('name');
+
+  const existing = document.getElementById('assign-visit-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'assign-visit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:flex-end;';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:20px 20px 0 0;width:100%;padding:20px;max-height:80vh;overflow-y:auto;">
+      <div style="width:36px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 16px;"></div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px;">Assign to Field Rep</div>
+      
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Field Rep *</label>
+        <select id="assign-rep-select" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;">
+          <option value="">Select rep…</option>
+          ${(fieldStaff||[]).map(s=>`<option value="${s.id}">${s.name} (${s.designation||s.role||'—'})</option>`).join('')}
+        </select>
+      </div>
+      
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Scheduled Date *</label>
+        <input type="date" id="assign-date" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;"
+               value="${new Date().toISOString().split('T')[0]}">
+      </div>
+      
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Priority</label>
+        <select id="assign-priority" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;">
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom:16px;">
+        <label style="font-size:12px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:6px;">Instructions for rep</label>
+        <textarea id="assign-notes" placeholder="What should they focus on, who to meet, etc." 
+          style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;min-height:70px;resize:vertical;font-family:inherit;"></textarea>
+      </div>
+      
+      <div style="display:flex;gap:10px;">
+        <button onclick="saveVisitAssignment(${visitId})" 
+          style="flex:1;padding:13px;border-radius:10px;background:#F5A623;border:none;color:#0F1923;font-weight:700;font-size:15px;cursor:pointer;">
+          Assign Visit
+        </button>
+        <button onclick="document.getElementById('assign-visit-modal').remove()"
+          style="padding:13px 16px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text-muted);cursor:pointer;font-size:15px;">
+          Cancel
+        </button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+async function saveVisitAssignment(visitId) {
+  const staffId = parseInt(document.getElementById('assign-rep-select').value);
+  const date = document.getElementById('assign-date').value;
+  const priority = document.getElementById('assign-priority').value;
+  const notes = document.getElementById('assign-notes').value;
+
+  if (!staffId) { alert('Select a field rep'); return; }
+  if (!date) { alert('Set a date'); return; }
+
+  // Get visit details for address
+  const { data: visit } = await VW_DB.client.from('field_visits').select('site_address,site_lat,site_lng,customer_name').eq('id', visitId).single();
+  const { data: staff } = await VW_DB.client.from('staff').select('name').eq('id', staffId).single();
+
+  const { error } = await VW_DB.client.from('field_visit_assignments').insert({
+    assigned_to_staff_id: staffId,
+    assigned_by_staff_id: staffId, // placeholder — ideally current user's staff_id
+    source_visit_id: visitId,
+    site_name: visit?.customer_name || 'Site Visit',
+    site_address: visit?.site_address,
+    site_lat: visit?.site_lat,
+    site_lng: visit?.site_lng,
+    scheduled_date: date,
+    priority,
+    notes,
+    status: 'pending',
+    city: 'Vijayawada',
+  });
+
+  if (error) { alert('Error: ' + error.message); return; }
+
+  document.getElementById('assign-visit-modal').remove();
+  showToast(`Assigned to ${staff?.name || 'field rep'}`, 'success');
+}
+
+window.showAssignVisitModal = showAssignVisitModal;
+window.saveVisitAssignment = saveVisitAssignment;
