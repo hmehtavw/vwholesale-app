@@ -3530,7 +3530,7 @@ function showSaveConfirm(geojson, _unused) {
     <div style="font-size:14px;font-weight:700;color:#22C55E;margin-bottom:4px;">✓ Territory drawn</div>
     <div style="font-size:13px;color:#94a3b8;margin-bottom:14px;">${name} — ${staffName.split('(')[0].trim()}</div>
     <div style="display:flex;gap:8px;">
-      <button onclick="saveTerritory(${JSON.stringify(JSON.stringify(geojson))})"
+      <button onclick="saveTerritory()"
         style="flex:1;padding:10px;border-radius:8px;background:#22C55E;border:none;color:#fff;
         font-weight:700;cursor:pointer;font-size:13px;">💾 Save Territory</button>
       <button onclick="cancelDraw()"
@@ -3543,8 +3543,9 @@ function showSaveConfirm(geojson, _unused) {
   window._pendingGeoJSON = geojson;
 }
 
-async function saveTerritory(geojsonStr) {
-  const geojson = typeof geojsonStr === 'string' ? JSON.parse(geojsonStr) : (window._pendingGeoJSON || geojsonStr);
+async function saveTerritory() {
+  const geojson = window._pendingGeoJSON;
+  if (!geojson) { alert('No territory drawn yet'); return; }
   const name    = document.getElementById('t-name').value.trim();
   const vertCode = document.getElementById('t-vertical').value;
   const staffId  = parseInt(document.getElementById('t-staff').value) || null;
