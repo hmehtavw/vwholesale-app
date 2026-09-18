@@ -1,0 +1,39 @@
+name: Sync Field App to field.vwholesale.in
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'field.html'
+      - 'field-sw.js'
+      - 'field-manifest.json'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+
+      - name: Checkout field repo
+        uses: actions/checkout@v4
+        with:
+          repository: hmehtavw/vwholesale-field
+          token: ${{ secrets.FIELD_DEPLOY_TOKEN }}
+          path: field-repo
+
+      - name: Copy field files
+        run: |
+          cp field.html field-repo/index.html
+          cp field-sw.js field-repo/field-sw.js
+          cp field-manifest.json field-repo/field-manifest.json
+          echo "field.vwholesale.in" > field-repo/CNAME
+
+      - name: Commit and push
+        run: |
+          cd field-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --staged --quiet || git commit -m "sync: field app updated from main repo [$(date '+%Y-%m-%d %H:%M')]"
+          git push
