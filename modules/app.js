@@ -253,7 +253,7 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'crm') html = await VW_CRM.renderCRM();
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
-    else if (page === 'quick_quote') { if (window.VW_TILES?.openQuickQuote) { VW_TILES.openQuickQuote(); } else if (typeof openQuickQuote === 'function') { openQuickQuote(); } else { navigateTo('tiles'); } return; }
+    else if (page === 'internal_chat') { if (window.VW_INTERNAL_CHAT) { html = await VW_INTERNAL_CHAT.renderChat(); } else { html = '<div style="padding:24px;text-align:center;color:#94a3b8;">Chat loading…</div>'; } }    else if (page === 'quick_quote') { if (window.VW_TILES?.openQuickQuote) { VW_TILES.openQuickQuote(); } else if (typeof openQuickQuote === 'function') { openQuickQuote(); } else { navigateTo('tiles'); } return; }
     else if (page === 'my_hr')     { if (window.VW_HR_SELF) { html = await VW_HR_SELF.renderMyHRPage(); } else { html = '<div class="empty-state">HR module loading… please try again</div>'; } }
     else if (page === 'my_leaves') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyLeaves(); } return; }
     else if (page === 'my_salary') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMySalary(); } return; }
@@ -427,6 +427,10 @@ async function navigateToFresh(page, params, cacheKey) {
     content.innerHTML = finalHtml;
     content.scrollTop = 0;
     applyRolePermissions();
+    // Post-render hooks for modules that need DOM access
+    if (page === 'internal_chat' && window.VW_INTERNAL_CHAT) {
+      setTimeout(() => VW_INTERNAL_CHAT.afterRender(), 100);
+    }
     // Re-apply customer nav styling after applyRolePermissions rebuilds nav.innerHTML
     if (document.body.classList.contains('customer-mode')) {
       const _nav = document.getElementById('bottom-nav');
