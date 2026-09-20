@@ -1269,6 +1269,7 @@ body.staff-mode #app-content { padding-top: 0 !important; padding-bottom: 0 !imp
       <button class="nav-btn" data-page="cart" onclick="openBillingEntry()"><span class="nav-icon">🧾</span><span>Billing</span></button>
       <button class="nav-btn" data-page="tasks" onclick="navigateTo('tasks')"><span class="nav-icon">📋</span><span>Tasks</span></button>
       <button class="nav-btn" data-page="internal_chat" onclick="navigateTo('internal_chat')" style="position:relative;"><span class="nav-icon">💬</span><span>Chat</span><span id="staff-chat-badge" style="display:none;position:absolute;top:4px;right:14px;background:#EF4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center;"></span></button>
+      <button class="nav-btn" data-page="payment_links" onclick="navigateTo('payment_links')"><span class="nav-icon">💳</span><span>Pay Links</span></button>
       <button class="nav-btn" data-page="more" onclick="toggleMoreMenu()"><span class="nav-icon">···</span><span>More</span></button>
     </nav>
     <div id="more-menu" class="more-menu" style="display:none">
@@ -1480,6 +1481,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script src="./modules/billing.js"></script>
 <script src="./modules/people.js"></script>
 <script src="./modules/internal-chat.js"></script>
+<script src="./modules/payment-links.js"></script>
 <script src="./modules/stock.js"></script>
 <script src="./modules/operations.js"></script>
 <script src="./modules/admin.js"></script>
