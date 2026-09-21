@@ -2542,11 +2542,9 @@ async function loadFieldVisits() {
     </div>
 
     <!-- Visit Detail Panel -->
-    <div id="visit-detail-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:480px;
-         background:var(--card);border-left:1px solid var(--bdr);overflow-y:auto;z-index:200;padding:24px;">
-      <button onclick="document.getElementById('visit-detail-panel').style.display='none'"
-        style="position:absolute;top:16px;right:16px;background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;">✕</button>
-      <div id="visit-detail-content">—</div>
+    <div id="visit-detail-panel" style="display:none;position:fixed;top:0;right:0;bottom:0;width:520px;
+         background:#0F1923;border-left:1px solid #1E2E3E;overflow-y:auto;z-index:200;box-shadow:-8px 0 40px rgba(0,0,0,.5);">
+      <div id="visit-detail-content"></div>
     </div>`;
 
   // Post-render: populate rep dropdown, render rows, update summary cards
@@ -2559,107 +2557,223 @@ async function showVisitDetail(id) {
   const panel = document.getElementById('visit-detail-panel');
   const content = document.getElementById('visit-detail-content');
   panel.style.display = 'block';
-  content.innerHTML = '<div style="color:var(--t3);padding:40px 0;text-align:center;">Loading…</div>';
+  content.innerHTML = `<div style="padding:60px 0;text-align:center;color:#506070;">
+    <div style="font-size:32px;margin-bottom:8px;">⏳</div>Loading visit…</div>`;
 
   const vArr = await sbFetch(`field_visits?id=eq.${id}&select=*&limit=1`).catch(()=>[]);
   const v = vArr?.[0];
-  if (!v) { content.innerHTML = '<div style="color:var(--t3);">Visit not found</div>'; return; }
+  if (!v) { content.innerHTML = '<div style="padding:40px;color:#506070;text-align:center;">Visit not found</div>'; return; }
 
   const score = Math.round(v.visit_quality_score||0);
-  const scoreColor = score>=90?'var(--green)':score>=60?'var(--gold)':'var(--red)';
+  const scoreColor = score>=90?'#22C55E':score>=60?'#F5A623':'#EF4444';
+  const stageLabel = fieldStageLabel(v.construction_stage);
+  const aiStageLabel = v.ai_stage_detected ? fieldStageLabel(v.ai_stage_detected) : null;
+  const hasAI = !!v.ai_stage_detected;
+  const valueMin = v.ai_estimated_value_min ? (v.ai_estimated_value_min/100000).toFixed(1) : null;
+  const valueMax = v.ai_estimated_value_max ? (v.ai_estimated_value_max/100000).toFixed(1) : null;
+  const visitDate = new Date(v.created_at).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const visitTime = new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
 
   content.innerHTML = `
-    <div style="margin-bottom:20px;">
-      <div style="font-size:18px;font-weight:800;margin-bottom:4px;">${v.site_address||'Site Visit'}</div>
-      <div style="font-size:12px;color:var(--t3);">${v.executive_name||'—'} · ${new Date(v.created_at).toLocaleString('en-IN')}</div>
+    <!-- Header with photo background -->
+    <div style="position:relative;background:#1A2634;padding:20px 20px 16px;">
+      <!-- Close -->
+      <button onclick="document.getElementById('visit-detail-panel').style.display='none'"
+        style="position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:none;color:#8FA3B8;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
+
+      <!-- Photos full width at top -->
+      ${v.site_photos?.length ? `
+        <div style="display:grid;grid-template-columns:repeat(${Math.min(v.site_photos.length,3)},1fr);gap:6px;margin-bottom:16px;border-radius:12px;overflow:hidden;">
+          ${v.site_photos.slice(0,3).map((p,i)=>`
+            <div style="position:relative;aspect-ratio:${v.site_photos.length===1?'16/9':'4/3'};overflow:hidden;${i===0&&v.site_photos.length===1?'':''}">
+              <img src="${p.url||p}" style="width:100%;height:100%;object-fit:cover;cursor:pointer;transition:transform .2s;"
+                onclick="window.open('${p.url||p}','_blank')"
+                onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+            </div>`).join('')}
+        </div>
+        ${v.site_photos.length > 3 ? `<div style="text-align:center;font-size:12px;color:#506070;margin-top:-8px;margin-bottom:10px;">+${v.site_photos.length-3} more photos</div>` : ''}
+      ` : `<div style="height:80px;display:flex;align-items:center;justify-content:center;color:#2A3A4A;font-size:40px;margin-bottom:12px;">📷</div>`}
+
+      <!-- Site name and meta -->
+      <div style="font-size:17px;font-weight:800;color:#F0F4F8;line-height:1.3;padding-right:40px;">${v.site_address||'Site Visit'}</div>
+      <div style="font-size:12px;color:#8FA3B8;margin-top:4px;">
+        <span style="color:#F5A623;font-weight:600;">${v.executive_name||'—'}</span>
+        · ${visitDate} at ${visitTime}
+        ${v.is_followup ? '<span style="margin-left:6px;padding:2px 8px;border-radius:10px;background:rgba(139,92,246,.2);color:#A78BFA;font-size:11px;">Follow-up</span>' : ''}
+      </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
-      <div style="background:var(--card2);border-radius:10px;padding:12px;">
-        <div style="font-size:11px;color:var(--t3);">STAGE</div>
-        <div style="font-weight:700;margin-top:4px;">${fieldStageLabel(v.construction_stage)}</div>
+    <!-- KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#1E2E3E;">
+      <div style="background:#0F1923;padding:14px 12px;text-align:center;">
+        <div style="font-size:11px;color:#506070;font-weight:600;margin-bottom:4px;">QUALITY</div>
+        <div style="font-size:22px;font-weight:800;color:${scoreColor};">${score}%</div>
       </div>
-      <div style="background:var(--card2);border-radius:10px;padding:12px;">
-        <div style="font-size:11px;color:var(--t3);">QUALITY SCORE</div>
-        <div style="font-weight:700;color:${scoreColor};margin-top:4px;">${score}%</div>
+      <div style="background:#0F1923;padding:14px 12px;text-align:center;">
+        <div style="font-size:11px;color:#506070;font-weight:600;margin-bottom:4px;">STAGE</div>
+        <div style="font-size:13px;font-weight:700;color:#F0F4F8;">${stageLabel}</div>
       </div>
-      <div style="background:var(--card2);border-radius:10px;padding:12px;">
-        <div style="font-size:11px;color:var(--t3);">EST. SQ FT</div>
-        <div style="font-weight:700;margin-top:4px;">${v.estimated_sqft ? v.estimated_sqft.toLocaleString('en-IN') + ' sqft' : '—'}</div>
+      <div style="background:#0F1923;padding:14px 12px;text-align:center;">
+        <div style="font-size:11px;color:#506070;font-weight:600;margin-bottom:4px;">AI STAGE</div>
+        <div style="font-size:13px;font-weight:700;color:${hasAI?'#A78BFA':'#506070'};">${aiStageLabel||'Pending'}</div>
       </div>
-      <div style="background:var(--card2);border-radius:10px;padding:12px;">
-        <div style="font-size:11px;color:var(--t3);">AI VALUE RANGE</div>
-        <div style="font-weight:700;color:var(--gold);margin-top:4px;">${v.ai_estimated_value_min ? '₹'+(v.ai_estimated_value_min/100000).toFixed(1)+'L – ₹'+(v.ai_estimated_value_max/100000).toFixed(1)+'L' : '—'}</div>
+      <div style="background:#0F1923;padding:14px 12px;text-align:center;">
+        <div style="font-size:11px;color:#506070;font-weight:600;margin-bottom:4px;">SQFT</div>
+        <div style="font-size:13px;font-weight:700;color:#F0F4F8;">${v.estimated_sqft ? v.estimated_sqft.toLocaleString('en-IN') : '—'}</div>
       </div>
     </div>
 
-    ${v.site_contacts?.length ? `
-      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">CONTACTS (${v.site_contacts.length})</div>
-      ${v.site_contacts.map(c=>`
-        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);">
+    <div style="padding:20px;">
+
+      <!-- AI Value highlight -->
+      ${valueMin ? `
+      <div style="background:linear-gradient(135deg,rgba(245,166,35,.12),rgba(245,166,35,.04));border:1px solid rgba(245,166,35,.25);border-radius:12px;padding:16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
           <div>
-            <div style="font-size:11px;color:var(--b);">${c.role||'Contact'}</div>
-            <div style="font-weight:600;">${c.name||'—'}</div>
+            <div style="font-size:11px;color:#B45309;font-weight:700;letter-spacing:.05em;margin-bottom:4px;">🤖 AI ESTIMATED PIPELINE</div>
+            <div style="font-size:24px;font-weight:800;color:#F5A623;">₹${valueMin}L <span style="color:#8FA3B8;font-size:14px;font-weight:500;">– ₹${valueMax}L</span></div>
           </div>
-          <a href="tel:${c.phone}" style="color:var(--green);font-size:13px;text-decoration:none;align-self:center;">📞 ${c.phone||''}</a>
-        </div>`).join('')}
-      <div style="margin-bottom:16px;"></div>` : ''}
-
-    ${v.ai_requirements?.length ? `
-      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">AI DETECTED REQUIREMENTS</div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
-        ${v.ai_requirements.map(r=>`<span style="padding:4px 10px;border-radius:20px;background:rgba(59,130,246,.15);color:var(--b);font-size:12px;font-weight:600;">${r}</span>`).join('')}
+          <div style="text-align:right;">
+            <div style="font-size:11px;color:#506070;">conservative → optimistic</div>
+            ${v.num_bathrooms_detected ? `<div style="font-size:12px;color:#8FA3B8;margin-top:2px;">${v.num_bathrooms_detected} bathrooms detected</div>` : ''}
+          </div>
+        </div>
       </div>` : ''}
 
-    ${v.notes ? `
-      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:6px;">NOTES</div>
-      <div style="font-size:13px;color:var(--t2);background:var(--card2);border-radius:8px;padding:12px;margin-bottom:16px;">${v.notes}</div>` : ''}
+      <!-- AI Requirements -->
+      ${v.ai_requirements?.length ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#506070;letter-spacing:.06em;margin-bottom:8px;">🏗️ AI REQUIREMENTS (ordered by urgency)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${v.ai_requirements.map((r,i)=>`
+            <span style="padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;
+              background:${i<3?'rgba(245,166,35,.15)':'rgba(100,116,139,.1)'};
+              color:${i<3?'#F5A623':'#8FA3B8'};
+              border:1px solid ${i<3?'rgba(245,166,35,.3)':'rgba(100,116,139,.2)'};">
+              ${i<3?'🔥 ':''}${r}
+            </span>`).join('')}
+        </div>
+      </div>` : ''}
 
-    ${v.followup_questions?.length ? `
-      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">🤖 AI FOLLOW-UP QUESTIONS</div>
-      <div style="background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);border-radius:10px;padding:12px;margin-bottom:16px;">
-        ${v.followup_questions.map((q,i) => `
-          <div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px;">
-            <span style="color:var(--gold);font-weight:700;">${i+1}.</span> ${q.question || q}
+      <!-- AI analysis text -->
+      ${v.ai_analysis?.suggestion ? `
+      <div style="background:#1A2634;border-left:3px solid #A78BFA;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px;">🤖 AI PITCH SUGGESTION</div>
+        <div style="font-size:13px;color:#C4B5FD;line-height:1.6;">${v.ai_analysis.suggestion}</div>
+      </div>` : ''}
+
+      ${v.ai_analysis?.crm_note ? `
+      <div style="background:#1A2634;border-left:3px solid #22C55E;border-radius:0 10px 10px 0;padding:12px 14px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:4px;">📋 CRM NOTE</div>
+        <div style="font-size:13px;color:#86EFAC;line-height:1.6;">${v.ai_analysis.crm_note}</div>
+      </div>` : ''}
+
+      <!-- Contacts -->
+      ${v.site_contacts?.length ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#506070;letter-spacing:.06em;margin-bottom:8px;">👥 CONTACTS (${v.site_contacts.length})</div>
+        ${v.site_contacts.map(c=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#1A2634;border-radius:10px;margin-bottom:6px;">
+            <div>
+              <div style="font-size:11px;color:#F5A623;font-weight:600;">${c.role||'Contact'}</div>
+              <div style="font-size:14px;font-weight:700;color:#F0F4F8;">${c.name||'—'}</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <a href="tel:+91${c.phone}" style="padding:6px 10px;border-radius:8px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3);color:#22C55E;font-size:12px;text-decoration:none;font-weight:600;">📞 Call</a>
+              <a href="https://wa.me/91${(c.phone||'').replace(/\D/g,'')}" target="_blank" style="padding:6px 10px;border-radius:8px;background:rgba(37,211,102,.12);border:1px solid rgba(37,211,102,.3);color:#25D366;font-size:12px;text-decoration:none;font-weight:600;">WA</a>
+            </div>
           </div>`).join('')}
       </div>` : ''}
 
-    ${v.next_action_date ? `
-      <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px 14px;font-size:13px;">
-        📅 Follow-up: <strong>${new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'})}</strong>
+      <!-- Follow-up -->
+      ${v.next_action_date ? `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px;background:#1A2634;border-radius:10px;margin-bottom:16px;">
+        <div style="font-size:24px;">📅</div>
+        <div>
+          <div style="font-size:11px;color:#506070;font-weight:600;">FOLLOW-UP SCHEDULED</div>
+          <div style="font-size:14px;font-weight:700;color:${v.next_action_date < new Date().toISOString().split('T')[0] ? '#EF4444':'#F0F4F8'};">
+            ${new Date(v.next_action_date).toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'long',year:'numeric'})}
+            ${v.next_action_date < new Date().toISOString().split('T')[0] ? '<span style="margin-left:8px;font-size:11px;color:#EF4444;background:rgba(239,68,68,.1);padding:2px 8px;border-radius:8px;">OVERDUE</span>' : ''}
+          </div>
+        </div>
       </div>` : ''}
 
-    <!-- Billing Conversion -->
-    <div style="margin-top:16px;padding:14px;background:var(--card2);border-radius:10px;border:1px solid var(--bdr);">
-      <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:10px;">BILLING CONVERSION</div>
-      ${v.converted_invoice_id ? `
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div style="font-size:20px;">✅</div>
-          <div>
-            <div style="font-weight:700;color:var(--green);">Converted — ₹${(v.conversion_value||0).toLocaleString('en-IN')}</div>
-            <div style="font-size:12px;color:var(--t3);">Invoice #${v.converted_invoice_id} · ${v.converted_at ? new Date(v.converted_at).toLocaleDateString('en-IN') : '—'}</div>
-          </div>
-        </div>` : `
-        <div style="font-size:13px;color:var(--t3);margin-bottom:10px;">Link this visit to an invoice when a sale is made</div>
-        <div style="display:flex;gap:8px;">
-          <input id="conv-invoice-id" type="number" placeholder="Invoice ID or No." 
-            style="flex:1;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--bdr);color:var(--t1);font-size:13px;">
-          <input id="conv-value" type="number" placeholder="₹ Amount"
-            style="flex:1;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--bdr);color:var(--t1);font-size:13px;">
-          <button onclick="markVisitConverted(${v.id})"
-            style="padding:8px 14px;border-radius:8px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:var(--green);font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">
-            💰 Mark Converted
-          </button>
-        </div>`}
-    </div>
+      <!-- AI Follow-up Questions -->
+      ${v.followup_questions?.length ? `
+      <div style="background:rgba(245,166,35,.06);border:1px solid rgba(245,166,35,.15);border-radius:10px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#B45309;margin-bottom:8px;">🤖 AI FOLLOW-UP QUESTIONS</div>
+        ${v.followup_questions.map((q,i)=>`
+          <div style="padding:6px 0;border-bottom:1px solid rgba(245,166,35,.08);font-size:13px;color:#D4A855;line-height:1.5;">
+            <span style="color:#F5A623;font-weight:700;">${i+1}.</span> ${q.question||q}
+          </div>`).join('')}
+      </div>` : ''}
 
-    ${v.site_photos?.length ? `
-      <div style="margin-top:16px;">
-        <div style="font-size:11px;font-weight:800;color:var(--t3);margin-bottom:8px;">SITE PHOTOS (${v.site_photos.length})</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
-          ${v.site_photos.map(p=>`<img src="${p.url||p}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;" onclick="window.open('${p.url||p}','_blank')">`).join('')}
+      <!-- Notes -->
+      ${v.notes ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#506070;letter-spacing:.06em;margin-bottom:6px;">📝 NOTES</div>
+        <div style="font-size:13px;color:#8FA3B8;background:#1A2634;border-radius:10px;padding:12px;line-height:1.6;">${v.notes}</div>
+      </div>` : ''}
+
+      <!-- Competitors -->
+      ${v.competitor_products?.length ? `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#506070;letter-spacing:.06em;margin-bottom:6px;">⚔️ COMPETITOR MATERIALS SPOTTED</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${v.competitor_products.map(c=>`<span style="padding:4px 10px;border-radius:16px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#FCA5A5;font-size:12px;">${c}</span>`).join('')}
         </div>
-      </div>` : ''}`;
+      </div>` : ''}
+
+      <!-- Billing Conversion -->
+      <div style="background:#1A2634;border-radius:12px;padding:16px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;color:#506070;letter-spacing:.06em;margin-bottom:10px;">💰 BILLING CONVERSION</div>
+        ${v.converted_invoice_id ? `
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:40px;height:40px;border-radius:50%;background:rgba(34,197,94,.15);display:flex;align-items:center;justify-content:center;font-size:20px;">✅</div>
+            <div>
+              <div style="font-size:15px;font-weight:700;color:#22C55E;">Converted — ₹${(v.conversion_value||0).toLocaleString('en-IN')}</div>
+              <div style="font-size:12px;color:#506070;">Invoice #${v.converted_invoice_id} · ${v.converted_at ? new Date(v.converted_at).toLocaleDateString('en-IN') : '—'}</div>
+            </div>
+          </div>` : `
+          <div style="font-size:13px;color:#506070;margin-bottom:10px;">Link this visit to an invoice when a sale is made</div>
+          <div style="display:flex;gap:8px;">
+            <input id="conv-invoice-id" type="number" placeholder="Invoice ID"
+              style="flex:1;padding:9px 12px;border-radius:8px;background:#243040;border:1px solid #2A3A4A;color:#F0F4F8;font-size:13px;outline:none;">
+            <input id="conv-value" type="number" placeholder="₹ Amount"
+              style="flex:1;padding:9px 12px;border-radius:8px;background:#243040;border:1px solid #2A3A4A;color:#F0F4F8;font-size:13px;outline:none;">
+            <button onclick="markVisitConverted(${v.id})"
+              style="padding:9px 14px;border-radius:8px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.4);color:#22C55E;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">
+              Mark Converted
+            </button>
+          </div>`}
+      </div>
+
+      <!-- Map link -->
+      ${v.site_lat ? `
+      <a href="https://www.google.com/maps?q=${v.site_lat},${v.site_lng}" target="_blank"
+        style="display:flex;align-items:center;gap:10px;padding:12px;background:#1A2634;border-radius:10px;text-decoration:none;margin-bottom:16px;">
+        <div style="font-size:24px;">📍</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#60A5FA;">Open in Google Maps</div>
+          <div style="font-size:11px;color:#506070;">${v.site_lat.toFixed(4)}, ${v.site_lng.toFixed(4)}</div>
+        </div>
+        <div style="margin-left:auto;color:#60A5FA;">↗</div>
+      </a>` : ''}
+
+      <!-- Assign to rep -->
+      <button onclick="showAssignVisitModal(${v.id})"
+        style="width:100%;padding:12px;border-radius:10px;background:rgba(245,166,35,.12);border:1px solid rgba(245,166,35,.3);color:#F5A623;font-weight:700;font-size:14px;cursor:pointer;margin-bottom:8px;">
+        👤 Assign to Field Rep
+      </button>
+
+      <!-- AI retry -->
+      ${!v.ai_stage_detected && v.site_photos?.length ? `
+      <button onclick="retryAISingle(${v.id}, ${JSON.stringify(v.site_photos.map(p=>p.url||p))})"
+        style="width:100%;padding:12px;border-radius:10px;background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:#A78BFA;font-weight:700;font-size:14px;cursor:pointer;">
+        🤖 Run AI Analysis
+      </button>` : ''}
+
+    </div>`;
 }
 
 let _allVisitRows = [];
