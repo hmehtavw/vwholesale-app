@@ -69,14 +69,21 @@ Site context provided by field rep:
 - Estimated area: ${ctx.sqft ? ctx.sqft + " sqft" : "not specified"}
 - City: ${ctx.city || "Vijayawada, AP"}
 
+IMPORTANT on value estimation:
+- NEVER return 0 for estimated_value_min or estimated_value_max — every site has some material need
+- Finishing/tiling_ready/tiling_in_progress are the HIGHEST value stages — tiles, granite, sanitaryware, CP fittings, paints are all needed NOW
+- Even handover/renovation sites need replacement tiles, fixtures, paints — estimate for that
+- Minimum value for any visited site is ₹50,000. Most residential sites are ₹3L–₹30L range.
+- Base estimate on sqft if visible: avg 3BHK = 1500 sqft, tiles alone = ₹35–120/sqft
+
 Return ONLY this JSON structure:
 {
-  "stage_detected": "one of: foundation | structure | brick_work | plastering | tiling_ready | tiling_in_progress | finishing | handover | renovation",
+  "stage_detected": "one of: foundation | structure | brick_work | plastering | tiling_ready | tiling_in_progress | finishing | renovation",
   "stage_confidence": "high | medium | low",
   "stage_notes": "brief observation about what you see that determines the stage",
   "requirements": [
     "list each V Wholesale product category needed, ordered by urgency",
-    "examples: Tiles, Granite, Sanitaryware, CP Fittings, Paints, Plywood, Waterproofing, PVC Pipes, Electrical Wires"
+    "examples: Tiles, Granite & Marble, Sanitaryware, CP Fittings, Paints, Plywood & Laminates, Waterproofing Solutions, PVC Pipes & Fittings, Electrical Wires & Conduits, Adhesives & Grouts"
   ],
   "requirements_detail": {
     "immediate": ["needed within 2 weeks"],
@@ -84,8 +91,8 @@ Return ONLY this JSON structure:
     "future": ["needed after 30 days"]
   },
   "estimated_sqft": <number or null — your estimate of total built-up area>,
-  "estimated_value_min": <number in INR — conservative total order estimate>,
-  "estimated_value_max": <number in INR — optimistic total order estimate>,
+  "estimated_value_min": <number in INR — conservative total order estimate, NEVER 0>,
+  "estimated_value_max": <number in INR — optimistic total order estimate, NEVER 0>,
   "num_bathrooms_detected": <number or null>,
   "competitor_materials_spotted": ["any branded materials you can identify in photos"],
   "suggestion": "2-3 sentences: specific, actionable advice for the field rep on what to pitch first and why, referencing what you actually saw in the photos",
@@ -195,12 +202,37 @@ Deno.serve(async (req) => {
     }
 
     // Save to field_visits
+    // Safety: normalize stage (remove invalid values like "handover")
+    const validStages = ["foundation","structure","brick_work","plastering","tiling_ready","tiling_in_progress","finishing","renovation"];
+    let detectedStage = (analysis.stage_detected as string || "").toLowerCase().replace(/\s+/g,'_');
+    if (!validStages.includes(detectedStage)) {
+      // Map invalid stages to closest valid one
+      if (detectedStage.includes("handover") || detectedStage.includes("complete")) detectedStage = "finishing";
+      else if (detectedStage.includes("tile")) detectedStage = "tiling_ready";
+      else detectedStage = "plastering"; // safe default
+    }
+
+    // Safety: ensure value is never 0 — apply stage-based minimums
+    const stageMinValues: Record<string, [number,number]> = {
+      foundation: [50000, 200000],
+      structure: [200000, 800000],
+      brick_work: [500000, 2000000],
+      plastering: [800000, 3000000],
+      tiling_ready: [1500000, 5000000],
+      tiling_in_progress: [1000000, 4000000],
+      finishing: [1200000, 4500000],
+      renovation: [300000, 1500000],
+    };
+    const [minFloor, maxFloor] = stageMinValues[detectedStage] || [300000, 1500000];
+    const valueMin = Math.max(Number(analysis.estimated_value_min) || 0, minFloor);
+    const valueMax = Math.max(Number(analysis.estimated_value_max) || 0, maxFloor, valueMin * 2);
+
     const { error: updateErr } = await sb.from("field_visits").update({
       ai_analysis: analysis,
-      ai_stage_detected: analysis.stage_detected,
+      ai_stage_detected: detectedStage,
       ai_requirements: analysis.requirements,
-      ai_estimated_value_min: analysis.estimated_value_min,
-      ai_estimated_value_max: analysis.estimated_value_max,
+      ai_estimated_value_min: valueMin,
+      ai_estimated_value_max: valueMax,
       ai_product_suggestions: analysis.requirements_detail || [],
     }).eq("id", visitId);
 
