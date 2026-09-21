@@ -2455,6 +2455,7 @@ async function loadFieldVisits() {
         <div style="font-size:11px;color:var(--t3);">Overdue Follow-ups</div>
       </div>
     </div>
+    <div id="fv-stat-extended" style="margin-bottom:8px;"></div>
 
     <!-- Filters -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
@@ -2484,10 +2485,15 @@ async function loadFieldVisits() {
       </select>
 
       <select class="form-sel" id="fv-filter-ai" onchange="applyVisitFilters()">
-        <option value="">All AI status</option>
-        <option value="with_ai">Has AI analysis</option>
-        <option value="no_ai">No AI yet</option>
-      </select>
+          <option value="">All AI status</option>
+          <option value="with_ai">Has AI analysis</option>
+          <option value="no_ai">No AI yet</option>
+          <option value="ai_plastering">AI: Plastering</option>
+          <option value="ai_tiling_ready">AI: Tiling Ready</option>
+          <option value="ai_brick_work">AI: Brick Work</option>
+          <option value="ai_finishing">AI: Finishing</option>
+          <option value="ai_structure">AI: Structure</option>
+        </select>
 
       <select class="form-sel" id="fv-filter-score" onchange="applyVisitFilters()">
         <option value="">All scores</option>
@@ -2500,6 +2506,10 @@ async function loadFieldVisits() {
         <option value="">New + Follow-up</option>
         <option value="new">New visits only</option>
         <option value="followup">Follow-ups only</option>
+        <option value="overdue">Overdue follow-up</option>
+        <option value="due_today">Follow-up due today</option>
+        <option value="converted">Converted to sale</option>
+        <option value="high_value">High value (₹10L+)</option>
       </select>
 
       <button onclick="clearVisitFilters()" style="padding:7px 12px;border-radius:8px;background:var(--card2);border:1px solid var(--bdr);color:var(--t2);font-size:12px;cursor:pointer;white-space:nowrap;">
@@ -2646,16 +2656,42 @@ function updateVisitSummaryCards(rows) {
   const total = rows.length;
   const avgQ = total ? Math.round(rows.reduce((s,v)=>s+(v.visit_quality_score||0),0)/total) : 0;
   const withAI = rows.filter(v=>v.ai_stage_detected).length;
-  const pipeline = rows.reduce((s,v)=>s+(v.ai_estimated_value_min||0),0);
+  const pipelineMin = rows.reduce((s,v)=>s+(v.ai_estimated_value_min||0),0);
+  const pipelineMax = rows.reduce((s,v)=>s+(v.ai_estimated_value_max||0),0);
   const today = new Date().toISOString().split('T')[0];
   const overdue = rows.filter(v=>v.next_action_date && v.next_action_date < today && !v.converted_invoice_id).length;
+  const converted = rows.filter(v=>v.converted_invoice_id).length;
+  const newVisits = rows.filter(v=>!v.is_followup).length;
+  const followups = rows.filter(v=>v.is_followup).length;
+
+  // Stage breakdown
+  const stages = {};
+  rows.forEach(v => { const s = v.ai_stage_detected || v.construction_stage || 'unknown';
+    stages[s] = (stages[s]||0)+1; });
+  const topStage = Object.entries(stages).sort((a,b)=>b[1]-a[1])[0];
+
+  // Top requirements from AI
+  const allReqs = rows.flatMap(v=>v.ai_requirements||[]);
+  const reqCount = {};
+  allReqs.forEach(r=>{ reqCount[r]=(reqCount[r]||0)+1; });
+  const topReqs = Object.entries(reqCount).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([r,c])=>`${r}(${c})`).join(', ');
 
   const el = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
   el('fv-stat-total', total);
   el('fv-stat-quality', avgQ+'%');
   el('fv-stat-ai', withAI+'/'+total);
-  el('fv-stat-pipeline', pipeline>0 ? '₹'+(pipeline/100000).toFixed(1)+'L' : '—');
+  el('fv-stat-pipeline', pipelineMin>0 ? '₹'+(pipelineMin/100000).toFixed(1)+'L–₹'+(pipelineMax/100000).toFixed(1)+'L' : '—');
   el('fv-stat-followup', overdue||'0');
+
+  // Update extended summary if panel exists
+  const ext = document.getElementById('fv-stat-extended');
+  if (ext) ext.innerHTML = `
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--t2);padding:8px 0;">
+      <span>🆕 <b>${newVisits}</b> new · 🔄 <b>${followups}</b> follow-ups</span>
+      <span>✅ <b>${converted}</b> converted</span>
+      ${topStage ? `<span>📊 Top stage: <b>${fieldStageLabel(topStage[0])}</b> (${topStage[1]})</span>` : ''}
+      ${topReqs ? `<span>🏗️ Top needs: <b>${topReqs}</b></span>` : ''}
+    </div>`;
 }
 
 function populateRepFilter(visits) {
@@ -2702,6 +2738,7 @@ function applyVisitFilters() {
     if (stageFilter && v.construction_stage !== stageFilter) return false;
     if (aiFilter === 'with_ai' && !v.ai_stage_detected) return false;
     if (aiFilter === 'no_ai' && v.ai_stage_detected) return false;
+    if (aiFilter.startsWith('ai_') && (v.ai_stage_detected||'').toLowerCase().replace(/\s/g,'_') !== aiFilter.replace('ai_','')) return false;
 
     if (scoreFilter === 'high' && (v.visit_quality_score||0) < 90) return false;
     if (scoreFilter === 'mid' && ((v.visit_quality_score||0) < 60 || (v.visit_quality_score||0) >= 90)) return false;
@@ -2709,6 +2746,10 @@ function applyVisitFilters() {
 
     if (typeFilter === 'new' && v.is_followup) return false;
     if (typeFilter === 'followup' && !v.is_followup) return false;
+    if (typeFilter === 'overdue' && !(v.next_action_date && v.next_action_date < todayStr && !v.converted_invoice_id)) return false;
+    if (typeFilter === 'due_today' && v.next_action_date !== todayStr) return false;
+    if (typeFilter === 'converted' && !v.converted_invoice_id) return false;
+    if (typeFilter === 'high_value' && (v.ai_estimated_value_min||0) < 1000000) return false;
 
     return true;
   });
