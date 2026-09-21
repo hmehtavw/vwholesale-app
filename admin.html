@@ -2419,26 +2419,10 @@ async function loadFieldVisits() {
   setPageTitle('Site Visits');
   document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
 
-  const visits = await sbFetch('field_visits?select=id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,city,customer_requirements,ai_stage_detected,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,site_contacts,notes,next_action_date,is_followup,visit_number,competitor_products,dept_flags,site_photos&order=created_at.desc&limit=200').catch(()=>[]);
+  const visits = await sbFetch('field_visits?select=id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,city,customer_requirements,ai_stage_detected,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,site_contacts,notes,next_action_date,is_followup,visit_number,competitor_products,dept_flags,site_photos&order=created_at.desc&limit=500').catch(()=>[]);
 
-  const rows = (visits||[]).map(v => {
-    const contacts = v.site_contacts?.length || 0;
-    const score = v.visit_quality_score ? Math.round(v.visit_quality_score) : 0;
-    const scoreColor = score >= 90 ? 'var(--green)' : score >= 60 ? 'var(--gold)' : 'var(--red)';
-    const aiStage = v.ai_stage_detected ? `<span class="badge badge-blue" style="background:rgba(139,92,246,.15);color:#A78BFA;">${fieldStageLabel(v.ai_stage_detected)}</span>` : '<span style="color:var(--t3);font-size:11px;">No AI yet</span>';
-    const aiVal = v.ai_estimated_value_min ? `₹${(v.ai_estimated_value_min/100000).toFixed(1)}L–₹${(v.ai_estimated_value_max/100000).toFixed(1)}L` : '—';
-    return `<tr onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
-      <td>${new Date(v.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
-      <td style="font-weight:700;">${v.executive_name||'—'}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.site_address||'—'}</td>
-      <td><span class="badge badge-blue">${fieldStageLabel(v.construction_stage)}</span></td>
-      <td style="font-weight:700;color:${scoreColor};">${score}%</td>
-      <td>${contacts} contacts</td>
-      <td>${aiStage}</td>
-      <td style="color:var(--gold);font-weight:600;">${aiVal}</td>
-      <td>${v.next_action_date ? new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '—'}</td>
-    </tr>`;
-  }).join('');
+  _allVisitRows = visits || [];
+  const rows = ''; // rendered after HTML injection
 
   document.getElementById('page-content').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -2447,22 +2431,82 @@ async function loadFieldVisits() {
         🤖 <span>Run AI on all visits</span>
       </button>
     </div>
-    <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-      <input class="form-inp" id="fv-search" placeholder="Search by rep or site…" style="max-width:260px;" oninput="filterVisitsTable(this.value)">
-      <select class="form-sel" style="max-width:180px;" onchange="filterVisitsByStage(this.value)">
+
+    <!-- Summary cards -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;" id="fv-summary-cards">
+      <div class="card" style="padding:12px;margin-bottom:0;text-align:center;">
+        <div class="mono" style="font-size:22px;font-weight:800;color:var(--gold);" id="fv-stat-total">—</div>
+        <div style="font-size:11px;color:var(--t3);">Total Visits</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:0;text-align:center;">
+        <div class="mono" style="font-size:22px;font-weight:800;color:var(--green);" id="fv-stat-quality">—</div>
+        <div style="font-size:11px;color:var(--t3);">Avg Quality</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:0;text-align:center;">
+        <div class="mono" style="font-size:22px;font-weight:800;color:#A78BFA;" id="fv-stat-ai">—</div>
+        <div style="font-size:11px;color:var(--t3);">With AI</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:0;text-align:center;">
+        <div class="mono" style="font-size:22px;font-weight:800;color:var(--gold);" id="fv-stat-pipeline">—</div>
+        <div style="font-size:11px;color:var(--t3);">Pipeline (min)</div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:0;text-align:center;">
+        <div class="mono" style="font-size:22px;font-weight:800;color:var(--blue);" id="fv-stat-followup">—</div>
+        <div style="font-size:11px;color:var(--t3);">Overdue Follow-ups</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+      <input class="form-inp" id="fv-search" placeholder="🔍 Search rep or site…" style="min-width:200px;flex:1;" oninput="applyVisitFilters()">
+
+      <select class="form-sel" id="fv-filter-date" onchange="applyVisitFilters()">
+        <option value="">All dates</option>
+        <option value="today">Today</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="week">This week</option>
+        <option value="month">This month</option>
+        <option value="cycle">This cycle (21st–20th)</option>
+      </select>
+
+      <select class="form-sel" id="fv-filter-rep" onchange="applyVisitFilters()">
+        <option value="">All reps</option>
+      </select>
+
+      <select class="form-sel" id="fv-filter-stage" onchange="applyVisitFilters()">
         <option value="">All stages</option>
         <option value="foundation">Foundation</option>
-        <option value="structure">Structure</option>
+        <option value="brick_work">Brick Work</option>
         <option value="plastering">Plastering</option>
         <option value="tiling_ready">Tiling Ready</option>
         <option value="finishing">Finishing</option>
+        <option value="completed">Completed</option>
       </select>
-      <select class="form-sel" style="max-width:160px;" onchange="filterVisitsByScore(this.value)">
+
+      <select class="form-sel" id="fv-filter-ai" onchange="applyVisitFilters()">
+        <option value="">All AI status</option>
+        <option value="with_ai">Has AI analysis</option>
+        <option value="no_ai">No AI yet</option>
+      </select>
+
+      <select class="form-sel" id="fv-filter-score" onchange="applyVisitFilters()">
         <option value="">All scores</option>
-        <option value="high">90%+ (Qualified)</option>
+        <option value="high">90%+ Qualified</option>
         <option value="mid">60–89%</option>
         <option value="low">Below 60%</option>
       </select>
+
+      <select class="form-sel" id="fv-filter-type" onchange="applyVisitFilters()">
+        <option value="">New + Follow-up</option>
+        <option value="new">New visits only</option>
+        <option value="followup">Follow-ups only</option>
+      </select>
+
+      <button onclick="clearVisitFilters()" style="padding:7px 12px;border-radius:8px;background:var(--card2);border:1px solid var(--bdr);color:var(--t2);font-size:12px;cursor:pointer;white-space:nowrap;">
+        ✕ Clear
+      </button>
+
+      <span id="fv-filter-count" style="font-size:12px;color:var(--t3);white-space:nowrap;"></span>
     </div>
 
     <div class="card" style="padding:0;overflow-x:auto;">
@@ -2471,7 +2515,7 @@ async function loadFieldVisits() {
           <th>Date/Time</th><th>Rep</th><th>Site</th><th>Stage</th>
           <th>Quality</th><th>Contacts</th><th>AI Stage</th><th>AI Value</th><th>Follow-up</th>
         </tr></thead>
-        <tbody id="visits-tbody">${rows}</tbody>
+        <tbody id="visits-tbody"></tbody>
       </table>
     </div>
 
@@ -2482,6 +2526,11 @@ async function loadFieldVisits() {
         style="position:absolute;top:16px;right:16px;background:none;border:none;color:var(--t2);font-size:22px;cursor:pointer;">✕</button>
       <div id="visit-detail-content">—</div>
     </div>`;
+
+  // Post-render: populate rep dropdown, render rows, update summary cards
+  populateRepFilter(_allVisitRows);
+  renderVisitRows(_allVisitRows);
+  updateVisitSummaryCards(_allVisitRows);
 }
 
 async function showVisitDetail(id) {
@@ -2591,22 +2640,138 @@ async function showVisitDetail(id) {
       </div>` : ''}`;
 }
 
-function filterVisitsTable(q) {
-  const rows = document.querySelectorAll('#visits-tbody tr');
-  rows.forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none'; });
+let _allVisitRows = [];
+
+function updateVisitSummaryCards(rows) {
+  const total = rows.length;
+  const avgQ = total ? Math.round(rows.reduce((s,v)=>s+(v.visit_quality_score||0),0)/total) : 0;
+  const withAI = rows.filter(v=>v.ai_stage_detected).length;
+  const pipeline = rows.reduce((s,v)=>s+(v.ai_estimated_value_min||0),0);
+  const today = new Date().toISOString().split('T')[0];
+  const overdue = rows.filter(v=>v.next_action_date && v.next_action_date < today && !v.converted_invoice_id).length;
+
+  const el = (id,val) => { const e=document.getElementById(id); if(e) e.textContent=val; };
+  el('fv-stat-total', total);
+  el('fv-stat-quality', avgQ+'%');
+  el('fv-stat-ai', withAI+'/'+total);
+  el('fv-stat-pipeline', pipeline>0 ? '₹'+(pipeline/100000).toFixed(1)+'L' : '—');
+  el('fv-stat-followup', overdue||'0');
 }
-function filterVisitsByStage(stage) {
-  const rows = document.querySelectorAll('#visits-tbody tr');
-  rows.forEach(r => { r.style.display = !stage || r.querySelector('td:nth-child(4)')?.textContent.toLowerCase().includes(stage.replace('_',' ').toLowerCase()) ? '' : 'none'; });
+
+function populateRepFilter(visits) {
+  const sel = document.getElementById('fv-filter-rep');
+  if (!sel) return;
+  const reps = [...new Set(visits.map(v=>v.executive_name).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">All reps</option>' + reps.map(r=>`<option value="${r}">${r}</option>`).join('');
 }
-function filterVisitsByScore(band) {
-  const rows = document.querySelectorAll('#visits-tbody tr');
-  rows.forEach(r => {
-    const score = parseInt(r.querySelector('td:nth-child(5)')?.textContent) || 0;
-    const show = !band || (band==='high'&&score>=90) || (band==='mid'&&score>=60&&score<90) || (band==='low'&&score<60);
-    r.style.display = show ? '' : 'none';
+
+function applyVisitFilters() {
+  const search = (document.getElementById('fv-search')?.value||'').toLowerCase();
+  const dateFilter = document.getElementById('fv-filter-date')?.value||'';
+  const repFilter = document.getElementById('fv-filter-rep')?.value||'';
+  const stageFilter = document.getElementById('fv-filter-stage')?.value||'';
+  const aiFilter = document.getElementById('fv-filter-ai')?.value||'';
+  const scoreFilter = document.getElementById('fv-filter-score')?.value||'';
+  const typeFilter = document.getElementById('fv-filter-type')?.value||'';
+
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const yesterday = new Date(now); yesterday.setDate(yesterday.getDate()-1);
+  const weekAgo = new Date(now); weekAgo.setDate(weekAgo.getDate()-7);
+  const monthAgo = new Date(now); monthAgo.setDate(monthAgo.getDate()-30);
+  const cycleDay = now.getDate() >= 21
+    ? new Date(now.getFullYear(), now.getMonth(), 21)
+    : new Date(now.getFullYear(), now.getMonth()-1, 21);
+
+  const filtered = _allVisitRows.filter(v => {
+    const vDate = new Date(v.created_at);
+    const vDateStr = vDate.toISOString().split('T')[0];
+
+    if (search && !( (v.executive_name||'').toLowerCase().includes(search) ||
+                     (v.site_address||'').toLowerCase().includes(search) ||
+                     (v.city||'').toLowerCase().includes(search) ||
+                     (v.ai_stage_detected||'').toLowerCase().includes(search) )) return false;
+
+    if (dateFilter === 'today' && vDateStr !== todayStr) return false;
+    if (dateFilter === 'yesterday' && vDateStr !== yesterday.toISOString().split('T')[0]) return false;
+    if (dateFilter === 'week' && vDate < weekAgo) return false;
+    if (dateFilter === 'month' && vDate < monthAgo) return false;
+    if (dateFilter === 'cycle' && vDate < cycleDay) return false;
+
+    if (repFilter && v.executive_name !== repFilter) return false;
+    if (stageFilter && v.construction_stage !== stageFilter) return false;
+    if (aiFilter === 'with_ai' && !v.ai_stage_detected) return false;
+    if (aiFilter === 'no_ai' && v.ai_stage_detected) return false;
+
+    if (scoreFilter === 'high' && (v.visit_quality_score||0) < 90) return false;
+    if (scoreFilter === 'mid' && ((v.visit_quality_score||0) < 60 || (v.visit_quality_score||0) >= 90)) return false;
+    if (scoreFilter === 'low' && (v.visit_quality_score||0) >= 60) return false;
+
+    if (typeFilter === 'new' && v.is_followup) return false;
+    if (typeFilter === 'followup' && !v.is_followup) return false;
+
+    return true;
   });
+
+  const countEl = document.getElementById('fv-filter-count');
+  if (countEl) countEl.textContent = filtered.length < _allVisitRows.length
+    ? `Showing ${filtered.length} of ${_allVisitRows.length}` : '';
+
+  renderVisitRows(filtered);
+  updateVisitSummaryCards(filtered);
 }
+
+function clearVisitFilters() {
+  ['fv-search','fv-filter-date','fv-filter-rep','fv-filter-stage','fv-filter-ai','fv-filter-score','fv-filter-type'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const countEl = document.getElementById('fv-filter-count');
+  if (countEl) countEl.textContent = '';
+  renderVisitRows(_allVisitRows);
+  updateVisitSummaryCards(_allVisitRows);
+}
+
+function renderVisitRows(visits) {
+  const tbody = document.getElementById('visits-tbody');
+  if (!tbody) return;
+  const today = new Date().toISOString().split('T')[0];
+  tbody.innerHTML = visits.map(v => {
+    const score = v.visit_quality_score || 0;
+    const scoreColor = score >= 90 ? 'var(--green)' : score >= 60 ? 'var(--gold)' : 'var(--red)';
+    const contacts = v.site_contacts?.length || 0;
+    const aiStage = v.ai_stage_detected
+      ? `<span style="padding:2px 8px;border-radius:12px;background:rgba(139,92,246,.15);color:#A78BFA;font-size:11px;font-weight:600;">${fieldStageLabel(v.ai_stage_detected)}</span>`
+      : '<span style="color:var(--t3);font-size:11px;">No AI yet</span>';
+    const aiVal = v.ai_estimated_value_min
+      ? `<span style="color:var(--gold);font-weight:600;">₹${(v.ai_estimated_value_min/100000).toFixed(1)}L–${(v.ai_estimated_value_max/100000).toFixed(1)}L</span>`
+      : '—';
+    const followupDate = v.next_action_date;
+    const followupOverdue = followupDate && followupDate < today;
+    const followupDisplay = followupDate
+      ? `<span style="color:${followupOverdue?'var(--red)':'var(--t2)'};">${followupOverdue?'⚠️ ':''}${new Date(followupDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>`
+      : '—';
+    return `<tr onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
+      <td style="white-space:nowrap;font-size:12px;">
+        ${new Date(v.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}
+        <span style="color:var(--t3);"> ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
+        ${v.is_followup ? '<span style="margin-left:4px;font-size:10px;padding:1px 5px;border-radius:8px;background:rgba(59,130,246,.15);color:#60A5FA;">Follow-up</span>' : ''}
+      </td>
+      <td style="font-weight:700;">${v.executive_name||'—'}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v.site_address||'—'}</td>
+      <td><span class="badge badge-blue">${fieldStageLabel(v.construction_stage)}</span></td>
+      <td style="font-weight:700;color:${scoreColor};">${score}%</td>
+      <td style="text-align:center;">${contacts}</td>
+      <td>${aiStage}</td>
+      <td>${aiVal}</td>
+      <td>${followupDisplay}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3);">No visits match filters</td></tr>';
+}
+
+function filterVisitsByStage(s) { document.getElementById('fv-filter-stage').value=s; applyVisitFilters(); }
+function filterVisitsByScore(s) { document.getElementById('fv-filter-score').value=s; applyVisitFilters(); }
+function filterVisitsTable(s) { document.getElementById('fv-search').value=s; applyVisitFilters(); }
 
 // ── 4. FUEL & ATTENDANCE ──
 async function loadFieldFuel() {
