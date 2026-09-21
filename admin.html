@@ -2419,12 +2419,13 @@ async function loadFieldVisits() {
   setPageTitle('Site Visits');
   document.getElementById('page-content').innerHTML = `<div style="color:var(--t3);font-size:13px;text-align:center;padding:40px;">Loading…</div>`;
 
-  const visits = await sbFetch('field_visits?select=id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,city,customer_requirements,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,site_contacts,notes,next_action_date,is_followup,visit_number,competitor_products,dept_flags&order=created_at.desc&limit=100').catch(()=>[]);
+  const visits = await sbFetch('field_visits?select=id,staff_id,executive_name,site_address,construction_stage,visit_quality_score,created_at,city,customer_requirements,ai_stage_detected,ai_requirements,ai_estimated_value_min,ai_estimated_value_max,site_contacts,notes,next_action_date,is_followup,visit_number,competitor_products,dept_flags,site_photos&order=created_at.desc&limit=200').catch(()=>[]);
 
   const rows = (visits||[]).map(v => {
     const contacts = v.site_contacts?.length || 0;
     const score = v.visit_quality_score ? Math.round(v.visit_quality_score) : 0;
     const scoreColor = score >= 90 ? 'var(--green)' : score >= 60 ? 'var(--gold)' : 'var(--red)';
+    const aiStage = v.ai_stage_detected ? `<span class="badge badge-blue" style="background:rgba(139,92,246,.15);color:#A78BFA;">${fieldStageLabel(v.ai_stage_detected)}</span>` : '<span style="color:var(--t3);font-size:11px;">No AI yet</span>';
     const aiVal = v.ai_estimated_value_min ? `₹${(v.ai_estimated_value_min/100000).toFixed(1)}L–₹${(v.ai_estimated_value_max/100000).toFixed(1)}L` : '—';
     return `<tr onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
       <td>${new Date(v.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})} ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
@@ -2433,7 +2434,8 @@ async function loadFieldVisits() {
       <td><span class="badge badge-blue">${fieldStageLabel(v.construction_stage)}</span></td>
       <td style="font-weight:700;color:${scoreColor};">${score}%</td>
       <td>${contacts} contacts</td>
-      <td style="color:var(--gold);">${aiVal}</td>
+      <td>${aiStage}</td>
+      <td style="color:var(--gold);font-weight:600;">${aiVal}</td>
       <td>${v.next_action_date ? new Date(v.next_action_date).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '—'}</td>
     </tr>`;
   }).join('');
@@ -2467,7 +2469,7 @@ async function loadFieldVisits() {
       <table class="tbl" id="visits-table">
         <thead><tr>
           <th>Date/Time</th><th>Rep</th><th>Site</th><th>Stage</th>
-          <th>Quality</th><th>Contacts</th><th>AI Value</th><th>Follow-up</th>
+          <th>Quality</th><th>Contacts</th><th>AI Stage</th><th>AI Value</th><th>Follow-up</th>
         </tr></thead>
         <tbody id="visits-tbody">${rows}</tbody>
       </table>
@@ -3754,37 +3756,51 @@ async function retryAISingle(visitId, photos) {
 }
 
 async function retryAIBulk() {
+  const btn = document.getElementById('bulk-ai-btn');
   const statusEl = document.getElementById('fv-ai-status');
-  if (statusEl) statusEl.textContent = 'Loading visits without AI...';
-  
-  const visits = await sbFetch('field_visits?select=id,site_photos,construction_stage,city&ai_stage_detected=is.null&order=created_at.desc&limit=20').catch(()=>[]);
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ <span>Running AI...</span>'; }
+  if (statusEl) statusEl.textContent = 'Fetching visits without AI...';
+
+  const visits = await sbFetch('field_visits?select=id,site_photos,construction_stage,city&ai_stage_detected=is.null&order=created_at.desc&limit=200').catch(()=>[]);
   const needsAI = (visits||[]).filter(v => v.site_photos?.length);
-  
-  if (!needsAI.length) { 
-    if (statusEl) statusEl.textContent = 'All visits have AI analysis ✓';
-    return; 
+
+  if (!needsAI.length) {
+    if (statusEl) statusEl.textContent = '✅ All visits already have AI analysis';
+    if (btn) { btn.disabled = false; btn.innerHTML = '🤖 <span>Run AI on all visits</span>'; }
+    return;
   }
-  
-  if (statusEl) statusEl.textContent = `Running AI on ${needsAI.length} visits...`;
-  
-  let done = 0;
+
+  if (statusEl) statusEl.textContent = `Running AI on ${needsAI.length} visits — please keep this tab open...`;
+  const authToken = _adminSession?.access_token || ANON;
+
+  let done = 0, failed = 0;
   for (const v of needsAI) {
     const photoUrls = (v.site_photos||[]).map(p => p.url || p).filter(Boolean);
-    if (!photoUrls.length) continue;
+    if (!photoUrls.length) { failed++; continue; }
     try {
-      await fetch(SUPABASE_URL_ADMIN + '/functions/v1/ai-site-analysis', {
+      const res = await fetch(SB_URL + '/functions/v1/ai-site-analysis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SUPABASE_ANON_ADMIN },
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken },
         body: JSON.stringify({ visitId: v.id, photoUrls, context: { stage: v.construction_stage, city: v.city } })
       });
-      done++;
-      if (statusEl) statusEl.textContent = `AI analysis: ${done}/${needsAI.length} done...`;
-      await new Promise(r => setTimeout(r, 1500)); // rate limit
-    } catch(e) { console.warn('AI retry failed for visit', v.id, e); }
+      if (res.ok) {
+        done++;
+        if (statusEl) statusEl.textContent = `🤖 Processing: ${done}/${needsAI.length} done... ${failed ? '('+failed+' skipped)' : ''}`;
+      } else {
+        const err = await res.json().catch(()=>({}));
+        console.warn('AI failed for visit', v.id, err);
+        failed++;
+      }
+      await new Promise(r => setTimeout(r, 800)); // pace requests
+    } catch(e) {
+      console.warn('AI retry error visit', v.id, e);
+      failed++;
+    }
   }
-  
-  if (statusEl) statusEl.textContent = `✓ AI analysis complete for ${done} visits`;
-  setTimeout(() => loadFieldVisits(), 1000);
+
+  if (statusEl) statusEl.textContent = `✅ Done — ${done} analysed${failed ? ', '+failed+' skipped (no photos)' : ''}`;
+  if (btn) { btn.disabled = false; btn.innerHTML = '🤖 <span>Run AI on all visits</span>'; }
+  setTimeout(() => loadFieldVisits(), 1500);
 }
 
 window.retryAISingle = retryAISingle;
