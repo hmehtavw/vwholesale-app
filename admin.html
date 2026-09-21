@@ -2441,8 +2441,8 @@ async function loadFieldVisits() {
   document.getElementById('page-content').innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <div style="font-size:12px;color:var(--t3);" id="fv-ai-status"></div>
-      <button onclick="retryAIBulk()" style="padding:7px 14px;border-radius:8px;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.3);color:var(--gold);font-size:12px;font-weight:700;cursor:pointer;">
-        🤖 Retry AI on missing visits
+      <button onclick="retryAIBulk()" id="bulk-ai-btn" style="padding:9px 18px;border-radius:8px;background:#F5A623;border:none;color:#0F1923;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;gap:6px;">
+        🤖 <span>Run AI on all visits</span>
       </button>
     </div>
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
