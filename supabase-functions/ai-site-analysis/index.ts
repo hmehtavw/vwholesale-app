@@ -92,16 +92,33 @@ Return ONLY this JSON structure:
   "crm_note": "1-2 sentences for the backend CRM team — what follow-up action to take and when"
 }`;
 
-async function fetchImageAsBase64(url: string): Promise<{ base64: string; mediaType: string } | null> {
+async function fetchImageAsBase64(url: string, serviceKey: string): Promise<{ base64: string; mediaType: string } | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return null;
+    // Add auth header for Supabase storage URLs to ensure access
+    const headers: Record<string, string> = {};
+    if (url.includes("supabase.co/storage")) {
+      headers["Authorization"] = `Bearer ${serviceKey}`;
+      headers["apikey"] = serviceKey;
+    }
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      console.error(`Failed to fetch image ${url}: ${res.status} ${res.statusText}`);
+      return null;
+    }
     const contentType = res.headers.get("content-type") || "image/jpeg";
     const mediaType = contentType.split(";")[0].trim() as "image/jpeg" | "image/png" | "image/webp";
     const buf = await res.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+    // Use a chunked approach for large images to avoid stack overflow
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+    }
+    const base64 = btoa(binary);
     return { base64, mediaType };
-  } catch {
+  } catch (e) {
+    console.error(`Error fetching image ${url}:`, e);
     return null;
   }
 }
@@ -124,7 +141,7 @@ Deno.serve(async (req) => {
 
     // Fetch images as base64 (parallel, max MAX_PHOTOS)
     const imageResults = await Promise.all(
-      photoUrls.slice(0, MAX_PHOTOS).map((url: string) => fetchImageAsBase64(url))
+      photoUrls.slice(0, MAX_PHOTOS).map((url: string) => fetchImageAsBase64(url, SB_SERVICE))
     );
     const validImages = imageResults.filter(Boolean) as { base64: string; mediaType: string }[];
 
