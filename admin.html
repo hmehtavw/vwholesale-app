@@ -2531,6 +2531,9 @@ async function loadFieldVisits() {
       </div>
     </div>
 
+    <!-- Duplicate alert banner -->
+    <div id="fv-dedup-banner" style="margin-bottom:10px;"></div>
+
     <div class="card" style="padding:0;overflow-x:auto;">
       <table class="tbl" id="visits-table">
         <thead><tr>
@@ -2551,6 +2554,7 @@ async function loadFieldVisits() {
   populateRepFilter(_allVisitRows);
   renderVisitRows(_allVisitRows);
   updateVisitSummaryCards(_allVisitRows);
+  detectAndShowDuplicates(_allVisitRows);
 }
 
 async function showVisitDetail(id) {
@@ -2918,7 +2922,7 @@ function renderVisitRows(visits) {
     const followupDisplay = followupDate
       ? `<span style="color:${followupOverdue?'var(--red)':'var(--t2)'};">${followupOverdue?'⚠️ ':''}${new Date(followupDate).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</span>`
       : '—';
-    return `<tr onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
+    return `<tr data-visit-id="${v.id}" onclick="showVisitDetail(${v.id})" style="cursor:pointer;">
       <td style="white-space:nowrap;font-size:12px;">
         ${new Date(v.created_at).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}
         <span style="color:var(--t3);"> ${new Date(v.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</span>
@@ -2934,6 +2938,7 @@ function renderVisitRows(visits) {
       <td>${followupDisplay}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3);">No visits match filters</td></tr>';
+  setTimeout(reHighlightDuplicateRows, 50);
 }
 
 function filterVisitsByStage(s) { document.getElementById('fv-filter-stage').value=s; applyVisitFilters(); }
@@ -4162,7 +4167,110 @@ async function markVisitConverted(visitId) {
   toast('✅ Visit marked as converted', 'ok');
   showVisitDetail(visitId); // Refresh detail panel
 }
-window.markVisitConverted = markVisitConverted;
+function detectAndShowDuplicates(visits) {
+  const banner = document.getElementById('fv-dedup-banner');
+  if (!banner) return;
+
+  // Find genuine duplicates: same GPS within 30m AND within 10 minutes
+  const duplicatePairs = [];
+  const duplicateIds = new Set();
+
+  for (let i = 0; i < visits.length; i++) {
+    for (let j = i + 1; j < visits.length; j++) {
+      const a = visits[i], b = visits[j];
+      if (!a.site_lat || !b.site_lat) continue;
+      // Time diff in minutes
+      const minsDiff = Math.abs(new Date(a.created_at) - new Date(b.created_at)) / 60000;
+      if (minsDiff > 20) continue;
+      // Distance in metres
+      const R = 6371000;
+      const dLat = (b.site_lat - a.site_lat) * Math.PI/180;
+      const dLng = (b.site_lng - a.site_lng) * Math.PI/180;
+      const aa = Math.sin(dLat/2)**2 + Math.cos(a.site_lat*Math.PI/180)*Math.cos(b.site_lat*Math.PI/180)*Math.sin(dLng/2)**2;
+      const dist = Math.round(R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa)));
+      if (dist < 30) {
+        duplicatePairs.push({ a, b, dist, minsDiff: Math.round(minsDiff * 10) / 10 });
+        duplicateIds.add(a.id);
+        duplicateIds.add(b.id);
+      }
+    }
+  }
+
+  // Highlight duplicate rows in table
+  window._duplicateIds = duplicateIds;
+
+  if (!duplicatePairs.length) {
+    banner.innerHTML = '';
+    return;
+  }
+
+  banner.innerHTML = `
+    <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:13px;font-weight:700;color:#EF4444;">
+          ⚠️ ${duplicatePairs.length} potential duplicate${duplicatePairs.length>1?'s':''} detected
+          <span style="font-size:11px;font-weight:400;color:#FCA5A5;margin-left:6px;">Same location within 30m + logged within 20 minutes</span>
+        </div>
+        <button onclick="this.closest('div[style]').style.display='none'" style="background:none;border:none;color:#FCA5A5;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${duplicatePairs.map(({a, b, dist, minsDiff}) => `
+          <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:12px;">
+            <div style="font-size:20px;">🔴</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:#F0F4F8;">${a.site_address||'Unknown site'}</div>
+              <div style="font-size:12px;color:#FCA5A5;margin-top:2px;">
+                Visit #${a.id} (${new Date(a.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})})
+                and #${b.id} (${new Date(b.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})})
+                · ${dist}m apart · ${minsDiff} min gap
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button onclick="showVisitDetail(${a.id})" 
+                style="padding:5px 10px;border-radius:6px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#FCA5A5;font-size:12px;cursor:pointer;">
+                View #${a.id}
+              </button>
+              <button onclick="showVisitDetail(${b.id})"
+                style="padding:5px 10px;border-radius:6px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#FCA5A5;font-size:12px;cursor:pointer;">
+                View #${b.id}
+              </button>
+              <button onclick="markVisitDuplicate(${b.id}, ${a.id}, this)"
+                style="padding:5px 10px;border-radius:6px;background:rgba(239,68,68,.25);border:1px solid rgba(239,68,68,.5);color:#EF4444;font-size:12px;font-weight:700;cursor:pointer;">
+                Mark Duplicate
+              </button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  // Re-render table with highlights on duplicate rows
+  reHighlightDuplicateRows();
+}
+
+function reHighlightDuplicateRows() {
+  const ids = window._duplicateIds || new Set();
+  document.querySelectorAll('#visits-tbody tr[data-visit-id]').forEach(row => {
+    const id = parseInt(row.dataset.visitId);
+    if (ids.has(id)) {
+      row.style.borderLeft = '3px solid #EF4444';
+      row.style.background = 'rgba(239,68,68,.04)';
+    }
+  });
+}
+
+async function markVisitDuplicate(duplicateId, keepId, btn) {
+  if (!confirm(`Mark visit #${duplicateId} as duplicate of #${keepId}? It will be flagged but not deleted.`)) return;
+  btn.disabled = true; btn.textContent = 'Marking…';
+  await sbFetch(`field_visits?id=eq.${duplicateId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ is_duplicate: true, parent_visit_id: keepId, notes: `[DUPLICATE of visit #${keepId}]` })
+  }).catch(()=>{});
+  btn.textContent = '✓ Marked';
+  btn.style.color = '#22C55E';
+  toast('Visit marked as duplicate', 'ok');
+}
+window.markVisitDuplicate = markVisitDuplicate;
 
 
 // ── INIT ──
