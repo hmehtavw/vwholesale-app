@@ -332,6 +332,7 @@ async function adminLogin() {
     localStorage.setItem('vw_admin_session', JSON.stringify(data));
     localStorage.setItem('vw_admin_profile', JSON.stringify(profile));
     startAdminApp();
+    startAdminRealtimeSync(); // Auto-sync via Supabase Realtime
   } catch(e) {
     btn.disabled = false; btn.textContent = 'Login to Admin';
     showLoginErr(e.message);
@@ -4322,6 +4323,163 @@ setInterval(async () => {
     }
   } catch(e) { console.warn('Token refresh failed:', e); }
 }, 30 * 60 * 1000);
+
+// ══════════════════════════════════════════════════════════
+// ADMIN AUTO-SYNC via Supabase Realtime WebSocket
+// ══════════════════════════════════════════════════════════
+let _adminWS = null;
+let _adminWSReconnectTimer = null;
+
+function startAdminRealtimeSync() {
+  if (_adminWS && _adminWS.readyState === WebSocket.OPEN) return;
+  stopAdminRealtimeSync();
+
+  const wsUrl = SB_URL.replace('https://', 'wss://') + '/realtime/v1/websocket?apikey=' + ANON + '&vsn=1.0.0';
+
+  try {
+    _adminWS = new WebSocket(wsUrl);
+
+    _adminWS.onopen = () => {
+      console.log('[Admin Realtime] Connected');
+      // Subscribe to all relevant tables
+      const tables = ['field_visits','attendance','field_location_log','field_alerts','internal_messages'];
+      tables.forEach(table => {
+        _adminWS.send(JSON.stringify({
+          topic: `realtime:public:${table}`,
+          event: 'phx_join',
+          payload: {},
+          ref: table
+        }));
+      });
+      showAdminSyncToast('🟢 Live sync active');
+    };
+
+    _adminWS.onmessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.event !== 'postgres_changes') return;
+        const table = msg.payload?.data?.table;
+        handleAdminRealtimeChange(table, msg.payload?.data);
+      } catch(e) {}
+    };
+
+    _adminWS.onclose = () => {
+      console.log('[Admin Realtime] Disconnected — reconnecting in 5s');
+      _adminWSReconnectTimer = setTimeout(startAdminRealtimeSync, 5000);
+    };
+
+    _adminWS.onerror = () => {
+      _adminWS.close();
+    };
+  } catch(e) {
+    console.warn('[Admin Realtime] WebSocket failed, falling back to polling');
+    startAdminPolling();
+  }
+}
+
+function stopAdminRealtimeSync() {
+  clearTimeout(_adminWSReconnectTimer);
+  if (_adminWS) { try { _adminWS.close(); } catch(e){} _adminWS = null; }
+  stopAdminPolling();
+}
+
+function handleAdminRealtimeChange(table, data) {
+  const currentPage = document.querySelector('[data-page].active')?.dataset?.page ||
+    document.querySelector('.sidebar-item.active')?.dataset?.page || '';
+
+  if (table === 'field_visits') {
+    if (currentPage === 'field_visits' || currentPage === 'site_visits') {
+      loadFieldVisits();
+    }
+    showAdminSyncToast('📍 New site visit');
+  }
+  if (table === 'field_location_log') {
+    if (currentPage === 'live_field_map') refreshFieldMap?.();
+    // Update rep last-seen badge
+    if (data?.new?.staff_id) updateRepLastSeen(data.new.staff_id, data.new.recorded_at);
+  }
+  if (table === 'attendance') {
+    if (currentPage === 'field_fuel') loadFieldFuel?.();
+    if (currentPage === 'live_field_map') refreshFieldMap?.();
+  }
+  if (table === 'field_alerts') {
+    const alertLabels = {
+      no_location_signal: '📡 No location signal',
+      stationary_warning: '⏸️ Rep stationary 30+ min',
+      target_miss_risk: '🎯 Target miss risk',
+    };
+    toast('🚨 ' + (alertLabels[data?.new?.alert_type] || 'New alert'), 'warn');
+    if (currentPage === 'live_field_map') refreshFieldMap?.();
+  }
+  if (table === 'internal_messages') {
+    const badge = document.getElementById('staff-chat-badge');
+    if (badge) {
+      const n = (parseInt(badge.textContent)||0) + 1;
+      badge.textContent = n; badge.style.display = '';
+    }
+  }
+}
+
+function updateRepLastSeen(staffId, recordedAt) {
+  const el = document.getElementById(`rep-last-seen-${staffId}`);
+  if (el) {
+    const ago = Math.round((Date.now() - new Date(recordedAt)) / 60000);
+    el.textContent = ago < 1 ? 'Just now' : ago + 'm ago';
+    el.style.color = 'var(--green)';
+  }
+}
+
+// Fallback: smart polling when WebSocket not available
+let _adminPollTimer = null;
+let _adminLastCheck = {};
+
+function startAdminPolling() {
+  stopAdminPolling();
+  _adminPollTimer = setInterval(async () => {
+    if (document.hidden) return; // Don't poll when tab is hidden
+    const since = _adminLastCheck.visits || new Date(Date.now() - 30000).toISOString();
+    const { data: newVisits } = await sbFetch(`field_visits?select=id,created_at&created_at=gt.${since}&order=created_at.desc&limit=1`).catch(()=>[]);
+    if (newVisits?.length) {
+      _adminLastCheck.visits = new Date().toISOString();
+      handleAdminRealtimeChange('field_visits', { new: newVisits[0] });
+    }
+    const sinceAlerts = _adminLastCheck.alerts || new Date(Date.now() - 30000).toISOString();
+    const { data: newAlerts } = await sbFetch(`field_alerts?select=id,alert_type,created_at&triggered_at=gt.${sinceAlerts}&order=triggered_at.desc&limit=1`).catch(()=>[]);
+    if (newAlerts?.length) {
+      _adminLastCheck.alerts = new Date().toISOString();
+      handleAdminRealtimeChange('field_alerts', { new: newAlerts[0] });
+    }
+  }, 15000); // Every 15 seconds
+}
+
+function stopAdminPolling() {
+  clearInterval(_adminPollTimer);
+  _adminPollTimer = null;
+}
+
+let _adminSyncToastTimer = null;
+function showAdminSyncToast(msg) {
+  let el = document.getElementById('admin-sync-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'admin-sync-toast';
+    el.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#1E293B;border:1px solid #22C55E;color:#22C55E;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:700;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(_adminSyncToastTimer);
+  _adminSyncToastTimer = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+// Re-sync when tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && _adminSession) {
+    if (!_adminWS || _adminWS.readyState !== WebSocket.OPEN) {
+      startAdminRealtimeSync();
+    }
+  }
+});
 
 </script>
 </body>
