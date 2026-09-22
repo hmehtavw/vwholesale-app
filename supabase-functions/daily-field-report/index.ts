@@ -142,6 +142,7 @@ async function generateAISummary(summaries: any[], level: string, date: string):
 
   const resp = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
+    signal: AbortSignal.timeout(25000),
     headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
       model: "claude-sonnet-4-6", max_tokens: 200,
@@ -392,7 +393,7 @@ async function sendEmail(to: string, subject: string, html: string) {
   await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: "VW Field Reports <field@vwholesale.in>", to, subject, html }),
+    body: JSON.stringify({ from: "VW Field Reports <onboarding@resend.dev>", to, subject, html }),
   });
 }
 
@@ -421,8 +422,29 @@ async function buildAllReports(date: string) {
   // Build report packages per recipient
   const reports = [];
 
-  // 1. Management report (Himansu) — everyone
-  const mgmtAI = await generateAISummary(allSummaries, "management", date);
+  // Run all AI summaries in parallel to avoid timeout
+  const tls = data.staffList.filter(s => {
+    const r = (s.designation || s.role || "").toLowerCase();
+    return r.includes("team leader") || r.includes("tl");
+  });
+  const reps = data.staffList.filter(s => {
+    const r = (s.designation || s.role || "").toLowerCase();
+    return r.includes("field exec") || r.includes("mapping");
+  });
+
+  const tlTeams = tls.map(tl => ({
+    tl,
+    teamSummaries: data.staffList.filter(s => s.reporting_to === String(tl.id)).map(s => buildRepSummary(s.id, data)),
+    tlSummary: allSummaries.find(s => s.staff?.id === tl.id) || buildRepSummary(tl.id, data),
+  })).filter(t => t.teamSummaries.length);
+
+  // All AI calls in parallel with 25s timeout
+  const [mgmtAI, ...tlAIs] = await Promise.all([
+    generateAISummary(allSummaries, "management", date).catch(() => "AI summary unavailable."),
+    ...tlTeams.map(t => generateAISummary(t.teamSummaries, "tl", date).catch(() => "AI summary unavailable.")),
+  ]);
+
+  // 1. Management report
   reports.push({
     recipient: { name: "Himansu R Mehta", phone: "9038010175", email: "himansu@vwholesale.in" },
     level: "management",
@@ -433,34 +455,20 @@ async function buildAllReports(date: string) {
     subject: `Field Report ${date} — ${allSummaries.reduce((s,r)=>s+r.totalVisits,0)} visits | ₹${(allSummaries.reduce((s,r)=>s+r.estimatedPipeline,0)/100000).toFixed(1)}L pipeline`,
   });
 
-  // 2. TL reports — each TL gets their team
-  const tls = data.staffList.filter(s => {
-    const r = (s.designation || s.role || "").toLowerCase();
-    return r.includes("team leader") || r.includes("tl");
-  });
-
-  for (const tl of tls) {
-    const directReports = data.staffList.filter(s => s.reporting_to === String(tl.id));
-    if (!directReports.length) continue;
-    const teamSummaries = directReports.map(s => buildRepSummary(s.id, data));
-    const tlSummary = allSummaries.find(s => s.staff?.id === tl.id) || buildRepSummary(tl.id, data);
-    const tlAI = await generateAISummary(teamSummaries, "tl", date);
+  // 2. TL reports
+  tlTeams.forEach((t, i) => {
     reports.push({
-      recipient: { name: tl.name, phone: tl.phone, email: null },
+      recipient: { name: t.tl.name, phone: t.tl.phone, email: null },
       level: "tl",
-      summaries: teamSummaries,
-      aiSummary: tlAI,
-      email_html: buildTLEmail(tlSummary, teamSummaries, tlAI, date),
-      wa_text: buildWAMessage(teamSummaries, "tl", date),
+      summaries: t.teamSummaries,
+      aiSummary: tlAIs[i] || "",
+      email_html: buildTLEmail(t.tlSummary, t.teamSummaries, tlAIs[i] || "", date),
+      wa_text: buildWAMessage(t.teamSummaries, "tl", date),
       subject: `Your Team Report — ${date}`,
     });
-  }
-
-  // 3. Individual rep reports
-  const reps = data.staffList.filter(s => {
-    const r = (s.designation || s.role || "").toLowerCase();
-    return r.includes("field exec") || r.includes("mapping");
   });
+
+  // 3. Rep reports (no AI needed)
   for (const rep of reps) {
     const summary = allSummaries.find(s => s.staff?.id === rep.id) || buildRepSummary(rep.id, data);
     reports.push({
