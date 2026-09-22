@@ -446,7 +446,7 @@ async function buildAllReports(date: string) {
 
   // 1. Management report
   reports.push({
-    recipient: { name: "Himansu R Mehta", phone: "9038010175", email: "himansu@vwholesale.in" },
+    recipient: { name: "Himansu R Mehta", phone: "9038010175", email: "hmehta@vwholesale.in" },
     level: "management",
     summaries: allSummaries,
     aiSummary: mgmtAI,
