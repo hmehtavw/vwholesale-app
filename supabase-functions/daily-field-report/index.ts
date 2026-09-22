@@ -492,12 +492,13 @@ async function deliverReports(reports: any[]) {
     if (WA_TOKEN && r.recipient.phone) await sendWA(r.recipient.phone, r.wa_text);
 
     // Log to DB
-    await sb.from("email_log").insert({
-      recipient_name: r.recipient.name,
-      recipient_email: r.recipient.email || null,
-      subject: r.subject,
-      status: "sent",
-      type: "daily_field_report",
-    }).catch(() => {});
+    try {
+      await sb.from("email_log").insert({
+        recipient_name: r.recipient.name,
+        subject: r.subject,
+        status: "sent",
+        type: "daily_field_report",
+      });
+    } catch(_) {}
   }
 }
