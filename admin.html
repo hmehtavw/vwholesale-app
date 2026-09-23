@@ -4285,7 +4285,7 @@ async function saveCatalog() {
 
       setCatalogStatus(`⏳ Uploading ${_catalogFileObj.name} (${(_catalogFileObj.size/1024/1024).toFixed(1)} MB)…`, 'info');
 
-      const filePath = `catalogs/${Date.now()}_${_catalogFileObj.name.replace(/\s+/g,'_')}`;
+      const filePath = `${Date.now()}_${_catalogFileObj.name.replace(/\s+/g,'_')}`;
 
       // Use XMLHttpRequest for real progress tracking
       fileUrl = await new Promise((resolve, reject) => {
