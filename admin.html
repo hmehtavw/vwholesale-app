@@ -1456,7 +1456,7 @@ async function loadCatalog() {
           </button>
           <button id="tab-upload-file" onclick="switchCatalogTab('file')"
             style="flex:1;padding:7px;border-radius:6px;border:none;background:transparent;color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;">
-            📁 Upload PDF (small files only)
+            📁 Upload PDF
           </button>
         </div>
 
@@ -1482,7 +1482,7 @@ async function loadCatalog() {
             ondrop="event.preventDefault();this.style.borderColor='var(--bdr)';handleCatalogDrop(event)">
             <div style="font-size:28px;margin-bottom:6px;">📄</div>
             <div style="font-size:13px;font-weight:700;color:var(--t1);" id="catalog-file-label">Click or drag PDF here</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:4px;">Max 50MB · PDF only</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:4px;">Max 300MB · PDF only</div>
             <input type="file" id="catalog-pdf-input" accept=".pdf" style="display:none;"
               onchange="onCatalogFileSelected(this)">
           </div>
