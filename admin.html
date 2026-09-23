@@ -4290,7 +4290,7 @@ async function saveCatalog() {
       // Use XMLHttpRequest for real progress tracking
       fileUrl = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${SB_URL}/storage/v1/object/catalogs-pdfs/${filePath}`);
+        xhr.open('POST', `${SB_URL}/storage/v1/object/catalogs/${filePath}`);
         xhr.setRequestHeader('Authorization', 'Bearer ' + (_adminSession?.access_token || ANON));
         xhr.setRequestHeader('apikey', ANON);
         xhr.setRequestHeader('Content-Type', 'application/pdf');
@@ -4311,7 +4311,7 @@ async function saveCatalog() {
 
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
-            resolve(`${SB_URL}/storage/v1/object/public/catalogs-pdfs/${filePath}`);
+            resolve(`${SB_URL}/storage/v1/object/public/catalogs/${filePath}`);
           } else {
             reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
           }
