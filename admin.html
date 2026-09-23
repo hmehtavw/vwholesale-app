@@ -1436,39 +1436,85 @@ async function loadCatalog() {
   setPageTitle('Catalog Upload');
   document.getElementById('page-content').innerHTML = `
     <div class="card">
-      <div class="card-title">📤 Catalog Management</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
-        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer;border:2px dashed var(--bdr);" onclick="document.getElementById('catalog-pdf-input').click()">
-          <div style="font-size:32px;margin-bottom:8px;">📤</div>
-          <div style="font-weight:800;color:var(--t1);">Upload Brand Catalog</div>
-          <div style="font-size:12px;color:var(--t3);margin-top:4px;">Click to select PDF</div>
-          <input type="file" id="catalog-pdf-input" accept=".pdf" style="display:none;" onchange="uploadCatalogPDF(this)">
+      <div class="card-title">📚 Catalog Management</div>
+
+      <!-- Add new catalog form -->
+      <div style="background:var(--card2);border-radius:12px;padding:16px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:12px;">Add New Catalog</div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <input id="catalog-brand-name" class="form-inp" placeholder="Brand name *  (e.g. Ashirvad)">
+          <input id="catalog-category" class="form-inp" placeholder="Category * (e.g. Pipes, Fans)">
         </div>
-        <div style="padding:20px;background:var(--card2);border-radius:12px;">
-          <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px;">Quick upload</div>
-          <div style="font-size:12px;color:var(--t3);margin-bottom:8px;">Set catalog details before uploading</div>
-          <input id="catalog-brand-name" class="form-inp" placeholder="Brand name (e.g. Ashirvad)" style="margin-bottom:6px;">
-          <input id="catalog-category" class="form-inp" placeholder="Category (e.g. Pipes, Fans, Bathware)">
+        <input id="catalog-display-name" class="form-inp" placeholder="Catalog name * (e.g. Ashirvad Price List April 2026)" style="margin-bottom:8px;">
+
+        <!-- Tab: Upload or URL -->
+        <div style="display:flex;background:var(--bg);border-radius:8px;padding:3px;gap:3px;margin-bottom:10px;">
+          <button id="tab-upload-file" onclick="switchCatalogTab('file')"
+            style="flex:1;padding:7px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">
+            📁 Upload PDF
+          </button>
+          <button id="tab-upload-url" onclick="switchCatalogTab('url')"
+            style="flex:1;padding:7px;border-radius:6px;border:none;background:transparent;color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;">
+            🔗 Paste URL / Drive Link
+          </button>
         </div>
+
+        <!-- File upload panel -->
+        <div id="catalog-file-panel">
+          <div style="border:2px dashed var(--bdr);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;"
+            onclick="document.getElementById('catalog-pdf-input').click()"
+            ondragover="event.preventDefault();this.style.borderColor='var(--blue)'"
+            ondragleave="this.style.borderColor='var(--bdr)'"
+            ondrop="event.preventDefault();this.style.borderColor='var(--bdr)';handleCatalogDrop(event)">
+            <div style="font-size:28px;margin-bottom:6px;">📄</div>
+            <div style="font-size:13px;font-weight:700;color:var(--t1);" id="catalog-file-label">Click or drag PDF here</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:4px;">Max 50MB · PDF only</div>
+            <input type="file" id="catalog-pdf-input" accept=".pdf" style="display:none;"
+              onchange="onCatalogFileSelected(this)">
+          </div>
+          <!-- Progress bar (hidden until upload starts) -->
+          <div id="catalog-progress-wrap" style="display:none;margin-top:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+              <span id="catalog-progress-label" style="color:var(--t2);">Uploading…</span>
+              <span id="catalog-progress-pct" style="color:var(--blue);font-weight:700;">0%</span>
+            </div>
+            <div style="height:6px;background:var(--bdr);border-radius:3px;overflow:hidden;">
+              <div id="catalog-progress-bar" style="height:100%;background:var(--blue);border-radius:3px;width:0%;transition:width .3s;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- URL panel (hidden by default) -->
+        <div id="catalog-url-panel" style="display:none;">
+          <input id="catalog-file-url" class="form-inp" placeholder="Paste PDF URL or Google Drive share link"
+            style="margin-bottom:4px;">
+          <div style="font-size:11px;color:var(--t3);">
+            Google Drive: Share → Anyone with link → Copy link<br>
+            Or use any direct PDF URL
+          </div>
+        </div>
+
+        <button onclick="saveCatalog()" id="catalog-save-btn"
+          style="margin-top:12px;width:100%;padding:11px;border-radius:10px;background:var(--blue);border:none;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+          ✓ Save Catalog
+        </button>
+        <div id="catalog-upload-status" style="display:none;margin-top:10px;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;"></div>
       </div>
-      <div id="catalog-upload-status" style="display:none;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;font-size:13px;color:var(--green);margin-bottom:12px;"></div>
+
+      <!-- Existing catalogs list -->
+      <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px;">Existing Catalogs</div>
+      <div id="catalog-list-admin">
+        <div style="text-align:center;padding:20px;color:var(--t3);font-size:13px;">Loading…</div>
+      </div>
     </div>
     <div class="card">
       <div class="card-title">Brand Catalog Items</div>
       <div id="catalog-items-list"><div style="text-align:center;padding:20px;color:var(--t3)">Loading…</div></div>
     </div>`;
   const items = await sbFetch('brand_catalog_items?select=id,brand,product_name,category,tier1_price,is_active&order=created_at.desc&limit=50').catch(()=>[]);
-  document.getElementById('catalog-items-list').innerHTML = items?.length ? `
-    <div style="overflow-x:auto"><table class="tbl">
-      <tr><th>Brand</th><th>Product</th><th>Category</th><th>Price</th><th>Active</th></tr>
-      ${items.map(i=>`<tr>
-        <td style="font-weight:700">${i.brand||'—'}</td>
-        <td>${i.product_name}</td>
-        <td style="color:var(--t3)">${i.category||'—'}</td>
-        <td style="color:var(--b);font-weight:700">₹${parseFloat(i.tier1_price||0).toLocaleString('en-IN')}</td>
-        <td><span class="badge ${i.is_active?'badge-green':'badge-grey'}">${i.is_active?'Active':'Off'}</span></td>
-      </tr>`).join('')}
-    </table></div>` : '<div style="text-align:center;padding:20px;color:var(--t3)">No catalog items yet</div>';
+  document.getElementById('catalog-items-list')?.remove(); // remove old section
+  loadCatalogAdminList(); // load real catalog list
 }
 
 // ── ANALYTICS ──
@@ -4145,51 +4191,213 @@ async function retryAIBulk() {
 window.retryAISingle = retryAISingle;
 window.retryAIBulk = retryAIBulk;
 
-async function uploadCatalogPDF(input) {
+// ── Catalog Management ──
+let _catalogFileObj = null;
+let _catalogMode = 'file'; // 'file' or 'url'
+
+function switchCatalogTab(mode) {
+  _catalogMode = mode;
+  document.getElementById('catalog-file-panel').style.display = mode === 'file' ? '' : 'none';
+  document.getElementById('catalog-url-panel').style.display = mode === 'url' ? '' : 'none';
+  const fBtn = document.getElementById('tab-upload-file');
+  const uBtn = document.getElementById('tab-upload-url');
+  fBtn.style.background = mode === 'file' ? 'var(--blue)' : 'transparent';
+  fBtn.style.color = mode === 'file' ? '#fff' : 'var(--t2)';
+  uBtn.style.background = mode === 'url' ? 'var(--blue)' : 'transparent';
+  uBtn.style.color = mode === 'url' ? '#fff' : 'var(--t2)';
+}
+window.switchCatalogTab = switchCatalogTab;
+
+function onCatalogFileSelected(input) {
   const file = input.files?.[0];
   if (!file) return;
-  const brand = document.getElementById('catalog-brand-name')?.value?.trim() || file.name.replace('.pdf','');
-  const category = document.getElementById('catalog-category')?.value?.trim() || 'General';
-  const statusEl = document.getElementById('catalog-upload-status');
-  statusEl.style.display = 'block';
-  statusEl.style.color = 'var(--gold)';
-  statusEl.textContent = '⏳ Uploading PDF…';
+  _catalogFileObj = file;
+  const label = document.getElementById('catalog-file-label');
+  if (label) label.textContent = `✓ ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+}
+window.onCatalogFileSelected = onCatalogFileSelected;
+
+function handleCatalogDrop(evt) {
+  const file = evt.dataTransfer?.files?.[0];
+  if (!file || file.type !== 'application/pdf') { toast('Please drop a PDF file', 'warn'); return; }
+  _catalogFileObj = file;
+  const label = document.getElementById('catalog-file-label');
+  if (label) label.textContent = `✓ ${file.name} (${(file.size/1024/1024).toFixed(1)} MB)`;
+}
+window.handleCatalogDrop = handleCatalogDrop;
+
+function setCatalogStatus(msg, type) {
+  const el = document.getElementById('catalog-upload-status');
+  if (!el) return;
+  el.style.display = 'block';
+  el.style.background = type === 'ok' ? 'rgba(34,197,94,.1)' : type === 'err' ? 'rgba(239,68,68,.1)' : 'rgba(59,130,246,.1)';
+  el.style.color = type === 'ok' ? 'var(--green)' : type === 'err' ? 'var(--red)' : 'var(--blue)';
+  el.style.border = `1px solid ${type === 'ok' ? 'rgba(34,197,94,.3)' : type === 'err' ? 'rgba(239,68,68,.3)' : 'rgba(59,130,246,.3)'}`;
+  el.textContent = msg;
+}
+
+async function saveCatalog() {
+  const brand = document.getElementById('catalog-brand-name')?.value?.trim();
+  const category = document.getElementById('catalog-category')?.value?.trim();
+  const displayName = document.getElementById('catalog-display-name')?.value?.trim();
+
+  if (!brand) { setCatalogStatus('Enter brand name', 'err'); return; }
+  if (!category) { setCatalogStatus('Enter category', 'err'); return; }
+  if (!displayName) { setCatalogStatus('Enter catalog name', 'err'); return; }
+
+  const btn = document.getElementById('catalog-save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
   try {
-    const filePath = `catalogs/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
-    // Upload to storage
-    const uploadRes = await fetch(`${SB_URL}/storage/v1/object/catalogs-pdfs/${filePath}`, {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (_adminSession?.access_token||ANON), 'apikey': ANON, 'Content-Type': 'application/pdf' },
-      body: file,
-    });
-    const fileUrl = `${SB_URL}/storage/v1/object/public/catalogs-pdfs/${filePath}`;
-    statusEl.textContent = '⏳ Saving catalog record…';
+    let fileUrl = null;
+
+    if (_catalogMode === 'url') {
+      // URL mode — just save the link
+      const rawUrl = document.getElementById('catalog-file-url')?.value?.trim();
+      if (!rawUrl) { setCatalogStatus('Paste a URL', 'err'); btn.disabled=false; btn.textContent='✓ Save Catalog'; return; }
+      // Convert Google Drive share link to direct download link
+      if (rawUrl.includes('drive.google.com')) {
+        const match = rawUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        if (match) {
+          fileUrl = `https://drive.google.com/file/d/${match[1]}/preview`;
+        } else {
+          fileUrl = rawUrl;
+        }
+      } else {
+        fileUrl = rawUrl;
+      }
+      setCatalogStatus('⏳ Saving catalog record…', 'info');
+
+    } else {
+      // File upload mode
+      if (!_catalogFileObj) { setCatalogStatus('Select a PDF file first', 'err'); btn.disabled=false; btn.textContent='✓ Save Catalog'; return; }
+
+      setCatalogStatus(`⏳ Uploading ${_catalogFileObj.name} (${(_catalogFileObj.size/1024/1024).toFixed(1)} MB)…`, 'info');
+
+      const filePath = `catalogs/${Date.now()}_${_catalogFileObj.name.replace(/\s+/g,'_')}`;
+
+      // Use XMLHttpRequest for real progress tracking
+      fileUrl = await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${SB_URL}/storage/v1/object/catalogs-pdfs/${filePath}`);
+        xhr.setRequestHeader('Authorization', 'Bearer ' + (_adminSession?.access_token || ANON));
+        xhr.setRequestHeader('apikey', ANON);
+        xhr.setRequestHeader('Content-Type', 'application/pdf');
+
+        xhr.upload.onprogress = (e) => {
+          if (!e.lengthComputable) return;
+          const pct = Math.round(e.loaded / e.total * 100);
+          const wrap = document.getElementById('catalog-progress-wrap');
+          const bar = document.getElementById('catalog-progress-bar');
+          const pctEl = document.getElementById('catalog-progress-pct');
+          const lbl = document.getElementById('catalog-progress-label');
+          if (wrap) wrap.style.display = '';
+          if (bar) bar.style.width = pct + '%';
+          if (pctEl) pctEl.textContent = pct + '%';
+          if (lbl) lbl.textContent = pct < 100 ? `Uploading ${(e.loaded/1024/1024).toFixed(1)}MB of ${(e.total/1024/1024).toFixed(1)}MB…` : 'Processing…';
+          setCatalogStatus(`⏳ Uploading: ${pct}%`, 'info');
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(`${SB_URL}/storage/v1/object/public/catalogs-pdfs/${filePath}`);
+          } else {
+            reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(_catalogFileObj);
+      });
+
+      // Hide progress bar
+      const wrap = document.getElementById('catalog-progress-wrap');
+      if (wrap) wrap.style.display = 'none';
+      setCatalogStatus('⏳ Saving catalog record…', 'info');
+    }
+
     // Save to catalogs table
     const res = await fetch(`${SB_URL}/rest/v1/catalogs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + (_adminSession?.access_token||ANON), 'Prefer': 'return=minimal' },
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': ANON,
+        'Authorization': 'Bearer ' + (_adminSession?.access_token || ANON),
+        'Prefer': 'return=minimal',
+      },
       body: JSON.stringify({
-        name: brand + ' ' + category + ' Catalog',
+        name: displayName,
         brand, category,
-        file_path: filePath,
         file_url: fileUrl,
         is_team_visible: true,
         is_customer_visible: false,
         uploaded_by_name: _adminProfile?.name || 'Admin',
-        description: `${brand} ${category} catalog — ${new Date().toLocaleDateString('en-IN')}`,
+        description: `${brand} ${category} catalog`,
       }),
     });
-    if (!res.ok) { const err = await res.text(); throw new Error(err); }
-    statusEl.style.color = 'var(--green)';
-    statusEl.textContent = `✅ ${brand} catalog uploaded! Field team can now view and share it.`;
-    input.value = '';
-    document.getElementById('catalog-brand-name').value = '';
-    document.getElementById('catalog-category').value = '';
+
+    if (!res.ok) throw new Error(await res.text());
+
+    setCatalogStatus(`✅ "${displayName}" saved! Field team can now view and share it.`, 'ok');
+
+    // Reset form
+    ['catalog-brand-name','catalog-display-name','catalog-category','catalog-file-url'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    _catalogFileObj = null;
+    const label = document.getElementById('catalog-file-label');
+    if (label) label.textContent = 'Click or drag PDF here';
+    document.getElementById('catalog-pdf-input').value = '';
+
+    // Refresh catalog list
+    loadCatalogAdminList();
+
   } catch(e) {
-    statusEl.style.color = 'var(--red)';
-    statusEl.textContent = '❌ Error: ' + e.message;
+    setCatalogStatus('❌ Error: ' + e.message, 'err');
   }
+  btn.disabled = false; btn.textContent = '✓ Save Catalog';
 }
+window.saveCatalog = saveCatalog;
+
+async function loadCatalogAdminList() {
+  const el = document.getElementById('catalog-list-admin');
+  if (!el) return;
+  const cats = await sbFetch('catalogs?select=id,name,brand,category,file_url,is_team_visible,created_at&order=created_at.desc').catch(()=>[]);
+  if (!cats?.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3);">No catalogs yet</div>'; return; }
+  el.innerHTML = cats.map(c => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr2);">
+      <div style="font-size:24px;">📖</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${c.name}</div>
+        <div style="font-size:11px;color:var(--t3);">${c.brand} · ${c.category} · ${c.is_team_visible?'<span style="color:var(--green)">Visible to field team</span>':'Hidden'}</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${c.file_url ? `<a href="${c.file_url}" target="_blank" style="padding:5px 10px;border-radius:6px;background:var(--card2);border:1px solid var(--bdr);color:var(--t2);font-size:12px;text-decoration:none;">View</a>` : ''}
+        <button onclick="toggleCatalogVisibility(${c.id}, ${!c.is_team_visible})"
+          style="padding:5px 10px;border-radius:6px;background:var(--card2);border:1px solid var(--bdr);color:var(--t2);font-size:12px;cursor:pointer;">
+          ${c.is_team_visible ? 'Hide' : 'Show'}
+        </button>
+        <button onclick="deleteCatalog(${c.id})"
+          style="padding:5px 10px;border-radius:6px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);font-size:12px;cursor:pointer;">
+          Delete
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+async function toggleCatalogVisibility(id, visible) {
+  await sbFetch(`catalogs?id=eq.${id}`, { method:'PATCH', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify({is_team_visible: visible}) });
+  loadCatalogAdminList();
+}
+async function deleteCatalog(id) {
+  if (!confirm('Delete this catalog? Field team will no longer see it.')) return;
+  await sbFetch(`catalogs?id=eq.${id}`, { method:'DELETE', headers:{'Prefer':'return=minimal'} });
+  toast('Catalog deleted', 'ok');
+  loadCatalogAdminList();
+}
+window.toggleCatalogVisibility = toggleCatalogVisibility;
+window.deleteCatalog = deleteCatalog;
+
+async function uploadCatalogPDF(input) { onCatalogFileSelected(input); } // legacy compat
 window.uploadCatalogPDF = uploadCatalogPDF;
 
 async function markVisitConverted(visitId) {
