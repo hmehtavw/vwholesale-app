@@ -1437,20 +1437,21 @@ async function loadCatalog() {
   document.getElementById('page-content').innerHTML = `
     <div class="card">
       <div class="card-title">📤 Catalog Management</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer" onclick="window.open('./staff.html','_blank')">
-          <div style="font-size:32px;margin-bottom:8px">📤</div>
-          <div style="font-weight:800;color:var(--t1)">Upload Brand Catalog</div>
-          <div style="font-size:12px;color:var(--t3);margin-top:4px">AI extracts products from PDF</div>
-          <div style="margin-top:10px;font-size:11px;color:var(--b)">Open in Staff App → Catalog Upload</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer;border:2px dashed var(--bdr);" onclick="document.getElementById('catalog-pdf-input').click()">
+          <div style="font-size:32px;margin-bottom:8px;">📤</div>
+          <div style="font-weight:800;color:var(--t1);">Upload Brand Catalog</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:4px;">Click to select PDF</div>
+          <input type="file" id="catalog-pdf-input" accept=".pdf" style="display:none;" onchange="uploadCatalogPDF(this)">
         </div>
-        <div style="padding:20px;background:var(--card2);border-radius:12px;text-align:center;cursor:pointer" onclick="window.open('./staff.html','_blank')">
-          <div style="font-size:32px;margin-bottom:8px">✅</div>
-          <div style="font-weight:800;color:var(--t1)">Review & Price</div>
-          <div style="font-size:12px;color:var(--t3);margin-top:4px">Set tier pricing, approve items</div>
-          <div style="margin-top:10px;font-size:11px;color:var(--b)">Open in Staff App → Catalog Review</div>
+        <div style="padding:20px;background:var(--card2);border-radius:12px;">
+          <div style="font-size:13px;font-weight:700;color:var(--t1);margin-bottom:10px;">Quick upload</div>
+          <div style="font-size:12px;color:var(--t3);margin-bottom:8px;">Set catalog details before uploading</div>
+          <input id="catalog-brand-name" class="form-inp" placeholder="Brand name (e.g. Ashirvad)" style="margin-bottom:6px;">
+          <input id="catalog-category" class="form-inp" placeholder="Category (e.g. Pipes, Fans, Bathware)">
         </div>
       </div>
+      <div id="catalog-upload-status" style="display:none;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;font-size:13px;color:var(--green);margin-bottom:12px;"></div>
     </div>
     <div class="card">
       <div class="card-title">Brand Catalog Items</div>
@@ -4143,6 +4144,53 @@ async function retryAIBulk() {
 
 window.retryAISingle = retryAISingle;
 window.retryAIBulk = retryAIBulk;
+
+async function uploadCatalogPDF(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const brand = document.getElementById('catalog-brand-name')?.value?.trim() || file.name.replace('.pdf','');
+  const category = document.getElementById('catalog-category')?.value?.trim() || 'General';
+  const statusEl = document.getElementById('catalog-upload-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--gold)';
+  statusEl.textContent = '⏳ Uploading PDF…';
+  try {
+    const filePath = `catalogs/${Date.now()}_${file.name.replace(/\s+/g,'_')}`;
+    // Upload to storage
+    const uploadRes = await fetch(`${SB_URL}/storage/v1/object/catalogs-pdfs/${filePath}`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (_adminSession?.access_token||ANON), 'apikey': ANON, 'Content-Type': 'application/pdf' },
+      body: file,
+    });
+    const fileUrl = `${SB_URL}/storage/v1/object/public/catalogs-pdfs/${filePath}`;
+    statusEl.textContent = '⏳ Saving catalog record…';
+    // Save to catalogs table
+    const res = await fetch(`${SB_URL}/rest/v1/catalogs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + (_adminSession?.access_token||ANON), 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        name: brand + ' ' + category + ' Catalog',
+        brand, category,
+        file_path: filePath,
+        file_url: fileUrl,
+        is_team_visible: true,
+        is_customer_visible: false,
+        uploaded_by_name: _adminProfile?.name || 'Admin',
+        description: `${brand} ${category} catalog — ${new Date().toLocaleDateString('en-IN')}`,
+      }),
+    });
+    if (!res.ok) { const err = await res.text(); throw new Error(err); }
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `✅ ${brand} catalog uploaded! Field team can now view and share it.`;
+    input.value = '';
+    document.getElementById('catalog-brand-name').value = '';
+    document.getElementById('catalog-category').value = '';
+  } catch(e) {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = '❌ Error: ' + e.message;
+  }
+}
+window.uploadCatalogPDF = uploadCatalogPDF;
 
 async function markVisitConverted(visitId) {
   const invoiceInput = document.getElementById('conv-invoice-id');
