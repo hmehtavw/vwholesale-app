@@ -1448,20 +1448,33 @@ async function loadCatalog() {
         </div>
         <input id="catalog-display-name" class="form-inp" placeholder="Catalog name * (e.g. Ashirvad Price List April 2026)" style="margin-bottom:8px;">
 
-        <!-- Tab: Upload or URL -->
+        <!-- Tab: URL first (default for large catalogs), Upload as fallback -->
         <div style="display:flex;background:var(--bg);border-radius:8px;padding:3px;gap:3px;margin-bottom:10px;">
-          <button id="tab-upload-file" onclick="switchCatalogTab('file')"
-            style="flex:1;padding:7px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">
-            📁 Upload PDF
-          </button>
           <button id="tab-upload-url" onclick="switchCatalogTab('url')"
+            style="flex:1;padding:7px;border-radius:6px;border:none;background:var(--blue);color:#fff;font-size:12px;font-weight:700;cursor:pointer;">
+            🔗 Google Drive / URL
+          </button>
+          <button id="tab-upload-file" onclick="switchCatalogTab('file')"
             style="flex:1;padding:7px;border-radius:6px;border:none;background:transparent;color:var(--t2);font-size:12px;font-weight:600;cursor:pointer;">
-            🔗 Paste URL / Drive Link
+            📁 Upload PDF (small files only)
           </button>
         </div>
 
-        <!-- File upload panel -->
-        <div id="catalog-file-panel">
+        <!-- URL panel (DEFAULT) -->
+        <div id="catalog-url-panel">
+          <input id="catalog-file-url" class="form-inp" placeholder="Paste Google Drive or PDF link here"
+            style="margin-bottom:8px;">
+          <div style="background:var(--card2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--t3);line-height:1.6;">
+            <div style="font-weight:700;color:var(--t2);margin-bottom:4px;">How to get Google Drive link:</div>
+            1. Upload PDF to Google Drive<br>
+            2. Right click → <strong>Share</strong><br>
+            3. Change to <strong>"Anyone with the link"</strong><br>
+            4. Click <strong>Copy link</strong> → paste above
+          </div>
+        </div>
+
+        <!-- File upload panel (hidden by default) -->
+        <div id="catalog-file-panel" style="display:none;">
           <div style="border:2px dashed var(--bdr);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;"
             onclick="document.getElementById('catalog-pdf-input').click()"
             ondragover="event.preventDefault();this.style.borderColor='var(--blue)'"
@@ -4193,7 +4206,7 @@ window.retryAIBulk = retryAIBulk;
 
 // ── Catalog Management ──
 let _catalogFileObj = null;
-let _catalogMode = 'file'; // 'file' or 'url'
+let _catalogMode = 'url'; // default to URL — catalogs are too large to upload directly
 
 function switchCatalogTab(mode) {
   _catalogMode = mode;
@@ -4201,10 +4214,8 @@ function switchCatalogTab(mode) {
   document.getElementById('catalog-url-panel').style.display = mode === 'url' ? '' : 'none';
   const fBtn = document.getElementById('tab-upload-file');
   const uBtn = document.getElementById('tab-upload-url');
-  fBtn.style.background = mode === 'file' ? 'var(--blue)' : 'transparent';
-  fBtn.style.color = mode === 'file' ? '#fff' : 'var(--t2)';
-  uBtn.style.background = mode === 'url' ? 'var(--blue)' : 'transparent';
-  uBtn.style.color = mode === 'url' ? '#fff' : 'var(--t2)';
+  if (fBtn) { fBtn.style.background = mode === 'file' ? 'var(--blue)' : 'transparent'; fBtn.style.color = mode === 'file' ? '#fff' : 'var(--t2)'; }
+  if (uBtn) { uBtn.style.background = mode === 'url' ? 'var(--blue)' : 'transparent'; uBtn.style.color = mode === 'url' ? '#fff' : 'var(--t2)'; }
 }
 window.switchCatalogTab = switchCatalogTab;
 
