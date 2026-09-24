@@ -254,7 +254,8 @@ async function navigateToFresh(page, params, cacheKey) {
     else if (page === 'inventory') html = await VW_INVENTORY.renderInventory();
     else if (page === 'hr') html = await VW_HR_PAYROLL.renderHRPage();
     else if (page === 'internal_chat') { if (window.VW_INTERNAL_CHAT) { html = await VW_INTERNAL_CHAT.renderChat(); } else { html = '<div style="padding:24px;text-align:center;color:#94a3b8;">Chat loading…</div>'; } }
-    else if (page === 'payment_links') { if (window.VW_PAYMENT_LINKS) { html = await VW_PAYMENT_LINKS.renderPage(); } else { html = '<div style="padding:24px;">Payment Links loading…</div>'; } }    else if (page === 'quick_quote') { if (window.VW_TILES?.openQuickQuote) { VW_TILES.openQuickQuote(); } else if (typeof openQuickQuote === 'function') { openQuickQuote(); } else { navigateTo('tiles'); } return; }
+    else if (page === 'payment_links') { if (window.VW_PAYMENT_LINKS) { html = await VW_PAYMENT_LINKS.renderPage(); } else { html = '<div style="padding:24px;">Payment Links loading…</div>'; } }
+    else if (page === 'quotations') { if (window.VW_QUOTATIONS) { html = await VW_QUOTATIONS.renderPage(); } else { html = '<div style="padding:24px;">Loading quotations…</div>'; } }    else if (page === 'quick_quote') { if (window.VW_TILES?.openQuickQuote) { VW_TILES.openQuickQuote(); } else if (typeof openQuickQuote === 'function') { openQuickQuote(); } else { navigateTo('tiles'); } return; }
     else if (page === 'my_hr')     { if (window.VW_HR_SELF) { html = await VW_HR_SELF.renderMyHRPage(); } else { html = '<div class="empty-state">HR module loading… please try again</div>'; } }
     else if (page === 'my_leaves') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMyLeaves(); } return; }
     else if (page === 'my_salary') { if (window.VW_HR_SELF) { await VW_HR_SELF.renderMySalary(); } return; }

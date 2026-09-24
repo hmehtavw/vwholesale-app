@@ -194,6 +194,7 @@ html,body{height:100%;background:#0F172A;color:#E2E8F0;font-family:'DM Sans',sys
       <div class="sb-section">Field Intelligence</div>
       <button class="sb-item" onclick="loadPage('field')" id="nav-field"><span class="sb-icon">🗺️</span>Live Field Map</button>
       <button class="sb-item" onclick="loadPage('fieldteam')" id="nav-fieldteam"><span class="sb-icon">👥</span>Field Team</button>
+      <button class="sb-item" onclick="loadPage('quotations')" id="nav-quotations"><span class="sb-icon">📋</span>Quotations</button>
       <button class="sb-item" onclick="loadPage('fieldvisits')" id="nav-fieldvisits"><span class="sb-icon">📍</span>Site Visits</button>
       <button class="sb-item" onclick="loadPage('fieldfuel')" id="nav-fieldfuel"><span class="sb-icon">⛽</span>Fuel & Attendance</button>
       <button class="sb-item" onclick="loadPage('fieldincentives')" id="nav-fieldincentives"><span class="sb-icon">🏆</span>Incentives & Targets</button>
@@ -363,7 +364,7 @@ async function loadPage(page) {
   const content = document.getElementById('page-content');
   content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--t3)">Loading…</div>';
   document.getElementById('sidebar').classList.remove('open');
-  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing, field:loadFieldMap, fieldteam:loadFieldTeam, fieldvisits:loadFieldVisits, fieldfuel:loadFieldFuel, fieldincentives:loadFieldIncentives, orgchart:loadOrgChart, territories:loadTerritories};
+  const pages = {dashboard:loadDashboard, orders:loadOrders, customers:loadCustomers, professionals:loadProfessionals, briefs:loadBriefs, products:loadProducts, categories:loadCategories, catalog:loadCatalog, promos:loadPromos, staff:loadStaff, settings:loadSettings, import:loadImport, analytics:loadAnalytics, accounts:loadAccounts, gst:loadGST, eod:loadEOD, hr:loadHR, vendors:loadVendors, commissions:loadCommissions, referrals:loadReferrals, marketing:loadMarketing, field:loadFieldMap, fieldteam:loadFieldTeam, fieldvisits:loadFieldVisits, fieldfuel:loadFieldFuel, fieldincentives:loadFieldIncentives, orgchart:loadOrgChart, territories:loadTerritories, quotations:loadQuotationsAdmin};
   if (pages[page]) await pages[page]();
 }
 
@@ -1431,7 +1432,155 @@ async function loadSettings() {
 }
 
 
-// ── CATALOG UPLOAD ──
+// ── QUOTATIONS ADMIN ──
+async function loadQuotationsAdmin() {
+  setPageTitle('Quotations');
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);">Loading quotations…</div>';
+
+  const requests = await sbFetch('quotation_requests?status=in.(with_management,approved,sent,rejected)&order=requested_at.desc&select=id,request_no,status,urgency,site_area,construction_stage,estimated_sqft,ai_requirements,requirement_photos,notes,requested_by_name,requested_at,approved_at,sent_at,rejection_reason,customer_name,customer_phone&limit=100').catch(()=>[]);
+
+  const STATUS_META = {
+    with_management: { label:'Awaiting Approval', color:'#EF4444', bg:'rgba(239,68,68,.12)' },
+    approved: { label:'Approved', color:'#22C55E', bg:'rgba(34,197,94,.12)' },
+    sent: { label:'Sent to Customer', color:'#22C55E', bg:'rgba(34,197,94,.12)' },
+    rejected: { label:'Rejected', color:'#94A3B8', bg:'rgba(148,163,184,.12)' },
+  };
+
+  const pending = (requests||[]).filter(r=>r.status==='with_management');
+  const others = (requests||[]).filter(r=>r.status!=='with_management');
+
+  el.innerHTML = `
+    <div style="padding:20px;max-width:960px;margin:0 auto;">
+      <div style="font-size:20px;font-weight:800;margin-bottom:16px;">📋 Quotations
+        ${pending.length?`<span style="margin-left:8px;padding:3px 10px;border-radius:10px;background:rgba(239,68,68,.1);color:#EF4444;font-size:13px;">${pending.length} awaiting your approval</span>`:''}
+      </div>
+
+      ${pending.length ? `<div style="font-size:12px;font-weight:700;color:var(--t3);margin-bottom:8px;letter-spacing:.05em;">AWAITING YOUR APPROVAL</div>` : ''}
+      ${(pending).map(r => renderAdminQRow(r, STATUS_META, true)).join('')}
+
+      ${others.length ? `<div style="font-size:12px;font-weight:700;color:var(--t3);margin:16px 0 8px;letter-spacing:.05em;">HISTORY</div>` : ''}
+      ${others.map(r => renderAdminQRow(r, STATUS_META, false)).join('')}
+
+      ${!requests?.length ? '<div style="text-align:center;padding:48px;color:var(--t3);"><div style="font-size:36px;margin-bottom:12px;">✅</div>No quotations yet</div>' : ''}
+    </div>`;
+}
+
+function renderAdminQRow(r, STATUS_META, showActions) {
+  const meta = STATUS_META[r.status] || { label:r.status, color:'#94A3B8', bg:'rgba(148,163,184,.12)' };
+  const ageMin = Math.round((Date.now() - new Date(r.requested_at)) / 60000);
+  return `
+    <div style="background:var(--card);border:1px solid ${showActions?'rgba(239,68,68,.4)':'var(--bdr)'};border-left:4px solid ${meta.color};border-radius:12px;padding:16px;margin-bottom:10px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:15px;font-weight:800;">${r.request_no}</span>
+            <span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${meta.bg};color:${meta.color};">${meta.label}</span>
+            ${r.urgency!=='normal'?`<span style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:rgba(239,68,68,.1);color:#EF4444;">${r.urgency.toUpperCase()}</span>`:''}
+          </div>
+          <div style="font-size:13px;color:var(--t2);">${r.site_area||'—'} · ${r.construction_stage||'—'} ${r.estimated_sqft?'· '+r.estimated_sqft+' sqft':''}</div>
+          <div style="font-size:12px;color:var(--t3);margin-top:2px;">By ${r.requested_by_name} · ${ageMin>60?Math.round(ageMin/60)+'h':ageMin+'m'} ago</div>
+          ${r.notes?`<div style="font-size:12px;color:var(--t3);margin-top:2px;">📝 ${r.notes.slice(0,100)}</div>`:''}
+        </div>
+        ${r.requirement_photos?.length?`
+        <div style="display:flex;gap:4px;">
+          ${r.requirement_photos.slice(0,2).map(url=>`<img src="${url}" style="width:50px;height:50px;object-fit:cover;border-radius:6px;cursor:pointer;" onclick="window.open('${url}','_blank')">`).join('')}
+        </div>`:''}
+      </div>
+
+      <!-- Customer details ONLY visible in admin -->
+      ${r.customer_name||r.customer_phone?`
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:13px;">
+        <span style="color:var(--green);font-weight:700;">👤 Customer: </span>
+        ${r.customer_name||''} ${r.customer_phone?`· <a href="tel:+91${r.customer_phone.replace(/\D/g,'')}" style="color:var(--green);">📞 ${r.customer_phone}</a>`:''}
+      </div>`:''}
+
+      ${showActions?`
+      <div>
+        <textarea id="mgmt-note-${r.id}" placeholder="Note for field rep (optional)" rows="2"
+          style="width:100%;padding:8px 10px;border:1px solid var(--bdr);border-radius:8px;background:var(--card2);color:var(--t1);font-size:13px;resize:none;box-sizing:border-box;margin-bottom:8px;"></textarea>
+        <div style="display:flex;gap:8px;">
+          <button onclick="approveQuotation(${r.id})"
+            style="flex:2;padding:10px;border-radius:8px;background:var(--green);border:none;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">✓ Approve & Send to Customer</button>
+          <button onclick="reviseQuotation(${r.id})"
+            style="flex:1;padding:10px;border-radius:8px;background:rgba(245,166,35,.15);border:1px solid rgba(245,166,35,.3);color:var(--gold);font-size:14px;font-weight:700;cursor:pointer;">↩ Revise</button>
+          <button onclick="rejectQuotation(${r.id})"
+            style="flex:1;padding:10px;border-radius:8px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);font-size:14px;font-weight:700;cursor:pointer;">✗ Reject</button>
+        </div>
+      </div>` : ''}
+    </div>`;
+}
+
+async function approveQuotation(id) {
+  const note = document.getElementById(`mgmt-note-${id}`)?.value?.trim();
+  const btn = document.querySelector(`button[onclick="approveQuotation(${id})"]`);
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+
+  // Get full request with customer phone
+  const [reqArr, files] = await Promise.all([
+    sbFetch(`quotation_requests?id=eq.${id}&select=*`),
+    sbFetch(`quotation_files?request_id=eq.${id}&select=*`),
+  ]);
+  const req = reqArr?.[0];
+  if (!req) { toast('Request not found', 'err'); return; }
+
+  // Update status
+  await sbFetch(`quotation_requests?id=eq.${id}`, { method:'PATCH',
+    headers:{'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({ status:'approved', approved_at: new Date().toISOString() })
+  });
+
+  // Log timeline
+  await sbFetch('quotation_timeline', { method:'POST',
+    headers:{'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify({ request_id:id, action:'approved_by_management',
+      actor_name: _adminProfile?.name || 'Management', actor_role:'Management',
+      note: note || 'Final approval granted' })
+  });
+
+  // Send to customer via WhatsApp
+  if (req.customer_phone) {
+    const phone = req.customer_phone.replace(/\D/g,'');
+    const fileUrl = files?.[0]?.file_url;
+    const amount = files?.[0]?.total_amount;
+    const waMsg = `Hello${req.customer_name?' '+req.customer_name:''}! 👋\n\nYour quotation from V Wholesale is ready.\n\n📋 *${req.request_no}*${amount?'\n💰 Total: ₹'+parseFloat(amount).toLocaleString('en-IN'):''}\n${fileUrl?'\n🔗 View Quotation: '+fileUrl:''}\n\nFor any questions, please contact your V Wholesale representative.\n\nThank you! 🙏\n— V Wholesale, Vijayawada`;
+    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(waMsg)}`, '_blank');
+
+    await sbFetch(`quotation_requests?id=eq.${id}`, { method:'PATCH',
+      headers:{'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ status:'sent', sent_at: new Date().toISOString() })
+    });
+
+    await sbFetch('quotation_timeline', { method:'POST',
+      headers:{'Content-Type':'application/json','Prefer':'return=minimal'},
+      body: JSON.stringify({ request_id:id, action:'sent_to_customer',
+        actor_name: 'System', actor_role:'System', note:'WhatsApp opened to send quotation' })
+    });
+  }
+
+  toast('✅ Approved! WhatsApp opened to send quotation to customer.', 'ok');
+  setTimeout(() => loadQuotationsAdmin(), 1000);
+}
+
+async function reviseQuotation(id) {
+  const note = document.getElementById(`mgmt-note-${id}`)?.value?.trim() || 'Revision requested by management';
+  await sbFetch(`quotation_requests?id=eq.${id}`, { method:'PATCH', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify({ status:'with_cat_mgr' }) });
+  await sbFetch('quotation_timeline', { method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify({ request_id:id, action:'revised_by_management', actor_name:_adminProfile?.name||'Management', actor_role:'Management', note }) });
+  toast('↩ Sent back to Category Manager', 'ok');
+  setTimeout(() => loadQuotationsAdmin(), 500);
+}
+
+async function rejectQuotation(id) {
+  const note = document.getElementById(`mgmt-note-${id}`)?.value?.trim();
+  if (!note) { toast('Please add a reason for rejection', 'warn'); return; }
+  await sbFetch(`quotation_requests?id=eq.${id}`, { method:'PATCH', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify({ status:'rejected', rejection_stage:'management', rejection_reason:note }) });
+  await sbFetch('quotation_timeline', { method:'POST', headers:{'Content-Type':'application/json','Prefer':'return=minimal'}, body: JSON.stringify({ request_id:id, action:'rejected_by_management', actor_name:_adminProfile?.name||'Management', actor_role:'Management', note }) });
+  toast('✗ Quotation rejected', 'ok');
+  setTimeout(() => loadQuotationsAdmin(), 500);
+}
+window.approveQuotation = approveQuotation;
+window.reviseQuotation = reviseQuotation;
+window.rejectQuotation = rejectQuotation;
 async function loadCatalog() {
   setPageTitle('Catalog Upload');
   document.getElementById('page-content').innerHTML = `
