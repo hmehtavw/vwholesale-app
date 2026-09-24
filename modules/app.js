@@ -380,7 +380,7 @@ async function navigateToFresh(page, params, cacheKey) {
     }`;
     document.body.appendChild(_wtScript);
   }
-    else if (page === 'quotations') html = await renderStandaloneQuotationPage();
+    else if (page === 'quotations') { if (window.VW_QUOTATIONS) { html = await VW_QUOTATIONS.renderPage(); } else { html = '<div style="padding:24px;text-align:center;color:#64748B;">Loading quotations…</div>'; } }
     else if (page === 'dedup') html = await VW_FEATURES.renderDedupTool();
     else if (page === 'vendors') html = await VW_VENDOR.renderVendorsPage();
     else if (page === 'marketing') html = await VW_MARKETING.renderMarketingPage();
@@ -3795,7 +3795,8 @@ const SIDEBAR_NAV = [
 
   // ── SALES ────────────────────────────────────────────
   { section: 'Sales' },
-  { page: 'cart',           icon: '🧾', label: 'Billing',         perm: 'billing' },
+  { page: 'quotations',      icon: '📋', label: 'Quotations',       always: true },
+  { page: 'cart',            icon: '🧾', label: 'Billing',          perm: 'billing' },
   { page: 'tiles',          icon: '⬜', label: 'Tile Quotation',  perm: 'billing' },
   { page: 'granite',        icon: '🪨', label: 'Granite Quote',   perm: 'billing' },
   { page: 'quick_quote',    icon: '⚡', label: 'Quick Quote',     perm: 'billing' },
