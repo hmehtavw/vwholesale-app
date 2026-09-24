@@ -49,8 +49,11 @@ window.VW_QUOTATIONS = (() => {
 
     const now = Date.now();
 
+    // Check TAT in background
+    setTimeout(() => checkQuotationTAT(), 500);
     return `
       <div style="padding:20px;max-width:960px;margin:0 auto;">
+        <div id="quot-tat-banner"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
           <div>
             <div style="font-size:20px;font-weight:800;">📋 Quotation Requests</div>
@@ -212,6 +215,22 @@ window.VW_QUOTATIONS = (() => {
             <span id="qf-pdf-name" style="font-size:13px;color:#64748B;">Click to upload PDF</span>
             <input type="file" id="qf-pdf" accept=".pdf" style="display:none;" onchange="VW_QUOTATIONS.onPDFSelected(this)">
           </label>
+          <!-- AI Tools for CRM Team -->
+          <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px;margin-bottom:10px;">
+            <div style="font-size:11px;font-weight:700;color:#1D4ED8;margin-bottom:8px;">🤖 AI TOOLS</div>
+            ${r.requirement_photos?.length ? `
+            <button id="ai-ocr-btn" onclick="runOCR(${r.id}, ${JSON.stringify(r.requirement_photos||[])})"
+              style="width:100%;padding:9px;border-radius:8px;background:#3B82F6;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">
+              🔍 Read Requirement Photos (AI OCR)
+            </button>` : ''}
+            <button id="ai-price-btn" onclick="runPriceMatch(${r.id})"
+              style="width:100%;padding:9px;border-radius:8px;background:#22C55E;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+              💰 Get AI Prices from Catalog
+            </button>
+            <div id="ai-ocr-result" style="display:none;margin-top:10px;"></div>
+            <div id="ai-price-result" style="display:none;margin-top:10px;"></div>
+          </div>
+
           <div style="display:flex;gap:8px;">
             <button onclick="VW_QUOTATIONS.saveFile(${r.id})" style="flex:2;padding:11px;border-radius:10px;background:#8B5CF6;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">💾 Save & Add Another Category</button>
             <button onclick="VW_QUOTATIONS.sendToTL(${r.id})" style="flex:2;padding:11px;border-radius:10px;background:#22C55E;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Send to TL</button>
@@ -227,6 +246,13 @@ window.VW_QUOTATIONS = (() => {
             <input id="tl-discount" type="number" placeholder="Discount % (TL authority)" min="0" max="100" style="padding:9px 12px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;outline:none;">
             <input id="tl-final-amount" type="number" placeholder="Final amount after discount ₹" style="padding:9px 12px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;outline:none;">
           </div>
+          <!-- AI Discount Suggestion for TL -->
+          <button id="ai-discount-btn" onclick="runDiscountSuggestion(${r.id}, parseFloat(document.getElementById('tl-final-amount')?.value||0))"
+            style="width:100%;padding:9px;border-radius:8px;background:#F59E0B;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">
+            🎯 AI Discount Suggestion
+          </button>
+          <div id="ai-discount-result" style="display:none;margin-bottom:10px;"></div>
+
           <textarea id="tl-note" placeholder="TL approval note (mandatory)" rows="2" style="width:100%;padding:10px;border:1px solid #E2E8F0;border-radius:8px;font-size:13px;resize:none;box-sizing:border-box;margin-bottom:10px;"></textarea>
           <div style="display:flex;gap:8px;">
             <button onclick="VW_QUOTATIONS.actionTL(${r.id},'approve')" style="flex:2;padding:11px;border-radius:10px;background:#22C55E;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">✓ Approve → Category Manager</button>
@@ -476,3 +502,154 @@ window.VW_QUOTATIONS = (() => {
 
   return { renderPage, openDetail, onPDFSelected, saveFile, sendToTL, runAIVerify, actionTL, actionCatMgr };
 })();
+
+
+// ══════════════════════════════════════════════════════════
+// AI QUOTATION FEATURES
+// ══════════════════════════════════════════════════════════
+const AI_QUOT_URL = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/ai-quotation';
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kYW1kbmxzdWt0dWNxdGNiaGdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTkwNDY1NDAsImV4cCI6MjAzNDYyMjU0MH0.YaXsOWBQk7FH2fFJbgjKpwjLQi4o9Pqb2D1fTSmKYD4';
+
+async function aiQuot(mode, payload) {
+  const token = VW_DB?.session?.access_token || ANON_KEY;
+  const res = await fetch(AI_QUOT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': ANON_KEY },
+    body: JSON.stringify({ mode, ...payload }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function runOCR(requestId, photoUrls) {
+  const btn = document.getElementById('ai-ocr-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '🔍 Reading photos…'; }
+  try {
+    const result = await aiQuot('ocr_requirements', { request_id: requestId, photo_urls: photoUrls });
+    const el = document.getElementById('ai-ocr-result');
+    if (el && result.items?.length) {
+      el.style.display = '';
+      el.innerHTML = `
+        <div style="font-size:11px;font-weight:700;color:#3B82F6;margin-bottom:8px;">🤖 AI EXTRACTED ${result.items.length} ITEMS (${result.reading_confidence} confidence)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <tr style="background:#F1F5F9;"><th style="padding:6px 8px;text-align:left;">Product</th><th style="padding:6px 8px;">Category</th><th style="padding:6px 8px;">Qty</th><th style="padding:6px 8px;">Brand</th></tr>
+          ${result.items.map(item => `
+            <tr style="border-bottom:1px solid #F1F5F9;">
+              <td style="padding:6px 8px;font-weight:600;">${item.product}</td>
+              <td style="padding:6px 8px;color:#64748B;">${item.category}</td>
+              <td style="padding:6px 8px;color:#64748B;">${item.quantity||'—'} ${item.unit||''}</td>
+              <td style="padding:6px 8px;color:#64748B;">${item.brand_requested||'any'}</td>
+            </tr>`).join('')}
+        </table>
+        ${result.unreadable_parts ? `<div style="margin-top:6px;font-size:11px;color:#F59E0B;">⚠️ Unreadable: ${result.unreadable_parts}</div>` : ''}
+        <button onclick="runPriceMatch(${requestId})" style="margin-top:10px;width:100%;padding:9px;border-radius:8px;background:#22C55E;border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;">
+          💰 Get AI Prices for these items
+        </button>`;
+    }
+    showToast?.('✅ OCR complete — ' + (result.items?.length||0) + ' items extracted');
+  } catch(e) { showToast?.('OCR error: ' + e.message); }
+  if (btn) { btn.disabled = false; btn.textContent = '🔍 Read Requirement Photos (AI OCR)'; }
+}
+window.runOCR = runOCR;
+
+async function runPriceMatch(requestId) {
+  const btn = document.getElementById('ai-price-btn') || event?.target;
+  if (btn) { btn.disabled = true; btn.textContent = '💰 Getting prices…'; }
+  try {
+    const rArr = await api(`quotation_requests?id=eq.${requestId}&select=ocr_items,ai_requirements,construction_stage,estimated_sqft`);
+    const r = rArr?.[0];
+    const items = r?.ocr_items?.length ? r.ocr_items : (r?.ai_requirements||[]).map((req) => ({ product: req, category: req, quantity: null, unit: null }));
+    if (!items.length) { showToast?.('No items to price — run OCR first'); return; }
+    const result = await aiQuot('price_match', { request_id: requestId, items, construction_stage: r?.construction_stage, estimated_sqft: r?.estimated_sqft });
+    const el = document.getElementById('ai-price-result');
+    if (el) {
+      el.style.display = '';
+      el.innerHTML = `
+        <div style="font-size:11px;font-weight:700;color:#22C55E;margin-bottom:8px;">💰 AI PRICE SUGGESTION (${result.pricing_confidence} confidence)</div>
+        <div style="background:#F0FFF4;border:1px solid #86EFAC;border-radius:8px;padding:12px;margin-bottom:10px;">
+          <div style="font-size:18px;font-weight:800;color:#16A34A;">₹${((result.grand_total_min||0)/100000).toFixed(1)}L – ₹${((result.grand_total_max||0)/100000).toFixed(1)}L</div>
+          <div style="font-size:12px;color:#64748B;">Discount room: ${result.discount_room_pct||5}% | Use these as your base pricing</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <tr style="background:#F1F5F9;"><th style="padding:5px 6px;text-align:left;">Product</th><th style="padding:5px 6px;">Brand</th><th style="padding:5px 6px;">Qty</th><th style="padding:5px 6px;">Unit Price</th><th style="padding:5px 6px;">Total</th></tr>
+          ${(result.priced_items||[]).map(item => `
+            <tr style="border-bottom:1px solid #F1F5F9;">
+              <td style="padding:5px 6px;font-weight:600;">${item.product}</td>
+              <td style="padding:5px 6px;color:#3B82F6;font-weight:600;">${item.brand_suggested||'—'}</td>
+              <td style="padding:5px 6px;color:#64748B;">${item.quantity_unit||'—'}</td>
+              <td style="padding:5px 6px;">₹${item.unit_price_min||0}–₹${item.unit_price_max||0}/${item.unit||'unit'}</td>
+              <td style="padding:5px 6px;font-weight:600;color:#16A34A;">₹${((item.total_min||0)/100000).toFixed(1)}L</td>
+            </tr>`).join('')}
+        </table>`;
+    }
+    // Auto-fill amount field
+    const amtEl = document.getElementById('qf-amount');
+    if (amtEl && result.grand_total_min) amtEl.value = Math.round((result.grand_total_min + result.grand_total_max) / 2);
+    showToast?.('✅ AI pricing complete');
+  } catch(e) { showToast?.('Price match error: ' + e.message); }
+  if (btn) { btn.disabled = false; btn.textContent = '💰 Get AI Prices for these items'; }
+}
+window.runPriceMatch = runPriceMatch;
+
+async function runDiscountSuggestion(requestId, totalAmount) {
+  const btn = document.getElementById('ai-discount-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '🎯 Analysing…'; }
+  try {
+    const rArr = await api(`quotation_requests?id=eq.${requestId}&select=*`);
+    const r = rArr?.[0];
+    const visitArr = r?.field_visit_id ? await api(`field_visits?id=eq.${r.field_visit_id}&select=ai_estimated_value_min,competitor_products`) : [];
+    const visit = visitArr?.[0];
+    const result = await aiQuot('discount_suggestion', {
+      pipeline_value: visit?.ai_estimated_value_min || 0,
+      construction_stage: r?.construction_stage,
+      competitor_products: visit?.competitor_products || [],
+      total_amount: totalAmount || 0,
+    });
+    const el = document.getElementById('ai-discount-result');
+    if (el) {
+      el.style.display = '';
+      el.innerHTML = `
+        <div style="background:linear-gradient(135deg,rgba(245,166,35,.1),rgba(245,166,35,.05));border:1px solid rgba(245,166,35,.3);border-radius:10px;padding:14px;">
+          <div style="font-size:11px;font-weight:700;color:#B45309;margin-bottom:6px;">🎯 AI DISCOUNT STRATEGY</div>
+          <div style="font-size:20px;font-weight:800;color:#F5A623;">Recommend: ${result.recommended_discount_pct}% <span style="font-size:13px;color:#64748B;">(range: ${result.discount_range}%, max: ${result.max_discount_pct}%)</span></div>
+          <div style="font-size:12px;font-weight:700;color:#78350F;margin-top:4px;">Strategy: ${(result.strategy||'standard').toUpperCase()}</div>
+          <div style="font-size:13px;color:#374151;margin-top:8px;line-height:1.6;">${result.rationale}</div>
+          ${result.talking_points?.length ? `
+          <div style="margin-top:10px;">
+            <div style="font-size:11px;font-weight:700;color:#B45309;margin-bottom:4px;">TALKING POINTS:</div>
+            ${result.talking_points.map(p => `<div style="font-size:12px;color:#374151;padding:3px 0;">• ${p}</div>`).join('')}
+          </div>` : ''}
+          <div style="margin-top:8px;padding:8px 10px;background:rgba(245,166,35,.1);border-radius:6px;font-size:12px;font-weight:600;color:#92400E;">
+            💬 "${result.urgency_message}"
+          </div>
+        </div>`;
+      // Auto-fill discount
+      const discEl = document.getElementById('tl-discount') || document.getElementById('cm-discount');
+      if (discEl) discEl.value = result.recommended_discount_pct;
+    }
+    showToast?.('✅ Discount strategy ready');
+  } catch(e) { showToast?.('Error: ' + e.message); }
+  if (btn) { btn.disabled = false; btn.textContent = '🎯 AI Discount Suggestion'; }
+}
+window.runDiscountSuggestion = runDiscountSuggestion;
+
+// TAT check — called on quotations page load
+async function checkQuotationTAT() {
+  try {
+    const result = await aiQuot('tat_check', {});
+    if (result.overdue?.length) {
+      const banner = document.getElementById('quot-tat-banner');
+      if (banner) {
+        banner.style.display = '';
+        banner.innerHTML = `
+          <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+            <div style="font-size:13px;font-weight:700;color:#B91C1C;margin-bottom:6px;">⏰ ${result.overdue.length} OVERDUE QUOTATION${result.overdue.length>1?'S':''}</div>
+            ${result.overdue.map(o => `<div style="font-size:12px;color:#7F1D1D;">• ${o.request_no} — ${o.stage} overdue by ${o.overdue_min} min ${o.urgency!=='normal'?'('+o.urgency.toUpperCase()+')':''}</div>`).join('')}
+          </div>`;
+      }
+    }
+    return result;
+  } catch(e) { console.warn('TAT check failed:', e); }
+}
+window.checkQuotationTAT = checkQuotationTAT;
+
