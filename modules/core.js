@@ -584,7 +584,8 @@ const ROLE_PAGES = {
 // doing the job, not optional add-ons.
 const PERMISSION_PAGES = {
   inbox:          ['inbox'],
-  billing:        ['cart', 'quotations', 'tiles', 'granite', 'ledger'],
+  billing:        ['cart', 'tiles', 'granite', 'ledger'],
+  quotations:     ['quotations'], // CRM team, Quotation TL, Category Manager, Management
   inventory:      ['inventory'],
   tile_inventory: ['tile_inventory'],
   crm:            ['crm'],

@@ -3795,7 +3795,7 @@ const SIDEBAR_NAV = [
 
   // ── SALES ────────────────────────────────────────────
   { section: 'Sales' },
-  { page: 'quotations',      icon: '📋', label: 'Quotations',       always: true },
+  { page: 'quotations',      icon: '📋', label: 'Quotations',       perm: 'quotations', roles: ['admin','quotation_tl','category_manager','management','asm','crm_team'] },
   { page: 'cart',            icon: '🧾', label: 'Billing',          perm: 'billing' },
   { page: 'tiles',          icon: '⬜', label: 'Tile Quotation',  perm: 'billing' },
   { page: 'granite',        icon: '🪨', label: 'Granite Quote',   perm: 'billing' },
@@ -3868,10 +3868,19 @@ function buildSidebar() {
   if (!nav) return; // Not ready yet — retry called by setTimeout
 
   let html = '';
+  const profileRole = (profile?.role || role || '').toLowerCase().replace(/\s+/g,'_');
+  const profileDesig = (profile?.designation || '').toLowerCase().replace(/\s+/g,'_');
+
   for (const item of SIDEBAR_NAV) {
     if (item.section) { html += `<div class="sb-section-lbl">${item.section}</div>`; continue; }
-    const hasAccess = item.always || role === 'admin' || allowed.has(item.page) ||
-      (item.perm && allowed.has(item.perm));
+    
+    let hasAccess = item.always || role === 'admin';
+    if (!hasAccess && item.perm) hasAccess = allowed.has(item.perm);
+    if (!hasAccess && item.roles) {
+      hasAccess = item.roles.some(r => profileRole.includes(r) || profileDesig.includes(r));
+    }
+    if (!hasAccess && item.perm) hasAccess = allowed.has(item.page);
+    
     if (!hasAccess) continue;
     html += `<button class="sb-nav-item" data-sb-page="${item.page}" onclick="sbNavigate('${item.page}')" title="${item.label}">
       <span class="sb-nav-icon" style="font-size:18px;flex-shrink:0">${item.icon}</span><span class="sb-nav-label">${item.label}</span>
