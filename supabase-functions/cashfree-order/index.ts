@@ -68,13 +68,9 @@ Deno.serve(async (req) => {
           send_sms: false,
           send_email: false,
         },
-        link_meta: {
-          return_url: "https://vwholesale.in?payment=success",
-          upi_intent: true,
-        },
         link_notes: {
-          invoice_id: String(invoice_id || ""),
-          source: "vwholesale_staff",
+          inv: String(invoice_id || ""),
+          src: "vw",
         },
       };
 
