@@ -68,10 +68,6 @@ Deno.serve(async (req) => {
           send_sms: false,
           send_email: false,
         },
-        link_notes: {
-          inv: String(invoice_id || ""),
-          src: "vw",
-        },
       };
 
       const res = await fetch(`${BASE_URL}/links`, {
