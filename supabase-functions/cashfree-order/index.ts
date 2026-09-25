@@ -79,18 +79,20 @@ Deno.serve(async (req) => {
 
       // Log to DB
       const sb = createClient(SB_URL, SB_KEY);
-      await sb.from("payment_links").insert({
-        link_id: linkId,
-        cf_link_id: data.link_id || linkId,
-        invoice_id: invoice_id || null,
-        customer_name: customer_name || null,
-        customer_phone: customer_phone.replace(/\D/g,"").slice(-10),
-        amount: parseFloat(amount),
-        description: description || null,
-        payment_url: paymentUrl,
-        status: "active",
-        expires_at: expiresAt,
-      }).catch(() => {}); // non-fatal
+      try {
+        await sb.from("payment_links").insert({
+          link_id: linkId,
+          cf_link_id: data.link_id || linkId,
+          invoice_id: invoice_id || null,
+          customer_name: customer_name || null,
+          customer_phone: customer_phone.replace(/\D/g,"").slice(-10),
+          amount: parseFloat(amount),
+          description: description || null,
+          payment_url: paymentUrl,
+          status: "active",
+          expires_at: expiresAt,
+        });
+      } catch(_) {} // non-fatal
 
       return json({
         success: true,
