@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
         link_id: linkId,
         link_amount: parseFloat(amount).toFixed(2),
         link_currency: "INR",
-        link_purpose: description || "V Wholesale Payment",
+        link_purpose: (description || "V Wholesale Payment").replace(/[<>{}"]/g, '').slice(0, 100),
         customer_details: {
           customer_name: customer_name || "Customer",
           customer_phone: customer_phone.replace(/\D/g, "").slice(-10),
