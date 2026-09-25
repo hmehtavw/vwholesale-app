@@ -57,17 +57,13 @@ Deno.serve(async (req) => {
         link_id: linkId,
         link_amount: parseFloat(amount).toFixed(2),
         link_currency: "INR",
-        link_purpose: (description || "V Wholesale Payment").replace(/[<>{}"]/g, '').slice(0, 100),
+        link_purpose: (description || "V Wholesale Payment").replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50),
         customer_details: {
-          customer_name: customer_name || "Customer",
+          customer_name: (customer_name || "Customer").replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 50),
           customer_phone: customer_phone.replace(/\D/g, "").slice(-10),
-          customer_email: customer_email || `${customer_phone.slice(-10)}@vwholesale.in`,
+          customer_email: `cust${customer_phone.replace(/\D/g,"").slice(-10)}@email.com`,
         },
         link_expiry_time: expiresAt,
-        link_notify: {
-          send_sms: false,
-          send_email: false,
-        },
       };
 
       const res = await fetch(`${BASE_URL}/links`, {
