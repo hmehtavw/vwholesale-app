@@ -6,7 +6,10 @@ window.VW_PAYMENT_LINKS = (() => {
   const SB_FN = 'https://ndamdnlsuktucqtcbhgp.supabase.co/functions/v1/cashfree-order';
 
   async function renderPage() {
-    const { data: links } = await VW_DB.client
+    const sbClient = window.VW_DB?.client || window.supabaseClient || window._sb;
+    if (!sbClient) return '<div style="padding:24px;color:#64748B;">Loading payment links…</div>';
+    
+    const { data: links } = await sbClient
       .from('payment_links')
       .select('*')
       .order('created_at', { ascending: false })
