@@ -498,6 +498,7 @@ const ROLE_PAGES = {
           'service','employeeapp','contractor','quotations','tiles','granite','tile_quotes',
           'tile_inventory','autotest','returns','visualizer','field','gst','wishlist','grn',
           'contractor_portal','commissions','quick_quote','my_profile','my_hr','my_attendance',
+          'payment_links',
           'my_leaves','my_salary','my_advances','my_documents','my_kpis','my_achievements'],
 
   // ── STORE MANAGER: full store ops, no admin settings/GST ─────────────
