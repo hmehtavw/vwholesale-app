@@ -3796,6 +3796,7 @@ const SIDEBAR_NAV = [
   // ── SALES ────────────────────────────────────────────
   { section: 'Sales' },
   { page: 'quotations',      icon: '📋', label: 'Quotations',       perm: 'quotations', roles: ['admin','quotation_tl','category_manager','management','asm','crm_team'] },
+  { page: 'payment_links',   icon: '💳', label: 'Pay Links',         perm: 'billing', roles: ['admin','management','asm','accounts','crm_team'] },
   { page: 'cart',            icon: '🧾', label: 'Billing',          perm: 'billing' },
   { page: 'tiles',          icon: '⬜', label: 'Tile Quotation',  perm: 'billing' },
   { page: 'granite',        icon: '🪨', label: 'Granite Quote',   perm: 'billing' },
