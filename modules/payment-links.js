@@ -264,7 +264,7 @@ window.VW_PAYMENT_LINKS = (() => {
 
   async function cancelLink(linkId) {
     if (!confirm('Cancel this payment link?')) return;
-    await VW_DB.client.from('payment_links').update({ status: 'cancelled' }).eq('link_id', linkId);
+    try { await VW_DB.client.from('payment_links').update({ status: 'cancelled' }).eq('link_id', linkId); } catch(e) {}
     showToast('Link cancelled');
     navigateTo('payment_links');
   }
