@@ -2356,7 +2356,8 @@ async function loadFieldMap() {
   const { start, end, label } = getCycleRange();
 
   // Get all field staff with last location
-  const { data: staff } = await sbFetch(`staff?select=id,name,designation,role&active=eq.true&department=eq.Field`).catch(()=>[]);
+  const staffRaw = await sbFetch(`staff?select=id,name,designation,role,department&active=eq.true&limit=100`).catch(()=>[]);
+  const staff = (staffRaw||[]).filter(s => s.department === 'Field');
   const ids = (staff||[]).map(s=>s.id);
 
   let locRows = [];
