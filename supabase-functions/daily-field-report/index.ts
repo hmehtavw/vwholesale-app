@@ -484,7 +484,113 @@ async function buildAllReports(date: string) {
   return reports;
 }
 
+function buildAccountsEmail(summaries: any[], date: string): string {
+  const rows = (summaries || []).map(r => {
+    const punchIn = r.punchedIn ? new Date(r.staff?.punchIn || "").toLocaleTimeString("en-IN", {hour:"2-digit",minute:"2-digit"}) : "Absent";
+    const punchOut = r.punchedOut ? new Date(r.staff?.punchOut || "").toLocaleTimeString("en-IN", {hour:"2-digit",minute:"2-digit"}) : r.punchedIn ? "Not out" : "—";
+    const km = r.km || 0;
+    const fuel = r.fuelDue || 0;
+    const visits = r.totalVisits || 0;
+    const leads = r.newVisits || 0;
+    const status = !r.punchedIn ? "Absent" : !r.punchedOut ? "Active" : "Done";
+    const statusColor = !r.punchedIn ? "#EF4444" : !r.punchedOut ? "#22C55E" : "#64748B";
+    return `<tr style="border-bottom:1px solid #E2E8F0;">
+      <td style="padding:10px 12px;font-weight:700;">${r.staff?.name||"—"}</td>
+      <td style="padding:10px 12px;color:#64748B;font-size:12px;">${r.staff?.designation||r.staff?.role||"—"}</td>
+      <td style="padding:10px 12px;text-align:center;font-weight:600;">${punchIn}</td>
+      <td style="padding:10px 12px;text-align:center;font-weight:600;">${punchOut}</td>
+      <td style="padding:10px 12px;text-align:center;">${visits}</td>
+      <td style="padding:10px 12px;text-align:center;">${leads}</td>
+      <td style="padding:10px 12px;text-align:center;">${km.toFixed(0)} km</td>
+      <td style="padding:10px 12px;text-align:center;font-weight:700;color:#22C55E;">₹${fuel.toFixed(0)}</td>
+      <td style="padding:10px 12px;text-align:center;"><span style="padding:3px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${statusColor}22;color:${statusColor};">${status}</span></td>
+    </tr>`;
+  }).join("");
+
+  const totalKm = (summaries||[]).reduce((s,r) => s+(r.km||0), 0);
+  const totalFuel = (summaries||[]).reduce((s,r) => s+(r.fuelDue||0), 0);
+  const totalVisits = (summaries||[]).reduce((s,r) => s+(r.totalVisits||0), 0);
+  const dateStr = new Date(date).toLocaleDateString("en-IN", {weekday:"long",day:"numeric",month:"long",year:"numeric"});
+
+  return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#F8FAFC;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">
+<div style="max-width:700px;margin:0 auto;padding:24px 16px;">
+
+  <div style="background:linear-gradient(135deg,#0F1923,#1A2634);border-radius:14px;padding:20px 24px;margin-bottom:20px;">
+    <div style="color:#F5A623;font-weight:700;font-size:13px;">V WHOLESALE — ACCOUNTS COPY</div>
+    <div style="color:#F0F4F8;font-size:20px;font-weight:800;margin-top:4px;">Daily Field Attendance & TA/DA</div>
+    <div style="color:#8FA3B8;font-size:12px;margin-top:2px;">${dateStr}</div>
+  </div>
+
+  <!-- Summary -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;">
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:24px;font-weight:800;">${(summaries||[]).filter(r=>r.punchedIn).length}/${(summaries||[]).length}</div>
+      <div style="font-size:12px;color:#64748B;">Staff Present</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:24px;font-weight:800;">${totalKm.toFixed(0)} km</div>
+      <div style="font-size:12px;color:#64748B;">Total Distance</div>
+    </div>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:14px;text-align:center;">
+      <div style="font-size:24px;font-weight:800;color:#22C55E;">₹${totalFuel.toFixed(0)}</div>
+      <div style="font-size:12px;color:#64748B;">TA/DA Due Today</div>
+    </div>
+  </div>
+
+  <!-- Attendance Table -->
+  <div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden;margin-bottom:20px;">
+    <div style="padding:12px 16px;font-weight:700;border-bottom:1px solid #E2E8F0;">Staff Attendance & TA/DA</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#F8FAFC;font-size:11px;color:#64748B;">
+          <th style="padding:10px 12px;text-align:left;">NAME</th>
+          <th style="padding:10px 12px;text-align:left;">ROLE</th>
+          <th style="padding:10px 12px;text-align:center;">PUNCH IN</th>
+          <th style="padding:10px 12px;text-align:center;">PUNCH OUT</th>
+          <th style="padding:10px 12px;text-align:center;">VISITS</th>
+          <th style="padding:10px 12px;text-align:center;">LEADS</th>
+          <th style="padding:10px 12px;text-align:center;">KM</th>
+          <th style="padding:10px 12px;text-align:center;">TA/DA</th>
+          <th style="padding:10px 12px;text-align:center;">STATUS</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="background:#F8FAFC;font-weight:700;">
+          <td colspan="4" style="padding:10px 12px;">TOTAL</td>
+          <td style="padding:10px 12px;text-align:center;">${totalVisits}</td>
+          <td style="padding:10px 12px;"></td>
+          <td style="padding:10px 12px;text-align:center;">${totalKm.toFixed(0)} km</td>
+          <td style="padding:10px 12px;text-align:center;color:#22C55E;font-weight:800;">₹${totalFuel.toFixed(0)}</td>
+          <td style="padding:10px 12px;"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div style="background:#FEF9EC;border:1px solid #F5A623;border-radius:10px;padding:14px;font-size:13px;color:#374151;">
+    <strong>Note:</strong> TA/DA is calculated at ₹2.5/km. Weekly TA/DA settlement emails are sent every 7 days from joining date. 
+    Please refer to the weekly TA/DA report for net payable after deducting advances.
+  </div>
+
+  <div style="text-align:center;color:#94A3B8;font-size:11px;margin-top:16px;">
+    V Wholesale Field Intelligence · Auto-generated at 8:00 PM IST · ${date}<br>
+    <a href="https://vwholesale.in/admin" style="color:#F5A623;">View Admin Dashboard →</a>
+  </div>
+</div>
+</body></html>`;
+}
+
 async function deliverReports(reports: any[]) {
+  // Send accounts email separately
+  const accountsReport = reports.find(r => r.level === "management");
+  if (accountsReport) {
+    await sendEmail("accounts@vwholesale.in", 
+      `[Accounts] Field Attendance & TA/DA — ${accountsReport.summaries?.[0] ? new Date().toISOString().split("T")[0] : "Today"}`,
+      buildAccountsEmail(accountsReport.summaries, new Date().toISOString().split("T")[0])
+    );
+  }
+
   for (const r of reports) {
     // Email
     if (r.recipient.email) await sendEmail(r.recipient.email, r.subject, r.email_html);
