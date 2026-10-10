@@ -890,9 +890,15 @@ async function studioGenerate(brief, tone, mode) {
     
     // Step 5: Show results in studio
     studioShowResults(updatedItem, mode);
-    
-    showMktToast('✅ Poster generated — edit or export below', 5000);
-    
+
+    if (mode === 'gif') {
+      // Auto-continue to GIF animation — user clicked "Generate AI Poster + Animate GIF"
+      showMktToast('✅ Poster done — now generating GIF slides…', 5000);
+      await gsAnimateWithSettings(calendarId);
+    } else {
+      showMktToast('✅ Poster generated — edit or export below', 5000);
+    }
+
   } catch(e) {
     showMktToast('❌ ' + e.message, 6000);
     if (loadEl) { loadEl.disabled = false; loadEl.textContent = mode === 'gif' ? '✨ Generate GIF' : '✨ Generate Poster'; }
@@ -977,8 +983,151 @@ async function studioSaveToCalendar(calendarId) {
 window.studioGenerate = studioGenerate;
 async function gsAnimateWithSettings(calendarId) {
   const s = window._gsSettings || { mode:'animated_text', animStyle:'cinematic', duration:6, sizes:['square'] };
-  // No prompt - offer badge is added via the poster editor (✏️ Open in Editor)
-  await calGenerateGif(calendarId, null, s.animStyle);
+
+  // For GIF Studio: use gif-generator edge function (bypasses broken Railway)
+  // Calls get_themes → gen_one x3 → make_gif → shows result
+  const resultsEl = document.getElementById('studio-results');
+  const btn = document.getElementById('studio-generate-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Animating…'; }
+
+  let secs = 0;
+  showMktToast('⏳ Generating animated slides… (step 1/3)', 6000);
+  const ticker = setInterval(() => { secs += 5; showMktToast('⏳ Animating slides… ' + secs + 's', 6000); }, 5000);
+
+  try {
+    // Get item topic
+    const { data: item } = await sb.from('content_calendar').select('topic,poster_message').eq('id', calendarId).single();
+    if (!item) throw new Error('Calendar item not found');
+    const topic = (item.poster_message || item.topic || '').replace(/\s*[—–-]\s*(GIF|Slideshow|Campaign|Reel).*/gi, '').trim();
+
+    const duration = s.duration || 6;
+    const animStyle = s.animStyle || 'cinematic';
+
+    // STEP 1: Get slide themes from gif-generator
+    showMktToast('⏳ Step 1/3 — AI generating slide themes…', 6000);
+    const themesRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({ action: 'get_themes', topic, calendar_id: calendarId })
+    });
+    const themesData = await themesRes.json();
+    if (!themesData.ok || !themesData.slides?.length) throw new Error(themesData.error || 'Theme generation failed');
+
+    const slides = themesData.slides.slice(0, 3);
+    const slideUrls = [];
+
+    // STEP 2: Generate one PNG per slide
+    for (let i = 0; i < slides.length; i++) {
+      const sl = slides[i];
+      showMktToast(`⏳ Step 2/3 — Generating slide ${i+1}/${slides.length}… (~30s each)`, 35000);
+      const genRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+        body: JSON.stringify({
+          action: 'gen_one',
+          calendar_id: calendarId,
+          slide_idx: i,
+          headline: sl.headline || topic,
+          message: sl.message || '',
+          angle: sl.angle || topic,
+          category_idx: i
+        })
+      });
+      const genData = await genRes.json();
+      if (!genData.ok || !genData.url) { console.warn('Slide ' + i + ' failed:', genData.error); continue; }
+      slideUrls.push(genData.url);
+    }
+
+    if (!slideUrls.length) throw new Error('All slide image generation failed');
+
+    // STEP 3: Assemble GIF via gif-generator make_gif
+    showMktToast('⏳ Step 3/3 — Assembling animated GIF…', 12000);
+    const gifRes = await fetch(MKT_SB_URL + '/functions/v1/gif-generator', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': MKT_SB_KEY },
+      body: JSON.stringify({
+        action: 'make_gif',
+        slide_urls: slideUrls,
+        size: '1080x1080',
+        duration,
+        style: animStyle,
+        job_id: 'studio_' + calendarId
+      })
+    });
+    const gifData = await gifRes.json();
+
+    clearInterval(ticker);
+
+    const gifUrl = gifData.gif_url || gifData.mp4_url;
+    const isGif = !!gifData.gif_url;
+
+    // Save slide URLs to calendar platform_images
+    const pi = {};
+    slideUrls.forEach((u, i) => { pi['gif_slide_' + i] = u; });
+    if (gifUrl) { pi[isGif ? 'gif' : 'mp4'] = gifUrl; pi.instagram_feed = slideUrls[0]; }
+    await sb.from('content_calendar').update({
+      platform_images: pi,
+      image_url: gifUrl || slideUrls[0],
+      updated_at: new Date().toISOString()
+    }).eq('id', calendarId);
+
+    // Show result
+    if (resultsEl) {
+      const oldCard = resultsEl.querySelector('.gif-result-card');
+      if (oldCard) oldCard.remove();
+
+      const card = document.createElement('div');
+      card.className = 'mkt-card gif-result-card';
+      card.style.marginTop = '16px';
+
+      if (gifUrl && isGif) {
+        card.innerHTML = `
+          <div class="mkt-card-title">🎬 Animated GIF Ready!</div>
+          <img src="${gifUrl}" style="width:100%;max-width:400px;border-radius:8px;display:block;margin:0 auto 12px" alt="Animated GIF">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+            <a href="${gifUrl}" download="vwholesale-gif.gif" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:9px 16px;text-decoration:none">⬇ Download GIF</a>
+            <a href="${gifUrl}" target="_blank" class="mkt-btn mkt-btn-ghost" style="font-size:12px;padding:9px 14px;text-decoration:none">🔗 Open GIF</a>
+          </div>`;
+      } else if (gifUrl) {
+        card.innerHTML = `
+          <div class="mkt-card-title">🎬 Video Ready!</div>
+          <video src="${gifUrl}" autoplay loop muted style="width:100%;max-width:400px;border-radius:8px;display:block;margin:0 auto 12px"></video>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+            <a href="${gifUrl}" download="vwholesale.mp4" class="mkt-btn mkt-btn-primary" style="font-size:12px;padding:9px 16px;text-decoration:none">⬇ Download MP4</a>
+          </div>`;
+      } else {
+        // GIF assembly failed — show slide images as downloadable
+        const gifErr = gifData.error || 'GIF assembly not available yet';
+        card.innerHTML = `
+          <div class="mkt-card-title">✅ Slide Images Generated (${slideUrls.length} slides)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:10px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.3);border-radius:6px;padding:8px">
+            ⚠️ ${gifErr}<br>Download individual slides below.
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(${Math.min(slideUrls.length,3)},1fr);gap:8px;margin-bottom:12px">
+            ${slideUrls.map((u, i) => `
+              <div style="text-align:center">
+                <img src="${u}" style="width:100%;border-radius:6px;margin-bottom:4px">
+                <a href="${u}" download="slide-${i+1}.png" class="mkt-btn mkt-btn-ghost" style="font-size:10px;padding:5px 10px;text-decoration:none">⬇ Slide ${i+1}</a>
+              </div>`).join('')}
+          </div>`;
+      }
+
+      resultsEl.appendChild(card);
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (gifUrl) {
+      showMktNotif('✅ ' + (isGif ? 'GIF' : 'MP4') + ' ready! Download or share from the result below.');
+    } else {
+      showMktToast('✅ ' + slideUrls.length + ' slide images ready — download individually', 6000);
+    }
+
+  } catch(e) {
+    clearInterval(ticker);
+    showMktToast('❌ ' + e.message, 7000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Generate AI Poster + Animate GIF'; }
+  }
 }
 window.gsAnimateWithSettings = gsAnimateWithSettings;
 
